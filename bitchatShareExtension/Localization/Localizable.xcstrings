@@ -108,6 +108,13 @@
             "value": "공유된 링크",
             "comment": "Fallback title when saving a shared link"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分享的链接",
+            "comment": "Fallback title when saving a shared link"
+          }
         }
       }
     },
@@ -216,6 +223,13 @@
           "stringUnit": {
             "state": "translated",
             "value": "링크를 인코딩하는 데 실패했습니다",
+            "comment": "Shown when the share payload cannot be encoded"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法编码链接",
             "comment": "Shown when the share payload cannot be encoded"
           }
         }
@@ -328,6 +342,13 @@
             "value": "공유할 수 있는 내용이 없습니다",
             "comment": "Shown when provided content cannot be shared"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有可分享的素材",
+            "comment": "Shown when provided content cannot be shared"
+          }
         }
       }
     },
@@ -436,6 +457,13 @@
           "stringUnit": {
             "state": "translated",
             "value": "공유할 내용이 없습니다",
+            "comment": "Shown when the share extension receives no content"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有可分享的内容",
             "comment": "Shown when the share extension receives no content"
           }
         }
@@ -548,6 +576,13 @@
             "value": "✓ bitchat으로 링크를 공유했습니다",
             "comment": "Confirmation after successfully sharing a link"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ 已将链接分享至 bitchat",
+            "comment": "Confirmation after successfully sharing a link"
+          }
         }
       }
     },
@@ -656,6 +691,13 @@
           "stringUnit": {
             "state": "translated",
             "value": "✓ bitchat으로 텍스트를 공유했습니다",
+            "comment": "Confirmation after successfully sharing text"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ 已将文本分享至 bitchat",
             "comment": "Confirmation after successfully sharing text"
           }
         }

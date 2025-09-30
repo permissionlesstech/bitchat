@@ -93,6 +93,12 @@
             "state": "translated",
             "value": "bitchat"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat"
+          }
         }
       }
     },
@@ -184,6 +190,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "关闭"
@@ -283,6 +295,12 @@
             "state": "translated",
             "value": "完成"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完成"
+          }
         }
       }
     },
@@ -378,6 +396,12 @@
             "state": "translated",
             "value": "私密消息使用 noise 协议加密"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用噪声协议加密私人消息"
+          }
         }
       }
     },
@@ -469,6 +493,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "端到端加密"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "端到端加密"
@@ -568,6 +598,12 @@
             "state": "translated",
             "value": "消息通过同伴中继，传得更远"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "消息通过对等节点中继，传输距离更远"
+          }
         }
       }
     },
@@ -659,6 +695,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扩展范围"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "扩展范围"
@@ -758,6 +800,12 @@
             "state": "translated",
             "value": "你喜欢的人加入时立刻提醒"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当您喜爱的人加入时获得通知"
+          }
         }
       }
     },
@@ -852,6 +900,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "收藏"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "收藏夹"
           }
         }
       }
@@ -948,6 +1002,12 @@
             "state": "translated",
             "value": "geohash 频道让你通过去中心化匿名中继与附近地区的人聊天"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "地理哈希频道，通过去中心化匿名中继与附近地区的人聊天"
+          }
         }
       }
     },
@@ -1042,6 +1102,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "本地频道"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "地理哈希频道"
           }
         }
       }
@@ -1138,6 +1204,12 @@
             "state": "translated",
             "value": "使用 @nickname 提醒特定的人"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用@符号提及其他用户"
+          }
         }
       }
     },
@@ -1229,6 +1301,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提及"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "提及"
@@ -1328,6 +1406,12 @@
             "state": "translated",
             "value": "利用低功耗 bluetooth 离线工作"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无需互联网即可与附近的人聊天"
+          }
         }
       }
     },
@@ -1419,6 +1503,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "离线通信"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "离线通信"
@@ -1518,6 +1608,12 @@
             "state": "translated",
             "value": "功能"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "功能"
+          }
         }
       }
     },
@@ -1612,6 +1708,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "• 轻点 #mesh 切换频道"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输入 #geohash 切换频道"
           }
         }
       }
@@ -1708,6 +1810,12 @@
             "state": "translated",
             "value": "• 三击聊天即可清除"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输入 /clear 清除聊天记录"
+          }
         }
       }
     },
@@ -1802,6 +1910,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "• 输入 / 查看指令"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输入 /help 查看所有命令"
           }
         }
       }
@@ -1898,6 +2012,12 @@
             "state": "translated",
             "value": "• 轻点人物图标打开侧栏"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击人数打开侧边栏"
+          }
         }
       }
     },
@@ -1992,6 +2112,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "• 轻点昵称即可设置"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输入 /nick 昵称 设置昵称"
           }
         }
       }
@@ -2088,6 +2214,12 @@
             "state": "translated",
             "value": "• 轻点同伴名字开始 dm"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击用户名开始私聊"
+          }
         }
       }
     },
@@ -2179,6 +2311,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用方法"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "使用方法"
@@ -2278,6 +2416,12 @@
             "state": "translated",
             "value": "定期生成新的 peer id"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "消息不会永久存储"
+          }
         }
       }
     },
@@ -2372,6 +2516,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "临时身份"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "临时消息"
           }
         }
       }
@@ -2468,6 +2618,12 @@
             "state": "translated",
             "value": "无服务器、无账号、无数据收集"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无分析、无跟踪、无广告"
+          }
         }
       }
     },
@@ -2559,6 +2715,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无跟踪"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "无跟踪"
@@ -2658,6 +2820,12 @@
             "state": "translated",
             "value": "三击标志立即清除全部数据"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "摇晃设备清除所有数据"
+          }
         }
       }
     },
@@ -2753,6 +2921,12 @@
             "state": "translated",
             "value": "紧急模式"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "紧急删除"
+          }
         }
       }
     },
@@ -2844,6 +3018,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隐私"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "隐私"
@@ -2943,6 +3123,12 @@
             "state": "translated",
             "value": "sidegroupchat"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "去中心化聊天"
+          }
         }
       }
     },
@@ -3038,6 +3224,12 @@
             "state": "translated",
             "value": "私信安全尚未完全审计。在此警告消失前不要用于关键情境。"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这是实验性软件。请勿用于重要通信。"
+          }
         }
       }
     },
@@ -3129,6 +3321,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "警告"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "警告"
@@ -3228,6 +3426,12 @@
             "state": "translated",
             "value": "取消"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消"
+          }
         }
       }
     },
@@ -3319,6 +3523,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "关闭"
@@ -3418,6 +3628,12 @@
             "state": "translated",
             "value": "复制"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制"
+          }
         }
       }
     },
@@ -3509,6 +3725,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确定"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "确定"
@@ -3608,6 +3830,12 @@
             "state": "translated",
             "value": "关闭"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭"
+          }
         }
       }
     },
@@ -3699,6 +3927,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开启"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "开启"
@@ -3798,6 +4032,12 @@
             "state": "translated",
             "value": "未知"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未知"
+          }
         }
       }
     },
@@ -3892,6 +4132,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "加入收藏"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加到收藏夹"
           }
         }
       }
@@ -3988,6 +4234,12 @@
             "state": "translated",
             "value": "通过 Nostr 可用"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可通过nostr访问"
+          }
         }
       }
     },
@@ -4079,6 +4331,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "返回主聊天"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "返回主聊天"
@@ -4178,6 +4436,12 @@
             "state": "translated",
             "value": "通过 mesh 已连接"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已连接到网格"
+          }
         }
       }
     },
@@ -4269,6 +4533,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加密状态：%@"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "加密状态：%@"
@@ -4368,6 +4638,12 @@
             "state": "translated",
             "value": "位置频道"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "位置频道"
+          }
         }
       }
     },
@@ -4463,6 +4739,12 @@
             "state": "translated",
             "value": "此位置的笔记"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "位置笔记"
+          }
         }
       }
     },
@@ -4554,6 +4836,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开未读私聊"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "打开未读私聊"
@@ -5037,6 +5325,34 @@
               }
             }
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%#@people@"
+          },
+          "substitutions": {
+            "people": {
+              "argNum": 1,
+              "formatSpecifier": "lld",
+              "variations": {
+                "plural": {
+                  "one": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%d 人"
+                    }
+                  },
+                  "other": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%d 人"
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -5128,6 +5444,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "与 %@ 的私聊"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "与 %@ 的私聊"
@@ -5227,6 +5549,12 @@
             "state": "translated",
             "value": "可通过 mesh 到达"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可通过网格访问"
+          }
         }
       }
     },
@@ -5321,6 +5649,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "移出收藏"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从收藏夹移除"
           }
         }
       }
@@ -5417,6 +5751,12 @@
             "state": "translated",
             "value": "输入要发送的消息"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输入消息后发送"
+          }
         }
       }
     },
@@ -5512,6 +5852,12 @@
             "state": "translated",
             "value": "双击发送"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发送消息"
+          }
         }
       }
     },
@@ -5603,6 +5949,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发送消息"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "发送消息"
@@ -5702,6 +6054,12 @@
             "state": "translated",
             "value": "切换 #%@ 的书签"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切换 #%@ 的书签"
+          }
         }
       }
     },
@@ -5796,6 +6154,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "双击切换收藏状态"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切换收藏夹提示"
           }
         }
       }
@@ -5892,6 +6256,12 @@
             "state": "translated",
             "value": "轻点查看加密指纹"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看指纹提示"
+          }
         }
       }
     },
@@ -5983,6 +6353,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "屏蔽"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "屏蔽"
@@ -6082,6 +6458,12 @@
             "state": "translated",
             "value": "私信"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "私信"
+          }
         }
       }
     },
@@ -6173,6 +6555,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拥抱"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "拥抱"
@@ -6272,6 +6660,12 @@
             "state": "translated",
             "value": "提及"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提及"
+          }
         }
       }
     },
@@ -6363,6 +6757,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拍打"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "拍打"
@@ -6462,6 +6862,12 @@
             "state": "translated",
             "value": "操作"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作"
+          }
         }
       }
     },
@@ -6556,6 +6962,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "bluetooth 已关闭。请在设置中开启以使用 bitchat。"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "蓝牙已关闭。请在设置中开启蓝牙。"
           }
         }
       }
@@ -6652,6 +7064,12 @@
             "state": "translated",
             "value": "bitchat 需要 bluetooth 权限以连接附近设备。请在设置中启用访问。"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat需要蓝牙权限来连接附近的设备。请在设置中启用访问权限。"
+          }
         }
       }
     },
@@ -6743,6 +7161,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "设置"
@@ -6842,6 +7266,12 @@
             "state": "translated",
             "value": "需要 bluetooth"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要蓝牙"
+          }
         }
       }
     },
@@ -6936,6 +7366,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "此设备不支持 bluetooth。bitchat 需要 bluetooth 才能运行。"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此设备不支持蓝牙。"
           }
         }
       }
@@ -7032,6 +7468,12 @@
             "state": "translated",
             "value": "位置频道的截图会暴露你的位置。公开分享前请三思。"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "截图可能会暴露您的身份和位置。"
+          }
         }
       }
     },
@@ -7126,6 +7568,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "注意"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隐私警告"
           }
         }
       }
@@ -7222,6 +7670,12 @@
             "state": "translated",
             "value": "屏蔽或查看已屏蔽的同伴"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "屏蔽用户"
+          }
         }
       }
     },
@@ -7316,6 +7770,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "清除聊天消息"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除聊天记录"
           }
         }
       }
@@ -7412,6 +7872,12 @@
             "state": "translated",
             "value": "加入收藏"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加到收藏夹"
+          }
         }
       }
     },
@@ -7507,6 +7973,12 @@
             "state": "translated",
             "value": "送出温暖拥抱"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拥抱某人"
+          }
         }
       }
     },
@@ -7598,6 +8070,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发送私信"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "发送私信"
@@ -7697,6 +8175,12 @@
             "state": "translated",
             "value": "用鳟鱼拍某人"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拍打某人"
+          }
         }
       }
     },
@@ -7791,6 +8275,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "取消屏蔽同伴"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消屏蔽用户"
           }
         }
       }
@@ -7887,6 +8377,12 @@
             "state": "translated",
             "value": "移出收藏"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从收藏夹移除"
+          }
         }
       }
     },
@@ -7981,6 +8477,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "查看谁在线"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示在线用户"
           }
         }
       }
@@ -8077,6 +8579,12 @@
             "state": "translated",
             "value": "已送达 %2$d 人中的 %1$d 人"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已送达 %2$d 个成员中的 %1$d 个"
+          }
         }
       }
     },
@@ -8172,6 +8680,12 @@
             "state": "translated",
             "value": "已送达 %@"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已送达给 %@"
+          }
         }
       }
     },
@@ -8263,6 +8777,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "失败：%@"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "失败：%@"
@@ -8362,6 +8882,12 @@
             "state": "translated",
             "value": "已读：%@"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已被 %@ 阅读"
+          }
         }
       }
     },
@@ -8456,6 +8982,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "用户已被屏蔽"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "被屏蔽"
           }
         }
       }
@@ -8552,6 +9084,12 @@
             "state": "translated",
             "value": "不能给自己发消息"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自己"
+          }
         }
       }
     },
@@ -8643,6 +9181,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发送错误"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "发送错误"
@@ -8742,6 +9286,12 @@
             "state": "translated",
             "value": "未知收件人"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未知收件人"
+          }
         }
       }
     },
@@ -8836,6 +9386,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "同伴不可达"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法到达"
           }
         }
       }
@@ -8932,6 +9488,12 @@
             "state": "translated",
             "value": "成员"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "人员"
+          }
         }
       }
     },
@@ -9027,6 +9589,12 @@
             "state": "translated",
             "value": "验证：展示我的 qr 或扫描好友"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "验证指纹以确保安全通信"
+          }
         }
       }
     },
@@ -9118,6 +9686,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输入消息..."
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "输入消息..."
@@ -9217,6 +9791,12 @@
             "state": "translated",
             "value": "昵称"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置昵称"
+          }
         }
       }
     },
@@ -9312,6 +9892,12 @@
             "state": "translated",
             "value": "启用位置"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "启用位置服务"
+          }
         }
       }
     },
@@ -9403,6 +9989,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制消息"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "复制消息"
@@ -9502,6 +10094,12 @@
             "state": "translated",
             "value": "收起"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示更少"
+          }
         }
       }
     },
@@ -9597,6 +10195,12 @@
             "state": "translated",
             "value": "展开"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示更多"
+          }
         }
       }
     },
@@ -9688,6 +10292,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "位置不可用"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "位置不可用"
@@ -9787,6 +10397,12 @@
             "state": "translated",
             "value": "笔记"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "笔记"
+          }
         }
       }
     },
@@ -9881,6 +10497,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "通过 cashu 支付"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cashu支付"
           }
         }
       }
@@ -9977,6 +10599,12 @@
             "state": "translated",
             "value": "通过 lightning 支付"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "闪电网络支付"
+          }
         }
       }
     },
@@ -10068,6 +10696,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在建立加密"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "正在建立加密"
@@ -10167,6 +10801,12 @@
             "state": "translated",
             "value": "加密失败"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加密失败"
+          }
         }
       }
     },
@@ -10258,6 +10898,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未加密"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "未加密"
@@ -10357,6 +11003,12 @@
             "state": "translated",
             "value": "已加密"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已加密"
+          }
         }
       }
     },
@@ -10451,6 +11103,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "已加密并验证"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已验证"
           }
         }
       }
@@ -10547,6 +11205,12 @@
             "state": "translated",
             "value": "正在建立加密..."
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在建立"
+          }
         }
       }
     },
@@ -10642,6 +11306,12 @@
             "state": "translated",
             "value": "加密失败"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "失败"
+          }
         }
       }
     },
@@ -10733,6 +11403,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未加密"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "未加密"
@@ -10832,6 +11508,12 @@
             "state": "translated",
             "value": "已加密"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已加密"
+          }
         }
       }
     },
@@ -10927,6 +11609,12 @@
             "state": "translated",
             "value": "已加密并验证"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已验证"
+          }
         }
       }
     },
@@ -11018,6 +11706,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "标记为已验证"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "标记为已验证"
@@ -11117,6 +11811,12 @@
             "state": "translated",
             "value": "移除验证"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除验证"
+          }
         }
       }
     },
@@ -11208,6 +11908,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⚠️ 未验证"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "⚠️ 未验证"
@@ -11307,6 +12013,12 @@
             "state": "translated",
             "value": "✓ 已验证"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ 已验证"
+          }
         }
       }
     },
@@ -11401,6 +12113,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "暂不可用 - handshake 进行中"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "握手待处理"
           }
         }
       }
@@ -11497,6 +12215,12 @@
             "state": "translated",
             "value": "你已经核实了此人的身份。"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已验证指纹"
+          }
         }
       }
     },
@@ -11591,6 +12315,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "通过安全渠道与 %@ 比对这些指纹。"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通过安全渠道与 %@ 比较这些指纹。"
           }
         }
       }
@@ -11687,6 +12417,12 @@
             "state": "translated",
             "value": "对方指纹："
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "他们的指纹"
+          }
         }
       }
     },
@@ -11781,6 +12517,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "安全验证"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "指纹"
           }
         }
       }
@@ -11877,6 +12619,12 @@
             "state": "translated",
             "value": "你的指纹："
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "您的指纹"
+          }
         }
       }
     },
@@ -11968,6 +12716,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "屏蔽"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "屏蔽"
@@ -12067,6 +12821,12 @@
             "state": "translated",
             "value": "取消屏蔽"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消屏蔽"
+          }
         }
       }
     },
@@ -12161,6 +12921,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "附近没人..."
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "附近没有人"
           }
         }
       }
@@ -12257,6 +13023,12 @@
             "state": "translated",
             "value": "在 geohash 中已屏蔽"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已屏蔽"
+          }
         }
       }
     },
@@ -12352,6 +13124,12 @@
             "state": "translated",
             "value": " (你)"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "（您）"
+          }
         }
       }
     },
@@ -12443,6 +13221,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开设置"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "打开设置"
@@ -12542,6 +13326,12 @@
             "state": "translated",
             "value": "移除位置访问"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除访问权限"
+          }
         }
       }
     },
@@ -12636,6 +13426,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "获取位置和我的 geohash"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请求权限"
           }
         }
       }
@@ -12732,6 +13528,12 @@
             "state": "translated",
             "value": "瞬移"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "传送"
+          }
         }
       }
     },
@@ -12823,6 +13625,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已收藏"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "已收藏"
@@ -12922,6 +13730,12 @@
             "state": "translated",
             "value": "使用 geohash 频道与附近的人聊天。只会共享粗略 geohash，从不泄露精确 GPS。所有流量通过 tor 路由来隐藏你的 IP。"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "基于位置的聊天频道"
+          }
         }
       }
     },
@@ -13016,6 +13830,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "无效的 geohash"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无效的地理哈希"
           }
         }
       }
@@ -13112,6 +13932,12 @@
             "state": "translated",
             "value": "正在寻找附近频道…"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在加载附近的频道"
+          }
         }
       }
     },
@@ -13207,6 +14033,12 @@
             "state": "translated",
             "value": "mesh"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "网格"
+          }
         }
       }
     },
@@ -13301,6 +14133,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "位置权限被拒。请在设置中启用以使用位置频道。"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "权限被拒绝"
           }
         }
       }
@@ -13781,6 +14619,34 @@
               }
             }
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ [%2$#@people_count@]"
+          },
+          "substitutions": {
+            "people_count": {
+              "argNum": 2,
+              "formatSpecifier": "lld",
+              "variations": {
+                "plural": {
+                  "one": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%d 人"
+                    }
+                  },
+                  "other": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%d 人"
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -13876,6 +14742,12 @@
             "state": "translated",
             "value": "#%@ • %@"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%1$@ • %2$@"
+          }
         }
       }
     },
@@ -13967,6 +14839,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ • %2$@"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "%1$@ • %2$@"
@@ -14066,6 +14944,12 @@
             "state": "translated",
             "value": "#位置频道"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#位置频道"
+          }
         }
       }
     },
@@ -14160,6 +15044,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "为位置频道隐藏你的 IP。推荐：开启。"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通过Tor的匿名中继"
           }
         }
       }
@@ -14256,6 +15146,12 @@
             "state": "translated",
             "value": "tor 路由"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tor中继"
+          }
         }
       }
     },
@@ -14347,6 +15243,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "街区"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "街区"
@@ -14446,6 +15348,12 @@
             "state": "translated",
             "value": "楼栋"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "建筑"
+          }
         }
       }
     },
@@ -14537,6 +15445,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "城市"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "城市"
@@ -14636,6 +15550,12 @@
             "state": "translated",
             "value": "社区"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "社区"
+          }
         }
       }
     },
@@ -14727,6 +15647,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "省份"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "省份"
@@ -14826,6 +15752,12 @@
             "state": "translated",
             "value": "区域"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "地区"
+          }
         }
       }
     },
@@ -14921,6 +15853,12 @@
             "state": "translated",
             "value": "关闭"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "忽略"
+          }
         }
       }
     },
@@ -15012,6 +15950,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重试"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "重试"
@@ -15111,6 +16055,12 @@
             "state": "translated",
             "value": "为此地点添加简短的常驻笔记，方便其他访客发现。"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在此位置留下笔记"
+          }
         }
       }
     },
@@ -15205,6 +16155,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "成为这里的第一条笔记。"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "成为第一个在此留下笔记的人"
           }
         }
       }
@@ -15301,6 +16257,12 @@
             "state": "translated",
             "value": "尚无笔记"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此处没有笔记"
+          }
         }
       }
     },
@@ -15396,6 +16358,12 @@
             "state": "translated",
             "value": "无法发送笔记。%@"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发送笔记失败。%@"
+          }
         }
       }
     },
@@ -15490,6 +16458,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "附近没有可用的地理中继。稍后再试。"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有中继"
           }
         }
       }
@@ -15970,6 +16944,34 @@
               }
             }
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%1$@ • %2$#@note_count@"
+          },
+          "substitutions": {
+            "note_count": {
+              "argNum": 2,
+              "formatSpecifier": "lld",
+              "variations": {
+                "plural": {
+                  "one": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%d 笔记"
+                    }
+                  },
+                  "other": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%d 笔记"
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -16064,6 +17066,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在加载笔记…"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在加载笔记"
           }
         }
       }
@@ -16160,6 +17168,12 @@
             "state": "translated",
             "value": "正在加载最新笔记…"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在加载最近的笔记"
+          }
         }
       }
     },
@@ -16254,6 +17268,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "附近没有地理中继"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "附近没有中继"
           }
         }
       }
@@ -16350,6 +17370,12 @@
             "state": "translated",
             "value": "为此地点添加笔记"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在此位置留下笔记..."
+          }
         }
       }
     },
@@ -16444,6 +17470,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "地理中继不可用；笔记已暂停"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中继已暂停"
           }
         }
       }
@@ -16540,6 +17572,12 @@
             "state": "translated",
             "value": "笔记依赖地理中继。检查连接后再试。"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击重试连接中继"
+          }
         }
       }
     },
@@ -16631,6 +17669,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新消息"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "新消息"
@@ -16730,6 +17774,12 @@
             "state": "translated",
             "value": "无法与 %@ 开始聊天：用户已被屏蔽。"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法与 %@ 开始聊天：此人已被屏蔽。"
+          }
         }
       }
     },
@@ -16825,6 +17875,12 @@
             "state": "translated",
             "value": "无法与 %@ 开始聊天：离线消息需要互相关注。"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法与 %@ 开始聊天：离线消息需要互相收藏。"
+          }
         }
       }
     },
@@ -16916,6 +17972,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用户"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "用户"
@@ -17015,6 +18077,12 @@
             "state": "translated",
             "value": "无法发送：用户已被屏蔽。"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "消息被屏蔽"
+          }
         }
       }
     },
@@ -17109,6 +18177,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "无法向 %@ 发送：用户已被屏蔽。"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法向 %@ 发送消息：此人已被屏蔽。"
           }
         }
       }
@@ -17205,6 +18279,12 @@
             "state": "translated",
             "value": "无法向 %@ 发送：对方无法通过 mesh 或 Nostr 到达。"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法向 %@ 发送消息 - 无法通过网格或 nostr 联系到对等节点。"
+          }
         }
       }
     },
@@ -17299,6 +18379,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "已在 geohash 聊天中屏蔽 %@"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在地理哈希聊天中屏蔽了 %@"
           }
         }
       }
@@ -17395,6 +18481,12 @@
             "state": "translated",
             "value": "已在 geohash 聊天中解除屏蔽 %@"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在地理哈希聊天中取消屏蔽了 %@"
+          }
         }
       }
     },
@@ -17489,6 +18581,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "发送失败：你不在位置频道中"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不在频道中"
           }
         }
       }
@@ -17585,6 +18683,12 @@
             "state": "translated",
             "value": "无法发送到位置频道"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发送失败"
+          }
         }
       }
     },
@@ -17679,6 +18783,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "开发构建：tor 绕过已启用。"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开发模式：绕过Tor"
           }
         }
       }
@@ -17775,6 +18885,12 @@
             "state": "translated",
             "value": "tor 已重启。网络路由已恢复。"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tor已重启"
+          }
         }
       }
     },
@@ -17869,6 +18985,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tor 正在重启以恢复连接..."
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在重启Tor"
           }
         }
       }
@@ -17965,6 +19087,12 @@
             "state": "translated",
             "value": "tor 已启动。所有聊天通过 tor 路由以保护 IP。"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tor已启动。所有聊天都通过Tor路由以保护隐私。"
+          }
         }
       }
     },
@@ -18059,6 +19187,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在启动 tor..."
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在启动Tor"
           }
         }
       }
@@ -18155,6 +19289,12 @@
             "state": "translated",
             "value": "验证 QR 码"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我的二维码"
+          }
         }
       }
     },
@@ -18249,6 +19389,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "扫描验证我"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我的二维码"
           }
         }
       }
@@ -18345,6 +19491,12 @@
             "state": "translated",
             "value": "QR 不可用"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "二维码不可用"
+          }
         }
       }
     },
@@ -18439,6 +19591,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "粘贴 QR 内容以验证："
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "粘贴指纹"
           }
         }
       }
@@ -18535,6 +19693,12 @@
             "state": "translated",
             "value": "扫描好友的 QR"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "让朋友扫描此二维码"
+          }
         }
       }
     },
@@ -18629,6 +19793,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "QR 无效或已过期"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无效的指纹"
           }
         }
       }
@@ -18725,6 +19895,12 @@
             "state": "translated",
             "value": "未找到匹配的同伴"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找不到对等节点"
+          }
         }
       }
     },
@@ -18819,6 +19995,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "已请求 %@ 的验证"
+          }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已请求验证 %@"
           }
         }
       }
@@ -18915,6 +20097,12 @@
             "state": "translated",
             "value": "验证"
           }
+        },
+        "zh-CN": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "验证指纹"
+          }
         }
       }
     },
@@ -19006,6 +20194,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "验证"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "验证"
@@ -19103,6 +20297,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@"
+          }
+        },
+        "zh-CN": {
           "stringUnit": {
             "state": "translated",
             "value": "%@"
