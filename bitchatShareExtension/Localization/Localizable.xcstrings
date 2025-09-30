@@ -108,6 +108,12 @@
             "value": "공유된 링크",
             "comment": "Fallback title when saving a shared link"
           }
+        },
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لینک به اشتراک گذاشته شد"
+          }
         }
       }
     },
@@ -217,6 +223,12 @@
             "state": "translated",
             "value": "링크를 인코딩하는 데 실패했습니다",
             "comment": "Shown when the share payload cannot be encoded"
+          }
+        },
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رمزگذاری لینک ناموفق بود"
           }
         }
       }
@@ -328,6 +340,12 @@
             "value": "공유할 수 있는 내용이 없습니다",
             "comment": "Shown when provided content cannot be shared"
           }
+        },
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "محتوای قابل اشتراک وجود ندارد"
+          }
         }
       }
     },
@@ -437,6 +455,12 @@
             "state": "translated",
             "value": "공유할 내용이 없습니다",
             "comment": "Shown when the share extension receives no content"
+          }
+        },
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "چیزی برای اشتراک نیست"
           }
         }
       }
@@ -548,6 +572,12 @@
             "value": "✓ bitchat으로 링크를 공유했습니다",
             "comment": "Confirmation after successfully sharing a link"
           }
+        },
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ لینک به bitchat به اشتراک گذاشته شد"
+          }
         }
       }
     },
@@ -657,6 +687,12 @@
             "state": "translated",
             "value": "✓ bitchat으로 텍스트를 공유했습니다",
             "comment": "Confirmation after successfully sharing text"
+          }
+        },
+        "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ متن به bitchat به اشتراک گذاشته شد"
           }
         }
       }
