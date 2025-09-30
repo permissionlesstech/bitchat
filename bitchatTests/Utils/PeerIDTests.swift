@@ -206,6 +206,18 @@ final class PeerIDTests: XCTestCase {
         XCTAssertEqual(short.prefix, .empty)
     }
     
+    func test_toShort_whenNoiseKeyExists_withNoisePrefix() {
+        let peerID = PeerID(str: "noise:" + hex64)
+        let short = peerID.toShort()
+        
+        // `toShort()` should derive 16-hex peerID
+        let expected = Data(hexString: hex64)!.sha256Fingerprint().prefix(16)
+        
+        XCTAssertEqual(short.bare, String(expected))
+        XCTAssertEqual(short.prefix, .empty)
+        XCTAssertEqual(peerID.prefix, .noise)
+    }
+    
     func test_toShort_whenNoNoiseKey() {
         let peerID = PeerID(str: "some_random_key")
         let short = peerID.toShort()
@@ -339,6 +351,10 @@ final class PeerIDTests: XCTestCase {
         let peerID = PeerID(str: hex64)
         XCTAssertTrue(peerID.isNoiseKeyHex)
         XCTAssertNotNil(peerID.noiseKey)
+        
+        let prefixedPeerID = PeerID(str: "noise:" + hex64)
+        XCTAssertTrue(prefixedPeerID.isNoiseKeyHex)
+        XCTAssertNotNil(prefixedPeerID.noiseKey)
         
         let bad = String(repeating: "z", count: 64) // invalid hex
         let badPeerID = PeerID(str: bad)

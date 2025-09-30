@@ -153,7 +153,7 @@ extension PeerID {
     
     /// Short routing IDs (exact 16-hex)
     var isShort: Bool {
-        id.count == Constants.hexIDLength && Data(hexString: id) != nil
+        bare.count == Constants.hexIDLength && Data(hexString: bare) != nil
     }
     
     /// Full Noise key hex (exact 64-hex)
@@ -163,8 +163,8 @@ extension PeerID {
     
     /// Full Noise key (exact 64-hex) as Data
     var noiseKey: Data? {
-        guard id.count == Constants.maxIDLength else { return nil }
-        return Data(hexString: id)
+        guard bare.count == Constants.maxIDLength else { return nil }
+        return Data(hexString: bare)
     }
 }
 
