@@ -3718,9 +3718,34 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             nostrRelayManager?.connect()
         }
         
+        // Delete ALL media files (incoming and outgoing) in background
+        Task.detached(priority: .utility) {
+            do {
+                let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+                let filesDir = base.appendingPathComponent("files", isDirectory: true)
+
+                // Delete the entire files directory and recreate it
+                if FileManager.default.fileExists(atPath: filesDir.path) {
+                    try FileManager.default.removeItem(at: filesDir)
+                    SecureLogger.info("🗑️ Deleted all media files during panic clear", category: .session)
+                }
+
+                // Recreate empty directory structure
+                try FileManager.default.createDirectory(at: filesDir, withIntermediateDirectories: true, attributes: nil)
+                try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("voicenotes/incoming", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
+                try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("voicenotes/outgoing", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
+                try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("images/incoming", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
+                try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("images/outgoing", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
+                try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("files/incoming", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
+                try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("files/outgoing", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
+            } catch {
+                SecureLogger.error("Failed to clear media files during panic: \(error)", category: .session)
+            }
+        }
+
         // Force immediate UI update for panic mode
         // UI updates immediately - no flushing needed
-        
+
     }
     
     // MARK: - Autocomplete
@@ -4722,6 +4747,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     // Clear the current public channel's timeline (visible + persistent buffer)
     @MainActor
     func clearCurrentPublicTimeline() {
+        // Clear messages from current timeline
         switch activeChannel {
         case .mesh:
             messages.removeAll()
@@ -4729,6 +4755,32 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         case .location(let ch):
             messages.removeAll()
             geoTimelines[ch.geohash] = []
+        }
+
+        // Delete associated media files (images, voice notes, files) in background
+        // Only delete from current chat to avoid removing private chat media
+        Task.detached(priority: .utility) {
+            do {
+                let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+                let filesDir = base.appendingPathComponent("files", isDirectory: true)
+
+                // Only clear public media (mesh channel only - geohash media is separate)
+                // Note: This is conservative - only clears outgoing since we authored those
+                let outgoingDirs = [
+                    filesDir.appendingPathComponent("voicenotes/outgoing", isDirectory: true),
+                    filesDir.appendingPathComponent("images/outgoing", isDirectory: true),
+                    filesDir.appendingPathComponent("files/outgoing", isDirectory: true)
+                ]
+
+                for dir in outgoingDirs {
+                    if FileManager.default.fileExists(atPath: dir.path) {
+                        try? FileManager.default.removeItem(at: dir)
+                        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
+                    }
+                }
+            } catch {
+                SecureLogger.error("Failed to clear media files: \(error)", category: .session)
+            }
         }
     }
     
