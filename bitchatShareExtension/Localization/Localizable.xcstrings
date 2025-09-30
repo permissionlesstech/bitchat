@@ -150,6 +150,13 @@
             "value": "rohy nozaraina",
             "comment": "Fallback title when saving a shared link"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "साझा किया गया लिंक",
+            "comment": "Fallback title when saving a shared link"
+          }
         }
       }
     },
@@ -300,6 +307,13 @@
           "stringUnit": {
             "state": "translated",
             "value": "tsy nahomby ny fanokafana ny rohy",
+            "comment": "Shown when the share payload cannot be encoded"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "लिंक एन्कोड करने में विफल",
             "comment": "Shown when the share payload cannot be encoded"
           }
         }
@@ -454,6 +468,13 @@
             "value": "tsy misy votoaty azo zaraina",
             "comment": "Shown when provided content cannot be shared"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "कोई साझा करने योग्य सामग्री नहीं",
+            "comment": "Shown when provided content cannot be shared"
+          }
         }
       }
     },
@@ -604,6 +625,13 @@
           "stringUnit": {
             "state": "translated",
             "value": "tsy misy hozaraina",
+            "comment": "Shown when the share extension receives no content"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "साझा करने के लिए कुछ नहीं",
             "comment": "Shown when the share extension receives no content"
           }
         }
@@ -758,6 +786,13 @@
             "value": "✓ nozaraina tamin'ny bitchat ny rohy",
             "comment": "Confirmation after successfully sharing a link"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ bitchat में लिंक साझा किया गया",
+            "comment": "Confirmation after successfully sharing a link"
+          }
         }
       }
     },
@@ -908,6 +943,13 @@
           "stringUnit": {
             "state": "translated",
             "value": "✓ nozaraina tamin'ny bitchat ny soratra",
+            "comment": "Confirmation after successfully sharing text"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ bitchat में टेक्स्ट साझा किया गया",
             "comment": "Confirmation after successfully sharing text"
           }
         }

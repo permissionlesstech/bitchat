@@ -129,6 +129,12 @@
             "state": "translated",
             "value": "bitchat"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat"
+          }
         }
       }
     },
@@ -259,6 +265,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "hidio"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "बंद करें"
           }
         }
       }
@@ -391,6 +403,12 @@
             "state": "translated",
             "value": "VITA"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "पूर्ण"
+          }
         }
       }
     },
@@ -521,6 +539,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "hafatra manokana voasifetra amin'ny protokola tabataba"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "नॉइज़ प्रोटोकॉल के साथ निजी संदेश एन्क्रिप्ट किए गए"
           }
         }
       }
@@ -653,6 +677,12 @@
             "state": "translated",
             "value": "fampifandraisana miafina"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एंड-टू-एंड एन्क्रिप्शन"
+          }
         }
       }
     },
@@ -783,6 +813,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ny hafatra dia ampitaina amin'ny alalan'ny mpiara-miasa, mandeha lavitra"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "संदेश पीयर्स के माध्यम से रिले होते हैं, दूरी तक पहुंचते हैं"
           }
         }
       }
@@ -915,6 +951,12 @@
             "state": "translated",
             "value": "faritry ny lavitra"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "विस्तारित रेंज"
+          }
         }
       }
     },
@@ -1045,6 +1087,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "mahazo fampandrenesana rehefa miditra ny olona tianao"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "जब आपके पसंदीदा लोग जुड़ें तो सूचना पाएं"
           }
         }
       }
@@ -1177,6 +1225,12 @@
             "state": "translated",
             "value": "ankafizina"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "पसंदीदा"
+          }
         }
       }
     },
@@ -1307,6 +1361,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "fantsona geohash hiresahana amin'ny olona eny amin'ny faritra akaiky amin'ny alalan'ny relay tsy miankina"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "विकेंद्रीकृत गुमनाम रिले पर पास के क्षेत्रों में लोगों के साथ चैट करने के लिए जियोहैश चैनल"
           }
         }
       }
@@ -1439,6 +1499,12 @@
             "state": "translated",
             "value": "fantsona geohash"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "जियोहैश चैनल"
+          }
         }
       }
     },
@@ -1569,6 +1635,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ampiasao ny marika @ hilazana ny mpampiasa hafa"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "@ चिह्न का उपयोग करके अन्य उपयोगकर्ताओं का उल्लेख करें"
           }
         }
       }
@@ -1701,6 +1773,12 @@
             "state": "translated",
             "value": "filazana"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "उल्लेख"
+          }
         }
       }
     },
@@ -1831,6 +1909,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "miresaha amin'ny olona akaiky tsy mila Internet"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इंटरनेट के बिना पास के लोगों के साथ चैट करें"
           }
         }
       }
@@ -1963,6 +2047,12 @@
             "state": "translated",
             "value": "fifandraisana tsy an-tserasera"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ऑफ़लाइन संचार"
+          }
         }
       }
     },
@@ -2093,6 +2183,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "endri-javatra"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सुविधाएं"
           }
         }
       }
@@ -2225,6 +2321,12 @@
             "state": "translated",
             "value": "soraty #geohash hanovana fantsona"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "चैनल बदलने के लिए #geohash टाइप करें"
+          }
         }
       }
     },
@@ -2355,6 +2457,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "soraty /clear hanadio ny resaka"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "चैट साफ़ करने के लिए /clear टाइप करें"
           }
         }
       }
@@ -2487,6 +2595,12 @@
             "state": "translated",
             "value": "soraty /help hijery ny baiko rehetra"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सभी कमांड देखने के लिए /help टाइप करें"
+          }
         }
       }
     },
@@ -2617,6 +2731,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tsindrio ny isan'ny olona hanokafana ny sidebar"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "साइडबार खोलने के लिए लोगों की संख्या पर टैप करें"
           }
         }
       }
@@ -2749,6 +2869,12 @@
             "state": "translated",
             "value": "soraty /nick anarana hametraka anarana kely"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "उपनाम सेट करने के लिए /nick उपनाम टाइप करें"
+          }
         }
       }
     },
@@ -2879,6 +3005,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tsindrio ny anaran'ny mpampiasa hanombohana hafatra mivantana"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "डायरेक्ट मैसेज शुरू करने के लिए उपयोगकर्ता नाम पर टैप करें"
           }
         }
       }
@@ -3011,6 +3143,12 @@
             "state": "translated",
             "value": "fomba fampiasana"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "उपयोग कैसे करें"
+          }
         }
       }
     },
@@ -3141,6 +3279,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ny hafatra dia tsy voatahiry maharitra"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "संदेश स्थायी रूप से संग्रहीत नहीं होते"
           }
         }
       }
@@ -3273,6 +3417,12 @@
             "state": "translated",
             "value": "hafatra vetivety"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "अस्थायी संदेश"
+          }
         }
       }
     },
@@ -3403,6 +3553,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tsy misy analytics, tsy misy fanaraha-maso, tsy misy dokam-barotra"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "कोई एनालिटिक्स, कोई ट्रैकिंग, कोई विज्ञापन नहीं"
           }
         }
       }
@@ -3535,6 +3691,12 @@
             "state": "translated",
             "value": "tsy misy fanaraha-maso"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "कोई ट्रैकिंग नहीं"
+          }
         }
       }
     },
@@ -3665,6 +3827,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ahetsaho ny fitaovana hanadio ny angona rehetra"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सभी डेटा साफ़ करने के लिए डिवाइस हिलाएं"
           }
         }
       }
@@ -3797,6 +3965,12 @@
             "state": "translated",
             "value": "famafana maika"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "पैनिक डिलीट"
+          }
         }
       }
     },
@@ -3927,6 +4101,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "fiainana manokana"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "गोपनीयता"
           }
         }
       }
@@ -4059,6 +4239,12 @@
             "state": "translated",
             "value": "resaka tsy miankina"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "विकेंद्रीकृत चैट"
+          }
         }
       }
     },
@@ -4189,6 +4375,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ity dia rindrambaiko andrana. Aza ampiasaina amin'ny fifandraisana manan-danja."
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "यह प्रयोगात्मक सॉफ़्टवेयर है। महत्वपूर्ण संचार के लिए उपयोग न करें।"
           }
         }
       }
@@ -4321,6 +4513,12 @@
             "state": "translated",
             "value": "fampitandremana"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "चेतावनी"
+          }
         }
       }
     },
@@ -4451,6 +4649,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "aoka ihany"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ਰੱਦ ਕਰੋ"
           }
         }
       }
@@ -4583,6 +4787,12 @@
             "state": "translated",
             "value": "hidio"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ਬੰਦ ਕਰੋ"
+          }
         }
       }
     },
@@ -4713,6 +4923,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "adikao"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ਕਾਪੀ ਕਰੋ"
           }
         }
       }
@@ -4845,6 +5061,12 @@
             "state": "translated",
             "value": "eka"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ਠੀਕ ਹੈ"
+          }
         }
       }
     },
@@ -4975,6 +5197,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tsy miasa"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "बंद"
           }
         }
       }
@@ -5107,6 +5335,12 @@
             "state": "translated",
             "value": "miasa"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "चालू"
+          }
         }
       }
     },
@@ -5237,6 +5471,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tsy fantatra"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "अज्ञात"
           }
         }
       }
@@ -5369,6 +5609,12 @@
             "state": "translated",
             "value": "ampidiro amin'ny ankafizina"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "पसंदीदा में जोड़ें"
+          }
         }
       }
     },
@@ -5499,6 +5745,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "azo atao amin'ny nostr"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nostr के माध्यम से उपलब्ध"
           }
         }
       }
@@ -5631,6 +5883,12 @@
             "state": "translated",
             "value": "miverina amin'ny resaka lehibe"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "मुख्य चैट पर वापस जाएं"
+          }
         }
       }
     },
@@ -5761,6 +6019,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "mifandray amin'ny harato"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "मेश से जुड़ा हुआ"
           }
         }
       }
@@ -5893,6 +6157,12 @@
             "state": "translated",
             "value": "toe-javatra fampifandraisana miafina: %@"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एन्क्रिप्शन स्थिति: %@"
+          }
         }
       }
     },
@@ -6023,6 +6293,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "fantsona toerana"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "स्थान चैनल"
           }
         }
       }
@@ -6155,6 +6431,12 @@
             "state": "translated",
             "value": "naoty toerana"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "स्थान नोट्स"
+          }
         }
       }
     },
@@ -6285,6 +6567,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "hanokatra resaka manokana tsy mbola novakiana"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "अपठित निजी चैट खोलें"
           }
         }
       }
@@ -6933,6 +7221,12 @@
               }
             }
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%#@people@"
+          }
         }
       }
     },
@@ -7063,6 +7357,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "resaka manokana amin'i %@"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ के साथ निजी चैट"
           }
         }
       }
@@ -7195,6 +7495,12 @@
             "state": "translated",
             "value": "azo tratrarina amin'ny harato"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "मेश के माध्यम से पहुंच योग्य"
+          }
         }
       }
     },
@@ -7325,6 +7631,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "esorina amin'ny ankafizina"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "पसंदीदा से हटाएं"
           }
         }
       }
@@ -7457,6 +7769,12 @@
             "state": "translated",
             "value": "alefaso rehefa avy nanoratra hafatra"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "संदेश टाइप करने के बाद भेजें"
+          }
         }
       }
     },
@@ -7587,6 +7905,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "alefaso ny hafatra"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "संदेश भेजें"
           }
         }
       }
@@ -7719,6 +8043,12 @@
             "state": "translated",
             "value": "alefaso ny hafatra"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "संदेश भेजें"
+          }
         }
       }
     },
@@ -7849,6 +8179,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ovay ny bookmark ho an'ny #%@"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%@ के लिए बुकमार्क टॉगल करें"
           }
         }
       }
@@ -7981,6 +8317,12 @@
             "state": "translated",
             "value": "ovay ny toro-hevitra ankafizina"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "पसंदीदा हिंट टॉगल करें"
+          }
         }
       }
     },
@@ -8111,6 +8453,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "jereo ny toro-hevitra dian-tanana"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "फिंगरप्रिंट हिंट देखें"
           }
         }
       }
@@ -8243,6 +8591,12 @@
             "state": "translated",
             "value": "sakano"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ब्लॉक करें"
+          }
         }
       }
     },
@@ -8373,6 +8727,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "hafatra mivantana"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "डायरेक्ट मैसेज"
           }
         }
       }
@@ -8505,6 +8865,12 @@
             "state": "translated",
             "value": "horohoro"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "गले लगाना"
+          }
         }
       }
     },
@@ -8635,6 +9001,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "lazao"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "उल्लेख"
           }
         }
       }
@@ -8767,6 +9139,12 @@
             "state": "translated",
             "value": "kapohina"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "थप्पड़"
+          }
         }
       }
     },
@@ -8897,6 +9275,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "hetsika"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "कार्य"
           }
         }
       }
@@ -9029,6 +9413,12 @@
             "state": "translated",
             "value": "Tsy miasa ny Bluetooth. Alefaso ny Bluetooth ao amin'ny Settings."
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ब्लूटूथ बंद है। कृपया सेटिंग्स में ब्लूटूथ चालू करें।"
+          }
         }
       }
     },
@@ -9159,6 +9549,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "mila fahazoan-dàlana Bluetooth ny bitchat mba hifandraisana amin'ny fitaovana akaiky. Alefaso ny fidirana ao amin'ny Settings."
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat को पास के डिवाइसेस से कनेक्ट करने के लिए ब्लूटूथ अनुमति की आवश्यकता है। सेटिंग्स में एक्सेस सक्षम करें।"
           }
         }
       }
@@ -9291,6 +9687,12 @@
             "state": "translated",
             "value": "Settings"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सेटिंग्स"
+          }
         }
       }
     },
@@ -9421,6 +9823,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ilaina ny Bluetooth"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ब्लूटूथ आवश्यक"
           }
         }
       }
@@ -9553,6 +9961,12 @@
             "state": "translated",
             "value": "Tsy manohana Bluetooth ity fitaovana ity."
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "यह डिवाइस ब्लूटूथ का समर्थन नहीं करता।"
+          }
         }
       }
     },
@@ -9683,6 +10097,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ny sary an-efijery dia mety hanambara ny mombamomba anao sy ny toerana misy anao."
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "स्क्रीनशॉट आपकी पहचान और स्थान को उजागर कर सकता है।"
           }
         }
       }
@@ -9815,6 +10235,12 @@
             "state": "translated",
             "value": "fampitandremana momba ny fiainana manokana"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "गोपनीयता चेतावनी"
+          }
         }
       }
     },
@@ -9945,6 +10371,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "sakano ny mpampiasa"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "उपयोगकर्ता को ब्लॉक करें"
           }
         }
       }
@@ -10077,6 +10509,12 @@
             "state": "translated",
             "value": "diovy ny resaka"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "चैट साफ़ करें"
+          }
         }
       }
     },
@@ -10207,6 +10645,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ampidiro amin'ny ankafizina"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "पसंदीदा में जोड़ें"
           }
         }
       }
@@ -10339,6 +10783,12 @@
             "state": "translated",
             "value": "horohoro ny olona iray"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "किसी को गले लगाएं"
+          }
         }
       }
     },
@@ -10469,6 +10919,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "alefaso hafatra manokana"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "निजी संदेश भेजें"
           }
         }
       }
@@ -10601,6 +11057,12 @@
             "state": "translated",
             "value": "kapohina ny olona iray"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "किसी को थप्पड़ मारें"
+          }
         }
       }
     },
@@ -10731,6 +11193,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "esory ny fanakanana ny mpampiasa"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "उपयोगकर्ता को अनब्लॉक करें"
           }
         }
       }
@@ -10863,6 +11331,12 @@
             "state": "translated",
             "value": "esorina amin'ny ankafizina"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "पसंदीदा से हटाएं"
+          }
         }
       }
     },
@@ -10993,6 +11467,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "asehoy ny mpampiasa an-tserasera"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ऑनलाइन उपयोगकर्ता दिखाएं"
           }
         }
       }
@@ -11125,6 +11605,12 @@
             "state": "translated",
             "value": "natolotra ho an'ny %1$d amin'ny %2$d mpikambana"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%2$d सदस्यों में से %1$d को वितरित"
+          }
         }
       }
     },
@@ -11255,6 +11741,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "natolotra ho an'i %@"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ को वितरित"
           }
         }
       }
@@ -11387,6 +11879,12 @@
             "state": "translated",
             "value": "tsy nahomby: %@"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "असफल: %@"
+          }
         }
       }
     },
@@ -11517,6 +12015,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "novakian'i %@"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ द्वारा पढ़ा गया"
           }
         }
       }
@@ -11649,6 +12153,12 @@
             "state": "translated",
             "value": "voasakana"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ब्लॉक किया गया"
+          }
         }
       }
     },
@@ -11779,6 +12289,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tena"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "स्वयं"
           }
         }
       }
@@ -11911,6 +12427,12 @@
             "state": "translated",
             "value": "fahadisoana fandefasana"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "भेजने में त्रुटि"
+          }
         }
       }
     },
@@ -12041,6 +12563,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "mpandray tsy fantatra"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "अज्ञात प्राप्तकर्ता"
           }
         }
       }
@@ -12173,6 +12701,12 @@
             "state": "translated",
             "value": "tsy azo tratrarina"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "पहुंच योग्य नहीं"
+          }
         }
       }
     },
@@ -12303,6 +12837,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "olona"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "लोग"
           }
         }
       }
@@ -12435,6 +12975,12 @@
             "state": "translated",
             "value": "hamarino ny dian-tanana hahazoana antoka fa azo antoka ny fifandraisana"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सुरक्षित संचार सुनिश्चित करने के लिए फिंगरप्रिंट सत्यापित करें"
+          }
         }
       }
     },
@@ -12565,6 +13111,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "soraty hafatra..."
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ਸੰਦੇਸ਼ ਟਾਈਪ ਕਰੋ..."
           }
         }
       }
@@ -12697,6 +13249,12 @@
             "state": "translated",
             "value": "apetraho anarana kely"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "उपनाम सेट करें"
+          }
         }
       }
     },
@@ -12827,6 +13385,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "alefaso ny serivisy toerana"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "स्थान सेवाएं सक्षम करें"
           }
         }
       }
@@ -12959,6 +13523,12 @@
             "state": "translated",
             "value": "adikao ny hafatra"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "संदेश कॉपी करें"
+          }
         }
       }
     },
@@ -13089,6 +13659,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "asehoy kely kokoa"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "कम दिखाएं"
           }
         }
       }
@@ -13221,6 +13797,12 @@
             "state": "translated",
             "value": "asehoy bebe kokoa"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "अधिक दिखाएं"
+          }
         }
       }
     },
@@ -13351,6 +13933,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tsy misy toerana"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "स्थान अनुपलब्ध"
           }
         }
       }
@@ -13483,6 +14071,12 @@
             "state": "translated",
             "value": "naoty"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "नोट्स"
+          }
         }
       }
     },
@@ -13613,6 +14207,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "fandoavam-bola Cashu"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cashu भुगतान"
           }
         }
       }
@@ -13745,6 +14345,12 @@
             "state": "translated",
             "value": "fandoavam-bola Lightning"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "लाइटनिंग भुगतान"
+          }
         }
       }
     },
@@ -13875,6 +14481,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "mametraka fampifandraisana miafina"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एन्क्रिप्शन स्थापित कर रहा है"
           }
         }
       }
@@ -14007,6 +14619,12 @@
             "state": "translated",
             "value": "tsy nahomby ny fampifandraisana miafina"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एन्क्रिप्शन असफल"
+          }
         }
       }
     },
@@ -14137,6 +14755,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tsy voasifetra"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एन्क्रिप्ट नहीं"
           }
         }
       }
@@ -14269,6 +14893,12 @@
             "state": "translated",
             "value": "voaaro"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सुरक्षित"
+          }
         }
       }
     },
@@ -14399,6 +15029,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "voamarina"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सत्यापित"
           }
         }
       }
@@ -14531,6 +15167,12 @@
             "state": "translated",
             "value": "mametraka"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "स्थापित कर रहा है"
+          }
         }
       }
     },
@@ -14661,6 +15303,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tsy nahomby"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "असफल"
           }
         }
       }
@@ -14793,6 +15441,12 @@
             "state": "translated",
             "value": "tsy voasifetra"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एन्क्रिप्ट नहीं"
+          }
         }
       }
     },
@@ -14923,6 +15577,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "voaaro"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सुरक्षित"
           }
         }
       }
@@ -15055,6 +15715,12 @@
             "state": "translated",
             "value": "voamarina"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सत्यापित"
+          }
         }
       }
     },
@@ -15185,6 +15851,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "mariho ho voamarina"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सत्यापित के रूप में चिह्नित करें"
           }
         }
       }
@@ -15317,6 +15989,12 @@
             "state": "translated",
             "value": "esory ny famarinana"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सत्यापन हटाएं"
+          }
         }
       }
     },
@@ -15447,6 +16125,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "⚠️ tsy voamarina"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⚠️ सत्यापित नहीं"
           }
         }
       }
@@ -15579,6 +16263,12 @@
             "state": "translated",
             "value": "✓ voamarina"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ सत्यापित"
+          }
         }
       }
     },
@@ -15709,6 +16399,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "miandry fifampiraharahana"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "हैंडशेक लंबित"
           }
         }
       }
@@ -15841,6 +16537,12 @@
             "state": "translated",
             "value": "voamarina ny dian-tanana"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "फिंगरप्रिंट सत्यापित"
+          }
         }
       }
     },
@@ -15971,6 +16673,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ampitahao amin'i %@ ireo dian-tanana ireo amin'ny alalan'ny fantsona azo antoka."
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सुरक्षित चैनल का उपयोग करके %@ के साथ इन फिंगरप्रिंट्स की तुलना करें।"
           }
         }
       }
@@ -16103,6 +16811,12 @@
             "state": "translated",
             "value": "ny dian-tanany"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "उनका फिंगरप्रिंट"
+          }
         }
       }
     },
@@ -16233,6 +16947,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "dian-tanana"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "फिंगरप्रिंट"
           }
         }
       }
@@ -16365,6 +17085,12 @@
             "state": "translated",
             "value": "ny dian-tananao"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "आपका फिंगरप्रिंट"
+          }
         }
       }
     },
@@ -16495,6 +17221,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "sakano"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ब्लॉक करें"
           }
         }
       }
@@ -16627,6 +17359,12 @@
             "state": "translated",
             "value": "esory ny fanakanana"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "अनब्लॉक करें"
+          }
         }
       }
     },
@@ -16757,6 +17495,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tsy misy olona akaiky"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "पास में कोई नहीं"
           }
         }
       }
@@ -16889,6 +17633,12 @@
             "state": "translated",
             "value": "voasakana"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ब्लॉक किया गया"
+          }
         }
       }
     },
@@ -17019,6 +17769,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "(ianao)"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(आप)"
           }
         }
       }
@@ -17151,6 +17907,12 @@
             "state": "translated",
             "value": "hanokatra Settings"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सेटिंग्स खोलें"
+          }
         }
       }
     },
@@ -17281,6 +18043,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "esory ny fidirana"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एक्सेस हटाएं"
           }
         }
       }
@@ -17413,6 +18181,12 @@
             "state": "translated",
             "value": "angataho fahazoan-dàlana"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "अनुमतियां अनुरोध करें"
+          }
         }
       }
     },
@@ -17543,6 +18317,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "teleport"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "टेलीपोर्ट"
           }
         }
       }
@@ -17675,6 +18455,12 @@
             "state": "translated",
             "value": "voamarika"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "बुकमार्क किए गए"
+          }
         }
       }
     },
@@ -17805,6 +18591,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "fantsona resaka mifototra amin'ny toerana"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "स्थान-आधारित चैट चैनल"
           }
         }
       }
@@ -17937,6 +18729,12 @@
             "state": "translated",
             "value": "geohash tsy mety"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "अमान्य जियोहैश"
+          }
         }
       }
     },
@@ -18067,6 +18865,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "mampiditra fantsona akaiky"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "पास के चैनल लोड कर रहा है"
           }
         }
       }
@@ -18199,6 +19003,12 @@
             "state": "translated",
             "value": "harato"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "मेश"
+          }
         }
       }
     },
@@ -18329,6 +19139,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "nolavina ny fahazoan-dàlana"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "अनुमति अस्वीकृत"
           }
         }
       }
@@ -18977,6 +19793,12 @@
               }
             }
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ [%2$#@people_count@]"
+          }
         }
       }
     },
@@ -19104,6 +19926,12 @@
           }
         },
         "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%1$@ • %2$@"
+          }
+        },
+        "pa": {
           "stringUnit": {
             "state": "translated",
             "value": "#%1$@ • %2$@"
@@ -19239,6 +20067,12 @@
             "state": "translated",
             "value": "%1$@ • %2$@"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ • %2$@"
+          }
         }
       }
     },
@@ -19369,6 +20203,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "#fantsona toerana"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#ਸਥਾਨ ਚੈਨਲ"
           }
         }
       }
@@ -19501,6 +20341,12 @@
             "state": "translated",
             "value": "relay tsy mitonona anarana amin'ny alalan'ny Tor"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tor के माध्यम से गुमनाम रिले"
+          }
         }
       }
     },
@@ -19631,6 +20477,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tor relay"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tor रिले"
           }
         }
       }
@@ -19763,6 +20615,12 @@
             "state": "translated",
             "value": "sakana"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ब्लॉक"
+          }
         }
       }
     },
@@ -19893,6 +20751,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "trano"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "भवन"
           }
         }
       }
@@ -20025,6 +20889,12 @@
             "state": "translated",
             "value": "tanàna"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "शहर"
+          }
         }
       }
     },
@@ -20155,6 +21025,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "manodidina"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "पड़ोस"
           }
         }
       }
@@ -20287,6 +21163,12 @@
             "state": "translated",
             "value": "faritany"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "प्रांत"
+          }
         }
       }
     },
@@ -20417,6 +21299,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "faritra"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "क्षेत्र"
           }
         }
       }
@@ -20549,6 +21437,12 @@
             "state": "translated",
             "value": "atsaharo"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "खारिज करें"
+          }
         }
       }
     },
@@ -20679,6 +21573,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "andramo indray"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "पुनः प्रयास करें"
           }
         }
       }
@@ -20811,6 +21711,12 @@
             "state": "translated",
             "value": "avelao naoty eto amin'ity toerana ity"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इस स्थान पर एक नोट छोड़ें"
+          }
         }
       }
     },
@@ -20941,6 +21847,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "avy ho lasa olona voalohany nametraka naoty eto ianao"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "यहां नोट छोड़ने वाले पहले व्यक्ति बनें"
           }
         }
       }
@@ -21073,6 +21985,12 @@
             "state": "translated",
             "value": "tsy misy naoty eto"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "यहां कोई नोट नहीं"
+          }
         }
       }
     },
@@ -21204,6 +22122,12 @@
             "state": "translated",
             "value": "tsy nahomby ny fandefasana naoty. %@"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "नोट भेजने में असफल। %@"
+          }
         }
       }
     },
@@ -21334,6 +22258,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tsy misy relay"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "कोई रिले नहीं"
           }
         }
       }
@@ -21982,6 +22912,12 @@
               }
             }
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%1$@ • %2$#@note_count@"
+          }
         }
       }
     },
@@ -22112,6 +23048,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "mampiditra naoty"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "नोट्स लोड कर रहा है"
           }
         }
       }
@@ -22244,6 +23186,12 @@
             "state": "translated",
             "value": "mampiditra naoty vao haingana"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "हाल के नोट्स लोड कर रहा है"
+          }
         }
       }
     },
@@ -22374,6 +23322,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tsy misy relay akaiky"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "पास में कोई रिले नहीं"
           }
         }
       }
@@ -22506,6 +23460,12 @@
             "state": "translated",
             "value": "avelao naoty eto amin'ity toerana ity..."
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इस स्थान पर एक नोट छोड़ें..."
+          }
         }
       }
     },
@@ -22636,6 +23596,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "natsahatra ny relay"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "रिले रोक दिए गए"
           }
         }
       }
@@ -22768,6 +23734,12 @@
             "state": "translated",
             "value": "tsindrio ny andramo indray hifandraisana amin'ny relay"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "रिले से कनेक्ट करने के लिए पुनः प्रयास पर टैप करें"
+          }
         }
       }
     },
@@ -22898,6 +23870,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "hafatra vaovao"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "नए संदेश"
           }
         }
       }
@@ -23030,6 +24008,12 @@
             "state": "translated",
             "value": "tsy afaka manomboka resaka amin'i %@: voasakana ny olona."
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ के साथ चैट शुरू नहीं कर सकते: व्यक्ति ब्लॉक है।"
+          }
         }
       }
     },
@@ -23160,6 +24144,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tsy afaka manomboka resaka amin'i %@: ilaina ny fifankatiavana ho an'ny hafatra tsy an-tserasera."
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ के साथ चैट शुरू नहीं कर सकते: ऑफलाइन मैसेजिंग के लिए पारस्परिक पसंदीदा आवश्यक।"
           }
         }
       }
@@ -23292,6 +24282,12 @@
             "state": "translated",
             "value": "mpampiasa"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "उपयोगकर्ता"
+          }
         }
       }
     },
@@ -23422,6 +24418,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "voasakana ny hafatra"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "संदेश ब्लॉक किया गया"
           }
         }
       }
@@ -23554,6 +24556,12 @@
             "state": "translated",
             "value": "tsy afaka mandefa hafatra any amin'i %@: voasakana ny olona."
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ को संदेश नहीं भेज सकते: व्यक्ति ब्लॉक है।"
+          }
         }
       }
     },
@@ -23684,6 +24692,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tsy afaka mandefa hafatra any amin'i %@ - tsy azo tratrarina ny mpiara-miasa amin'ny alalan'ny harato na nostr."
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ को संदेश नहीं भेज सकते - पीयर मेश या nostr के माध्यम से पहुंच योग्य नहीं है।"
           }
         }
       }
@@ -23816,6 +24830,12 @@
             "state": "translated",
             "value": "nosakanana tao amin'ny resaka geohash i %@"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "जियोहैश चैट में %@ को ब्लॉक किया"
+          }
         }
       }
     },
@@ -23946,6 +24966,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "nesorina ny fanakanana an'i %@ tao amin'ny resaka geohash"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "जियोहैश चैट में %@ को अनब्लॉक किया"
           }
         }
       }
@@ -24078,6 +25104,12 @@
             "state": "translated",
             "value": "tsy ao amin'ny fantsona"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "चैनल में नहीं"
+          }
         }
       }
     },
@@ -24208,6 +25240,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tsy nahomby ny fandefasana"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "भेजना असफल"
           }
         }
       }
@@ -24340,6 +25378,12 @@
             "state": "translated",
             "value": "fomba dev: mihoatra ny Tor"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "डेव मोड: Tor बायपास"
+          }
         }
       }
     },
@@ -24470,6 +25514,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "naverina nanomboka ny Tor"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tor पुनः आरंभ किया गया"
           }
         }
       }
@@ -24602,6 +25652,12 @@
             "state": "translated",
             "value": "mamerina manomboka ny Tor"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tor पुनः आरंभ कर रहा है"
+          }
         }
       }
     },
@@ -24732,6 +25788,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "nanomboka ny Tor. Ny resaka rehetra dia mandalo amin'ny Tor ho an'ny fiainana manokana."
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tor ਸ਼ੁਰੂ ਹੋ ਗਿਆ। ਗੁਪਤਤਾ ਲਈ ਸਾਰੀ ਚੈਟ Tor ਰਾਹੀਂ ਰੂਟ ਕੀਤੀ ਜਾਂਦੀ ਹੈ।"
           }
         }
       }
@@ -24864,6 +25926,12 @@
             "state": "translated",
             "value": "manomboka ny Tor"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tor शुरू कर रहा है"
+          }
         }
       }
     },
@@ -24994,6 +26062,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ny kaody QR-ko"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "मेरा QR कोड"
           }
         }
       }
@@ -25126,6 +26200,12 @@
             "state": "translated",
             "value": "ny kaody QR-ko"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "मेरा QR कोड"
+          }
         }
       }
     },
@@ -25256,6 +26336,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tsy misy kaody QR"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QR कोड अनुपलब्ध"
           }
         }
       }
@@ -25388,6 +26474,12 @@
             "state": "translated",
             "value": "apetaho ny dian-tanana"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "फिंगरप्रिंट पेस्ट करें"
+          }
         }
       }
     },
@@ -25518,6 +26610,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "avelao ny namanao hiscan ity kaody QR ity"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "मित्र को इस QR कोड को स्कैन करने दें"
           }
         }
       }
@@ -25650,6 +26748,12 @@
             "state": "translated",
             "value": "dian-tanana tsy mety"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "अमान्य फिंगरप्रिंट"
+          }
         }
       }
     },
@@ -25780,6 +26884,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tsy nahita mpiara-miasa"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "पीयर नहीं मिला"
           }
         }
       }
@@ -25912,6 +27022,12 @@
             "state": "translated",
             "value": "nangataka famarinana ho an'i %@"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ के लिए सत्यापन अनुरोधित"
+          }
         }
       }
     },
@@ -26042,6 +27158,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "hamarino ny dian-tanana"
+          }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "फिंगरप्रिंट सत्यापित करें"
           }
         }
       }
@@ -26174,6 +27296,12 @@
             "state": "translated",
             "value": "famarinana"
           }
+        },
+        "pa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सत्यापन"
+          }
         }
       }
     },
@@ -26303,6 +27431,12 @@
           }
         },
         "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@"
+          }
+        },
+        "pa": {
           "stringUnit": {
             "state": "translated",
             "value": "%@"
