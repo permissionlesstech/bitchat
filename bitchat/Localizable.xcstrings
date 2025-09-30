@@ -93,6 +93,12 @@
             "state": "translated",
             "value": "bitchat"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat"
+          }
         }
       }
     },
@@ -187,6 +193,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "关闭"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "rufe"
           }
         }
       }
@@ -283,6 +295,12 @@
             "state": "translated",
             "value": "完成"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AN GAMA"
+          }
         }
       }
     },
@@ -377,6 +395,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "私密消息使用 noise 协议加密"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "saƙonnin sirri ana ɓoye su da tsarin Noise"
           }
         }
       }
@@ -473,6 +497,12 @@
             "state": "translated",
             "value": "端到端加密"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ɓoyewa daga ƙarshe zuwa ƙarshe"
+          }
         }
       }
     },
@@ -567,6 +597,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "消息通过同伴中继，传得更远"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\"saƙonni suna wucewa ta abokan haɗin, suna kai wa nesa\""
           }
         }
       }
@@ -663,6 +699,12 @@
             "state": "translated",
             "value": "扩展范围"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "faɗaɗɗen isa"
+          }
         }
       }
     },
@@ -757,6 +799,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "你喜欢的人加入时立刻提醒"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "samu sanarwa idan waɗanda kake so suka shiga"
           }
         }
       }
@@ -853,6 +901,12 @@
             "state": "translated",
             "value": "收藏"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "masu so"
+          }
         }
       }
     },
@@ -947,6 +1001,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "geohash 频道让你通过去中心化匿名中继与附近地区的人聊天"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tashoshin geohash don hira da mutane a yankunan kusa ta hanyar relays masu zaman kansu marasa suna"
           }
         }
       }
@@ -1043,6 +1103,12 @@
             "state": "translated",
             "value": "本地频道"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tashoshin yankin"
+          }
         }
       }
     },
@@ -1137,6 +1203,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "使用 @nickname 提醒特定的人"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "yi amfani da @lakabi don sanar da takamaiman mutane"
           }
         }
       }
@@ -1233,6 +1305,12 @@
             "state": "translated",
             "value": "提及"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ambato"
+          }
         }
       }
     },
@@ -1327,6 +1405,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "利用低功耗 bluetooth 离线工作"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "yana aiki ba tare da intanet ba ta Bluetooth mai ƙarancin ƙarfi"
           }
         }
       }
@@ -1423,6 +1507,12 @@
             "state": "translated",
             "value": "离线通信"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sadarwa ba tare da layi ba"
+          }
         }
       }
     },
@@ -1517,6 +1607,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "功能"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SIFFOFI"
           }
         }
       }
@@ -1613,6 +1709,12 @@
             "state": "translated",
             "value": "• 轻点 #mesh 切换频道"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• danna #mesh don canza tashoshi"
+          }
         }
       }
     },
@@ -1707,6 +1809,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "• 三击聊天即可清除"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• danna hira sau uku don sharewa"
           }
         }
       }
@@ -1803,6 +1911,12 @@
             "state": "translated",
             "value": "• 输入 / 查看指令"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• rubuta / don umarni"
+          }
         }
       }
     },
@@ -1897,6 +2011,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "• 轻点人物图标打开侧栏"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• danna gunkin mutane don buɗe gefen gefe"
           }
         }
       }
@@ -1993,6 +2113,12 @@
             "state": "translated",
             "value": "• 轻点昵称即可设置"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• saita laƙabinka ta danna shi"
+          }
         }
       }
     },
@@ -2087,6 +2213,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "• 轻点同伴名字开始 dm"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• danna sunan aboki don fara DM"
           }
         }
       }
@@ -2183,6 +2315,12 @@
             "state": "translated",
             "value": "使用方法"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "YADDA AKE AMFANI"
+          }
         }
       }
     },
@@ -2277,6 +2415,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "定期生成新的 peer id"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ana samar da sabuwar lambar aboki a kai a kai"
           }
         }
       }
@@ -2373,6 +2517,12 @@
             "state": "translated",
             "value": "临时身份"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "suna na wucin gadi"
+          }
         }
       }
     },
@@ -2467,6 +2617,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "无服务器、无账号、无数据收集"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\"babu sabar, asusu, ko tattara bayanai\""
           }
         }
       }
@@ -2563,6 +2719,12 @@
             "state": "translated",
             "value": "无跟踪"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "babu bin diddigi"
+          }
         }
       }
     },
@@ -2657,6 +2819,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "三击标志立即清除全部数据"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "danna tambarin sau uku don goge duk bayanai nan take"
           }
         }
       }
@@ -2753,6 +2921,12 @@
             "state": "translated",
             "value": "紧急模式"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "yanayin firgici"
+          }
         }
       }
     },
@@ -2848,6 +3022,12 @@
             "state": "translated",
             "value": "隐私"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SIRRI"
+          }
         }
       }
     },
@@ -2939,6 +3119,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sidegroupchat"
+          }
+        },
+        "ha": {
           "stringUnit": {
             "state": "translated",
             "value": "sidegroupchat"
@@ -3038,6 +3224,12 @@
             "state": "translated",
             "value": "私信安全尚未完全审计。在此警告消失前不要用于关键情境。"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tsaron saƙo na sirri bai gama bincike ba. kada a yi amfani da shi a lokuta masu muhimmanci sai wannan gargadi ya ɓace."
+          }
         }
       }
     },
@@ -3132,6 +3324,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "警告"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GARGADI"
           }
         }
       }
@@ -3228,6 +3426,12 @@
             "state": "translated",
             "value": "取消"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "soke"
+          }
         }
       }
     },
@@ -3322,6 +3526,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "关闭"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "rufe"
           }
         }
       }
@@ -3418,6 +3628,12 @@
             "state": "translated",
             "value": "复制"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kwafe"
+          }
         }
       }
     },
@@ -3512,6 +3728,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "确定"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TO"
           }
         }
       }
@@ -3608,6 +3830,12 @@
             "state": "translated",
             "value": "关闭"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kashe"
+          }
         }
       }
     },
@@ -3702,6 +3930,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "开启"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kunna"
           }
         }
       }
@@ -3798,6 +4032,12 @@
             "state": "translated",
             "value": "未知"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ba a sani ba"
+          }
         }
       }
     },
@@ -3892,6 +4132,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "加入收藏"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ƙara zuwa masu so"
           }
         }
       }
@@ -3988,6 +4234,12 @@
             "state": "translated",
             "value": "通过 Nostr 可用"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "akwai ta Nostr"
+          }
         }
       }
     },
@@ -4082,6 +4334,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "返回主聊天"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "koma zuwa babban hira"
           }
         }
       }
@@ -4178,6 +4436,12 @@
             "state": "translated",
             "value": "通过 mesh 已连接"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "an haɗu ta mesh"
+          }
         }
       }
     },
@@ -4272,6 +4536,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "加密状态：%@"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "matsayin ɓoyewa: %@"
           }
         }
       }
@@ -4368,6 +4638,12 @@
             "state": "translated",
             "value": "位置频道"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tashoshin wuri"
+          }
         }
       }
     },
@@ -4463,6 +4739,12 @@
             "state": "translated",
             "value": "此位置的笔记"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bayanan wuri na wannan gurin"
+          }
         }
       }
     },
@@ -4557,6 +4839,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "打开未读私聊"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "buɗe hirar sirri da ba a karanta ba"
           }
         }
       }
@@ -5037,6 +5325,12 @@
               }
             }
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%#@people@"
+          }
         }
       }
     },
@@ -5131,6 +5425,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "与 %@ 的私聊"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hira ta sirri da %@"
           }
         }
       }
@@ -5227,6 +5527,12 @@
             "state": "translated",
             "value": "可通过 mesh 到达"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ana iya isa ta mesh"
+          }
         }
       }
     },
@@ -5321,6 +5627,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "移出收藏"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cire daga masu so"
           }
         }
       }
@@ -5417,6 +5729,12 @@
             "state": "translated",
             "value": "输入要发送的消息"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "shigar da saƙo don aika"
+          }
         }
       }
     },
@@ -5511,6 +5829,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "双击发送"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "danna sau biyu don aika"
           }
         }
       }
@@ -5607,6 +5931,12 @@
             "state": "translated",
             "value": "发送消息"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "aika saƙo"
+          }
         }
       }
     },
@@ -5701,6 +6031,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "切换 #%@ 的书签"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "juya alamar shafi na #%@"
           }
         }
       }
@@ -5797,6 +6133,12 @@
             "state": "translated",
             "value": "双击切换收藏状态"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "danna sau biyu don juya matsayin masoyi"
+          }
         }
       }
     },
@@ -5891,6 +6233,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "轻点查看加密指纹"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "danna don duba alamar ɓoyewa"
           }
         }
       }
@@ -5987,6 +6335,12 @@
             "state": "translated",
             "value": "屏蔽"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "toshe"
+          }
         }
       }
     },
@@ -6081,6 +6435,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "私信"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "saƙo kai tsaye"
           }
         }
       }
@@ -6177,6 +6537,12 @@
             "state": "translated",
             "value": "拥抱"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "runguma"
+          }
         }
       }
     },
@@ -6271,6 +6637,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "提及"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ambaci"
           }
         }
       }
@@ -6367,6 +6739,12 @@
             "state": "translated",
             "value": "拍打"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mara"
+          }
         }
       }
     },
@@ -6461,6 +6839,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "操作"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ayyuka"
           }
         }
       }
@@ -6557,6 +6941,12 @@
             "state": "translated",
             "value": "bluetooth 已关闭。请在设置中开启以使用 bitchat。"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "an kashe bluetooth. don Allah a kunna bluetooth a saituna don amfani da bitchat."
+          }
         }
       }
     },
@@ -6651,6 +7041,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "bitchat 需要 bluetooth 权限以连接附近设备。请在设置中启用访问。"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat na buƙatar izinin bluetooth don haɗuwa da na'urori kusa. don Allah a ba da damar bluetooth a saituna."
           }
         }
       }
@@ -6747,6 +7143,12 @@
             "state": "translated",
             "value": "设置"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "saituna"
+          }
         }
       }
     },
@@ -6841,6 +7243,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "需要 bluetooth"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ana buƙatar bluetooth"
           }
         }
       }
@@ -6937,6 +7345,12 @@
             "state": "translated",
             "value": "此设备不支持 bluetooth。bitchat 需要 bluetooth 才能运行。"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wannan na'ura ba ta goyi bayan bluetooth. bitchat na buƙatar bluetooth don aiki."
+          }
         }
       }
     },
@@ -7031,6 +7445,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "位置频道的截图会暴露你的位置。公开分享前请三思。"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hoton allo na tashoshin wuri zai fallasa wurinka. ka yi tunani kafin ka rabawa jama'a."
           }
         }
       }
@@ -7127,6 +7547,12 @@
             "state": "translated",
             "value": "注意"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a kula"
+          }
         }
       }
     },
@@ -7221,6 +7647,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "屏蔽或查看已屏蔽的同伴"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "toshe ko jera waɗanda aka toshe"
           }
         }
       }
@@ -7317,6 +7749,12 @@
             "state": "translated",
             "value": "清除聊天消息"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "share saƙonnin hira"
+          }
         }
       }
     },
@@ -7411,6 +7849,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "加入收藏"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ƙara zuwa masu so"
           }
         }
       }
@@ -7507,6 +7951,12 @@
             "state": "translated",
             "value": "送出温暖拥抱"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "aika wa wani runguma mai dumi"
+          }
         }
       }
     },
@@ -7601,6 +8051,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "发送私信"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "aika saƙo na sirri"
           }
         }
       }
@@ -7697,6 +8153,12 @@
             "state": "translated",
             "value": "用鳟鱼拍某人"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mara wani da kifi"
+          }
         }
       }
     },
@@ -7791,6 +8253,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "取消屏蔽同伴"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cire toshewar aboki"
           }
         }
       }
@@ -7887,6 +8355,12 @@
             "state": "translated",
             "value": "移出收藏"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cire daga masu so"
+          }
         }
       }
     },
@@ -7981,6 +8455,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "查看谁在线"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "duba waɗanda ke kan layi"
           }
         }
       }
@@ -8077,6 +8557,12 @@
             "state": "translated",
             "value": "已送达 %2$d 人中的 %1$d 人"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "an isar da %1$d daga cikin %2$d mambobi"
+          }
         }
       }
     },
@@ -8171,6 +8657,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "已送达 %@"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "an aika zuwa %@"
           }
         }
       }
@@ -8267,6 +8759,12 @@
             "state": "translated",
             "value": "失败：%@"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "gazawa: %@"
+          }
         }
       }
     },
@@ -8361,6 +8859,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "已读：%@"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "an karanta ta %@"
           }
         }
       }
@@ -8457,6 +8961,12 @@
             "state": "translated",
             "value": "用户已被屏蔽"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "an toshe mai amfani"
+          }
         }
       }
     },
@@ -8551,6 +9061,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "不能给自己发消息"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ba za ka iya aika wa kanka saƙo ba"
           }
         }
       }
@@ -8647,6 +9163,12 @@
             "state": "translated",
             "value": "发送错误"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kuskuren aikawa"
+          }
         }
       }
     },
@@ -8741,6 +9263,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "未知收件人"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mai karɓa ba a sani ba"
           }
         }
       }
@@ -8837,6 +9365,12 @@
             "state": "translated",
             "value": "同伴不可达"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "aboki ba ya samuwa"
+          }
         }
       }
     },
@@ -8931,6 +9465,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "成员"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MUTANE"
           }
         }
       }
@@ -9027,6 +9567,12 @@
             "state": "translated",
             "value": "验证：展示我的 qr 或扫描好友"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tabbaci: nuna QR ɗina ko duba na aboki"
+          }
         }
       }
     },
@@ -9121,6 +9667,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "输入消息..."
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "rubuta saƙo..."
           }
         }
       }
@@ -9217,6 +9769,12 @@
             "state": "translated",
             "value": "昵称"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "laƙabi"
+          }
         }
       }
     },
@@ -9311,6 +9869,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "启用位置"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kunna wuri"
           }
         }
       }
@@ -9407,6 +9971,12 @@
             "state": "translated",
             "value": "复制消息"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kwafe saƙo"
+          }
         }
       }
     },
@@ -9501,6 +10071,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "收起"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nuna kaɗan"
           }
         }
       }
@@ -9597,6 +10173,12 @@
             "state": "translated",
             "value": "展开"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nuna ƙari"
+          }
         }
       }
     },
@@ -9691,6 +10273,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "位置不可用"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ba a samun wuri"
           }
         }
       }
@@ -9787,6 +10375,12 @@
             "state": "translated",
             "value": "笔记"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bayanan kula"
+          }
         }
       }
     },
@@ -9881,6 +10475,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "通过 cashu 支付"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "biya ta Cashu"
           }
         }
       }
@@ -9977,6 +10577,12 @@
             "state": "translated",
             "value": "通过 lightning 支付"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "biya ta lightning"
+          }
         }
       }
     },
@@ -10071,6 +10677,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在建立加密"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ana kafa ɓoyewa"
           }
         }
       }
@@ -10167,6 +10779,12 @@
             "state": "translated",
             "value": "加密失败"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ɓoyewa ta gaza"
+          }
         }
       }
     },
@@ -10261,6 +10879,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "未加密"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ba a ɓoye ba"
           }
         }
       }
@@ -10357,6 +10981,12 @@
             "state": "translated",
             "value": "已加密"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "an ɓoye"
+          }
         }
       }
     },
@@ -10451,6 +11081,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "已加密并验证"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "an ɓoye kuma an tabbatar"
           }
         }
       }
@@ -10547,6 +11183,12 @@
             "state": "translated",
             "value": "正在建立加密..."
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ana kafa ɓoyewa..."
+          }
         }
       }
     },
@@ -10641,6 +11283,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "加密失败"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ɓoyewa ta gaza"
           }
         }
       }
@@ -10737,6 +11385,12 @@
             "state": "translated",
             "value": "未加密"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ba a ɓoye ba"
+          }
         }
       }
     },
@@ -10831,6 +11485,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "已加密"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "an ɓoye"
           }
         }
       }
@@ -10927,6 +11587,12 @@
             "state": "translated",
             "value": "已加密并验证"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "an ɓoye & an tabbatar"
+          }
         }
       }
     },
@@ -11021,6 +11687,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "标记为已验证"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "alama a matsayin an tabbatar"
           }
         }
       }
@@ -11117,6 +11789,12 @@
             "state": "translated",
             "value": "移除验证"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cire tabbaci"
+          }
         }
       }
     },
@@ -11211,6 +11889,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "⚠️ 未验证"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⚠️ BA A TABBTAR BA"
           }
         }
       }
@@ -11307,6 +11991,12 @@
             "state": "translated",
             "value": "✓ 已验证"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ AN TABBTAR"
+          }
         }
       }
     },
@@ -11401,6 +12091,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "暂不可用 - handshake 进行中"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ba ya samuwa - ana ci gaba da musafaha"
           }
         }
       }
@@ -11497,6 +12193,12 @@
             "state": "translated",
             "value": "你已经核实了此人的身份。"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ka tabbatar da ainihin wannan mutumin."
+          }
         }
       }
     },
@@ -11591,6 +12293,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "通过安全渠道与 %@ 比对这些指纹。"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kwatanta waɗannan alamomin yatsa da %@ ta hanya mai aminci."
           }
         }
       }
@@ -11687,6 +12395,12 @@
             "state": "translated",
             "value": "对方指纹："
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "alamarsu:"
+          }
         }
       }
     },
@@ -11781,6 +12495,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "安全验证"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tabbacin tsaro"
           }
         }
       }
@@ -11877,6 +12597,12 @@
             "state": "translated",
             "value": "你的指纹："
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "alamarka:"
+          }
         }
       }
     },
@@ -11971,6 +12697,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "屏蔽"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "toshe"
           }
         }
       }
@@ -12067,6 +12799,12 @@
             "state": "translated",
             "value": "取消屏蔽"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "buɗe toshewa"
+          }
         }
       }
     },
@@ -12161,6 +12899,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "附近没人..."
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "babu kowa a kusa..."
           }
         }
       }
@@ -12257,6 +13001,12 @@
             "state": "translated",
             "value": "在 geohash 中已屏蔽"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "an toshe a geohash"
+          }
         }
       }
     },
@@ -12351,6 +13101,12 @@
           "stringUnit": {
             "state": "translated",
             "value": " (你)"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(kai)"
           }
         }
       }
@@ -12447,6 +13203,12 @@
             "state": "translated",
             "value": "打开设置"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "buɗe saituna"
+          }
         }
       }
     },
@@ -12541,6 +13303,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "移除位置访问"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cire damar wuri"
           }
         }
       }
@@ -12637,6 +13405,12 @@
             "state": "translated",
             "value": "获取位置和我的 geohash"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nemi wuri da geohash ɗina"
+          }
         }
       }
     },
@@ -12731,6 +13505,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "瞬移"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "teleport"
           }
         }
       }
@@ -12827,6 +13607,12 @@
             "state": "translated",
             "value": "已收藏"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ajiyayyu"
+          }
         }
       }
     },
@@ -12921,6 +13707,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "使用 geohash 频道与附近的人聊天。只会共享粗略 geohash，从不泄露精确 GPS。所有流量通过 tor 路由来隐藏你的 IP。"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "yi hira da mutanen da ke kusa da kai ta tashoshin geohash. ana raba geohash mai kauri kawai, ba a taɓa bayar da cikakken GPS ba. an ɓoye adireshin IP ɗinka ta hanyar tura duk zirga-zirga ta tor."
           }
         }
       }
@@ -13017,6 +13809,12 @@
             "state": "translated",
             "value": "无效的 geohash"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "geohash mara inganci"
+          }
         }
       }
     },
@@ -13112,6 +13910,12 @@
             "state": "translated",
             "value": "正在寻找附近频道…"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ana nemo tashoshin kusa…"
+          }
         }
       }
     },
@@ -13203,6 +14007,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh"
+          }
+        },
+        "ha": {
           "stringUnit": {
             "state": "translated",
             "value": "mesh"
@@ -13301,6 +14111,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "位置权限被拒。请在设置中启用以使用位置频道。"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "an ƙi izinin wuri. kunna shi a saituna don amfani da tashoshin wuri."
           }
         }
       }
@@ -13781,6 +14597,12 @@
               }
             }
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ [%2$#@people_count@]"
+          }
         }
       }
     },
@@ -13790,13 +14612,13 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
           }
         },
         "en": {
@@ -13808,73 +14630,79 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
           }
         },
         "id": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
           }
         },
         "ne": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
           }
         },
         "uk": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%1$@ • %2$@"
           }
         }
       }
@@ -13967,6 +14795,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ • %2$@"
+          }
+        },
+        "ha": {
           "stringUnit": {
             "state": "translated",
             "value": "%1$@ • %2$@"
@@ -14066,6 +14900,12 @@
             "state": "translated",
             "value": "#位置频道"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#tashoshin wuri"
+          }
         }
       }
     },
@@ -14160,6 +15000,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "为位置频道隐藏你的 IP。推荐：开启。"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "yana ɓoye IP ɗinka don tashoshin wuri. shawara: a kunna."
           }
         }
       }
@@ -14256,6 +15102,12 @@
             "state": "translated",
             "value": "tor 路由"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hanyar tor"
+          }
         }
       }
     },
@@ -14350,6 +15202,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "街区"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unguwa"
           }
         }
       }
@@ -14446,6 +15304,12 @@
             "state": "translated",
             "value": "楼栋"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "gini"
+          }
         }
       }
     },
@@ -14540,6 +15404,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "城市"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "birni"
           }
         }
       }
@@ -14636,6 +15506,12 @@
             "state": "translated",
             "value": "社区"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "makwabta"
+          }
         }
       }
     },
@@ -14730,6 +15606,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "省份"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "jiha"
           }
         }
       }
@@ -14826,6 +15708,12 @@
             "state": "translated",
             "value": "区域"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "yanki"
+          }
         }
       }
     },
@@ -14920,6 +15808,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "关闭"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ƙyale"
           }
         }
       }
@@ -15016,6 +15910,12 @@
             "state": "translated",
             "value": "重试"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sake gwadawa"
+          }
         }
       }
     },
@@ -15110,6 +16010,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "为此地点添加简短的常驻笔记，方便其他访客发现。"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ƙara gajeren bayanin dindindin a wannan wuri don wasu baƙi su gani."
           }
         }
       }
@@ -15206,6 +16112,12 @@
             "state": "translated",
             "value": "成为这里的第一条笔记。"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ka kasance na farko da za ka ƙara wa wannan wuri."
+          }
         }
       }
     },
@@ -15300,6 +16212,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "尚无笔记"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "babu bayanin kula tukuna"
           }
         }
       }
@@ -15396,6 +16314,12 @@
             "state": "translated",
             "value": "无法发送笔记。%@"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "an kasa aika bayanin kula. %@"
+          }
         }
       }
     },
@@ -15490,6 +16414,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "附近没有可用的地理中继。稍后再试。"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "babu relays na geo a kusa da wannan wuri. gwada kuma nan gaba."
           }
         }
       }
@@ -15970,6 +16900,12 @@
               }
             }
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%1$@ • %2$#@note_count@"
+          }
         }
       }
     },
@@ -16064,6 +17000,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在加载笔记…"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ana loda bayanan kula…"
           }
         }
       }
@@ -16160,6 +17102,12 @@
             "state": "translated",
             "value": "正在加载最新笔记…"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ana loda bayanan kula na baya-bayan nan…"
+          }
         }
       }
     },
@@ -16254,6 +17202,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "附近没有地理中继"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "babu relays na geo a kusa"
           }
         }
       }
@@ -16350,6 +17304,12 @@
             "state": "translated",
             "value": "为此地点添加笔记"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ƙara bayanin kula ga wannan wuri"
+          }
         }
       }
     },
@@ -16444,6 +17404,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "地理中继不可用；笔记已暂停"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "relays na geo ba sa aiki; bayanai sun tsaya"
           }
         }
       }
@@ -16540,6 +17506,12 @@
             "state": "translated",
             "value": "笔记依赖地理中继。检查连接后再试。"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bayanan kula suna dogara da relays na geo. duba haɗinka ka sake gwadawa."
+          }
         }
       }
     },
@@ -16634,6 +17606,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "新消息"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sabbin saƙonni"
           }
         }
       }
@@ -16730,6 +17708,12 @@
             "state": "translated",
             "value": "无法与 %@ 开始聊天：用户已被屏蔽。"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ba za a iya fara hira da %@ ba: an toshe mutumin."
+          }
         }
       }
     },
@@ -16824,6 +17808,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "无法与 %@ 开始聊天：离线消息需要互相关注。"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ba za a iya fara hira da %@ ba: ana buƙatar kasancewa masoyi na juna don saƙon ba tare da layi ba."
           }
         }
       }
@@ -16920,6 +17910,12 @@
             "state": "translated",
             "value": "用户"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mai amfani"
+          }
         }
       }
     },
@@ -17014,6 +18010,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "无法发送：用户已被屏蔽。"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ba za a iya aika saƙo ba: an toshe mutumin."
           }
         }
       }
@@ -17110,6 +18112,12 @@
             "state": "translated",
             "value": "无法向 %@ 发送：用户已被屏蔽。"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ba za a iya aika saƙo ga %@ ba: an toshe mutumin."
+          }
         }
       }
     },
@@ -17204,6 +18212,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "无法向 %@ 发送：对方无法通过 mesh 或 Nostr 到达。"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ba za a iya aika saƙo ga %@ ba - abokin ba ya samuwa ta mesh ko nostr."
           }
         }
       }
@@ -17300,6 +18314,12 @@
             "state": "translated",
             "value": "已在 geohash 聊天中屏蔽 %@"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "an toshe %@ a hirar geohash"
+          }
         }
       }
     },
@@ -17394,6 +18414,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "已在 geohash 聊天中解除屏蔽 %@"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "an buɗe toshewar %@ a hirar geohash"
           }
         }
       }
@@ -17490,6 +18516,12 @@
             "state": "translated",
             "value": "发送失败：你不在位置频道中"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ba za a iya aika ba: ba ka cikin tashar wuri"
+          }
         }
       }
     },
@@ -17584,6 +18616,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "无法发送到位置频道"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "an kasa aika zuwa tashar wuri"
           }
         }
       }
@@ -17680,6 +18718,12 @@
             "state": "translated",
             "value": "开发构建：tor 绕过已启用。"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "gini na ci gaba: an kunna kauce wa Tor."
+          }
         }
       }
     },
@@ -17774,6 +18818,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tor 已重启。网络路由已恢复。"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "an sake kunna tor. an dawo da hanyar sadarwa."
           }
         }
       }
@@ -17870,6 +18920,12 @@
             "state": "translated",
             "value": "tor 正在重启以恢复连接..."
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tor na sake farawa don dawo da haɗin..."
+          }
         }
       }
     },
@@ -17964,6 +19020,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tor 已启动。所有聊天通过 tor 路由以保护 IP。"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "an kunna tor. ana tura duk hirarraki ta tor don ɓoye IP."
           }
         }
       }
@@ -18060,6 +19122,12 @@
             "state": "translated",
             "value": "正在启动 tor..."
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ana kunna tor..."
+          }
         }
       }
     },
@@ -18154,6 +19222,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "验证 QR 码"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QR na tabbaci"
           }
         }
       }
@@ -18250,6 +19324,12 @@
             "state": "translated",
             "value": "扫描验证我"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "duba don tabbatar da ni"
+          }
         }
       }
     },
@@ -18344,6 +19424,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "QR 不可用"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QR ba ya samuwa"
           }
         }
       }
@@ -18440,6 +19526,12 @@
             "state": "translated",
             "value": "粘贴 QR 内容以验证："
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "liƙa abun cikin QR don tantancewa:"
+          }
         }
       }
     },
@@ -18534,6 +19626,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "扫描好友的 QR"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "duba QR na aboki"
           }
         }
       }
@@ -18630,6 +19728,12 @@
             "state": "translated",
             "value": "QR 无效或已过期"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QR ɗin ya lalace ko ya ƙare"
+          }
         }
       }
     },
@@ -18724,6 +19828,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "未找到匹配的同伴"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ba a sami abokin da ya dace ba"
           }
         }
       }
@@ -18820,6 +19930,12 @@
             "state": "translated",
             "value": "已请求 %@ 的验证"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "an nemi tabbaci ga %@"
+          }
         }
       }
     },
@@ -18914,6 +20030,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "验证"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tabbatar"
           }
         }
       }
@@ -19010,6 +20132,12 @@
             "state": "translated",
             "value": "验证"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TABBTAR"
+          }
         }
       }
     },
@@ -19103,6 +20231,12 @@
           }
         },
         "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@"
+          }
+        },
+        "ha": {
           "stringUnit": {
             "state": "translated",
             "value": "%@"

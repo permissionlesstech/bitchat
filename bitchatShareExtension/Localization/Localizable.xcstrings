@@ -108,6 +108,13 @@
             "value": "공유된 링크",
             "comment": "Fallback title when saving a shared link"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "haɗin da aka raba",
+            "comment": "Fallback title when saving a shared link"
+          }
         }
       }
     },
@@ -216,6 +223,13 @@
           "stringUnit": {
             "state": "translated",
             "value": "링크를 인코딩하는 데 실패했습니다",
+            "comment": "Shown when the share payload cannot be encoded"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "an kasa tsara haɗin",
             "comment": "Shown when the share payload cannot be encoded"
           }
         }
@@ -328,6 +342,13 @@
             "value": "공유할 수 있는 내용이 없습니다",
             "comment": "Shown when provided content cannot be shared"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "babu abin da za a iya rabawa",
+            "comment": "Shown when provided content cannot be shared"
+          }
         }
       }
     },
@@ -436,6 +457,13 @@
           "stringUnit": {
             "state": "translated",
             "value": "공유할 내용이 없습니다",
+            "comment": "Shown when the share extension receives no content"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "babu abin rabawa",
             "comment": "Shown when the share extension receives no content"
           }
         }
@@ -548,6 +576,13 @@
             "value": "✓ bitchat으로 링크를 공유했습니다",
             "comment": "Confirmation after successfully sharing a link"
           }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ an raba haɗi zuwa bitchat",
+            "comment": "Confirmation after successfully sharing a link"
+          }
         }
       }
     },
@@ -656,6 +691,13 @@
           "stringUnit": {
             "state": "translated",
             "value": "✓ bitchat으로 텍스트를 공유했습니다",
+            "comment": "Confirmation after successfully sharing text"
+          }
+        },
+        "ha": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ an raba rubutu zuwa bitchat",
             "comment": "Confirmation after successfully sharing text"
           }
         }
