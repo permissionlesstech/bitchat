@@ -108,6 +108,12 @@
             "value": "공유된 링크",
             "comment": "Fallback title when saving a shared link"
           }
+        },
+        "rhg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "share kora link"
+          }
         }
       }
     },
@@ -217,6 +223,12 @@
             "state": "translated",
             "value": "링크를 인코딩하는 데 실패했습니다",
             "comment": "Shown when the share payload cannot be encoded"
+          }
+        },
+        "rhg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "link encode korte parlam na"
           }
         }
       }
@@ -328,6 +340,12 @@
             "value": "공유할 수 있는 내용이 없습니다",
             "comment": "Shown when provided content cannot be shared"
           }
+        },
+        "rhg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "share korar moto kichu nai"
+          }
         }
       }
     },
@@ -437,6 +455,12 @@
             "state": "translated",
             "value": "공유할 내용이 없습니다",
             "comment": "Shown when the share extension receives no content"
+          }
+        },
+        "rhg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "share korar onno kichu nai"
           }
         }
       }
@@ -548,6 +572,12 @@
             "value": "✓ bitchat으로 링크를 공유했습니다",
             "comment": "Confirmation after successfully sharing a link"
           }
+        },
+        "rhg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ link bitchat e share hoigiyé"
+          }
         }
       }
     },
@@ -657,6 +687,12 @@
             "state": "translated",
             "value": "✓ bitchat으로 텍스트를 공유했습니다",
             "comment": "Confirmation after successfully sharing text"
+          }
+        },
+        "rhg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ text bitchat e share hoigiyé"
           }
         }
       }
