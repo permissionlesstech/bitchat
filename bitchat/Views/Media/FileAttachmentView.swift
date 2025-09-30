@@ -52,7 +52,7 @@ struct FileAttachmentView: View {
             Spacer()
 
             Button(action: openFile) {
-                Text("Open")
+                Text("open", comment: "Button to open attached file")
                     .font(.bitchatSystem(size: 13, weight: .semibold))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
