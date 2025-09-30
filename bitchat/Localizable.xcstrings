@@ -688,7 +688,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "prywatne wiadomości są szyfrowane protokołem Noise"
+            "value": "prywatne wiadomości szyfrowane protokołem Noise"
           }
         },
         "nl": {
@@ -1046,7 +1046,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "wiadomości są przekazywane przez peerów, aby dotrzeć dalej"
+            "value": "wiadomości przekazywane przez peerów, docierają dalej"
           }
         },
         "nl": {
@@ -1225,7 +1225,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "większy zasięg"
+            "value": "rozszerzony zasięg"
           }
         },
         "nl": {
@@ -1404,7 +1404,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "otrzymuj powiadomienia, gdy dołączają twoje ulubione osoby"
+            "value": "otrzymuj powiadomienia gdy dołączają twoje ulubione osoby"
           }
         },
         "nl": {
@@ -1762,7 +1762,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "kanały geohash do rozmów z osobami w pobliżu przez zdecentralizowane, anonimowe przekaźniki"
+            "value": "kanały geohash do rozmów z ludźmi w pobliskich regionach przez zdecentralizowane anonimowe przekaźniki"
           }
         },
         "nl": {
@@ -1941,7 +1941,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "kanały lokalne"
+            "value": "lokalne kanały"
           }
         },
         "nl": {
@@ -2120,7 +2120,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "użyj @nickname, aby powiadomić konkretną osobę"
+            "value": "użyj @pseudonimu aby powiadomić konkretne osoby"
           }
         },
         "nl": {
@@ -3015,7 +3015,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "• stuknij #mesh, aby zmienić kanał"
+            "value": "• stuknij #mesh aby zmienić kanały"
           }
         },
         "nl": {
@@ -3194,7 +3194,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "• stuknij okno czatu trzykrotnie, aby wyczyścić"
+            "value": "• stuknij czat trzykrotnie aby wyczyścić"
           }
         },
         "nl": {
@@ -3373,7 +3373,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "• wpisz /, aby zobaczyć polecenia"
+            "value": "• wpisz / aby wyświetlić komendy"
           }
         },
         "nl": {
@@ -3552,7 +3552,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "• stuknij ikonę osób, aby otworzyć panel boczny"
+            "value": "• stuknij ikonę osób aby otworzyć panel boczny"
           }
         },
         "nl": {
@@ -3731,7 +3731,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "• ustaw swój pseudonim, stukając go"
+            "value": "• ustaw swój pseudonim stukając w niego"
           }
         },
         "nl": {
@@ -3910,7 +3910,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "• stuknij nazwę peera, aby rozpocząć DM"
+            "value": "• stuknij nazwę peera aby rozpocząć DM"
           }
         },
         "nl": {
@@ -4447,7 +4447,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "tymczasowa tożsamość"
+            "value": "ulotna tożsamość"
           }
         },
         "nl": {
@@ -4626,7 +4626,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "bez serwerów, kont ani zbierania danych"
+            "value": "brak serwerów kont ani zbierania danych"
           }
         },
         "nl": {
@@ -4805,7 +4805,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "brak śledzenia"
+            "value": "bez śledzenia"
           }
         },
         "nl": {
@@ -4984,7 +4984,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "stuknij logo trzy razy, aby natychmiast usunąć wszystkie dane"
+            "value": "stuknij logo trzykrotnie aby natychmiast wyczyścić wszystkie dane"
           }
         },
         "nl": {
@@ -5700,7 +5700,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "bezpieczeństwo wiadomości prywatnych nie zostało jeszcze w pełni sprawdzone. nie używaj w sytuacjach krytycznych, dopóki to ostrzeżenie nie zniknie."
+            "value": "bezpieczeństwo wiadomości prywatnych nie zostało jeszcze w pełni zbadane. nie używaj w sytuacjach krytycznych dopóki to ostrzeżenie nie zniknie."
           }
         },
         "nl": {
@@ -6774,7 +6774,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "wył."
+            "value": "wyłączone"
           }
         },
         "nl": {
@@ -6953,7 +6953,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "wł."
+            "value": "włączone"
           }
         },
         "nl": {
@@ -8206,7 +8206,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "kanały lokalizacyjne"
+            "value": "kanały lokalizacji"
           }
         },
         "nl": {
@@ -8385,7 +8385,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "notatki lokalizacyjne dla tego miejsca"
+            "value": "notatki o tej lokalizacji"
           }
         },
         "nl": {
@@ -9843,7 +9843,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "wpisz wiadomość, aby wysłać"
+            "value": "wpisz wiadomość aby wysłać"
           }
         },
         "nl": {
@@ -10022,7 +10022,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "stuknij dwukrotnie, aby wysłać"
+            "value": "dwukrotnie stuknij aby wysłać"
           }
         },
         "nl": {
@@ -10559,7 +10559,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "stuknij dwukrotnie, aby zmienić stan ulubionych"
+            "value": "dwukrotnie stuknij aby przełączyć status ulubionych"
           }
         },
         "nl": {
@@ -10738,7 +10738,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "stuknij, by zobaczyć odcisk szyfrowania"
+            "value": "stuknij aby wyświetlić odcisk szyfrowania"
           }
         },
         "nl": {
@@ -11633,7 +11633,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "spoliczkuj"
+            "value": "klepnij"
           }
         },
         "nl": {
@@ -11991,7 +11991,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "bluetooth jest wyłączony. włącz bluetooth w ustawieniach, aby używać bitchat."
+            "value": "bluetooth jest wyłączony. włącz bluetooth w ustawieniach aby korzystać z bitchat."
           }
         },
         "nl": {
@@ -12170,7 +12170,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "bitchat potrzebuje uprawnień bluetooth, aby łączyć się z pobliskimi urządzeniami. włącz dostęp w ustawieniach."
+            "value": "bitchat potrzebuje uprawnienia bluetooth do łączenia się z pobliskimi urządzeniami. włącz dostęp do bluetooth w ustawieniach."
           }
         },
         "nl": {
@@ -12886,7 +12886,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "zrzuty ekranu kanałów lokalizacyjnych ujawnią twoją lokalizację. przemyśl to przed publicznym udostępnieniem."
+            "value": "zrzuty ekranu kanałów lokalizacji ujawnią twoją lokalizację. zastanów się zanim udostępnisz je publicznie."
           }
         },
         "nl": {
@@ -13244,7 +13244,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "zablokuj albo pokaż listę zablokowanych peerów"
+            "value": "zablokuj lub pokaż zablokowanych użytkowników"
           }
         },
         "nl": {
@@ -14139,7 +14139,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "spoliczkuj kogoś trocią"
+            "value": "uderz kogoś pstrągiem"
           }
         },
         "nl": {
@@ -14318,7 +14318,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "odblokuj peera"
+            "value": "odblokuj użytkownika"
           }
         },
         "nl": {
@@ -15571,7 +15571,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "użytkownik zablokowany"
+            "value": "użytkownik jest zablokowany"
           }
         },
         "nl": {
@@ -17361,7 +17361,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "kopiuj wiadomość"
+            "value": "skopiuj wiadomość"
           }
         },
         "nl": {
@@ -18256,7 +18256,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "zapłać przez Cashu"
+            "value": "zapłać przez cashu"
           }
         },
         "nl": {
@@ -18435,7 +18435,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "zapłać przez Lightning"
+            "value": "zapłać przez lightning"
           }
         },
         "nl": {
@@ -18614,7 +18614,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "trwa ustanawianie szyfrowania"
+            "value": "nawiązywanie szyfrowania"
           }
         },
         "nl": {
@@ -18972,7 +18972,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "brak szyfrowania"
+            "value": "bez szyfrowania"
           }
         },
         "nl": {
@@ -19509,7 +19509,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "trwa ustanawianie szyfrowania..."
+            "value": "nawiązywanie szyfrowania..."
           }
         },
         "nl": {
@@ -19867,7 +19867,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "brak szyfrowania"
+            "value": "bez szyfrowania"
           }
         },
         "nl": {
@@ -21120,7 +21120,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "niedostępne – handshake w toku"
+            "value": "niedostępne – trwa uzgadnianie"
           }
         },
         "nl": {
@@ -21478,7 +21478,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "porównaj te odciski z %@ na bezpiecznym kanale."
+            "value": "porównaj te odciski z %@ korzystając z bezpiecznego kanału."
           }
         },
         "nl": {
@@ -22731,7 +22731,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "zablokowany w geohash"
+            "value": "zablokowano w geohash"
           }
         },
         "nl": {
@@ -23447,7 +23447,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "uzyskaj uprawnienia lokalizacji i moje geohashe"
+            "value": "uzyskaj lokalizację i moje geohashe"
           }
         },
         "nl": {
@@ -23984,7 +23984,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "rozmawiaj z osobami w pobliżu za pomocą kanałów geohash. udostępniany jest tylko zgrubny geohash, nigdy dokładny GPS. twój adres IP jest ukryty przez kierowanie całego ruchu przez tor."
+            "value": "czatuj z ludźmi w pobliżu korzystając z kanałów geohash. udostępniana jest tylko zgrubna geolokalizacja, nigdy dokładne GPS. twój adres IP jest ukrywany przez trasowanie całego ruchu przez tor."
           }
         },
         "nl": {
@@ -24342,7 +24342,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "wyszukiwanie kanałów w pobliżu…"
+            "value": "wyszukiwanie pobliskich kanałów…"
           }
         },
         "nl": {
@@ -24700,7 +24700,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "odmówiono dostępu do lokalizacji. włącz w ustawieniach, aby korzystać z kanałów lokalizacji."
+            "value": "odmowa dostępu do lokalizacji. włącz ją w ustawieniach aby używać kanałów lokalizacji."
           }
         },
         "nl": {
@@ -26158,7 +26158,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "trasowanie tor"
+            "value": "trasowanie przez tor"
           }
         },
         "nl": {
@@ -27053,7 +27053,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "województwo"
+            "value": "prowincja"
           }
         },
         "nl": {
@@ -27769,7 +27769,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "dodaj krótkie trwałe notatki o tej lokalizacji, aby inni mogli je znaleźć"
+            "value": "dodaj krótkie trwałe notatki do tej lokalizacji aby znaleźli je inni odwiedzający."
           }
         },
         "nl": {
@@ -27948,7 +27948,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "dodaj pierwszą notatkę dla tego miejsca"
+            "value": "bądź pierwszy i dodaj jedną dla tego miejsca."
           }
         },
         "nl": {
@@ -28485,7 +28485,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "brak geo relay w pobliżu tej lokalizacji. spróbuj ponownie wkrótce."
+            "value": "brak przekaźników geo w pobliżu tej lokalizacji. spróbuj ponownie wkrótce."
           }
         },
         "nl": {
@@ -29585,7 +29585,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "brak pobliskich geo relay"
+            "value": "brak pobliskich przekaźników geo"
           }
         },
         "nl": {
@@ -29764,7 +29764,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "dodaj notatkę do tego miejsca"
+            "value": "dodaj notatkę dla tego miejsca"
           }
         },
         "nl": {
@@ -29943,7 +29943,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "geo relay niedostępne; notatki wstrzymane"
+            "value": "przekaźniki geo niedostępne; notatki wstrzymane"
           }
         },
         "nl": {
@@ -30122,7 +30122,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "notatki polegają na geo relay. sprawdź połączenie i spróbuj ponownie."
+            "value": "notatki opierają się na przekaźnikach geo. sprawdź połączenie i spróbuj ponownie."
           }
         },
         "nl": {
@@ -30480,7 +30480,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "nie można rozpocząć czatu z %@: osoba zablokowana."
+            "value": "nie można rozpocząć czatu z %@: osoba jest zablokowana."
           }
         },
         "nl": {
@@ -30659,7 +30659,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "nie można rozpocząć czatu z %@: potrzebne wzajemne ulubione dla wiadomości offline."
+            "value": "nie można rozpocząć czatu z %@: do wiadomości offline wymagane jest wzajemne dodanie do ulubionych."
           }
         },
         "nl": {
@@ -31017,7 +31017,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "nie można wysłać wiadomości: osoba zablokowana."
+            "value": "nie można wysłać wiadomości: osoba jest zablokowana."
           }
         },
         "nl": {
@@ -31196,7 +31196,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "nie można wysłać do %@: osoba zablokowana."
+            "value": "nie można wysłać wiadomości do %@: osoba jest zablokowana."
           }
         },
         "nl": {
@@ -31375,7 +31375,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "nie można wysłać do %@ – peer nieosiągalny przez mesh ani nostr."
+            "value": "nie można wysłać wiadomości do %@ - peer jest nieosiągalny przez mesh ani nostr."
           }
         },
         "nl": {
@@ -32091,7 +32091,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "wysłanie do kanału lokalizacji nie powiodło się"
+            "value": "nie udało się wysłać do kanału lokalizacji"
           }
         },
         "nl": {
@@ -32449,7 +32449,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "tor uruchomiony ponownie. trasowanie przywrócone."
+            "value": "tor uruchomiony ponownie. przywrócono trasowanie sieci."
           }
         },
         "nl": {
@@ -32628,7 +32628,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "tor uruchamia się ponownie, aby przywrócić łączność..."
+            "value": "tor ponownie się uruchamia aby odzyskać łączność..."
           }
         },
         "nl": {
@@ -32807,7 +32807,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "tor uruchomiony. wszystkie czaty idą przez tor dla prywatności IP."
+            "value": "tor uruchomiony. wszystkie czaty trasowane przez tor dla prywatności IP."
           }
         },
         "nl": {
@@ -33165,7 +33165,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "kod QR do weryfikacji"
+            "value": "kod QR weryfikacji"
           }
         },
         "nl": {
@@ -33344,7 +33344,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "zeskanuj, aby mnie zweryfikować"
+            "value": "zeskanuj aby mnie zweryfikować"
           }
         },
         "nl": {
@@ -33523,7 +33523,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "QR niedostępny"
+            "value": "kod QR niedostępny"
           }
         },
         "nl": {
@@ -33702,7 +33702,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "wklej zawartość QR, aby zweryfikować:"
+            "value": "wklej zawartość QR aby potwierdzić:"
           }
         },
         "nl": {
@@ -33881,7 +33881,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "zeskanuj QR znajomego"
+            "value": "zeskanuj kod QR znajomego"
           }
         },
         "nl": {
@@ -34060,7 +34060,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "nieprawidłowy lub wygasły payload QR"
+            "value": "nieprawidłowy lub wygasły kod QR"
           }
         },
         "nl": {
@@ -34239,7 +34239,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "nie znaleziono dopasowanego peera"
+            "value": "nie znaleziono pasującego peera"
           }
         },
         "nl": {
@@ -34418,7 +34418,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "poproszono o weryfikację %@"
+            "value": "żądanie weryfikacji dla %@"
           }
         },
         "nl": {
@@ -34597,7 +34597,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "zweryfikuj"
+            "value": "zatwierdź"
           }
         },
         "nl": {
@@ -34776,7 +34776,7 @@
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "WERYFIKACJA"
+            "value": "ZWERYFIKUJ"
           }
         },
         "nl": {
