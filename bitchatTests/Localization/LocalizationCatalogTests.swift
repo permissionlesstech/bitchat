@@ -110,6 +110,230 @@ final class LocalizationCatalogTests: XCTestCase {
     }
   }
 
+  // Test that validates placeholder replacement works correctly for all locales
+  // This test ensures that when placeholders are replaced with actual values,
+  // no raw placeholder text remains in the final string
+  func testPlaceholderReplacementCompleteness() throws {
+    let appContext = try loadContext(relativePath: "bitchat/Localizable.xcstrings")
+    let shareContext = try loadContext(relativePath: "bitchatShareExtension/Localization/Localizable.xcstrings")
+    
+    // Test both app and share extension catalogs
+    let contexts = [
+      ("App", appContext),
+      ("ShareExtension", shareContext)
+    ]
+    
+    for (catalogName, context) in contexts {
+      try validatePlaceholderReplacement(context: context, catalogName: catalogName)
+    }
+  }
+  
+  // Test that validates pluralization placeholders work correctly
+  func testPluralizationPlaceholderCompleteness() throws {
+    let context = try loadContext(relativePath: "bitchat/Localizable.xcstrings")
+    
+    // Find keys that use pluralization placeholders
+    let pluralizationKeys = findPluralizationKeys(in: context)
+    
+    for key in pluralizationKeys {
+      try validatePluralizationKey(key: key, context: context)
+    }
+  }
+
+  // MARK: - Placeholder Validation Helper Methods
+  
+  private func validatePlaceholderReplacement(context: CatalogContext, catalogName: String) throws {
+    let baseLocale = context.baseLocale
+    
+    for (key, entry) in context.catalog.strings {
+      // Get the English version to understand what placeholders should exist
+      guard let englishLocalization = entry.localizations[baseLocale],
+            let englishUnit = englishLocalization.stringUnit else {
+        continue
+      }
+      
+      let englishValue = englishUnit.value ?? ""
+      let englishPlaceholders = placeholders(in: englishValue)
+      
+      // Skip keys without placeholders
+      guard !englishPlaceholders.isEmpty else { continue }
+      
+      // Test each locale
+      for locale in context.locales {
+        guard locale != baseLocale else { continue }
+        
+        guard let localization = entry.localizations[locale],
+              let unit = localization.stringUnit else {
+          XCTFail("Missing localization for key '\(key)' in locale '\(locale)' (\(catalogName))")
+          continue
+        }
+        
+        let localizedValue = unit.value ?? ""
+        let localizedPlaceholders = placeholders(in: localizedValue)
+        
+        // Test placeholder replacement simulation
+        try validatePlaceholderReplacement(
+          key: key,
+          locale: locale,
+          localizedValue: localizedValue,
+          englishPlaceholders: englishPlaceholders,
+          localizedPlaceholders: localizedPlaceholders,
+          catalogName: catalogName
+        )
+      }
+    }
+  }
+  
+  private func validatePlaceholderReplacement(
+    key: String,
+    locale: String,
+    localizedValue: String,
+    englishPlaceholders: [String],
+    localizedPlaceholders: [String],
+    catalogName: String
+  ) throws {
+    var testString = localizedValue
+    
+    // Before replacement: verify the string contains the expected placeholders
+    let normalizedEnglish = Set(englishPlaceholders.map(normalizePlaceholder))
+    let normalizedLocalized = Set(localizedPlaceholders.map(normalizePlaceholder))
+    
+    XCTAssertEqual(
+      normalizedLocalized, normalizedEnglish,
+      "Placeholder mismatch for key '\(key)' in locale '\(locale)' (\(catalogName)). Expected: \(normalizedEnglish), Got: \(normalizedLocalized)"
+    )
+    
+    // Simulate placeholder replacement with test values
+    for placeholder in localizedPlaceholders {
+      let replacementValue = generateReplacementValue(for: placeholder)
+      testString = testString.replacingOccurrences(of: placeholder, with: replacementValue)
+    }
+    
+    // After replacement: verify no raw placeholders remain
+    let remainingPlaceholders = placeholders(in: testString)
+    XCTAssertTrue(
+      remainingPlaceholders.isEmpty,
+      "Raw placeholders remain after replacement for key '\(key)' in locale '\(locale)' (\(catalogName)). Remaining: \(remainingPlaceholders). Final string: '\(testString)'"
+    )
+    
+    // Verify no placeholder-like patterns remain (catch malformed placeholders)
+    let suspiciousPatterns = findSuspiciousPlaceholderPatterns(in: testString)
+    XCTAssertTrue(
+      suspiciousPatterns.isEmpty,
+      "Suspicious placeholder patterns found for key '\(key)' in locale '\(locale)' (\(catalogName)). Patterns: \(suspiciousPatterns). Final string: '\(testString)'"
+    )
+  }
+  
+  private func validatePluralizationKey(key: String, context: CatalogContext) throws {
+    guard let entry = context.catalog.strings[key] else { return }
+    
+    for locale in context.locales {
+      guard let localization = entry.localizations[locale] else { continue }
+      
+      // Check if this locale has proper pluralization structure
+      if let unit = localization.stringUnit,
+         let value = unit.value,
+         value.contains("%#@") {
+        
+        // If it uses pluralization placeholders, it should have substitutions
+        if localization.substitutions == nil {
+          XCTFail("Key '\(key)' in locale '\(locale)' uses pluralization placeholder but lacks substitutions structure")
+        }
+      }
+    }
+  }
+  
+  private func findPluralizationKeys(in context: CatalogContext) -> [String] {
+    var keys: [String] = []
+    
+    for (key, entry) in context.catalog.strings {
+      // Check if any locale uses pluralization
+      for (_, localization) in entry.localizations {
+        if let unit = localization.stringUnit,
+           let value = unit.value,
+           value.contains("%#@") {
+          keys.append(key)
+          break
+        }
+      }
+    }
+    
+    return keys
+  }
+  
+  private func extractPlaceholders(from string: String) -> [String] {
+    // Use the same proven regex pattern as the original placeholders() function
+    let pattern = "%(?:\\d+\\$)?#@[A-Za-z0-9_]+@|%(?:\\d+\\$)?[#0\\- +'\"]*(?:\\d+|\\*)?(?:\\.\\d+)?(?:hh|h|ll|l|z|t|L)?[a-zA-Z@]"
+    let regex = try! NSRegularExpression(pattern: pattern, options: [])
+    let range = NSRange(location: 0, length: string.count)
+    let matches = regex.matches(in: string, options: [], range: range)
+    
+    var placeholders: [String] = []
+    for match in matches {
+      if let range = Range(match.range, in: string) {
+        let placeholder = String(string[range])
+        if placeholder != "%%" { // Skip escaped %
+          placeholders.append(placeholder)
+        }
+      }
+    }
+    
+    return placeholders
+  }
+  
+  private func normalizePlaceholder(_ placeholder: String) -> String {
+    // Normalize positional vs non-positional placeholders for comparison
+    // %@ and %1$@ should be considered equivalent
+    if placeholder.contains("$") {
+      return placeholder
+    } else if placeholder.hasPrefix("%") && placeholder.hasSuffix("@") {
+      return "%1$@"
+    } else if placeholder.hasPrefix("%") && (placeholder.hasSuffix("d") || placeholder.hasSuffix("i")) {
+      return "%1$d"
+    }
+    return placeholder
+  }
+  
+  private func generateReplacementValue(for placeholder: String) -> String {
+    if placeholder.contains("#@") {
+      // Pluralization placeholder - this would be handled by the system
+      return "2 people" // Simulate pluralization result
+    } else if placeholder.hasSuffix("@") {
+      return "TestString"
+    } else if placeholder.hasSuffix("d") || placeholder.hasSuffix("i") {
+      return "42"
+    } else if placeholder.hasSuffix("f") {
+      return "3.14"
+    } else {
+      return "TestValue"
+    }
+  }
+  
+  private func findSuspiciousPlaceholderPatterns(in string: String) -> [String] {
+    var suspicious: [String] = []
+    
+    // Look for patterns that might be malformed placeholders
+    let suspiciousPatterns = [
+      "\\[%[^\\]]*\\]", // [%...] patterns
+      "%[A-Za-z0-9_]*@[A-Za-z0-9_]*", // Malformed pluralization
+      "@[A-Za-z0-9_]+@", // Orphaned @ patterns
+    ]
+    
+    for pattern in suspiciousPatterns {
+      let regex = try! NSRegularExpression(pattern: pattern, options: [])
+      let range = NSRange(location: 0, length: string.count)
+      let matches = regex.matches(in: string, options: [], range: range)
+      
+      for match in matches {
+        if let range = Range(match.range, in: string) {
+          suspicious.append(String(string[range]))
+        }
+      }
+    }
+    
+    return suspicious
+  }
+
   // MARK: - Assertions
 
   private func assertLocaleParity(context: CatalogContext, catalogName: String, file: StaticString = #filePath, line: UInt = #line) {
@@ -270,6 +494,7 @@ private struct CatalogEntry: Decodable {
 
 private struct CatalogLocalization: Decodable {
   let stringUnit: CatalogStringUnit?
+  let substitutions: [String: CatalogSubstitution]?
 }
 
 private struct CatalogStringUnit: Decodable {
@@ -285,6 +510,12 @@ private struct CatalogVariations: Decodable {
 
 private struct CatalogVariationValue: Decodable {
   let stringUnit: CatalogStringUnit?
+}
+
+private struct CatalogSubstitution: Decodable {
+  let argNum: Int
+  let formatSpecifier: String
+  let variations: CatalogVariations?
 }
 
 private struct Segment {
