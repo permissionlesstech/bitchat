@@ -40,7 +40,9 @@
       buildConfiguration = "Debug"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
-      shouldUseLaunchSchemeArgsEnv = "YES">
+      shouldUseLaunchSchemeArgsEnv = "YES"
+      codeCoverageEnabled = "YES"
+      onlyGenerateCoverageForSpecifiedTargets = "YES">
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
@@ -50,6 +52,15 @@
             ReferencedContainer = "container:bitchat.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
+      <CodeCoverageTargets>
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "AF077EA0474EDEDE2C72716C"
+            BuildableName = "bitchat.app"
+            BlueprintName = "bitchat_iOS"
+            ReferencedContainer = "container:bitchat.xcodeproj">
+         </BuildableReference>
+      </CodeCoverageTargets>
       <Testables>
          <TestableReference
             skipped = "NO"
