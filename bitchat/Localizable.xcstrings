@@ -491,7 +491,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "XONG"
+            "value": "HOÀN TẤT"
           }
         },
         "fil": {
@@ -670,7 +670,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "tin nhắn riêng tư được mã hóa bằng giao thức Noise"
+            "value": "tin nhắn riêng được mã hóa bằng giao thức Noise"
           }
         },
         "fil": {
@@ -1028,7 +1028,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "tin nhắn được chuyển tiếp qua các nút ngang hàng để đi xa hơn"
+            "value": "tin nhắn chuyển qua các nút ngang hàng, đi xa hơn"
           }
         },
         "fil": {
@@ -1386,7 +1386,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "nhận thông báo khi những người yêu thích của bạn tham gia"
+            "value": "nhận thông báo khi người bạn yêu thích tham gia"
           }
         },
         "fil": {
@@ -1744,7 +1744,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "các kênh geohash để trò chuyện với mọi người ở vùng lân cận thông qua các relay ẩn danh phi tập trung"
+            "value": "kênh geohash để trò chuyện với người ở khu vực lân cận qua các rơle phi tập trung ẩn danh"
           }
         },
         "fil": {
@@ -2102,7 +2102,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "dùng @nickname để thông báo cho người cụ thể"
+            "value": "sử dụng @biệt danh để báo cho người cụ thể"
           }
         },
         "fil": {
@@ -2281,7 +2281,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "nhắc tới"
+            "value": "lượt nhắc"
           }
         },
         "fil": {
@@ -2460,7 +2460,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "hoạt động không cần internet bằng Bluetooth năng lượng thấp"
+            "value": "hoạt động không cần internet với Bluetooth năng lượng thấp"
           }
         },
         "fil": {
@@ -2639,7 +2639,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "liên lạc ngoại tuyến"
+            "value": "giao tiếp ngoại tuyến"
           }
         },
         "fil": {
@@ -3176,7 +3176,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "• chạm ba lần vào khung chat để xóa"
+            "value": "• chạm ba lần vào cuộc trò chuyện để xóa"
           }
         },
         "fil": {
@@ -3713,7 +3713,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "• đặt biệt danh bằng cách chạm vào tên bạn"
+            "value": "• chạm vào biệt danh để đặt"
           }
         },
         "fil": {
@@ -3892,7 +3892,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "• chạm tên một nút ngang hàng để mở DM"
+            "value": "• chạm tên nút ngang hàng để bắt đầu DM"
           }
         },
         "fil": {
@@ -4250,7 +4250,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "tạo ID nút mới định kỳ"
+            "value": "ID nút mới được tạo thường xuyên"
           }
         },
         "fil": {
@@ -4429,7 +4429,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "danh tính tạm thời"
+            "value": "định danh tạm thời"
           }
         },
         "fil": {
@@ -4608,7 +4608,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "không máy chủ, không tài khoản, không thu thập dữ liệu"
+            "value": "không máy chủ; không tài khoản; không thu thập dữ liệu"
           }
         },
         "fil": {
@@ -4966,7 +4966,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "chạm logo ba lần để xóa toàn bộ dữ liệu ngay lập tức"
+            "value": "chạm ba lần vào logo để xóa ngay mọi dữ liệu"
           }
         },
         "fil": {
@@ -5503,7 +5503,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "sidegroupchat"
+            "value": "trò chuyện nhóm phụ"
           }
         },
         "fil": {
@@ -5682,7 +5682,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "bảo mật tin nhắn riêng tư vẫn chưa được kiểm toán đầy đủ. đừng dùng cho tình huống quan trọng cho tới khi cảnh báo này biến mất."
+            "value": "bảo mật tin nhắn riêng chưa được kiểm toán đầy đủ. đừng dùng cho tình huống quan trọng cho đến khi cảnh báo này biến mất."
           }
         },
         "fil": {
@@ -7114,7 +7114,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "không rõ"
+            "value": "không xác định"
           }
         },
         "fil": {
@@ -7293,7 +7293,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "thêm vào mục yêu thích"
+            "value": "thêm vào yêu thích"
           }
         },
         "fil": {
@@ -7651,7 +7651,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "quay lại phòng chat chính"
+            "value": "trở về trò chuyện chính"
           }
         },
         "fil": {
@@ -7830,7 +7830,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "đang kết nối qua mesh"
+            "value": "kết nối qua mesh"
           }
         },
         "fil": {
@@ -8188,7 +8188,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "kênh theo vị trí"
+            "value": "kênh vị trí"
           }
         },
         "fil": {
@@ -8546,7 +8546,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "mở chat riêng chưa đọc"
+            "value": "mở trò chuyện riêng chưa đọc"
           }
         },
         "fil": {
@@ -9288,7 +9288,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "chat riêng với %@"
+            "value": "trò chuyện riêng với %@"
           }
         },
         "fil": {
@@ -9467,7 +9467,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "liên hệ được qua mesh"
+            "value": "truy cập được qua mesh"
           }
         },
         "fil": {
@@ -10362,7 +10362,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "chuyển đánh dấu cho #%@"
+            "value": "chuyển dấu trang cho #%@"
           }
         },
         "fil": {
@@ -10541,7 +10541,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "chạm hai lần để chuyển trạng thái yêu thích"
+            "value": "chạm hai lần để đổi trạng thái yêu thích"
           }
         },
         "fil": {
@@ -11078,7 +11078,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "nhắn tin trực tiếp"
+            "value": "tin nhắn trực tiếp"
           }
         },
         "fil": {
@@ -11436,7 +11436,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "nhắc tới"
+            "value": "nhắc đến"
           }
         },
         "fil": {
@@ -11973,7 +11973,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "bluetooth đang tắt. hãy bật trong cài đặt để dùng bitchat."
+            "value": "Bluetooth đang tắt. hãy bật Bluetooth trong cài đặt để dùng bitchat."
           }
         },
         "fil": {
@@ -12152,7 +12152,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "bitchat cần quyền bluetooth để kết nối thiết bị gần. hãy bật quyền trong cài đặt."
+            "value": "bitchat cần quyền Bluetooth để kết nối thiết bị lân cận. vui lòng bật quyền Bluetooth trong cài đặt."
           }
         },
         "fil": {
@@ -12510,7 +12510,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "cần bluetooth"
+            "value": "cần Bluetooth"
           }
         },
         "fil": {
@@ -12689,7 +12689,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "thiết bị này không hỗ trợ bluetooth. bitchat cần bluetooth để hoạt động."
+            "value": "thiết bị này không hỗ trợ Bluetooth. bitchat cần Bluetooth để hoạt động."
           }
         },
         "fil": {
@@ -12868,7 +12868,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "ảnh chụp kênh vị trí sẽ lộ vị trí của bạn. hãy cân nhắc trước khi chia sẻ công khai."
+            "value": "ảnh chụp màn hình kênh vị trí sẽ tiết lộ vị trí của bạn. hãy cân nhắc trước khi chia sẻ công khai."
           }
         },
         "fil": {
@@ -13226,7 +13226,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "chặn hoặc xem danh sách nút đã chặn"
+            "value": "chặn hoặc liệt kê các nút bị chặn"
           }
         },
         "fil": {
@@ -13405,7 +13405,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "xóa tin nhắn chat"
+            "value": "xóa tin nhắn trò chuyện"
           }
         },
         "fil": {
@@ -13763,7 +13763,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "gửi một cái ôm ấm áp"
+            "value": "gửi ai đó một cái ôm ấm áp"
           }
         },
         "fil": {
@@ -14121,7 +14121,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "tát ai đó bằng cá hồi"
+            "value": "tát ai đó bằng cá hồi trout"
           }
         },
         "fil": {
@@ -14300,7 +14300,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "bỏ chặn nút"
+            "value": "bỏ chặn một nút"
           }
         },
         "fil": {
@@ -14658,7 +14658,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "xem ai đang online"
+            "value": "xem ai đang trực tuyến"
           }
         },
         "fil": {
@@ -14837,7 +14837,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "đã gửi tới %1$d trong %2$d thành viên"
+            "value": "đã gửi tới %1$d trong số %2$d thành viên"
           }
         },
         "fil": {
@@ -15016,7 +15016,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "gửi tới %@"
+            "value": "đã gửi tới %@"
           }
         },
         "fil": {
@@ -15374,7 +15374,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "đã đọc bởi %@"
+            "value": "được đọc bởi %@"
           }
         },
         "fil": {
@@ -15553,7 +15553,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "người dùng bị chặn"
+            "value": "người dùng đã bị chặn"
           }
         },
         "fil": {
@@ -15732,7 +15732,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "không thể tự gửi cho chính mình"
+            "value": "không thể tự gửi tin nhắn"
           }
         },
         "fil": {
@@ -16090,7 +16090,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "người nhận không xác định"
+            "value": "người nhận không rõ"
           }
         },
         "fil": {
@@ -16269,7 +16269,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "không liên lạc được với nút"
+            "value": "nút không truy cập được"
           }
         },
         "fil": {
@@ -16448,7 +16448,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "PEOPLE"
+            "value": "MỌI NGƯỜI"
           }
         },
         "fil": {
@@ -17522,7 +17522,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "thu gọn"
+            "value": "hiển thị ít hơn"
           }
         },
         "fil": {
@@ -17701,7 +17701,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "mở rộng"
+            "value": "hiển thị thêm"
           }
         },
         "fil": {
@@ -17880,7 +17880,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "không có dữ liệu vị trí"
+            "value": "không có vị trí"
           }
         },
         "fil": {
@@ -18238,7 +18238,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "thanh toán bằng Cashu"
+            "value": "thanh toán qua cashu"
           }
         },
         "fil": {
@@ -18417,7 +18417,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "thanh toán bằng Lightning"
+            "value": "thanh toán qua lightning"
           }
         },
         "fil": {
@@ -19312,7 +19312,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "đã mã hóa và xác thực"
+            "value": "đã mã hóa và xác minh"
           }
         },
         "fil": {
@@ -20207,7 +20207,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "đã mã hóa & xác thực"
+            "value": "đã mã hóa và xác minh"
           }
         },
         "fil": {
@@ -20386,7 +20386,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "đánh dấu đã xác thực"
+            "value": "đánh dấu đã xác minh"
           }
         },
         "fil": {
@@ -20565,7 +20565,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "xóa xác thực"
+            "value": "gỡ xác minh"
           }
         },
         "fil": {
@@ -20744,7 +20744,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "⚠️ CHƯA XÁC THỰC"
+            "value": "⚠️ CHƯA XÁC MINH"
           }
         },
         "fil": {
@@ -20923,7 +20923,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ ĐÃ XÁC THỰC"
+            "value": "✓ ĐÃ XÁC MINH"
           }
         },
         "fil": {
@@ -21102,7 +21102,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "chưa sẵn sàng - đang bắt tay"
+            "value": "không khả dụng - đang bắt tay"
           }
         },
         "fil": {
@@ -21281,7 +21281,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "bạn đã xác thực danh tính người này."
+            "value": "bạn đã xác minh danh tính của người này."
           }
         },
         "fil": {
@@ -22534,7 +22534,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "không có ai gần..."
+            "value": "không có ai xung quanh..."
           }
         },
         "fil": {
@@ -23429,7 +23429,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "yêu cầu quyền vị trí và geohash của tôi"
+            "value": "lấy vị trí và geohash của tôi"
           }
         },
         "fil": {
@@ -24324,7 +24324,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "đang tìm kênh gần…"
+            "value": "đang tìm kênh ở gần…"
           }
         },
         "fil": {
@@ -24682,7 +24682,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "bị từ chối quyền vị trí. hãy bật trong cài đặt để dùng kênh vị trí."
+            "value": "quyền vị trí bị từ chối. hãy bật trong cài đặt để dùng kênh vị trí."
           }
         },
         "fil": {
@@ -25961,7 +25961,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "ẩn IP của bạn cho kênh vị trí. khuyến nghị: bật."
+            "value": "ẩn IP của bạn cho các kênh vị trí. khuyến nghị: bật."
           }
         },
         "fil": {
@@ -26856,7 +26856,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "khu vực"
+            "value": "khu lân cận"
           }
         },
         "fil": {
@@ -27751,7 +27751,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "thêm ghi chú ngắn cố định cho nơi này để người khác tìm thấy"
+            "value": "thêm ghi chú ngắn cố định cho địa điểm này để người khác tìm thấy."
           }
         },
         "fil": {
@@ -27930,7 +27930,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "hãy là người đầu tiên thêm ghi chú tại đây"
+            "value": "hãy là người đầu tiên thêm cho vị trí này."
           }
         },
         "fil": {
@@ -28467,7 +28467,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "không có relay địa lý gần khu vực này. thử lại sau."
+            "value": "không có rơle geo nào gần vị trí này. thử lại sau."
           }
         },
         "fil": {
@@ -29567,7 +29567,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "không có relay địa lý gần đó"
+            "value": "không có rơle geo gần đây"
           }
         },
         "fil": {
@@ -29746,7 +29746,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "thêm ghi chú cho nơi này"
+            "value": "thêm ghi chú cho địa điểm này"
           }
         },
         "fil": {
@@ -29925,7 +29925,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "relay địa lý không sẵn có; ghi chú bị tạm dừng"
+            "value": "rơle geo không khả dụng; ghi chú tạm dừng"
           }
         },
         "fil": {
@@ -30104,7 +30104,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "ghi chú phụ thuộc vào relay địa lý. kiểm tra kết nối rồi thử lại."
+            "value": "ghi chú dựa vào rơle geo. kiểm tra kết nối và thử lại."
           }
         },
         "fil": {
@@ -30462,7 +30462,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "không thể bắt đầu chat với %@: người này bị chặn."
+            "value": "không thể bắt đầu trò chuyện với %@: người này bị chặn."
           }
         },
         "fil": {
@@ -30641,7 +30641,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "không thể bắt đầu chat với %@: cần yêu thích lẫn nhau để nhắn ngoại tuyến."
+            "value": "không thể bắt đầu trò chuyện với %@: cần cả hai thêm vào yêu thích để nhắn ngoại tuyến."
           }
         },
         "fil": {
@@ -30999,7 +30999,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "không thể gửi tin: người này bị chặn."
+            "value": "không thể gửi tin nhắn: người này bị chặn."
           }
         },
         "fil": {
@@ -31178,7 +31178,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "không thể gửi tin cho %@: người này bị chặn."
+            "value": "không thể gửi tin nhắn tới %@: người này bị chặn."
           }
         },
         "fil": {
@@ -31357,7 +31357,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "không thể gửi tin cho %@ - nút không thể liên lạc qua mesh hoặc nostr."
+            "value": "không thể gửi tin nhắn tới %@ - nút không truy cập được qua mesh hay nostr."
           }
         },
         "fil": {
@@ -31536,7 +31536,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "đã chặn %@ trong chat geohash"
+            "value": "đã chặn %@ trong trò chuyện geohash"
           }
         },
         "fil": {
@@ -31715,7 +31715,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "đã bỏ chặn %@ trong chat geohash"
+            "value": "đã bỏ chặn %@ trong trò chuyện geohash"
           }
         },
         "fil": {
@@ -31894,7 +31894,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "không gửi được: bạn không ở trong kênh vị trí"
+            "value": "không thể gửi: không ở trong kênh vị trí"
           }
         },
         "fil": {
@@ -32252,7 +32252,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "bản dành cho dev: đang bật bỏ qua Tor."
+            "value": "bản phát triển: bật bỏ qua Tor."
           }
         },
         "fil": {
@@ -32431,7 +32431,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "tor đã khởi động lại. định tuyến mạng được khôi phục."
+            "value": "tor đã khởi động lại. định tuyến mạng đã khôi phục."
           }
         },
         "fil": {
@@ -32789,7 +32789,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "tor đã khởi động. toàn bộ chat đi qua tor để ẩn IP."
+            "value": "tor đã khởi động. định tuyến mọi trò chuyện qua tor để bảo vệ IP."
           }
         },
         "fil": {
@@ -33684,7 +33684,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "dán nội dung QR để kiểm tra:"
+            "value": "dán nội dung QR để xác thực:"
           }
         },
         "fil": {
@@ -33863,7 +33863,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "quét QR của bạn"
+            "value": "quét QR của bạn bè"
           }
         },
         "fil": {
@@ -34042,7 +34042,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "payload QR không hợp lệ hoặc đã hết hạn"
+            "value": "tải QR không hợp lệ hoặc đã hết hạn"
           }
         },
         "fil": {
@@ -34221,7 +34221,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "không tìm thấy nút phù hợp"
+            "value": "không tìm thấy nút khớp"
           }
         },
         "fil": {
@@ -34400,7 +34400,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "đã yêu cầu xác minh cho %@"
+            "value": "yêu cầu xác minh cho %@"
           }
         },
         "fil": {
@@ -34579,7 +34579,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "xác minh"
+            "value": "xác thực"
           }
         },
         "fil": {
@@ -34758,7 +34758,7 @@
         "vi": {
           "stringUnit": {
             "state": "translated",
-            "value": "XÁC MINH"
+            "value": "XÁC THỰC"
           }
         },
         "fil": {
