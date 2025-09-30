@@ -91,10 +91,14 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
     // MARK: - AVAudioPlayerDelegate
 
     func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        stopTimer()
-        updateProgress()
-        isPlaying = false
-        VoiceNotePlaybackCoordinator.shared.deactivate(self)
+        // Delegate callback may be on background thread - ensure main thread for UI updates
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.stopTimer()
+            self.updateProgress()
+            self.isPlaying = false
+            VoiceNotePlaybackCoordinator.shared.deactivate(self)
+        }
     }
 
     // MARK: - Private Helpers

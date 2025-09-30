@@ -29,19 +29,24 @@ enum ImageUtils {
 
     #if os(iOS)
     static func processImage(_ image: UIImage, maxDimension: CGFloat = 512) throws -> URL {
-        let scaled = scaledImage(image, maxDimension: maxDimension)
-        var quality = compressionQuality
-        guard var jpegData = scaled.jpegData(compressionQuality: quality) else {
-            throw ImageUtilsError.encodingFailed
+        return try autoreleasepool {
+            let scaled = scaledImage(image, maxDimension: maxDimension)
+            var quality = compressionQuality
+            guard var jpegData = scaled.jpegData(compressionQuality: quality) else {
+                throw ImageUtilsError.encodingFailed
+            }
+            while jpegData.count > targetImageBytes && quality > 0.3 {
+                quality -= 0.1
+                autoreleasepool {
+                    if let next = scaled.jpegData(compressionQuality: quality) {
+                        jpegData = next
+                    }
+                }
+            }
+            let outputURL = try makeOutputURL()
+            try jpegData.write(to: outputURL, options: .atomic)
+            return outputURL
         }
-        while jpegData.count > targetImageBytes && quality > 0.3 {
-            quality -= 0.1
-            guard let next = scaled.jpegData(compressionQuality: quality) else { break }
-            jpegData = next
-        }
-        let outputURL = try makeOutputURL()
-        try jpegData.write(to: outputURL, options: .atomic)
-        return outputURL
     }
 
     private static func scaledImage(_ image: UIImage, maxDimension: CGFloat) -> UIImage {
@@ -58,40 +63,45 @@ enum ImageUtils {
     }
     #else
     static func processImage(_ image: NSImage, maxDimension: CGFloat = 512) throws -> URL {
-        let scaled = scaledImage(image, maxDimension: maxDimension)
-        guard let inputCG = scaled.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            throw ImageUtilsError.encodingFailed
+        return try autoreleasepool {
+            let scaled = scaledImage(image, maxDimension: maxDimension)
+            guard let inputCG = scaled.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+                throw ImageUtilsError.encodingFailed
+            }
+            let width = inputCG.width
+            let height = inputCG.height
+            let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+            guard let context = CGContext(
+                data: nil,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: 0,
+                space: colorSpace,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else {
+                throw ImageUtilsError.encodingFailed
+            }
+            context.draw(inputCG, in: CGRect(x: 0, y: 0, width: width, height: height))
+            guard let cgImage = context.makeImage() else {
+                throw ImageUtilsError.encodingFailed
+            }
+            var quality = compressionQuality
+            guard var jpegData = encodeJPEG(from: cgImage, quality: quality) else {
+                throw ImageUtilsError.encodingFailed
+            }
+            while jpegData.count > targetImageBytes && quality > 0.3 {
+                quality -= 0.1
+                autoreleasepool {
+                    if let next = encodeJPEG(from: cgImage, quality: quality) {
+                        jpegData = next
+                    }
+                }
+            }
+            let outputURL = try makeOutputURL()
+            try jpegData.write(to: outputURL, options: .atomic)
+            return outputURL
         }
-        let width = inputCG.width
-        let height = inputCG.height
-        let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
-        guard let context = CGContext(
-            data: nil,
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: 0,
-            space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else {
-            throw ImageUtilsError.encodingFailed
-        }
-        context.draw(inputCG, in: CGRect(x: 0, y: 0, width: width, height: height))
-        guard let cgImage = context.makeImage() else {
-            throw ImageUtilsError.encodingFailed
-        }
-        var quality = compressionQuality
-        guard var jpegData = encodeJPEG(from: cgImage, quality: quality) else {
-            throw ImageUtilsError.encodingFailed
-        }
-        while jpegData.count > targetImageBytes && quality > 0.3 {
-            quality -= 0.1
-            guard let next = encodeJPEG(from: cgImage, quality: quality) else { break }
-            jpegData = next
-        }
-        let outputURL = try makeOutputURL()
-        try jpegData.write(to: outputURL, options: .atomic)
-        return outputURL
     }
 
     private static func scaledImage(_ image: NSImage, maxDimension: CGFloat) -> NSImage {
