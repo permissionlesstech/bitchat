@@ -52,7 +52,7 @@
 /// ## Flag Bits
 /// - Bit 0: Has recipient ID (directed message)
 /// - Bit 1: Has signature (authenticated message)
-/// - Bit 2: Is compressed (LZ4 compression applied)
+/// - Bit 2: Is compressed (zlib compression applied)
 /// - Bits 3-7: Reserved for future use
 ///
 /// ## Size Constraints
@@ -111,11 +111,20 @@ struct BinaryProtocol {
     static let recipientIDSize = 8
     static let signatureSize = 64
 
-    static func headerSize(for version: UInt8) -> Int {
+    // Field offsets within packet header
+    struct Offsets {
+        static let version = 0
+        static let type = 1
+        static let ttl = 2
+        static let timestamp = 3
+        static let flags = 11  // After version(1) + type(1) + ttl(1) + timestamp(8)
+    }
+
+    static func headerSize(for version: UInt8) -> Int? {
         switch version {
         case 1: return v1HeaderSize
         case 2: return v2HeaderSize
-        default: return 0
+        default: return nil
         }
     }
 
@@ -156,7 +165,8 @@ struct BinaryProtocol {
         if version == 1 && payloadDataSize > Int(UInt16.max) { return nil }
         if version == 2 && payloadDataSize > Int(UInt32.max) { return nil }
 
-        let estimatedHeader = headerSize(for: version) + senderIDSize + (packet.recipientID == nil ? 0 : recipientIDSize)
+        guard let headerSize = headerSize(for: version) else { return nil }
+        let estimatedHeader = headerSize + senderIDSize + (packet.recipientID == nil ? 0 : recipientIDSize)
         let estimatedPayload = payloadDataSize
         let estimatedSignature = (packet.signature == nil ? 0 : signatureSize)
         var data = Data()
@@ -274,7 +284,8 @@ struct BinaryProtocol {
 
             guard let version = read8(), version == 1 || version == 2 else { return nil }
             let lengthFieldBytes = lengthFieldSize(for: version)
-            let minimumRequired = headerSize(for: version) + senderIDSize
+            guard let headerSize = headerSize(for: version) else { return nil }
+            let minimumRequired = headerSize + senderIDSize
             guard raw.count >= minimumRequired else { return nil }
 
             guard let type = read8(), let ttl = read8() else { return nil }

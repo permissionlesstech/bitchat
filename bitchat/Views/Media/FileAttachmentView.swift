@@ -38,7 +38,7 @@ struct FileAttachmentView: View {
                     .font(.bitchatSystem(size: 14, weight: .medium))
                     .foregroundColor(.primary)
                     .lineLimit(2)
-                Text(url.path)
+                Text(url.lastPathComponent)
                     .font(.bitchatSystem(size: 11, design: .monospaced))
                     .foregroundColor(.secondary)
                     .lineLimit(1)

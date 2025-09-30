@@ -45,18 +45,16 @@ struct NotificationStreamAssembler {
                 continue
             }
 
-            let headerSize = BinaryProtocol.headerSize(for: version)
-            let framePrefix = headerSize + BinaryProtocol.senderIDSize
-            guard headerSize > 0 else {
+            guard let headerSize = BinaryProtocol.headerSize(for: version) else {
                 dropped.append(buffer.removeFirst())
                 pendingFrameStartedAt = nil
                 pendingFrameExpectedLength = 0
                 continue
             }
+            let framePrefix = headerSize + BinaryProtocol.senderIDSize
             guard buffer.count >= framePrefix else { break }
 
-            let flagsOffset = 1 + 1 + 1 + 8 // version + type + ttl + timestamp
-            let flagsIndex = buffer.startIndex + flagsOffset
+            let flagsIndex = buffer.startIndex + BinaryProtocol.Offsets.flags
             guard flagsIndex < buffer.endIndex else { break }
             let flags = buffer[flagsIndex]
             let hasRecipient = (flags & BinaryProtocol.Flags.hasRecipient) != 0
