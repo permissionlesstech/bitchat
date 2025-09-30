@@ -165,6 +165,12 @@
             "state": "translated",
             "value": "bitchat"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat"
+          }
         }
       }
     },
@@ -331,6 +337,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "إغلاق"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭"
           }
         }
       }
@@ -499,6 +511,12 @@
             "state": "translated",
             "value": "تم"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完成"
+          }
         }
       }
     },
@@ -665,6 +683,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "الرسائل الخاصة مشفرة ببروتوكول noise"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用噪声协议加密私人消息"
           }
         }
       }
@@ -833,6 +857,12 @@
             "state": "translated",
             "value": "تشفير طرف لطرف"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "端到端加密"
+          }
         }
       }
     },
@@ -999,6 +1029,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "يُعاد تمرير الرسائل بين الأقران لتصل لمسافات أبعد"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "消息通过对等节点中继，传输距离更远"
           }
         }
       }
@@ -1167,6 +1203,12 @@
             "state": "translated",
             "value": "نطاق ممتد"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扩展范围"
+          }
         }
       }
     },
@@ -1333,6 +1375,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "تلقَّ تنبيهات عندما ينضم أحباؤك"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当您喜爱的人加入时获得通知"
           }
         }
       }
@@ -1501,6 +1549,12 @@
             "state": "translated",
             "value": "المفضلة"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "收藏夹"
+          }
         }
       }
     },
@@ -1667,6 +1721,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "قنوات geohash للدردشة مع أشخاص قريبين عبر مرحلات لامركزية مجهولة"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "地理哈希频道，通过去中心化匿名中继与附近地区的人聊天"
           }
         }
       }
@@ -1835,6 +1895,12 @@
             "state": "translated",
             "value": "قنوات محلية"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "地理哈希频道"
+          }
         }
       }
     },
@@ -2001,6 +2067,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "استخدم @nickname لتنبيه أشخاص محددين"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用@符号提及其他用户"
           }
         }
       }
@@ -2169,6 +2241,12 @@
             "state": "translated",
             "value": "إشارات"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提及"
+          }
         }
       }
     },
@@ -2335,6 +2413,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "يعمل بدون إنترنت باستخدام bluetooth منخفض الطاقة"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无需互联网即可与附近的人聊天"
           }
         }
       }
@@ -2503,6 +2587,12 @@
             "state": "translated",
             "value": "تواصل بدون اتصال"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "离线通信"
+          }
         }
       }
     },
@@ -2669,6 +2759,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "مزايا"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "功能"
           }
         }
       }
@@ -2837,6 +2933,12 @@
             "state": "translated",
             "value": "• اضغط #mesh لتغيير القناة"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输入 #geohash 切换频道"
+          }
         }
       }
     },
@@ -3003,6 +3105,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "• اضغط الدردشة ثلاث مرات للمسح"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输入 /clear 清除聊天记录"
           }
         }
       }
@@ -3171,6 +3279,12 @@
             "state": "translated",
             "value": "• اكتب / لعرض الأوامر"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输入 /help 查看所有命令"
+          }
         }
       }
     },
@@ -3337,6 +3451,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "• اضغط أيقونة الأشخاص لفتح الشريط الجانبي"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击人数打开侧边栏"
           }
         }
       }
@@ -3505,6 +3625,12 @@
             "state": "translated",
             "value": "• اضبط لقبك بلمسه"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输入 /nick 昵称 设置昵称"
+          }
         }
       }
     },
@@ -3671,6 +3797,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "• اضغط اسم القرين لبدء رسائل خاصة"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击用户名开始私聊"
           }
         }
       }
@@ -3839,6 +3971,12 @@
             "state": "translated",
             "value": "طريقة الاستخدام"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用方法"
+          }
         }
       }
     },
@@ -4005,6 +4143,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "يُولد معرف قرين جديد بانتظام"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "消息不会永久存储"
           }
         }
       }
@@ -4173,6 +4317,12 @@
             "state": "translated",
             "value": "هوية مؤقتة"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "临时消息"
+          }
         }
       }
     },
@@ -4339,6 +4489,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "لا خوادم أو حسابات أو جمع بيانات"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无分析、无跟踪、无广告"
           }
         }
       }
@@ -4507,6 +4663,12 @@
             "state": "translated",
             "value": "لا تتبع"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无跟踪"
+          }
         }
       }
     },
@@ -4673,6 +4835,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "اضغط الشعار ثلاث مرات لمسح كل البيانات فوراً"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "摇晃设备清除所有数据"
           }
         }
       }
@@ -4841,6 +5009,12 @@
             "state": "translated",
             "value": "وضع الذعر"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "紧急删除"
+          }
         }
       }
     },
@@ -5007,6 +5181,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "خصوصية"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隐私"
           }
         }
       }
@@ -5175,6 +5355,12 @@
             "state": "translated",
             "value": "sidegroupchat"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "去中心化聊天"
+          }
         }
       }
     },
@@ -5341,6 +5527,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "أمان الرسائل الخاصة لم يتم تدقيقه بالكامل بعد. لا تستخدمها في الحالات الحرجة حتى يختفي هذا التحذير."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这是实验性软件。请勿用于重要通信。"
           }
         }
       }
@@ -5509,6 +5701,12 @@
             "state": "translated",
             "value": "تحذير"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "警告"
+          }
         }
       }
     },
@@ -5675,6 +5873,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "إلغاء"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消"
           }
         }
       }
@@ -5843,6 +6047,12 @@
             "state": "translated",
             "value": "إغلاق"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭"
+          }
         }
       }
     },
@@ -6009,6 +6219,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "نسخ"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制"
           }
         }
       }
@@ -6177,6 +6393,12 @@
             "state": "translated",
             "value": "موافق"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确定"
+          }
         }
       }
     },
@@ -6343,6 +6565,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "إيقاف"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭"
           }
         }
       }
@@ -6511,6 +6739,12 @@
             "state": "translated",
             "value": "تشغيل"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开启"
+          }
         }
       }
     },
@@ -6677,6 +6911,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "غير معروف"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未知"
           }
         }
       }
@@ -6845,6 +7085,12 @@
             "state": "translated",
             "value": "إضافة إلى المفضلة"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加到收藏夹"
+          }
         }
       }
     },
@@ -7011,6 +7257,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "متاح عبر nostr"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可通过nostr访问"
           }
         }
       }
@@ -7179,6 +7431,12 @@
             "state": "translated",
             "value": "عودة إلى الدردشة الرئيسية"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "返回主聊天"
+          }
         }
       }
     },
@@ -7345,6 +7603,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "متصل عبر mesh"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已连接到网格"
           }
         }
       }
@@ -7513,6 +7777,12 @@
             "state": "translated",
             "value": "حالة التشفير: %@"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加密状态：%@"
+          }
         }
       }
     },
@@ -7679,6 +7949,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "قنوات الموقع"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "位置频道"
           }
         }
       }
@@ -7847,6 +8123,12 @@
             "state": "translated",
             "value": "ملاحظات الموقع لهذا المكان"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "位置笔记"
+          }
         }
       }
     },
@@ -8013,6 +8295,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "فتح دردشة خاصة غير مقروءة"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开未读私聊"
           }
         }
       }
@@ -8697,6 +8985,12 @@
             "state": "translated",
             "value": "%#@people@"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%#@people@"
+          }
         }
       }
     },
@@ -8863,6 +9157,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "دردشة خاصة مع %@"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "与 %@ 的私聊"
           }
         }
       }
@@ -9031,6 +9331,12 @@
             "state": "translated",
             "value": "قابل للوصول عبر mesh"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可通过网格访问"
+          }
         }
       }
     },
@@ -9197,6 +9503,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "إزالة من المفضلة"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从收藏夹移除"
           }
         }
       }
@@ -9365,6 +9677,12 @@
             "state": "translated",
             "value": "أدخل رسالة للإرسال"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输入消息后发送"
+          }
         }
       }
     },
@@ -9531,6 +9849,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "اضغط مرتين للإرسال"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发送消息"
           }
         }
       }
@@ -9699,6 +10023,12 @@
             "state": "translated",
             "value": "إرسال رسالة"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发送消息"
+          }
         }
       }
     },
@@ -9865,6 +10195,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "تبديل الإشارة لـ #%@"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切换 #%@ 的书签"
           }
         }
       }
@@ -10033,6 +10369,12 @@
             "state": "translated",
             "value": "اضغط مرتين لتبديل حالة المفضلة"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切换收藏夹提示"
+          }
         }
       }
     },
@@ -10199,6 +10541,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "اضغط لمشاهدة بصمة التشفير"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看指纹提示"
           }
         }
       }
@@ -10367,6 +10715,12 @@
             "state": "translated",
             "value": "حظر"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "屏蔽"
+          }
         }
       }
     },
@@ -10533,6 +10887,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "رسالة مباشرة"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "私信"
           }
         }
       }
@@ -10701,6 +11061,12 @@
             "state": "translated",
             "value": "عناق"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拥抱"
+          }
         }
       }
     },
@@ -10867,6 +11233,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ذكر"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提及"
           }
         }
       }
@@ -11035,6 +11407,12 @@
             "state": "translated",
             "value": "صفعة"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拍打"
+          }
         }
       }
     },
@@ -11201,6 +11579,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "إجراءات"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作"
           }
         }
       }
@@ -11369,6 +11753,12 @@
             "state": "translated",
             "value": "bluetooth متوقف. فعّل bluetooth في الإعدادات لاستخدام bitchat."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "蓝牙已关闭。请在设置中开启蓝牙。"
+          }
         }
       }
     },
@@ -11535,6 +11925,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "تحتاج bitchat إلى إذن bluetooth للاتصال بالأجهزة القريبة. فعّل الوصول في الإعدادات."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat需要蓝牙权限来连接附近的设备。请在设置中启用访问权限。"
           }
         }
       }
@@ -11703,6 +12099,12 @@
             "state": "translated",
             "value": "الإعدادات"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置"
+          }
         }
       }
     },
@@ -11869,6 +12271,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "مطلوب bluetooth"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要蓝牙"
           }
         }
       }
@@ -12037,6 +12445,12 @@
             "state": "translated",
             "value": "هذا الجهاز لا يدعم bluetooth. يحتاج bitchat إلى bluetooth للعمل."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此设备不支持蓝牙。"
+          }
         }
       }
     },
@@ -12203,6 +12617,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "لقطات قنوات الموقع تكشف موقعك. فكر قبل المشاركة علناً."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "截图可能会暴露您的身份和位置。"
           }
         }
       }
@@ -12371,6 +12791,12 @@
             "state": "translated",
             "value": "تنبيه"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隐私警告"
+          }
         }
       }
     },
@@ -12537,6 +12963,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "حظر أو عرض المحظورين"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "屏蔽用户"
           }
         }
       }
@@ -12705,6 +13137,12 @@
             "state": "translated",
             "value": "مسح رسائل الدردشة"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除聊天记录"
+          }
         }
       }
     },
@@ -12871,6 +13309,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "إضافة للمفضلة"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加到收藏夹"
           }
         }
       }
@@ -13039,6 +13483,12 @@
             "state": "translated",
             "value": "إرسال عناق دافئ"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拥抱某人"
+          }
         }
       }
     },
@@ -13205,6 +13655,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "إرسال رسالة خاصة"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发送私信"
           }
         }
       }
@@ -13373,6 +13829,12 @@
             "state": "translated",
             "value": "صفع شخص بسمكة تراوت"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拍打某人"
+          }
         }
       }
     },
@@ -13539,6 +14001,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "إلغاء حظر قرين"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消屏蔽用户"
           }
         }
       }
@@ -13707,6 +14175,12 @@
             "state": "translated",
             "value": "إزالة من المفضلة"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从收藏夹移除"
+          }
         }
       }
     },
@@ -13873,6 +14347,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "عرض من هو متصل"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示在线用户"
           }
         }
       }
@@ -14041,6 +14521,12 @@
             "state": "translated",
             "value": "تم التسليم إلى %1$d من %2$d عضو"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已送达 %2$d 个成员中的 %1$d 个"
+          }
         }
       }
     },
@@ -14207,6 +14693,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "سُلّم إلى %@"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已送达给 %@"
           }
         }
       }
@@ -14375,6 +14867,12 @@
             "state": "translated",
             "value": "فشل: %@"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "失败：%@"
+          }
         }
       }
     },
@@ -14541,6 +15039,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "قُرِئ بواسطة %@"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已被 %@ 阅读"
           }
         }
       }
@@ -14709,6 +15213,12 @@
             "state": "translated",
             "value": "المستخدم محظور"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "被屏蔽"
+          }
         }
       }
     },
@@ -14875,6 +15385,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "لا يمكن الإرسال لنفسك"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自己"
           }
         }
       }
@@ -15043,6 +15559,12 @@
             "state": "translated",
             "value": "خطأ في الإرسال"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发送错误"
+          }
         }
       }
     },
@@ -15209,6 +15731,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "مستلم غير معروف"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未知收件人"
           }
         }
       }
@@ -15377,6 +15905,12 @@
             "state": "translated",
             "value": "القرين غير متاح"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法到达"
+          }
         }
       }
     },
@@ -15543,6 +16077,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "أشخاص"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "人员"
           }
         }
       }
@@ -15711,6 +16251,12 @@
             "state": "translated",
             "value": "التحقق: عرض رمز qr الخاص بي أو مسح صديق"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "验证指纹以确保安全通信"
+          }
         }
       }
     },
@@ -15877,6 +16423,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "اكتب رسالة..."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输入消息..."
           }
         }
       }
@@ -16045,6 +16597,12 @@
             "state": "translated",
             "value": "لقب"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置昵称"
+          }
         }
       }
     },
@@ -16211,6 +16769,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "تفعيل الموقع"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "启用位置服务"
           }
         }
       }
@@ -16379,6 +16943,12 @@
             "state": "translated",
             "value": "نسخ الرسالة"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制消息"
+          }
         }
       }
     },
@@ -16545,6 +17115,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "عرض أقل"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示更少"
           }
         }
       }
@@ -16713,6 +17289,12 @@
             "state": "translated",
             "value": "عرض المزيد"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示更多"
+          }
         }
       }
     },
@@ -16879,6 +17461,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "الموقع غير متاح"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "位置不可用"
           }
         }
       }
@@ -17047,6 +17635,12 @@
             "state": "translated",
             "value": "ملاحظات"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "笔记"
+          }
         }
       }
     },
@@ -17213,6 +17807,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "الدفع عبر cashu"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cashu支付"
           }
         }
       }
@@ -17381,6 +17981,12 @@
             "state": "translated",
             "value": "الدفع عبر lightning"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "闪电网络支付"
+          }
         }
       }
     },
@@ -17547,6 +18153,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "جار إعداد التشفير"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在建立加密"
           }
         }
       }
@@ -17715,6 +18327,12 @@
             "state": "translated",
             "value": "فشل التشفير"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加密失败"
+          }
         }
       }
     },
@@ -17881,6 +18499,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "غير مشفر"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未加密"
           }
         }
       }
@@ -18049,6 +18673,12 @@
             "state": "translated",
             "value": "مشفر"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已加密"
+          }
         }
       }
     },
@@ -18215,6 +18845,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "مشفر ومُتحقق"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已验证"
           }
         }
       }
@@ -18383,6 +19019,12 @@
             "state": "translated",
             "value": "جار إعداد التشفير..."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在建立"
+          }
         }
       }
     },
@@ -18549,6 +19191,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "فشل التشفير"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "失败"
           }
         }
       }
@@ -18717,6 +19365,12 @@
             "state": "translated",
             "value": "غير مشفر"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未加密"
+          }
         }
       }
     },
@@ -18883,6 +19537,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "مشفر"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已加密"
           }
         }
       }
@@ -19051,6 +19711,12 @@
             "state": "translated",
             "value": "مشفر ومُتحقق"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已验证"
+          }
         }
       }
     },
@@ -19217,6 +19883,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "وضع علامة تم التحقق"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "标记为已验证"
           }
         }
       }
@@ -19385,6 +20057,12 @@
             "state": "translated",
             "value": "إزالة التحقق"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除验证"
+          }
         }
       }
     },
@@ -19551,6 +20229,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "⚠️ غير مُتحقق"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⚠️ 未验证"
           }
         }
       }
@@ -19719,6 +20403,12 @@
             "state": "translated",
             "value": "✓ مُتحقق"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ 已验证"
+          }
         }
       }
     },
@@ -19885,6 +20575,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "غير متاح - جار تنفيذ handshake"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "握手待处理"
           }
         }
       }
@@ -20053,6 +20749,12 @@
             "state": "translated",
             "value": "لقد تحققت من هوية هذا الشخص."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已验证指纹"
+          }
         }
       }
     },
@@ -20219,6 +20921,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "قارن هذه البصمات مع %@ عبر قناة آمنة."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通过安全渠道与 %@ 比较这些指纹。"
           }
         }
       }
@@ -20387,6 +21095,12 @@
             "state": "translated",
             "value": "بصمتهم:"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "他们的指纹"
+          }
         }
       }
     },
@@ -20553,6 +21267,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "تحقق الأمان"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "指纹"
           }
         }
       }
@@ -20721,6 +21441,12 @@
             "state": "translated",
             "value": "بصمتك:"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "您的指纹"
+          }
         }
       }
     },
@@ -20887,6 +21613,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "حظر"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "屏蔽"
           }
         }
       }
@@ -21055,6 +21787,12 @@
             "state": "translated",
             "value": "إلغاء الحظر"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消屏蔽"
+          }
         }
       }
     },
@@ -21221,6 +21959,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "لا أحد قريب..."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "附近没有人"
           }
         }
       }
@@ -21389,6 +22133,12 @@
             "state": "translated",
             "value": "محظور في geohash"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已屏蔽"
+          }
         }
       }
     },
@@ -21555,6 +22305,12 @@
           "stringUnit": {
             "state": "translated",
             "value": " (أنت)"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "（您）"
           }
         }
       }
@@ -21723,6 +22479,12 @@
             "state": "translated",
             "value": "فتح الإعدادات"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开设置"
+          }
         }
       }
     },
@@ -21889,6 +22651,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "إزالة صلاحية الموقع"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除访问权限"
           }
         }
       }
@@ -22057,6 +22825,12 @@
             "state": "translated",
             "value": "جلب موقعي و geohash"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请求权限"
+          }
         }
       }
     },
@@ -22223,6 +22997,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "انتقال فوري"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "传送"
           }
         }
       }
@@ -22391,6 +23171,12 @@
             "state": "translated",
             "value": "محفوظ"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已收藏"
+          }
         }
       }
     },
@@ -22557,6 +23343,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "تحدث مع أشخاص قريبين عبر قنوات geohash. نشارك geohash تقريبي فقط، وليس gps الدقيق. يتم إخفاء عنوان ip لأن كل المرور يمر عبر tor."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "基于位置的聊天频道"
           }
         }
       }
@@ -22725,6 +23517,12 @@
             "state": "translated",
             "value": "geohash غير صالح"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无效的地理哈希"
+          }
         }
       }
     },
@@ -22891,6 +23689,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "جار البحث عن قنوات قريبة…"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在加载附近的频道"
           }
         }
       }
@@ -23059,6 +23863,12 @@
             "state": "translated",
             "value": "mesh"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "网格"
+          }
         }
       }
     },
@@ -23225,6 +24035,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "تم رفض إذن الموقع. فعّله في الإعدادات لاستخدام قنوات الموقع."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "权限被拒绝"
           }
         }
       }
@@ -23909,6 +24725,12 @@
             "state": "translated",
             "value": "%1$@ [%2$#@people_count@]"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ [%2$#@people_count@]"
+          }
         }
       }
     },
@@ -24076,6 +24898,12 @@
             "state": "translated",
             "value": "#%@ • %@"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%1$@ • %2$@"
+          }
         }
       }
     },
@@ -24239,6 +25067,12 @@
           }
         },
         "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ • %2$@"
+          }
+        },
+        "vi": {
           "stringUnit": {
             "state": "translated",
             "value": "%1$@ • %2$@"
@@ -24410,6 +25244,12 @@
             "state": "translated",
             "value": "#قنوات الموقع"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#位置频道"
+          }
         }
       }
     },
@@ -24576,6 +25416,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "يخفي ip لقنوات الموقع. الموصى به: تشغيل."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通过Tor的匿名中继"
           }
         }
       }
@@ -24744,6 +25590,12 @@
             "state": "translated",
             "value": "توجيه tor"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tor中继"
+          }
         }
       }
     },
@@ -24910,6 +25762,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "مربع"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "街区"
           }
         }
       }
@@ -25078,6 +25936,12 @@
             "state": "translated",
             "value": "مبنى"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "建筑"
+          }
         }
       }
     },
@@ -25244,6 +26108,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "مدينة"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "城市"
           }
         }
       }
@@ -25412,6 +26282,12 @@
             "state": "translated",
             "value": "حي"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "社区"
+          }
         }
       }
     },
@@ -25578,6 +26454,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "مقاطعة"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "省份"
           }
         }
       }
@@ -25746,6 +26628,12 @@
             "state": "translated",
             "value": "منطقة"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "地区"
+          }
         }
       }
     },
@@ -25912,6 +26800,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "إغلاق"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "忽略"
           }
         }
       }
@@ -26080,6 +26974,12 @@
             "state": "translated",
             "value": "إعادة المحاولة"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重试"
+          }
         }
       }
     },
@@ -26246,6 +27146,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "أضف ملاحظات قصيرة دائمة لهذا المكان ليجدها الآخرون."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在此位置留下笔记"
           }
         }
       }
@@ -26414,6 +27320,12 @@
             "state": "translated",
             "value": "كن أول من يضيف هنا."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "成为第一个在此留下笔记的人"
+          }
         }
       }
     },
@@ -26580,6 +27492,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "لا توجد ملاحظات بعد"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此处没有笔记"
           }
         }
       }
@@ -26748,6 +27666,12 @@
             "state": "translated",
             "value": "تعذر إرسال الملاحظة. %@"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发送笔记失败。%@"
+          }
         }
       }
     },
@@ -26914,6 +27838,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "لا توجد مرحلات جغرافية قريبة من هذا المكان. حاول لاحقاً."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有中继"
           }
         }
       }
@@ -27598,6 +28528,12 @@
             "state": "translated",
             "value": "#%1$@ • %2$#@note_count@"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%1$@ • %2$#@note_count@"
+          }
         }
       }
     },
@@ -27764,6 +28700,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "جار تحميل الملاحظات…"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在加载笔记"
           }
         }
       }
@@ -27932,6 +28874,12 @@
             "state": "translated",
             "value": "جار تحميل الملاحظات الحديثة…"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在加载最近的笔记"
+          }
         }
       }
     },
@@ -28098,6 +29046,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "لا مرحلات جغرافية قريبة"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "附近没有中继"
           }
         }
       }
@@ -28266,6 +29220,12 @@
             "state": "translated",
             "value": "أضف ملاحظة لهذا المكان"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在此位置留下笔记..."
+          }
         }
       }
     },
@@ -28432,6 +29392,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "المرحلات الجغرافية غير متاحة؛ الملاحظات متوقفة"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中继已暂停"
           }
         }
       }
@@ -28600,6 +29566,12 @@
             "state": "translated",
             "value": "الملاحظات تعتمد على المرحلات الجغرافية. تحقق من الاتصال ثم أعد المحاولة."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击重试连接中继"
+          }
         }
       }
     },
@@ -28766,6 +29738,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "رسائل جديدة"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新消息"
           }
         }
       }
@@ -28934,6 +29912,12 @@
             "state": "translated",
             "value": "لا يمكن بدء دردشة مع %@: المستخدم محظور."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法与 %@ 开始聊天：此人已被屏蔽。"
+          }
         }
       }
     },
@@ -29100,6 +30084,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "لا يمكن بدء دردشة مع %@: يجب أن تكونا مفضلين متبادلين للتشغيل بدون اتصال."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法与 %@ 开始聊天：离线消息需要互相收藏。"
           }
         }
       }
@@ -29268,6 +30258,12 @@
             "state": "translated",
             "value": "مستخدم"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用户"
+          }
         }
       }
     },
@@ -29434,6 +30430,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "تعذر الإرسال: المستخدم محظور."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "消息被屏蔽"
           }
         }
       }
@@ -29602,6 +30604,12 @@
             "state": "translated",
             "value": "لا يمكن الإرسال إلى %@: المستخدم محظور."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法向 %@ 发送消息：此人已被屏蔽。"
+          }
         }
       }
     },
@@ -29768,6 +30776,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "لا يمكن الإرسال إلى %@: المستلم غير متاح عبر mesh أو nostr."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法向 %@ 发送消息 - 无法通过网格或 nostr 联系到对等节点。"
           }
         }
       }
@@ -29936,6 +30950,12 @@
             "state": "translated",
             "value": "تم حظر %@ في محادثات geohash"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在地理哈希聊天中屏蔽了 %@"
+          }
         }
       }
     },
@@ -30102,6 +31122,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "تم إلغاء حظر %@ في محادثات geohash"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在地理哈希聊天中取消屏蔽了 %@"
           }
         }
       }
@@ -30270,6 +31296,12 @@
             "state": "translated",
             "value": "تعذر الإرسال: لست داخل قناة موقع"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不在频道中"
+          }
         }
       }
     },
@@ -30436,6 +31468,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "تعذر الإرسال إلى قناة الموقع"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发送失败"
           }
         }
       }
@@ -30604,6 +31642,12 @@
             "state": "translated",
             "value": "بناء تطوير: تجاوز tor مفعل."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开发模式：绕过Tor"
+          }
         }
       }
     },
@@ -30770,6 +31814,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tor أُعيد تشغيله. تمت استعادة التوجيه."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tor已重启"
           }
         }
       }
@@ -30938,6 +31988,12 @@
             "state": "translated",
             "value": "tor يعاد تشغيله لاستعادة الاتصال..."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在重启Tor"
+          }
         }
       }
     },
@@ -31104,6 +32160,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tor يعمل. كل الدردشة تمر عبر tor للخصوصية."
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tor已启动。所有聊天都通过Tor路由以保护隐私。"
           }
         }
       }
@@ -31272,6 +32334,12 @@
             "state": "translated",
             "value": "يتم تشغيل tor..."
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在启动Tor"
+          }
         }
       }
     },
@@ -31438,6 +32506,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "رمز qr للتحقق"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我的二维码"
           }
         }
       }
@@ -31606,6 +32680,12 @@
             "state": "translated",
             "value": "امسح للتحقق مني"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我的二维码"
+          }
         }
       }
     },
@@ -31772,6 +32852,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "qr غير متاح"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "二维码不可用"
           }
         }
       }
@@ -31940,6 +33026,12 @@
             "state": "translated",
             "value": "الصق محتوى qr للتحقق:"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "粘贴指纹"
+          }
         }
       }
     },
@@ -32106,6 +33198,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "امسح qr لصديق"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "让朋友扫描此二维码"
           }
         }
       }
@@ -32274,6 +33372,12 @@
             "state": "translated",
             "value": "qr غير صالح أو منتهٍ"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无效的指纹"
+          }
         }
       }
     },
@@ -32440,6 +33544,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "لم يتم العثور على قرين مطابق"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找不到对等节点"
           }
         }
       }
@@ -32608,6 +33718,12 @@
             "state": "translated",
             "value": "تم طلب التحقق لـ %@"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已请求验证 %@"
+          }
         }
       }
     },
@@ -32774,6 +33890,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "تحقق"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "验证指纹"
           }
         }
       }
@@ -32942,6 +34064,12 @@
             "state": "translated",
             "value": "تحقق"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "验证"
+          }
         }
       }
     },
@@ -33107,6 +34235,12 @@
           }
         },
         "fa": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@"
+          }
+        },
+        "vi": {
           "stringUnit": {
             "state": "translated",
             "value": "%@"

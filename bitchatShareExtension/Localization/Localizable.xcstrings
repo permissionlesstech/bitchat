@@ -192,6 +192,13 @@
             "value": "رابط مشترك",
             "comment": "Fallback title when saving a shared link"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分享的链接",
+            "comment": "Fallback title when saving a shared link"
+          }
         }
       }
     },
@@ -384,6 +391,13 @@
           "stringUnit": {
             "state": "translated",
             "value": "تعذر ترميز الرابط",
+            "comment": "Shown when the share payload cannot be encoded"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法编码链接",
             "comment": "Shown when the share payload cannot be encoded"
           }
         }
@@ -580,6 +594,13 @@
             "value": "لا محتوى قابلاً للمشاركة",
             "comment": "Shown when provided content cannot be shared"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有可分享的素材",
+            "comment": "Shown when provided content cannot be shared"
+          }
         }
       }
     },
@@ -772,6 +793,13 @@
           "stringUnit": {
             "state": "translated",
             "value": "لا شيء لمشاركته",
+            "comment": "Shown when the share extension receives no content"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有可分享的内容",
             "comment": "Shown when the share extension receives no content"
           }
         }
@@ -968,6 +996,13 @@
             "value": "✓ تم إرسال الرابط إلى bitchat",
             "comment": "Confirmation after successfully sharing a link"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ 已将链接分享至 bitchat",
+            "comment": "Confirmation after successfully sharing a link"
+          }
         }
       }
     },
@@ -1160,6 +1195,13 @@
           "stringUnit": {
             "state": "translated",
             "value": "✓ تم إرسال النص إلى bitchat",
+            "comment": "Confirmation after successfully sharing text"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ 已将文本分享至 bitchat",
             "comment": "Confirmation after successfully sharing text"
           }
         }
