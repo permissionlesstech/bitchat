@@ -113,7 +113,16 @@ struct ContentView: View {
             ZStack {
                 // Base layer - Main public chat (always visible)
                 mainChatView
-                    .onAppear { viewModel.currentColorScheme = colorScheme }
+                    .onAppear {
+                        viewModel.currentColorScheme = colorScheme
+                        #if os(macOS)
+                        // Focus message input on macOS launch, not nickname field
+                        DispatchQueue.main.async {
+                            isNicknameFieldFocused = false
+                            isTextFieldFocused = true
+                        }
+                        #endif
+                    }
                     .onChange(of: colorScheme) { newValue in
                         viewModel.currentColorScheme = newValue
                     }
