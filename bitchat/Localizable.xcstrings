@@ -177,6 +177,12 @@
             "state": "translated",
             "value": "bitchat"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat"
+          }
         }
       }
     },
@@ -355,6 +361,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "بند کریں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بند کړه"
           }
         }
       }
@@ -535,6 +547,12 @@
             "state": "translated",
             "value": "مکمل"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "پای ته ورسېد"
+          }
         }
       }
     },
@@ -713,6 +731,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "نجی پیغامات Noise پروٹوکول سے خفیہ کیے جاتے ہیں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "خصوصي پیغامونه د Noise پروتوکول په وسیله کوډیږي"
           }
         }
       }
@@ -893,6 +917,12 @@
             "state": "translated",
             "value": "اینڈ ٹو اینڈ انکرپشن"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "پای تر پای کوډیزه"
+          }
         }
       }
     },
@@ -1071,6 +1101,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "پیغامات ہم منصبوں کے ذریعے آگے بڑھا کر دور تک پہنچتے ہیں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "پیغامونه د همځولو له لارې لېږدول کېږي، اوږد واټن وهي"
           }
         }
       }
@@ -1251,6 +1287,12 @@
             "state": "translated",
             "value": "وسیع دائرہ"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "پراخ شوی واټن"
+          }
         }
       }
     },
@@ -1429,6 +1471,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "جب آپ کے پسندیدہ لوگ شامل ہوں تو اطلاع پائیں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "کله چې ستا خوښې خلک یوځای شي خبرتیا ترلاسه کړه"
           }
         }
       }
@@ -1609,6 +1657,12 @@
             "state": "translated",
             "value": "پسندیدہ"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "خوښې"
+          }
         }
       }
     },
@@ -1787,6 +1841,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "غیر مرکزی گمنام ریلوں کے ذریعے قریب کے لوگوں سے بات کرنے کیلئے geohash چینلز"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "د geohash چینلونه چې له نږدې سیمو خلکو سره د غیرمتمرکز نااشنا ریلونو له لارې خبرې کوي"
           }
         }
       }
@@ -1967,6 +2027,12 @@
             "state": "translated",
             "value": "مقامی چینلز"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سیمه ییز چینلونه"
+          }
         }
       }
     },
@@ -2145,6 +2211,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "کسی مخصوص شخص کو خبردار کرنے کیلئے @nickname استعمال کریں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "د ځانګړو خلکو د خبرولو لپاره @نوم وکاروه"
           }
         }
       }
@@ -2325,6 +2397,12 @@
             "state": "translated",
             "value": "ذکر"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "یادونې"
+          }
         }
       }
     },
@@ -2503,6 +2581,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Bluetooth Low Energy کے ساتھ بغیر انٹرنیٹ کے کام کرتا ہے"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بې له انټرنټه د Bluetooth لږ مصرف په وسیله کار کوي"
           }
         }
       }
@@ -2683,6 +2767,12 @@
             "state": "translated",
             "value": "آف لائن مواصلات"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بې انټرنټه اړیکه"
+          }
         }
       }
     },
@@ -2861,6 +2951,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "خصوصیات"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ځانګړتیاوې"
           }
         }
       }
@@ -3041,6 +3137,12 @@
             "state": "translated",
             "value": "• چینل بدلنے کیلئے #mesh پر ٹیپ کریں"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• #mesh ټک کړه څو چینلونه بدل شي"
+          }
         }
       }
     },
@@ -3219,6 +3321,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "• چیٹ صاف کرنے کیلئے تین بار ٹیپ کریں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• چټ درې ځله ټک کړه څو پاک شي"
           }
         }
       }
@@ -3399,6 +3507,12 @@
             "state": "translated",
             "value": "• کمانڈز کیلئے / ٹائپ کریں"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• د قومندو لپاره / ولیکه"
+          }
         }
       }
     },
@@ -3577,6 +3691,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "• سائیڈ بار کھولنے کیلئے لوگوں کا آئیکن ٹیپ کریں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• د اړخ پټې د خلاصولو لپاره د خلکو نښه ټک کړه"
           }
         }
       }
@@ -3757,6 +3877,12 @@
             "state": "translated",
             "value": "• اپنا نک نیم سیٹ کرنے کیلئے اس پر ٹیپ کریں"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• خپل نوم د ټک کولو په وسیله وټاکه"
+          }
         }
       }
     },
@@ -3935,6 +4061,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "• DM شروع کرنے کیلئے کسی ہم منصب کے نام پر ٹیپ کریں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• د DM د پېل لپاره د ملګري نوم ټک کړه"
           }
         }
       }
@@ -4115,6 +4247,12 @@
             "state": "translated",
             "value": "استعمال کرنے کا طریقہ"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "څنګه وکاروئ"
+          }
         }
       }
     },
@@ -4293,6 +4431,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "نیا peer ID باقاعدگی سے بنایا جاتا ہے"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نوی د ملګري پېژند هر وخت جوړېږي"
           }
         }
       }
@@ -4473,6 +4617,12 @@
             "state": "translated",
             "value": "عارضی شناخت"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لنډ مهاله پېژند"
+          }
         }
       }
     },
@@ -4651,6 +4801,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "کوئی سرور، اکاؤنٹس یا ڈیٹا جمع نہیں کیا جاتا"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بې سرورونه، بې حسابونه، بې د معلوماتو ټولول"
           }
         }
       }
@@ -4831,6 +4987,12 @@
             "state": "translated",
             "value": "ٹریسنگ نہیں"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بې څار"
+          }
         }
       }
     },
@@ -5009,6 +5171,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "تمام ڈیٹا فوری صاف کرنے کیلئے لوگو پر تین بار ٹیپ کریں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نښه درې ځله ټک کړه څو ټول معلومات سملاسي پاک شي"
           }
         }
       }
@@ -5189,6 +5357,12 @@
             "state": "translated",
             "value": "پینک موڈ"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بیړنی بڼه"
+          }
         }
       }
     },
@@ -5367,6 +5541,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "رازداری"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "محرمیت"
           }
         }
       }
@@ -5547,6 +5727,12 @@
             "state": "translated",
             "value": "sidegroupchat"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سايډګروپچټ"
+          }
         }
       }
     },
@@ -5725,6 +5911,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "نجی پیغامات کی سیکیورٹی کا ابھی مکمل آڈٹ نہیں ہوا۔ اس انتباہ کے ختم ہونے تک اسے اہم حالات میں استعمال نہ کریں۔"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "د شخصي پیغامونو امنیت لا تراوسه بشپړ نه دی ارزول شوی. تر هغه چې دا خبرتیا لیرې نه شي، په مهمو حالاتو کې یې مه کاروه."
           }
         }
       }
@@ -5905,6 +6097,12 @@
             "state": "translated",
             "value": "انتباہ"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "خبرتیا"
+          }
         }
       }
     },
@@ -6083,6 +6281,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "منسوخ کریں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لغوه کړه"
           }
         }
       }
@@ -6263,6 +6467,12 @@
             "state": "translated",
             "value": "بند کریں"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بند کړه"
+          }
         }
       }
     },
@@ -6441,6 +6651,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "نقل کریں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "کاپي کړه"
           }
         }
       }
@@ -6621,6 +6837,12 @@
             "state": "translated",
             "value": "ٹھیک"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سم"
+          }
         }
       }
     },
@@ -6796,6 +7018,12 @@
           }
         },
         "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بند"
+          }
+        },
+        "ps": {
           "stringUnit": {
             "state": "translated",
             "value": "بند"
@@ -6979,6 +7207,12 @@
             "state": "translated",
             "value": "چالو"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "پر"
+          }
         }
       }
     },
@@ -7154,6 +7388,12 @@
           }
         },
         "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نامعلوم"
+          }
+        },
+        "ps": {
           "stringUnit": {
             "state": "translated",
             "value": "نامعلوم"
@@ -7337,6 +7577,12 @@
             "state": "translated",
             "value": "پسندیدہ میں شامل کریں"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "خوښې ته یې اضافه کړه"
+          }
         }
       }
     },
@@ -7515,6 +7761,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nostr کے ذریعے دستیاب"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "د Nostr له لارې شته"
           }
         }
       }
@@ -7695,6 +7947,12 @@
             "state": "translated",
             "value": "مرکزی چیٹ پر واپس جائیں"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اصلي چټ ته ستن شه"
+          }
         }
       }
     },
@@ -7873,6 +8131,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "mesh کے ذریعے جڑا ہوا"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "د مش له لارې نښلول شوی"
           }
         }
       }
@@ -8053,6 +8317,12 @@
             "state": "translated",
             "value": "انکرپشن کی حالت: %@"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "د کوډیز وضعیت: %@"
+          }
         }
       }
     },
@@ -8231,6 +8501,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "لوکیشن چینلز"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "د ځای چینلونه"
           }
         }
       }
@@ -8411,6 +8687,12 @@
             "state": "translated",
             "value": "اس جگہ کیلئے لوکیشن نوٹس"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "د دې ځای یادښتونه"
+          }
         }
       }
     },
@@ -8589,6 +8871,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "نہ پڑھی گئی نجی چیٹ کھولیں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نالوستل شوی شخصي چټ پرانیزه"
           }
         }
       }
@@ -9153,6 +9441,12 @@
             "state": "translated",
             "value": "%#@people@"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%#@people@"
+          }
         }
       }
     },
@@ -9331,6 +9625,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ کے ساتھ نجی چیٹ"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "له %@ سره شخصي چټ"
           }
         }
       }
@@ -9511,6 +9811,12 @@
             "state": "translated",
             "value": "mesh کے ذریعے قابل رسائی"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "د مش له لارې د لاسرسي وړ"
+          }
         }
       }
     },
@@ -9689,6 +9995,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "پسندیدہ سے ہٹائیں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "له خوښو یې لرې کړه"
           }
         }
       }
@@ -9869,6 +10181,12 @@
             "state": "translated",
             "value": "بھیجنے کیلئے پیغام درج کریں"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "د لېږلو لپاره پیغام ولیکه"
+          }
         }
       }
     },
@@ -10047,6 +10365,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "بھیجنے کیلئے دو بار ٹیپ کریں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "د لېږلو لپاره دوه ځله ټک کړه"
           }
         }
       }
@@ -10227,6 +10551,12 @@
             "state": "translated",
             "value": "پیغام بھیجیں"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "پیغام واستوه"
+          }
         }
       }
     },
@@ -10405,6 +10735,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "#%@ کیلئے بُک مارک تبدیل کریں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "د #%@ لپاره نښه واړوه"
           }
         }
       }
@@ -10585,6 +10921,12 @@
             "state": "translated",
             "value": "پسندیدہ حالت بدلنے کیلئے دو بار ٹیپ کریں"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "د خوښیو حالت بدلولو لپاره دوه ځله ټک کړه"
+          }
         }
       }
     },
@@ -10763,6 +11105,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "انکرپشن فنگرپرنٹ دیکھنے کیلئے ٹیپ کریں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "د کوډ د ګوتې نښه د لیدلو لپاره ټک کړه"
           }
         }
       }
@@ -10943,6 +11291,12 @@
             "state": "translated",
             "value": "بلاک کریں"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بندول"
+          }
         }
       }
     },
@@ -11121,6 +11475,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "براہ راست پیغام"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مستقیم پیغام"
           }
         }
       }
@@ -11301,6 +11661,12 @@
             "state": "translated",
             "value": "گلے لگائیں"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "غېږ"
+          }
         }
       }
     },
@@ -11479,6 +11845,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ذکر کریں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "یادونه"
           }
         }
       }
@@ -11659,6 +12031,12 @@
             "state": "translated",
             "value": "چاپڑ"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "څپېړه"
+          }
         }
       }
     },
@@ -11837,6 +12215,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "کارروائیاں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "کړنې"
           }
         }
       }
@@ -12017,6 +12401,12 @@
             "state": "translated",
             "value": "Bluetooth بند ہے۔ bitchat استعمال کرنے کیلئے سیٹنگز میں Bluetooth آن کریں۔"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بلوتوث بند دی. د bitchat کارولو لپاره په امستنو کې بلوتوث چالان کړه."
+          }
         }
       }
     },
@@ -12195,6 +12585,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "قریب کے آلات سے جڑنے کیلئے bitchat کو Bluetooth اجازت درکار ہے۔ سیٹنگز میں رسائی فعال کریں۔"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat ته د بلوتوث اجازه پکار ده څو له نږدې وسیلو سره ونښلي. په امستنو کې د بلوتوث لاسرسی فعال کړه."
           }
         }
       }
@@ -12375,6 +12771,12 @@
             "state": "translated",
             "value": "سیٹنگز"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "امستنې"
+          }
         }
       }
     },
@@ -12553,6 +12955,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Bluetooth درکار ہے"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بلوتوث ته اړتیا ده"
           }
         }
       }
@@ -12733,6 +13141,12 @@
             "state": "translated",
             "value": "یہ ڈیوائس Bluetooth کو سپورٹ نہیں کرتی۔ bitchat کو چلنے کیلئے Bluetooth چاہیے۔"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "دا وسیله بلوتوث نه لري. bitchat ته د کار لپاره بلوتوث پکار دی."
+          }
         }
       }
     },
@@ -12911,6 +13325,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "لوکیشن چینلز کے اسکرین شاٹس آپ کی لوکیشن ظاہر کر دیں گے۔ عوامی طور پر شیئر کرنے سے پہلے سوچیں۔"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "د ځای چینلونو سکرین شاټونه ستا ځای ښکاره کوي. مخکې له شریکولو ښه فکر وکړه."
           }
         }
       }
@@ -13091,6 +13511,12 @@
             "state": "translated",
             "value": "خبردار"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "پاملرنه"
+          }
         }
       }
     },
@@ -13269,6 +13695,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "peer کو بلاک کریں یا فہرست دیکھیں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بند او یا بند شویان وښیه"
           }
         }
       }
@@ -13449,6 +13881,12 @@
             "state": "translated",
             "value": "چیٹ پیغامات صاف کریں"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "د چټ پیغامونه پاک کړه"
+          }
         }
       }
     },
@@ -13627,6 +14065,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "پسندیدہ میں شامل کریں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "خوښې ته اضافه کړه"
           }
         }
       }
@@ -13807,6 +14251,12 @@
             "state": "translated",
             "value": "کسی کو گرمجوشی سے گلے لگائیں"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "چا ته تاوده غېږ ورکړه"
+          }
         }
       }
     },
@@ -13985,6 +14435,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "نجی پیغام بھیجیں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "شخصي پیغام واستوه"
           }
         }
       }
@@ -14165,6 +14621,12 @@
             "state": "translated",
             "value": "کسی کو ٹراؤٹ سے تھپڑ ماریں"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "څوک د ټراوټ کب په وهه"
+          }
         }
       }
     },
@@ -14343,6 +14805,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "peer کا بلاک ہٹائیں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "یو ملګری خلاص کړه"
           }
         }
       }
@@ -14523,6 +14991,12 @@
             "state": "translated",
             "value": "پسندیدہ سے ہٹا دیں"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "له خوښو یې وباسه"
+          }
         }
       }
     },
@@ -14701,6 +15175,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "دیکھیں کون آن لائن ہے"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "وګوره څوک آنلاین دي"
           }
         }
       }
@@ -14881,6 +15361,12 @@
             "state": "translated",
             "value": "%2$d میں سے %1$d اراکین کو پہنچا دیا گیا"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%2$d غړو څخه %1$d ته رسول شوی"
+          }
         }
       }
     },
@@ -15060,6 +15546,12 @@
             "state": "translated",
             "value": "%@ کو پہنچایا گیا"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ته رسول شوی"
+          }
         }
       }
     },
@@ -15235,6 +15727,12 @@
           }
         },
         "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ناکام: %@"
+          }
+        },
+        "ps": {
           "stringUnit": {
             "state": "translated",
             "value": "ناکام: %@"
@@ -15418,6 +15916,12 @@
             "state": "translated",
             "value": "%@ نے پڑھا"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "د %@ لخوا لوستل شوی"
+          }
         }
       }
     },
@@ -15596,6 +16100,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "صارف بلاک ہے"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "کاروونکی بند دی"
           }
         }
       }
@@ -15776,6 +16286,12 @@
             "state": "translated",
             "value": "خود کو پیغام نہیں بھیج سکتے"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ته خپل ځان ته پیغام نه شي لېږلی"
+          }
         }
       }
     },
@@ -15954,6 +16470,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "بھیجنے میں غلطی"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "د لېږلو خطا"
           }
         }
       }
@@ -16134,6 +16656,12 @@
             "state": "translated",
             "value": "نامعلوم وصول کنندہ"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نامعلوم ترلاسه کوونکی"
+          }
         }
       }
     },
@@ -16312,6 +16840,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "peer تک رسائی نہیں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ملګری لاسرسی نه لري"
           }
         }
       }
@@ -16492,6 +17026,12 @@
             "state": "translated",
             "value": "PEOPLE"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "خلک"
+          }
         }
       }
     },
@@ -16670,6 +17210,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "توثیق: میرا QR دکھائیں یا دوست کا اسکین کریں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تصدیق: زما QR وښیه یا د ملګري و سکین کړه"
           }
         }
       }
@@ -16850,6 +17396,12 @@
             "state": "translated",
             "value": "پیغام ٹائپ کریں..."
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "پیغام ولیکه..."
+          }
         }
       }
     },
@@ -17028,6 +17580,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "نک نیم"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نوم"
           }
         }
       }
@@ -17208,6 +17766,12 @@
             "state": "translated",
             "value": "لوکیشن فعال کریں"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "موقعیت فعال کړه"
+          }
         }
       }
     },
@@ -17386,6 +17950,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "پیغام کاپی کریں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "پیغام کاپي کړه"
           }
         }
       }
@@ -17566,6 +18136,12 @@
             "state": "translated",
             "value": "کم دکھائیں"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "کم وښایه"
+          }
         }
       }
     },
@@ -17744,6 +18320,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "مزید دکھائیں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نور وښایه"
           }
         }
       }
@@ -17924,6 +18506,12 @@
             "state": "translated",
             "value": "لوکیشن دستیاب نہیں"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "موقعیت نشته"
+          }
         }
       }
     },
@@ -18102,6 +18690,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "نوٹس"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "یادښتونه"
           }
         }
       }
@@ -18282,6 +18876,12 @@
             "state": "translated",
             "value": "Cashu سے ادائیگی کریں"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "د cashu له لارې تادیه وکړه"
+          }
         }
       }
     },
@@ -18460,6 +19060,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Lightning سے ادائیگی کریں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "د Lightning له لارې تادیه وکړه"
           }
         }
       }
@@ -18640,6 +19246,12 @@
             "state": "translated",
             "value": "انکرپشن قائم کی جا رہی ہے"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "کوډیزه اړیکه جوړېږي"
+          }
         }
       }
     },
@@ -18818,6 +19430,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "انکرپشن ناکام رہی"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "کوډیزه اړیکه ناکامه شوه"
           }
         }
       }
@@ -18998,6 +19616,12 @@
             "state": "translated",
             "value": "غیر انکرپٹڈ"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بې کوډه"
+          }
         }
       }
     },
@@ -19176,6 +19800,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "انکرپٹڈ"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "کوډيز"
           }
         }
       }
@@ -19356,6 +19986,12 @@
             "state": "translated",
             "value": "انکرپٹڈ اور تصدیق شدہ"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "کوډيز او تایید شوی"
+          }
         }
       }
     },
@@ -19534,6 +20170,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "انکرپشن قائم کی جا رہی ہے..."
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "کوډیزه اړیکه جوړېږي..."
           }
         }
       }
@@ -19714,6 +20356,12 @@
             "state": "translated",
             "value": "انکرپشن ناکام رہی"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "کوډیزه اړیکه ناکامه شوه"
+          }
         }
       }
     },
@@ -19892,6 +20540,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "غیر انکرپٹڈ"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بې کوډه"
           }
         }
       }
@@ -20072,6 +20726,12 @@
             "state": "translated",
             "value": "انکرپٹڈ"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "کوډيز"
+          }
         }
       }
     },
@@ -20250,6 +20910,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "انکرپٹڈ اور تصدیق شدہ"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "کوډيز او تایید شوی"
           }
         }
       }
@@ -20430,6 +21096,12 @@
             "state": "translated",
             "value": "تصدیق شدہ کے طور پر نشان زد کریں"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تایید شوی وګڼئ"
+          }
         }
       }
     },
@@ -20608,6 +21280,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "تصدیق ہٹائیں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تایید لیرې کړه"
           }
         }
       }
@@ -20788,6 +21466,12 @@
             "state": "translated",
             "value": "⚠️ تصدیق نہیں ہوئی"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⚠️ ناتایید"
+          }
         }
       }
     },
@@ -20966,6 +21650,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "✓ تصدیق شدہ"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ تایید شوی"
           }
         }
       }
@@ -21146,6 +21836,12 @@
             "state": "translated",
             "value": "دستیاب نہیں - ہینڈ شیک جاری ہے"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "شته نه دی - لا هم لاسوهنه روانه ده"
+          }
         }
       }
     },
@@ -21324,6 +22020,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "آپ نے اس شخص کی شناخت کی تصدیق کی ہے۔"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ته د دې کس پېژند تایید کړې ده."
           }
         }
       }
@@ -21504,6 +22206,12 @@
             "state": "translated",
             "value": "ان فنگر پرنٹس کو %@ کے ساتھ محفوظ چینل پر ملائیں۔"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "دا ګوتې نښې د %@ سره د خوندي کانال له لارې پرتله کړه."
+          }
         }
       }
     },
@@ -21682,6 +22390,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ان کا فنگر پرنٹ:"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "دوی ګوته نښه:"
           }
         }
       }
@@ -21862,6 +22576,12 @@
             "state": "translated",
             "value": "سیکیورٹی تصدیق"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "د امنیت تایید"
+          }
         }
       }
     },
@@ -22040,6 +22760,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "آپ کا فنگر پرنٹ:"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ستاسو ګوته نښه:"
           }
         }
       }
@@ -22220,6 +22946,12 @@
             "state": "translated",
             "value": "بلاک کریں"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بند کړه"
+          }
         }
       }
     },
@@ -22398,6 +23130,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "بلاک ہٹائیں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "خلاص یې کړه"
           }
         }
       }
@@ -22578,6 +23316,12 @@
             "state": "translated",
             "value": "قریب کوئی نہیں..."
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هیڅ څوک نږدې نشته..."
+          }
         }
       }
     },
@@ -22756,6 +23500,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "geohash میں بلاک شدہ"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "په geohash کې بند شوی"
           }
         }
       }
@@ -22936,6 +23686,12 @@
             "state": "translated",
             "value": " (آپ)"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " (ته)"
+          }
         }
       }
     },
@@ -23114,6 +23870,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "سیٹنگز کھولیں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "امستنې پرانیزه"
           }
         }
       }
@@ -23294,6 +24056,12 @@
             "state": "translated",
             "value": "لوکیشن رسائی ہٹائیں"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "د موقعیت لاسرسی لېرې کړه"
+          }
         }
       }
     },
@@ -23472,6 +24240,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "لوکیشن کی اجازت اور میرے geohash حاصل کریں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "موقعیت او زما geohashونه ترلاسه کړه"
           }
         }
       }
@@ -23652,6 +24426,12 @@
             "state": "translated",
             "value": "ٹیلی پورٹ"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "انتقال"
+          }
         }
       }
     },
@@ -23830,6 +24610,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "بک مارک شدہ"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نښه شوي"
           }
         }
       }
@@ -24010,6 +24796,12 @@
             "state": "translated",
             "value": "قریب کے لوگوں سے گفتگو کیلئے geohash چینلز استعمال کریں۔ صرف عمومی geohash شیئر کیا جاتا ہے، کبھی درست GPS نہیں۔ آپ کا IP tor کے ذریعے ساری ٹریفک روٹ کر کے چھپایا جاتا ہے۔"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "له نږدې خلکو سره د geohash چینلونو په وسیله خبرې وکړه. یوازې نږدې موقعیت شریکېږي، دقیق GPS هېڅکله نه. ستا IP د tor له لارې د ټول ترافیک په لېږلو پټ ساتل کېږي."
+          }
         }
       }
     },
@@ -24188,6 +24980,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "غلط geohash"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ناسم geohash"
           }
         }
       }
@@ -24368,6 +25166,12 @@
             "state": "translated",
             "value": "قریب کے چینلز تلاش ہو رہے ہیں…"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نږدې چینلونه لټول کېږي…"
+          }
         }
       }
     },
@@ -24547,6 +25351,12 @@
             "state": "translated",
             "value": "mesh"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مش"
+          }
         }
       }
     },
@@ -24725,6 +25535,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "لوکیشن کی اجازت مسترد کر دی گئی۔ لوکیشن چینلز استعمال کرنے کیلئے سیٹنگز میں فعال کریں۔"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "د موقعیت اجازه رد شوه. د چینلونو لپاره یې په امستنو کې فعال کړه."
           }
         }
       }
@@ -25289,6 +26105,12 @@
             "state": "translated",
             "value": "%1$@ [%2$#@people_count@]"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ [%2$#@people_count@]"
+          }
         }
       }
     },
@@ -25464,6 +26286,12 @@
           }
         },
         "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%1$@ • %2$@"
+          }
+        },
+        "ps": {
           "stringUnit": {
             "state": "translated",
             "value": "#%1$@ • %2$@"
@@ -25647,6 +26475,12 @@
             "state": "translated",
             "value": "%1$@ • %2$@"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ • %2$@"
+          }
         }
       }
     },
@@ -25825,6 +26659,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "#لوکیشن چینلز"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#د موقعیت چینلونه"
           }
         }
       }
@@ -26005,6 +26845,12 @@
             "state": "translated",
             "value": "لوکیشن چینلز کیلئے آپ کا IP چھپاتا ہے۔ تجویز: آن رکھیں۔"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ستاسو IP د موقعیت چینلونو لپاره پټ ساتي. سپارښتنه: فعاله یې کړه."
+          }
         }
       }
     },
@@ -26184,6 +27030,12 @@
             "state": "translated",
             "value": "tor روٹنگ"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "د tor لاره"
+          }
         }
       }
     },
@@ -26359,6 +27211,12 @@
           }
         },
         "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بلاک"
+          }
+        },
+        "ps": {
           "stringUnit": {
             "state": "translated",
             "value": "بلاک"
@@ -26542,6 +27400,12 @@
             "state": "translated",
             "value": "عمارت"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ودانۍ"
+          }
         }
       }
     },
@@ -26720,6 +27584,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "شہر"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ښار"
           }
         }
       }
@@ -26900,6 +27770,12 @@
             "state": "translated",
             "value": "محلہ"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "کوڅه"
+          }
         }
       }
     },
@@ -27078,6 +27954,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "صوبہ"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ولایت"
           }
         }
       }
@@ -27258,6 +28140,12 @@
             "state": "translated",
             "value": "خطہ"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سیمه"
+          }
         }
       }
     },
@@ -27436,6 +28324,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "بند کریں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بند کړه"
           }
         }
       }
@@ -27616,6 +28510,12 @@
             "state": "translated",
             "value": "دوبارہ کوشش کریں"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بیا هڅه وکړه"
+          }
         }
       }
     },
@@ -27794,6 +28694,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "اس جگہ کیلئے مختصر مستقل نوٹس شامل کریں تاکہ دوسرے دیکھ سکیں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "دې ځای ته لنډ دايمي یادښتونه اضافه کړه څو نور یې ومومي."
           }
         }
       }
@@ -27974,6 +28880,12 @@
             "state": "translated",
             "value": "اس مقام کیلئے پہلا نوٹ آپ شامل کریں"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لومړی شه او د دې ځای لپاره یو یادښت اضافه کړه."
+          }
         }
       }
     },
@@ -28152,6 +29064,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ابھی تک کوئی نوٹس نہیں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "یادښتونه نشته"
           }
         }
       }
@@ -28332,6 +29250,12 @@
             "state": "translated",
             "value": "نوٹ بھیجنا ناکام۔ %@"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "یادښت نه شو لېږل کېدای. %@"
+          }
         }
       }
     },
@@ -28510,6 +29434,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "اس جگہ کے قریب کوئی geo relay دستیاب نہیں۔ کچھ دیر بعد دوبارہ کوشش کریں۔"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "د دې ځای نږدې georelays نشته. لږ وروسته بیا کوښښ وکړه."
           }
         }
       }
@@ -29074,6 +30004,12 @@
             "state": "translated",
             "value": "#%1$@ • %2$#@note_count@"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%1$@ • %2$#@note_count@"
+          }
         }
       }
     },
@@ -29252,6 +30188,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "نوٹس لوڈ ہو رہے ہیں…"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "یادښتونه بارېږي…"
           }
         }
       }
@@ -29432,6 +30374,12 @@
             "state": "translated",
             "value": "حالیہ نوٹس لوڈ ہو رہے ہیں…"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "وروستي یادښتونه بارېږي…"
+          }
         }
       }
     },
@@ -29610,6 +30558,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "قریب کوئی geo relay نہیں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نږدې geo ریلونه نشته"
           }
         }
       }
@@ -29790,6 +30744,12 @@
             "state": "translated",
             "value": "اس جگہ کیلئے نوٹ شامل کریں"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "د دې ځای لپاره یادښت اضافه کړه"
+          }
         }
       }
     },
@@ -29968,6 +30928,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "geo relay دستیاب نہیں؛ نوٹس موقوف"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "geo ریلونه نشته؛ یادښتونه درېدلي"
           }
         }
       }
@@ -30148,6 +31114,12 @@
             "state": "translated",
             "value": "نوٹس geo relay پر منحصر ہیں۔ کنکشن چیک کریں اور دوبارہ کوشش کریں۔"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "یادښتونه پر geo ریلونو ولاړ دي. اړیکه وګوره او بیا هڅه وکړه."
+          }
         }
       }
     },
@@ -30326,6 +31298,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "نئے پیغامات"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نوې پیغامونه"
           }
         }
       }
@@ -30506,6 +31484,12 @@
             "state": "translated",
             "value": "%@ کے ساتھ چیٹ شروع نہیں کر سکتے: شخص بلاک ہے۔"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "له %@ سره چټ نه شي پیل کېدای: شخص بند دی."
+          }
         }
       }
     },
@@ -30684,6 +31668,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ کے ساتھ چیٹ شروع نہیں کر سکتے: آفلائن پیغامات کیلئے باہمی پسندیدہ ہونا ضروری ہے۔"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "له %@ سره چټ نه شي پیل کېدای: د بې انټرنېټې پیغامونو لپاره دواړه خوښې ته اړتیا ده."
           }
         }
       }
@@ -30864,6 +31854,12 @@
             "state": "translated",
             "value": "صارف"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "کاروونکی"
+          }
         }
       }
     },
@@ -31042,6 +32038,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "پیغام نہیں بھیج سکتے: شخص بلاک ہے۔"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "پیغام نه شي لېږل کېدای: شخص بند دی."
           }
         }
       }
@@ -31222,6 +32224,12 @@
             "state": "translated",
             "value": "%@ کو پیغام نہیں بھیج سکتے: شخص بلاک ہے۔"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ته پیغام نه شي لېږل کېدای: شخص بند دی."
+          }
         }
       }
     },
@@ -31400,6 +32408,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ کو پیغام نہیں بھیج سکتے - peer mesh یا nostr کے ذریعے دستیاب نہیں۔"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ته پیغام نه شي لېږل کېدای - ملګری د mesh یا nostr له لارې نه رسیږي."
           }
         }
       }
@@ -31580,6 +32594,12 @@
             "state": "translated",
             "value": "geohash چیٹس میں %@ کو بلاک کیا"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ په geohash چټونو کې بند شو"
+          }
         }
       }
     },
@@ -31758,6 +32778,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "geohash چیٹس میں %@ کا بلاک ہٹایا"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ په geohash چټونو کې خلاص شو"
           }
         }
       }
@@ -31938,6 +32964,12 @@
             "state": "translated",
             "value": "نہیں بھیج سکتے: آپ لوکیشن چینل میں نہیں ہیں"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نه شي لېږل کېدای: په موقعیت چینل کې نه یې"
+          }
         }
       }
     },
@@ -32116,6 +33148,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "لوکیشن چینل کو بھیجنا ناکام رہا"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "موقعیت چینل ته لېږل پاتې راغلل"
           }
         }
       }
@@ -32296,6 +33334,12 @@
             "state": "translated",
             "value": "ڈیولپر بلڈ: Tor بائی پاس فعال ہے۔"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "د پراختیا جوړونه: د Tor لنډه لاره فعاله ده."
+          }
         }
       }
     },
@@ -32474,6 +33518,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tor نے دوبارہ آغاز کر دیا۔ نیٹ ورک روٹنگ بحال ہو گئی۔"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tor بیا چالان شو. د شبکې لارښود بېرته جوړ شو."
           }
         }
       }
@@ -32654,6 +33704,12 @@
             "state": "translated",
             "value": "tor کنکشن بحال کرنے کیلئے دوبارہ شروع ہو رہا ہے..."
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tor بیا چالانېږي څو اړیکه بېرته راشي..."
+          }
         }
       }
     },
@@ -32832,6 +33888,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tor شروع ہو گیا۔ IP راز داری کیلئے تمام چیٹس tor سے گزرتی ہیں۔"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tor پیل شو. ټول چټونه د IP محرمیت لپاره د tor له لارې استول کېږي."
           }
         }
       }
@@ -33012,6 +34074,12 @@
             "state": "translated",
             "value": "tor شروع ہو رہا ہے..."
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tor پیل کېږي..."
+          }
         }
       }
     },
@@ -33190,6 +34258,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "تصدیقی QR کوڈ"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "د تایید QR کود"
           }
         }
       }
@@ -33370,6 +34444,12 @@
             "state": "translated",
             "value": "مجھے تصدیق کرنے کیلئے اسکین کریں"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "زه د تصدیق لپاره سکین کړه"
+          }
         }
       }
     },
@@ -33548,6 +34628,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "QR دستیاب نہیں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QR نشته"
           }
         }
       }
@@ -33728,6 +34814,12 @@
             "state": "translated",
             "value": "تصدیق کیلئے QR مواد چسپاں کریں:"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "د تایید لپاره د QR منځپانګه دلته ونښلوه:"
+          }
         }
       }
     },
@@ -33906,6 +34998,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "دوست کا QR اسکین کریں"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "د ملګري QR سکین کړه"
           }
         }
       }
@@ -34086,6 +35184,12 @@
             "state": "translated",
             "value": "غلط یا میعاد ختم شدہ QR payload"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ناسم يا ختم شوی QR معلومات"
+          }
         }
       }
     },
@@ -34264,6 +35368,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ملتا جلتا peer نہیں ملا"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سمون خوړونکی ملګری ونه موندل شو"
           }
         }
       }
@@ -34444,6 +35554,12 @@
             "state": "translated",
             "value": "%@ کیلئے تصدیق کی درخواست کی گئی"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "د %@ لپاره د تایید غوښتنه وشوه"
+          }
         }
       }
     },
@@ -34623,6 +35739,12 @@
             "state": "translated",
             "value": "تصدیق کریں"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تایید کړه"
+          }
         }
       }
     },
@@ -34798,6 +35920,12 @@
           }
         },
         "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تصدیق"
+          }
+        },
+        "ps": {
           "stringUnit": {
             "state": "translated",
             "value": "تصدیق"
@@ -34979,6 +36107,12 @@
           }
         },
         "ur": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@"
+          }
+        },
+        "ps": {
           "stringUnit": {
             "state": "translated",
             "value": "%@"
