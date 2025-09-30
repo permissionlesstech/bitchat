@@ -21,7 +21,8 @@ final class LocationNotesManagerTests: XCTestCase {
         XCTAssertFalse(subscribeCalled)
         XCTAssertEqual(manager.state, .noRelays)
         XCTAssertTrue(manager.initialLoadComplete)
-        XCTAssertEqual(manager.errorMessage, "location_notes.error.no_relays")
+        let expected = String(localized: "location_notes.error.no_relays")
+        XCTAssertEqual(manager.errorMessage, expected)
     }
 
     func testSendWhenNoRelaysSurfacesError() {
@@ -40,7 +41,8 @@ final class LocationNotesManagerTests: XCTestCase {
 
         XCTAssertFalse(sendCalled)
         XCTAssertEqual(manager.state, .noRelays)
-        XCTAssertEqual(manager.errorMessage, "location_notes.error.no_relays")
+        let expected = String(localized: "location_notes.error.no_relays")
+        XCTAssertEqual(manager.errorMessage, expected)
     }
 
     func testSubscribeUsesGeoRelaysAndAppendsNotes() {
