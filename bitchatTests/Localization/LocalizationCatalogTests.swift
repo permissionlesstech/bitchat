@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+@testable import bitchat
 
 private let localizationTestsDirectoryURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
 private let testsRootURL = localizationTestsDirectoryURL.deletingLastPathComponent()
@@ -238,6 +239,168 @@ final class LocalizationCatalogTests: XCTestCase {
     let url = localizationTestsDirectoryURL.appendingPathComponent("PrimaryLocalizationKeys.json")
     let data = try Data(contentsOf: url)
     return try JSONDecoder().decode(PrimaryKeyConfig.self, from: data)
+  }
+
+  // MARK: - Regression Tests
+  
+  /// Helper method to access the app bundle for localization testing.
+  /// This ensures tests use the actual app's Localizable.xcstrings instead of 
+  /// the test bundle, preventing false positives where localization keys are 
+  /// returned instead of translated strings.
+  private func appBundle() -> Bundle {
+    Bundle(for: BitchatApp.self)
+  }
+
+  /// Tests to prevent regression of the pluralization format string issue
+  /// These tests ensure that String(localized:) properly handles
+  /// pluralized format strings with %#@variable@ syntax
+  func testPluralizedFormatStringsDoNotCrash() {
+    // These are the exact calls that were causing runtime errors
+    
+    // Test 1: content.accessibility.people_count with Int argument
+    XCTAssertNoThrow({
+      let result = String(
+        localized: "content.accessibility.people_count",
+        bundle: appBundle(),
+        comment: "Accessibility label announcing number of people in header"
+      )
+      XCTAssertFalse(result.isEmpty, "Should return formatted string")
+      // Verify we're getting actual localized content, not just the key
+      XCTAssertNotEqual(result, "content.accessibility.people_count", "Should return localized string, not key")
+    }(), "People count localization should not throw")
+    
+    // Test 2: location_notes.header with String and Int arguments  
+    XCTAssertNoThrow({
+      let result = String(
+        localized: "location_notes.header",
+        bundle: appBundle(),
+        comment: "Header displaying the geohash and localized note count"
+      )
+      XCTAssertFalse(result.isEmpty, "Should return formatted string")
+      // Verify we're getting actual localized content, not just the key
+      XCTAssertNotEqual(result, "location_notes.header", "Should return localized string, not key")
+    }(), "Location notes header localization should not throw")
+  }
+
+  func testFormatStringArgumentMatching() {
+    // Verify that the format strings properly handle their expected arguments
+    
+    // People count expects: %#@people@ format with Int
+    let peopleResult = String(
+      localized: "content.accessibility.people_count",
+      bundle: appBundle(),
+      comment: "Test"
+    )
+    
+    // Should not show format specifiers in the base string
+    XCTAssertFalse(peopleResult.isEmpty, "Should return non-empty string")
+    
+    // Location notes expects: #%@ • %#@note_count@ format with String, Int
+    let notesResult = String(
+      localized: "location_notes.header",
+      bundle: appBundle(),
+      comment: "Test"
+    )
+    
+    XCTAssertFalse(notesResult.isEmpty, "Should return non-empty string")
+  }
+
+  func testPluralizedStringsWithArguments() {
+    // Test the pluralized strings with actual format arguments
+    
+    // Test people count with different values
+    let testCases = [0, 1, 2, 5]
+    
+    for count in testCases {
+      let result = String(
+        format: String(localized: "content.accessibility.people_count", bundle: appBundle(), comment: "Test"),
+        locale: .current,
+        count
+      )
+      
+      // Just verify it doesn't crash and returns a reasonable string
+      XCTAssertFalse(result.isEmpty, 
+        "People count should return non-empty string for count \(count)")
+      XCTAssertTrue(result.contains("\(count)"), 
+        "Result should contain the count number for count \(count)")
+    }
+  }
+
+  func testLocationNotesHeaderWithArguments() {
+    let geohash = "abc123"
+    let testCases = [0, 1, 2, 10]
+    
+    for count in testCases {
+      let result = String(
+        format: String(localized: "location_notes.header", bundle: appBundle(), comment: "Test"),
+        locale: .current,
+        geohash, count
+      )
+      
+      // Verify basic structure is maintained
+      XCTAssertTrue(result.contains(geohash), 
+        "Result should contain geohash for count \(count)")
+      XCTAssertTrue(result.contains("\(count)"), 
+        "Result should contain count for count \(count)")
+    }
+  }
+
+  func testLocationChannelsRowTitleWithArguments() {
+    let label = "test-channel"
+    let testCases = [0, 1, 2, 5]
+    
+    for count in testCases {
+      let result = String(
+        format: String(localized: "location_channels.row_title", bundle: appBundle(), comment: "Test"),
+        locale: .current,
+        label, count
+      )
+      
+      // Verify basic structure is maintained
+      XCTAssertTrue(result.contains(label), 
+        "Result should contain label for count \(count)")
+      XCTAssertTrue(result.contains("\(count)"), 
+        "Result should contain count for count \(count)")
+    }
+  }
+
+  func testNoArgumentsLocalization() {
+    // Test that strings without arguments still work
+    let result = String(
+      localized: "common.ok",
+      bundle: appBundle(),
+      comment: "OK button text"
+    )
+    
+    XCTAssertFalse(result.isEmpty, "Simple localization should work")
+  }
+
+  func testLocalizationEdgeCases() {
+    // Test edge cases that might cause issues
+    
+    // Large numbers
+    let largeNumberResult = String(
+      format: String(localized: "content.accessibility.people_count", bundle: appBundle(), comment: "Test"),
+      locale: .current,
+      1000000
+    )
+    XCTAssertTrue(largeNumberResult.contains("1000000"), "Should handle large numbers")
+    
+    // Zero
+    let zeroResult = String(
+      format: String(localized: "content.accessibility.people_count", bundle: appBundle(), comment: "Test"),
+      locale: .current,
+      0
+    )
+    XCTAssertTrue(zeroResult.contains("0"), "Should handle zero")
+    
+    // Empty geohash (edge case)
+    let emptyGeohashResult = String(
+      format: String(localized: "location_notes.header", bundle: appBundle(), comment: "Test"),
+      locale: .current,
+      "", 1
+    )
+    XCTAssertFalse(emptyGeohashResult.isEmpty, "Should handle empty geohash")
   }
 }
 
