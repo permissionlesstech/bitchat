@@ -153,176 +153,176 @@
         },
         "pa": {
           "stringUnit": {
-            "state": "translated",
-            "value": "साझा किया गया लिंक",
+            "state": "needs_review",
+            "value": "shared Link",
             "comment": "Fallback title when saving a shared link"
           }
         },
         "mr": {
           "stringUnit": {
-            "state": "translated",
-            "value": "साझा किया गया लिंक",
+            "state": "needs_review",
+            "value": "shared Link",
             "comment": "Fallback title when saving a shared link"
           }
         },
         "te": {
           "stringUnit": {
-            "state": "translated",
-            "value": "साझा किया गया लिंक",
+            "state": "needs_review",
+            "value": "shared Link",
             "comment": "Fallback title when saving a shared link"
           }
         },
         "ta": {
           "stringUnit": {
-            "state": "translated",
-            "value": "साझा किया गया लिंक",
+            "state": "needs_review",
+            "value": "shared Link",
             "comment": "Fallback title when saving a shared link"
           }
         },
         "jv": {
           "stringUnit": {
-            "state": "translated",
-            "value": "tautan dibagikan",
+            "state": "needs_review",
+            "value": "shared Link",
             "comment": "Fallback title when saving a shared link"
           }
         },
         "fa": {
           "stringUnit": {
-            "state": "translated",
-            "value": "رابط مشترك",
+            "state": "needs_review",
+            "value": "shared Link",
             "comment": "Fallback title when saving a shared link"
           }
         },
         "vi": {
           "stringUnit": {
-            "state": "translated",
-            "value": "分享的链接",
+            "state": "needs_review",
+            "value": "shared Link",
             "comment": "Fallback title when saving a shared link"
           }
         },
         "fil": {
           "stringUnit": {
-            "state": "translated",
-            "value": "tautan dibagikan",
+            "state": "needs_review",
+            "value": "shared Link",
             "comment": "Fallback title when saving a shared link"
           }
         },
         "th": {
           "stringUnit": {
-            "state": "translated",
-            "value": "分享的链接",
+            "state": "needs_review",
+            "value": "shared Link",
             "comment": "Fallback title when saving a shared link"
           }
         },
         "sw": {
           "stringUnit": {
-            "state": "translated",
-            "value": "رابط مشترك",
+            "state": "needs_review",
+            "value": "shared Link",
             "comment": "Fallback title when saving a shared link"
           }
         },
         "my": {
           "stringUnit": {
-            "state": "translated",
-            "value": "分享的链接",
+            "state": "needs_review",
+            "value": "shared Link",
             "comment": "Fallback title when saving a shared link"
           }
         },
         "ms": {
           "stringUnit": {
-            "state": "translated",
-            "value": "tautan dibagikan",
+            "state": "needs_review",
+            "value": "shared Link",
             "comment": "Fallback title when saving a shared link"
           }
         },
         "ps": {
           "stringUnit": {
-            "state": "translated",
-            "value": "رابط مشترك",
+            "state": "needs_review",
+            "value": "shared Link",
             "comment": "Fallback title when saving a shared link"
           }
         },
         "ha": {
           "stringUnit": {
-            "state": "translated",
-            "value": "رابط مشترك",
+            "state": "needs_review",
+            "value": "shared Link",
             "comment": "Fallback title when saving a shared link"
           }
         },
         "pl": {
           "stringUnit": {
-            "state": "translated",
-            "value": "поделился ссылкой",
+            "state": "needs_review",
+            "value": "shared Link",
             "comment": "Fallback title when saving a shared link"
           }
         },
         "am": {
           "stringUnit": {
-            "state": "translated",
-            "value": "رابط مشترك",
+            "state": "needs_review",
+            "value": "shared Link",
             "comment": "Fallback title when saving a shared link"
           }
         },
         "ig": {
           "stringUnit": {
-            "state": "translated",
-            "value": "رابط مشترك",
+            "state": "needs_review",
+            "value": "shared Link",
             "comment": "Fallback title when saving a shared link"
           }
         },
         "yo": {
           "stringUnit": {
-            "state": "translated",
-            "value": "رابط مشترك",
+            "state": "needs_review",
+            "value": "shared Link",
             "comment": "Fallback title when saving a shared link"
           }
         },
         "zu": {
           "stringUnit": {
-            "state": "translated",
-            "value": "رابط مشترك",
+            "state": "needs_review",
+            "value": "shared Link",
             "comment": "Fallback title when saving a shared link"
           }
         },
         "ku": {
           "stringUnit": {
-            "state": "translated",
-            "value": "رابط مشترك",
+            "state": "needs_review",
+            "value": "shared Link",
             "comment": "Fallback title when saving a shared link"
           }
         },
         "rhg": {
           "stringUnit": {
-            "state": "translated",
-            "value": "শেয়ার করা লিংক",
+            "state": "needs_review",
+            "value": "shared Link",
             "comment": "Fallback title when saving a shared link"
           }
         },
         "so": {
           "stringUnit": {
-            "state": "translated",
-            "value": "رابط مشترك",
+            "state": "needs_review",
+            "value": "shared Link",
             "comment": "Fallback title when saving a shared link"
           }
         },
         "ti": {
           "stringUnit": {
-            "state": "translated",
-            "value": "رابط مشترك",
+            "state": "needs_review",
+            "value": "shared Link",
             "comment": "Fallback title when saving a shared link"
           }
         },
         "kk": {
           "stringUnit": {
-            "state": "translated",
-            "value": "поделился ссылкой",
+            "state": "needs_review",
+            "value": "shared Link",
             "comment": "Fallback title when saving a shared link"
           }
         },
         "uz": {
           "stringUnit": {
-            "state": "translated",
-            "value": "поделился ссылкой",
+            "state": "needs_review",
+            "value": "shared Link",
             "comment": "Fallback title when saving a shared link"
           }
         }
@@ -480,176 +480,176 @@
         },
         "pa": {
           "stringUnit": {
-            "state": "translated",
-            "value": "लिंक एन्कोड करने में विफल",
+            "state": "needs_review",
+            "value": "failed to encode link",
             "comment": "Shown when the share payload cannot be encoded"
           }
         },
         "mr": {
           "stringUnit": {
-            "state": "translated",
-            "value": "लिंक एन्कोड करने में विफल",
+            "state": "needs_review",
+            "value": "failed to encode link",
             "comment": "Shown when the share payload cannot be encoded"
           }
         },
         "te": {
           "stringUnit": {
-            "state": "translated",
-            "value": "लिंक एन्कोड करने में विफल",
+            "state": "needs_review",
+            "value": "failed to encode link",
             "comment": "Shown when the share payload cannot be encoded"
           }
         },
         "ta": {
           "stringUnit": {
-            "state": "translated",
-            "value": "लिंक एन्कोड करने में विफल",
+            "state": "needs_review",
+            "value": "failed to encode link",
             "comment": "Shown when the share payload cannot be encoded"
           }
         },
         "jv": {
           "stringUnit": {
-            "state": "translated",
-            "value": "gagal mengodekan tautan",
+            "state": "needs_review",
+            "value": "failed to encode link",
             "comment": "Shown when the share payload cannot be encoded"
           }
         },
         "fa": {
           "stringUnit": {
-            "state": "translated",
-            "value": "تعذر ترميز الرابط",
+            "state": "needs_review",
+            "value": "failed to encode link",
             "comment": "Shown when the share payload cannot be encoded"
           }
         },
         "vi": {
           "stringUnit": {
-            "state": "translated",
-            "value": "无法编码链接",
+            "state": "needs_review",
+            "value": "failed to encode link",
             "comment": "Shown when the share payload cannot be encoded"
           }
         },
         "fil": {
           "stringUnit": {
-            "state": "translated",
-            "value": "gagal mengodekan tautan",
+            "state": "needs_review",
+            "value": "failed to encode link",
             "comment": "Shown when the share payload cannot be encoded"
           }
         },
         "th": {
           "stringUnit": {
-            "state": "translated",
-            "value": "无法编码链接",
+            "state": "needs_review",
+            "value": "failed to encode link",
             "comment": "Shown when the share payload cannot be encoded"
           }
         },
         "sw": {
           "stringUnit": {
-            "state": "translated",
-            "value": "تعذر ترميز الرابط",
+            "state": "needs_review",
+            "value": "failed to encode link",
             "comment": "Shown when the share payload cannot be encoded"
           }
         },
         "my": {
           "stringUnit": {
-            "state": "translated",
-            "value": "无法编码链接",
+            "state": "needs_review",
+            "value": "failed to encode link",
             "comment": "Shown when the share payload cannot be encoded"
           }
         },
         "ms": {
           "stringUnit": {
-            "state": "translated",
-            "value": "gagal mengodekan tautan",
+            "state": "needs_review",
+            "value": "failed to encode link",
             "comment": "Shown when the share payload cannot be encoded"
           }
         },
         "ps": {
           "stringUnit": {
-            "state": "translated",
-            "value": "تعذر ترميز الرابط",
+            "state": "needs_review",
+            "value": "failed to encode link",
             "comment": "Shown when the share payload cannot be encoded"
           }
         },
         "ha": {
           "stringUnit": {
-            "state": "translated",
-            "value": "تعذر ترميز الرابط",
+            "state": "needs_review",
+            "value": "failed to encode link",
             "comment": "Shown when the share payload cannot be encoded"
           }
         },
         "pl": {
           "stringUnit": {
-            "state": "translated",
-            "value": "не удалось закодировать ссылку",
+            "state": "needs_review",
+            "value": "failed to encode link",
             "comment": "Shown when the share payload cannot be encoded"
           }
         },
         "am": {
           "stringUnit": {
-            "state": "translated",
-            "value": "تعذر ترميز الرابط",
+            "state": "needs_review",
+            "value": "failed to encode link",
             "comment": "Shown when the share payload cannot be encoded"
           }
         },
         "ig": {
           "stringUnit": {
-            "state": "translated",
-            "value": "تعذر ترميز الرابط",
+            "state": "needs_review",
+            "value": "failed to encode link",
             "comment": "Shown when the share payload cannot be encoded"
           }
         },
         "yo": {
           "stringUnit": {
-            "state": "translated",
-            "value": "تعذر ترميز الرابط",
+            "state": "needs_review",
+            "value": "failed to encode link",
             "comment": "Shown when the share payload cannot be encoded"
           }
         },
         "zu": {
           "stringUnit": {
-            "state": "translated",
-            "value": "تعذر ترميز الرابط",
+            "state": "needs_review",
+            "value": "failed to encode link",
             "comment": "Shown when the share payload cannot be encoded"
           }
         },
         "ku": {
           "stringUnit": {
-            "state": "translated",
-            "value": "تعذر ترميز الرابط",
+            "state": "needs_review",
+            "value": "failed to encode link",
             "comment": "Shown when the share payload cannot be encoded"
           }
         },
         "rhg": {
           "stringUnit": {
-            "state": "translated",
-            "value": "লিংক এনকোড করতে ব্যর্থ",
+            "state": "needs_review",
+            "value": "failed to encode link",
             "comment": "Shown when the share payload cannot be encoded"
           }
         },
         "so": {
           "stringUnit": {
-            "state": "translated",
-            "value": "تعذر ترميز الرابط",
+            "state": "needs_review",
+            "value": "failed to encode link",
             "comment": "Shown when the share payload cannot be encoded"
           }
         },
         "ti": {
           "stringUnit": {
-            "state": "translated",
-            "value": "تعذر ترميز الرابط",
+            "state": "needs_review",
+            "value": "failed to encode link",
             "comment": "Shown when the share payload cannot be encoded"
           }
         },
         "kk": {
           "stringUnit": {
-            "state": "translated",
-            "value": "не удалось закодировать ссылку",
+            "state": "needs_review",
+            "value": "failed to encode link",
             "comment": "Shown when the share payload cannot be encoded"
           }
         },
         "uz": {
           "stringUnit": {
-            "state": "translated",
-            "value": "не удалось закодировать ссылку",
+            "state": "needs_review",
+            "value": "failed to encode link",
             "comment": "Shown when the share payload cannot be encoded"
           }
         }
@@ -807,176 +807,176 @@
         },
         "pa": {
           "stringUnit": {
-            "state": "translated",
-            "value": "कोई साझा करने योग्य सामग्री नहीं",
+            "state": "needs_review",
+            "value": "no shareable content",
             "comment": "Shown when provided content cannot be shared"
           }
         },
         "mr": {
           "stringUnit": {
-            "state": "translated",
-            "value": "कोई साझा करने योग्य सामग्री नहीं",
+            "state": "needs_review",
+            "value": "no shareable content",
             "comment": "Shown when provided content cannot be shared"
           }
         },
         "te": {
           "stringUnit": {
-            "state": "translated",
-            "value": "कोई साझा करने योग्य सामग्री नहीं",
+            "state": "needs_review",
+            "value": "no shareable content",
             "comment": "Shown when provided content cannot be shared"
           }
         },
         "ta": {
           "stringUnit": {
-            "state": "translated",
-            "value": "कोई साझा करने योग्य सामग्री नहीं",
+            "state": "needs_review",
+            "value": "no shareable content",
             "comment": "Shown when provided content cannot be shared"
           }
         },
         "jv": {
           "stringUnit": {
-            "state": "translated",
-            "value": "tidak ada konten yang bisa dibagikan",
+            "state": "needs_review",
+            "value": "no shareable content",
             "comment": "Shown when provided content cannot be shared"
           }
         },
         "fa": {
           "stringUnit": {
-            "state": "translated",
-            "value": "لا محتوى قابلاً للمشاركة",
+            "state": "needs_review",
+            "value": "no shareable content",
             "comment": "Shown when provided content cannot be shared"
           }
         },
         "vi": {
           "stringUnit": {
-            "state": "translated",
-            "value": "没有可分享的素材",
+            "state": "needs_review",
+            "value": "no shareable content",
             "comment": "Shown when provided content cannot be shared"
           }
         },
         "fil": {
           "stringUnit": {
-            "state": "translated",
-            "value": "tidak ada konten yang bisa dibagikan",
+            "state": "needs_review",
+            "value": "no shareable content",
             "comment": "Shown when provided content cannot be shared"
           }
         },
         "th": {
           "stringUnit": {
-            "state": "translated",
-            "value": "没有可分享的素材",
+            "state": "needs_review",
+            "value": "no shareable content",
             "comment": "Shown when provided content cannot be shared"
           }
         },
         "sw": {
           "stringUnit": {
-            "state": "translated",
-            "value": "لا محتوى قابلاً للمشاركة",
+            "state": "needs_review",
+            "value": "no shareable content",
             "comment": "Shown when provided content cannot be shared"
           }
         },
         "my": {
           "stringUnit": {
-            "state": "translated",
-            "value": "没有可分享的素材",
+            "state": "needs_review",
+            "value": "no shareable content",
             "comment": "Shown when provided content cannot be shared"
           }
         },
         "ms": {
           "stringUnit": {
-            "state": "translated",
-            "value": "tidak ada konten yang bisa dibagikan",
+            "state": "needs_review",
+            "value": "no shareable content",
             "comment": "Shown when provided content cannot be shared"
           }
         },
         "ps": {
           "stringUnit": {
-            "state": "translated",
-            "value": "لا محتوى قابلاً للمشاركة",
+            "state": "needs_review",
+            "value": "no shareable content",
             "comment": "Shown when provided content cannot be shared"
           }
         },
         "ha": {
           "stringUnit": {
-            "state": "translated",
-            "value": "لا محتوى قابلاً للمشاركة",
+            "state": "needs_review",
+            "value": "no shareable content",
             "comment": "Shown when provided content cannot be shared"
           }
         },
         "pl": {
           "stringUnit": {
-            "state": "translated",
-            "value": "нет подходящего контента",
+            "state": "needs_review",
+            "value": "no shareable content",
             "comment": "Shown when provided content cannot be shared"
           }
         },
         "am": {
           "stringUnit": {
-            "state": "translated",
-            "value": "لا محتوى قابلاً للمشاركة",
+            "state": "needs_review",
+            "value": "no shareable content",
             "comment": "Shown when provided content cannot be shared"
           }
         },
         "ig": {
           "stringUnit": {
-            "state": "translated",
-            "value": "لا محتوى قابلاً للمشاركة",
+            "state": "needs_review",
+            "value": "no shareable content",
             "comment": "Shown when provided content cannot be shared"
           }
         },
         "yo": {
           "stringUnit": {
-            "state": "translated",
-            "value": "لا محتوى قابلاً للمشاركة",
+            "state": "needs_review",
+            "value": "no shareable content",
             "comment": "Shown when provided content cannot be shared"
           }
         },
         "zu": {
           "stringUnit": {
-            "state": "translated",
-            "value": "لا محتوى قابلاً للمشاركة",
+            "state": "needs_review",
+            "value": "no shareable content",
             "comment": "Shown when provided content cannot be shared"
           }
         },
         "ku": {
           "stringUnit": {
-            "state": "translated",
-            "value": "لا محتوى قابلاً للمشاركة",
+            "state": "needs_review",
+            "value": "no shareable content",
             "comment": "Shown when provided content cannot be shared"
           }
         },
         "rhg": {
           "stringUnit": {
-            "state": "translated",
-            "value": "কোন শেয়ারযোগ্য কন্টেন্ট নেই",
+            "state": "needs_review",
+            "value": "no shareable content",
             "comment": "Shown when provided content cannot be shared"
           }
         },
         "so": {
           "stringUnit": {
-            "state": "translated",
-            "value": "لا محتوى قابلاً للمشاركة",
+            "state": "needs_review",
+            "value": "no shareable content",
             "comment": "Shown when provided content cannot be shared"
           }
         },
         "ti": {
           "stringUnit": {
-            "state": "translated",
-            "value": "لا محتوى قابلاً للمشاركة",
+            "state": "needs_review",
+            "value": "no shareable content",
             "comment": "Shown when provided content cannot be shared"
           }
         },
         "kk": {
           "stringUnit": {
-            "state": "translated",
-            "value": "нет подходящего контента",
+            "state": "needs_review",
+            "value": "no shareable content",
             "comment": "Shown when provided content cannot be shared"
           }
         },
         "uz": {
           "stringUnit": {
-            "state": "translated",
-            "value": "нет подходящего контента",
+            "state": "needs_review",
+            "value": "no shareable content",
             "comment": "Shown when provided content cannot be shared"
           }
         }
@@ -1134,176 +1134,176 @@
         },
         "pa": {
           "stringUnit": {
-            "state": "translated",
-            "value": "साझा करने के लिए कुछ नहीं",
+            "state": "needs_review",
+            "value": "nothing to share",
             "comment": "Shown when the share extension receives no content"
           }
         },
         "mr": {
           "stringUnit": {
-            "state": "translated",
-            "value": "साझा करने के लिए कुछ नहीं",
+            "state": "needs_review",
+            "value": "nothing to share",
             "comment": "Shown when the share extension receives no content"
           }
         },
         "te": {
           "stringUnit": {
-            "state": "translated",
-            "value": "साझा करने के लिए कुछ नहीं",
+            "state": "needs_review",
+            "value": "nothing to share",
             "comment": "Shown when the share extension receives no content"
           }
         },
         "ta": {
           "stringUnit": {
-            "state": "translated",
-            "value": "साझा करने के लिए कुछ नहीं",
+            "state": "needs_review",
+            "value": "nothing to share",
             "comment": "Shown when the share extension receives no content"
           }
         },
         "jv": {
           "stringUnit": {
-            "state": "translated",
-            "value": "tidak ada yang bisa dibagikan",
+            "state": "needs_review",
+            "value": "nothing to share",
             "comment": "Shown when the share extension receives no content"
           }
         },
         "fa": {
           "stringUnit": {
-            "state": "translated",
-            "value": "لا شيء لمشاركته",
+            "state": "needs_review",
+            "value": "nothing to share",
             "comment": "Shown when the share extension receives no content"
           }
         },
         "vi": {
           "stringUnit": {
-            "state": "translated",
-            "value": "没有可分享的内容",
+            "state": "needs_review",
+            "value": "nothing to share",
             "comment": "Shown when the share extension receives no content"
           }
         },
         "fil": {
           "stringUnit": {
-            "state": "translated",
-            "value": "tidak ada yang bisa dibagikan",
+            "state": "needs_review",
+            "value": "nothing to share",
             "comment": "Shown when the share extension receives no content"
           }
         },
         "th": {
           "stringUnit": {
-            "state": "translated",
-            "value": "没有可分享的内容",
+            "state": "needs_review",
+            "value": "nothing to share",
             "comment": "Shown when the share extension receives no content"
           }
         },
         "sw": {
           "stringUnit": {
-            "state": "translated",
-            "value": "لا شيء لمشاركته",
+            "state": "needs_review",
+            "value": "nothing to share",
             "comment": "Shown when the share extension receives no content"
           }
         },
         "my": {
           "stringUnit": {
-            "state": "translated",
-            "value": "没有可分享的内容",
+            "state": "needs_review",
+            "value": "nothing to share",
             "comment": "Shown when the share extension receives no content"
           }
         },
         "ms": {
           "stringUnit": {
-            "state": "translated",
-            "value": "tidak ada yang bisa dibagikan",
+            "state": "needs_review",
+            "value": "nothing to share",
             "comment": "Shown when the share extension receives no content"
           }
         },
         "ps": {
           "stringUnit": {
-            "state": "translated",
-            "value": "لا شيء لمشاركته",
+            "state": "needs_review",
+            "value": "nothing to share",
             "comment": "Shown when the share extension receives no content"
           }
         },
         "ha": {
           "stringUnit": {
-            "state": "translated",
-            "value": "لا شيء لمشاركته",
+            "state": "needs_review",
+            "value": "nothing to share",
             "comment": "Shown when the share extension receives no content"
           }
         },
         "pl": {
           "stringUnit": {
-            "state": "translated",
-            "value": "нечем поделиться",
+            "state": "needs_review",
+            "value": "nothing to share",
             "comment": "Shown when the share extension receives no content"
           }
         },
         "am": {
           "stringUnit": {
-            "state": "translated",
-            "value": "لا شيء لمشاركته",
+            "state": "needs_review",
+            "value": "nothing to share",
             "comment": "Shown when the share extension receives no content"
           }
         },
         "ig": {
           "stringUnit": {
-            "state": "translated",
-            "value": "لا شيء لمشاركته",
+            "state": "needs_review",
+            "value": "nothing to share",
             "comment": "Shown when the share extension receives no content"
           }
         },
         "yo": {
           "stringUnit": {
-            "state": "translated",
-            "value": "لا شيء لمشاركته",
+            "state": "needs_review",
+            "value": "nothing to share",
             "comment": "Shown when the share extension receives no content"
           }
         },
         "zu": {
           "stringUnit": {
-            "state": "translated",
-            "value": "لا شيء لمشاركته",
+            "state": "needs_review",
+            "value": "nothing to share",
             "comment": "Shown when the share extension receives no content"
           }
         },
         "ku": {
           "stringUnit": {
-            "state": "translated",
-            "value": "لا شيء لمشاركته",
+            "state": "needs_review",
+            "value": "nothing to share",
             "comment": "Shown when the share extension receives no content"
           }
         },
         "rhg": {
           "stringUnit": {
-            "state": "translated",
-            "value": "শেয়ার করার কিছু নেই",
+            "state": "needs_review",
+            "value": "nothing to share",
             "comment": "Shown when the share extension receives no content"
           }
         },
         "so": {
           "stringUnit": {
-            "state": "translated",
-            "value": "لا شيء لمشاركته",
+            "state": "needs_review",
+            "value": "nothing to share",
             "comment": "Shown when the share extension receives no content"
           }
         },
         "ti": {
           "stringUnit": {
-            "state": "translated",
-            "value": "لا شيء لمشاركته",
+            "state": "needs_review",
+            "value": "nothing to share",
             "comment": "Shown when the share extension receives no content"
           }
         },
         "kk": {
           "stringUnit": {
-            "state": "translated",
-            "value": "нечем поделиться",
+            "state": "needs_review",
+            "value": "nothing to share",
             "comment": "Shown when the share extension receives no content"
           }
         },
         "uz": {
           "stringUnit": {
-            "state": "translated",
-            "value": "нечем поделиться",
+            "state": "needs_review",
+            "value": "nothing to share",
             "comment": "Shown when the share extension receives no content"
           }
         }
@@ -1461,176 +1461,176 @@
         },
         "pa": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ bitchat में लिंक साझा किया गया",
+            "state": "needs_review",
+            "value": "✓ shared link to bitchat",
             "comment": "Confirmation after successfully sharing a link"
           }
         },
         "mr": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ bitchat में लिंक साझा किया गया",
+            "state": "needs_review",
+            "value": "✓ shared link to bitchat",
             "comment": "Confirmation after successfully sharing a link"
           }
         },
         "te": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ bitchat में लिंक साझा किया गया",
+            "state": "needs_review",
+            "value": "✓ shared link to bitchat",
             "comment": "Confirmation after successfully sharing a link"
           }
         },
         "ta": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ bitchat में लिंक साझा किया गया",
+            "state": "needs_review",
+            "value": "✓ shared link to bitchat",
             "comment": "Confirmation after successfully sharing a link"
           }
         },
         "jv": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ tautan dikirim ke bitchat",
+            "state": "needs_review",
+            "value": "✓ shared link to bitchat",
             "comment": "Confirmation after successfully sharing a link"
           }
         },
         "fa": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ تم إرسال الرابط إلى bitchat",
+            "state": "needs_review",
+            "value": "✓ shared link to bitchat",
             "comment": "Confirmation after successfully sharing a link"
           }
         },
         "vi": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ 已将链接分享至 bitchat",
+            "state": "needs_review",
+            "value": "✓ shared link to bitchat",
             "comment": "Confirmation after successfully sharing a link"
           }
         },
         "fil": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ tautan dikirim ke bitchat",
+            "state": "needs_review",
+            "value": "✓ shared link to bitchat",
             "comment": "Confirmation after successfully sharing a link"
           }
         },
         "th": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ 已将链接分享至 bitchat",
+            "state": "needs_review",
+            "value": "✓ shared link to bitchat",
             "comment": "Confirmation after successfully sharing a link"
           }
         },
         "sw": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ تم إرسال الرابط إلى bitchat",
+            "state": "needs_review",
+            "value": "✓ shared link to bitchat",
             "comment": "Confirmation after successfully sharing a link"
           }
         },
         "my": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ 已将链接分享至 bitchat",
+            "state": "needs_review",
+            "value": "✓ shared link to bitchat",
             "comment": "Confirmation after successfully sharing a link"
           }
         },
         "ms": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ tautan dikirim ke bitchat",
+            "state": "needs_review",
+            "value": "✓ shared link to bitchat",
             "comment": "Confirmation after successfully sharing a link"
           }
         },
         "ps": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ تم إرسال الرابط إلى bitchat",
+            "state": "needs_review",
+            "value": "✓ shared link to bitchat",
             "comment": "Confirmation after successfully sharing a link"
           }
         },
         "ha": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ تم إرسال الرابط إلى bitchat",
+            "state": "needs_review",
+            "value": "✓ shared link to bitchat",
             "comment": "Confirmation after successfully sharing a link"
           }
         },
         "pl": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ ссылка отправлена в bitchat",
+            "state": "needs_review",
+            "value": "✓ shared link to bitchat",
             "comment": "Confirmation after successfully sharing a link"
           }
         },
         "am": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ تم إرسال الرابط إلى bitchat",
+            "state": "needs_review",
+            "value": "✓ shared link to bitchat",
             "comment": "Confirmation after successfully sharing a link"
           }
         },
         "ig": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ تم إرسال الرابط إلى bitchat",
+            "state": "needs_review",
+            "value": "✓ shared link to bitchat",
             "comment": "Confirmation after successfully sharing a link"
           }
         },
         "yo": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ تم إرسال الرابط إلى bitchat",
+            "state": "needs_review",
+            "value": "✓ shared link to bitchat",
             "comment": "Confirmation after successfully sharing a link"
           }
         },
         "zu": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ تم إرسال الرابط إلى bitchat",
+            "state": "needs_review",
+            "value": "✓ shared link to bitchat",
             "comment": "Confirmation after successfully sharing a link"
           }
         },
         "ku": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ تم إرسال الرابط إلى bitchat",
+            "state": "needs_review",
+            "value": "✓ shared link to bitchat",
             "comment": "Confirmation after successfully sharing a link"
           }
         },
         "rhg": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ bitchat এ লিংক শেয়ার করা হয়েছে",
+            "state": "needs_review",
+            "value": "✓ shared link to bitchat",
             "comment": "Confirmation after successfully sharing a link"
           }
         },
         "so": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ تم إرسال الرابط إلى bitchat",
+            "state": "needs_review",
+            "value": "✓ shared link to bitchat",
             "comment": "Confirmation after successfully sharing a link"
           }
         },
         "ti": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ تم إرسال الرابط إلى bitchat",
+            "state": "needs_review",
+            "value": "✓ shared link to bitchat",
             "comment": "Confirmation after successfully sharing a link"
           }
         },
         "kk": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ ссылка отправлена в bitchat",
+            "state": "needs_review",
+            "value": "✓ shared link to bitchat",
             "comment": "Confirmation after successfully sharing a link"
           }
         },
         "uz": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ ссылка отправлена в bitchat",
+            "state": "needs_review",
+            "value": "✓ shared link to bitchat",
             "comment": "Confirmation after successfully sharing a link"
           }
         }
@@ -1788,176 +1788,176 @@
         },
         "pa": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ bitchat में टेक्स्ट साझा किया गया",
+            "state": "needs_review",
+            "value": "✓ shared text to bitchat",
             "comment": "Confirmation after successfully sharing text"
           }
         },
         "mr": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ bitchat में टेक्स्ट साझा किया गया",
+            "state": "needs_review",
+            "value": "✓ shared text to bitchat",
             "comment": "Confirmation after successfully sharing text"
           }
         },
         "te": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ bitchat में टेक्स्ट साझा किया गया",
+            "state": "needs_review",
+            "value": "✓ shared text to bitchat",
             "comment": "Confirmation after successfully sharing text"
           }
         },
         "ta": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ bitchat में टेक्स्ट साझा किया गया",
+            "state": "needs_review",
+            "value": "✓ shared text to bitchat",
             "comment": "Confirmation after successfully sharing text"
           }
         },
         "jv": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ teks dikirim ke bitchat",
+            "state": "needs_review",
+            "value": "✓ shared text to bitchat",
             "comment": "Confirmation after successfully sharing text"
           }
         },
         "fa": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ تم إرسال النص إلى bitchat",
+            "state": "needs_review",
+            "value": "✓ shared text to bitchat",
             "comment": "Confirmation after successfully sharing text"
           }
         },
         "vi": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ 已将文本分享至 bitchat",
+            "state": "needs_review",
+            "value": "✓ shared text to bitchat",
             "comment": "Confirmation after successfully sharing text"
           }
         },
         "fil": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ teks dikirim ke bitchat",
+            "state": "needs_review",
+            "value": "✓ shared text to bitchat",
             "comment": "Confirmation after successfully sharing text"
           }
         },
         "th": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ 已将文本分享至 bitchat",
+            "state": "needs_review",
+            "value": "✓ shared text to bitchat",
             "comment": "Confirmation after successfully sharing text"
           }
         },
         "sw": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ تم إرسال النص إلى bitchat",
+            "state": "needs_review",
+            "value": "✓ shared text to bitchat",
             "comment": "Confirmation after successfully sharing text"
           }
         },
         "my": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ 已将文本分享至 bitchat",
+            "state": "needs_review",
+            "value": "✓ shared text to bitchat",
             "comment": "Confirmation after successfully sharing text"
           }
         },
         "ms": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ teks dikirim ke bitchat",
+            "state": "needs_review",
+            "value": "✓ shared text to bitchat",
             "comment": "Confirmation after successfully sharing text"
           }
         },
         "ps": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ تم إرسال النص إلى bitchat",
+            "state": "needs_review",
+            "value": "✓ shared text to bitchat",
             "comment": "Confirmation after successfully sharing text"
           }
         },
         "ha": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ تم إرسال النص إلى bitchat",
+            "state": "needs_review",
+            "value": "✓ shared text to bitchat",
             "comment": "Confirmation after successfully sharing text"
           }
         },
         "pl": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ текст отправлен в bitchat",
+            "state": "needs_review",
+            "value": "✓ shared text to bitchat",
             "comment": "Confirmation after successfully sharing text"
           }
         },
         "am": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ تم إرسال النص إلى bitchat",
+            "state": "needs_review",
+            "value": "✓ shared text to bitchat",
             "comment": "Confirmation after successfully sharing text"
           }
         },
         "ig": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ تم إرسال النص إلى bitchat",
+            "state": "needs_review",
+            "value": "✓ shared text to bitchat",
             "comment": "Confirmation after successfully sharing text"
           }
         },
         "yo": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ تم إرسال النص إلى bitchat",
+            "state": "needs_review",
+            "value": "✓ shared text to bitchat",
             "comment": "Confirmation after successfully sharing text"
           }
         },
         "zu": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ تم إرسال النص إلى bitchat",
+            "state": "needs_review",
+            "value": "✓ shared text to bitchat",
             "comment": "Confirmation after successfully sharing text"
           }
         },
         "ku": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ تم إرسال النص إلى bitchat",
+            "state": "needs_review",
+            "value": "✓ shared text to bitchat",
             "comment": "Confirmation after successfully sharing text"
           }
         },
         "rhg": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ bitchat এ টেক্সট শেয়ার করা হয়েছে",
+            "state": "needs_review",
+            "value": "✓ shared text to bitchat",
             "comment": "Confirmation after successfully sharing text"
           }
         },
         "so": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ تم إرسال النص إلى bitchat",
+            "state": "needs_review",
+            "value": "✓ shared text to bitchat",
             "comment": "Confirmation after successfully sharing text"
           }
         },
         "ti": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ تم إرسال النص إلى bitchat",
+            "state": "needs_review",
+            "value": "✓ shared text to bitchat",
             "comment": "Confirmation after successfully sharing text"
           }
         },
         "kk": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ текст отправлен в bitchat",
+            "state": "needs_review",
+            "value": "✓ shared text to bitchat",
             "comment": "Confirmation after successfully sharing text"
           }
         },
         "uz": {
           "stringUnit": {
-            "state": "translated",
-            "value": "✓ текст отправлен в bitchat",
+            "state": "needs_review",
+            "value": "✓ shared text to bitchat",
             "comment": "Confirmation after successfully sharing text"
           }
         }
