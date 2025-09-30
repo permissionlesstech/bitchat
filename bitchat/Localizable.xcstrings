@@ -676,7 +676,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "ang mga pribadong mensahe ay ini-encrypt gamit ang Noise protocol"
+            "value": "Mga pribadong mensahe ay naka-encrypt sa Noise protocol"
           }
         },
         "ms": {
@@ -855,7 +855,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "end-to-end na pag-encrypt"
+            "value": "End-to-end na pag-e-encrypt"
           }
         },
         "ms": {
@@ -1034,7 +1034,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "ipinapasa ang mga mensahe sa mga peer para makarating sa malalayo"
+            "value": "Ipinapasa ng mga mensahe sa mga kapwa at umaabot sa malayo"
           }
         },
         "ms": {
@@ -1213,7 +1213,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "mas malawak na saklaw"
+            "value": "Mas malawak na saklaw"
           }
         },
         "ms": {
@@ -1392,7 +1392,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "tumanggap ng abiso kapag sumali ang paborito mong mga tao"
+            "value": "Makatanggap ng abiso kapag sumali ang mga paborito mong tao"
           }
         },
         "ms": {
@@ -1571,7 +1571,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "mga paborito"
+            "value": "Mga paborito"
           }
         },
         "ms": {
@@ -1750,7 +1750,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "mga geohash channel para makipag-chat sa mga tao sa karatig na lugar sa pamamagitan ng mga desentralisado at anonimong relay"
+            "value": "Mga channel ng geohash para makipag-usap sa mga taong malapit sa pamamagitan ng desentralisadong mga anonymous relay"
           }
         },
         "ms": {
@@ -1929,7 +1929,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "mga lokal na channel"
+            "value": "Mga lokal na channel"
           }
         },
         "ms": {
@@ -2108,7 +2108,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "gumamit ng @nickname para abisuhan ang partikular na tao"
+            "value": "Gamitin ang @bansag para abisuhan ang partikular na tao"
           }
         },
         "ms": {
@@ -2287,7 +2287,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "mga banggit"
+            "value": "Mga pagbanggit"
           }
         },
         "ms": {
@@ -2466,7 +2466,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "gumagana kahit walang internet gamit ang Bluetooth Low Energy"
+            "value": "Gumagana kahit walang internet gamit ang Bluetooth low energy"
           }
         },
         "ms": {
@@ -2645,7 +2645,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "offline na komunikasyon"
+            "value": "Offline na komunikasyon"
           }
         },
         "ms": {
@@ -3003,7 +3003,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "• i-tap ang #mesh para magpalit ng channel"
+            "value": "• tapikin ang #mesh para magpalit ng channel"
           }
         },
         "ms": {
@@ -3182,7 +3182,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "• i-triple tap ang chat para linisin"
+            "value": "• tatlong beses tapikin ang chat upang limasin"
           }
         },
         "ms": {
@@ -3540,7 +3540,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "• i-tap ang icon ng tao para buksan ang sidebar"
+            "value": "• tapikin ang icon ng tao para sa sidebar"
           }
         },
         "ms": {
@@ -3719,7 +3719,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "• itakda ang iyong palayaw sa pag-tap dito"
+            "value": "• itakda ang iyong bansag sa pamamagitan ng pag-tap dito"
           }
         },
         "ms": {
@@ -3898,7 +3898,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "• i-tap ang pangalan ng peer para magsimula ng DM"
+            "value": "• tapikin ang pangalan ng kausap para magsimula ng DM"
           }
         },
         "ms": {
@@ -4256,7 +4256,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "regular na lumilikha ng bagong peer ID"
+            "value": "Regular na gumagawa ng bagong peer ID"
           }
         },
         "ms": {
@@ -4435,7 +4435,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "panandaliang pagkakakilanlan"
+            "value": "Panandaliang pagkakakilanlan"
           }
         },
         "ms": {
@@ -4614,7 +4614,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "walang mga server, account, o pagkuha ng data"
+            "value": "Walang mga server, account, o pangangalap ng datos"
           }
         },
         "ms": {
@@ -4793,7 +4793,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "walang pagsubaybay"
+            "value": "Walang pagsubaybay"
           }
         },
         "ms": {
@@ -4972,7 +4972,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "i-tap ang logo nang tatlong beses para agad burahin ang lahat ng data"
+            "value": "I-tap nang tatlong beses ang logo upang agad na burahin ang lahat ng datos"
           }
         },
         "ms": {
@@ -5151,7 +5151,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "panic mode"
+            "value": "Panic mode"
           }
         },
         "ms": {
@@ -5330,7 +5330,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "PRIBASYA"
+            "value": "PRIBASIYA"
           }
         },
         "ms": {
@@ -5688,7 +5688,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "hindi pa ganap na na-audit ang seguridad ng pribadong mensahe. huwag gamitin para sa kritikal na sitwasyon hangga't hindi nawawala ang babalang ito."
+            "value": "Hindi pa lubusang nasusuri ang seguridad ng pribadong mensahe. Huwag gamitin para sa kritikal na sitwasyon hangga’t hindi nawawala ang babalang ito."
           }
         },
         "ms": {
@@ -7120,7 +7120,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "hindi alam"
+            "value": "hindi kilala"
           }
         },
         "ms": {
@@ -7478,7 +7478,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "magagamit sa Nostr"
+            "value": "available sa pamamagitan ng Nostr"
           }
         },
         "ms": {
@@ -7836,7 +7836,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "nakakonekta sa pamamagitan ng mesh"
+            "value": "nakakonekta sa mesh"
           }
         },
         "ms": {
@@ -8015,7 +8015,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "estado ng pag-encrypt: %@"
+            "value": "katayuan ng pag-e-encrypt: %@"
           }
         },
         "ms": {
@@ -8194,7 +8194,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "mga channel batay sa lokasyon"
+            "value": "mga channel ng lokasyon"
           }
         },
         "ms": {
@@ -8373,7 +8373,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "mga tala para sa lugar na ito"
+            "value": "mga tala ng lokasyon para sa lugar na ito"
           }
         },
         "ms": {
@@ -9473,7 +9473,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "maabot sa pamamagitan ng mesh"
+            "value": "maaaring maabot sa pamamagitan ng mesh"
           }
         },
         "ms": {
@@ -9831,7 +9831,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "mag-type ng mensahe para ipadala"
+            "value": "maglagay ng mensahe para ipadala"
           }
         },
         "ms": {
@@ -10010,7 +10010,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "i-double tap para magpadala"
+            "value": "dobleng tap upang magpadala"
           }
         },
         "ms": {
@@ -10547,7 +10547,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "i-double tap para i-toggle ang paborito"
+            "value": "dobleng tap upang baguhin ang estado ng paborito"
           }
         },
         "ms": {
@@ -10726,7 +10726,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "i-tap para makita ang fingerprint ng pag-encrypt"
+            "value": "tapikin upang makita ang fingerprint ng pag-e-encrypt"
           }
         },
         "ms": {
@@ -10905,7 +10905,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "i-block"
+            "value": "harangan"
           }
         },
         "ms": {
@@ -11084,7 +11084,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "diretsong mensahe"
+            "value": "direct message"
           }
         },
         "ms": {
@@ -11442,7 +11442,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "banggitin"
+            "value": "banggit"
           }
         },
         "ms": {
@@ -11800,7 +11800,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "mga aksyon"
+            "value": "mga pagkilos"
           }
         },
         "ms": {
@@ -11979,7 +11979,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "naka-off ang bluetooth. pakibuksan sa settings para magamit ang bitchat."
+            "value": "Patay ang bluetooth. Buksan ang bluetooth sa settings upang magamit ang bitchat."
           }
         },
         "ms": {
@@ -12158,7 +12158,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "kailangan ng bitchat ng pahintulot sa bluetooth upang kumonekta sa mga kalapit na device. pakiactivate sa settings."
+            "value": "Kailangan ng bitchat ng pahintulot sa bluetooth upang kumonekta sa mga kalapit na device. Paganahin ang access sa bluetooth sa settings."
           }
         },
         "ms": {
@@ -12337,7 +12337,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "settings"
+            "value": "mga setting"
           }
         },
         "ms": {
@@ -12516,7 +12516,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "kailangan ng bluetooth"
+            "value": "kailangang naka-bluetooth"
           }
         },
         "ms": {
@@ -12695,7 +12695,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "hindi sinusuportahan ng device na ito ang bluetooth. kailangan ito ng bitchat para gumana."
+            "value": "Hindi sinusuportahan ng device na ito ang bluetooth. Kailangan ng bitchat ang bluetooth para gumana."
           }
         },
         "ms": {
@@ -12874,7 +12874,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "ibinubunyag ng screenshot ng mga channel ng lokasyon ang iyong lokasyon. mag-isip bago magbahagi sa publiko."
+            "value": "Ilalantad ng mga screenshot ng mga channel ng lokasyon ang iyong kinaroroonan. Mag-isip bago ibahagi nang pampubliko."
           }
         },
         "ms": {
@@ -13232,7 +13232,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "i-block o tingnan ang listahan ng mga na-block na peer"
+            "value": "harangan o tingnan ang listahan ng mga hinarang"
           }
         },
         "ms": {
@@ -13411,7 +13411,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "burahin ang mga mensahe sa chat"
+            "value": "linisin ang mga mensahe sa chat"
           }
         },
         "ms": {
@@ -13769,7 +13769,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "magpadala ng mainit na yakap"
+            "value": "magpadala ng mainit na yakap sa isang tao"
           }
         },
         "ms": {
@@ -14306,7 +14306,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "alisin ang pag-block sa peer"
+            "value": "alisin sa harang ang isang peer"
           }
         },
         "ms": {
@@ -14843,7 +14843,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "naihatid sa %1$d ng %2$d miyembro"
+            "value": "naipadala sa %1$d ng %2$d na miyembro"
           }
         },
         "ms": {
@@ -15022,7 +15022,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "naihatid kay %@"
+            "value": "naipadala kay %@"
           }
         },
         "ms": {
@@ -15559,7 +15559,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "na-block ang user"
+            "value": "naharang ang user"
           }
         },
         "ms": {
@@ -15738,7 +15738,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "hindi puwedeng magpadala sa sarili mo"
+            "value": "hindi puwedeng mensahihin ang sarili"
           }
         },
         "ms": {
@@ -16454,7 +16454,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "PEOPLE"
+            "value": "MGA TAO"
           }
         },
         "ms": {
@@ -16633,7 +16633,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "beripikasyon: ipakita ang aking QR o i-scan ang sa kaibigan"
+            "value": "Beripikasyon: ipakita ang aking QR o i-scan ang kaibigan"
           }
         },
         "ms": {
@@ -16991,7 +16991,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "palayaw"
+            "value": "bansag"
           }
         },
         "ms": {
@@ -17170,7 +17170,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "i-on ang lokasyon"
+            "value": "paganahin ang lokasyon"
           }
         },
         "ms": {
@@ -17707,7 +17707,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "ipakita pa"
+            "value": "ipakita nang marami"
           }
         },
         "ms": {
@@ -17886,7 +17886,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "walang lokasyon"
+            "value": "hindi available ang lokasyon"
           }
         },
         "ms": {
@@ -18602,7 +18602,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "nagseset up ng pag-encrypt"
+            "value": "nagtatatag ng pag-e-encrypt"
           }
         },
         "ms": {
@@ -18781,7 +18781,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "nabigo ang pag-encrypt"
+            "value": "nabigo ang pag-e-encrypt"
           }
         },
         "ms": {
@@ -18960,7 +18960,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "walang pag-encrypt"
+            "value": "hindi naka-encrypt"
           }
         },
         "ms": {
@@ -19139,7 +19139,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "na-encrypt"
+            "value": "naka-encrypt"
           }
         },
         "ms": {
@@ -19318,7 +19318,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "na-encrypt at beripikado"
+            "value": "naka-encrypt at napatunayan"
           }
         },
         "ms": {
@@ -19497,7 +19497,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "nagseset up ng pag-encrypt..."
+            "value": "nagtatatag ng pag-e-encrypt..."
           }
         },
         "ms": {
@@ -19676,7 +19676,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "nabigo ang pag-encrypt"
+            "value": "nabigo ang pag-e-encrypt"
           }
         },
         "ms": {
@@ -19855,7 +19855,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "walang pag-encrypt"
+            "value": "hindi naka-encrypt"
           }
         },
         "ms": {
@@ -20034,7 +20034,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "na-encrypt"
+            "value": "naka-encrypt"
           }
         },
         "ms": {
@@ -20213,7 +20213,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "na-encrypt at beripikado"
+            "value": "naka-encrypt at napatunayan"
           }
         },
         "ms": {
@@ -20392,7 +20392,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "markahan bilang beripikado"
+            "value": "markahan bilang napatunayan"
           }
         },
         "ms": {
@@ -20750,7 +20750,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "⚠️ HINDI BERIPIKADO"
+            "value": "⚠️ HINDI NAPATUNAYAN"
           }
         },
         "ms": {
@@ -20929,7 +20929,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ BERIPIKADO"
+            "value": "✓ NAPATUNAYAN"
           }
         },
         "ms": {
@@ -21108,7 +21108,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "hindi pa magagamit - nagpapatuloy ang handshake"
+            "value": "hindi magagamit - isinasagawa ang handshake"
           }
         },
         "ms": {
@@ -21287,7 +21287,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "na-beripika mo na ang pagkakakilanlan ng taong ito."
+            "value": "Nakumpirma mo ang pagkakakilanlan ng taong ito."
           }
         },
         "ms": {
@@ -21466,7 +21466,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "ikumpara ang mga fingerprint na ito kay %@ sa isang ligtas na channel."
+            "value": "Ihambing ang mga fingerprint na ito kay %@ gamit ang secure na channel."
           }
         },
         "ms": {
@@ -21645,7 +21645,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "fingerprint nila:"
+            "value": "kanilang fingerprint:"
           }
         },
         "ms": {
@@ -21824,7 +21824,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "beripikasyong panseguridad"
+            "value": "seguridad na beripikasyon"
           }
         },
         "ms": {
@@ -22003,7 +22003,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "fingerprint mo:"
+            "value": "iyong fingerprint:"
           }
         },
         "ms": {
@@ -22182,7 +22182,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "i-block"
+            "value": "harangan"
           }
         },
         "ms": {
@@ -22361,7 +22361,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "i-unblock"
+            "value": "alisin ang harang"
           }
         },
         "ms": {
@@ -22719,7 +22719,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "na-block sa geohash"
+            "value": "naharang sa geohash"
           }
         },
         "ms": {
@@ -23077,7 +23077,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "buksan ang settings"
+            "value": "buksan ang mga setting"
           }
         },
         "ms": {
@@ -23435,7 +23435,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "kumuha ng access sa lokasyon at mga geohash ko"
+            "value": "kunin ang lokasyon at ang aking mga geohash"
           }
         },
         "ms": {
@@ -23793,7 +23793,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "naka-bookmark"
+            "value": "na-bookmark"
           }
         },
         "ms": {
@@ -23972,7 +23972,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "makipag-chat sa mga taong malapit sa iyo gamit ang mga geohash channel. coarse na geohash lang ang ibinabahagi, hindi ang eksaktong GPS. tinatago ang iyong IP address sa pagreruta ng lahat ng traffic sa tor."
+            "value": "Makipag-chat sa mga malapit sa iyo gamit ang mga channel ng geohash. Isang magaspang na geohash lang ang ibinabahagi, hindi kailanman eksaktong GPS. Nakatago ang iyong IP address dahil lahat ng trapiko ay dumaraan sa Tor."
           }
         },
         "ms": {
@@ -24688,7 +24688,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "tinanggihan ang pahintulot sa lokasyon. i-enable sa settings para magamit ang mga channel ng lokasyon."
+            "value": "Tinanggihan ang pahintulot sa lokasyon. Paganahin ito sa settings upang magamit ang mga channel ng lokasyon."
           }
         },
         "ms": {
@@ -25967,7 +25967,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "itinatago ang iyong IP para sa mga channel ng lokasyon. inirerekomenda: naka-on."
+            "value": "Itinatago ang iyong IP para sa mga channel ng lokasyon. Inirerekomenda: naka-on."
           }
         },
         "ms": {
@@ -26146,7 +26146,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "tor routing"
+            "value": "Tor routing"
           }
         },
         "ms": {
@@ -26325,7 +26325,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "bloke"
+            "value": "harangan"
           }
         },
         "ms": {
@@ -26862,7 +26862,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "baranggay"
+            "value": "kapitbahayan"
           }
         },
         "ms": {
@@ -27041,7 +27041,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "probinsya"
+            "value": "lalawigan"
           }
         },
         "ms": {
@@ -27578,7 +27578,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "subukan muli"
+            "value": "subukang muli"
           }
         },
         "ms": {
@@ -27757,7 +27757,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "magdagdag ng maiikling permanenteng tala sa lugar na ito para matagpuan ng iba"
+            "value": "Magdagdag ng maiikling permanenteng tala sa lokasyong ito para makita ng ibang bisita."
           }
         },
         "ms": {
@@ -27936,7 +27936,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "maging unang magdagdag para sa puntong ito"
+            "value": "Ikaw ang maunang magdagdag para sa lugar na ito."
           }
         },
         "ms": {
@@ -28473,7 +28473,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "walang geo relay malapit sa lokasyong ito. subukan muli maya-maya."
+            "value": "Walang geo relay na malapit sa lokasyong ito. Subukan muli mamaya."
           }
         },
         "ms": {
@@ -29215,7 +29215,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "nagse-load ng mga tala…"
+            "value": "nilo-load ang mga tala…"
           }
         },
         "ms": {
@@ -29394,7 +29394,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "nagse-load ng pinakahuling mga tala…"
+            "value": "nilo-load ang mga bagong tala…"
           }
         },
         "ms": {
@@ -29573,7 +29573,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "walang malapit na geo relay"
+            "value": "walang geo relay sa paligid"
           }
         },
         "ms": {
@@ -29931,7 +29931,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "hindi magagamit ang mga geo relay; naka-pause ang mga tala"
+            "value": "walang geo relay; pansamantalang hinto ang mga tala"
           }
         },
         "ms": {
@@ -30110,7 +30110,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "umaasa ang mga tala sa mga geo relay. suriin ang koneksyon at subukan ulit."
+            "value": "Umaasa ang mga tala sa mga geo relay. Suriin ang koneksyon at subukang muli."
           }
         },
         "ms": {
@@ -30289,7 +30289,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "may bagong mensahe"
+            "value": "mga bagong mensahe"
           }
         },
         "ms": {
@@ -30468,7 +30468,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "hindi makapagsimula ng chat kay %@: na-block ang tao."
+            "value": "Hindi masimulan ang chat kay %@: naharang ang tao."
           }
         },
         "ms": {
@@ -30647,7 +30647,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "hindi makapagsimula ng chat kay %@: kailangan ang mutual na paborito para sa offline na mensahe."
+            "value": "Hindi masimulan ang chat kay %@: kailangan ninyong maging paborito ng isa’t isa para sa offline na pagmemensahe."
           }
         },
         "ms": {
@@ -30826,7 +30826,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "user"
+            "value": "gumagamit"
           }
         },
         "ms": {
@@ -31005,7 +31005,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "hindi makapagpadala ng mensahe: na-block ang tao."
+            "value": "Hindi maipadala ang mensahe: naharang ang tao."
           }
         },
         "ms": {
@@ -31184,7 +31184,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "hindi maipadala kay %@: na-block ang tao."
+            "value": "Hindi maipadala ang mensahe kay %@: naharang ang tao."
           }
         },
         "ms": {
@@ -31363,7 +31363,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "hindi maipadala kay %@ - hindi maabot ang peer sa mesh o nostr."
+            "value": "Hindi maipadala ang mensahe kay %@ - hindi maaabot ang peer sa pamamagitan ng mesh o Nostr."
           }
         },
         "ms": {
@@ -31542,7 +31542,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "na-block si %@ sa geohash chats"
+            "value": "Naharang si %@ sa mga geohash chat"
           }
         },
         "ms": {
@@ -31721,7 +31721,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "in-unblock si %@ sa geohash chats"
+            "value": "Inalis ang harang kay %@ sa mga geohash chat"
           }
         },
         "ms": {
@@ -31900,7 +31900,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "hindi maipadala: wala ka sa channel ng lokasyon"
+            "value": "Hindi maipadala: wala ka sa isang channel ng lokasyon"
           }
         },
         "ms": {
@@ -32079,7 +32079,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "nabigong magpadala sa channel ng lokasyon"
+            "value": "Nabigong magpadala sa channel ng lokasyon"
           }
         },
         "ms": {
@@ -32258,7 +32258,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "developer build: naka-enable ang Tor bypass."
+            "value": "Development build: naka-enable ang Tor bypass."
           }
         },
         "ms": {
@@ -32437,7 +32437,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "nag-restart ang tor. naibalik ang routing ng network."
+            "value": "Muling sinimulan ang Tor. Naibalik ang routing ng network."
           }
         },
         "ms": {
@@ -32616,7 +32616,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "nagre-restart ang tor upang ibalik ang koneksyon..."
+            "value": "Muling sinisimulan ang Tor para ibalik ang koneksyon..."
           }
         },
         "ms": {
@@ -32795,7 +32795,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "nagsimula ang tor. lahat ng chat ay dumadaan sa tor para itago ang IP."
+            "value": "Nagsimula ang Tor. Iro-route ang lahat ng chat sa Tor para sa privacy ng IP."
           }
         },
         "ms": {
@@ -32974,7 +32974,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "sinisimulan ang tor..."
+            "value": "Sinisimulan ang Tor..."
           }
         },
         "ms": {
@@ -33153,7 +33153,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "QR code para sa beripikasyon"
+            "value": "Verification QR code"
           }
         },
         "ms": {
@@ -33332,7 +33332,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "i-scan para i-verify ako"
+            "value": "I-scan upang i-verify ako"
           }
         },
         "ms": {
@@ -33511,7 +33511,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "walang QR"
+            "value": "Hindi available ang QR"
           }
         },
         "ms": {
@@ -33690,7 +33690,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "i-paste ang nilalaman ng QR para beripikahin:"
+            "value": "I-paste ang nilalaman ng QR para beripikahin:"
           }
         },
         "ms": {
@@ -33869,7 +33869,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "i-scan ang QR ng kaibigan"
+            "value": "I-scan ang QR ng kaibigan"
           }
         },
         "ms": {
@@ -34048,7 +34048,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "di-wasto o paso na ang QR payload"
+            "value": "Di-wasto o paso na ang QR payload"
           }
         },
         "ms": {
@@ -34227,7 +34227,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "walang nahanap na kaakibat na peer"
+            "value": "Walang natagpuang tumutugmang peer"
           }
         },
         "ms": {
@@ -34406,7 +34406,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "humiling ng beripikasyon para kay %@"
+            "value": "Humihiling ng beripikasyon para kay %@"
           }
         },
         "ms": {
@@ -34764,7 +34764,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "BERIPIKA"
+            "value": "BERIPIKAHIN"
           }
         },
         "ms": {
