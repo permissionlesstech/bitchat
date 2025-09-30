@@ -234,6 +234,13 @@
             "value": "tautan dibagikan",
             "comment": "Fallback title when saving a shared link"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رابط مشترك",
+            "comment": "Fallback title when saving a shared link"
+          }
         }
       }
     },
@@ -468,6 +475,13 @@
           "stringUnit": {
             "state": "translated",
             "value": "gagal mengodekan tautan",
+            "comment": "Shown when the share payload cannot be encoded"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذر ترميز الرابط",
             "comment": "Shown when the share payload cannot be encoded"
           }
         }
@@ -706,6 +720,13 @@
             "value": "tidak ada konten yang bisa dibagikan",
             "comment": "Shown when provided content cannot be shared"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا محتوى قابلاً للمشاركة",
+            "comment": "Shown when provided content cannot be shared"
+          }
         }
       }
     },
@@ -940,6 +961,13 @@
           "stringUnit": {
             "state": "translated",
             "value": "tidak ada yang bisa dibagikan",
+            "comment": "Shown when the share extension receives no content"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا شيء لمشاركته",
             "comment": "Shown when the share extension receives no content"
           }
         }
@@ -1178,6 +1206,13 @@
             "value": "✓ tautan dikirim ke bitchat",
             "comment": "Confirmation after successfully sharing a link"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ تم إرسال الرابط إلى bitchat",
+            "comment": "Confirmation after successfully sharing a link"
+          }
         }
       }
     },
@@ -1412,6 +1447,13 @@
           "stringUnit": {
             "state": "translated",
             "value": "✓ teks dikirim ke bitchat",
+            "comment": "Confirmation after successfully sharing text"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ تم إرسال النص إلى bitchat",
             "comment": "Confirmation after successfully sharing text"
           }
         }

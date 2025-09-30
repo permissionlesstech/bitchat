@@ -201,6 +201,12 @@
             "state": "translated",
             "value": "bitchat"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat"
+          }
         }
       }
     },
@@ -403,6 +409,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tutup"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إغلاق"
           }
         }
       }
@@ -607,6 +619,12 @@
             "state": "translated",
             "value": "SELESAI"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم"
+          }
         }
       }
     },
@@ -809,6 +827,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "pesan pribadi dienkripsi dengan protokol noise"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الرسائل الخاصة مشفرة ببروتوكول noise"
           }
         }
       }
@@ -1013,6 +1037,12 @@
             "state": "translated",
             "value": "enkripsi ujung ke ujung"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تشفير طرف لطرف"
+          }
         }
       }
     },
@@ -1215,6 +1245,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "pesan diteruskan antar peer sehingga jangkauannya lebih jauh"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يُعاد تمرير الرسائل بين الأقران لتصل لمسافات أبعد"
           }
         }
       }
@@ -1419,6 +1455,12 @@
             "state": "translated",
             "value": "jangkauan diperluas"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نطاق ممتد"
+          }
         }
       }
     },
@@ -1621,6 +1663,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "dapatkan notifikasi saat orang favoritmu bergabung"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تلقَّ تنبيهات عندما ينضم أحباؤك"
           }
         }
       }
@@ -1825,6 +1873,12 @@
             "state": "translated",
             "value": "favorit"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المفضلة"
+          }
         }
       }
     },
@@ -2027,6 +2081,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "kanal geohash untuk ngobrol dengan orang di wilayah sekitar lewat relay anonim terdesentralisasi"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قنوات geohash للدردشة مع أشخاص قريبين عبر مرحلات لامركزية مجهولة"
           }
         }
       }
@@ -2231,6 +2291,12 @@
             "state": "translated",
             "value": "kanal lokal"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قنوات محلية"
+          }
         }
       }
     },
@@ -2433,6 +2499,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "pakai @nickname untuk memberi tahu orang tertentu"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "استخدم @nickname لتنبيه أشخاص محددين"
           }
         }
       }
@@ -2637,6 +2709,12 @@
             "state": "translated",
             "value": "mention"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إشارات"
+          }
         }
       }
     },
@@ -2839,6 +2917,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "bekerja tanpa internet memakai bluetooth low energy"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يعمل بدون إنترنت باستخدام bluetooth منخفض الطاقة"
           }
         }
       }
@@ -3043,6 +3127,12 @@
             "state": "translated",
             "value": "komunikasi offline"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تواصل بدون اتصال"
+          }
         }
       }
     },
@@ -3245,6 +3335,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "FITUR"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مزايا"
           }
         }
       }
@@ -3449,6 +3545,12 @@
             "state": "translated",
             "value": "• ketuk #mesh untuk ganti kanal"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• اضغط #mesh لتغيير القناة"
+          }
         }
       }
     },
@@ -3651,6 +3753,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "• ketuk chat tiga kali untuk menghapus"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• اضغط الدردشة ثلاث مرات للمسح"
           }
         }
       }
@@ -3855,6 +3963,12 @@
             "state": "translated",
             "value": "• ketik / untuk melihat perintah"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• اكتب / لعرض الأوامر"
+          }
         }
       }
     },
@@ -4057,6 +4171,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "• ketuk ikon orang untuk membuka sidebar"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• اضغط أيقونة الأشخاص لفتح الشريط الجانبي"
           }
         }
       }
@@ -4261,6 +4381,12 @@
             "state": "translated",
             "value": "• atur nama panggilanmu dengan mengetuknya"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• اضبط لقبك بلمسه"
+          }
         }
       }
     },
@@ -4463,6 +4589,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "• ketuk nama peer untuk mulai dm"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• اضغط اسم القرين لبدء رسائل خاصة"
           }
         }
       }
@@ -4667,6 +4799,12 @@
             "state": "translated",
             "value": "CARA PAKAI"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "طريقة الاستخدام"
+          }
         }
       }
     },
@@ -4869,6 +5007,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "id peer baru dibuat secara berkala"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يُولد معرف قرين جديد بانتظام"
           }
         }
       }
@@ -5073,6 +5217,12 @@
             "state": "translated",
             "value": "identitas sementara"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هوية مؤقتة"
+          }
         }
       }
     },
@@ -5275,6 +5425,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tanpa server, akun, atau pengumpulan data"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا خوادم أو حسابات أو جمع بيانات"
           }
         }
       }
@@ -5479,6 +5635,12 @@
             "state": "translated",
             "value": "tanpa pelacakan"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا تتبع"
+          }
         }
       }
     },
@@ -5681,6 +5843,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ketuk logo tiga kali untuk langsung menghapus semua data"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اضغط الشعار ثلاث مرات لمسح كل البيانات فوراً"
           }
         }
       }
@@ -5885,6 +6053,12 @@
             "state": "translated",
             "value": "mode panik"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "وضع الذعر"
+          }
         }
       }
     },
@@ -6088,6 +6262,12 @@
             "state": "translated",
             "value": "PRIVASI"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "خصوصية"
+          }
         }
       }
     },
@@ -6287,6 +6467,12 @@
           }
         },
         "ms": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sidegroupchat"
+          }
+        },
+        "ps": {
           "stringUnit": {
             "state": "translated",
             "value": "sidegroupchat"
@@ -6494,6 +6680,12 @@
             "state": "translated",
             "value": "keamanan pesan pribadi belum diaudit sepenuhnya. jangan dipakai untuk situasi kritis sampai peringatan ini hilang."
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أمان الرسائل الخاصة لم يتم تدقيقه بالكامل بعد. لا تستخدمها في الحالات الحرجة حتى يختفي هذا التحذير."
+          }
         }
       }
     },
@@ -6696,6 +6888,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "PERINGATAN"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحذير"
           }
         }
       }
@@ -6900,6 +7098,12 @@
             "state": "translated",
             "value": "batal"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إلغاء"
+          }
         }
       }
     },
@@ -7102,6 +7306,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tutup"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إغلاق"
           }
         }
       }
@@ -7306,6 +7516,12 @@
             "state": "translated",
             "value": "salin"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نسخ"
+          }
         }
       }
     },
@@ -7508,6 +7724,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "OK"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "موافق"
           }
         }
       }
@@ -7712,6 +7934,12 @@
             "state": "translated",
             "value": "mati"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إيقاف"
+          }
         }
       }
     },
@@ -7914,6 +8142,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "nyala"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تشغيل"
           }
         }
       }
@@ -8118,6 +8352,12 @@
             "state": "translated",
             "value": "tidak diketahui"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "غير معروف"
+          }
         }
       }
     },
@@ -8320,6 +8560,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tambah ke favorit"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إضافة إلى المفضلة"
           }
         }
       }
@@ -8524,6 +8770,12 @@
             "state": "translated",
             "value": "tersedia melalui nostr"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "متاح عبر nostr"
+          }
         }
       }
     },
@@ -8726,6 +8978,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "kembali ke chat utama"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عودة إلى الدردشة الرئيسية"
           }
         }
       }
@@ -8930,6 +9188,12 @@
             "state": "translated",
             "value": "terhubung lewat mesh"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "متصل عبر mesh"
+          }
         }
       }
     },
@@ -9132,6 +9396,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "status enkripsi: %@"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حالة التشفير: %@"
           }
         }
       }
@@ -9336,6 +9606,12 @@
             "state": "translated",
             "value": "kanal lokasi"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قنوات الموقع"
+          }
         }
       }
     },
@@ -9539,6 +9815,12 @@
             "state": "translated",
             "value": "catatan lokasi untuk tempat ini"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ملاحظات الموقع لهذا المكان"
+          }
         }
       }
     },
@@ -9741,6 +10023,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "buka chat pribadi belum dibaca"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فتح دردشة خاصة غير مقروءة"
           }
         }
       }
@@ -10461,6 +10749,12 @@
             "state": "translated",
             "value": "%#@people@"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%#@people@"
+          }
         }
       }
     },
@@ -10663,6 +10957,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "chat pribadi dengan %@"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "دردشة خاصة مع %@"
           }
         }
       }
@@ -10867,6 +11167,12 @@
             "state": "translated",
             "value": "dapat dijangkau lewat mesh"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قابل للوصول عبر mesh"
+          }
         }
       }
     },
@@ -11069,6 +11375,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "hapus dari favorit"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إزالة من المفضلة"
           }
         }
       }
@@ -11273,6 +11585,12 @@
             "state": "translated",
             "value": "masukkan pesan untuk dikirim"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أدخل رسالة للإرسال"
+          }
         }
       }
     },
@@ -11475,6 +11793,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ketuk dua kali untuk mengirim"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اضغط مرتين للإرسال"
           }
         }
       }
@@ -11679,6 +12003,12 @@
             "state": "translated",
             "value": "kirim pesan"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إرسال رسالة"
+          }
         }
       }
     },
@@ -11881,6 +12211,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ubah penanda untuk #%@"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تبديل الإشارة لـ #%@"
           }
         }
       }
@@ -12085,6 +12421,12 @@
             "state": "translated",
             "value": "ketuk dua kali untuk mengubah status favorit"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اضغط مرتين لتبديل حالة المفضلة"
+          }
         }
       }
     },
@@ -12287,6 +12629,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ketuk untuk melihat sidik enkripsi"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اضغط لمشاهدة بصمة التشفير"
           }
         }
       }
@@ -12491,6 +12839,12 @@
             "state": "translated",
             "value": "blokir"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حظر"
+          }
         }
       }
     },
@@ -12693,6 +13047,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "pesan langsung"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رسالة مباشرة"
           }
         }
       }
@@ -12897,6 +13257,12 @@
             "state": "translated",
             "value": "peluk"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عناق"
+          }
         }
       }
     },
@@ -13099,6 +13465,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "sebut"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ذكر"
           }
         }
       }
@@ -13303,6 +13675,12 @@
             "state": "translated",
             "value": "tampar"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "صفعة"
+          }
         }
       }
     },
@@ -13505,6 +13883,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "aksi"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إجراءات"
           }
         }
       }
@@ -13709,6 +14093,12 @@
             "state": "translated",
             "value": "bluetooth dimatikan. aktifkan bluetooth di pengaturan untuk memakai bitchat."
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bluetooth متوقف. فعّل bluetooth في الإعدادات لاستخدام bitchat."
+          }
         }
       }
     },
@@ -13911,6 +14301,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "bitchat memerlukan izin bluetooth untuk terhubung dengan perangkat dekat. aktifkan akses di pengaturan."
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحتاج bitchat إلى إذن bluetooth للاتصال بالأجهزة القريبة. فعّل الوصول في الإعدادات."
           }
         }
       }
@@ -14115,6 +14511,12 @@
             "state": "translated",
             "value": "pengaturan"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الإعدادات"
+          }
         }
       }
     },
@@ -14317,6 +14719,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "butuh bluetooth"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مطلوب bluetooth"
           }
         }
       }
@@ -14521,6 +14929,12 @@
             "state": "translated",
             "value": "perangkat ini tidak mendukung bluetooth. bitchat memerlukan bluetooth untuk berjalan."
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا الجهاز لا يدعم bluetooth. يحتاج bitchat إلى bluetooth للعمل."
+          }
         }
       }
     },
@@ -14723,6 +15137,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tangkapan layar kanal lokasi akan mengungkap lokasimu. pikirkan dulu sebelum membagikannya."
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لقطات قنوات الموقع تكشف موقعك. فكر قبل المشاركة علناً."
           }
         }
       }
@@ -14927,6 +15347,12 @@
             "state": "translated",
             "value": "perhatian"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تنبيه"
+          }
         }
       }
     },
@@ -15129,6 +15555,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "blokir atau lihat peer yang diblokir"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حظر أو عرض المحظورين"
           }
         }
       }
@@ -15333,6 +15765,12 @@
             "state": "translated",
             "value": "hapus pesan chat"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مسح رسائل الدردشة"
+          }
         }
       }
     },
@@ -15535,6 +15973,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tambah ke favorit"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إضافة للمفضلة"
           }
         }
       }
@@ -15739,6 +16183,12 @@
             "state": "translated",
             "value": "kirim pelukan hangat"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إرسال عناق دافئ"
+          }
         }
       }
     },
@@ -15941,6 +16391,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "kirim pesan pribadi"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إرسال رسالة خاصة"
           }
         }
       }
@@ -16145,6 +16601,12 @@
             "state": "translated",
             "value": "tampar seseorang dengan ikan trout"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "صفع شخص بسمكة تراوت"
+          }
         }
       }
     },
@@ -16347,6 +16809,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "buka blokir peer"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إلغاء حظر قرين"
           }
         }
       }
@@ -16551,6 +17019,12 @@
             "state": "translated",
             "value": "hapus dari favorit"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إزالة من المفضلة"
+          }
         }
       }
     },
@@ -16753,6 +17227,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "lihat siapa yang online"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عرض من هو متصل"
           }
         }
       }
@@ -16957,6 +17437,12 @@
             "state": "translated",
             "value": "terkirim ke %1$d dari %2$d anggota"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم التسليم إلى %1$d من %2$d عضو"
+          }
         }
       }
     },
@@ -17159,6 +17645,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "terkirim ke %@"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سُلّم إلى %@"
           }
         }
       }
@@ -17363,6 +17855,12 @@
             "state": "translated",
             "value": "gagal: %@"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فشل: %@"
+          }
         }
       }
     },
@@ -17565,6 +18063,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "dibaca oleh %@"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قُرِئ بواسطة %@"
           }
         }
       }
@@ -17769,6 +18273,12 @@
             "state": "translated",
             "value": "pengguna diblokir"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المستخدم محظور"
+          }
         }
       }
     },
@@ -17971,6 +18481,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tidak bisa kirim ke diri sendiri"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن الإرسال لنفسك"
           }
         }
       }
@@ -18175,6 +18691,12 @@
             "state": "translated",
             "value": "kesalahan pengiriman"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "خطأ في الإرسال"
+          }
         }
       }
     },
@@ -18377,6 +18899,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "penerima tidak dikenal"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مستلم غير معروف"
           }
         }
       }
@@ -18581,6 +19109,12 @@
             "state": "translated",
             "value": "peer tidak dapat dijangkau"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "القرين غير متاح"
+          }
         }
       }
     },
@@ -18783,6 +19317,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ORANG"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أشخاص"
           }
         }
       }
@@ -18987,6 +19527,12 @@
             "state": "translated",
             "value": "verifikasi: tampilkan qr-ku atau pindai teman"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التحقق: عرض رمز qr الخاص بي أو مسح صديق"
+          }
         }
       }
     },
@@ -19189,6 +19735,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ketik pesan..."
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اكتب رسالة..."
           }
         }
       }
@@ -19393,6 +19945,12 @@
             "state": "translated",
             "value": "nama panggilan"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لقب"
+          }
         }
       }
     },
@@ -19595,6 +20153,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "aktifkan lokasi"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تفعيل الموقع"
           }
         }
       }
@@ -19799,6 +20363,12 @@
             "state": "translated",
             "value": "salin pesan"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نسخ الرسالة"
+          }
         }
       }
     },
@@ -20001,6 +20571,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tampilkan lebih sedikit"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عرض أقل"
           }
         }
       }
@@ -20205,6 +20781,12 @@
             "state": "translated",
             "value": "tampilkan lebih banyak"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عرض المزيد"
+          }
         }
       }
     },
@@ -20407,6 +20989,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "lokasi tidak tersedia"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الموقع غير متاح"
           }
         }
       }
@@ -20611,6 +21199,12 @@
             "state": "translated",
             "value": "catatan"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ملاحظات"
+          }
         }
       }
     },
@@ -20813,6 +21407,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "bayar via cashu"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الدفع عبر cashu"
           }
         }
       }
@@ -21017,6 +21617,12 @@
             "state": "translated",
             "value": "bayar via lightning"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الدفع عبر lightning"
+          }
         }
       }
     },
@@ -21219,6 +21825,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "menyiapkan enkripsi"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جار إعداد التشفير"
           }
         }
       }
@@ -21423,6 +22035,12 @@
             "state": "translated",
             "value": "enkripsi gagal"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فشل التشفير"
+          }
         }
       }
     },
@@ -21625,6 +22243,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tidak terenkripsi"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "غير مشفر"
           }
         }
       }
@@ -21829,6 +22453,12 @@
             "state": "translated",
             "value": "terenkripsi"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مشفر"
+          }
         }
       }
     },
@@ -22031,6 +22661,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "terenkripsi dan terverifikasi"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مشفر ومُتحقق"
           }
         }
       }
@@ -22235,6 +22871,12 @@
             "state": "translated",
             "value": "menyiapkan enkripsi..."
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جار إعداد التشفير..."
+          }
         }
       }
     },
@@ -22437,6 +23079,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "enkripsi gagal"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فشل التشفير"
           }
         }
       }
@@ -22641,6 +23289,12 @@
             "state": "translated",
             "value": "tidak terenkripsi"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "غير مشفر"
+          }
         }
       }
     },
@@ -22843,6 +23497,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "terenkripsi"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مشفر"
           }
         }
       }
@@ -23047,6 +23707,12 @@
             "state": "translated",
             "value": "terenkripsi dan terverifikasi"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مشفر ومُتحقق"
+          }
         }
       }
     },
@@ -23249,6 +23915,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tandai sebagai terverifikasi"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "وضع علامة تم التحقق"
           }
         }
       }
@@ -23453,6 +24125,12 @@
             "state": "translated",
             "value": "hapus verifikasi"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إزالة التحقق"
+          }
         }
       }
     },
@@ -23655,6 +24333,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "⚠️ BELUM TERVERIFIKASI"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⚠️ غير مُتحقق"
           }
         }
       }
@@ -23859,6 +24543,12 @@
             "state": "translated",
             "value": "✓ TERVERIFIKASI"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ مُتحقق"
+          }
         }
       }
     },
@@ -24061,6 +24751,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tidak tersedia - handshake sedang berlangsung"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "غير متاح - جار تنفيذ handshake"
           }
         }
       }
@@ -24265,6 +24961,12 @@
             "state": "translated",
             "value": "kamu sudah memverifikasi identitas orang ini."
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لقد تحققت من هوية هذا الشخص."
+          }
         }
       }
     },
@@ -24467,6 +25169,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "bandingkan sidik ini dengan %@ lewat kanal aman."
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قارن هذه البصمات مع %@ عبر قناة آمنة."
           }
         }
       }
@@ -24671,6 +25379,12 @@
             "state": "translated",
             "value": "sidik mereka:"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بصمتهم:"
+          }
         }
       }
     },
@@ -24873,6 +25587,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "verifikasi keamanan"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحقق الأمان"
           }
         }
       }
@@ -25077,6 +25797,12 @@
             "state": "translated",
             "value": "sidikmu:"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بصمتك:"
+          }
         }
       }
     },
@@ -25279,6 +26005,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "blokir"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حظر"
           }
         }
       }
@@ -25483,6 +26215,12 @@
             "state": "translated",
             "value": "buka blokir"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إلغاء الحظر"
+          }
         }
       }
     },
@@ -25685,6 +26423,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tidak ada siapa pun..."
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا أحد قريب..."
           }
         }
       }
@@ -25889,6 +26633,12 @@
             "state": "translated",
             "value": "diblokir di geohash"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "محظور في geohash"
+          }
         }
       }
     },
@@ -26091,6 +26841,12 @@
           "stringUnit": {
             "state": "translated",
             "value": " (kamu)"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " (أنت)"
           }
         }
       }
@@ -26295,6 +27051,12 @@
             "state": "translated",
             "value": "buka pengaturan"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فتح الإعدادات"
+          }
         }
       }
     },
@@ -26497,6 +27259,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "cabut akses lokasi"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إزالة صلاحية الموقع"
           }
         }
       }
@@ -26701,6 +27469,12 @@
             "state": "translated",
             "value": "ambil lokasiku dan geohash"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جلب موقعي و geohash"
+          }
         }
       }
     },
@@ -26903,6 +27677,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "teleport"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "انتقال فوري"
           }
         }
       }
@@ -27107,6 +27887,12 @@
             "state": "translated",
             "value": "disimpan"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "محفوظ"
+          }
         }
       }
     },
@@ -27309,6 +28095,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ngobrol dengan orang terdekat lewat kanal geohash. hanya geohash kasar yang dibagikan, tidak pernah gps tepat. alamat ip-mu tersembunyi karena seluruh trafik lewat tor."
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحدث مع أشخاص قريبين عبر قنوات geohash. نشارك geohash تقريبي فقط، وليس gps الدقيق. يتم إخفاء عنوان ip لأن كل المرور يمر عبر tor."
           }
         }
       }
@@ -27513,6 +28305,12 @@
             "state": "translated",
             "value": "geohash tidak valid"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "geohash غير صالح"
+          }
         }
       }
     },
@@ -27716,6 +28514,12 @@
             "state": "translated",
             "value": "mencari kanal sekitar…"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جار البحث عن قنوات قريبة…"
+          }
         }
       }
     },
@@ -27915,6 +28719,12 @@
           }
         },
         "ms": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh"
+          }
+        },
+        "ps": {
           "stringUnit": {
             "state": "translated",
             "value": "mesh"
@@ -28121,6 +28931,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "izin lokasi ditolak. aktifkan di pengaturan untuk memakai kanal lokasi."
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم رفض إذن الموقع. فعّله في الإعدادات لاستخدام قنوات الموقع."
           }
         }
       }
@@ -28841,6 +29657,12 @@
             "state": "translated",
             "value": "%1$@ [%2$#@people_count@]"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ [%2$#@people_count@]"
+          }
         }
       }
     },
@@ -29040,6 +29862,12 @@
           }
         },
         "ms": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%@ • %@"
+          }
+        },
+        "ps": {
           "stringUnit": {
             "state": "translated",
             "value": "#%@ • %@"
@@ -29247,6 +30075,12 @@
             "state": "translated",
             "value": "%1$@ • %2$@"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ • %2$@"
+          }
         }
       }
     },
@@ -29449,6 +30283,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "#kanal lokasi"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#قنوات الموقع"
           }
         }
       }
@@ -29653,6 +30493,12 @@
             "state": "translated",
             "value": "menyembunyikan ip-mu untuk kanal lokasi. disarankan: aktif."
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يخفي ip لقنوات الموقع. الموصى به: تشغيل."
+          }
         }
       }
     },
@@ -29855,6 +30701,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "perutean tor"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "توجيه tor"
           }
         }
       }
@@ -30059,6 +30911,12 @@
             "state": "translated",
             "value": "blok"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مربع"
+          }
         }
       }
     },
@@ -30261,6 +31119,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "gedung"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مبنى"
           }
         }
       }
@@ -30465,6 +31329,12 @@
             "state": "translated",
             "value": "kota"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مدينة"
+          }
         }
       }
     },
@@ -30667,6 +31537,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "lingkungan"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حي"
           }
         }
       }
@@ -30871,6 +31747,12 @@
             "state": "translated",
             "value": "provinsi"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مقاطعة"
+          }
         }
       }
     },
@@ -31073,6 +31955,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "wilayah"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "منطقة"
           }
         }
       }
@@ -31277,6 +32165,12 @@
             "state": "translated",
             "value": "tutup"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إغلاق"
+          }
         }
       }
     },
@@ -31479,6 +32373,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "coba lagi"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إعادة المحاولة"
           }
         }
       }
@@ -31683,6 +32583,12 @@
             "state": "translated",
             "value": "tambahkan catatan permanen singkat di tempat ini agar orang lain menemukannya."
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أضف ملاحظات قصيرة دائمة لهذا المكان ليجدها الآخرون."
+          }
         }
       }
     },
@@ -31885,6 +32791,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "jadilah orang pertama yang menambahkannya di sini."
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كن أول من يضيف هنا."
           }
         }
       }
@@ -32089,6 +33001,12 @@
             "state": "translated",
             "value": "belum ada catatan"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا توجد ملاحظات بعد"
+          }
         }
       }
     },
@@ -32292,6 +33210,12 @@
             "state": "translated",
             "value": "tidak bisa mengirim catatan. %@"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذر إرسال الملاحظة. %@"
+          }
         }
       }
     },
@@ -32494,6 +33418,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tidak ada relay geo tersedia dekat sini. coba lagi nanti."
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا توجد مرحلات جغرافية قريبة من هذا المكان. حاول لاحقاً."
           }
         }
       }
@@ -33214,6 +34144,12 @@
             "state": "translated",
             "value": "#%1$@ • %2$#@note_count@"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%1$@ • %2$#@note_count@"
+          }
         }
       }
     },
@@ -33416,6 +34352,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "memuat catatan…"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جار تحميل الملاحظات…"
           }
         }
       }
@@ -33620,6 +34562,12 @@
             "state": "translated",
             "value": "memuat catatan terbaru…"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جار تحميل الملاحظات الحديثة…"
+          }
         }
       }
     },
@@ -33822,6 +34770,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tidak ada relay geo di dekatmu"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا مرحلات جغرافية قريبة"
           }
         }
       }
@@ -34026,6 +34980,12 @@
             "state": "translated",
             "value": "tambahkan catatan untuk tempat ini"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أضف ملاحظة لهذا المكان"
+          }
         }
       }
     },
@@ -34228,6 +35188,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "relay geo tidak tersedia; catatan dijeda"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المرحلات الجغرافية غير متاحة؛ الملاحظات متوقفة"
           }
         }
       }
@@ -34432,6 +35398,12 @@
             "state": "translated",
             "value": "catatan bergantung pada relay geo. cek koneksi lalu coba lagi."
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الملاحظات تعتمد على المرحلات الجغرافية. تحقق من الاتصال ثم أعد المحاولة."
+          }
         }
       }
     },
@@ -34634,6 +35606,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "pesan baru"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رسائل جديدة"
           }
         }
       }
@@ -34838,6 +35816,12 @@
             "state": "translated",
             "value": "tidak bisa mulai chat dengan %@: pengguna diblokir."
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن بدء دردشة مع %@: المستخدم محظور."
+          }
         }
       }
     },
@@ -35040,6 +36024,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tidak bisa mulai chat dengan %@: butuh favorit bersama untuk offline."
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن بدء دردشة مع %@: يجب أن تكونا مفضلين متبادلين للتشغيل بدون اتصال."
           }
         }
       }
@@ -35244,6 +36234,12 @@
             "state": "translated",
             "value": "pengguna"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مستخدم"
+          }
         }
       }
     },
@@ -35446,6 +36442,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tidak bisa mengirim: pengguna diblokir."
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذر الإرسال: المستخدم محظور."
           }
         }
       }
@@ -35650,6 +36652,12 @@
             "state": "translated",
             "value": "tidak bisa mengirim ke %@: pengguna diblokir."
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن الإرسال إلى %@: المستخدم محظور."
+          }
         }
       }
     },
@@ -35852,6 +36860,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tidak bisa mengirim ke %@: penerima tidak dapat dijangkau lewat mesh atau nostr."
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن الإرسال إلى %@: المستلم غير متاح عبر mesh أو nostr."
           }
         }
       }
@@ -36056,6 +37070,12 @@
             "state": "translated",
             "value": "%@ diblokir di chat geohash"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم حظر %@ في محادثات geohash"
+          }
         }
       }
     },
@@ -36258,6 +37278,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ dibuka blokirnya di chat geohash"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم إلغاء حظر %@ في محادثات geohash"
           }
         }
       }
@@ -36462,6 +37488,12 @@
             "state": "translated",
             "value": "gagal mengirim: kamu tidak berada di kanal lokasi"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذر الإرسال: لست داخل قناة موقع"
+          }
         }
       }
     },
@@ -36664,6 +37696,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "gagal mengirim ke kanal lokasi"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذر الإرسال إلى قناة الموقع"
           }
         }
       }
@@ -36868,6 +37906,12 @@
             "state": "translated",
             "value": "build pengembangan: bypass tor aktif."
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بناء تطوير: تجاوز tor مفعل."
+          }
         }
       }
     },
@@ -37070,6 +38114,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tor dimulai ulang. perutean dipulihkan."
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tor أُعيد تشغيله. تمت استعادة التوجيه."
           }
         }
       }
@@ -37274,6 +38324,12 @@
             "state": "translated",
             "value": "tor sedang dimulai ulang untuk memulihkan konektivitas..."
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tor يعاد تشغيله لاستعادة الاتصال..."
+          }
         }
       }
     },
@@ -37476,6 +38532,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tor berjalan. seluruh chat dirutekan lewat tor demi privasi."
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tor يعمل. كل الدردشة تمر عبر tor للخصوصية."
           }
         }
       }
@@ -37680,6 +38742,12 @@
             "state": "translated",
             "value": "menjalankan tor..."
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يتم تشغيل tor..."
+          }
         }
       }
     },
@@ -37882,6 +38950,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "kode qr verifikasi"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رمز qr للتحقق"
           }
         }
       }
@@ -38086,6 +39160,12 @@
             "state": "translated",
             "value": "pindai untuk verifikasi"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "امسح للتحقق مني"
+          }
         }
       }
     },
@@ -38288,6 +39368,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "qr tidak tersedia"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "qr غير متاح"
           }
         }
       }
@@ -38492,6 +39578,12 @@
             "state": "translated",
             "value": "tempel konten qr untuk validasi:"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الصق محتوى qr للتحقق:"
+          }
         }
       }
     },
@@ -38694,6 +39786,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "pindai qr teman"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "امسح qr لصديق"
           }
         }
       }
@@ -38898,6 +39996,12 @@
             "state": "translated",
             "value": "qr tidak valid atau kedaluwarsa"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "qr غير صالح أو منتهٍ"
+          }
         }
       }
     },
@@ -39100,6 +40204,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tidak ada peer yang cocok"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم يتم العثور على قرين مطابق"
           }
         }
       }
@@ -39304,6 +40414,12 @@
             "state": "translated",
             "value": "verifikasi diminta untuk %@"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم طلب التحقق لـ %@"
+          }
         }
       }
     },
@@ -39506,6 +40622,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "validasi"
+          }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحقق"
           }
         }
       }
@@ -39710,6 +40832,12 @@
             "state": "translated",
             "value": "VERIFIKASI"
           }
+        },
+        "ps": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحقق"
+          }
         }
       }
     },
@@ -39911,6 +41039,12 @@
           }
         },
         "ms": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@"
+          }
+        },
+        "ps": {
           "stringUnit": {
             "state": "translated",
             "value": "%@"
