@@ -199,6 +199,13 @@
             "value": "分享的链接",
             "comment": "Fallback title when saving a shared link"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tautan dibagikan",
+            "comment": "Fallback title when saving a shared link"
+          }
         }
       }
     },
@@ -398,6 +405,13 @@
           "stringUnit": {
             "state": "translated",
             "value": "无法编码链接",
+            "comment": "Shown when the share payload cannot be encoded"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "gagal mengodekan tautan",
             "comment": "Shown when the share payload cannot be encoded"
           }
         }
@@ -601,6 +615,13 @@
             "value": "没有可分享的素材",
             "comment": "Shown when provided content cannot be shared"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tidak ada konten yang bisa dibagikan",
+            "comment": "Shown when provided content cannot be shared"
+          }
         }
       }
     },
@@ -800,6 +821,13 @@
           "stringUnit": {
             "state": "translated",
             "value": "没有可分享的内容",
+            "comment": "Shown when the share extension receives no content"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tidak ada yang bisa dibagikan",
             "comment": "Shown when the share extension receives no content"
           }
         }
@@ -1003,6 +1031,13 @@
             "value": "✓ 已将链接分享至 bitchat",
             "comment": "Confirmation after successfully sharing a link"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ tautan dikirim ke bitchat",
+            "comment": "Confirmation after successfully sharing a link"
+          }
         }
       }
     },
@@ -1202,6 +1237,13 @@
           "stringUnit": {
             "state": "translated",
             "value": "✓ 已将文本分享至 bitchat",
+            "comment": "Confirmation after successfully sharing text"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ teks dikirim ke bitchat",
             "comment": "Confirmation after successfully sharing text"
           }
         }

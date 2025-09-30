@@ -171,6 +171,12 @@
             "state": "translated",
             "value": "bitchat"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat"
+          }
         }
       }
     },
@@ -343,6 +349,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "关闭"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tutup"
           }
         }
       }
@@ -517,6 +529,12 @@
             "state": "translated",
             "value": "完成"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SELESAI"
+          }
         }
       }
     },
@@ -689,6 +707,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "使用噪声协议加密私人消息"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "pesan pribadi dienkripsi dengan protokol noise"
           }
         }
       }
@@ -863,6 +887,12 @@
             "state": "translated",
             "value": "端到端加密"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "enkripsi ujung ke ujung"
+          }
         }
       }
     },
@@ -1035,6 +1065,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "消息通过对等节点中继，传输距离更远"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "pesan diteruskan antar peer sehingga jangkauannya lebih jauh"
           }
         }
       }
@@ -1209,6 +1245,12 @@
             "state": "translated",
             "value": "扩展范围"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "jangkauan diperluas"
+          }
         }
       }
     },
@@ -1381,6 +1423,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "当您喜爱的人加入时获得通知"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "dapatkan notifikasi saat orang favoritmu bergabung"
           }
         }
       }
@@ -1555,6 +1603,12 @@
             "state": "translated",
             "value": "收藏夹"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "favorit"
+          }
         }
       }
     },
@@ -1727,6 +1781,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "地理哈希频道，通过去中心化匿名中继与附近地区的人聊天"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kanal geohash untuk ngobrol dengan orang di wilayah sekitar lewat relay anonim terdesentralisasi"
           }
         }
       }
@@ -1901,6 +1961,12 @@
             "state": "translated",
             "value": "地理哈希频道"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kanal lokal"
+          }
         }
       }
     },
@@ -2073,6 +2139,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "使用@符号提及其他用户"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "pakai @nickname untuk memberi tahu orang tertentu"
           }
         }
       }
@@ -2247,6 +2319,12 @@
             "state": "translated",
             "value": "提及"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mention"
+          }
         }
       }
     },
@@ -2419,6 +2497,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "无需互联网即可与附近的人聊天"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bekerja tanpa internet memakai bluetooth low energy"
           }
         }
       }
@@ -2593,6 +2677,12 @@
             "state": "translated",
             "value": "离线通信"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "komunikasi offline"
+          }
         }
       }
     },
@@ -2765,6 +2855,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "功能"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FITUR"
           }
         }
       }
@@ -2939,6 +3035,12 @@
             "state": "translated",
             "value": "输入 #geohash 切换频道"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• ketuk #mesh untuk ganti kanal"
+          }
         }
       }
     },
@@ -3111,6 +3213,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "输入 /clear 清除聊天记录"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• ketuk chat tiga kali untuk menghapus"
           }
         }
       }
@@ -3285,6 +3393,12 @@
             "state": "translated",
             "value": "输入 /help 查看所有命令"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• ketik / untuk melihat perintah"
+          }
         }
       }
     },
@@ -3457,6 +3571,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "点击人数打开侧边栏"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• ketuk ikon orang untuk membuka sidebar"
           }
         }
       }
@@ -3631,6 +3751,12 @@
             "state": "translated",
             "value": "输入 /nick 昵称 设置昵称"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• atur nama panggilanmu dengan mengetuknya"
+          }
         }
       }
     },
@@ -3803,6 +3929,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "点击用户名开始私聊"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• ketuk nama peer untuk mulai dm"
           }
         }
       }
@@ -3977,6 +4109,12 @@
             "state": "translated",
             "value": "使用方法"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CARA PAKAI"
+          }
         }
       }
     },
@@ -4149,6 +4287,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "消息不会永久存储"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "id peer baru dibuat secara berkala"
           }
         }
       }
@@ -4323,6 +4467,12 @@
             "state": "translated",
             "value": "临时消息"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "identitas sementara"
+          }
         }
       }
     },
@@ -4495,6 +4645,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "无分析、无跟踪、无广告"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tanpa server, akun, atau pengumpulan data"
           }
         }
       }
@@ -4669,6 +4825,12 @@
             "state": "translated",
             "value": "无跟踪"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tanpa pelacakan"
+          }
         }
       }
     },
@@ -4841,6 +5003,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "摇晃设备清除所有数据"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ketuk logo tiga kali untuk langsung menghapus semua data"
           }
         }
       }
@@ -5015,6 +5183,12 @@
             "state": "translated",
             "value": "紧急删除"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mode panik"
+          }
         }
       }
     },
@@ -5187,6 +5361,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "隐私"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PRIVASI"
           }
         }
       }
@@ -5361,6 +5541,12 @@
             "state": "translated",
             "value": "去中心化聊天"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sidegroupchat"
+          }
         }
       }
     },
@@ -5533,6 +5719,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "这是实验性软件。请勿用于重要通信。"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "keamanan pesan pribadi belum diaudit sepenuhnya. jangan dipakai untuk situasi kritis sampai peringatan ini hilang."
           }
         }
       }
@@ -5707,6 +5899,12 @@
             "state": "translated",
             "value": "警告"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PERINGATAN"
+          }
         }
       }
     },
@@ -5879,6 +6077,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "取消"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "batal"
           }
         }
       }
@@ -6053,6 +6257,12 @@
             "state": "translated",
             "value": "关闭"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tutup"
+          }
         }
       }
     },
@@ -6225,6 +6435,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "复制"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "salin"
           }
         }
       }
@@ -6399,6 +6615,12 @@
             "state": "translated",
             "value": "确定"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
         }
       }
     },
@@ -6571,6 +6793,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "关闭"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mati"
           }
         }
       }
@@ -6745,6 +6973,12 @@
             "state": "translated",
             "value": "开启"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nyala"
+          }
         }
       }
     },
@@ -6917,6 +7151,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "未知"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tidak diketahui"
           }
         }
       }
@@ -7091,6 +7331,12 @@
             "state": "translated",
             "value": "添加到收藏夹"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tambah ke favorit"
+          }
         }
       }
     },
@@ -7263,6 +7509,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "可通过nostr访问"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tersedia melalui nostr"
           }
         }
       }
@@ -7437,6 +7689,12 @@
             "state": "translated",
             "value": "返回主聊天"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kembali ke chat utama"
+          }
         }
       }
     },
@@ -7609,6 +7867,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "已连接到网格"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "terhubung lewat mesh"
           }
         }
       }
@@ -7783,6 +8047,12 @@
             "state": "translated",
             "value": "加密状态：%@"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "status enkripsi: %@"
+          }
         }
       }
     },
@@ -7955,6 +8225,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "位置频道"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kanal lokasi"
           }
         }
       }
@@ -8129,6 +8405,12 @@
             "state": "translated",
             "value": "位置笔记"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "catatan lokasi untuk tempat ini"
+          }
         }
       }
     },
@@ -8301,6 +8583,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "打开未读私聊"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "buka chat pribadi belum dibaca"
           }
         }
       }
@@ -8991,6 +9279,12 @@
             "state": "translated",
             "value": "%#@people@"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%#@people@"
+          }
         }
       }
     },
@@ -9163,6 +9457,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "与 %@ 的私聊"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "chat pribadi dengan %@"
           }
         }
       }
@@ -9337,6 +9637,12 @@
             "state": "translated",
             "value": "可通过网格访问"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "dapat dijangkau lewat mesh"
+          }
         }
       }
     },
@@ -9509,6 +9815,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "从收藏夹移除"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hapus dari favorit"
           }
         }
       }
@@ -9683,6 +9995,12 @@
             "state": "translated",
             "value": "输入消息后发送"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "masukkan pesan untuk dikirim"
+          }
         }
       }
     },
@@ -9855,6 +10173,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "发送消息"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ketuk dua kali untuk mengirim"
           }
         }
       }
@@ -10029,6 +10353,12 @@
             "state": "translated",
             "value": "发送消息"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kirim pesan"
+          }
         }
       }
     },
@@ -10201,6 +10531,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "切换 #%@ 的书签"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ubah penanda untuk #%@"
           }
         }
       }
@@ -10375,6 +10711,12 @@
             "state": "translated",
             "value": "切换收藏夹提示"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ketuk dua kali untuk mengubah status favorit"
+          }
         }
       }
     },
@@ -10547,6 +10889,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "查看指纹提示"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ketuk untuk melihat sidik enkripsi"
           }
         }
       }
@@ -10721,6 +11069,12 @@
             "state": "translated",
             "value": "屏蔽"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "blokir"
+          }
         }
       }
     },
@@ -10893,6 +11247,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "私信"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "pesan langsung"
           }
         }
       }
@@ -11067,6 +11427,12 @@
             "state": "translated",
             "value": "拥抱"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "peluk"
+          }
         }
       }
     },
@@ -11239,6 +11605,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "提及"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sebut"
           }
         }
       }
@@ -11413,6 +11785,12 @@
             "state": "translated",
             "value": "拍打"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tampar"
+          }
         }
       }
     },
@@ -11585,6 +11963,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "操作"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "aksi"
           }
         }
       }
@@ -11759,6 +12143,12 @@
             "state": "translated",
             "value": "蓝牙已关闭。请在设置中开启蓝牙。"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bluetooth dimatikan. aktifkan bluetooth di pengaturan untuk memakai bitchat."
+          }
         }
       }
     },
@@ -11931,6 +12321,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "bitchat需要蓝牙权限来连接附近的设备。请在设置中启用访问权限。"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat memerlukan izin bluetooth untuk terhubung dengan perangkat dekat. aktifkan akses di pengaturan."
           }
         }
       }
@@ -12105,6 +12501,12 @@
             "state": "translated",
             "value": "设置"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "pengaturan"
+          }
         }
       }
     },
@@ -12277,6 +12679,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "需要蓝牙"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "butuh bluetooth"
           }
         }
       }
@@ -12451,6 +12859,12 @@
             "state": "translated",
             "value": "此设备不支持蓝牙。"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "perangkat ini tidak mendukung bluetooth. bitchat memerlukan bluetooth untuk berjalan."
+          }
         }
       }
     },
@@ -12623,6 +13037,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "截图可能会暴露您的身份和位置。"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tangkapan layar kanal lokasi akan mengungkap lokasimu. pikirkan dulu sebelum membagikannya."
           }
         }
       }
@@ -12797,6 +13217,12 @@
             "state": "translated",
             "value": "隐私警告"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "perhatian"
+          }
         }
       }
     },
@@ -12969,6 +13395,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "屏蔽用户"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "blokir atau lihat peer yang diblokir"
           }
         }
       }
@@ -13143,6 +13575,12 @@
             "state": "translated",
             "value": "清除聊天记录"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hapus pesan chat"
+          }
         }
       }
     },
@@ -13315,6 +13753,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "添加到收藏夹"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tambah ke favorit"
           }
         }
       }
@@ -13489,6 +13933,12 @@
             "state": "translated",
             "value": "拥抱某人"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kirim pelukan hangat"
+          }
         }
       }
     },
@@ -13661,6 +14111,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "发送私信"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kirim pesan pribadi"
           }
         }
       }
@@ -13835,6 +14291,12 @@
             "state": "translated",
             "value": "拍打某人"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tampar seseorang dengan ikan trout"
+          }
         }
       }
     },
@@ -14007,6 +14469,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "取消屏蔽用户"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "buka blokir peer"
           }
         }
       }
@@ -14181,6 +14649,12 @@
             "state": "translated",
             "value": "从收藏夹移除"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hapus dari favorit"
+          }
         }
       }
     },
@@ -14353,6 +14827,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "显示在线用户"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "lihat siapa yang online"
           }
         }
       }
@@ -14527,6 +15007,12 @@
             "state": "translated",
             "value": "已送达 %2$d 个成员中的 %1$d 个"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "terkirim ke %1$d dari %2$d anggota"
+          }
         }
       }
     },
@@ -14699,6 +15185,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "已送达给 %@"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "terkirim ke %@"
           }
         }
       }
@@ -14873,6 +15365,12 @@
             "state": "translated",
             "value": "失败：%@"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "gagal: %@"
+          }
         }
       }
     },
@@ -15045,6 +15543,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "已被 %@ 阅读"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "dibaca oleh %@"
           }
         }
       }
@@ -15219,6 +15723,12 @@
             "state": "translated",
             "value": "被屏蔽"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "pengguna diblokir"
+          }
         }
       }
     },
@@ -15391,6 +15901,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "自己"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tidak bisa kirim ke diri sendiri"
           }
         }
       }
@@ -15565,6 +16081,12 @@
             "state": "translated",
             "value": "发送错误"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kesalahan pengiriman"
+          }
         }
       }
     },
@@ -15737,6 +16259,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "未知收件人"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "penerima tidak dikenal"
           }
         }
       }
@@ -15911,6 +16439,12 @@
             "state": "translated",
             "value": "无法到达"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "peer tidak dapat dijangkau"
+          }
         }
       }
     },
@@ -16083,6 +16617,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "人员"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ORANG"
           }
         }
       }
@@ -16257,6 +16797,12 @@
             "state": "translated",
             "value": "验证指纹以确保安全通信"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verifikasi: tampilkan qr-ku atau pindai teman"
+          }
         }
       }
     },
@@ -16429,6 +16975,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "输入消息..."
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ketik pesan..."
           }
         }
       }
@@ -16603,6 +17155,12 @@
             "state": "translated",
             "value": "设置昵称"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nama panggilan"
+          }
         }
       }
     },
@@ -16775,6 +17333,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "启用位置服务"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "aktifkan lokasi"
           }
         }
       }
@@ -16949,6 +17513,12 @@
             "state": "translated",
             "value": "复制消息"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "salin pesan"
+          }
         }
       }
     },
@@ -17121,6 +17691,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "显示更少"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tampilkan lebih sedikit"
           }
         }
       }
@@ -17295,6 +17871,12 @@
             "state": "translated",
             "value": "显示更多"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tampilkan lebih banyak"
+          }
         }
       }
     },
@@ -17467,6 +18049,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "位置不可用"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "lokasi tidak tersedia"
           }
         }
       }
@@ -17641,6 +18229,12 @@
             "state": "translated",
             "value": "笔记"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "catatan"
+          }
         }
       }
     },
@@ -17813,6 +18407,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cashu支付"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bayar via cashu"
           }
         }
       }
@@ -17987,6 +18587,12 @@
             "state": "translated",
             "value": "闪电网络支付"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bayar via lightning"
+          }
         }
       }
     },
@@ -18159,6 +18765,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在建立加密"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "menyiapkan enkripsi"
           }
         }
       }
@@ -18333,6 +18945,12 @@
             "state": "translated",
             "value": "加密失败"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "enkripsi gagal"
+          }
         }
       }
     },
@@ -18505,6 +19123,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "未加密"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tidak terenkripsi"
           }
         }
       }
@@ -18679,6 +19303,12 @@
             "state": "translated",
             "value": "已加密"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "terenkripsi"
+          }
         }
       }
     },
@@ -18851,6 +19481,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "已验证"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "terenkripsi dan terverifikasi"
           }
         }
       }
@@ -19025,6 +19661,12 @@
             "state": "translated",
             "value": "正在建立"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "menyiapkan enkripsi..."
+          }
         }
       }
     },
@@ -19197,6 +19839,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "失败"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "enkripsi gagal"
           }
         }
       }
@@ -19371,6 +20019,12 @@
             "state": "translated",
             "value": "未加密"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tidak terenkripsi"
+          }
         }
       }
     },
@@ -19543,6 +20197,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "已加密"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "terenkripsi"
           }
         }
       }
@@ -19717,6 +20377,12 @@
             "state": "translated",
             "value": "已验证"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "terenkripsi dan terverifikasi"
+          }
         }
       }
     },
@@ -19889,6 +20555,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "标记为已验证"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tandai sebagai terverifikasi"
           }
         }
       }
@@ -20063,6 +20735,12 @@
             "state": "translated",
             "value": "移除验证"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hapus verifikasi"
+          }
         }
       }
     },
@@ -20235,6 +20913,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "⚠️ 未验证"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⚠️ BELUM TERVERIFIKASI"
           }
         }
       }
@@ -20409,6 +21093,12 @@
             "state": "translated",
             "value": "✓ 已验证"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ TERVERIFIKASI"
+          }
         }
       }
     },
@@ -20581,6 +21271,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "握手待处理"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tidak tersedia - handshake sedang berlangsung"
           }
         }
       }
@@ -20755,6 +21451,12 @@
             "state": "translated",
             "value": "已验证指纹"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kamu sudah memverifikasi identitas orang ini."
+          }
         }
       }
     },
@@ -20927,6 +21629,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "通过安全渠道与 %@ 比较这些指纹。"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bandingkan sidik ini dengan %@ lewat kanal aman."
           }
         }
       }
@@ -21101,6 +21809,12 @@
             "state": "translated",
             "value": "他们的指纹"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sidik mereka:"
+          }
         }
       }
     },
@@ -21273,6 +21987,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "指纹"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verifikasi keamanan"
           }
         }
       }
@@ -21447,6 +22167,12 @@
             "state": "translated",
             "value": "您的指纹"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sidikmu:"
+          }
         }
       }
     },
@@ -21619,6 +22345,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "屏蔽"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "blokir"
           }
         }
       }
@@ -21793,6 +22525,12 @@
             "state": "translated",
             "value": "取消屏蔽"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "buka blokir"
+          }
         }
       }
     },
@@ -21965,6 +22703,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "附近没有人"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tidak ada siapa pun..."
           }
         }
       }
@@ -22139,6 +22883,12 @@
             "state": "translated",
             "value": "已屏蔽"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "diblokir di geohash"
+          }
         }
       }
     },
@@ -22311,6 +23061,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "（您）"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " (kamu)"
           }
         }
       }
@@ -22485,6 +23241,12 @@
             "state": "translated",
             "value": "打开设置"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "buka pengaturan"
+          }
         }
       }
     },
@@ -22657,6 +23419,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "移除访问权限"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cabut akses lokasi"
           }
         }
       }
@@ -22831,6 +23599,12 @@
             "state": "translated",
             "value": "请求权限"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ambil lokasiku dan geohash"
+          }
         }
       }
     },
@@ -23003,6 +23777,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "传送"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "teleport"
           }
         }
       }
@@ -23177,6 +23957,12 @@
             "state": "translated",
             "value": "已收藏"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "disimpan"
+          }
         }
       }
     },
@@ -23349,6 +24135,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "基于位置的聊天频道"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ngobrol dengan orang terdekat lewat kanal geohash. hanya geohash kasar yang dibagikan, tidak pernah gps tepat. alamat ip-mu tersembunyi karena seluruh trafik lewat tor."
           }
         }
       }
@@ -23523,6 +24315,12 @@
             "state": "translated",
             "value": "无效的地理哈希"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "geohash tidak valid"
+          }
         }
       }
     },
@@ -23695,6 +24493,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在加载附近的频道"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mencari kanal sekitar…"
           }
         }
       }
@@ -23869,6 +24673,12 @@
             "state": "translated",
             "value": "网格"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mesh"
+          }
         }
       }
     },
@@ -24041,6 +24851,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "权限被拒绝"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "izin lokasi ditolak. aktifkan di pengaturan untuk memakai kanal lokasi."
           }
         }
       }
@@ -24731,6 +25547,12 @@
             "state": "translated",
             "value": "%1$@ [%2$#@people_count@]"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ [%2$#@people_count@]"
+          }
         }
       }
     },
@@ -24904,6 +25726,12 @@
             "state": "translated",
             "value": "#%1$@ • %2$@"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%@ • %@"
+          }
         }
       }
     },
@@ -25073,6 +25901,12 @@
           }
         },
         "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ • %2$@"
+          }
+        },
+        "fil": {
           "stringUnit": {
             "state": "translated",
             "value": "%1$@ • %2$@"
@@ -25250,6 +26084,12 @@
             "state": "translated",
             "value": "#位置频道"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#kanal lokasi"
+          }
         }
       }
     },
@@ -25422,6 +26262,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "通过Tor的匿名中继"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "menyembunyikan ip-mu untuk kanal lokasi. disarankan: aktif."
           }
         }
       }
@@ -25596,6 +26442,12 @@
             "state": "translated",
             "value": "Tor中继"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "perutean tor"
+          }
         }
       }
     },
@@ -25768,6 +26620,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "街区"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "blok"
           }
         }
       }
@@ -25942,6 +26800,12 @@
             "state": "translated",
             "value": "建筑"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "gedung"
+          }
         }
       }
     },
@@ -26114,6 +26978,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "城市"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kota"
           }
         }
       }
@@ -26288,6 +27158,12 @@
             "state": "translated",
             "value": "社区"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "lingkungan"
+          }
         }
       }
     },
@@ -26460,6 +27336,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "省份"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "provinsi"
           }
         }
       }
@@ -26634,6 +27516,12 @@
             "state": "translated",
             "value": "地区"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wilayah"
+          }
         }
       }
     },
@@ -26806,6 +27694,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "忽略"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tutup"
           }
         }
       }
@@ -26980,6 +27874,12 @@
             "state": "translated",
             "value": "重试"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "coba lagi"
+          }
         }
       }
     },
@@ -27152,6 +28052,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "在此位置留下笔记"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tambahkan catatan permanen singkat di tempat ini agar orang lain menemukannya."
           }
         }
       }
@@ -27326,6 +28232,12 @@
             "state": "translated",
             "value": "成为第一个在此留下笔记的人"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "jadilah orang pertama yang menambahkannya di sini."
+          }
         }
       }
     },
@@ -27498,6 +28410,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "此处没有笔记"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "belum ada catatan"
           }
         }
       }
@@ -27672,6 +28590,12 @@
             "state": "translated",
             "value": "发送笔记失败。%@"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tidak bisa mengirim catatan. %@"
+          }
         }
       }
     },
@@ -27844,6 +28768,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "没有中继"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tidak ada relay geo tersedia dekat sini. coba lagi nanti."
           }
         }
       }
@@ -28534,6 +29464,12 @@
             "state": "translated",
             "value": "#%1$@ • %2$#@note_count@"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%1$@ • %2$#@note_count@"
+          }
         }
       }
     },
@@ -28706,6 +29642,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在加载笔记"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "memuat catatan…"
           }
         }
       }
@@ -28880,6 +29822,12 @@
             "state": "translated",
             "value": "正在加载最近的笔记"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "memuat catatan terbaru…"
+          }
         }
       }
     },
@@ -29052,6 +30000,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "附近没有中继"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tidak ada relay geo di dekatmu"
           }
         }
       }
@@ -29226,6 +30180,12 @@
             "state": "translated",
             "value": "在此位置留下笔记..."
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tambahkan catatan untuk tempat ini"
+          }
         }
       }
     },
@@ -29398,6 +30358,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "中继已暂停"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "relay geo tidak tersedia; catatan dijeda"
           }
         }
       }
@@ -29572,6 +30538,12 @@
             "state": "translated",
             "value": "点击重试连接中继"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "catatan bergantung pada relay geo. cek koneksi lalu coba lagi."
+          }
         }
       }
     },
@@ -29744,6 +30716,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "新消息"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "pesan baru"
           }
         }
       }
@@ -29918,6 +30896,12 @@
             "state": "translated",
             "value": "无法与 %@ 开始聊天：此人已被屏蔽。"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tidak bisa mulai chat dengan %@: pengguna diblokir."
+          }
         }
       }
     },
@@ -30090,6 +31074,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "无法与 %@ 开始聊天：离线消息需要互相收藏。"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tidak bisa mulai chat dengan %@: butuh favorit bersama untuk offline."
           }
         }
       }
@@ -30264,6 +31254,12 @@
             "state": "translated",
             "value": "用户"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "pengguna"
+          }
         }
       }
     },
@@ -30436,6 +31432,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "消息被屏蔽"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tidak bisa mengirim: pengguna diblokir."
           }
         }
       }
@@ -30610,6 +31612,12 @@
             "state": "translated",
             "value": "无法向 %@ 发送消息：此人已被屏蔽。"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tidak bisa mengirim ke %@: pengguna diblokir."
+          }
         }
       }
     },
@@ -30782,6 +31790,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "无法向 %@ 发送消息 - 无法通过网格或 nostr 联系到对等节点。"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tidak bisa mengirim ke %@: penerima tidak dapat dijangkau lewat mesh atau nostr."
           }
         }
       }
@@ -30956,6 +31970,12 @@
             "state": "translated",
             "value": "在地理哈希聊天中屏蔽了 %@"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ diblokir di chat geohash"
+          }
         }
       }
     },
@@ -31128,6 +32148,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "在地理哈希聊天中取消屏蔽了 %@"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ dibuka blokirnya di chat geohash"
           }
         }
       }
@@ -31302,6 +32328,12 @@
             "state": "translated",
             "value": "不在频道中"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "gagal mengirim: kamu tidak berada di kanal lokasi"
+          }
         }
       }
     },
@@ -31474,6 +32506,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "发送失败"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "gagal mengirim ke kanal lokasi"
           }
         }
       }
@@ -31648,6 +32686,12 @@
             "state": "translated",
             "value": "开发模式：绕过Tor"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "build pengembangan: bypass tor aktif."
+          }
         }
       }
     },
@@ -31820,6 +32864,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tor已重启"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tor dimulai ulang. perutean dipulihkan."
           }
         }
       }
@@ -31994,6 +33044,12 @@
             "state": "translated",
             "value": "正在重启Tor"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tor sedang dimulai ulang untuk memulihkan konektivitas..."
+          }
         }
       }
     },
@@ -32166,6 +33222,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tor已启动。所有聊天都通过Tor路由以保护隐私。"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tor berjalan. seluruh chat dirutekan lewat tor demi privasi."
           }
         }
       }
@@ -32340,6 +33402,12 @@
             "state": "translated",
             "value": "正在启动Tor"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "menjalankan tor..."
+          }
         }
       }
     },
@@ -32512,6 +33580,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "我的二维码"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kode qr verifikasi"
           }
         }
       }
@@ -32686,6 +33760,12 @@
             "state": "translated",
             "value": "我的二维码"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "pindai untuk verifikasi"
+          }
         }
       }
     },
@@ -32858,6 +33938,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "二维码不可用"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "qr tidak tersedia"
           }
         }
       }
@@ -33032,6 +34118,12 @@
             "state": "translated",
             "value": "粘贴指纹"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tempel konten qr untuk validasi:"
+          }
         }
       }
     },
@@ -33204,6 +34296,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "让朋友扫描此二维码"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "pindai qr teman"
           }
         }
       }
@@ -33378,6 +34476,12 @@
             "state": "translated",
             "value": "无效的指纹"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "qr tidak valid atau kedaluwarsa"
+          }
         }
       }
     },
@@ -33550,6 +34654,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "找不到对等节点"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tidak ada peer yang cocok"
           }
         }
       }
@@ -33724,6 +34834,12 @@
             "state": "translated",
             "value": "已请求验证 %@"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verifikasi diminta untuk %@"
+          }
         }
       }
     },
@@ -33896,6 +35012,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "验证指纹"
+          }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "validasi"
           }
         }
       }
@@ -34070,6 +35192,12 @@
             "state": "translated",
             "value": "验证"
           }
+        },
+        "fil": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VERIFIKASI"
+          }
         }
       }
     },
@@ -34241,6 +35369,12 @@
           }
         },
         "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@"
+          }
+        },
+        "fil": {
           "stringUnit": {
             "state": "translated",
             "value": "%@"
