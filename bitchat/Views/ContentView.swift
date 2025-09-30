@@ -365,7 +365,6 @@ struct ContentView: View {
                     ForEach(messageItems) { item in
                         let message = item.message
                         messageRow(for: message)
-                            .id(item.id)
                             .onAppear {
                                 if message.id == windowedMessages.last?.id {
                                     isAtBottom.wrappedValue = true
@@ -485,8 +484,14 @@ struct ContentView: View {
     private func sendMessage() {
         let trimmed = trimmedMessageText
         guard !trimmed.isEmpty else { return }
-        viewModel.sendMessage(trimmed)
+
+        // Clear input immediately for instant feedback
         messageText = ""
+
+        // Defer actual send to next runloop to avoid blocking
+        DispatchQueue.main.async {
+            self.viewModel.sendMessage(trimmed)
+        }
     }
     
     // MARK: - Sidebar View

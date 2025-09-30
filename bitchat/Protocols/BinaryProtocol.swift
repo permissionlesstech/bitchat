@@ -89,6 +89,7 @@
 ///
 
 import Foundation
+import BitLogger
 
 extension Data {
     func trimmingNullBytes() -> Data {
@@ -335,6 +336,17 @@ struct BinaryProtocol {
                 guard originalSize >= 0 && originalSize <= FileTransferLimits.maxPayloadBytes else { return nil }
                 let compressedSize = payloadLength - lengthFieldBytes
                 guard compressedSize >= 0, let compressed = readData(compressedSize) else { return nil }
+
+                // Validate compression ratio to prevent zip bomb attacks
+                // Primary protection: originalSize capped at 1MB (line 336)
+                // Defense-in-depth: reject extreme ratios (prevents DoS via memory allocation)
+                guard compressedSize > 0 else { return nil }
+                let compressionRatio = Double(originalSize) / Double(compressedSize)
+                guard compressionRatio <= 50_000.0 else {
+                    SecureLogger.warning("🚫 Suspicious compression ratio: \(String(format: "%.0f", compressionRatio)):1", category: .security)
+                    return nil
+                }
+
                 guard let decompressed = CompressionUtil.decompress(compressed, originalSize: originalSize),
                       decompressed.count == originalSize else { return nil }
                 payload = decompressed

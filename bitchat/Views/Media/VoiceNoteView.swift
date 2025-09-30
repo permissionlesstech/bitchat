@@ -99,12 +99,14 @@ struct VoiceNoteView: View {
             RoundedRectangle(cornerRadius: 14)
                 .stroke(borderColor, lineWidth: 1)
         )
-        .onAppear {
-            // Defer both duration and waveform loading to let UI settle after message appears
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                playback.loadDuration()
+        .task {
+            // Defer loading to let UI settle after view appears
+            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s
+            playback.loadDuration()
+            await withCheckedContinuation { continuation in
                 WaveformCache.shared.waveform(for: url, completion: { bins in
-                    self.waveform = bins
+                    waveform = bins
+                    continuation.resume()
                 })
             }
         }

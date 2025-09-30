@@ -2156,6 +2156,20 @@ final class BLEService: NSObject {
         }
 
         let mime = (filePacket.mimeType ?? "application/octet-stream").lowercased()
+
+        // Validate MIME type against whitelist
+        guard isAllowedMimeType(mime) else {
+            SecureLogger.warning("🚫 MIME REJECT: '\(mime)' not in whitelist. Size=\(filePacket.content.count)b from \(peerID.prefix(8))...", category: .security)
+            return
+        }
+
+        // Validate content matches declared MIME type (magic byte check)
+        guard validateContentMatchesMime(data: filePacket.content, declaredMime: mime) else {
+            let prefix = filePacket.content.prefix(20).map { String(format: "%02x", $0) }.joined(separator: " ")
+            SecureLogger.warning("🚫 MAGIC REJECT: MIME='\(mime)' size=\(filePacket.content.count)b prefix=[\(prefix)] from \(peerID.prefix(8))...", category: .security)
+            return
+        }
+
         let category: IncomingMediaCategory
         if mime.hasPrefix("audio/") {
             category = .audio
@@ -2355,6 +2369,68 @@ final class BLEService: NSObject {
         case other
     }
 
+    private func isAllowedMimeType(_ mime: String) -> Bool {
+        let allowed: Set<String> = [
+            "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp",
+            "audio/mp4", "audio/m4a", "audio/aac", "audio/mpeg", "audio/mp3",
+            "audio/wav", "audio/x-wav", "audio/ogg",
+            "application/pdf", "application/octet-stream"
+        ]
+        return allowed.contains(mime.lowercased())
+    }
+
+    private func validateContentMatchesMime(data: Data, declaredMime: String) -> Bool {
+        guard !data.isEmpty else { return false }
+        let mime = declaredMime.lowercased()
+
+        // Generic type - can't validate
+        if mime == "application/octet-stream" { return true }
+
+        switch mime {
+        case "image/jpeg", "image/jpg":
+            return data.count >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF
+
+        case "image/png":
+            return data.count >= 8 &&
+                   data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47 &&
+                   data[4] == 0x0D && data[5] == 0x0A && data[6] == 0x1A && data[7] == 0x0A
+
+        case "image/gif":
+            return data.count >= 6 && data[0] == 0x47 && data[1] == 0x49 && data[2] == 0x46 &&
+                   data[3] == 0x38 && (data[4] == 0x37 || data[4] == 0x39) && data[5] == 0x61
+
+        case "image/webp":
+            return data.count >= 12 &&
+                   data[0] == 0x52 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x46 &&
+                   data[8] == 0x57 && data[9] == 0x45 && data[10] == 0x42 && data[11] == 0x50
+
+        case "audio/m4a", "audio/mp4", "audio/aac":
+            // AVAudioRecorder output varies by platform - be lenient
+            // Security: size already capped + sandboxed execution
+            return data.count > 100  // Min reasonable audio size
+
+        case "audio/mpeg", "audio/mp3":
+            if data.count >= 3 && data[0] == 0x49 && data[1] == 0x44 && data[2] == 0x33 { return true }
+            return data.count >= 2 && data[0] == 0xFF && (data[1] & 0xE0) == 0xE0
+
+        case "audio/wav", "audio/x-wav":
+            return data.count >= 12 &&
+                   data[0] == 0x52 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x46 &&
+                   data[8] == 0x57 && data[9] == 0x41 && data[10] == 0x56 && data[11] == 0x45
+
+        case "audio/ogg":
+            return data.count >= 4 &&
+                   data[0] == 0x4F && data[1] == 0x67 && data[2] == 0x67 && data[3] == 0x53
+
+        case "application/pdf":
+            return data.count >= 4 &&
+                   data[0] == 0x25 && data[1] == 0x50 && data[2] == 0x44 && data[3] == 0x46
+
+        default:
+            return false
+        }
+    }
+
     private func applicationFilesDirectory() throws -> URL {
         let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
         let filesDir = base.appendingPathComponent("files", isDirectory: true)
@@ -2364,36 +2440,84 @@ final class BLEService: NSObject {
 
     private func sanitizeFileName(_ name: String?, defaultName: String, fallbackExtension: String?) -> String {
         var candidate = name ?? ""
-        candidate = candidate.replacingOccurrences(of: "\\", with: "/")
-        candidate = candidate.components(separatedBy: "/").last ?? defaultName
+
+        // Security: Remove null bytes (path traversal vector)
+        candidate = candidate.replacingOccurrences(of: "\0", with: "")
+
+        // Security: Unicode normalization prevents fullwidth character bypass
+        candidate = candidate.precomposedStringWithCanonicalMapping
+
+        // Security: Remove ALL path separators (not just strip last component)
+        candidate = candidate.replacingOccurrences(of: "/", with: "_")
+        candidate = candidate.replacingOccurrences(of: "\\", with: "_")
+
+        // Security: Remove control characters and dangerous filesystem chars
+        let invalid = CharacterSet(charactersIn: "<>:\"|?*\0").union(.controlCharacters)
+        candidate = candidate.components(separatedBy: invalid).joined(separator: "_")
+
         candidate = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
         if candidate.isEmpty { candidate = defaultName }
-        let invalid = CharacterSet(charactersIn: "<>:\"|?*")
-        candidate = candidate.components(separatedBy: invalid).joined(separator: "_")
-        if candidate.isEmpty { candidate = defaultName }
-        if candidate.count > 120 {
-            candidate = String(candidate.prefix(120))
+
+        // Security: Reject dotfiles (hidden file attacks)
+        if candidate.hasPrefix(".") {
+            candidate = "_" + candidate
         }
+
+        // Truncate while preserving extension
+        if candidate.count > 120 {
+            let ext = (candidate as NSString).pathExtension
+            let base = (candidate as NSString).deletingPathExtension
+            if ext.isEmpty {
+                candidate = String(candidate.prefix(120))
+            } else {
+                let maxBase = max(10, 120 - ext.count - 1)
+                candidate = String(base.prefix(maxBase)) + "." + ext
+            }
+        }
+
         if let fallbackExtension = fallbackExtension, (candidate as NSString).pathExtension.isEmpty {
             candidate += ".\(fallbackExtension)"
         }
+
+        if candidate.isEmpty { candidate = defaultName }
         return candidate
     }
 
     private func uniqueFileURL(in directory: URL, fileName: String) -> URL {
         var candidate = directory.appendingPathComponent(fileName)
+
+        // Security: Validate path doesn't escape directory
+        if !candidate.path.hasPrefix(directory.path) {
+            SecureLogger.warning("⚠️ Path traversal blocked: \(fileName)", category: .security)
+            return directory.appendingPathComponent("blocked_\(UUID().uuidString)")
+        }
+
         if !FileManager.default.fileExists(atPath: candidate.path) {
             return candidate
         }
+
         let baseName = (fileName as NSString).deletingPathExtension
         let ext = (fileName as NSString).pathExtension
         var counter = 1
-        repeat {
+
+        // Limit iterations to prevent DoS
+        while counter < 100 {
             let newName = ext.isEmpty ? "\(baseName) (\(counter))" : "\(baseName) (\(counter)).\(ext)"
             candidate = directory.appendingPathComponent(newName)
+
+            // Validate each iteration
+            guard candidate.path.hasPrefix(directory.path) else {
+                return directory.appendingPathComponent("blocked_\(UUID().uuidString)")
+            }
+
+            if !FileManager.default.fileExists(atPath: candidate.path) {
+                return candidate
+            }
             counter += 1
-        } while FileManager.default.fileExists(atPath: candidate.path)
-        return candidate
+        }
+
+        // Fallback: UUID to guarantee uniqueness
+        return directory.appendingPathComponent("\(baseName)_\(UUID().uuidString).\(ext.isEmpty ? "dat" : ext)")
     }
 
     private func saveIncomingFile(data: Data, preferredName: String?, subdirectory: String, fallbackExtension: String?, defaultPrefix: String) -> URL? {

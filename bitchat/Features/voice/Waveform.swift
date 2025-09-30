@@ -23,11 +23,8 @@ final class WaveformCache {
         queue.async { [weak self] in
             guard let self = self else { return }
 
-            // Check cache and update access time
+            // Check cache (read-only, no update needed on cache hit for performance)
             if let entry = self.cache[url] {
-                self.queue.async(flags: .barrier) { [weak self] in
-                    self?.cache[url] = (entry.waveform, Date())
-                }
                 DispatchQueue.main.async { completion(entry.waveform) }
                 return
             }

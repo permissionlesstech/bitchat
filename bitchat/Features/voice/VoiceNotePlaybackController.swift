@@ -20,19 +20,19 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
     }
 
     func loadDuration() {
-        // Only load if not already loaded
         guard duration == 0 else { return }
 
         DispatchQueue.global(qos: .utility).async { [weak self] in
             guard let self = self else { return }
             do {
                 let player = try AVAudioPlayer(contentsOf: self.url)
-                let duration = player.duration
-                DispatchQueue.main.async {
-                    self.duration = duration
+                let loadedDuration = player.duration
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self, self.duration == 0 else { return }
+                    self.duration = loadedDuration
                 }
             } catch {
-                SecureLogger.error("Failed to load audio duration for \(self.url.lastPathComponent): \(error)", category: .session)
+                SecureLogger.error("Failed to load audio duration: \(error)", category: .session)
             }
         }
     }

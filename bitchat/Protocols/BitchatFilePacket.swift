@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import BitLogger
 
 /// TLV payload for Bluetooth mesh file transfers (voice notes, images, generic files).
 /// Mirrors the Android client specification to ensure cross-platform interoperability.
@@ -82,12 +83,15 @@ struct BitchatFilePacket {
 
             func readBigEndianLength(bytes: Int) -> Int? {
                 guard data.distance(from: cursor, to: end) >= bytes else { return nil }
-                var result = 0
+                // Use UInt64 to prevent integer overflow during shift operations
+                var result: UInt64 = 0
                 for _ in 0..<bytes {
-                    result = (result << 8) | Int(data[cursor])
+                    result = (result << 8) | UInt64(data[cursor])
                     cursor = data.index(after: cursor)
                 }
-                return result
+                // Safely convert to Int with overflow check
+                guard result <= Int.max else { return nil }
+                return Int(result)
             }
 
             let length: Int?

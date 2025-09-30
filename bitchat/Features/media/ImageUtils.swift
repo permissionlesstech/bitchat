@@ -17,6 +17,16 @@ enum ImageUtils {
     private static let targetImageBytes: Int = 60_000
 
     static func processImage(at url: URL, maxDimension: CGFloat = 512) throws -> URL {
+        // Security H1: Check file size BEFORE reading into memory
+        let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
+        guard let fileSize = attrs[.size] as? Int else {
+            throw ImageUtilsError.invalidImage
+        }
+        // Allow up to 10MB source images (will be scaled down)
+        guard fileSize <= 10 * 1024 * 1024 else {
+            throw ImageUtilsError.invalidImage
+        }
+
         let data = try Data(contentsOf: url)
         #if os(iOS)
         guard let image = UIImage(data: data) else { throw ImageUtilsError.invalidImage }
@@ -127,12 +137,10 @@ enum ImageUtils {
         guard let destination = CGImageDestinationCreateWithData(data, UTType.jpeg.identifier as CFString, 1, nil) else {
             return nil
         }
+        // Security H2: Strip ALL metadata (EXIF, GPS, TIFF, IPTC, XMP)
+        // Don't add any metadata dictionary keys - fresh CGContext ensures clean image
         let options: [CFString: Any] = [
-            kCGImageDestinationLossyCompressionQuality: quality,
-            kCGImagePropertyExifDictionary: [:],
-            kCGImagePropertyTIFFDictionary: [:],
-            kCGImagePropertyIPTCDictionary: [:],
-            kCGImagePropertyOrientation: 1
+            kCGImageDestinationLossyCompressionQuality: quality
         ]
         CGImageDestinationAddImage(destination, cgImage, options as CFDictionary)
         guard CGImageDestinationFinalize(destination) else {
