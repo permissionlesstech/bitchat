@@ -248,7 +248,7 @@ final class LocalizationCatalogTests: XCTestCase {
   /// the test bundle, preventing false positives where localization keys are 
   /// returned instead of translated strings.
   private func appBundle() -> Bundle {
-    Bundle(for: BitchatApp.self)
+    Bundle(for: ChatViewModel.self)
   }
 
   /// Tests to prevent regression of the pluralization format string issue
