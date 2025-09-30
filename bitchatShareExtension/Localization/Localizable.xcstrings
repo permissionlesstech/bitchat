@@ -108,6 +108,12 @@
             "value": "공유된 링크",
             "comment": "Fallback title when saving a shared link"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "liên kết đã chia sẻ"
+          }
         }
       }
     },
@@ -217,6 +223,12 @@
             "state": "translated",
             "value": "링크를 인코딩하는 데 실패했습니다",
             "comment": "Shown when the share payload cannot be encoded"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mã hóa liên kết thất bại"
           }
         }
       }
@@ -328,6 +340,12 @@
             "value": "공유할 수 있는 내용이 없습니다",
             "comment": "Shown when provided content cannot be shared"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "không có nội dung để chia sẻ"
+          }
         }
       }
     },
@@ -437,6 +455,12 @@
             "state": "translated",
             "value": "공유할 내용이 없습니다",
             "comment": "Shown when the share extension receives no content"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "không có gì để chia sẻ"
           }
         }
       }
@@ -548,6 +572,12 @@
             "value": "✓ bitchat으로 링크를 공유했습니다",
             "comment": "Confirmation after successfully sharing a link"
           }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ đã chia sẻ liên kết đến bitchat"
+          }
         }
       }
     },
@@ -657,6 +687,12 @@
             "state": "translated",
             "value": "✓ bitchat으로 텍스트를 공유했습니다",
             "comment": "Confirmation after successfully sharing text"
+          }
+        },
+        "vi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ đã chia sẻ văn bản đến bitchat"
           }
         }
       }
