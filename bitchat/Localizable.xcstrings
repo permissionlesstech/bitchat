@@ -39686,13 +39686,13 @@
         "jv": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
           }
         },
         "fa": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
           }
         },
         "vi": {
@@ -39704,7 +39704,7 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
           }
         },
         "th": {
@@ -39716,7 +39716,7 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
           }
         },
         "my": {
@@ -39728,55 +39728,55 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
           }
         },
         "ps": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
           }
         },
         "ha": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
           }
         },
         "pl": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
           }
         },
         "am": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
           }
         },
         "ig": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
           }
         },
         "yo": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
           }
         },
         "zu": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
           }
         },
         "ku": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
           }
         },
         "rhg": {
@@ -39788,25 +39788,25 @@
         "so": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
           }
         },
         "ti": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
           }
         },
         "kk": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
           }
         },
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%@ • %@"
+            "value": "#%1$@ • %2$@"
           }
         }
       }
