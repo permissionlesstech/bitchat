@@ -539,21 +539,6 @@ final class BLEService: NSObject {
     }
     #endif
     
-    // MARK: - Helper Functions for Peripheral Management
-    
-    private func getConnectedPeripherals() -> [CBPeripheral] {
-        return peripherals.values
-            .filter { $0.isConnected }
-            .map { $0.peripheral }
-    }
-    
-    private func getPeripheral(for peerID: String) -> CBPeripheral? {
-        guard let uuid = peerToPeripheralUUID[peerID],
-              let state = peripherals[uuid],
-              state.isConnected else { return nil }
-        return state.peripheral
-    }
-    
     // MARK: - Core Public API
     
     func startServices() {
