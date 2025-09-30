@@ -143,6 +143,13 @@
             "value": "paylaşılan bağlantı",
             "comment": "Fallback title when saving a shared link"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "rohy nozaraina",
+            "comment": "Fallback title when saving a shared link"
+          }
         }
       }
     },
@@ -286,6 +293,13 @@
           "stringUnit": {
             "state": "translated",
             "value": "bağlantı kodlanamadı",
+            "comment": "Shown when the share payload cannot be encoded"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tsy nahomby ny fanokafana ny rohy",
             "comment": "Shown when the share payload cannot be encoded"
           }
         }
@@ -433,6 +447,13 @@
             "value": "paylaşılabilir içerik yok",
             "comment": "Shown when provided content cannot be shared"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tsy misy votoaty azo zaraina",
+            "comment": "Shown when provided content cannot be shared"
+          }
         }
       }
     },
@@ -576,6 +597,13 @@
           "stringUnit": {
             "state": "translated",
             "value": "paylaşılacak bir şey yok",
+            "comment": "Shown when the share extension receives no content"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tsy misy hozaraina",
             "comment": "Shown when the share extension receives no content"
           }
         }
@@ -723,6 +751,13 @@
             "value": "✓ bitchat'e bağlantı paylaşıldı",
             "comment": "Confirmation after successfully sharing a link"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ nozaraina tamin'ny bitchat ny rohy",
+            "comment": "Confirmation after successfully sharing a link"
+          }
         }
       }
     },
@@ -866,6 +901,13 @@
           "stringUnit": {
             "state": "translated",
             "value": "✓ bitchat'e metin paylaşıldı",
+            "comment": "Confirmation after successfully sharing text"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ nozaraina tamin'ny bitchat ny soratra",
             "comment": "Confirmation after successfully sharing text"
           }
         }

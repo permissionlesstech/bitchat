@@ -123,6 +123,12 @@
             "state": "translated",
             "value": "bitchat"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bitchat"
+          }
         }
       }
     },
@@ -247,6 +253,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "kapat"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hidio"
           }
         }
       }
@@ -373,6 +385,12 @@
             "state": "translated",
             "value": "TAMAM"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VITA"
+          }
         }
       }
     },
@@ -497,6 +515,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "gürültü protokolü ile şifrelenmiş özel mesajlar"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hafatra manokana voasifetra amin'ny protokola tabataba"
           }
         }
       }
@@ -623,6 +647,12 @@
             "state": "translated",
             "value": "uçtan uca şifreleme"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fampifandraisana miafina"
+          }
         }
       }
     },
@@ -747,6 +777,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "mesajlar eşler aracılığıyla aktarılır, mesafeyi aşar"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ny hafatra dia ampitaina amin'ny alalan'ny mpiara-miasa, mandeha lavitra"
           }
         }
       }
@@ -873,6 +909,12 @@
             "state": "translated",
             "value": "genişletilmiş menzil"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "faritry ny lavitra"
+          }
         }
       }
     },
@@ -997,6 +1039,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "favori kişileriniz katıldığında bildirim alın"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mahazo fampandrenesana rehefa miditra ny olona tianao"
           }
         }
       }
@@ -1123,6 +1171,12 @@
             "state": "translated",
             "value": "favoriler"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ankafizina"
+          }
         }
       }
     },
@@ -1247,6 +1301,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "merkezi olmayan anonim röleler üzerinden yakındaki bölgelerdeki insanlarla sohbet etmek için geohash kanalları"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fantsona geohash hiresahana amin'ny olona eny amin'ny faritra akaiky amin'ny alalan'ny relay tsy miankina"
           }
         }
       }
@@ -1373,6 +1433,12 @@
             "state": "translated",
             "value": "geohash kanalları"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fantsona geohash"
+          }
         }
       }
     },
@@ -1497,6 +1563,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "@ işaretini kullanarak diğer kullanıcıları bahsedin"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ampiasao ny marika @ hilazana ny mpampiasa hafa"
           }
         }
       }
@@ -1623,6 +1695,12 @@
             "state": "translated",
             "value": "bahsetmeler"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "filazana"
+          }
         }
       }
     },
@@ -1747,6 +1825,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "internet olmadan yakındaki insanlarla sohbet edin"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "miresaha amin'ny olona akaiky tsy mila Internet"
           }
         }
       }
@@ -1873,6 +1957,12 @@
             "state": "translated",
             "value": "çevrimdışı iletişim"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fifandraisana tsy an-tserasera"
+          }
         }
       }
     },
@@ -1997,6 +2087,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "özellikler"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "endri-javatra"
           }
         }
       }
@@ -2123,6 +2219,12 @@
             "state": "translated",
             "value": "kanal değiştirmek için #geohash yazın"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "soraty #geohash hanovana fantsona"
+          }
         }
       }
     },
@@ -2247,6 +2349,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "sohbeti temizlemek için /clear yazın"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "soraty /clear hanadio ny resaka"
           }
         }
       }
@@ -2373,6 +2481,12 @@
             "state": "translated",
             "value": "tüm komutları görmek için /help yazın"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "soraty /help hijery ny baiko rehetra"
+          }
         }
       }
     },
@@ -2497,6 +2611,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "kenar çubuğunu açmak için kişi sayısına dokunun"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tsindrio ny isan'ny olona hanokafana ny sidebar"
           }
         }
       }
@@ -2623,6 +2743,12 @@
             "state": "translated",
             "value": "takma ad ayarlamak için /nick takmaad yazın"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "soraty /nick anarana hametraka anarana kely"
+          }
         }
       }
     },
@@ -2747,6 +2873,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "doğrudan mesaj başlatmak için kullanıcı adına dokunun"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tsindrio ny anaran'ny mpampiasa hanombohana hafatra mivantana"
           }
         }
       }
@@ -2873,6 +3005,12 @@
             "state": "translated",
             "value": "nasıl kullanılır"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fomba fampiasana"
+          }
         }
       }
     },
@@ -2997,6 +3135,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "mesajlar kalıcı olarak saklanmaz"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ny hafatra dia tsy voatahiry maharitra"
           }
         }
       }
@@ -3123,6 +3267,12 @@
             "state": "translated",
             "value": "geçici mesajlar"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hafatra vetivety"
+          }
         }
       }
     },
@@ -3247,6 +3397,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "analitik yok, takip yok, reklam yok"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tsy misy analytics, tsy misy fanaraha-maso, tsy misy dokam-barotra"
           }
         }
       }
@@ -3373,6 +3529,12 @@
             "state": "translated",
             "value": "takip yok"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tsy misy fanaraha-maso"
+          }
         }
       }
     },
@@ -3497,6 +3659,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "tüm verileri temizlemek için cihazı sallayın"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ahetsaho ny fitaovana hanadio ny angona rehetra"
           }
         }
       }
@@ -3623,6 +3791,12 @@
             "state": "translated",
             "value": "panik silme"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "famafana maika"
+          }
         }
       }
     },
@@ -3747,6 +3921,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "gizlilik"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fiainana manokana"
           }
         }
       }
@@ -3873,6 +4053,12 @@
             "state": "translated",
             "value": "merkezi olmayan sohbet"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "resaka tsy miankina"
+          }
         }
       }
     },
@@ -3997,6 +4183,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Bu deneysel yazılımdır. Önemli iletişim için kullanmayın."
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ity dia rindrambaiko andrana. Aza ampiasaina amin'ny fifandraisana manan-danja."
           }
         }
       }
@@ -4123,6 +4315,12 @@
             "state": "translated",
             "value": "uyarı"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fampitandremana"
+          }
         }
       }
     },
@@ -4247,6 +4445,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "iptal"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "aoka ihany"
           }
         }
       }
@@ -4373,6 +4577,12 @@
             "state": "translated",
             "value": "kapat"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hidio"
+          }
         }
       }
     },
@@ -4497,6 +4707,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "kopyala"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "adikao"
           }
         }
       }
@@ -4623,6 +4839,12 @@
             "state": "translated",
             "value": "tamam"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "eka"
+          }
         }
       }
     },
@@ -4747,6 +4969,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "kapalı"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tsy miasa"
           }
         }
       }
@@ -4873,6 +5101,12 @@
             "state": "translated",
             "value": "açık"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "miasa"
+          }
         }
       }
     },
@@ -4997,6 +5231,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "bilinmeyen"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tsy fantatra"
           }
         }
       }
@@ -5123,6 +5363,12 @@
             "state": "translated",
             "value": "favorilere ekle"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ampidiro amin'ny ankafizina"
+          }
         }
       }
     },
@@ -5247,6 +5493,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "nostr üzerinden mevcut"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "azo atao amin'ny nostr"
           }
         }
       }
@@ -5373,6 +5625,12 @@
             "state": "translated",
             "value": "ana sohbete dön"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "miverina amin'ny resaka lehibe"
+          }
         }
       }
     },
@@ -5497,6 +5755,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ağa bağlı"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mifandray amin'ny harato"
           }
         }
       }
@@ -5623,6 +5887,12 @@
             "state": "translated",
             "value": "şifreleme durumu: %@"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "toe-javatra fampifandraisana miafina: %@"
+          }
         }
       }
     },
@@ -5747,6 +6017,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "konum kanalları"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fantsona toerana"
           }
         }
       }
@@ -5873,6 +6149,12 @@
             "state": "translated",
             "value": "konum notları"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "naoty toerana"
+          }
         }
       }
     },
@@ -5997,6 +6279,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "okunmamış özel sohbeti aç"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hanokatra resaka manokana tsy mbola novakiana"
           }
         }
       }
@@ -6617,6 +6905,34 @@
               }
             }
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%#@people@"
+          },
+          "substitutions": {
+            "people": {
+              "argNum": 1,
+              "formatSpecifier": "lld",
+              "variations": {
+                "plural": {
+                  "one": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%d olona"
+                    }
+                  },
+                  "other": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%d olona"
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -6741,6 +7057,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ ile özel sohbet"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "resaka manokana amin'i %@"
           }
         }
       }
@@ -6867,6 +7189,12 @@
             "state": "translated",
             "value": "ağ üzerinden erişilebilir"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "azo tratrarina amin'ny harato"
+          }
         }
       }
     },
@@ -6991,6 +7319,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "favorilerden kaldır"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "esorina amin'ny ankafizina"
           }
         }
       }
@@ -7117,6 +7451,12 @@
             "state": "translated",
             "value": "mesaj yazdıktan sonra gönder"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "alefaso rehefa avy nanoratra hafatra"
+          }
         }
       }
     },
@@ -7241,6 +7581,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "mesaj gönder"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "alefaso ny hafatra"
           }
         }
       }
@@ -7367,6 +7713,12 @@
             "state": "translated",
             "value": "mesaj gönder"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "alefaso ny hafatra"
+          }
         }
       }
     },
@@ -7491,6 +7843,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "#%@ için yer işaretini değiştir"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ovay ny bookmark ho an'ny #%@"
           }
         }
       }
@@ -7617,6 +7975,12 @@
             "state": "translated",
             "value": "favori ipucunu değiştir"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ovay ny toro-hevitra ankafizina"
+          }
         }
       }
     },
@@ -7741,6 +8105,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "parmak izi ipucunu görüntüle"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "jereo ny toro-hevitra dian-tanana"
           }
         }
       }
@@ -7867,6 +8237,12 @@
             "state": "translated",
             "value": "engelle"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sakano"
+          }
         }
       }
     },
@@ -7991,6 +8367,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "doğrudan mesaj"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hafatra mivantana"
           }
         }
       }
@@ -8117,6 +8499,12 @@
             "state": "translated",
             "value": "sarıl"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "horohoro"
+          }
         }
       }
     },
@@ -8241,6 +8629,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "bahset"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "lazao"
           }
         }
       }
@@ -8367,6 +8761,12 @@
             "state": "translated",
             "value": "tokat"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kapohina"
+          }
         }
       }
     },
@@ -8491,6 +8891,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "eylemler"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hetsika"
           }
         }
       }
@@ -8617,6 +9023,12 @@
             "state": "translated",
             "value": "Bluetooth kapalı. Lütfen ayarlarda Bluetooth'u açın."
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tsy miasa ny Bluetooth. Alefaso ny Bluetooth ao amin'ny Settings."
+          }
         }
       }
     },
@@ -8741,6 +9153,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "bitchat yakındaki cihazlara bağlanmak için Bluetooth izni gerektirir. Ayarlarda erişimi etkinleştirin."
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mila fahazoan-dàlana Bluetooth ny bitchat mba hifandraisana amin'ny fitaovana akaiky. Alefaso ny fidirana ao amin'ny Settings."
           }
         }
       }
@@ -8867,6 +9285,12 @@
             "state": "translated",
             "value": "ayarlar"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings"
+          }
         }
       }
     },
@@ -8991,6 +9415,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Bluetooth gerekli"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ilaina ny Bluetooth"
           }
         }
       }
@@ -9117,6 +9547,12 @@
             "state": "translated",
             "value": "Bu cihaz Bluetooth'u desteklemiyor."
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tsy manohana Bluetooth ity fitaovana ity."
+          }
         }
       }
     },
@@ -9241,6 +9677,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ekran görüntüsü kimliğinizi ve konumunuzu açığa çıkarabilir."
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ny sary an-efijery dia mety hanambara ny mombamomba anao sy ny toerana misy anao."
           }
         }
       }
@@ -9367,6 +9809,12 @@
             "state": "translated",
             "value": "gizlilik uyarısı"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fampitandremana momba ny fiainana manokana"
+          }
         }
       }
     },
@@ -9491,6 +9939,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "kullanıcıyı engelle"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sakano ny mpampiasa"
           }
         }
       }
@@ -9617,6 +10071,12 @@
             "state": "translated",
             "value": "sohbeti temizle"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "diovy ny resaka"
+          }
         }
       }
     },
@@ -9741,6 +10201,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "favorilere ekle"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ampidiro amin'ny ankafizina"
           }
         }
       }
@@ -9867,6 +10333,12 @@
             "state": "translated",
             "value": "birisini sarıl"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "horohoro ny olona iray"
+          }
         }
       }
     },
@@ -9991,6 +10463,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "özel mesaj gönder"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "alefaso hafatra manokana"
           }
         }
       }
@@ -10117,6 +10595,12 @@
             "state": "translated",
             "value": "birisini tokatlat"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kapohina ny olona iray"
+          }
         }
       }
     },
@@ -10241,6 +10725,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "kullanıcının engelini kaldır"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "esory ny fanakanana ny mpampiasa"
           }
         }
       }
@@ -10367,6 +10857,12 @@
             "state": "translated",
             "value": "favorilerden kaldır"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "esorina amin'ny ankafizina"
+          }
         }
       }
     },
@@ -10491,6 +10987,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "çevrimiçi kullanıcıları göster"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "asehoy ny mpampiasa an-tserasera"
           }
         }
       }
@@ -10617,6 +11119,12 @@
             "state": "translated",
             "value": "%2$d üyeden %1$d tanesine teslim edildi"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "natolotra ho an'ny %1$d amin'ny %2$d mpikambana"
+          }
         }
       }
     },
@@ -10741,6 +11249,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ kişisine teslim edildi"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "natolotra ho an'i %@"
           }
         }
       }
@@ -10867,6 +11381,12 @@
             "state": "translated",
             "value": "başarısız: %@"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tsy nahomby: %@"
+          }
         }
       }
     },
@@ -10991,6 +11511,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ tarafından okundu"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "novakian'i %@"
           }
         }
       }
@@ -11117,6 +11643,12 @@
             "state": "translated",
             "value": "engellendi"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "voasakana"
+          }
         }
       }
     },
@@ -11241,6 +11773,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "kendisi"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tena"
           }
         }
       }
@@ -11367,6 +11905,12 @@
             "state": "translated",
             "value": "gönderme hatası"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fahadisoana fandefasana"
+          }
         }
       }
     },
@@ -11491,6 +12035,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "bilinmeyen alıcı"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mpandray tsy fantatra"
           }
         }
       }
@@ -11617,6 +12167,12 @@
             "state": "translated",
             "value": "erişilemiyor"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tsy azo tratrarina"
+          }
         }
       }
     },
@@ -11741,6 +12297,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "kişiler"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "olona"
           }
         }
       }
@@ -11867,6 +12429,12 @@
             "state": "translated",
             "value": "güvenli iletişim sağlamak için parmak izini doğrulayın"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hamarino ny dian-tanana hahazoana antoka fa azo antoka ny fifandraisana"
+          }
         }
       }
     },
@@ -11991,6 +12559,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "mesaj yazın..."
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "soraty hafatra..."
           }
         }
       }
@@ -12117,6 +12691,12 @@
             "state": "translated",
             "value": "takma ad belirle"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "apetraho anarana kely"
+          }
         }
       }
     },
@@ -12241,6 +12821,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "konum hizmetlerini etkinleştir"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "alefaso ny serivisy toerana"
           }
         }
       }
@@ -12367,6 +12953,12 @@
             "state": "translated",
             "value": "mesajı kopyala"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "adikao ny hafatra"
+          }
         }
       }
     },
@@ -12491,6 +13083,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "daha az göster"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "asehoy kely kokoa"
           }
         }
       }
@@ -12617,6 +13215,12 @@
             "state": "translated",
             "value": "daha fazla göster"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "asehoy bebe kokoa"
+          }
         }
       }
     },
@@ -12741,6 +13345,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "konum mevcut değil"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tsy misy toerana"
           }
         }
       }
@@ -12867,6 +13477,12 @@
             "state": "translated",
             "value": "notlar"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "naoty"
+          }
         }
       }
     },
@@ -12991,6 +13607,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cashu ödemesi"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fandoavam-bola Cashu"
           }
         }
       }
@@ -13117,6 +13739,12 @@
             "state": "translated",
             "value": "Lightning ödemesi"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fandoavam-bola Lightning"
+          }
         }
       }
     },
@@ -13241,6 +13869,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "şifreleme kuruluyor"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mametraka fampifandraisana miafina"
           }
         }
       }
@@ -13367,6 +14001,12 @@
             "state": "translated",
             "value": "şifreleme başarısız"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tsy nahomby ny fampifandraisana miafina"
+          }
         }
       }
     },
@@ -13491,6 +14131,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "şifrelenmemiş"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tsy voasifetra"
           }
         }
       }
@@ -13617,6 +14263,12 @@
             "state": "translated",
             "value": "güvenli"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "voaaro"
+          }
         }
       }
     },
@@ -13741,6 +14393,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "doğrulandı"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "voamarina"
           }
         }
       }
@@ -13867,6 +14525,12 @@
             "state": "translated",
             "value": "kuruluyor"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mametraka"
+          }
         }
       }
     },
@@ -13991,6 +14655,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "başarısız"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tsy nahomby"
           }
         }
       }
@@ -14117,6 +14787,12 @@
             "state": "translated",
             "value": "şifrelenmemiş"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tsy voasifetra"
+          }
         }
       }
     },
@@ -14241,6 +14917,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "güvenli"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "voaaro"
           }
         }
       }
@@ -14367,6 +15049,12 @@
             "state": "translated",
             "value": "doğrulandı"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "voamarina"
+          }
         }
       }
     },
@@ -14491,6 +15179,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "doğrulandı olarak işaretle"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mariho ho voamarina"
           }
         }
       }
@@ -14617,6 +15311,12 @@
             "state": "translated",
             "value": "doğrulamayı kaldır"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "esory ny famarinana"
+          }
         }
       }
     },
@@ -14741,6 +15441,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "⚠️ doğrulanmadı"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⚠️ tsy voamarina"
           }
         }
       }
@@ -14867,6 +15573,12 @@
             "state": "translated",
             "value": "✓ doğrulandı"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ voamarina"
+          }
         }
       }
     },
@@ -14991,6 +15703,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "el sıkışma beklemede"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "miandry fifampiraharahana"
           }
         }
       }
@@ -15117,6 +15835,12 @@
             "state": "translated",
             "value": "parmak izi doğrulandı"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "voamarina ny dian-tanana"
+          }
         }
       }
     },
@@ -15241,6 +15965,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "güvenli kanal kullanarak bu parmak izlerini %@ ile karşılaştırın."
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ampitahao amin'i %@ ireo dian-tanana ireo amin'ny alalan'ny fantsona azo antoka."
           }
         }
       }
@@ -15367,6 +16097,12 @@
             "state": "translated",
             "value": "onların parmak izi"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ny dian-tanany"
+          }
         }
       }
     },
@@ -15491,6 +16227,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "parmak izi"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "dian-tanana"
           }
         }
       }
@@ -15617,6 +16359,12 @@
             "state": "translated",
             "value": "sizin parmak iziniz"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ny dian-tananao"
+          }
         }
       }
     },
@@ -15741,6 +16489,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "engelle"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sakano"
           }
         }
       }
@@ -15867,6 +16621,12 @@
             "state": "translated",
             "value": "engeli kaldır"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "esory ny fanakanana"
+          }
         }
       }
     },
@@ -15991,6 +16751,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "yakında kimse yok"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tsy misy olona akaiky"
           }
         }
       }
@@ -16117,6 +16883,12 @@
             "state": "translated",
             "value": "engellendi"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "voasakana"
+          }
         }
       }
     },
@@ -16241,6 +17013,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "(siz)"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(ianao)"
           }
         }
       }
@@ -16367,6 +17145,12 @@
             "state": "translated",
             "value": "ayarları aç"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hanokatra Settings"
+          }
         }
       }
     },
@@ -16491,6 +17275,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "erişimi kaldır"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "esory ny fidirana"
           }
         }
       }
@@ -16617,6 +17407,12 @@
             "state": "translated",
             "value": "izin iste"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "angataho fahazoan-dàlana"
+          }
         }
       }
     },
@@ -16741,6 +17537,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ışınlan"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "teleport"
           }
         }
       }
@@ -16867,6 +17669,12 @@
             "state": "translated",
             "value": "yer işaretlenenler"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "voamarika"
+          }
         }
       }
     },
@@ -16991,6 +17799,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "konum tabanlı sohbet kanalları"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fantsona resaka mifototra amin'ny toerana"
           }
         }
       }
@@ -17117,6 +17931,12 @@
             "state": "translated",
             "value": "geçersiz geohash"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "geohash tsy mety"
+          }
         }
       }
     },
@@ -17241,6 +18061,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "yakındaki kanallar yükleniyor"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mampiditra fantsona akaiky"
           }
         }
       }
@@ -17367,6 +18193,12 @@
             "state": "translated",
             "value": "ağ"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "harato"
+          }
         }
       }
     },
@@ -17491,6 +18323,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "izin reddedildi"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nolavina ny fahazoan-dàlana"
           }
         }
       }
@@ -18111,6 +18949,34 @@
               }
             }
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ [%2$#@people_count@]"
+          },
+          "substitutions": {
+            "people_count": {
+              "argNum": 2,
+              "formatSpecifier": "lld",
+              "variations": {
+                "plural": {
+                  "one": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%d olona"
+                    }
+                  },
+                  "other": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%d olona"
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -18232,6 +19098,12 @@
           }
         },
         "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%1$@ • %2$@"
+          }
+        },
+        "mg": {
           "stringUnit": {
             "state": "translated",
             "value": "#%1$@ • %2$@"
@@ -18361,6 +19233,12 @@
             "state": "translated",
             "value": "%1$@ • %2$@"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ • %2$@"
+          }
         }
       }
     },
@@ -18485,6 +19363,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "#konum kanalları"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#fantsona toerana"
           }
         }
       }
@@ -18611,6 +19495,12 @@
             "state": "translated",
             "value": "Tor üzerinden anonim röle"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "relay tsy mitonona anarana amin'ny alalan'ny Tor"
+          }
         }
       }
     },
@@ -18735,6 +19625,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tor röle"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tor relay"
           }
         }
       }
@@ -18861,6 +19757,12 @@
             "state": "translated",
             "value": "blok"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sakana"
+          }
         }
       }
     },
@@ -18985,6 +19887,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "bina"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "trano"
           }
         }
       }
@@ -19111,6 +20019,12 @@
             "state": "translated",
             "value": "şehir"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tanàna"
+          }
         }
       }
     },
@@ -19235,6 +20149,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "mahalle"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "manodidina"
           }
         }
       }
@@ -19361,6 +20281,12 @@
             "state": "translated",
             "value": "il"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "faritany"
+          }
         }
       }
     },
@@ -19485,6 +20411,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "bölge"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "faritra"
           }
         }
       }
@@ -19611,6 +20543,12 @@
             "state": "translated",
             "value": "kapat"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "atsaharo"
+          }
         }
       }
     },
@@ -19735,6 +20673,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "yeniden dene"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "andramo indray"
           }
         }
       }
@@ -19861,6 +20805,12 @@
             "state": "translated",
             "value": "bu konuma bir not bırakın"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "avelao naoty eto amin'ity toerana ity"
+          }
         }
       }
     },
@@ -19985,6 +20935,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "buraya not bırakan ilk kişi olun"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "avy ho lasa olona voalohany nametraka naoty eto ianao"
           }
         }
       }
@@ -20111,6 +21067,12 @@
             "state": "translated",
             "value": "burada not yok"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tsy misy naoty eto"
+          }
         }
       }
     },
@@ -20236,6 +21198,12 @@
             "state": "translated",
             "value": "not gönderme başarısız. %@"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tsy nahomby ny fandefasana naoty. %@"
+          }
         }
       }
     },
@@ -20360,6 +21328,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "röle yok"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tsy misy relay"
           }
         }
       }
@@ -20980,6 +21954,34 @@
               }
             }
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%1$@ • %2$#@note_count@"
+          },
+          "substitutions": {
+            "note_count": {
+              "argNum": 2,
+              "formatSpecifier": "lld",
+              "variations": {
+                "plural": {
+                  "one": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%d naoty"
+                    }
+                  },
+                  "other": {
+                    "stringUnit": {
+                      "state": "translated",
+                      "value": "%d naoty"
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -21104,6 +22106,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "notlar yükleniyor"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mampiditra naoty"
           }
         }
       }
@@ -21230,6 +22238,12 @@
             "state": "translated",
             "value": "son notlar yükleniyor"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mampiditra naoty vao haingana"
+          }
         }
       }
     },
@@ -21354,6 +22368,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "yakında röle yok"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tsy misy relay akaiky"
           }
         }
       }
@@ -21480,6 +22500,12 @@
             "state": "translated",
             "value": "bu konuma bir not bırakın..."
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "avelao naoty eto amin'ity toerana ity..."
+          }
         }
       }
     },
@@ -21604,6 +22630,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "röleler duraklatıldı"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "natsahatra ny relay"
           }
         }
       }
@@ -21730,6 +22762,12 @@
             "state": "translated",
             "value": "rölelere bağlanmak için yeniden dene'ye dokunun"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tsindrio ny andramo indray hifandraisana amin'ny relay"
+          }
         }
       }
     },
@@ -21854,6 +22892,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "yeni mesajlar"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hafatra vaovao"
           }
         }
       }
@@ -21980,6 +23024,12 @@
             "state": "translated",
             "value": "%@ ile sohbet başlatılamıyor: kişi engellenmiş."
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tsy afaka manomboka resaka amin'i %@: voasakana ny olona."
+          }
         }
       }
     },
@@ -22104,6 +23154,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ ile sohbet başlatılamıyor: çevrimdışı mesajlaşma için karşılıklı favori gerekli."
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tsy afaka manomboka resaka amin'i %@: ilaina ny fifankatiavana ho an'ny hafatra tsy an-tserasera."
           }
         }
       }
@@ -22230,6 +23286,12 @@
             "state": "translated",
             "value": "kullanıcı"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mpampiasa"
+          }
         }
       }
     },
@@ -22354,6 +23416,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "mesaj engellendi"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "voasakana ny hafatra"
           }
         }
       }
@@ -22480,6 +23548,12 @@
             "state": "translated",
             "value": "%@ kişisine mesaj gönderilemiyor: kişi engellenmiş."
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tsy afaka mandefa hafatra any amin'i %@: voasakana ny olona."
+          }
         }
       }
     },
@@ -22604,6 +23678,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ kişisine mesaj gönderilemiyor - eş ağ veya nostr üzerinden erişilemiyor."
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tsy afaka mandefa hafatra any amin'i %@ - tsy azo tratrarina ny mpiara-miasa amin'ny alalan'ny harato na nostr."
           }
         }
       }
@@ -22730,6 +23810,12 @@
             "state": "translated",
             "value": "geohash sohbetlerinde %@ engellendi"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nosakanana tao amin'ny resaka geohash i %@"
+          }
         }
       }
     },
@@ -22854,6 +23940,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "geohash sohbetlerinde %@ engeli kaldırıldı"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nesorina ny fanakanana an'i %@ tao amin'ny resaka geohash"
           }
         }
       }
@@ -22980,6 +24072,12 @@
             "state": "translated",
             "value": "kanalda değil"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tsy ao amin'ny fantsona"
+          }
         }
       }
     },
@@ -23104,6 +24202,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "gönderme başarısız"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tsy nahomby ny fandefasana"
           }
         }
       }
@@ -23230,6 +24334,12 @@
             "state": "translated",
             "value": "geliştirici modu: Tor atlandı"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fomba dev: mihoatra ny Tor"
+          }
         }
       }
     },
@@ -23354,6 +24464,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tor yeniden başlatıldı"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "naverina nanomboka ny Tor"
           }
         }
       }
@@ -23480,6 +24596,12 @@
             "state": "translated",
             "value": "Tor yeniden başlatılıyor"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mamerina manomboka ny Tor"
+          }
         }
       }
     },
@@ -23604,6 +24726,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tor başlatıldı. Gizlilik için tüm sohbet Tor üzerinden yönlendiriliyor."
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nanomboka ny Tor. Ny resaka rehetra dia mandalo amin'ny Tor ho an'ny fiainana manokana."
           }
         }
       }
@@ -23730,6 +24858,12 @@
             "state": "translated",
             "value": "Tor başlatılıyor"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "manomboka ny Tor"
+          }
         }
       }
     },
@@ -23854,6 +24988,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "benim QR kodum"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ny kaody QR-ko"
           }
         }
       }
@@ -23980,6 +25120,12 @@
             "state": "translated",
             "value": "benim QR kodum"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ny kaody QR-ko"
+          }
         }
       }
     },
@@ -24104,6 +25250,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "QR kodu mevcut değil"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tsy misy kaody QR"
           }
         }
       }
@@ -24230,6 +25382,12 @@
             "state": "translated",
             "value": "parmak izini yapıştır"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "apetaho ny dian-tanana"
+          }
         }
       }
     },
@@ -24354,6 +25512,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "arkadaşınızın bu QR kodu taramasını sağlayın"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "avelao ny namanao hiscan ity kaody QR ity"
           }
         }
       }
@@ -24480,6 +25644,12 @@
             "state": "translated",
             "value": "geçersiz parmak izi"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "dian-tanana tsy mety"
+          }
         }
       }
     },
@@ -24604,6 +25774,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "eş bulunamadı"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tsy nahita mpiara-miasa"
           }
         }
       }
@@ -24730,6 +25906,12 @@
             "state": "translated",
             "value": "%@ için doğrulama istendi"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nangataka famarinana ho an'i %@"
+          }
         }
       }
     },
@@ -24854,6 +26036,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "parmak izini doğrula"
+          }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hamarino ny dian-tanana"
           }
         }
       }
@@ -24980,6 +26168,12 @@
             "state": "translated",
             "value": "doğrulama"
           }
+        },
+        "mg": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "famarinana"
+          }
         }
       }
     },
@@ -25103,6 +26297,12 @@
           }
         },
         "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@"
+          }
+        },
+        "mg": {
           "stringUnit": {
             "state": "translated",
             "value": "%@"
