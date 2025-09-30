@@ -646,7 +646,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "özel mesajlar noise protokolü ile şifrelenir"
+            "value": "özel mesajlar Noise protokolü ile şifrelenir"
           }
         },
         "pt": {
@@ -1004,7 +1004,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "mesajlar eşler üzerinden aktarılarak uzağa ulaşır"
+            "value": "mesajlar eşler üzerinden aktarılır, uzaklara ulaşır"
           }
         },
         "pt": {
@@ -1362,7 +1362,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "favori kişileriniz katıldığında bildirim alın"
+            "value": "favori insanlarınız katıldığında bildirim alın"
           }
         },
         "pt": {
@@ -1720,7 +1720,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "merkeziyetsiz anonim röleler üzerinden yakın bölgelerdeki insanlarla sohbet etmek için geohash kanalları"
+            "value": "yakın bölgelerdeki insanlarla merkeziyetsiz anonim aktarıcılar üzerinden sohbet etmek için geohash kanalları"
           }
         },
         "pt": {
@@ -2078,7 +2078,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "belirli kişileri bildirmek için @nickname kullanın"
+            "value": "belirli kişileri bildirmek için @takmaadı kullanın"
           }
         },
         "pt": {
@@ -2436,7 +2436,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bluetooth Low Energy kullanarak internet olmadan çalışır"
+            "value": "Bluetooth düşük enerji kullanarak internetsiz çalışır"
           }
         },
         "pt": {
@@ -2973,7 +2973,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "• kanalı değiştirmek için #mesh'e dokunun"
+            "value": "• kanalları değiştirmek için #mesh'e dokunun"
           }
         },
         "pt": {
@@ -3152,7 +3152,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "• sohbeti temizlemek için sohbete üç kez dokunun"
+            "value": "• sohbeti temizlemek için üç kez dokunun"
           }
         },
         "pt": {
@@ -3510,7 +3510,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "• kenar çubuğunu açmak için insan simgesine dokunun"
+            "value": "• yan panel için kişi simgesine dokunun"
           }
         },
         "pt": {
@@ -3868,7 +3868,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "• bir eşin adına dokunarak DM başlatın"
+            "value": "• DM başlatmak için bir eşin adına dokunun"
           }
         },
         "pt": {
@@ -4047,7 +4047,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "NASIL KULLANILIR"
+            "value": "KULLANIM"
           }
         },
         "pt": {
@@ -4584,7 +4584,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "sunucu, hesap veya veri toplama yok"
+            "value": "sunucu yok; hesap yok; veri toplanmaz"
           }
         },
         "pt": {
@@ -4942,7 +4942,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "logoya üç kez dokunun, tüm veriler anında silinsin"
+            "value": "tüm verileri anında silmek için logoya üç kez dokunun"
           }
         },
         "pt": {
@@ -5479,7 +5479,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "sidegroupchat"
+            "value": "yan grup sohbeti"
           }
         },
         "pt": {
@@ -5658,7 +5658,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "özel mesaj güvenliği henüz tamamen denetlenmedi. bu uyarı kaybolana kadar kritik durumlarda kullanmayın."
+            "value": "özel mesaj güvenliği henüz tam olarak denetlenmedi. bu uyarı kaybolana kadar kritik durumlar için kullanmayın."
           }
         },
         "pt": {
@@ -9443,7 +9443,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "mesh üzerinden ulaşılabilir"
+            "value": "mesh üzerinden erişilebilir"
           }
         },
         "pt": {
@@ -9801,7 +9801,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "bir mesaj göndermek için metin girin"
+            "value": "göndermek için bir mesaj girin"
           }
         },
         "pt": {
@@ -9980,7 +9980,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "göndermek için çift dokunun"
+            "value": "göndermek için iki kez dokunun"
           }
         },
         "pt": {
@@ -10517,7 +10517,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "favori durumunu değiştirmek için çift dokunun"
+            "value": "favori durumunu değiştirmek için iki kez dokunun"
           }
         },
         "pt": {
@@ -11054,7 +11054,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "doğrudan mesaj"
+            "value": "özel mesaj"
           }
         },
         "pt": {
@@ -11591,7 +11591,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "tokatla"
+            "value": "tokat"
           }
         },
         "pt": {
@@ -11949,7 +11949,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bluetooth kapalı. bitchat'i kullanmak için ayarlardan Bluetooth'u açın."
+            "value": "bluetooth kapalı. bitchat'i kullanmak için lütfen ayarlardan bluetooth'u açın."
           }
         },
         "pt": {
@@ -12128,7 +12128,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "bitchat'in yakın cihazlara bağlanması için Bluetooth izni gerekir. lütfen ayarlardan Bluetooth erişimini etkinleştirin."
+            "value": "bitchat yakın cihazlara bağlanmak için bluetooth iznine ihtiyaç duyar. lütfen ayarlarda bluetooth erişimini etkinleştirin."
           }
         },
         "pt": {
@@ -12486,7 +12486,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bluetooth gerekli"
+            "value": "bluetooth gerekli"
           }
         },
         "pt": {
@@ -12665,7 +12665,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "bu cihaz Bluetooth'u desteklemiyor. bitchat'in çalışması için Bluetooth gerekli."
+            "value": "bu cihaz bluetooth desteklemiyor. bitchat'in çalışması için bluetooth gerekir."
           }
         },
         "pt": {
@@ -12844,7 +12844,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "konum kanallarının ekran görüntüleri konumunuzu ortaya çıkarır. paylaşmadan önce iki kez düşünün."
+            "value": "konum kanallarının ekran görüntüleri konumunuzu ortaya çıkarır. herkese açık paylaşmadan önce düşünün."
           }
         },
         "pt": {
@@ -13202,7 +13202,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "engelle veya engellenen eşleri listele"
+            "value": "eşleri engelle veya engellenenleri listele"
           }
         },
         "pt": {
@@ -14276,7 +14276,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "bir eşin engelini kaldır"
+            "value": "bir eşi engelden çıkar"
           }
         },
         "pt": {
@@ -14455,7 +14455,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "favorilerden çıkar"
+            "value": "favorilerden kaldır"
           }
         },
         "pt": {
@@ -14634,7 +14634,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "kimler çevrimiçi gör"
+            "value": "kim çevrimiçi bak"
           }
         },
         "pt": {
@@ -14813,7 +14813,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%2$d üyeden %1$d kişiye ulaştı"
+            "value": "%2$d üyenin %1$d'ine teslim edildi"
           }
         },
         "pt": {
@@ -14992,7 +14992,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@'a iletildi"
+            "value": "%@'ya teslim edildi"
           }
         },
         "pt": {
@@ -15350,7 +15350,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ okudu"
+            "value": "%@ tarafından okundu"
           }
         },
         "pt": {
@@ -15708,7 +15708,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "kendine mesaj gönderemezsin"
+            "value": "kendinize mesaj gönderemezsiniz"
           }
         },
         "pt": {
@@ -15887,7 +15887,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "gönderme hatası"
+            "value": "gönderim hatası"
           }
         },
         "pt": {
@@ -16245,7 +16245,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "eşe ulaşılamıyor"
+            "value": "eş erişilemez"
           }
         },
         "pt": {
@@ -16603,7 +16603,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "doğrulama: QR kodumu göster veya bir arkadaşını tara"
+            "value": "doğrulama: kendi QR kodumu göster veya bir arkadaşını tara"
           }
         },
         "pt": {
@@ -16782,7 +16782,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "bir mesaj yazın..."
+            "value": "bir mesaj yaz..."
           }
         },
         "pt": {
@@ -18930,7 +18930,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "şifrelenmedi"
+            "value": "şifrelenmemiş"
           }
         },
         "pt": {
@@ -19288,7 +19288,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "şifreli ve doğrulandı"
+            "value": "şifreli ve doğrulanmış"
           }
         },
         "pt": {
@@ -19825,7 +19825,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "şifrelenmedi"
+            "value": "şifrelenmemiş"
           }
         },
         "pt": {
@@ -20183,7 +20183,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "şifreli ve doğrulandı"
+            "value": "şifreli ve doğrulanmış"
           }
         },
         "pt": {
@@ -21436,7 +21436,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "bu parmak izlerini %@ ile güvenli bir kanalda karşılaştırın."
+            "value": "bu parmak izlerini güvenli bir kanal üzerinden %@ ile karşılaştırın."
           }
         },
         "pt": {
@@ -22510,7 +22510,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "yakında kimse yok..."
+            "value": "etrafta kimse yok..."
           }
         },
         "pt": {
@@ -23405,7 +23405,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "konum izni ve geohash'lerimi al"
+            "value": "konumu ve geohash'lerimi al"
           }
         },
         "pt": {
@@ -23942,7 +23942,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "geohash kanallarıyla yakınınızdaki insanlarla sohbet edin. yalnızca kaba bir geohash paylaşılır, tam GPS asla değil. IP adresiniz tüm trafik Tor üzerinden yönlendirilerek gizlenir."
+            "value": "yakınınızdaki insanlarla geohash kanalları üzerinden sohbet edin. yalnızca kaba bir geohash paylaşılır, asla tam GPS değil. tüm trafik tor üzerinden yönlendirilerek IP adresiniz gizlenir."
           }
         },
         "pt": {
@@ -24121,7 +24121,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "geçersiz geohash"
+            "value": "geohash geçersiz"
           }
         },
         "pt": {
@@ -26116,7 +26116,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tor yönlendirmesi"
+            "value": "tor yönlendirmesi"
           }
         },
         "pt": {
@@ -27727,7 +27727,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "bu konuma gelen diğer ziyaretçilerin bulması için kısa kalıcı notlar ekleyin."
+            "value": "bu konuma diğer ziyaretçilerin bulması için kısa kalıcı notlar ekleyin."
           }
         },
         "pt": {
@@ -28443,7 +28443,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "bu konuma yakın geo röle yok. birazdan yeniden deneyin."
+            "value": "bu konumun yakınında geo aktarıcı yok. yakında tekrar deneyin."
           }
         },
         "pt": {
@@ -29543,7 +29543,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "yakında geo röle yok"
+            "value": "yakında geo aktarıcı yok"
           }
         },
         "pt": {
@@ -29722,7 +29722,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "bu yer için bir not ekleyin"
+            "value": "bu yer için bir not ekle"
           }
         },
         "pt": {
@@ -29901,7 +29901,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "geo röleler kullanılamıyor; notlar durduruldu"
+            "value": "geo aktarıcılar kullanılamıyor; notlar durduruldu"
           }
         },
         "pt": {
@@ -30080,7 +30080,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "notlar geo rölelere bağlıdır. bağlantıyı kontrol edip tekrar deneyin."
+            "value": "notlar geo aktarıcılara dayanır. bağlantıyı kontrol edip tekrar deneyin."
           }
         },
         "pt": {
@@ -30438,7 +30438,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ ile sohbet başlatılamıyor: kişi engelli."
+            "value": "%@ ile sohbet başlatılamıyor: kişi engellenmiş."
           }
         },
         "pt": {
@@ -30975,7 +30975,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "mesaj gönderilemiyor: kişi engelli."
+            "value": "mesaj gönderilemiyor: kişi engellenmiş."
           }
         },
         "pt": {
@@ -31154,7 +31154,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@'a mesaj gönderilemiyor: kişi engelli."
+            "value": "%@'ya mesaj gönderilemiyor: kişi engellenmiş."
           }
         },
         "pt": {
@@ -31333,7 +31333,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@'a mesaj gönderilemiyor - eş mesh veya Nostr üzerinden ulaşılamıyor."
+            "value": "%@'ya mesaj gönderilemiyor - eş mesh veya nostr üzerinden erişilemiyor."
           }
         },
         "pt": {
@@ -31870,7 +31870,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "gönderilemiyor: konum kanalında değilsiniz"
+            "value": "gönderilemiyor: bir konum kanalında değilsiniz"
           }
         },
         "pt": {
@@ -32049,7 +32049,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "konum kanalına gönderme başarısız"
+            "value": "konum kanalına gönderilemedi"
           }
         },
         "pt": {
@@ -32228,7 +32228,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "geliştirme yapısı: Tor atlatması etkin."
+            "value": "geliştirme derlemesi: Tor atlatması etkin."
           }
         },
         "pt": {
@@ -32407,7 +32407,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tor yeniden başlatıldı. ağ yönlendirmesi geri geldi."
+            "value": "tor yeniden başlatıldı. ağ yönlendirmesi geri geldi."
           }
         },
         "pt": {
@@ -32586,7 +32586,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tor bağlantıyı kurtarmak için yeniden başlatılıyor..."
+            "value": "bağlantıyı düzeltmek için tor yeniden başlatılıyor..."
           }
         },
         "pt": {
@@ -32765,7 +32765,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tor başlatıldı. IP gizliliği için tüm sohbetler Tor üzerinden yönlendiriliyor."
+            "value": "tor başlatıldı. IP gizliliği için tüm sohbetler tor üzerinden yönlendiriliyor."
           }
         },
         "pt": {
@@ -32944,7 +32944,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tor başlatılıyor..."
+            "value": "tor başlatılıyor..."
           }
         },
         "pt": {
@@ -33481,7 +33481,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "QR mevcut değil"
+            "value": "QR kullanılamıyor"
           }
         },
         "pt": {
@@ -33660,7 +33660,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "doğrulamak için QR içeriğini yapıştırın:"
+            "value": "doğrulamak için QR içeriğini yapıştır:"
           }
         },
         "pt": {
@@ -33839,7 +33839,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "bir arkadaşının QR'ını tara"
+            "value": "bir arkadaşının QR kodunu tara"
           }
         },
         "pt": {
@@ -34018,7 +34018,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "geçersiz veya süresi dolmuş QR yükü"
+            "value": "geçersiz veya süresi dolmuş QR veri yükü"
           }
         },
         "pt": {
@@ -34197,7 +34197,7 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "eş bulunamadı"
+            "value": "eşleşen eş bulunamadı"
           }
         },
         "pt": {
