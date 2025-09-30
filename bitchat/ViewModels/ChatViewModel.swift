@@ -1491,14 +1491,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             mentions: mentions.isEmpty ? nil : mentions
         )
 
-        print("📤 Created message id=\(message.id.prefix(8))... content='\(trimmed)'")
-        print("📤 BEFORE append: messages.count=\(messages.count)")
-
         // Add to main messages immediately for user feedback
         messages.append(message)
-
-        print("📤 AFTER append: messages.count=\(messages.count)")
-        print("📤 Last message in array: id=\(messages.last?.id.prefix(8) ?? "nil") content='\(messages.last?.content ?? "nil")'")
 
         // Update content LRU for near-dup detection
         let ckey = normalizedContentKey(message.content)
@@ -1518,15 +1512,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             geoTimelines[ch.geohash] = arr
         }
 
-        print("📤 BEFORE trimMessagesIfNeeded: messages.count=\(messages.count)")
         trimMessagesIfNeeded()
-        print("📤 AFTER trimMessagesIfNeeded: messages.count=\(messages.count)")
 
         // UI updates automatically via @Published var messages
 
-        print("📤 Calling updateChannelActivityTimeThenSend")
         updateChannelActivityTimeThenSend(content: content, trimmed: trimmed, mentions: mentions)
-        print("📤 sendMessage COMPLETE - final messages.count=\(messages.count)")
     }
 
     private func updateChannelActivityTimeThenSend(content: String, trimmed: String, mentions: [String]) {
