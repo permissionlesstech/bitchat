@@ -112,7 +112,8 @@
         "rhg": {
           "stringUnit": {
             "state": "translated",
-            "value": "share kora link"
+            "value": "share kora link",
+            "comment": "Fallback title when saving a shared link"
           }
         }
       }
@@ -228,7 +229,8 @@
         "rhg": {
           "stringUnit": {
             "state": "translated",
-            "value": "link encode korte parlam na"
+            "value": "link encode korte parlam na",
+            "comment": "Shown when the share payload cannot be encoded"
           }
         }
       }
@@ -344,7 +346,8 @@
         "rhg": {
           "stringUnit": {
             "state": "translated",
-            "value": "share korar moto kichu nai"
+            "value": "share korar moto kichu nai",
+            "comment": "Shown when provided content cannot be shared"
           }
         }
       }
@@ -460,7 +463,8 @@
         "rhg": {
           "stringUnit": {
             "state": "translated",
-            "value": "share korar onno kichu nai"
+            "value": "share korar onno kichu nai",
+            "comment": "Shown when the share extension receives no content"
           }
         }
       }
@@ -576,7 +580,8 @@
         "rhg": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ link bitchat e share hoigiyé"
+            "value": "✓ link bitchat e share hoigiyé",
+            "comment": "Confirmation after successfully sharing a link"
           }
         }
       }
@@ -692,7 +697,8 @@
         "rhg": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ text bitchat e share hoigiyé"
+            "value": "✓ text bitchat e share hoigiyé",
+            "comment": "Confirmation after successfully sharing text"
           }
         }
       }
