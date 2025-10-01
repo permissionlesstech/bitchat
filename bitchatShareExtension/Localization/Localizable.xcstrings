@@ -112,7 +112,8 @@
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "baham ko‘rilgan havola"
+            "value": "baham ko'rilgan havola",
+            "comment": "Fallback title when saving a shared link"
           }
         }
       }
@@ -228,7 +229,8 @@
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "havolani shifrlash muvaffaqiyatsiz"
+            "value": "havolani shifrlash muvaffaqiyatsiz",
+            "comment": "Shown when the share payload cannot be encoded"
           }
         }
       }
@@ -344,7 +346,8 @@
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "bahamlashishga mos kontent yo‘q"
+            "value": "bahamlashishga mos kontent yo'q",
+            "comment": "Shown when provided content cannot be shared"
           }
         }
       }
@@ -460,7 +463,8 @@
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "baham ko‘radigan hech narsa yo‘q"
+            "value": "baham ko'radigan hech narsa yo'q",
+            "comment": "Shown when the share extension receives no content"
           }
         }
       }
@@ -576,7 +580,8 @@
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ havola bitchat bilan bo‘lishildi"
+            "value": "✓ havola bitchat bilan bo'lishildi",
+            "comment": "Confirmation after successfully sharing a link"
           }
         }
       }
@@ -692,7 +697,8 @@
         "uz": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ matn bitchat bilan bo‘lishildi"
+            "value": "✓ matn bitchat bilan bo'lishildi",
+            "comment": "Confirmation after successfully sharing text"
           }
         }
       }
