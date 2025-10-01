@@ -112,7 +112,8 @@
         "th": {
           "stringUnit": {
             "state": "translated",
-            "value": "ลิงก์ที่แชร์"
+            "value": "ลิงก์ที่แชร์",
+            "comment": "Fallback title when saving a shared link"
           }
         }
       }
@@ -228,7 +229,8 @@
         "th": {
           "stringUnit": {
             "state": "translated",
-            "value": "เข้ารหัสลิงก์ไม่สำเร็จ"
+            "value": "เข้ารหัสลิงก์ไม่สำเร็จ",
+            "comment": "Shown when the share payload cannot be encoded"
           }
         }
       }
@@ -344,7 +346,8 @@
         "th": {
           "stringUnit": {
             "state": "translated",
-            "value": "ไม่มีเนื้อหาที่แชร์ได้"
+            "value": "ไม่มีเนื้อหาที่แชร์ได้",
+            "comment": "Shown when provided content cannot be shared"
           }
         }
       }
@@ -460,7 +463,8 @@
         "th": {
           "stringUnit": {
             "state": "translated",
-            "value": "ไม่มีสิ่งใดจะแชร์"
+            "value": "ไม่มีสิ่งใดจะแชร์",
+            "comment": "Shown when the share extension receives no content"
           }
         }
       }
@@ -576,7 +580,8 @@
         "th": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ แชร์ลิงก์ไปยัง bitchat แล้ว"
+            "value": "✓ แชร์ลิงก์ไปยัง bitchat แล้ว",
+            "comment": "Confirmation after successfully sharing a link"
           }
         }
       }
@@ -692,7 +697,8 @@
         "th": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ แชร์ข้อความไปยัง bitchat แล้ว"
+            "value": "✓ แชร์ข้อความไปยัง bitchat แล้ว",
+            "comment": "Confirmation after successfully sharing text"
           }
         }
       }
