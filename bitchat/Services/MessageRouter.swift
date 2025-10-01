@@ -94,7 +94,7 @@ final class MessageRouter {
                 return true
             }
         } else if peerID.count == 16 {
-            if let fav = FavoritesPersistenceService.shared.getFavoriteStatus(forPeerID: peerID),
+            if let fav = FavoritesPersistenceService.shared.getFavoriteStatus(forPeerID: PeerID(str: peerID)),
                fav.peerNostrPublicKey != nil {
                 return true
             }
