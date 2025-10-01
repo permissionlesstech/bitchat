@@ -112,7 +112,8 @@
         "jv": {
           "stringUnit": {
             "state": "translated",
-            "value": "link sing dibagi"
+            "value": "link sing dibagi",
+            "comment": "Fallback title when saving a shared link"
           }
         }
       }
@@ -228,7 +229,8 @@
         "jv": {
           "stringUnit": {
             "state": "translated",
-            "value": "gagal enkode link"
+            "value": "gagal enkode link",
+            "comment": "Shown when the share payload cannot be encoded"
           }
         }
       }
@@ -344,7 +346,8 @@
         "jv": {
           "stringUnit": {
             "state": "translated",
-            "value": "ora ana konten sing bisa dibagi"
+            "value": "ora ana konten sing bisa dibagi",
+            "comment": "Shown when provided content cannot be shared"
           }
         }
       }
@@ -460,7 +463,8 @@
         "jv": {
           "stringUnit": {
             "state": "translated",
-            "value": "ora ana sing bisa dibagi"
+            "value": "ora ana sing bisa dibagi",
+            "comment": "Shown when the share extension receives no content"
           }
         }
       }
@@ -576,7 +580,8 @@
         "jv": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ link wis dibagi menyang bitchat"
+            "value": "✓ link wis dibagi menyang bitchat",
+            "comment": "Confirmation after successfully sharing a link"
           }
         }
       }
@@ -692,7 +697,8 @@
         "jv": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ teks wis dibagi menyang bitchat"
+            "value": "✓ teks wis dibagi menyang bitchat",
+            "comment": "Confirmation after successfully sharing text"
           }
         }
       }
