@@ -112,7 +112,8 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pautan dikongsi"
+            "value": "Pautan dikongsi",
+            "comment": "Fallback title when saving a shared link"
           }
         }
       }
@@ -228,7 +229,8 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gagal mengekod pautan"
+            "value": "Gagal mengekod pautan",
+            "comment": "Shown when the share payload cannot be encoded"
           }
         }
       }
@@ -344,7 +346,8 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tiada kandungan boleh dikongsi"
+            "value": "Tiada kandungan boleh dikongsi",
+            "comment": "Shown when provided content cannot be shared"
           }
         }
       }
@@ -460,7 +463,8 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tiada apa untuk dikongsi"
+            "value": "Tiada apa untuk dikongsi",
+            "comment": "Shown when the share extension receives no content"
           }
         }
       }
@@ -576,7 +580,8 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ pautan dikongsi ke bitchat"
+            "value": "✓ pautan dikongsi ke bitchat",
+            "comment": "Confirmation after successfully sharing a link"
           }
         }
       }
@@ -692,7 +697,8 @@
         "ms": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ teks dikongsi ke bitchat"
+            "value": "✓ teks dikongsi ke bitchat",
+            "comment": "Confirmation after successfully sharing text"
           }
         }
       }
