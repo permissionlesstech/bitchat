@@ -1615,7 +1615,7 @@ final class BLEService: NSObject {
         if peerID == myPeerID {
             return
         }
-        
+
         // Minimum header: 8 bytes ID + 2 index + 2 total + 1 type
         guard packet.payload.count >= 13 else { return }
 
@@ -1634,47 +1634,76 @@ final class BLEService: NSObject {
         let originalType = packet.payload[12]
         let fragmentData = packet.payload.suffix(from: 13)
 
-        // Sanity checks
-        guard total > 0 && index >= 0 && index < total else { return }
+        // Sanity checks - add reasonable upper bound on total to prevent DoS
+        guard total > 0 && total <= 10000 && index >= 0 && index < total else { return }
 
-        // Store fragment
+        // Compute fragment key for this assembly
         let key = FragmentKey(sender: senderU64, id: fragU64)
-        if incomingFragments[key] == nil {
-            // Cap in-flight assemblies to prevent memory/battery blowups
-            if incomingFragments.count >= maxInFlightAssemblies {
-                // Evict the oldest assembly by timestamp
-                if let oldest = fragmentMetadata.min(by: { $0.value.timestamp < $1.value.timestamp })?.key {
-                    incomingFragments.removeValue(forKey: oldest)
-                    fragmentMetadata.removeValue(forKey: oldest)
-                }
-            }
-            incomingFragments[key] = [:]
-            fragmentMetadata[key] = (originalType, total, Date())
-            SecureLogger.debug("📦 Started fragment assembly id=\(String(format: "%016llx", fragU64)) total=\(total)", category: .session)
-        }
-        incomingFragments[key]?[index] = Data(fragmentData)
-        SecureLogger.debug("📦 Fragment \(index + 1)/\(total) (len=\(fragmentData.count)) for id=\(String(format: "%016llx", fragU64))", category: .session)
 
-        // Check if complete
-        if let fragments = incomingFragments[key],
-           fragments.count == total {
-            // Reassemble
-            var reassembled = Data()
-            for i in 0..<total {
-                if let fragment = fragments[i] {
-                    reassembled.append(fragment)
+        // Critical section: Store fragment and check completion status
+        var shouldReassemble: Bool = false
+        var fragmentsToReassemble: [Int: Data]? = nil
+
+        collectionsQueue.sync(flags: .barrier) {
+            if incomingFragments[key] == nil {
+                // Cap in-flight assemblies to prevent memory/battery blowups
+                if incomingFragments.count >= maxInFlightAssemblies {
+                    // Evict the oldest assembly by timestamp
+                    if let oldest = fragmentMetadata.min(by: { $0.value.timestamp < $1.value.timestamp })?.key {
+                        incomingFragments.removeValue(forKey: oldest)
+                        fragmentMetadata.removeValue(forKey: oldest)
+                    }
                 }
+                incomingFragments[key] = [:]
+                fragmentMetadata[key] = (originalType, total, Date())
+                SecureLogger.debug("📦 Started fragment assembly id=\(String(format: "%016llx", fragU64)) total=\(total)", category: .session)
             }
-            
-            // Decode the original packet bytes we reassembled, so flags/compression are preserved
-            if let originalPacket = BinaryProtocol.decode(reassembled) {
-                SecureLogger.debug("✅ Reassembled packet id=\(String(format: "%016llx", fragU64)) type=\(originalPacket.type) bytes=\(reassembled.count)", category: .session)
-                handleReceivedPacket(originalPacket, from: peerID)
+
+            // Check cumulative size before storing this fragment
+            let currentSize = incomingFragments[key]?.values.reduce(0) { $0 + $1.count } ?? 0
+            guard currentSize + fragmentData.count <= FileTransferLimits.maxPayloadBytes else {
+                // Exceeds size limit - evict this assembly
+                SecureLogger.warning("🚫 Fragment assembly exceeds size limit (\(currentSize + fragmentData.count) bytes), evicting", category: .security)
+                incomingFragments.removeValue(forKey: key)
+                fragmentMetadata.removeValue(forKey: key)
+                shouldReassemble = false
+                fragmentsToReassemble = nil
+                return
+            }
+
+            incomingFragments[key]?[index] = Data(fragmentData)
+            SecureLogger.debug("📦 Fragment \(index + 1)/\(total) (len=\(fragmentData.count)) for id=\(String(format: "%016llx", fragU64))", category: .session)
+
+            // Check if complete
+            if let fragments = incomingFragments[key], fragments.count == total {
+                shouldReassemble = true
+                fragmentsToReassemble = fragments
             } else {
-                SecureLogger.error("❌ Failed to decode reassembled packet (type=\(originalType), total=\(total))", category: .session)
+                shouldReassemble = false
+                fragmentsToReassemble = nil
             }
-            
-            // Cleanup
+        }
+
+        // Heavy work outside lock: reassemble and decode
+        guard shouldReassemble, let fragments = fragmentsToReassemble else { return }
+
+        var reassembled = Data()
+        for i in 0..<total {
+            if let fragment = fragments[i] {
+                reassembled.append(fragment)
+            }
+        }
+
+        // Decode the original packet bytes we reassembled, so flags/compression are preserved
+        if let originalPacket = BinaryProtocol.decode(reassembled) {
+            SecureLogger.debug("✅ Reassembled packet id=\(String(format: "%016llx", fragU64)) type=\(originalPacket.type) bytes=\(reassembled.count)", category: .session)
+            handleReceivedPacket(originalPacket, from: peerID)
+        } else {
+            SecureLogger.error("❌ Failed to decode reassembled packet (type=\(originalType), total=\(total))", category: .session)
+        }
+
+        // Critical section: Cleanup completed assembly
+        collectionsQueue.sync(flags: .barrier) {
             incomingFragments.removeValue(forKey: key)
             fragmentMetadata.removeValue(forKey: key)
         }

@@ -2747,21 +2747,34 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     }
 
     private func cleanupLocalFile(forMessage message: BitchatMessage) {
-        let prefixes = ["[voice] ": "voicenotes/outgoing",
-                        "[image] ": "images/outgoing",
-                        "[file] ": "files/outgoing"]
-        guard let entry = prefixes.first(where: { message.content.hasPrefix($0.key) }) else { return }
-        let filename = String(message.content.dropFirst(entry.key.count)).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !filename.isEmpty, let base = try? applicationFilesDirectory() else { return }
-        let target = base.appendingPathComponent(entry.value, isDirectory: true).appendingPathComponent(filename)
+        // Check both outgoing and incoming directories for thorough cleanup
+        let prefixes = ["[voice] ", "[image] ", "[file] "]
+        let subdirs = ["voicenotes/outgoing", "voicenotes/incoming",
+                       "images/outgoing", "images/incoming",
+                       "files/outgoing", "files/incoming"]
 
-        // Security: Remove file directly (no TOCTOU race)
-        do {
-            try FileManager.default.removeItem(at: target)
-        } catch CocoaError.fileNoSuchFile {
-            // Expected
-        } catch {
-            SecureLogger.error("Failed to cleanup \(filename): \(error)", category: .session)
+        guard let prefix = prefixes.first(where: { message.content.hasPrefix($0) }) else { return }
+        let rawFilename = String(message.content.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !rawFilename.isEmpty, let base = try? applicationFilesDirectory() else { return }
+
+        // Security: Extract only the last path component to prevent directory traversal
+        let safeFilename = (rawFilename as NSString).lastPathComponent
+        guard !safeFilename.isEmpty && safeFilename != "." && safeFilename != ".." else { return }
+
+        // Try all possible locations (outgoing and incoming)
+        for subdir in subdirs {
+            let target = base.appendingPathComponent(subdir, isDirectory: true).appendingPathComponent(safeFilename)
+
+            // Security: Verify target is within expected directory before deletion
+            guard target.path.hasPrefix(base.path) else { continue }
+
+            do {
+                try FileManager.default.removeItem(at: target)
+            } catch CocoaError.fileNoSuchFile {
+                // Expected - file not in this directory
+            } catch {
+                SecureLogger.error("Failed to cleanup \(safeFilename): \(error)", category: .session)
+            }
         }
     }
 
