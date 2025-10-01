@@ -112,7 +112,8 @@
         "ps": {
           "stringUnit": {
             "state": "translated",
-            "value": "شریک شوی لینک"
+            "value": "شریک شوی لینک",
+            "comment": "Fallback title when saving a shared link"
           }
         }
       }
@@ -228,7 +229,8 @@
         "ps": {
           "stringUnit": {
             "state": "translated",
-            "value": "د لینک کوډول ناکام شو"
+            "value": "د لینک کوډول ناکام شو",
+            "comment": "Shown when the share payload cannot be encoded"
           }
         }
       }
@@ -344,7 +346,8 @@
         "ps": {
           "stringUnit": {
             "state": "translated",
-            "value": "د شریکولو وړ منځپانګه نشته"
+            "value": "د شریکولو وړ منځپانګه نشته",
+            "comment": "Shown when provided content cannot be shared"
           }
         }
       }
@@ -460,7 +463,8 @@
         "ps": {
           "stringUnit": {
             "state": "translated",
-            "value": "د شریکولو لپاره څه نشته"
+            "value": "د شریکولو لپاره څه نشته",
+            "comment": "Shown when the share extension receives no content"
           }
         }
       }
@@ -576,7 +580,8 @@
         "ps": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ لینک bitchat ته شریک شو"
+            "value": "✓ لینک bitchat ته شریک شو",
+            "comment": "Confirmation after successfully sharing a link"
           }
         }
       }
@@ -692,7 +697,8 @@
         "ps": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ متن bitchat ته شریک شو"
+            "value": "✓ متن bitchat ته شریک شو",
+            "comment": "Confirmation after successfully sharing text"
           }
         }
       }
