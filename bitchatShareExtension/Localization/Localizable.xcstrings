@@ -112,7 +112,8 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "kiungo kilichoshirikiwa"
+            "value": "kiungo kilichoshirikiwa",
+            "comment": "Fallback title when saving a shared link"
           }
         }
       }
@@ -228,7 +229,8 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "imeshindwa kusimba kiungo"
+            "value": "imeshindwa kusimba kiungo",
+            "comment": "Shown when the share payload cannot be encoded"
           }
         }
       }
@@ -344,7 +346,8 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "hakuna maudhui ya kushiriki"
+            "value": "hakuna maudhui ya kushiriki",
+            "comment": "Shown when provided content cannot be shared"
           }
         }
       }
@@ -460,7 +463,8 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "hakuna cha kushiriki"
+            "value": "hakuna cha kushiriki",
+            "comment": "Shown when the share extension receives no content"
           }
         }
       }
@@ -576,7 +580,8 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ kiungo kimeshirikiwa kwa bitchat"
+            "value": "✓ kiungo kimeshirikiwa kwa bitchat",
+            "comment": "Confirmation after successfully sharing a link"
           }
         }
       }
@@ -692,7 +697,8 @@
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ maandishi yameshirikiwa kwa bitchat"
+            "value": "✓ maandishi yameshirikiwa kwa bitchat",
+            "comment": "Confirmation after successfully sharing text"
           }
         }
       }
