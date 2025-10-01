@@ -112,7 +112,8 @@
         "ti": {
           "stringUnit": {
             "state": "translated",
-            "value": "ዝተካፈለ ኣገናእ"
+            "value": "ዝተካፈለ ኣገናእ",
+            "comment": "Fallback title when saving a shared link"
           }
         }
       }
