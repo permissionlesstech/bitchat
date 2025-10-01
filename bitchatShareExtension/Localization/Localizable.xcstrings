@@ -112,7 +112,8 @@
         "fa": {
           "stringUnit": {
             "state": "translated",
-            "value": "لینک به اشتراک گذاشته شد"
+            "value": "لینک به اشتراک گذاشته شد",
+            "comment": "Fallback title when saving a shared link"
           }
         }
       }
@@ -228,7 +229,8 @@
         "fa": {
           "stringUnit": {
             "state": "translated",
-            "value": "رمزگذاری لینک ناموفق بود"
+            "value": "رمزگذاری لینک ناموفق بود",
+            "comment": "Shown when the share payload cannot be encoded"
           }
         }
       }
@@ -344,7 +346,8 @@
         "fa": {
           "stringUnit": {
             "state": "translated",
-            "value": "محتوای قابل اشتراک وجود ندارد"
+            "value": "محتوای قابل اشتراک وجود ندارد",
+            "comment": "Shown when provided content cannot be shared"
           }
         }
       }
@@ -460,7 +463,8 @@
         "fa": {
           "stringUnit": {
             "state": "translated",
-            "value": "چیزی برای اشتراک نیست"
+            "value": "چیزی برای اشتراک نیست",
+            "comment": "Shown when the share extension receives no content"
           }
         }
       }
@@ -576,7 +580,8 @@
         "fa": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ لینک به bitchat به اشتراک گذاشته شد"
+            "value": "✓ لینک به bitchat به اشتراک گذاشته شد",
+            "comment": "Confirmation after successfully sharing a link"
           }
         }
       }
@@ -692,7 +697,8 @@
         "fa": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ متن به bitchat به اشتراک گذاشته شد"
+            "value": "✓ متن به bitchat به اشتراک گذاشته شد",
+            "comment": "Confirmation after successfully sharing text"
           }
         }
       }
