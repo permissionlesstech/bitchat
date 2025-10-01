@@ -21,7 +21,7 @@ final class BitchatMessage: Codable {
     let originalSender: String?
     let isPrivate: Bool
     let recipientNickname: String?
-    let senderPeerID: String?
+    let senderPeerID: PeerID?
     let mentions: [String]?  // Array of mentioned nicknames
     var deliveryStatus: DeliveryStatus? // Delivery tracking
     
@@ -51,7 +51,7 @@ final class BitchatMessage: Codable {
         self.originalSender = originalSender
         self.isPrivate = isPrivate
         self.recipientNickname = recipientNickname
-        self.senderPeerID = senderPeerID
+        self.senderPeerID = PeerID(str: senderPeerID)
         self.mentions = mentions
         self.deliveryStatus = deliveryStatus ?? (isPrivate ? .sending : nil)
     }
@@ -151,7 +151,7 @@ extension BitchatMessage {
             data.append(recipData.prefix(255))
         }
         
-        if let senderPeerID = senderPeerID, let peerData = senderPeerID.data(using: .utf8) {
+        if let peerData = senderPeerID?.id.data(using: .utf8) {
             data.append(UInt8(min(peerData.count, 255)))
             data.append(peerData.prefix(255))
         }

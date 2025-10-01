@@ -290,6 +290,48 @@ final class PeerIDTests: XCTestCase {
         XCTAssertEqual(sorted, [p1, p2])
     }
     
+    func test_equality() {
+        let string = "aaa"
+        let peerID = PeerID(str: string)
+        let badString = "bbb"
+        
+        // PeerID == String
+        XCTAssertTrue(peerID == string)
+        XCTAssertTrue(peerID == Optional(string))
+        XCTAssertTrue(Optional(peerID) == string)
+        XCTAssertTrue(Optional(peerID) == Optional(string))
+
+        // PeerID != String
+        XCTAssertTrue(peerID != badString)
+        XCTAssertTrue(peerID != Optional(badString))
+        XCTAssertTrue(Optional(peerID) != badString)
+        XCTAssertTrue(Optional(peerID) != Optional(badString))
+        
+        // String == PeerID
+        XCTAssertTrue(string == peerID)
+        XCTAssertTrue(Optional(string) == peerID)
+        XCTAssertTrue(string == Optional(peerID))
+        XCTAssertTrue(Optional(string) == Optional(peerID))
+
+        // String != PeerID
+        XCTAssertTrue(badString != peerID)
+        XCTAssertTrue(Optional(badString) != peerID)
+        XCTAssertTrue(badString != Optional(peerID))
+        XCTAssertTrue(Optional(badString) != Optional(peerID))
+        
+        
+        // Make sure the regular PeerID <> PeerID is not broken
+        XCTAssertTrue(peerID == PeerID(str: "aaa"))
+        XCTAssertTrue(peerID == Optional(PeerID(str: "aaa")))
+        XCTAssertTrue(PeerID(str: "aaa") == peerID)
+        XCTAssertTrue(Optional(PeerID(str: "aaa")) == Optional(peerID))
+        
+        XCTAssertTrue(peerID != PeerID(str: "bbb"))
+        XCTAssertTrue(peerID != Optional(PeerID(str: "bbb")))
+        XCTAssertTrue(PeerID(str: "bbb") != peerID)
+        XCTAssertTrue(Optional(PeerID(str: "bbb")) != Optional(peerID))
+    }
+    
     // MARK: - Computed properties
     
     func test_isEmpty_true_and_false() {

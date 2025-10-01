@@ -111,7 +111,7 @@ final class PublicChatE2ETests: XCTestCase {
                     originalSender: message.sender,
                     isPrivate: message.isPrivate,
                     recipientNickname: message.recipientNickname,
-                    senderPeerID: message.senderPeerID,
+                    senderPeerID: message.senderPeerID?.id,
                     mentions: message.mentions
                 )
                 
@@ -451,7 +451,7 @@ final class PublicChatE2ETests: XCTestCase {
                     originalSender: message.isRelay ? message.originalSender : message.sender,
                     isPrivate: message.isPrivate,
                     recipientNickname: message.recipientNickname,
-                    senderPeerID: message.senderPeerID,
+                    senderPeerID: message.senderPeerID?.id,
                     mentions: message.mentions
                 )
                 
