@@ -112,7 +112,8 @@
         "am": {
           "stringUnit": {
             "state": "translated",
-            "value": "የተጋራ አገናኝ"
+            "value": "የተጋራ አገናኝ",
+            "comment": "Fallback title when saving a shared link"
           }
         }
       }
@@ -228,7 +229,8 @@
         "am": {
           "stringUnit": {
             "state": "translated",
-            "value": "አገናኝን መስቀል አልተሳካም"
+            "value": "አገናኝን መስቀል አልተሳካም",
+            "comment": "Shown when the share payload cannot be encoded"
           }
         }
       }
@@ -344,7 +346,8 @@
         "am": {
           "stringUnit": {
             "state": "translated",
-            "value": "ሊጋራ የሚችል ይዘት የለም"
+            "value": "ሊጋራ የሚችል ይዘት የለም",
+            "comment": "Shown when provided content cannot be shared"
           }
         }
       }
@@ -460,7 +463,8 @@
         "am": {
           "stringUnit": {
             "state": "translated",
-            "value": "ምንም ለመጋራት የለም"
+            "value": "ምንም ለመጋራት የለም",
+            "comment": "Shown when the share extension receives no content"
           }
         }
       }
@@ -576,7 +580,8 @@
         "am": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ አገናኝ ወደ bitchat ተጋራ"
+            "value": "✓ አገናኝ ወደ bitchat ተጋራ",
+            "comment": "Confirmation after successfully sharing a link"
           }
         }
       }
@@ -692,7 +697,8 @@
         "am": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ ጽሑፍ ወደ bitchat ተጋራ"
+            "value": "✓ ጽሑፍ ወደ bitchat ተጋራ",
+            "comment": "Confirmation after successfully sharing text"
           }
         }
       }
