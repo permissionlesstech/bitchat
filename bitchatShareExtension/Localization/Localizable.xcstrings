@@ -112,7 +112,8 @@
         "ku": {
           "stringUnit": {
             "state": "translated",
-            "value": "Lînka parve kirî"
+            "value": "Lînka parve kirî",
+            "comment": "Fallback title when saving a shared link"
           }
         }
       }
@@ -228,7 +229,8 @@
         "ku": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kodkirina lînkê serneket"
+            "value": "Kodkirina lînkê serneket",
+            "comment": "Shown when the share payload cannot be encoded"
           }
         }
       }
@@ -344,7 +346,8 @@
         "ku": {
           "stringUnit": {
             "state": "translated",
-            "value": "Naverokê ji bo parve kirinê tune"
+            "value": "Naverokê ji bo parve kirinê tune",
+            "comment": "Shown when provided content cannot be shared"
           }
         }
       }
@@ -460,7 +463,8 @@
         "ku": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tiştek ji bo parve kirinê tune"
+            "value": "Tiştek ji bo parve kirinê tune",
+            "comment": "Shown when the share extension receives no content"
           }
         }
       }
@@ -576,7 +580,8 @@
         "ku": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ Lînk bi bitchat re hat parve kirin"
+            "value": "✓ Lînk bi bitchat re hat parve kirin",
+            "comment": "Confirmation after successfully sharing a link"
           }
         }
       }
@@ -692,7 +697,8 @@
         "ku": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ Nivîstok bi bitchat re hat parve kirin"
+            "value": "✓ Nivîstok bi bitchat re hat parve kirin",
+            "comment": "Confirmation after successfully sharing text"
           }
         }
       }
