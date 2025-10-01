@@ -112,7 +112,8 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "साझा लिंक"
+            "value": "साझा लिंक",
+            "comment": "Fallback title when saving a shared link"
           }
         }
       }
@@ -228,7 +229,8 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "लिंक एन्कोड करने में विफल"
+            "value": "लिंक एन्कोड करने में विफल",
+            "comment": "Shown when the share payload cannot be encoded"
           }
         }
       }
@@ -344,7 +346,8 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "साझा करने योग्य सामग्री नहीं"
+            "value": "साझा करने योग्य सामग्री नहीं",
+            "comment": "Shown when provided content cannot be shared"
           }
         }
       }
@@ -460,7 +463,8 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "साझा करने के लिए कुछ नहीं"
+            "value": "साझा करने के लिए कुछ नहीं",
+            "comment": "Shown when the share extension receives no content"
           }
         }
       }
@@ -576,7 +580,8 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ bitchat पर लिंक साझा किया"
+            "value": "✓ bitchat पर लिंक साझा किया",
+            "comment": "Confirmation after successfully sharing a link"
           }
         }
       }
@@ -692,7 +697,8 @@
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ bitchat पर पाठ साझा किया"
+            "value": "✓ bitchat पर पाठ साझा किया",
+            "comment": "Confirmation after successfully sharing text"
           }
         }
       }
