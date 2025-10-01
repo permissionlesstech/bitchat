@@ -112,7 +112,8 @@
         "ta": {
           "stringUnit": {
             "state": "translated",
-            "value": "பகிரப்பட்ட இணைப்பு"
+            "value": "பகிரப்பட்ட இணைப்பு",
+            "comment": "Fallback title when saving a shared link"
           }
         }
       }
@@ -228,7 +229,8 @@
         "ta": {
           "stringUnit": {
             "state": "translated",
-            "value": "இணைப்பை குறியாக்க முடியவில்லை"
+            "value": "இணைப்பை குறியாக்க முடியவில்லை",
+            "comment": "Shown when the share payload cannot be encoded"
           }
         }
       }
@@ -344,7 +346,8 @@
         "ta": {
           "stringUnit": {
             "state": "translated",
-            "value": "பகிரக் கூடிய உள்ளடக்கம் இல்லை"
+            "value": "பகிரக் கூடிய உள்ளடக்கம் இல்லை",
+            "comment": "Shown when provided content cannot be shared"
           }
         }
       }
@@ -460,7 +463,8 @@
         "ta": {
           "stringUnit": {
             "state": "translated",
-            "value": "பகிர ஒன்றும் இல்லை"
+            "value": "பகிர ஒன்றும் இல்லை",
+            "comment": "Shown when the share extension receives no content"
           }
         }
       }
@@ -576,7 +580,8 @@
         "ta": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ இணைப்பு bitchat இற்கு பகிரப்பட்டது"
+            "value": "✓ இணைப்பு bitchat இற்கு பகிரப்பட்டது",
+            "comment": "Confirmation after successfully sharing a link"
           }
         }
       }
@@ -692,7 +697,8 @@
         "ta": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ உரை bitchat இற்கு பகிரப்பட்டது"
+            "value": "✓ உரை bitchat இற்கு பகிரப்பட்டது",
+            "comment": "Confirmation after successfully sharing text"
           }
         }
       }
