@@ -112,7 +112,8 @@
         "my": {
           "stringUnit": {
             "state": "translated",
-            "value": "မျှဝေထားသော လင့်ခ်"
+            "value": "မျှဝေထားသော လင့်ခ်",
+            "comment": "Fallback title when saving a shared link"
           }
         }
       }
@@ -228,7 +229,8 @@
         "my": {
           "stringUnit": {
             "state": "translated",
-            "value": "လင့်ခ်ကို ကုဒ်တပ်ခြင်း မအောင်မြင်ပါ"
+            "value": "လင့်ခ်ကို ကုဒ်တပ်ခြင်း မအောင်မြင်ပါ",
+            "comment": "Shown when the share payload cannot be encoded"
           }
         }
       }
@@ -344,7 +346,8 @@
         "my": {
           "stringUnit": {
             "state": "translated",
-            "value": "မျှဝေနိုင်သော အကြောင်းအရာ မရှိပါ"
+            "value": "မျှဝေနိုင်သော အကြောင်းအရာ မရှိပါ",
+            "comment": "Shown when provided content cannot be shared"
           }
         }
       }
@@ -460,7 +463,8 @@
         "my": {
           "stringUnit": {
             "state": "translated",
-            "value": "မျှဝေရန် မရှိပါ"
+            "value": "မျှဝေရန် မရှိပါ",
+            "comment": "Shown when the share extension receives no content"
           }
         }
       }
@@ -576,7 +580,8 @@
         "my": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ bitchat သို့ လင့်ခ် မျှဝေခဲ့သည်"
+            "value": "✓ bitchat သို့ လင့်ခ် မျှဝေခဲ့သည်",
+            "comment": "Confirmation after successfully sharing a link"
           }
         }
       }
@@ -692,7 +697,8 @@
         "my": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ bitchat သို့ စာသား မျှဝေခဲ့သည်"
+            "value": "✓ bitchat သို့ စာသား မျှဝေခဲ့သည်",
+            "comment": "Confirmation after successfully sharing text"
           }
         }
       }
