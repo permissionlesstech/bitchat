@@ -112,7 +112,8 @@
         "mg": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rohy nozaraina"
+            "value": "Rohy nozaraina",
+            "comment": "Fallback title when saving a shared link"
           }
         }
       }
@@ -228,7 +229,8 @@
         "mg": {
           "stringUnit": {
             "state": "translated",
-            "value": "tsy nahomby ny fanoratana kaody ny rohy"
+            "value": "tsy nahomby ny fanoratana kaody ny rohy",
+            "comment": "Shown when the share payload cannot be encoded"
           }
         }
       }
@@ -344,7 +346,8 @@
         "mg": {
           "stringUnit": {
             "state": "translated",
-            "value": "tsy misy votoaty azo zaraina"
+            "value": "tsy misy votoaty azo zaraina",
+            "comment": "Shown when provided content cannot be shared"
           }
         }
       }
@@ -460,7 +463,8 @@
         "mg": {
           "stringUnit": {
             "state": "translated",
-            "value": "tsy misy hozaraina"
+            "value": "tsy misy hozaraina",
+            "comment": "Shown when the share extension receives no content"
           }
         }
       }
@@ -576,7 +580,8 @@
         "mg": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ rohy nozaraina tamin’ny bitchat"
+            "value": "✓ rohy nozaraina tamin'ny bitchat",
+            "comment": "Confirmation after successfully sharing a link"
           }
         }
       }
@@ -692,7 +697,8 @@
         "mg": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ lahatsoratra nozaraina tamin’ny bitchat"
+            "value": "✓ lahatsoratra nozaraina tamin'ny bitchat",
+            "comment": "Confirmation after successfully sharing text"
           }
         }
       }
