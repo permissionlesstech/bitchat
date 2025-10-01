@@ -1786,7 +1786,7 @@ final class BLEService: NSObject {
             // Fallback: verify signature using persisted signing key for this peerID's fingerprint prefix
             if let signature = packet.signature, let packetData = packet.toBinaryDataForSigning() {
                 // Find candidate identities by peerID prefix (16 hex)
-                let candidates = identityManager.getCryptoIdentitiesByPeerIDPrefix(peerID)
+                let candidates = identityManager.getCryptoIdentitiesByPeerIDPrefix(PeerID(str: peerID))
                 for candidate in candidates {
                     if let signingKey = candidate.signingPublicKey,
                        noiseService.verifySignature(signature, for: packetData, publicKey: signingKey) {

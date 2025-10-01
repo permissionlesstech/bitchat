@@ -4607,7 +4607,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             isConnected = true
             
             // Register ephemeral session with identity manager
-            identityManager.registerEphemeralSession(peerID: peerID, handshakeState: .none)
+            identityManager.registerEphemeralSession(peerID: PeerID(str: peerID), handshakeState: .none)
             
             // Intentionally do not resend favorites on reconnect.
             // We only send our npub when a favorite is toggled on, or if our npub changes.
@@ -4632,7 +4632,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         SecureLogger.debug("👋 Peer disconnected: \(peerID)", category: .session)
         
         // Remove ephemeral session from identity manager
-        identityManager.removeEphemeralSession(peerID: peerID)
+        identityManager.removeEphemeralSession(peerID: PeerID(str: peerID))
 
         // If the open PM is tied to this short peer ID, switch UI context to the full Noise key (offline favorite)
         var derivedStableKeyHex: String? = shortIDToNoiseKey[peerID]
@@ -4739,7 +4739,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             
             // Register ephemeral sessions for all connected peers
             for peerID in peers {
-                self.identityManager.registerEphemeralSession(peerID: peerID, handshakeState: .none)
+                self.identityManager.registerEphemeralSession(peerID: PeerID(str: peerID), handshakeState: .none)
             }
             
             // Schedule UI refresh to ensure offline favorites are shown
