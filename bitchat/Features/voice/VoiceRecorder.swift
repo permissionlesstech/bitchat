@@ -73,9 +73,9 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
             let outputURL = try makeOutputURL()
             let settings: [String: Any] = [
                 AVFormatIDKey: kAudioFormatMPEG4AAC,
-                AVSampleRateKey: 44_100,
+                AVSampleRateKey: 16_000,
                 AVNumberOfChannelsKey: 1,
-                AVEncoderBitRateKey: 32_000
+                AVEncoderBitRateKey: 20_000
             ]
 
             let audioRecorder = try AVAudioRecorder(url: outputURL, settings: settings)
