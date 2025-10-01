@@ -112,7 +112,8 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "paylaşılan bağlantı"
+            "value": "paylaşılan bağlantı",
+            "comment": "Fallback title when saving a shared link"
           }
         }
       }
@@ -228,7 +229,8 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "bağlantı kodlanamadı"
+            "value": "bağlantı kodlanamadı",
+            "comment": "Shown when the share payload cannot be encoded"
           }
         }
       }
@@ -344,7 +346,8 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "paylaşılabilir içerik yok"
+            "value": "paylaşılabilir içerik yok",
+            "comment": "Shown when provided content cannot be shared"
           }
         }
       }
@@ -460,7 +463,8 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "paylaşacak bir şey yok"
+            "value": "paylaşacak bir şey yok",
+            "comment": "Shown when the share extension receives no content"
           }
         }
       }
@@ -576,7 +580,8 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ bağlantı bitchat ile paylaşıldı"
+            "value": "✓ bağlantı bitchat ile paylaşıldı",
+            "comment": "Confirmation after successfully sharing a link"
           }
         }
       }
@@ -692,7 +697,8 @@
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ metin bitchat ile paylaşıldı"
+            "value": "✓ metin bitchat ile paylaşıldı",
+            "comment": "Confirmation after successfully sharing text"
           }
         }
       }
