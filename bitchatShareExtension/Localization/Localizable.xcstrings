@@ -112,7 +112,8 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ibinahaging link"
+            "value": "Ibinahaging link",
+            "comment": "Fallback title when saving a shared link"
           }
         }
       }
@@ -228,7 +229,8 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nabigong i-encode ang link"
+            "value": "Nabigong i-encode ang link",
+            "comment": "Shown when the share payload cannot be encoded"
           }
         }
       }
@@ -344,7 +346,8 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "Walang maibabahaging nilalaman"
+            "value": "Walang maibabahaging nilalaman",
+            "comment": "Shown when provided content cannot be shared"
           }
         }
       }
@@ -460,7 +463,8 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "Walang maibabahagi"
+            "value": "Walang maibabahagi",
+            "comment": "Shown when the share extension receives no content"
           }
         }
       }
@@ -576,7 +580,8 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ Naibahagi ang link sa bitchat"
+            "value": "✓ Naibahagi ang link sa bitchat",
+            "comment": "Confirmation after successfully sharing a link"
           }
         }
       }
@@ -692,7 +697,8 @@
         "fil": {
           "stringUnit": {
             "state": "translated",
-            "value": "✓ Naibahagi ang text sa bitchat"
+            "value": "✓ Naibahagi ang text sa bitchat",
+            "comment": "Confirmation after successfully sharing text"
           }
         }
       }
