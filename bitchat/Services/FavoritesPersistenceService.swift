@@ -182,9 +182,8 @@ final class FavoritesPersistenceService: ObservableObject {
     func getFavoriteStatus(forPeerID peerID: String) -> FavoriteRelationship? {
         // Quick sanity: peerID should be 16 hex chars (8 bytes)
         guard peerID.count == 16 else { return nil }
-        for (pubkey, rel) in favorites {
-            let derived = PeerIDUtils.derivePeerID(fromPublicKey: pubkey)
-            if derived == peerID { return rel }
+        for (pubkey, rel) in favorites where PeerID(publicKey: pubkey).id == peerID {
+            return rel
         }
         return nil
     }

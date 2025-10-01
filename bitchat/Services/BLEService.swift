@@ -615,23 +615,13 @@ final class BLEService: NSObject {
     
     func isPeerConnected(_ peerID: String) -> Bool {
         // Accept both 16-hex short IDs and 64-hex Noise keys
-        let shortID: String = {
-            if peerID.count == 64, let key = Data(hexString: peerID) {
-                return PeerIDUtils.derivePeerID(fromPublicKey: key)
-            }
-            return peerID
-        }()
+        let shortID = PeerID(str: peerID).toShort().id
         return collectionsQueue.sync { peers[shortID]?.isConnected ?? false }
     }
 
     func isPeerReachable(_ peerID: String) -> Bool {
         // Accept both 16-hex short IDs and 64-hex Noise keys
-        let shortID: String = {
-            if peerID.count == 64, let key = Data(hexString: peerID) {
-                return PeerIDUtils.derivePeerID(fromPublicKey: key)
-            }
-            return peerID
-        }()
+        let shortID = PeerID(str: peerID).toShort().id
         return collectionsQueue.sync {
             // Must be mesh-attached: at least one live direct link to the mesh
             let meshAttached = peers.values.contains { $0.isConnected }
@@ -1579,7 +1569,7 @@ final class BLEService: NSObject {
         
         // Verify that the sender's derived ID from the announced noise public key matches the packet senderID
         // This helps detect relayed or spoofed announces. Only warn in release; assert in debug.
-        let derivedFromKey = PeerIDUtils.derivePeerID(fromPublicKey: announcement.noisePublicKey)
+        let derivedFromKey = PeerID(publicKey: announcement.noisePublicKey).id
         if derivedFromKey != peerID {
             SecureLogger.warning("⚠️ Announce sender mismatch: derived \(derivedFromKey.prefix(8))… vs packet \(peerID.prefix(8))…", category: .security)
 
