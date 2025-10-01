@@ -540,7 +540,7 @@ public final class TorManager: ObservableObject {
         }
     }
 
-    func shutdownCompletely() {
+    public func shutdownCompletely() {
         Task.detached { [weak self] in
             guard let self = self else { return }
             _ = tor_host_shutdown()
