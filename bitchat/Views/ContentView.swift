@@ -11,6 +11,20 @@ import SwiftUI
 import UIKit
 #endif
 
+#if os(iOS)
+@available(iOS 14.0, *)
+struct IOSOnMacFixModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if ProcessInfo.processInfo.isiOSAppOnMac {
+            content
+                .autocorrectionDisabled(true)
+        } else {
+            content
+        }
+    }
+}
+#endif
+
 // MARK: - Supporting Types
 
 //
@@ -815,6 +829,10 @@ struct ContentView: View {
                 .foregroundColor(textColor)
                 .focused($isTextFieldFocused)
                 .padding(.leading, 12)
+                #if os(iOS)
+                // Fix for gray overlay issue when iOS app runs on macOS with Increase Contrast disabled
+                .modifier(IOSOnMacFixModifier())
+                #endif
                 // iOS keyboard autocomplete and capitalization enabled by default
                 .onChange(of: messageText) { newValue in
                     // Cancel previous debounce timer
