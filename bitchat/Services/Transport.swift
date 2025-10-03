@@ -12,10 +12,14 @@ struct TransportPeerSnapshot: Equatable, Hashable {
 }
 
 protocol Transport: AnyObject {
-    // Peer events (preferred over publishers for UI)
-    var peerEventsDelegate: TransportPeerEventsDelegate? { get set }
     // Event sink
     var delegate: BitchatDelegate? { get set }
+    // Peer events (preferred over publishers for UI)
+    var peerEventsDelegate: TransportPeerEventsDelegate? { get set }
+    
+    // Peer snapshots (for non-UI services)
+    var peerSnapshotPublisher: AnyPublisher<[TransportPeerSnapshot], Never> { get }
+    func currentPeerSnapshots() -> [TransportPeerSnapshot]
 
     // Identity
     var myPeerID: String { get }
@@ -50,10 +54,6 @@ protocol Transport: AnyObject {
     // QR verification (optional for transports)
     func sendVerifyChallenge(to peerID: String, noiseKeyHex: String, nonceA: Data)
     func sendVerifyResponse(to peerID: String, noiseKeyHex: String, nonceA: Data)
-
-    // Peer snapshots (for non-UI services)
-    var peerSnapshotPublisher: AnyPublisher<[TransportPeerSnapshot], Never> { get }
-    func currentPeerSnapshots() -> [TransportPeerSnapshot]
 }
 
 extension Transport {
