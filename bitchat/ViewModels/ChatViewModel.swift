@@ -4380,10 +4380,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         noiseService.onHandshakeRequired = { [weak self] peerID in
             DispatchQueue.main.async {
                 guard let self = self else { return }
-                self.peerEncryptionStatus[peerID] = .noiseHandshaking
+                self.peerEncryptionStatus[peerID.id] = .noiseHandshaking
                 
                 // Invalidate cache when encryption status changes
-                self.invalidateEncryptionCache(for: peerID)
+                self.invalidateEncryptionCache(for: peerID.id)
             }
         }
     }

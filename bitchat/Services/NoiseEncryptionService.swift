@@ -178,7 +178,7 @@ final class NoiseEncryptionService {
     
     // Callbacks
     private var onPeerAuthenticatedHandlers: [((String, String) -> Void)] = [] // Array of handlers for peer authentication
-    var onHandshakeRequired: ((String) -> Void)? // peerID needs handshake
+    var onHandshakeRequired: ((PeerID) -> Void)? // peerID needs handshake
     
     // Add a handler for peer authentication
     func addOnPeerAuthenticatedHandler(_ handler: @escaping (String, String) -> Void) {
@@ -251,7 +251,7 @@ final class NoiseEncryptionService {
         
         // Set up session callbacks
         sessionManager.onSessionEstablished = { [weak self] peerID, remoteStaticKey in
-            self?.handleSessionEstablished(peerID: PeerID(str: peerID), remoteStaticKey: remoteStaticKey)
+            self?.handleSessionEstablished(peerID: peerID, remoteStaticKey: remoteStaticKey)
         }
         
         // Start session maintenance timer
@@ -277,7 +277,7 @@ final class NoiseEncryptionService {
     
     /// Get peer's public key data
     func getPeerPublicKeyData(_ peerID: PeerID) -> Data? {
-        return sessionManager.getRemoteStaticKey(for: peerID.id)?.rawRepresentation
+        return sessionManager.getRemoteStaticKey(for: peerID)?.rawRepresentation
     }
     
     /// Clear persistent identity (for panic mode)
@@ -422,7 +422,7 @@ final class NoiseEncryptionService {
         
         // Return raw handshake data without wrapper
         // The Noise protocol handles its own message format
-        let handshakeData = try sessionManager.initiateHandshake(with: peerID.id)
+        let handshakeData = try sessionManager.initiateHandshake(with: peerID)
         return handshakeData
     }
     
@@ -449,7 +449,7 @@ final class NoiseEncryptionService {
         
         // For handshakes, we process the raw data directly without NoiseMessage wrapper
         // The Noise protocol handles its own message format
-        let responsePayload = try sessionManager.handleIncomingHandshake(from: peerID.id, message: message)
+        let responsePayload = try sessionManager.handleIncomingHandshake(from: peerID, message: message)
         
         
         // Return raw response without wrapper
@@ -458,12 +458,12 @@ final class NoiseEncryptionService {
     
     /// Check if we have an established session with a peer
     func hasEstablishedSession(with peerID: PeerID) -> Bool {
-        return sessionManager.getSession(for: peerID.id)?.isEstablished() ?? false
+        return sessionManager.getSession(for: peerID)?.isEstablished() ?? false
     }
     
     /// Check if we have a session (established or handshaking) with a peer
     func hasSession(with peerID: PeerID) -> Bool {
-        return sessionManager.getSession(for: peerID.id) != nil
+        return sessionManager.getSession(for: peerID) != nil
     }
     
     // MARK: - Encryption/Decryption
@@ -483,11 +483,11 @@ final class NoiseEncryptionService {
         // Check if we have an established session
         guard hasEstablishedSession(with: peerID) else {
             // Signal that handshake is needed
-            onHandshakeRequired?(peerID.id)
+            onHandshakeRequired?(peerID)
             throw NoiseEncryptionError.handshakeRequired
         }
         
-        return try sessionManager.encrypt(data, for: peerID.id)
+        return try sessionManager.encrypt(data, for: peerID)
     }
     
     /// Decrypt data from a specific peer
@@ -507,7 +507,7 @@ final class NoiseEncryptionService {
             throw NoiseEncryptionError.sessionNotEstablished
         }
         
-        return try sessionManager.decrypt(data, from: peerID.id)
+        return try sessionManager.decrypt(data, from: peerID)
     }
     
     // MARK: - Peer Management
