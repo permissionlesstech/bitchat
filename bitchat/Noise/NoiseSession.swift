@@ -10,8 +10,6 @@ import BitLogger
 import Foundation
 import CryptoKit
 
-// MARK: - Noise Session
-
 class NoiseSession {
     let peerID: PeerID
     let role: NoiseRole
@@ -234,14 +232,4 @@ class NoiseSession {
             }
         }
     }
-}
-
-// MARK: - Errors
-
-enum NoiseSessionError: Error {
-    case invalidState
-    case notEstablished
-    case sessionNotFound
-    case handshakeFailed(Error)
-    case alreadyEstablished
 }
