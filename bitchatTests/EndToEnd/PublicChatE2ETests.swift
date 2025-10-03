@@ -423,7 +423,6 @@ final class PublicChatE2ETests: XCTestCase {
         let service = MockBluetoothMeshService()
         service.myPeerID = peerID
         service.mockNickname = nickname
-        service._testRegister()
         return service
     }
     

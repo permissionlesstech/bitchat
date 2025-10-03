@@ -591,7 +591,6 @@ final class IntegrationTests: XCTestCase {
         let node = MockBluetoothMeshService()
         node.myPeerID = peerID
         node.mockNickname = name
-        node._testRegister()
         nodes[name] = node
         
         // Create Noise manager
