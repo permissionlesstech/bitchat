@@ -160,8 +160,6 @@ final class BLEService: NSObject {
     
     // MARK: - Identity
     
-    var myPeerID: String = ""
-    var myNickname: String = "anon"
     private var noiseService: NoiseEncryptionService
     private let identityManager: SecureIdentityStateManagerProtocol
     private let keychain: KeychainManagerProtocol
@@ -365,36 +363,6 @@ final class BLEService: NSObject {
         }
     }
     
-    // MARK: - Peer snapshots publisher (non-UI convenience)
-    private let peerSnapshotSubject = PassthroughSubject<[TransportPeerSnapshot], Never>()
-    var peerSnapshotPublisher: AnyPublisher<[TransportPeerSnapshot], Never> {
-        peerSnapshotSubject.eraseToAnyPublisher()
-    }
-
-    func currentPeerSnapshots() -> [TransportPeerSnapshot] {
-        collectionsQueue.sync {
-            let snapshot = Array(peers.values)
-            let resolvedNames = PeerDisplayNameResolver.resolve(
-                snapshot.map { ($0.id, $0.nickname, $0.isConnected) },
-                selfNickname: myNickname
-            )
-            return snapshot.map { info in
-                TransportPeerSnapshot(
-                    id: info.id,
-                    nickname: resolvedNames[info.id] ?? info.nickname,
-                    isConnected: info.isConnected,
-                    noisePublicKey: info.noisePublicKey,
-                    lastSeen: info.lastSeen
-                )
-            }
-        }
-    }
-    
-    // MARK: - Delegate
-    
-    weak var delegate: BitchatDelegate?
-    weak var peerEventsDelegate: TransportPeerEventsDelegate?
-    
     // MARK: - Initialization
     
     /// Notify UI on the MainActor to satisfy Swift concurrency isolation
@@ -495,12 +463,6 @@ final class BLEService: NSObject {
         // Initialize gossip sync manager
         restartGossipManager()
     }
-    
-    func setNickname(_ nickname: String) {
-        self.myNickname = nickname
-        // Send announce to notify peers of nickname change (force send)
-        sendAnnounce(forceSend: true)
-    }
 
     // No advertising policy to set; we never include Local Name in adverts.
     
@@ -538,8 +500,169 @@ final class BLEService: NSObject {
         // No Local Name; nothing to refresh for advertising policy
     }
     #endif
+
+    private func sendNoisePayload(_ typedPayload: Data, to peerID: String) {
+        guard noiseService.hasSession(with: PeerID(str: peerID)) else {
+            // Lazy-handshake path: queue? For now, initiate handshake and drop
+            initiateNoiseHandshake(with: peerID)
+            return
+        }
+        do {
+            let encrypted = try noiseService.encrypt(typedPayload, for: PeerID(str: peerID))
+            let packet = BitchatPacket(
+                type: MessageType.noiseEncrypted.rawValue,
+                senderID: myPeerIDData,
+                recipientID: Data(hexString: peerID),
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: encrypted,
+                signature: nil,
+                ttl: messageTTL
+            )
+            if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
+                broadcastPacket(packet)
+            } else {
+                messageQueue.async { [weak self] in self?.broadcastPacket(packet) }
+            }
+        } catch {
+            SecureLogger.error("Failed to send verification payload: \(error)")
+        }
+    }
     
-    // MARK: - Core Public API
+    func getPeerFingerprint(_ peerID: String) -> String? {
+        return collectionsQueue.sync {
+            return peers[peerID]?.noisePublicKey?.sha256Fingerprint()
+        }
+    }
+
+    func resetIdentityForPanic(currentNickname: String) {
+        messageQueue.sync(flags: .barrier) {
+            pendingMessagesAfterHandshake.removeAll()
+            pendingNoisePayloadsAfterHandshake.removeAll()
+        }
+
+        collectionsQueue.sync(flags: .barrier) {
+            recentAnnounceBySender.removeAll()
+            recentAnnounceOrder.removeAll()
+            pendingPeripheralWrites.removeAll()
+            pendingNotifications.removeAll()
+            pendingDirectedRelays.removeAll()
+            ingressByMessageID.removeAll()
+            recentPacketTimestamps.removeAll()
+            scheduledRelays.values.forEach { $0.cancel() }
+            scheduledRelays.removeAll()
+        }
+
+        bleQueue.sync {
+            pendingWriteBuffers.removeAll()
+            recentConnectTimeouts.removeAll()
+        }
+        recentDisconnectNotifies.removeAll()
+
+        noiseService.clearEphemeralStateForPanic()
+        noiseService.clearPersistentIdentity()
+
+        let newNoise = NoiseEncryptionService(keychain: keychain)
+        noiseService = newNoise
+        configureNoiseServiceCallbacks(for: newNoise)
+        refreshPeerIdentity()
+        restartGossipManager()
+
+        setNickname(currentNickname)
+
+        messageDeduplicator.reset()
+        requestPeerDataPublish()
+        startServices()
+    }
+    
+    func sendMessage(_ content: String, mentions: [String] = [], to recipientID: String? = nil, messageID: String? = nil, timestamp: Date? = nil) {
+        // Ensure this runs on message queue to avoid main thread blocking
+        messageQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            guard content.count <= self.maxMessageLength else {
+                SecureLogger.error("Message too long: \(content.count) chars", category: .session)
+                return
+            }
+            
+            let finalMessageID = messageID ?? UUID().uuidString
+            let _ = UInt64(Date().timeIntervalSince1970 * 1000)
+            
+            if let recipientID = recipientID {
+                // Private message
+                self.sendPrivateMessage(content, to: recipientID, messageID: finalMessageID)
+            } else {
+                // Public broadcast
+                // Create packet with explicit fields so we can sign it
+                let basePacket = BitchatPacket(
+                    type: MessageType.message.rawValue,
+                    senderID: Data(hexString: self.myPeerID) ?? Data(),
+                    recipientID: nil,
+                    timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                    payload: Data(content.utf8),
+                    signature: nil,
+                    ttl: self.messageTTL
+                )
+                guard let signedPacket = self.noiseService.signPacket(basePacket) else {
+                    SecureLogger.error("❌ Failed to sign public message", category: .security)
+                    return
+                }
+                // Pre-mark our own broadcast as processed to avoid handling relayed self copy
+                let senderHex = signedPacket.senderID.hexEncodedString()
+                let dedupID = "\(senderHex)-\(signedPacket.timestamp)-\(signedPacket.type)"
+                self.messageDeduplicator.markProcessed(dedupID)
+                // Call synchronously since we're already on background queue
+                self.broadcastPacket(signedPacket)
+                // Track our own broadcast for sync
+                self.gossipSyncManager?.onPublicPacketSeen(signedPacket)
+            }
+        }
+    }
+    
+    // MARK: - Transport Protocol Conformance
+
+    // MARK: Delegates
+    
+    weak var delegate: BitchatDelegate?
+    weak var peerEventsDelegate: TransportPeerEventsDelegate?
+    
+    // MARK: Peer snapshots publisher (non-UI convenience)
+    
+    private let peerSnapshotSubject = PassthroughSubject<[TransportPeerSnapshot], Never>()
+    var peerSnapshotPublisher: AnyPublisher<[TransportPeerSnapshot], Never> {
+        peerSnapshotSubject.eraseToAnyPublisher()
+    }
+
+    func currentPeerSnapshots() -> [TransportPeerSnapshot] {
+        collectionsQueue.sync {
+            let snapshot = Array(peers.values)
+            let resolvedNames = PeerDisplayNameResolver.resolve(
+                snapshot.map { ($0.id, $0.nickname, $0.isConnected) },
+                selfNickname: myNickname
+            )
+            return snapshot.map { info in
+                TransportPeerSnapshot(
+                    id: info.id,
+                    nickname: resolvedNames[info.id] ?? info.nickname,
+                    isConnected: info.isConnected,
+                    noisePublicKey: info.noisePublicKey,
+                    lastSeen: info.lastSeen
+                )
+            }
+        }
+    }
+    
+    // MARK: Identity
+    
+    var myPeerID: String = ""
+    var myNickname: String = "anon"
+    
+    func setNickname(_ nickname: String) {
+        self.myNickname = nickname
+        // Send announce to notify peers of nickname change (force send)
+        sendAnnounce(forceSend: true)
+    }
+    
+    // MARK: Lifecycle
     
     func startServices() {
         // Start BLE services if not already running
@@ -555,12 +678,6 @@ final class BLEService: NSObject {
         messageQueue.asyncAfter(deadline: .now() + TransportConfig.bleInitialAnnounceDelaySeconds) { [weak self] in
             self?.sendAnnounce(forceSend: true)
         }
-    }
-
-    // Transport protocol conformance helper: simplified public message send
-    func sendMessage(_ content: String, mentions: [String]) {
-        // Delegate to the full API with default routing
-        sendMessage(content, mentions: mentions, to: nil, messageID: nil, timestamp: nil)
     }
     
     func stopServices() {
@@ -613,6 +730,28 @@ final class BLEService: NSObject {
         }
     }
     
+    func emergencyDisconnectAll() {
+        stopServices()
+        
+        // Clear all sessions and peers
+        collectionsQueue.sync(flags: .barrier) {
+            peers.removeAll()
+            incomingFragments.removeAll()
+            fragmentMetadata.removeAll()
+        }
+        
+        // Clear processed messages
+        messageDeduplicator.reset()
+        
+        // Clear peripheral references
+        peripherals.removeAll()
+        peerToPeripheralUUID.removeAll()
+        subscribedCentrals.removeAll()
+        centralToPeerID.removeAll()
+    }
+    
+    // MARK: Connectivity and peers
+    
     func isPeerConnected(_ peerID: String) -> Bool {
         // Accept both 16-hex short IDs and 64-hex Noise keys
         let shortID = PeerID(str: peerID).toShort().id
@@ -650,24 +789,40 @@ final class BLEService: NSObject {
         }
     }
     
-    func sendPrivateMessage(_ content: String, to recipientID: String, recipientNickname: String, messageID: String) {
-        sendPrivateMessage(content, to: recipientID, messageID: messageID)
+    // MARK: Protocol utilities
+    
+    func getFingerprint(for peerID: String) -> String? {
+        return getPeerFingerprint(peerID)
     }
     
-    func sendFavoriteNotification(to peerID: String, isFavorite: Bool) {
-        SecureLogger.debug("🔔 sendFavoriteNotification called - peerID: \(peerID), isFavorite: \(isFavorite)", category: .session)
-        
-        // Include Nostr public key in the notification
-        var content = isFavorite ? "[FAVORITED]" : "[UNFAVORITED]"
-        
-        // Add our Nostr public key if available
-        if let myNostrIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() {
-            content += ":" + myNostrIdentity.npub
-            SecureLogger.debug("📝 Sending favorite notification with Nostr npub: \(myNostrIdentity.npub)", category: .session)
+    func getNoiseSessionState(for peerID: String) -> LazyHandshakeState {
+        if noiseService.hasEstablishedSession(with: PeerID(str: peerID)) {
+            return .established
+        } else if noiseService.hasSession(with: PeerID(str: peerID)) {
+            return .handshaking
+        } else {
+            return .none
         }
-        
-        SecureLogger.debug("📤 Sending favorite notification to \(peerID): \(content)", category: .session)
-        sendPrivateMessage(content, to: peerID, messageID: UUID().uuidString)
+    }
+    
+    func triggerHandshake(with peerID: String) {
+        initiateNoiseHandshake(with: peerID)
+    }
+    
+    func getNoiseService() -> NoiseEncryptionService {
+        return noiseService
+    }
+    
+    // MARK: Messaging
+    
+    // Transport protocol conformance helper: simplified public message send
+    func sendMessage(_ content: String, mentions: [String]) {
+        // Delegate to the full API with default routing
+        sendMessage(content, mentions: mentions, to: nil, messageID: nil, timestamp: nil)
+    }
+    
+    func sendPrivateMessage(_ content: String, to peerID: String, recipientNickname: String, messageID: String) {
+        sendPrivateMessage(content, to: peerID, messageID: messageID)
     }
     
     func sendReadReceipt(_ receipt: ReadReceipt, to peerID: String) {
@@ -707,11 +862,60 @@ final class BLEService: NSObject {
         }
     }
     
+    func sendFavoriteNotification(to peerID: String, isFavorite: Bool) {
+        SecureLogger.debug("🔔 sendFavoriteNotification called - peerID: \(peerID), isFavorite: \(isFavorite)", category: .session)
+        
+        // Include Nostr public key in the notification
+        var content = isFavorite ? "[FAVORITED]" : "[UNFAVORITED]"
+        
+        // Add our Nostr public key if available
+        if let myNostrIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() {
+            content += ":" + myNostrIdentity.npub
+            SecureLogger.debug("📝 Sending favorite notification with Nostr npub: \(myNostrIdentity.npub)", category: .session)
+        }
+        
+        SecureLogger.debug("📤 Sending favorite notification to \(peerID): \(content)", category: .session)
+        sendPrivateMessage(content, to: peerID, messageID: UUID().uuidString)
+    }
+    
     func sendBroadcastAnnounce() {
         sendAnnounce()
     }
+    
+    func sendDeliveryAck(for messageID: String, to peerID: String) {
+        // Create typed payload: [type byte] + [message ID]
+        var payload = Data([NoisePayloadType.delivered.rawValue])
+        payload.append(contentsOf: messageID.utf8)
 
-    // MARK: - QR Verification over Noise
+        if noiseService.hasEstablishedSession(with: PeerID(str: peerID)) {
+            do {
+                let encrypted = try noiseService.encrypt(payload, for: PeerID(str: peerID))
+                let packet = BitchatPacket(
+                    type: MessageType.noiseEncrypted.rawValue,
+                    senderID: myPeerIDData,
+                    recipientID: Data(hexString: peerID),
+                    timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                    payload: encrypted,
+                    signature: nil,
+                    ttl: messageTTL
+                )
+                broadcastPacket(packet)
+            } catch {
+                SecureLogger.error("Failed to send delivery ACK: \(error)")
+            }
+        } else {
+            // Queue for after handshake and initiate if needed
+            collectionsQueue.async(flags: .barrier) { [weak self] in
+                guard let self = self else { return }
+                self.pendingNoisePayloadsAfterHandshake[peerID, default: []].append(payload)
+            }
+            if !noiseService.hasSession(with: PeerID(str: peerID)) { initiateNoiseHandshake(with: peerID) }
+            SecureLogger.debug("🕒 Queued DELIVERED ack for \(peerID) until handshake completes", category: .session)
+        }
+    }
+    
+    // MARK: QR Verification over Noise
+    
     func sendVerifyChallenge(to peerID: String, noiseKeyHex: String, nonceA: Data) {
         let payload = VerificationService.shared.buildVerifyChallenge(noiseKeyHex: noiseKeyHex, nonceA: nonceA)
         sendNoisePayload(payload, to: peerID)
@@ -721,170 +925,6 @@ final class BLEService: NSObject {
         guard let payload = VerificationService.shared.buildVerifyResponse(noiseKeyHex: noiseKeyHex, nonceA: nonceA) else { return }
         sendNoisePayload(payload, to: peerID)
     }
-
-    private func sendNoisePayload(_ typedPayload: Data, to peerID: String) {
-        guard noiseService.hasSession(with: PeerID(str: peerID)) else {
-            // Lazy-handshake path: queue? For now, initiate handshake and drop
-            initiateNoiseHandshake(with: peerID)
-            return
-        }
-        do {
-            let encrypted = try noiseService.encrypt(typedPayload, for: PeerID(str: peerID))
-            let packet = BitchatPacket(
-                type: MessageType.noiseEncrypted.rawValue,
-                senderID: myPeerIDData,
-                recipientID: Data(hexString: peerID),
-                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                payload: encrypted,
-                signature: nil,
-                ttl: messageTTL
-            )
-            if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
-                broadcastPacket(packet)
-            } else {
-                messageQueue.async { [weak self] in self?.broadcastPacket(packet) }
-            }
-        } catch {
-            SecureLogger.error("Failed to send verification payload: \(error)")
-        }
-    }
-    
-    func getPeerFingerprint(_ peerID: String) -> String? {
-        return collectionsQueue.sync {
-            return peers[peerID]?.noisePublicKey?.sha256Fingerprint()
-        }
-    }
-
-    // Transport compatibility: generic naming
-    
-    
-    func getNoiseSessionState(for peerID: String) -> LazyHandshakeState {
-        if noiseService.hasEstablishedSession(with: PeerID(str: peerID)) {
-            return .established
-        } else if noiseService.hasSession(with: PeerID(str: peerID)) {
-            return .handshaking
-        } else {
-            return .none
-        }
-    }
-    
-    func triggerHandshake(with peerID: String) {
-        initiateNoiseHandshake(with: peerID)
-    }
-    
-    func emergencyDisconnectAll() {
-        stopServices()
-        
-        // Clear all sessions and peers
-        collectionsQueue.sync(flags: .barrier) {
-            peers.removeAll()
-            incomingFragments.removeAll()
-            fragmentMetadata.removeAll()
-        }
-        
-        // Clear processed messages
-        messageDeduplicator.reset()
-        
-        // Clear peripheral references
-        peripherals.removeAll()
-        peerToPeripheralUUID.removeAll()
-        subscribedCentrals.removeAll()
-        centralToPeerID.removeAll()
-    }
-
-    func resetIdentityForPanic(currentNickname: String) {
-        messageQueue.sync(flags: .barrier) {
-            pendingMessagesAfterHandshake.removeAll()
-            pendingNoisePayloadsAfterHandshake.removeAll()
-        }
-
-        collectionsQueue.sync(flags: .barrier) {
-            recentAnnounceBySender.removeAll()
-            recentAnnounceOrder.removeAll()
-            pendingPeripheralWrites.removeAll()
-            pendingNotifications.removeAll()
-            pendingDirectedRelays.removeAll()
-            ingressByMessageID.removeAll()
-            recentPacketTimestamps.removeAll()
-            scheduledRelays.values.forEach { $0.cancel() }
-            scheduledRelays.removeAll()
-        }
-
-        bleQueue.sync {
-            pendingWriteBuffers.removeAll()
-            recentConnectTimeouts.removeAll()
-        }
-        recentDisconnectNotifies.removeAll()
-
-        noiseService.clearEphemeralStateForPanic()
-        noiseService.clearPersistentIdentity()
-
-        let newNoise = NoiseEncryptionService(keychain: keychain)
-        noiseService = newNoise
-        configureNoiseServiceCallbacks(for: newNoise)
-        refreshPeerIdentity()
-        restartGossipManager()
-
-        setNickname(currentNickname)
-
-        messageDeduplicator.reset()
-        requestPeerDataPublish()
-        startServices()
-    }
-    
-    func getNoiseService() -> NoiseEncryptionService {
-        return noiseService
-    }
-    
-    func getFingerprint(for peerID: String) -> String? {
-        return getPeerFingerprint(peerID)
-    }
-    
-    func sendMessage(_ content: String, mentions: [String] = [], to recipientID: String? = nil, messageID: String? = nil, timestamp: Date? = nil) {
-        // Ensure this runs on message queue to avoid main thread blocking
-        messageQueue.async { [weak self] in
-            guard let self = self else { return }
-            
-            guard content.count <= self.maxMessageLength else {
-                SecureLogger.error("Message too long: \(content.count) chars", category: .session)
-                return
-            }
-            
-            let finalMessageID = messageID ?? UUID().uuidString
-            let _ = UInt64(Date().timeIntervalSince1970 * 1000)
-            
-            if let recipientID = recipientID {
-                // Private message
-                self.sendPrivateMessage(content, to: recipientID, messageID: finalMessageID)
-            } else {
-                // Public broadcast
-                // Create packet with explicit fields so we can sign it
-                let basePacket = BitchatPacket(
-                    type: MessageType.message.rawValue,
-                    senderID: Data(hexString: self.myPeerID) ?? Data(),
-                    recipientID: nil,
-                    timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                    payload: Data(content.utf8),
-                    signature: nil,
-                    ttl: self.messageTTL
-                )
-                guard let signedPacket = self.noiseService.signPacket(basePacket) else {
-                    SecureLogger.error("❌ Failed to sign public message", category: .security)
-                    return
-                }
-                // Pre-mark our own broadcast as processed to avoid handling relayed self copy
-                let senderHex = signedPacket.senderID.hexEncodedString()
-                let dedupID = "\(senderHex)-\(signedPacket.timestamp)-\(signedPacket.type)"
-                self.messageDeduplicator.markProcessed(dedupID)
-                // Call synchronously since we're already on background queue
-                self.broadcastPacket(signedPacket)
-                // Track our own broadcast for sync
-                self.gossipSyncManager?.onPublicPacketSeen(signedPacket)
-            }
-        }
-    }
-    
-    //
     
     // MARK: - Private Message Handling
     
@@ -2024,38 +2064,6 @@ final class BLEService: NSObject {
         }
         // Ensure our own announce is included in sync state
         gossipSyncManager?.onPublicPacketSeen(signedPacket)
-    }
-    
-    func sendDeliveryAck(for messageID: String, to peerID: String) {
-        // Create typed payload: [type byte] + [message ID]
-        var payload = Data([NoisePayloadType.delivered.rawValue])
-        payload.append(contentsOf: messageID.utf8)
-
-        if noiseService.hasEstablishedSession(with: PeerID(str: peerID)) {
-            do {
-                let encrypted = try noiseService.encrypt(payload, for: PeerID(str: peerID))
-                let packet = BitchatPacket(
-                    type: MessageType.noiseEncrypted.rawValue,
-                    senderID: myPeerIDData,
-                    recipientID: Data(hexString: peerID),
-                    timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                    payload: encrypted,
-                    signature: nil,
-                    ttl: messageTTL
-                )
-                broadcastPacket(packet)
-            } catch {
-                SecureLogger.error("Failed to send delivery ACK: \(error)")
-            }
-        } else {
-            // Queue for after handshake and initiate if needed
-            collectionsQueue.async(flags: .barrier) { [weak self] in
-                guard let self = self else { return }
-                self.pendingNoisePayloadsAfterHandshake[peerID, default: []].append(payload)
-            }
-            if !noiseService.hasSession(with: PeerID(str: peerID)) { initiateNoiseHandshake(with: peerID) }
-            SecureLogger.debug("🕒 Queued DELIVERED ack for \(peerID) until handshake completes", category: .session)
-        }
     }
 
     private func sendPendingNoisePayloadsAfterHandshake(for peerID: String) {
