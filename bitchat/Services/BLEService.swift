@@ -1706,7 +1706,7 @@ final class BLEService: NSObject {
             if (packet.ttl == self.messageTTL) && (isNewPeer || isReconnectedPeer) {
                 self.delegate?.didConnectToPeer(peerID)
                 // Schedule initial unicast sync to this peer
-                self.gossipSyncManager?.scheduleInitialSyncToPeer(peerID, delaySeconds: 1.0)
+                self.gossipSyncManager?.scheduleInitialSyncToPeer(PeerID(str: peerID), delaySeconds: 1.0)
             }
             
             self.requestPeerDataPublish()
@@ -1744,7 +1744,7 @@ final class BLEService: NSObject {
             SecureLogger.warning("⚠️ Malformed REQUEST_SYNC from \(peerID)", category: .session)
             return
         }
-        gossipSyncManager?.handleRequestSync(fromPeerID: peerID, request: req)
+        gossipSyncManager?.handleRequestSync(from: PeerID(str: peerID), request: req)
     }
     
     // Mention parsing moved to ChatViewModel
@@ -1940,7 +1940,7 @@ final class BLEService: NSObject {
             peers.removeValue(forKey: peerID)
         }
         // Remove any stored announcement for sync purposes
-        gossipSyncManager?.removeAnnouncementForPeer(peerID)
+        gossipSyncManager?.removeAnnouncementForPeer(PeerID(str: peerID))
         // Send on main thread
         notifyUI { [weak self] in
             guard let self = self else { return }
@@ -2252,7 +2252,7 @@ final class BLEService: NSObject {
                     if age > retention {
                         SecureLogger.debug("🗑️ Removing stale peer after reachability window: \(peerID) (\(peer.nickname))", category: .session)
                         // Also remove any stored announcement from sync candidates
-                        gossipSyncManager?.removeAnnouncementForPeer(peerID)
+                        gossipSyncManager?.removeAnnouncementForPeer(PeerID(str: peerID))
                         peers.removeValue(forKey: peerID)
                         removedOfflineCount += 1
                     }
@@ -2424,11 +2424,11 @@ extension BLEService: GossipSyncManager.Delegate {
         }
     }
 
-    func sendPacket(to peerID: String, packet: BitchatPacket) {
+    func sendPacket(to peerID: PeerID, packet: BitchatPacket) {
         if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
-            sendPacketDirected(packet, to: peerID)
+            sendPacketDirected(packet, to: peerID.id)
         } else {
-            messageQueue.async { [weak self] in self?.sendPacketDirected(packet, to: peerID) }
+            messageQueue.async { [weak self] in self?.sendPacketDirected(packet, to: peerID.id) }
         }
     }
 
