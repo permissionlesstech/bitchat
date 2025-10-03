@@ -306,7 +306,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         
         // Send favorite notification to the peer via router (mesh or Nostr)
         if let router = messageRouter {
-            router.sendFavoriteNotification(to: peerID, isFavorite: !wasFavorite)
+            router.sendFavoriteNotification(to: PeerID(str: peerID), isFavorite: !wasFavorite)
         } else {
             // Fallback to mesh-only if router not yet wired
             meshService.sendFavoriteNotification(to: peerID, isFavorite: !wasFavorite)

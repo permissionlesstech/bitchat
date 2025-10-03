@@ -72,6 +72,11 @@ extension PeerID {
         guard let str = String(data: data, encoding: .utf8) else { return nil }
         self.init(str: str)
     }
+    
+    /// Convenience init to "hide" hex-encoding implementation detail
+    init(hexData: Data) {
+        self.init(str: hexData.hexEncodedString())
+    }
 }
 
 // MARK: - Noise Public Key Helpers
