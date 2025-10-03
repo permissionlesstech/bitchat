@@ -301,9 +301,9 @@ final class PrivateChatE2ETests: XCTestCase {
     
     // MARK: - Helper Methods
     
-    private func createMockService(peerID: String, nickname: String) -> MockBluetoothMeshService {
+    private func createMockService(peerID: PeerID, nickname: String) -> MockBluetoothMeshService {
         let service = MockBluetoothMeshService()
-        service.myPeerID = peerID
+        service.myPeerID = peerID.id
         service.mockNickname = nickname
         return service
     }

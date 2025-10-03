@@ -30,7 +30,7 @@ final class TestHelpers {
     static func createTestMessage(
         content: String = TestConstants.testMessage1,
         sender: String = TestConstants.testNickname1,
-        senderPeerID: String = TestConstants.testPeerID1,
+        senderPeerID: PeerID = TestConstants.testPeerID1,
         isPrivate: Bool = false,
         recipientNickname: String? = nil,
         mentions: [String]? = nil
@@ -44,23 +44,23 @@ final class TestHelpers {
             originalSender: nil,
             isPrivate: isPrivate,
             recipientNickname: recipientNickname,
-            senderPeerID: senderPeerID,
+            senderPeerID: senderPeerID.id,
             mentions: mentions
         )
     }
     
     static func createTestPacket(
         type: UInt8 = 0x01,
-        senderID: String = TestConstants.testPeerID1,
-        recipientID: String? = nil,
+        senderID: PeerID = TestConstants.testPeerID1,
+        recipientID: PeerID? = nil,
         payload: Data = "test payload".data(using: .utf8)!,
         signature: Data? = nil,
         ttl: UInt8 = 3
     ) -> BitchatPacket {
         return BitchatPacket(
             type: type,
-            senderID: senderID.data(using: .utf8)!,
-            recipientID: recipientID?.data(using: .utf8),
+            senderID: senderID.id.data(using: .utf8)!,
+            recipientID: recipientID?.id.data(using: .utf8),
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             payload: payload,
             signature: signature,
@@ -120,3 +120,15 @@ enum TestError: Error {
     case unexpectedValue
     case testFailure(String)
 }
+
+// MARK: - PeerID String Helpers
+
+/// Raw String can be passed as PeerID
+extension PeerID: @retroactive ExpressibleByStringLiteral {
+    public init(stringLiteral value: String) {
+        self.init(str: value)
+    }
+}
+
+/// Interpolated String can be passed as PeerID
+extension PeerID: @retroactive ExpressibleByStringInterpolation {}

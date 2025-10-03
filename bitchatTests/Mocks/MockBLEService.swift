@@ -342,8 +342,8 @@ final class MockBLEService: NSObject {
     
     // MARK: - Compatibility methods for old tests
     
-    func sendPrivateMessage(_ content: String, to recipientPeerID: String, recipientNickname: String, messageID: String? = nil) {
-        sendPrivateMessage(content, to: recipientPeerID, recipientNickname: recipientNickname, messageID: messageID ?? UUID().uuidString)
+    func sendPrivateMessage(_ content: String, to recipientPeerID: PeerID, recipientNickname: String, messageID: String? = nil) {
+        sendPrivateMessage(content, to: recipientPeerID.id, recipientNickname: recipientNickname, messageID: messageID ?? UUID().uuidString)
     }
 }
 
