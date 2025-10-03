@@ -310,7 +310,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         if let mapped = shortIDToNoiseKey[shortPeerID] { return mapped }
         // Fallback: derive from active Noise session if available
         if shortPeerID.count == 16,
-           let key = meshService.getNoiseService().getPeerPublicKeyData(shortPeerID) {
+           let key = meshService.getNoiseService().getPeerPublicKeyData(PeerID(str: shortPeerID)) {
             let stable = key.hexEncodedString()
             shortIDToNoiseKey[shortPeerID] = stable
             return stable
@@ -3737,7 +3737,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     func updateEncryptionStatusForPeer(_ peerID: String) {
         let noiseService = meshService.getNoiseService()
         
-        if noiseService.hasEstablishedSession(with: peerID) {
+        if noiseService.hasEstablishedSession(with: PeerID(str: peerID)) {
             // Check if fingerprint is verified using our persisted data
             if let fingerprint = getFingerprint(for: peerID),
                verifiedFingerprints.contains(fingerprint) {
@@ -3745,7 +3745,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             } else {
                 peerEncryptionStatus[peerID] = .noiseSecured
             }
-        } else if noiseService.hasSession(with: peerID) {
+        } else if noiseService.hasSession(with: PeerID(str: peerID)) {
             // Session exists but not established - handshaking
             peerEncryptionStatus[peerID] = .noiseHandshaking
         } else {
@@ -4195,7 +4195,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     private func updateEncryptionStatus(for peerID: String) {
         let noiseService = meshService.getNoiseService()
         
-        if noiseService.hasEstablishedSession(with: peerID) {
+        if noiseService.hasEstablishedSession(with: PeerID(str: peerID)) {
             if let fingerprint = getFingerprint(for: peerID) {
                 if verifiedFingerprints.contains(fingerprint) {
                     peerEncryptionStatus[peerID] = .noiseVerified
@@ -4206,7 +4206,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 // Session established but no fingerprint yet
                 peerEncryptionStatus[peerID] = .noiseSecured
             }
-        } else if noiseService.hasSession(with: peerID) {
+        } else if noiseService.hasSession(with: PeerID(str: peerID)) {
             peerEncryptionStatus[peerID] = .noiseHandshaking
         } else {
             peerEncryptionStatus[peerID] = Optional.none
@@ -4357,7 +4357,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
 
                 // Cache shortID -> full Noise key mapping as soon as session authenticates
                 if self.shortIDToNoiseKey[peerID] == nil,
-                   let keyData = self.meshService.getNoiseService().getPeerPublicKeyData(peerID) {
+                   let keyData = self.meshService.getNoiseService().getPeerPublicKeyData(PeerID(str: peerID)) {
                     let stable = keyData.hexEncodedString()
                     self.shortIDToNoiseKey[peerID] = stable
                     SecureLogger.debug("🗺️ Mapped short peerID to Noise key for header continuity: \(peerID) -> \(stable.prefix(8))…", category: .session)
@@ -4586,7 +4586,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         pendingQRVerifications[peerID] = pending
         // If Noise session is established, send immediately; otherwise trigger handshake and send on auth
         let noise = meshService.getNoiseService()
-        if noise.hasEstablishedSession(with: peerID) {
+        if noise.hasEstablishedSession(with: PeerID(str: peerID)) {
             meshService.sendVerifyChallenge(to: peerID, noiseKeyHex: qr.noiseKeyHex, nonceA: nonce)
             pending.sent = true
             pendingQRVerifications[peerID] = pending
@@ -4637,7 +4637,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         // If the open PM is tied to this short peer ID, switch UI context to the full Noise key (offline favorite)
         var derivedStableKeyHex: String? = shortIDToNoiseKey[peerID]
         if derivedStableKeyHex == nil,
-           let key = meshService.getNoiseService().getPeerPublicKeyData(peerID) {
+           let key = meshService.getNoiseService().getPeerPublicKeyData(PeerID(str: peerID)) {
             derivedStableKeyHex = key.hexEncodedString()
             shortIDToNoiseKey[peerID] = derivedStableKeyHex
         }

@@ -162,8 +162,8 @@ final class NoiseEncryptionService {
     private let sessionManager: NoiseSessionManager
     
     // Peer fingerprints (SHA256 hash of static public key)
-    private var peerFingerprints: [String: String] = [:] // peerID -> fingerprint
-    private var fingerprintToPeerID: [String: String] = [:] // fingerprint -> peerID
+    private var peerFingerprints: [PeerID: String] = [:]
+    private var fingerprintToPeerID: [String: PeerID] = [:]
     
     // Thread safety
     private let serviceQueue = DispatchQueue(label: "chat.bitchat.noise.service", attributes: .concurrent)
@@ -251,7 +251,7 @@ final class NoiseEncryptionService {
         
         // Set up session callbacks
         sessionManager.onSessionEstablished = { [weak self] peerID, remoteStaticKey in
-            self?.handleSessionEstablished(peerID: peerID, remoteStaticKey: remoteStaticKey)
+            self?.handleSessionEstablished(peerID: PeerID(str: peerID), remoteStaticKey: remoteStaticKey)
         }
         
         // Start session maintenance timer
@@ -276,8 +276,8 @@ final class NoiseEncryptionService {
     }
     
     /// Get peer's public key data
-    func getPeerPublicKeyData(_ peerID: String) -> Data? {
-        return sessionManager.getRemoteStaticKey(for: peerID)?.rawRepresentation
+    func getPeerPublicKeyData(_ peerID: PeerID) -> Data? {
+        return sessionManager.getRemoteStaticKey(for: peerID.id)?.rawRepresentation
     }
     
     /// Clear persistent identity (for panic mode)
@@ -404,52 +404,52 @@ final class NoiseEncryptionService {
     // MARK: - Handshake Management
     
     /// Initiate a Noise handshake with a peer
-    func initiateHandshake(with peerID: String) throws -> Data {
+    func initiateHandshake(with peerID: PeerID) throws -> Data {
         
         // Validate peer ID
-        guard PeerID(str: peerID).isValid else {
-            SecureLogger.warning(.authenticationFailed(peerID: peerID))
+        guard peerID.isValid else {
+            SecureLogger.warning(.authenticationFailed(peerID: peerID.id))
             throw NoiseSecurityError.invalidPeerID
         }
         
         // Check rate limit
-        guard rateLimiter.allowHandshake(from: PeerID(str: peerID)) else {
+        guard rateLimiter.allowHandshake(from: peerID) else {
             SecureLogger.warning(.authenticationFailed(peerID: "Rate limited: \(peerID)"))
             throw NoiseSecurityError.rateLimitExceeded
         }
         
-        SecureLogger.info(.handshakeStarted(peerID: peerID))
+        SecureLogger.info(.handshakeStarted(peerID: peerID.id))
         
         // Return raw handshake data without wrapper
         // The Noise protocol handles its own message format
-        let handshakeData = try sessionManager.initiateHandshake(with: peerID)
+        let handshakeData = try sessionManager.initiateHandshake(with: peerID.id)
         return handshakeData
     }
     
     /// Process an incoming handshake message
-    func processHandshakeMessage(from peerID: String, message: Data) throws -> Data? {
+    func processHandshakeMessage(from peerID: PeerID, message: Data) throws -> Data? {
         
         // Validate peer ID
-        guard PeerID(str: peerID).isValid else {
-            SecureLogger.warning(.authenticationFailed(peerID: peerID))
+        guard peerID.isValid else {
+            SecureLogger.warning(.authenticationFailed(peerID: peerID.id))
             throw NoiseSecurityError.invalidPeerID
         }
         
         // Validate message size
         guard NoiseSecurityValidator.validateHandshakeMessageSize(message) else {
-            SecureLogger.warning(.handshakeFailed(peerID: peerID, error: "Message too large"))
+            SecureLogger.warning(.handshakeFailed(peerID: peerID.id, error: "Message too large"))
             throw NoiseSecurityError.messageTooLarge
         }
         
         // Check rate limit
-        guard rateLimiter.allowHandshake(from: PeerID(str: peerID)) else {
+        guard rateLimiter.allowHandshake(from: peerID) else {
             SecureLogger.warning(.authenticationFailed(peerID: "Rate limited: \(peerID)"))
             throw NoiseSecurityError.rateLimitExceeded
         }
         
         // For handshakes, we process the raw data directly without NoiseMessage wrapper
         // The Noise protocol handles its own message format
-        let responsePayload = try sessionManager.handleIncomingHandshake(from: peerID, message: message)
+        let responsePayload = try sessionManager.handleIncomingHandshake(from: peerID.id, message: message)
         
         
         // Return raw response without wrapper
@@ -457,48 +457,48 @@ final class NoiseEncryptionService {
     }
     
     /// Check if we have an established session with a peer
-    func hasEstablishedSession(with peerID: String) -> Bool {
-        return sessionManager.getSession(for: peerID)?.isEstablished() ?? false
+    func hasEstablishedSession(with peerID: PeerID) -> Bool {
+        return sessionManager.getSession(for: peerID.id)?.isEstablished() ?? false
     }
     
     /// Check if we have a session (established or handshaking) with a peer
-    func hasSession(with peerID: String) -> Bool {
-        return sessionManager.getSession(for: peerID) != nil
+    func hasSession(with peerID: PeerID) -> Bool {
+        return sessionManager.getSession(for: peerID.id) != nil
     }
     
     // MARK: - Encryption/Decryption
     
     /// Encrypt data for a specific peer
-    func encrypt(_ data: Data, for peerID: String) throws -> Data {
+    func encrypt(_ data: Data, for peerID: PeerID) throws -> Data {
         // Validate message size
         guard NoiseSecurityValidator.validateMessageSize(data) else {
             throw NoiseSecurityError.messageTooLarge
         }
         
         // Check rate limit
-        guard rateLimiter.allowMessage(from: PeerID(str: peerID)) else {
+        guard rateLimiter.allowMessage(from: peerID) else {
             throw NoiseSecurityError.rateLimitExceeded
         }
         
         // Check if we have an established session
         guard hasEstablishedSession(with: peerID) else {
             // Signal that handshake is needed
-            onHandshakeRequired?(peerID)
+            onHandshakeRequired?(peerID.id)
             throw NoiseEncryptionError.handshakeRequired
         }
         
-        return try sessionManager.encrypt(data, for: peerID)
+        return try sessionManager.encrypt(data, for: peerID.id)
     }
     
     /// Decrypt data from a specific peer
-    func decrypt(_ data: Data, from peerID: String) throws -> Data {
+    func decrypt(_ data: Data, from peerID: PeerID) throws -> Data {
         // Validate message size
         guard NoiseSecurityValidator.validateMessageSize(data) else {
             throw NoiseSecurityError.messageTooLarge
         }
         
         // Check rate limit
-        guard rateLimiter.allowMessage(from: PeerID(str: peerID)) else {
+        guard rateLimiter.allowMessage(from: peerID) else {
             throw NoiseSecurityError.rateLimitExceeded
         }
         
@@ -507,37 +507,16 @@ final class NoiseEncryptionService {
             throw NoiseEncryptionError.sessionNotEstablished
         }
         
-        return try sessionManager.decrypt(data, from: peerID)
+        return try sessionManager.decrypt(data, from: peerID.id)
     }
     
     // MARK: - Peer Management
     
     /// Get fingerprint for a peer
-    func getPeerFingerprint(_ peerID: String) -> String? {
+    func getPeerFingerprint(_ peerID: PeerID) -> String? {
         return serviceQueue.sync {
             return peerFingerprints[peerID]
         }
-    }
-    
-    /// Get peer ID for a fingerprint
-    func getPeerID(for fingerprint: String) -> String? {
-        return serviceQueue.sync {
-            return fingerprintToPeerID[fingerprint]
-        }
-    }
-    
-    /// Remove a peer session
-    func removePeer(_ peerID: String) {
-        sessionManager.removeSession(for: peerID)
-        
-        serviceQueue.sync(flags: .barrier) {
-            if let fingerprint = peerFingerprints[peerID] {
-                fingerprintToPeerID.removeValue(forKey: fingerprint)
-            }
-            peerFingerprints.removeValue(forKey: peerID)
-        }
-        
-        SecureLogger.info(.sessionExpired(peerID: peerID))
     }
 
     func clearEphemeralStateForPanic() {
@@ -551,7 +530,7 @@ final class NoiseEncryptionService {
     
     // MARK: - Private Helpers
     
-    private func handleSessionEstablished(peerID: String, remoteStaticKey: Curve25519.KeyAgreement.PublicKey) {
+    private func handleSessionEstablished(peerID: PeerID, remoteStaticKey: Curve25519.KeyAgreement.PublicKey) {
         // Calculate fingerprint
         let fingerprint = remoteStaticKey.rawRepresentation.sha256Fingerprint()
         
@@ -562,12 +541,12 @@ final class NoiseEncryptionService {
         }
         
         // Log security event
-        SecureLogger.info(.handshakeCompleted(peerID: peerID))
+        SecureLogger.info(.handshakeCompleted(peerID: peerID.id))
         
         // Notify all handlers about authentication
         serviceQueue.async { [weak self] in
             self?.onPeerAuthenticatedHandlers.forEach { handler in
-                handler(peerID, fingerprint)
+                handler(peerID.id, fingerprint)
             }
         }
     }
