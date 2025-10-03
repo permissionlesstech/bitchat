@@ -274,14 +274,6 @@ final class PrivateChatE2ETests: XCTestCase {
         wait(for: [expectation], timeout: TestConstants.defaultTimeout)
     }
     
-    // MARK: - Error Handling Tests
-    
-    // NOTE: This test relied on MessageRetryService which has been removed
-    
-    func testDuplicateAckPrevention() throws {
-        throw XCTSkip("DeliveryTracker/ACK flow removed; test not applicable")
-    }
-    
     // MARK: - Helper Methods
     
     private func createMockService(peerID: String, nickname: String) -> MockBluetoothMeshService {
