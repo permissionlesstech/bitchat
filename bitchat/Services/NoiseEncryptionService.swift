@@ -407,13 +407,13 @@ final class NoiseEncryptionService {
     func initiateHandshake(with peerID: String) throws -> Data {
         
         // Validate peer ID
-        guard NoiseSecurityValidator.validatePeerID(peerID) else {
+        guard PeerID(str: peerID).isValid else {
             SecureLogger.warning(.authenticationFailed(peerID: peerID))
             throw NoiseSecurityError.invalidPeerID
         }
         
         // Check rate limit
-        guard rateLimiter.allowHandshake(from: peerID) else {
+        guard rateLimiter.allowHandshake(from: PeerID(str: peerID)) else {
             SecureLogger.warning(.authenticationFailed(peerID: "Rate limited: \(peerID)"))
             throw NoiseSecurityError.rateLimitExceeded
         }
@@ -430,7 +430,7 @@ final class NoiseEncryptionService {
     func processHandshakeMessage(from peerID: String, message: Data) throws -> Data? {
         
         // Validate peer ID
-        guard NoiseSecurityValidator.validatePeerID(peerID) else {
+        guard PeerID(str: peerID).isValid else {
             SecureLogger.warning(.authenticationFailed(peerID: peerID))
             throw NoiseSecurityError.invalidPeerID
         }
@@ -442,7 +442,7 @@ final class NoiseEncryptionService {
         }
         
         // Check rate limit
-        guard rateLimiter.allowHandshake(from: peerID) else {
+        guard rateLimiter.allowHandshake(from: PeerID(str: peerID)) else {
             SecureLogger.warning(.authenticationFailed(peerID: "Rate limited: \(peerID)"))
             throw NoiseSecurityError.rateLimitExceeded
         }
@@ -476,7 +476,7 @@ final class NoiseEncryptionService {
         }
         
         // Check rate limit
-        guard rateLimiter.allowMessage(from: peerID) else {
+        guard rateLimiter.allowMessage(from: PeerID(str: peerID)) else {
             throw NoiseSecurityError.rateLimitExceeded
         }
         
@@ -498,7 +498,7 @@ final class NoiseEncryptionService {
         }
         
         // Check rate limit
-        guard rateLimiter.allowMessage(from: peerID) else {
+        guard rateLimiter.allowMessage(from: PeerID(str: peerID)) else {
             throw NoiseSecurityError.rateLimitExceeded
         }
         

@@ -21,7 +21,7 @@ final class MessageRouter {
         ) { [weak self] note in
             guard let self = self else { return }
             if let data = note.userInfo?["peerPublicKey"] as? Data {
-                let peerID = PeerIDUtils.derivePeerID(fromPublicKey: data)
+                let peerID = PeerID(publicKey: data).id
                 Task { @MainActor in
                     self.flushOutbox(for: peerID)
                 }
@@ -29,7 +29,7 @@ final class MessageRouter {
             // Handle key updates
             if let newKey = note.userInfo?["peerPublicKey"] as? Data,
                let _ = note.userInfo?["isKeyUpdate"] as? Bool {
-                let peerID = PeerIDUtils.derivePeerID(fromPublicKey: newKey)
+                let peerID = PeerID(publicKey: newKey).id
                 Task { @MainActor in
                     self.flushOutbox(for: peerID)
                 }
@@ -94,7 +94,7 @@ final class MessageRouter {
                 return true
             }
         } else if peerID.count == 16 {
-            if let fav = FavoritesPersistenceService.shared.getFavoriteStatus(forPeerID: peerID),
+            if let fav = FavoritesPersistenceService.shared.getFavoriteStatus(forPeerID: PeerID(str: peerID)),
                fav.peerNostrPublicKey != nil {
                 return true
             }
