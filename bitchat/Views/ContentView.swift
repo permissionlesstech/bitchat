@@ -989,7 +989,7 @@ struct ContentView: View {
                 }
                     }
                 }
-                .id(viewModel.allPeers.map { "\($0.id)-\($0.isConnected)" }.joined())
+                .id(viewModel.allPeers.map { "\($0.peerID)-\($0.isConnected)" }.joined())
             }
             
             Spacer()
@@ -1085,7 +1085,7 @@ struct ContentView: View {
             return (n, n > 0 ? standardGreen : Color.secondary)
         case .mesh:
             let counts = viewModel.allPeers.reduce(into: (others: 0, mesh: 0)) { counts, peer in
-                guard peer.id != viewModel.meshService.myPeerID else { return }
+                guard peer.peerID != viewModel.meshService.myPeerID else { return }
                 if peer.isConnected { counts.mesh += 1; counts.others += 1 }
                 else if peer.isReachable { counts.others += 1 }
             }

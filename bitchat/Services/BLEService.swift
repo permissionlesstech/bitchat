@@ -51,7 +51,7 @@ final class BLEService: NSObject {
     
     // 3. Peer Information (single source of truth)
     private struct PeerInfo {
-        let id: String
+        let peerID: PeerID
         var nickname: String
         var isConnected: Bool
         var noisePublicKey: Data?
@@ -380,13 +380,13 @@ final class BLEService: NSObject {
         collectionsQueue.sync {
             let snapshot = Array(peers.values)
             let resolvedNames = PeerDisplayNameResolver.resolve(
-                snapshot.map { ($0.id, $0.nickname, $0.isConnected) },
+                snapshot.map { ($0.peerID, $0.nickname, $0.isConnected) },
                 selfNickname: myNickname
             )
             return snapshot.map { info in
                 TransportPeerSnapshot(
-                    id: info.id,
-                    nickname: resolvedNames[PeerID(str: info.id)] ?? info.nickname,
+                    peerID: info.peerID,
+                    nickname: resolvedNames[info.peerID] ?? info.nickname,
                     isConnected: info.isConnected,
                     noisePublicKey: info.noisePublicKey,
                     lastSeen: info.lastSeen
@@ -528,7 +528,7 @@ final class BLEService: NSObject {
     func getPeerNicknames() -> [PeerID: String] {
         return collectionsQueue.sync {
             let connected = peers.filter { $0.value.isConnected }
-            let tuples = connected.map { ($0.key, $0.value.nickname, true) }
+            let tuples = connected.map { (PeerID(str: $0.key), $0.value.nickname, true) }
             return PeerDisplayNameResolver.resolve(tuples, selfNickname: myNickname)
         }
     }
@@ -1032,7 +1032,7 @@ extension BLEService {
         collectionsQueue.sync(flags: .barrier) {
             if peers[normalizedID] == nil {
                 peers[normalizedID] = PeerInfo(
-                    id: normalizedID,
+                    peerID: PeerID(str: normalizedID),
                     nickname: "TestPeer_\(fromPeerID.prefix(4))",
                     isConnected: true,
                     noisePublicKey: packet.senderID,
@@ -2464,7 +2464,7 @@ extension BLEService {
             if let existing = existingPeer, existing.isConnected {
                 // Update lastSeen and identity info
                 peers[peerID] = PeerInfo(
-                    id: existing.id,
+                    peerID: existing.peerID,
                     nickname: announcement.nickname,
                     isConnected: isDirectAnnounce || hasPeripheralConnection || hasCentralSubscription,
                     noisePublicKey: announcement.noisePublicKey,
@@ -2475,7 +2475,7 @@ extension BLEService {
             } else {
                 // New peer or reconnecting peer
                 peers[peerID] = PeerInfo(
-                    id: peerID,
+                    peerID: PeerID(str: peerID),
                     nickname: announcement.nickname,
                     isConnected: isDirectAnnounce || hasPeripheralConnection || hasCentralSubscription,
                     noisePublicKey: announcement.noisePublicKey,
@@ -2599,7 +2599,7 @@ extension BLEService {
             accepted = true
             senderNickname = info.nickname
             // Handle nickname collisions
-            let hasCollision = peers.values.contains { $0.isConnected && $0.nickname == info.nickname && $0.id != peerID } || (myNickname == info.nickname)
+            let hasCollision = peers.values.contains { $0.isConnected && $0.nickname == info.nickname && $0.peerID != peerID } || (myNickname == info.nickname)
             if hasCollision {
                 senderNickname += "#" + String(peerID.prefix(4))
             }
@@ -2917,10 +2917,10 @@ extension BLEService {
             return peers.values.map { info in
                 var display = info.nickname
                 if info.isConnected, (counts[info.nickname] ?? 0) > 1 {
-                    display += "#" + String(info.id.prefix(4))
+                    display += "#" + String(info.peerID.id.prefix(4))
                 }
                 return TransportPeerSnapshot(
-                    id: info.id,
+                    peerID: info.peerID,
                     nickname: display,
                     isConnected: info.isConnected,
                     noisePublicKey: info.noisePublicKey,
