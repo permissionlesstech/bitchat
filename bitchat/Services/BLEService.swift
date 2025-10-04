@@ -36,7 +36,7 @@ final class BLEService: NSObject {
     private struct PeripheralState {
         let peripheral: CBPeripheral
         var characteristic: CBCharacteristic?
-        var peerID: String?
+        var peerID: PeerID?
         var isConnecting: Bool = false
         var isConnected: Bool = false
         var lastConnectionAttempt: Date? = nil
@@ -47,7 +47,7 @@ final class BLEService: NSObject {
     
     // 2. BLE Centrals (when acting as peripheral)
     private var subscribedCentrals: [CBCentral] = []
-    private var centralToPeerID: [String: String] = [:]  // Central UUID -> Peer ID mapping
+    private var centralToPeerID: [String: PeerID] = [:]  // Central UUID -> Peer ID mapping
     
     // 3. Peer Information (single source of truth)
     private struct PeerInfo {
@@ -270,12 +270,6 @@ final class BLEService: NSObject {
         #if os(iOS)
         NotificationCenter.default.removeObserver(self)
         #endif
-    }
-    
-    func getPeerFingerprint(_ peerID: String) -> String? {
-        return collectionsQueue.sync {
-            return peers[peerID]?.noisePublicKey?.sha256Fingerprint()
-        }
     }
 
     func resetIdentityForPanic(currentNickname: String) {
@@ -536,7 +530,9 @@ final class BLEService: NSObject {
     // MARK: Protocol utilities
     
     func getFingerprint(for peerID: PeerID) -> String? {
-        return getPeerFingerprint(peerID.id)
+        return collectionsQueue.sync {
+            return peers[peerID.id]?.noisePublicKey?.sha256Fingerprint()
+        }
     }
     
     func getNoiseSessionState(for peerID: PeerID) -> LazyHandshakeState {
@@ -890,7 +886,7 @@ func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeriph
         // Find the peer ID if we have it
         let peerID = peripherals[peripheralID]?.peerID
         
-        SecureLogger.debug("📱 Disconnect: \(peerID ?? peripheralID)\(error != nil ? " (\(error!.localizedDescription))" : "")", category: .session)
+        SecureLogger.debug("📱 Disconnect: \(peerID?.id ?? peripheralID)\(error != nil ? " (\(error!.localizedDescription))" : "")", category: .session)
 
         // If disconnect carried an error (often timeout), apply short backoff to avoid thrash
         if error != nil {
@@ -901,14 +897,14 @@ func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeriph
         peripherals.removeValue(forKey: peripheralID)
         
         // Clean up peer mappings
-        if let peerID = peerID {
-            peerToPeripheralUUID.removeValue(forKey: peerID)
+        if let peerID {
+            peerToPeripheralUUID.removeValue(forKey: peerID.id)
             
             // Do not remove peer; mark as not connected but retain for reachability
             collectionsQueue.sync(flags: .barrier) {
-                if var info = peers[peerID] {
+                if var info = peers[peerID.id] {
                     info.isConnected = false
-                    peers[peerID] = info
+                    peers[peerID.id] = info
                 }
             }
         }
@@ -932,7 +928,7 @@ func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeriph
             let currentPeerIDs = self.collectionsQueue.sync { Array(self.peers.keys) }
             
             if let peerID = peerID {
-                self.notifyPeerDisconnectedDebounced(peerID)
+                self.notifyPeerDisconnectedDebounced(peerID.id)
             }
             self.requestPeerDataPublish()
             self.delegate?.didUpdatePeerList(currentPeerIDs)
@@ -1200,7 +1196,7 @@ extension BLEService: CBPeripheralDelegate {
         if packet.type == MessageType.announce.rawValue {
             if packet.ttl == messageTTL {
                 if var state = peripherals[peripheralUUID] {
-                    state.peerID = senderID
+                    state.peerID = PeerID(str: senderID)
                     peripherals[peripheralUUID] = state
                 }
                 peerToPeripheralUUID[senderID] = peripheralUUID
@@ -1336,9 +1332,9 @@ extension BLEService: CBPeripheralManagerDelegate {
         if let peerID = centralToPeerID[centralUUID] {
             // Mark peer as not connected; retain for reachability
             collectionsQueue.sync(flags: .barrier) {
-                if var info = peers[peerID] {
+                if var info = peers[peerID.id] {
                     info.isConnected = false
-                    peers[peerID] = info
+                    peers[peerID.id] = info
                 }
             }
             
@@ -1352,7 +1348,7 @@ extension BLEService: CBPeripheralManagerDelegate {
                 // Get current peer list (after removal)
                 let currentPeerIDs = self.collectionsQueue.sync { Array(self.peers.keys) }
                 
-                self.notifyPeerDisconnectedDebounced(peerID)
+                self.notifyPeerDisconnectedDebounced(peerID.id)
                 // Publish snapshots so UnifiedPeerService can refresh icons promptly
                 self.requestPeerDataPublish()
                 self.delegate?.didUpdatePeerList(currentPeerIDs)
@@ -1460,7 +1456,7 @@ extension BLEService: CBPeripheralManagerDelegate {
                     subscribedCentrals.append(sorted[0].central)
                 }
                 if packet.type == MessageType.announce.rawValue {
-                    if packet.ttl == messageTTL { centralToPeerID[centralUUID] = senderID }
+                    if packet.ttl == messageTTL { centralToPeerID[centralUUID] = PeerID(str: senderID) }
                     // Record ingress link for last-hop suppression then process
                     let msgID = makeMessageID(for: packet)
                     collectionsQueue.async(flags: .barrier) { [weak self] in
@@ -1580,7 +1576,7 @@ extension BLEService {
             return bleQueue.sync { Array(peripherals.values) }
         }
     }
-    private func snapshotSubscribedCentrals() -> ([CBCentral], [String: String]) {
+    private func snapshotSubscribedCentrals() -> ([CBCentral], [String: PeerID]) {
         if DispatchQueue.getSpecific(key: bleQueueKey) != nil {
             return (self.subscribedCentrals, self.centralToPeerID)
         } else {
@@ -2438,7 +2434,7 @@ extension BLEService {
             
             // Check if this peer is subscribed to us as a central
             // Note: We can't identify which specific central is which peer without additional mapping
-            let hasCentralSubscription = centralToPeerID.values.contains(peerID)
+            let hasCentralSubscription = centralToPeerID.values.contains(PeerID(str: peerID))
             
             // Direct announces arrive with full TTL (no prior hop)
             let isDirectAnnounce = (packet.ttl == messageTTL)
@@ -2653,7 +2649,7 @@ extension BLEService {
         let hasDirectLink: Bool = collectionsQueue.sync {
             let perUUID = peerToPeripheralUUID[peerID]
             let perConnected = perUUID != nil && peripherals[perUUID!]?.isConnected == true
-            let hasCentral = centralToPeerID.values.contains(peerID)
+            let hasCentral = centralToPeerID.values.contains(PeerID(str: peerID))
             return perConnected || hasCentral
         }
 
@@ -3014,7 +3010,7 @@ extension BLEService {
                     // Check if we still have an active BLE connection to this peer
                     let hasPeripheralConnection = peerToPeripheralUUID[peerID] != nil &&
                                                  peripherals[peerToPeripheralUUID[peerID]!]?.isConnected == true
-                    let hasCentralConnection = centralToPeerID.values.contains(peerID)
+                    let hasCentralConnection = centralToPeerID.values.contains(PeerID(str: peerID))
                     
                     // If direct link is gone, mark as not connected (retain entry for reachability)
                     if !hasPeripheralConnection && !hasCentralConnection {
