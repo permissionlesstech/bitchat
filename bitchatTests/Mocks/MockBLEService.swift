@@ -147,7 +147,7 @@ final class MockBLEService: NSObject {
             originalSender: nil,
             isPrivate: recipientID != nil,
             recipientNickname: nil,
-            senderPeerID: myPeerID,
+            senderPeerID: PeerID(str: myPeerID),
             mentions: mentions.isEmpty ? nil : mentions
         )
         
@@ -192,7 +192,7 @@ final class MockBLEService: NSObject {
             originalSender: nil,
             isPrivate: true,
             recipientNickname: recipientNickname,
-            senderPeerID: myPeerID,
+            senderPeerID: PeerID(str: myPeerID),
             mentions: nil
         )
         

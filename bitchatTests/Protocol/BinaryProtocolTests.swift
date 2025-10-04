@@ -251,7 +251,7 @@ final class BinaryProtocolTests: XCTestCase {
             originalSender: TestConstants.testNickname3,
             isPrivate: false,
             recipientNickname: nil,
-            senderPeerID: TestConstants.testPeerID1.id,
+            senderPeerID: TestConstants.testPeerID1,
             mentions: nil
         )
         

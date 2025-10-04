@@ -69,8 +69,7 @@ extension PeerID {
     
     /// Convenience init to create PeerID by converting Data to String
     init?(data: Data) {
-        guard let str = String(data: data, encoding: .utf8) else { return nil }
-        self.init(str: str)
+        self.init(str: String(data: data, encoding: .utf8))
     }
     
     /// Convenience init to "hide" hex-encoding implementation detail

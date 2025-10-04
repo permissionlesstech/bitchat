@@ -42,7 +42,19 @@ final class BitchatMessage: Codable {
         case isPrivate, recipientNickname, senderPeerID, mentions, deliveryStatus
     }
     
-    init(id: String? = nil, sender: String, content: String, timestamp: Date, isRelay: Bool, originalSender: String? = nil, isPrivate: Bool = false, recipientNickname: String? = nil, senderPeerID: String? = nil, mentions: [String]? = nil, deliveryStatus: DeliveryStatus? = nil) {
+    init(
+        id: String? = nil,
+        sender: String,
+        content: String,
+        timestamp: Date,
+        isRelay: Bool,
+        originalSender: String? = nil,
+        isPrivate: Bool = false,
+        recipientNickname: String? = nil,
+        senderPeerID: PeerID? = nil,
+        mentions: [String]? = nil,
+        deliveryStatus: DeliveryStatus? = nil
+    ) {
         self.id = id ?? UUID().uuidString
         self.sender = sender
         self.content = content
@@ -51,7 +63,7 @@ final class BitchatMessage: Codable {
         self.originalSender = originalSender
         self.isPrivate = isPrivate
         self.recipientNickname = recipientNickname
-        self.senderPeerID = PeerID(str: senderPeerID)
+        self.senderPeerID = senderPeerID
         self.mentions = mentions
         self.deliveryStatus = deliveryStatus ?? (isPrivate ? .sending : nil)
     }
@@ -264,11 +276,11 @@ extension BitchatMessage {
             }
         }
         
-        var senderPeerID: String?
+        var senderPeerID: PeerID?
         if hasSenderPeerID && offset < dataCopy.count {
             let length = Int(dataCopy[offset]); offset += 1
             if offset + length <= dataCopy.count {
-                senderPeerID = String(data: dataCopy[offset..<offset+length], encoding: .utf8)
+                senderPeerID = PeerID(data: dataCopy[offset..<offset+length])
                 offset += length
             }
         }

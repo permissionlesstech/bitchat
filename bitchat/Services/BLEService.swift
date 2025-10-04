@@ -2791,7 +2791,7 @@ extension BLEService {
         let packet = BitchatPacket(
             type: MessageType.leave.rawValue,
             ttl: messageTTL,
-            senderID: myPeerID.id,
+            senderID: myPeerID,
             payload: Data(myNickname.utf8)
         )
         broadcastPacket(packet)

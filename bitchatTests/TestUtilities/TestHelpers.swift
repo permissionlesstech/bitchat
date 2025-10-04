@@ -44,7 +44,7 @@ final class TestHelpers {
             originalSender: nil,
             isPrivate: isPrivate,
             recipientNickname: recipientNickname,
-            senderPeerID: senderPeerID.id,
+            senderPeerID: senderPeerID,
             mentions: mentions
         )
     }

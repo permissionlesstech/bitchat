@@ -640,7 +640,7 @@ final class IntegrationTests: XCTestCase {
                     originalSender: message.isRelay ? message.originalSender : message.sender,
                     isPrivate: message.isPrivate,
                     recipientNickname: message.recipientNickname,
-                    senderPeerID: message.senderPeerID?.id,
+                    senderPeerID: message.senderPeerID,
                     mentions: message.mentions
                 )
                 
