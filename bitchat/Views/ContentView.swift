@@ -346,30 +346,10 @@ struct ContentView: View {
                                     if !lightningLinks.isEmpty || !cashuLinks.isEmpty {
                                         HStack(spacing: 8) {
                                             ForEach(lightningLinks, id: \.self) { link in
-                                                PaymentChipView(
-                                                    emoji: "⚡",
-                                                    label: String(localized: "content.payment.lightning", comment: "Label for Lightning payment chip"),
-                                                    colorScheme: colorScheme
-                                                ) {
-                                                    #if os(iOS)
-                                                    if let url = URL(string: link) { UIApplication.shared.open(url) }
-                                                    #else
-                                                    if let url = URL(string: link) { NSWorkspace.shared.open(url) }
-                                                    #endif
-                                                }
+                                                PaymentChipView(paymentType: .lightning(link))
                                             }
                                             ForEach(cashuLinks, id: \.self) { link in
-                                                PaymentChipView(
-                                                    emoji: "🥜",
-                                                    label: String(localized: "content.payment.cashu", comment: "Label for Cashu payment chip"),
-                                                    colorScheme: colorScheme
-                                                ) {
-                                                    #if os(iOS)
-                                                    if let url = URL(string: link) { UIApplication.shared.open(url) }
-                                                    #else
-                                                    if let url = URL(string: link) { NSWorkspace.shared.open(url) }
-                                                    #endif
-                                                }
+                                                PaymentChipView(paymentType: .cashu(link))
                                             }
                                         }
                                         .padding(.top, 6)
@@ -1614,45 +1594,5 @@ extension ContentView {
         case .location:
             LocationNotesCounter.shared.cancel()
         }
-    }
-}
-
-// MARK: - Helper Views
-
-// Rounded payment chip button
-private struct PaymentChipView: View {
-    let emoji: String
-    let label: String
-    let colorScheme: ColorScheme
-    let action: () -> Void
-    
-    private var fgColor: Color {
-        colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
-    }
-    private var bgColor: Color {
-        colorScheme == .dark ? Color.gray.opacity(0.18) : Color.gray.opacity(0.12)
-    }
-    private var border: Color { fgColor.opacity(0.25) }
-    
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Text(emoji)
-                Text(label)
-                    .font(.bitchatSystem(size: 12, weight: .semibold, design: .monospaced))
-            }
-            .padding(.vertical, 6)
-            .padding(.horizontal, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(bgColor)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(border, lineWidth: 1)
-            )
-            .foregroundColor(fgColor)
-        }
-        .buttonStyle(.plain)
     }
 }
