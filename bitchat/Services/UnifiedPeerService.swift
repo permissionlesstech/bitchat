@@ -273,7 +273,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         
         if actualNickname.isEmpty {
             // Try to get from mesh service's current peer list
-            if let meshPeerNickname = meshService.peerNickname(peerID: peerID) {
+            if let meshPeerNickname = meshService.peerNickname(peerID: PeerID(str: peerID)) {
                 actualNickname = meshPeerNickname
                 SecureLogger.debug("🔍 Got nickname from mesh service: '\(actualNickname)'", category: .session)
             }
@@ -309,7 +309,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
             router.sendFavoriteNotification(to: PeerID(str: peerID), isFavorite: !wasFavorite)
         } else {
             // Fallback to mesh-only if router not yet wired
-            meshService.sendFavoriteNotification(to: peerID, isFavorite: !wasFavorite)
+            meshService.sendFavoriteNotification(to: PeerID(str: peerID), isFavorite: !wasFavorite)
         }
         
         // Force update of peers to reflect the change
@@ -360,7 +360,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         }
         
         // Try to get from mesh service
-        if let fingerprint = meshService.getFingerprint(for: peerID) {
+        if let fingerprint = meshService.getFingerprint(for: PeerID(str: peerID)) {
             fingerprintCache[peerID] = fingerprint
             return fingerprint
         }

@@ -465,7 +465,7 @@ struct ContentView: View {
                     selectedMessageSender = viewModel.geohashDisplayName(for: peerID)
                 } else {
                     // Mesh sender: use current mesh nickname if available; otherwise fall back to last non-system message
-                    if let name = viewModel.meshService.peerNickname(peerID: peerID) {
+                    if let name = viewModel.meshService.peerNickname(peerID: PeerID(str: peerID)) {
                         selectedMessageSender = name
                     } else {
                         selectedMessageSender = viewModel.messages.last(where: { $0.senderPeerID == peerID && $0.sender != "system" })?.sender
@@ -1401,7 +1401,7 @@ struct ContentView: View {
             // Try mesh/unified peer display
             if let name = peer?.displayName { return name }
             // Try direct mesh nickname (connected-only)
-            if let name = viewModel.meshService.peerNickname(peerID: headerPeerID) { return name }
+            if let name = viewModel.meshService.peerNickname(peerID: PeerID(str: headerPeerID)) { return name }
             // Try favorite nickname by stable Noise key
             if let fav = FavoritesPersistenceService.shared.getFavoriteStatus(for: Data(hexString: headerPeerID) ?? Data()),
                !fav.peerNickname.isEmpty { return fav.peerNickname }
@@ -1477,7 +1477,7 @@ struct ContentView: View {
                                     // Should not happen for PM header, but handle gracefully
                                     EmptyView()
                                 }
-                            } else if viewModel.meshService.isPeerReachable(headerPeerID) {
+                            } else if viewModel.meshService.isPeerReachable(PeerID(str: headerPeerID)) {
                                 // Fallback: reachable via mesh but not in current peer list
                                 Image(systemName: "point.3.filled.connected.trianglepath.dotted")
                                     .font(.bitchatSystem(size: 14))
@@ -1493,7 +1493,7 @@ struct ContentView: View {
                                     .accessibilityLabel(
                                         String(localized: "content.accessibility.available_nostr", comment: "Accessibility label for Nostr-available peer indicator")
                                     )
-                            } else if viewModel.meshService.isPeerConnected(headerPeerID) || viewModel.connectedPeers.contains(headerPeerID) {
+                            } else if viewModel.meshService.isPeerConnected(PeerID(str: headerPeerID)) || viewModel.connectedPeers.contains(headerPeerID) {
                                 // Fallback: if peer lookup is missing but mesh reports connected, show radio
                                 Image(systemName: "dot.radiowaves.left.and.right")
                                     .font(.bitchatSystem(size: 14))

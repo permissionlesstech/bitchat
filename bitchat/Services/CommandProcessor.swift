@@ -148,10 +148,10 @@ final class CommandProcessor {
         
         if chatViewModel?.selectedPrivateChatPeer != nil {
             // In private chat
-            if let peerNickname = meshService?.peerNickname(peerID: targetPeerID) {
+            if let peerNickname = meshService?.peerNickname(peerID: PeerID(str: targetPeerID)) {
                 let personalMessage = "* \(emoji) \(myNickname) \(action) you\(suffix) *"
-                meshService?.sendPrivateMessage(personalMessage, to: targetPeerID, 
-                                               recipientNickname: peerNickname, 
+                meshService?.sendPrivateMessage(personalMessage, to: PeerID(str: targetPeerID),
+                                               recipientNickname: peerNickname,
                                                messageID: UUID().uuidString)
                 // Also add a local system message so the sender sees a natural-language confirmation
                 let pastAction: String = {
@@ -214,7 +214,7 @@ final class CommandProcessor {
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
         
         if let peerID = chatViewModel?.getPeerIDForNickname(nickname),
-           let fingerprint = meshService?.getFingerprint(for: peerID) {
+           let fingerprint = meshService?.getFingerprint(for: PeerID(str: peerID)) {
             if identityManager.isBlocked(fingerprint: fingerprint) {
                 return .success(message: "\(nickname) is already blocked")
             }
@@ -258,7 +258,7 @@ final class CommandProcessor {
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
         
         if let peerID = chatViewModel?.getPeerIDForNickname(nickname),
-           let fingerprint = meshService?.getFingerprint(for: peerID) {
+           let fingerprint = meshService?.getFingerprint(for: PeerID(str: peerID)) {
             if !identityManager.isBlocked(fingerprint: fingerprint) {
                 return .success(message: "\(nickname) is not blocked")
             }

@@ -14,7 +14,7 @@ final class GossipSyncManager {
         var gcsTargetFpr: Double = 0.01      // 1%
     }
 
-    private let myPeerID: String
+    private let myPeerID: PeerID
     private let config: Config
     weak var delegate: Delegate?
 
@@ -27,7 +27,7 @@ final class GossipSyncManager {
     private var periodicTimer: DispatchSourceTimer?
     private let queue = DispatchQueue(label: "mesh.sync", qos: .utility)
 
-    init(myPeerID: String, config: Config = Config()) {
+    init(myPeerID: PeerID, config: Config = Config()) {
         self.myPeerID = myPeerID
         self.config = config
     }
@@ -90,7 +90,7 @@ final class GossipSyncManager {
         let payload = buildGcsPayload()
         let pkt = BitchatPacket(
             type: MessageType.requestSync.rawValue,
-            senderID: Data(hexString: myPeerID) ?? Data(),
+            senderID: Data(hexString: myPeerID.id) ?? Data(),
             recipientID: nil, // broadcast
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             payload: payload,
@@ -112,7 +112,7 @@ final class GossipSyncManager {
         }
         let pkt = BitchatPacket(
             type: MessageType.requestSync.rawValue,
-            senderID: Data(hexString: myPeerID) ?? Data(),
+            senderID: Data(hexString: myPeerID.id) ?? Data(),
             recipientID: recipient,
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             payload: payload,

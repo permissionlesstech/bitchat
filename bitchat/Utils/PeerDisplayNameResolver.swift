@@ -7,7 +7,7 @@ struct PeerDisplayNameResolver {
     ///   - peers: Array of tuples (id, nickname, isConnected).
     ///   - selfNickname: The local user's current nickname, included in collision counts to suffix remotes matching it.
     /// - Returns: Map of peerID -> displayName.
-    static func resolve(_ peers: [(id: String, nickname: String, isConnected: Bool)], selfNickname: String) -> [String: String] {
+    static func resolve(_ peers: [(id: String, nickname: String, isConnected: Bool)], selfNickname: String) -> [PeerID: String] {
         // Count collisions among connected peers and include our own nickname
         var counts: [String: Int] = [:]
         for p in peers where p.isConnected {
@@ -15,13 +15,13 @@ struct PeerDisplayNameResolver {
         }
         counts[selfNickname, default: 0] += 1
 
-        var result: [String: String] = [:]
+        var result: [PeerID: String] = [:]
         for p in peers {
             var name = p.nickname
             if p.isConnected, (counts[p.nickname] ?? 0) > 1 {
                 name += "#" + String(p.id.prefix(4))
             }
-            result[p.id] = name
+            result[PeerID(str: p.id)] = name
         }
         return result
     }
