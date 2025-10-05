@@ -181,7 +181,7 @@ final class MockBLEService: NSObject {
             }
         }
     }
-    
+
     func sendPrivateMessage(_ content: String, to recipientPeerID: String, recipientNickname: String, messageID: String) {
         let message = BitchatMessage(
             id: messageID,
@@ -345,6 +345,10 @@ final class MockBLEService: NSObject {
     func sendPrivateMessage(_ content: String, to recipientPeerID: PeerID, recipientNickname: String, messageID: String? = nil) {
         sendPrivateMessage(content, to: recipientPeerID.id, recipientNickname: recipientNickname, messageID: messageID ?? UUID().uuidString)
     }
+
+    func sendFileBroadcast(_ packet: BitchatFilePacket, transferId: String) {}
+
+    func sendFilePrivate(_ packet: BitchatFilePacket, to peerID: String, transferId: String) {}
 }
 
 // Backward compatibility for older tests

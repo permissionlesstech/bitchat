@@ -87,6 +87,7 @@ import Tor
 #if os(iOS)
 import UIKit
 #endif
+import UniformTypeIdentifiers
 
 /// Manages the application state and business logic for BitChat.
 /// Acts as the primary coordinator between UI components and backend services,
@@ -361,6 +362,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     private var geoSubscriptionID: String? = nil
     private var geoDmSubscriptionID: String? = nil
     private var currentGeohash: String? = nil
+    private var cachedGeohashIdentity: (geohash: String, identity: NostrIdentity)? = nil // Cache current geohash identity
     private var geoNicknames: [String: String] = [:] // pubkeyHex(lowercased) -> nickname
     // Show Tor status once per app launch
     private var torStatusAnnounced = false
@@ -429,6 +431,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     
     // Delivery tracking
     private var cancellables = Set<AnyCancellable>()
+    private var transferIdToMessageIDs: [String: [String]] = [:]
+    private var messageIDToTransferId: [String: String] = [:]
 
     // MARK: - QR Verification (pending state)
     private struct PendingVerification {
@@ -631,6 +635,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
 
         // Set up Noise encryption callbacks
         setupNoiseCallbacks()
+
+        TransferProgressManager.shared.publisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.handleTransferEvent(event)
+            }
+            .store(in: &cancellables)
 
         // Observe location channel selection
         LocationChannelManager.shared.$selectedChannel
@@ -1387,7 +1398,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         // Ignore messages that are empty or whitespace-only to prevent blank lines
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        
+
         // Check for commands
         if content.hasPrefix("/") {
             Task { @MainActor in
@@ -1395,20 +1406,20 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             }
             return
         }
-        
+
         if selectedPrivateChatPeer != nil {
             // Update peer ID in case it changed due to reconnection
             updatePrivateChatPeerIfNeeded()
-            
+
             if let selectedPeer = selectedPrivateChatPeer {
                 sendPrivateMessage(content, to: selectedPeer)
             }
             return
         }
-        
+
         // Parse mentions from the content (use original content for user intent)
         let mentions = parseMentions(from: content)
-        
+
         // Add message to local display
         var displaySender = nickname
         var localSenderPeerID = meshService.myPeerID
@@ -1427,14 +1438,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             senderPeerID: localSenderPeerID,
             mentions: mentions.isEmpty ? nil : mentions
         )
-        
+
         // Add to main messages immediately for user feedback
         messages.append(message)
-        
+
         // Update content LRU for near-dup detection
         let ckey = normalizedContentKey(message.content)
         recordContentKey(ckey, timestamp: message.timestamp)
-        
+
         // Persist to channel-specific timelines
         switch activeChannel {
         case .mesh:
@@ -1448,14 +1459,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             }
             geoTimelines[ch.geohash] = arr
         }
+
         trimMessagesIfNeeded()
-        
-        // Force immediate UI update for user's own messages
-        objectWillChange.send()
+
+        // UI updates automatically via @Published var messages
 
         updateChannelActivityTimeThenSend(content: content, trimmed: trimmed, mentions: mentions)
     }
-    
+
     private func updateChannelActivityTimeThenSend(content: String, trimmed: String, mentions: [String]) {
         switch activeChannel {
         case .mesh:
@@ -2361,6 +2372,460 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         }
     }
 
+    // MARK: - Media Transfers
+
+    private enum MediaSendError: Error {
+        case encodingFailed
+        case tooLarge
+        case copyFailed
+    }
+
+    @MainActor
+    func sendVoiceNote(at url: URL) {
+        let targetPeer = selectedPrivateChatPeer
+        let message = enqueueMediaMessage(content: "[voice] \(url.lastPathComponent)", targetPeer: targetPeer)
+        let messageID = message.id
+        let transferId = makeTransferID(messageID: messageID)
+
+        Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self = self else { return }
+            do {
+                // Security H1: Check file size BEFORE reading into memory
+                let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
+                guard let fileSize = attrs[.size] as? Int,
+                      fileSize <= FileTransferLimits.maxVoiceNoteBytes else {
+                    let size = (attrs[.size] as? Int) ?? 0
+                    SecureLogger.warning("Voice note exceeds size limit (\(size) bytes)", category: .session)
+                    try? FileManager.default.removeItem(at: url)
+                    await MainActor.run {
+                        self.handleMediaSendFailure(messageID: messageID, reason: "Voice note too large")
+                    }
+                    return
+                }
+
+                let data = try Data(contentsOf: url)
+                let packet = BitchatFilePacket(
+                    fileName: url.lastPathComponent,
+                    fileSize: UInt64(data.count),
+                    mimeType: "audio/mp4",
+                    content: data
+                )
+                guard packet.encode() != nil else { throw MediaSendError.encodingFailed }
+                await MainActor.run {
+                    self.registerTransfer(transferId: transferId, messageID: messageID)
+                    if let peerID = targetPeer {
+                        self.meshService.sendFilePrivate(packet, to: peerID, transferId: transferId)
+                    } else {
+                        self.meshService.sendFileBroadcast(packet, transferId: transferId)
+                    }
+                }
+            } catch {
+                SecureLogger.error("Voice note send failed: \(error)", category: .session)
+                await MainActor.run {
+                    self.handleMediaSendFailure(messageID: messageID, reason: "Failed to send voice note")
+                }
+            }
+        }
+    }
+
+    @MainActor
+    func sendImage(from sourceURL: URL, cleanup: (() -> Void)? = nil) {
+        let targetPeer = selectedPrivateChatPeer
+
+        Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self = self else { return }
+            var processedURL: URL?
+            do {
+                let outputURL = try ImageUtils.processImage(at: sourceURL)
+                processedURL = outputURL
+                let data = try Data(contentsOf: outputURL)
+                guard data.count <= FileTransferLimits.maxImageBytes else {
+                    SecureLogger.warning("Processed image exceeds size limit (\(data.count) bytes)", category: .session)
+                    await MainActor.run {
+                        self.addSystemMessage("Image is too large to send.")
+                    }
+                    try? FileManager.default.removeItem(at: outputURL)
+                    return
+                }
+                let packet = BitchatFilePacket(
+                    fileName: outputURL.lastPathComponent,
+                    fileSize: UInt64(data.count),
+                    mimeType: "image/jpeg",
+                    content: data
+                )
+                guard packet.encode() != nil else { throw MediaSendError.encodingFailed }
+                await MainActor.run {
+                    let message = self.enqueueMediaMessage(content: "[image] \(outputURL.lastPathComponent)", targetPeer: targetPeer)
+                    let messageID = message.id
+                    let transferId = self.makeTransferID(messageID: messageID)
+                    self.registerTransfer(transferId: transferId, messageID: messageID)
+                    if let peerID = targetPeer {
+                        self.meshService.sendFilePrivate(packet, to: peerID, transferId: transferId)
+                    } else {
+                        self.meshService.sendFileBroadcast(packet, transferId: transferId)
+                    }
+                }
+            } catch {
+                SecureLogger.error("Image send preparation failed: \(error)", category: .session)
+                await MainActor.run {
+                    self.addSystemMessage("Failed to prepare image for sending.")
+                }
+                if let url = processedURL {
+                    try? FileManager.default.removeItem(at: url)
+                }
+            }
+            cleanup?()
+        }
+    }
+
+    @MainActor
+    func sendFileAttachment(from sourceURL: URL) {
+        let targetPeer = selectedPrivateChatPeer
+
+        Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self = self else { return }
+            defer { try? FileManager.default.removeItem(at: sourceURL) }
+            var destinationURL: URL?
+            do {
+                // Security H1: Check file size BEFORE reading into memory
+                let attrs = try FileManager.default.attributesOfItem(atPath: sourceURL.path)
+                guard let fileSize = attrs[.size] as? Int else {
+                    throw MediaSendError.encodingFailed
+                }
+                guard FileTransferLimits.isValidPayload(fileSize) else {
+                    throw MediaSendError.tooLarge
+                }
+
+                let data = try Data(contentsOf: sourceURL)
+
+                let destination = try self.prepareOutgoingFileCopy(from: sourceURL, data: data)
+                destinationURL = destination
+                let packet = BitchatFilePacket(
+                    fileName: destination.lastPathComponent,
+                    fileSize: UInt64(data.count),
+                    mimeType: self.mimeType(for: destination),
+                    content: data
+                )
+                guard packet.encode() != nil else {
+                    try? FileManager.default.removeItem(at: destination)
+                    throw MediaSendError.encodingFailed
+                }
+
+                await MainActor.run {
+                    let message = self.enqueueMediaMessage(content: "[file] \(destination.lastPathComponent)", targetPeer: targetPeer)
+                    let messageID = message.id
+                    let transferId = self.makeTransferID(messageID: messageID)
+                    self.registerTransfer(transferId: transferId, messageID: messageID)
+                    if let peerID = targetPeer {
+                        self.meshService.sendFilePrivate(packet, to: peerID, transferId: transferId)
+                    } else {
+                        self.meshService.sendFileBroadcast(packet, transferId: transferId)
+                    }
+                }
+            } catch MediaSendError.tooLarge {
+                await MainActor.run {
+                    self.addSystemMessage("File is too large to send.")
+                }
+            } catch {
+                if let destination = destinationURL {
+                    try? FileManager.default.removeItem(at: destination)
+                }
+                SecureLogger.error("File attachment send failed: \(error)", category: .session)
+                await MainActor.run {
+                    self.addSystemMessage("Failed to send file.")
+                }
+            }
+        }
+    }
+
+    @MainActor
+    func cancelMediaSend(messageID: String) {
+        if let transferId = messageIDToTransferId[messageID],
+           let active = transferIdToMessageIDs[transferId]?.first,
+           active == messageID {
+            meshService.cancelTransfer(transferId)
+        }
+        clearTransferMapping(for: messageID)
+        removeMessage(withID: messageID, cleanupFile: true)
+    }
+
+    @MainActor
+    func deleteMediaMessage(messageID: String) {
+        clearTransferMapping(for: messageID)
+        removeMessage(withID: messageID, cleanupFile: true)
+    }
+
+    @MainActor
+    private func enqueueMediaMessage(content: String, targetPeer: String?) -> BitchatMessage {
+        let timestamp = Date()
+        let message: BitchatMessage
+
+        if let peerID = targetPeer {
+            message = BitchatMessage(
+                sender: nickname,
+                content: content,
+                timestamp: timestamp,
+                isRelay: false,
+                originalSender: nil,
+                isPrivate: true,
+                recipientNickname: nicknameForPeer(peerID),
+                senderPeerID: meshService.myPeerID,
+                deliveryStatus: .sending
+            )
+            var chats = privateChats
+            chats[peerID, default: []].append(message)
+            privateChats = chats
+            trimPrivateChatMessagesIfNeeded(for: peerID)
+        } else {
+            let (displayName, senderPeerID) = currentPublicSender()
+            message = BitchatMessage(
+                sender: displayName,
+                content: content,
+                timestamp: timestamp,
+                isRelay: false,
+                originalSender: nil,
+                isPrivate: false,
+                recipientNickname: nil,
+                senderPeerID: senderPeerID,
+                deliveryStatus: .sending
+            )
+            messages.append(message)
+            switch activeChannel {
+            case .mesh:
+                meshTimeline.append(message)
+                trimMeshTimelineIfNeeded()
+            case .location(let ch):
+                var arr = geoTimelines[ch.geohash] ?? []
+                arr.append(message)
+                if arr.count > geoTimelineCap {
+                    arr = Array(arr.suffix(geoTimelineCap))
+                }
+                geoTimelines[ch.geohash] = arr
+            }
+            trimMessagesIfNeeded()
+        }
+
+        let key = normalizedContentKey(message.content)
+        recordContentKey(key, timestamp: timestamp)
+        objectWillChange.send()
+        return message
+    }
+
+    private func currentPublicSender() -> (name: String, peerID: String) {
+        var displaySender = nickname
+        var senderPeerID = meshService.myPeerID
+        if case .location(let ch) = activeChannel,
+           let identity = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
+            let suffix = String(identity.publicKeyHex.suffix(4))
+            displaySender = nickname + "#" + suffix
+            let shortKey = identity.publicKeyHex.prefix(TransportConfig.nostrShortKeyDisplayLength)
+            senderPeerID = "nostr:\(shortKey)"
+        }
+        return (displaySender, senderPeerID)
+    }
+
+    @MainActor
+    private func nicknameForPeer(_ peerID: String) -> String {
+        if let name = meshService.peerNickname(peerID: peerID) {
+            return name
+        }
+        if let favorite = FavoritesPersistenceService.shared.getFavoriteStatus(forPeerID: peerID),
+           !favorite.peerNickname.isEmpty {
+            return favorite.peerNickname
+        }
+        if let noiseKey = Data(hexString: peerID),
+           let favorite = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey),
+           !favorite.peerNickname.isEmpty {
+            return favorite.peerNickname
+        }
+        return "user"
+    }
+
+    @MainActor
+    private func registerTransfer(transferId: String, messageID: String) {
+        transferIdToMessageIDs[transferId, default: []].append(messageID)
+        messageIDToTransferId[messageID] = transferId
+    }
+
+    private func makeTransferID(messageID: String) -> String {
+        "\(messageID)-\(UUID().uuidString)"
+    }
+
+    @MainActor
+    private func clearTransferMapping(for messageID: String) {
+        guard let transferId = messageIDToTransferId.removeValue(forKey: messageID) else { return }
+        guard var queue = transferIdToMessageIDs[transferId] else { return }
+        if !queue.isEmpty {
+            if queue.first == messageID {
+                queue.removeFirst()
+            } else if let idx = queue.firstIndex(of: messageID) {
+                queue.remove(at: idx)
+            }
+        }
+        transferIdToMessageIDs[transferId] = queue.isEmpty ? nil : queue
+    }
+
+    @MainActor
+    private func handleMediaSendFailure(messageID: String, reason: String) {
+        updateMessageDeliveryStatus(messageID, status: .failed(reason: reason))
+        clearTransferMapping(for: messageID)
+    }
+
+    @MainActor
+    private func handleTransferEvent(_ event: TransferProgressManager.Event) {
+        switch event {
+        case .started(let id, let total):
+            guard let messageID = transferIdToMessageIDs[id]?.first else { return }
+            updateMessageDeliveryStatus(messageID, status: .partiallyDelivered(reached: 0, total: total))
+        case .updated(let id, let sent, let total):
+            guard let messageID = transferIdToMessageIDs[id]?.first else { return }
+            updateMessageDeliveryStatus(messageID, status: .partiallyDelivered(reached: sent, total: total))
+        case .completed(let id, _):
+            guard let messageID = transferIdToMessageIDs[id]?.first else { return }
+            updateMessageDeliveryStatus(messageID, status: .sent)
+            clearTransferMapping(for: messageID)
+        case .cancelled(let id, _, _):
+            guard let messageID = transferIdToMessageIDs[id]?.first else { return }
+            clearTransferMapping(for: messageID)
+            removeMessage(withID: messageID, cleanupFile: true)
+        }
+    }
+
+    private func cleanupLocalFile(forMessage message: BitchatMessage) {
+        // Check both outgoing and incoming directories for thorough cleanup
+        let prefixes = ["[voice] ", "[image] ", "[file] "]
+        let subdirs = ["voicenotes/outgoing", "voicenotes/incoming",
+                       "images/outgoing", "images/incoming",
+                       "files/outgoing", "files/incoming"]
+
+        guard let prefix = prefixes.first(where: { message.content.hasPrefix($0) }) else { return }
+        let rawFilename = String(message.content.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !rawFilename.isEmpty, let base = try? applicationFilesDirectory() else { return }
+
+        // Security: Extract only the last path component to prevent directory traversal
+        let safeFilename = (rawFilename as NSString).lastPathComponent
+        guard !safeFilename.isEmpty && safeFilename != "." && safeFilename != ".." else { return }
+
+        // Try all possible locations (outgoing and incoming)
+        for subdir in subdirs {
+            let target = base.appendingPathComponent(subdir, isDirectory: true).appendingPathComponent(safeFilename)
+
+            // Security: Verify target is within expected directory before deletion
+            guard target.path.hasPrefix(base.path) else { continue }
+
+            do {
+                try FileManager.default.removeItem(at: target)
+            } catch CocoaError.fileNoSuchFile {
+                // Expected - file not in this directory
+            } catch {
+                SecureLogger.error("Failed to cleanup \(safeFilename): \(error)", category: .session)
+            }
+        }
+    }
+
+    private func prepareOutgoingFileCopy(from sourceURL: URL, data: Data) throws -> URL {
+        let base = try applicationFilesDirectory().appendingPathComponent("files/outgoing", isDirectory: true)
+        try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true, attributes: nil)
+
+        let rawName = sourceURL.lastPathComponent
+        let sanitized = sanitizeOutgoingFileName(rawName.isEmpty ? "file" : rawName)
+        var destination = base.appendingPathComponent(sanitized)
+        var counter = 1
+        while FileManager.default.fileExists(atPath: destination.path) {
+            let baseName = (sanitized as NSString).deletingPathExtension
+            let ext = (sanitized as NSString).pathExtension
+            let newName: String
+            if ext.isEmpty {
+                newName = "\(baseName) (\(counter))"
+            } else {
+                newName = "\(baseName) (\(counter)).\(ext)"
+            }
+            destination = base.appendingPathComponent(newName)
+            counter += 1
+        }
+
+        try data.write(to: destination, options: .atomic)
+        return destination
+    }
+
+    private func sanitizeOutgoingFileName(_ name: String) -> String {
+        var candidate = name
+        candidate = candidate.replacingOccurrences(of: "\\", with: "/")
+        candidate = candidate.components(separatedBy: "/").last ?? name
+        candidate = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+        if candidate.isEmpty { candidate = "file" }
+        let invalid = CharacterSet(charactersIn: "<>:\"|?*")
+        candidate = candidate.components(separatedBy: invalid).joined(separator: "_")
+        if candidate.isEmpty { candidate = "file" }
+        if (candidate as NSString).pathExtension.isEmpty {
+            candidate += ".bin"
+        }
+        return candidate
+    }
+
+    private func mimeType(for url: URL) -> String {
+        let ext = url.pathExtension.lowercased()
+        if !ext.isEmpty,
+           let type = UTType(filenameExtension: ext),
+           let mime = type.preferredMIMEType {
+            return mime
+        }
+        return "application/octet-stream"
+    }
+
+    private func applicationFilesDirectory() throws -> URL {
+        let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+        let filesDir = base.appendingPathComponent("files", isDirectory: true)
+        try FileManager.default.createDirectory(at: filesDir, withIntermediateDirectories: true, attributes: nil)
+        return filesDir
+    }
+
+    @MainActor
+    private func removeMessage(withID messageID: String, cleanupFile: Bool = false) {
+        var removedMessage: BitchatMessage?
+
+        if let idx = messages.firstIndex(where: { $0.id == messageID }) {
+            removedMessage = messages.remove(at: idx)
+        }
+
+        meshTimeline.removeAll { $0.id == messageID }
+
+        for key in Array(geoTimelines.keys) {
+            var entries = geoTimelines[key] ?? []
+            if let idx = entries.firstIndex(where: { $0.id == messageID }) {
+                removedMessage = removedMessage ?? entries[idx]
+                entries.remove(at: idx)
+                if entries.isEmpty {
+                    geoTimelines.removeValue(forKey: key)
+                } else {
+                    geoTimelines[key] = entries
+                }
+            }
+        }
+
+        var chats = privateChats
+        for (peerID, items) in chats {
+            let filtered = items.filter { $0.id != messageID }
+            if filtered.count != items.count {
+                if filtered.isEmpty {
+                    chats.removeValue(forKey: peerID)
+                } else {
+                    chats[peerID] = filtered
+                }
+                if removedMessage == nil {
+                    removedMessage = items.first(where: { $0.id == messageID })
+                }
+            }
+        }
+        privateChats = chats
+
+        if cleanupFile, let message = removedMessage {
+            cleanupLocalFile(forMessage: message)
+        }
+
+        objectWillChange.send()
+    }
+
     // MARK: - Geohash DMs initiation
     @MainActor
     func startGeohashDM(withPubkeyHex hex: String) {
@@ -3226,9 +3691,34 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             nostrRelayManager?.connect()
         }
         
+        // Delete ALL media files (incoming and outgoing) in background
+        Task.detached(priority: .utility) {
+            do {
+                let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+                let filesDir = base.appendingPathComponent("files", isDirectory: true)
+
+                // Delete the entire files directory and recreate it
+                if FileManager.default.fileExists(atPath: filesDir.path) {
+                    try FileManager.default.removeItem(at: filesDir)
+                    SecureLogger.info("🗑️ Deleted all media files during panic clear", category: .session)
+                }
+
+                // Recreate empty directory structure
+                try FileManager.default.createDirectory(at: filesDir, withIntermediateDirectories: true, attributes: nil)
+                try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("voicenotes/incoming", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
+                try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("voicenotes/outgoing", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
+                try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("images/incoming", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
+                try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("images/outgoing", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
+                try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("files/incoming", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
+                try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("files/outgoing", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
+            } catch {
+                SecureLogger.error("Failed to clear media files during panic: \(error)", category: .session)
+            }
+        }
+
         // Force immediate UI update for panic mode
         // UI updates immediately - no flushing needed
-        
+
     }
     
     // MARK: - Autocomplete
@@ -3299,7 +3789,19 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             if let spid = message.senderPeerID?.id {
                 // In geohash channels, compare against our per-geohash nostr short ID
                 if case .location(let ch) = activeChannel, spid.hasPrefix("nostr:") {
-                    if let myGeo = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
+                    // Use cached identity to avoid crypto during rendering
+                    let myGeo: NostrIdentity? = {
+                        if let cached = cachedGeohashIdentity, cached.geohash == ch.geohash {
+                            return cached.identity
+                        }
+                        // Fallback: derive and cache (should rarely happen)
+                        if let identity = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
+                            cachedGeohashIdentity = (ch.geohash, identity)
+                            return identity
+                        }
+                        return nil
+                    }()
+                    if let myGeo = myGeo {
                         return spid == "nostr:\(myGeo.publicKeyHex.prefix(TransportConfig.nostrShortKeyDisplayLength))"
                     }
                 }
@@ -3623,6 +4125,53 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         // Cache the formatted text
         message.setCachedFormattedText(result, isDark: isDark, isSelf: isSelf)
         
+        return result
+    }
+
+    @MainActor
+    func formatMessageHeader(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
+        let isSelf: Bool = {
+            if let spid = message.senderPeerID {
+                if case .location(let ch) = activeChannel, spid.hasPrefix("nostr:") {
+                    if let myGeo = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
+                        return spid == "nostr:\(myGeo.publicKeyHex.prefix(TransportConfig.nostrShortKeyDisplayLength))"
+                    }
+                }
+                return spid == meshService.myPeerID
+            }
+            if message.sender == nickname { return true }
+            if message.sender.hasPrefix(nickname + "#") { return true }
+            return false
+        }()
+
+        let isDark = colorScheme == .dark
+        let baseColor: Color = isSelf ? .orange : peerColor(for: message, isDark: isDark)
+
+        if message.sender == "system" {
+            var style = AttributeContainer()
+            style.foregroundColor = baseColor
+            style.font = .bitchatSystem(size: 14, weight: .medium, design: .monospaced)
+            return AttributedString(message.sender).mergingAttributes(style)
+        }
+
+        var result = AttributedString()
+        let (baseName, suffix) = message.sender.splitSuffix()
+        var senderStyle = AttributeContainer()
+        senderStyle.foregroundColor = baseColor
+        senderStyle.font = .bitchatSystem(size: 14, weight: isSelf ? .bold : .medium, design: .monospaced)
+        if let spid = message.senderPeerID,
+           let url = URL(string: "bitchat://user/\(spid.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? spid)") {
+            senderStyle.link = url
+        }
+
+        result.append(AttributedString("<@").mergingAttributes(senderStyle))
+        result.append(AttributedString(baseName).mergingAttributes(senderStyle))
+        if !suffix.isEmpty {
+            var suffixStyle = senderStyle
+            suffixStyle.foregroundColor = baseColor.opacity(0.6)
+            result.append(AttributedString(suffix).mergingAttributes(suffixStyle))
+        }
+        result.append(AttributedString("> ").mergingAttributes(senderStyle))
         return result
     }
     
@@ -4171,6 +4720,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     // Clear the current public channel's timeline (visible + persistent buffer)
     @MainActor
     func clearCurrentPublicTimeline() {
+        // Clear messages from current timeline
         switch activeChannel {
         case .mesh:
             messages.removeAll()
@@ -4178,6 +4728,32 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         case .location(let ch):
             messages.removeAll()
             geoTimelines[ch.geohash] = []
+        }
+
+        // Delete associated media files (images, voice notes, files) in background
+        // Only delete from current chat to avoid removing private chat media
+        Task.detached(priority: .utility) {
+            do {
+                let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+                let filesDir = base.appendingPathComponent("files", isDirectory: true)
+
+                // Only clear public media (mesh channel only - geohash media is separate)
+                // Note: This is conservative - only clears outgoing since we authored those
+                let outgoingDirs = [
+                    filesDir.appendingPathComponent("voicenotes/outgoing", isDirectory: true),
+                    filesDir.appendingPathComponent("images/outgoing", isDirectory: true),
+                    filesDir.appendingPathComponent("files/outgoing", isDirectory: true)
+                ]
+
+                for dir in outgoingDirs {
+                    if FileManager.default.fileExists(atPath: dir.path) {
+                        try? FileManager.default.removeItem(at: dir)
+                        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
+                    }
+                }
+            } catch {
+                SecureLogger.error("Failed to clear media files: \(error)", category: .session)
+            }
         }
     }
     
