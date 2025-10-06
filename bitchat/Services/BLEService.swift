@@ -2415,7 +2415,20 @@ extension BLEService {
         if peerID == myPeerID {
             return
         }
-        
+
+        // Reject stale announces to prevent ghost peers from appearing
+        // Use same 15-minute window as gossip sync (900 seconds)
+        let maxAnnounceAgeSeconds: TimeInterval = 900
+        let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
+        let ageThresholdMs = UInt64(maxAnnounceAgeSeconds * 1000)
+        if nowMs >= ageThresholdMs {
+            let cutoffMs = nowMs - ageThresholdMs
+            if packet.timestamp < cutoffMs {
+                SecureLogger.debug("⏰ Ignoring stale announce from \(peerID.prefix(8))… (age: \(Double(nowMs - packet.timestamp) / 1000.0)s)", category: .session)
+                return
+            }
+        }
+
         // Suppress announce logs to reduce noise
 
         // Precompute signature verification outside barrier to reduce contention
@@ -2590,6 +2603,26 @@ extension BLEService {
         // This allows our own messages to be surfaced when they come back via
         // the sync path without re-processing regular relayed copies.
         if peerID == myPeerID && packet.ttl != 0 { return }
+
+        // Reject stale broadcast messages to prevent old messages from appearing
+        // Use same 15-minute window as gossip sync (900 seconds)
+        // Check if this is a broadcast message (recipient is all 0xFF or nil)
+        let isBroadcast: Bool = {
+            guard let r = packet.recipientID else { return true }
+            return r.count == 8 && r.allSatisfy { $0 == 0xFF }
+        }()
+        if isBroadcast {
+            let maxMessageAgeSeconds: TimeInterval = 900
+            let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
+            let ageThresholdMs = UInt64(maxMessageAgeSeconds * 1000)
+            if nowMs >= ageThresholdMs {
+                let cutoffMs = nowMs - ageThresholdMs
+                if packet.timestamp < cutoffMs {
+                    SecureLogger.debug("⏰ Ignoring stale broadcast message from \(peerID.prefix(8))… (age: \(Double(nowMs - packet.timestamp) / 1000.0)s)", category: .session)
+                    return
+                }
+            }
+        }
 
         var accepted = false
         var senderNickname: String = ""
