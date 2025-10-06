@@ -131,7 +131,7 @@ enum LazyHandshakeState {
 // MARK: - Delivery Status
 
 // Delivery status for messages
-enum DeliveryStatus: Codable, Equatable {
+enum DeliveryStatus: Codable, Equatable, Hashable {
     case sending
     case sent  // Left our device
     case delivered(to: String, at: Date)  // Confirmed by recipient

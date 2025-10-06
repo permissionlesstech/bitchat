@@ -100,7 +100,7 @@ struct NostrEmbeddedBitChat {
         if let maybeData = Data(hexString: recipientPeerID) {
             if maybeData.count == 32 {
                 // Treat as Noise static public key; derive peerID from fingerprint
-                return PeerIDUtils.derivePeerID(fromPublicKey: maybeData)
+                return PeerID(publicKey: maybeData).id
             } else if maybeData.count == 8 {
                 // Already an 8-byte peer ID
                 return recipientPeerID

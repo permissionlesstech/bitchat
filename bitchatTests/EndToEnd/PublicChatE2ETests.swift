@@ -200,9 +200,9 @@ final class PublicChatE2ETests: XCTestCase {
         }
         
         // Inject at Bob with TTL=2 so Charlie sees it (TTL->1) and does not relay to David
-        let msg = TestHelpers.createTestMessage(content: TestConstants.testMessage1, sender: TestConstants.testNickname1, senderPeerID: alice.peerID)
+        let msg = TestHelpers.createTestMessage(content: TestConstants.testMessage1, sender: TestConstants.testNickname1, senderPeerID: PeerID(str: alice.peerID))
         if let payload = msg.toBinaryPayload() {
-            let pkt = TestHelpers.createTestPacket(senderID: alice.peerID, payload: payload, ttl: 2)
+            let pkt = TestHelpers.createTestPacket(senderID: PeerID(str: alice.peerID), payload: payload, ttl: 2)
             bob.simulateIncomingPacket(pkt)
         }
         
@@ -419,11 +419,10 @@ final class PublicChatE2ETests: XCTestCase {
     
     // MARK: - Helper Methods
     
-    private func createMockService(peerID: String, nickname: String) -> MockBluetoothMeshService {
+    private func createMockService(peerID: PeerID, nickname: String) -> MockBluetoothMeshService {
         let service = MockBluetoothMeshService()
-        service.myPeerID = peerID
+        service.myPeerID = peerID.id
         service.mockNickname = nickname
-        service._testRegister()
         return service
     }
     

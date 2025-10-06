@@ -54,7 +54,7 @@ final class BinaryProtocolTests: XCTestCase {
         // Verify recipient
         XCTAssertNotNil(decodedPacket.recipientID)
         let decodedRecipientID = decodedPacket.recipientID?.trimmingNullBytes()
-        XCTAssertEqual(String(data: decodedRecipientID!, encoding: .utf8), recipientID)
+        XCTAssertTrue(String(data: decodedRecipientID!, encoding: .utf8) == recipientID)
     }
     
     func testPacketWithSignature() throws {

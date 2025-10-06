@@ -87,7 +87,7 @@ import Foundation
 /// Represents the ephemeral layer of identity - short-lived peer IDs that provide network privacy.
 /// These IDs rotate periodically to prevent tracking while maintaining cryptographic relationships.
 struct EphemeralIdentity {
-    let peerID: String          // 8 random bytes
+    let peerID: PeerID          // 8 random bytes
     let sessionStart: Date
     var handshakeState: HandshakeState
 }

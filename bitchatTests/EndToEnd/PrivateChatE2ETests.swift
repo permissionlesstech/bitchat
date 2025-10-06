@@ -41,6 +41,31 @@ final class PrivateChatE2ETests: XCTestCase {
     
     // MARK: - Basic Private Messaging Tests
     
+    func testSimplePrivateMessageShouldNotBeSentWithoutConnection() {
+        // Intentionally commented out to test
+        // simulateConnection(alice, bob)
+        
+        let expectation = XCTestExpectation(description: "Bob should not receive a private message")
+        expectation.isInverted = true
+        
+        bob.messageDeliveryHandler = { message in
+            if message.content == TestConstants.testMessage1 &&
+               message.isPrivate &&
+               message.sender == TestConstants.testNickname1 {
+                expectation.fulfill()
+            }
+        }
+        
+        // Alice sends private message to Bob
+        alice.sendPrivateMessage(
+            TestConstants.testMessage1,
+            to: TestConstants.testPeerID2,
+            recipientNickname: TestConstants.testNickname2
+        )
+        
+        wait(for: [expectation], timeout: TestConstants.shortTimeout)
+    }
+    
     func testSimplePrivateMessage() {
         simulateConnection(alice, bob)
         
@@ -276,11 +301,10 @@ final class PrivateChatE2ETests: XCTestCase {
     
     // MARK: - Helper Methods
     
-    private func createMockService(peerID: String, nickname: String) -> MockBluetoothMeshService {
+    private func createMockService(peerID: PeerID, nickname: String) -> MockBluetoothMeshService {
         let service = MockBluetoothMeshService()
-        service.myPeerID = peerID
+        service.myPeerID = peerID.id
         service.mockNickname = nickname
-        service._testRegister()
         return service
     }
     

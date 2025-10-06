@@ -17,7 +17,6 @@ import CoreBluetooth
 ///   simulated connections between peers. Tests call `simulateConnectedPeer` /
 ///   `simulateDisconnectedPeer` to manage topology.
 /// - `resetTestBus()` clears global state and is called in test `setUp()`.
-/// - `_testRegister()` registers a node immediately on creation for deterministic routing.
 /// - `messageDeliveryHandler` and `packetDeliveryHandler` let tests observe messages/packets
 ///   as they flow, enabling scenarios like manual encryption/relay.
 /// - A thread-safe `seenMessageIDs` set prevents double-delivery races during flooding.
@@ -110,11 +109,6 @@ final class MockBLEService: NSObject {
         if var setB = adjacency[b] { setB.remove(a); adjacency[b] = setB }
     }
 
-    /// Test-only: register this instance on the bus immediately.
-    func _testRegister() {
-        registerIfNeeded()
-    }
-
     func startServices() {
         // Mock implementation - do nothing
     }
@@ -153,7 +147,7 @@ final class MockBLEService: NSObject {
             originalSender: nil,
             isPrivate: recipientID != nil,
             recipientNickname: nil,
-            senderPeerID: myPeerID,
+            senderPeerID: PeerID(str: myPeerID),
             mentions: mentions.isEmpty ? nil : mentions
         )
         
@@ -198,7 +192,7 @@ final class MockBLEService: NSObject {
             originalSender: nil,
             isPrivate: true,
             recipientNickname: recipientNickname,
-            senderPeerID: myPeerID,
+            senderPeerID: PeerID(str: myPeerID),
             mentions: nil
         )
         
@@ -348,8 +342,8 @@ final class MockBLEService: NSObject {
     
     // MARK: - Compatibility methods for old tests
     
-    func sendPrivateMessage(_ content: String, to recipientPeerID: String, recipientNickname: String, messageID: String? = nil) {
-        sendPrivateMessage(content, to: recipientPeerID, recipientNickname: recipientNickname, messageID: messageID ?? UUID().uuidString)
+    func sendPrivateMessage(_ content: String, to recipientPeerID: PeerID, recipientNickname: String, messageID: String? = nil) {
+        sendPrivateMessage(content, to: recipientPeerID.id, recipientNickname: recipientNickname, messageID: messageID ?? UUID().uuidString)
     }
 }
 
