@@ -286,4 +286,7 @@ private final class MockBitchatDelegate: BitchatDelegate {
     func didUpdatePeerList(_ peers: [String]) {}
     func isFavorite(fingerprint: String) -> Bool { return false }
     func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {}
+    func didReceiveNoisePayload(from peerID: String, type: NoisePayloadType, payload: Data, timestamp: Date) {}
+    func didUpdateBluetoothState(_ state: CBManagerState) {}
+    func didReceivePublicMessage(from peerID: String, nickname: String, content: String, timestamp: Date) {}
 }

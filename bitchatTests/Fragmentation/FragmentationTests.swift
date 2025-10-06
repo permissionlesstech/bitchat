@@ -8,6 +8,7 @@
 
 import Testing
 import Foundation
+import CoreBluetooth
 @testable import bitchat
 
 struct FragmentationTests {
@@ -134,6 +135,7 @@ extension FragmentationTests {
         func isFavorite(fingerprint: String) -> Bool { false }
         func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {}
         func didReceiveNoisePayload(from peerID: String, type: NoisePayloadType, payload: Data, timestamp: Date) {}
+        func didUpdateBluetoothState(_ state: CBManagerState) {}
         func didReceivePublicMessage(from peerID: String, nickname: String, content: String, timestamp: Date) {
             publicMessages.append((peerID, nickname, content))
         }
