@@ -353,13 +353,12 @@ typealias MockSimplifiedBluetoothService = MockBLEService
 // MARK: - Helpers
 
 extension MockBLEService {
-    convenience init(peerID: String, nickname: String) {
+    convenience init(peerID: PeerID, nickname: String) {
         self.init()
-        myPeerID = peerID
+        myPeerID = peerID.id
         mockNickname = nickname
-        _testRegister()
     }
-    
+
     func simulateConnection(with otherPeer: MockBLEService) {
         simulateConnectedPeer(otherPeer.peerID)
         otherPeer.simulateConnectedPeer(myPeerID)
