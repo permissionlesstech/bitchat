@@ -21,11 +21,11 @@ struct PrivateChatE2ETests {
     
     init() {
         MockBLEService.resetTestBus()
-        
-        // Create services
-        alice = MockBLEService(peerID: TestConstants.testPeerID1, nickname: TestConstants.testNickname1)
-        bob = MockBLEService(peerID: TestConstants.testPeerID2, nickname: TestConstants.testNickname2)
-        charlie = MockBLEService(peerID: TestConstants.testPeerID3, nickname: TestConstants.testNickname3)
+
+        // Create services with unique peer IDs to avoid collision with other test suites
+        alice = MockBLEService(peerID: "PRIV_ALICE_", nickname: TestConstants.testNickname1)
+        bob = MockBLEService(peerID: "PRIV_BOB___", nickname: TestConstants.testNickname2)
+        charlie = MockBLEService(peerID: "PRIV_CHARLE", nickname: TestConstants.testNickname3)
         mockKeychain = MockKeychain()
     }
     
@@ -49,7 +49,7 @@ struct PrivateChatE2ETests {
             // Alice sends private message to Bob
             alice.sendPrivateMessage(
                 TestConstants.testMessage1,
-                to: TestConstants.testPeerID2,
+                to: PeerID(str: bob.peerID),
                 recipientNickname: TestConstants.testNickname2
             )
 
@@ -75,7 +75,7 @@ struct PrivateChatE2ETests {
             // Alice sends private message to Bob
             alice.sendPrivateMessage(
                 TestConstants.testMessage1,
-                to: TestConstants.testPeerID2,
+                to: PeerID(str: bob.peerID),
                 recipientNickname: TestConstants.testNickname2
             )
         }
@@ -97,10 +97,10 @@ struct PrivateChatE2ETests {
                     Issue.record("Charlie should not receive")
                 }
             }
-            
+
             alice.sendPrivateMessage(
                 TestConstants.testMessage1,
-                to: TestConstants.testPeerID2,
+                to: PeerID(str: bob.peerID),
                 recipientNickname: TestConstants.testNickname2
             )
         }
@@ -120,10 +120,10 @@ struct PrivateChatE2ETests {
         
         // Establish encrypted session
         do {
-            let handshake1 = try aliceManager.initiateHandshake(with: TestConstants.testPeerID2)
-            let handshake2 = try bobManager.handleIncomingHandshake(from: TestConstants.testPeerID1, message: handshake1)!
-            let handshake3 = try aliceManager.handleIncomingHandshake(from: TestConstants.testPeerID2, message: handshake2)!
-            _ = try bobManager.handleIncomingHandshake(from: TestConstants.testPeerID1, message: handshake3)
+            let handshake1 = try aliceManager.initiateHandshake(with: PeerID(str: bob.peerID))
+            let handshake2 = try bobManager.handleIncomingHandshake(from: PeerID(str: alice.peerID), message: handshake1)!
+            let handshake3 = try aliceManager.handleIncomingHandshake(from: PeerID(str: bob.peerID), message: handshake2)!
+            _ = try bobManager.handleIncomingHandshake(from: PeerID(str: alice.peerID), message: handshake3)
         } catch {
             Issue.record("Failed to establish Noise session: \(error)")
         }
@@ -136,7 +136,7 @@ struct PrivateChatE2ETests {
                    let message = BitchatMessage(packet.payload),
                    message.isPrivate {
                     do {
-                        let encrypted = try aliceManager.encrypt(packet.payload, for: TestConstants.testPeerID2)
+                        let encrypted = try aliceManager.encrypt(packet.payload, for: PeerID(str: bob.peerID))
                         let encryptedPacket = BitchatPacket(
                             type: 0x02, // Encrypted message type
                             senderID: packet.senderID,
@@ -157,7 +157,7 @@ struct PrivateChatE2ETests {
                 // Decrypt incoming encrypted messages
                 if packet.type == 0x02 {
                     do {
-                        let decrypted = try bobManager.decrypt(packet.payload, from: TestConstants.testPeerID1)
+                        let decrypted = try bobManager.decrypt(packet.payload, from: PeerID(str: alice.peerID))
                         if let message = BitchatMessage(decrypted) {
                             #expect(message.content == TestConstants.testMessage1)
                             #expect(message.isPrivate)
@@ -189,7 +189,7 @@ struct PrivateChatE2ETests {
             // Bob relays private messages for Charlie
             bob.packetDeliveryHandler = { packet in
                 if let recipientID = packet.recipientID,
-                   String(data: recipientID, encoding: .utf8) == TestConstants.testPeerID3 {
+                   String(data: recipientID, encoding: .utf8) == charlie.peerID {
                     // Relay to Charlie
                     var relayPacket = packet
                     relayPacket.ttl = packet.ttl - 1
@@ -208,7 +208,7 @@ struct PrivateChatE2ETests {
             // Alice sends private message to Charlie (through Bob)
             alice.sendPrivateMessage(
                 TestConstants.testMessage1,
-                to: TestConstants.testPeerID3,
+                to: PeerID(str: charlie.peerID),
                 recipientNickname: TestConstants.testNickname3
             )
         }

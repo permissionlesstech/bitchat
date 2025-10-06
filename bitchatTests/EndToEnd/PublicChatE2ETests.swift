@@ -21,12 +21,12 @@ struct PublicChatE2ETests {
     
     init() {
         MockBLEService.resetTestBus()
-        
-        // Create mock services
-        alice = MockBLEService(peerID: TestConstants.testPeerID1, nickname: TestConstants.testNickname1)
-        bob = MockBLEService(peerID: TestConstants.testPeerID2, nickname: TestConstants.testNickname2)
-        charlie = MockBLEService(peerID: TestConstants.testPeerID3, nickname: TestConstants.testNickname3)
-        david = MockBLEService(peerID: TestConstants.testPeerID4, nickname: TestConstants.testNickname4)
+
+        // Create mock services with unique peer IDs to avoid collision with other test suites
+        alice = MockBLEService(peerID: "PUB_ALICE__", nickname: TestConstants.testNickname1)
+        bob = MockBLEService(peerID: "PUB_BOB____", nickname: TestConstants.testNickname2)
+        charlie = MockBLEService(peerID: "PUB_CHARLIE", nickname: TestConstants.testNickname3)
+        david = MockBLEService(peerID: "PUB_DAVID__", nickname: TestConstants.testNickname4)
     }
     
     // MARK: - Basic Broadcasting Tests
