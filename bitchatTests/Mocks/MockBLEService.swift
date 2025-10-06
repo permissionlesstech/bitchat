@@ -349,3 +349,18 @@ final class MockBLEService: NSObject {
 
 // Backward compatibility for older tests
 typealias MockSimplifiedBluetoothService = MockBLEService
+
+// MARK: - Helpers
+
+extension MockBLEService {
+    convenience init(peerID: PeerID, nickname: String) {
+        self.init()
+        myPeerID = peerID.id
+        mockNickname = nickname
+    }
+
+    func simulateConnection(with otherPeer: MockBLEService) {
+        simulateConnectedPeer(otherPeer.myPeerID)
+        otherPeer.simulateConnectedPeer(myPeerID)
+    }
+}

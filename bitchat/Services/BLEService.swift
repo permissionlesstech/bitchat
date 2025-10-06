@@ -552,7 +552,11 @@ final class BLEService: NSObject {
     func getNoiseService() -> NoiseEncryptionService {
         return noiseService
     }
-    
+
+    func getCurrentBluetoothState() -> CBManagerState {
+        return centralManager?.state ?? .unknown
+    }
+
     // MARK: Messaging
     
     // Transport protocol conformance helper: simplified public message send
@@ -694,6 +698,11 @@ extension BLEService: GossipSyncManager.Delegate {
 
 extension BLEService: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
+        // Notify delegate about state change on main thread
+        Task { @MainActor in
+            self.delegate?.didUpdateBluetoothState(central.state)
+        }
+
         if central.state == .poweredOn {
             // Start scanning - use allow duplicates for faster discovery when active
             startScanning()

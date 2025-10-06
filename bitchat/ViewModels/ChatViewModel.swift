@@ -549,7 +549,16 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         
         // Start mesh service immediately
         meshService.startServices()
-        
+
+        // Check initial Bluetooth state after a brief delay to allow centralManager initialization
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            guard let self = self else { return }
+            if let bleService = self.meshService as? BLEService {
+                let state = bleService.getCurrentBluetoothState()
+                self.updateBluetoothState(state)
+            }
+        }
+
         // Announce Tor status (geohash-only; do not show in mesh chat). Only when auto-start is allowed.
         if TorManager.shared.torEnforced && !torStatusAnnounced && TorManager.shared.isAutoStartAllowed() {
             torStatusAnnounced = true
@@ -2834,6 +2843,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     
     @MainActor
     @objc private func appDidBecomeActive() {
+        // Check Bluetooth state and show alert if needed
+        if let bleService = meshService as? BLEService {
+            let currentState = bleService.getCurrentBluetoothState()
+            updateBluetoothState(currentState)
+        }
+
         // When app becomes active, send read receipts for visible private chat
         if let peerID = selectedPrivateChatPeer {
             // Try immediately
@@ -4597,8 +4612,16 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     }
 
     // Mention parsing moved from BLE – use the existing non-optional helper below
+    // MARK: - Bluetooth State Monitoring
+
+    func didUpdateBluetoothState(_ state: CBManagerState) {
+        Task { @MainActor in
+            updateBluetoothState(state)
+        }
+    }
+
     // MARK: - Peer Connection Events
-    
+
     func didConnectToPeer(_ peerID: String) {
         SecureLogger.debug("🤝 Peer connected: \(peerID)", category: .session)
         

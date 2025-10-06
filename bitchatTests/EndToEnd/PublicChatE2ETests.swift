@@ -6,439 +6,390 @@
 // For more information, see <https://unlicense.org>
 //
 
-import XCTest
+import Testing
 @testable import bitchat
 
-final class PublicChatE2ETests: XCTestCase {
+@Suite(.serialized)
+struct PublicChatE2ETests {
     
-    var alice: MockBluetoothMeshService!
-    var bob: MockBluetoothMeshService!
-    var charlie: MockBluetoothMeshService!
-    var david: MockBluetoothMeshService!
+    private let alice: MockBLEService
+    private let bob: MockBLEService
+    private let charlie: MockBLEService
+    private let david: MockBLEService
     
-    var receivedMessages: [String: [BitchatMessage]] = [:]
+    private var receivedMessages: [String: [BitchatMessage]] = [:]
     
-    override func setUp() {
-        super.setUp()
+    init() {
         MockBLEService.resetTestBus()
-        
-        // Create mock services
-        alice = createMockService(peerID: TestConstants.testPeerID1, nickname: TestConstants.testNickname1)
-        bob = createMockService(peerID: TestConstants.testPeerID2, nickname: TestConstants.testNickname2)
-        charlie = createMockService(peerID: TestConstants.testPeerID3, nickname: TestConstants.testNickname3)
-        david = createMockService(peerID: TestConstants.testPeerID4, nickname: TestConstants.testNickname4)
-        
-        // Clear received messages
-        receivedMessages.removeAll()
-    }
-    
-    override func tearDown() {
-        alice = nil
-        bob = nil
-        charlie = nil
-        david = nil
-        super.tearDown()
+
+        // Create mock services with unique peer IDs to avoid collision with other test suites
+        alice = MockBLEService(peerID: "PUB_ALICE__", nickname: TestConstants.testNickname1)
+        bob = MockBLEService(peerID: "PUB_BOB____", nickname: TestConstants.testNickname2)
+        charlie = MockBLEService(peerID: "PUB_CHARLIE", nickname: TestConstants.testNickname3)
+        david = MockBLEService(peerID: "PUB_DAVID__", nickname: TestConstants.testNickname4)
     }
     
     // MARK: - Basic Broadcasting Tests
     
-    func testSimplePublicMessage() {
-        // Connect Alice and Bob
-        simulateConnection(alice, bob)
+    @Test func simplePublicMessage() async {
+        alice.simulateConnection(with: bob)
         
-        let expectation = XCTestExpectation(description: "Bob receives message")
-        
-        bob.messageDeliveryHandler = { message in
-            if message.content == TestConstants.testMessage1 && message.sender == TestConstants.testNickname1 {
-                expectation.fulfill()
+        await confirmation("Bob receives message") { bobReceivesMessage in
+            bob.messageDeliveryHandler = { message in
+                if message.content == TestConstants.testMessage1 && message.sender == TestConstants.testNickname1 {
+                    bobReceivesMessage()
+                }
             }
+            
+            alice.sendMessage(TestConstants.testMessage1, mentions: [], to: nil)
         }
-        
-        // Alice sends public message
-        alice.sendMessage(TestConstants.testMessage1, mentions: [], to: nil)
-        
-        wait(for: [expectation], timeout: TestConstants.shortTimeout)
     }
     
-    func testMultiRecipientBroadcast() {
-        // Connect Alice to Bob and Charlie
-        simulateConnection(alice, bob)
-        simulateConnection(alice, charlie)
+    @Test func multiRecipientBroadcast() async {
+        alice.simulateConnection(with: bob)
+        alice.simulateConnection(with: charlie)
         
-        let bobExpectation = XCTestExpectation(description: "Bob receives message")
-        let charlieExpectation = XCTestExpectation(description: "Charlie receives message")
+        var bobReceivedMessage = false
+        var charlieReceivedMessage = false
         
-        bob.messageDeliveryHandler = { message in
-            if message.content == TestConstants.testMessage1 {
-                bobExpectation.fulfill()
+        await confirmation("Both recieve message", expectedCount: 2) { receiveMessage in
+            bob.messageDeliveryHandler = { message in
+                if message.content == TestConstants.testMessage1 {
+                    if !bobReceivedMessage {
+                        bobReceivedMessage = true
+                        receiveMessage()
+                    } else {
+                        Issue.record("Bob received more than once")
+                    }
+                }
             }
-        }
-        
-        charlie.messageDeliveryHandler = { message in
-            if message.content == TestConstants.testMessage1 {
-                charlieExpectation.fulfill()
+            
+            charlie.messageDeliveryHandler = { message in
+                if message.content == TestConstants.testMessage1 {
+                    if !charlieReceivedMessage {
+                        charlieReceivedMessage = true
+                        receiveMessage()
+                    } else {
+                        Issue.record("Charlie received more than once")
+                    }
+                }
             }
+            
+            alice.sendMessage(TestConstants.testMessage1, mentions: [], to: nil)
         }
-        
-        // Alice broadcasts
-        alice.sendMessage(TestConstants.testMessage1, mentions: [], to: nil)
-        
-        wait(for: [bobExpectation, charlieExpectation], timeout: TestConstants.shortTimeout)
     }
     
     // MARK: - Message Routing and Relay Tests
     
-    func testMessageRelayChain() {
+    @Test func messageRelayChain() async {
         // Linear topology: Alice -> Bob -> Charlie
-        simulateConnection(alice, bob)
-        simulateConnection(bob, charlie)
-        
-        let expectation = XCTestExpectation(description: "Charlie receives relayed message")
-        
-        // Set up relay in Bob
-        bob.packetDeliveryHandler = { packet in
-            // Bob should relay to Charlie
-            if let message = BitchatMessage(packet.payload),
-               message.sender == TestConstants.testNickname1 {
-                
-                // Create relay message
-                let relayMessage = BitchatMessage(
-                    id: message.id,
-                    sender: message.sender,
-                    content: message.content,
-                    timestamp: message.timestamp,
-                    isRelay: true,
-                    originalSender: message.sender,
-                    isPrivate: message.isPrivate,
-                    recipientNickname: message.recipientNickname,
-                    senderPeerID: message.senderPeerID,
-                    mentions: message.mentions
-                )
-                
-                if let relayPayload = relayMessage.toBinaryPayload() {
-                    let relayPacket = BitchatPacket(
-                        type: packet.type,
-                        senderID: packet.senderID,
-                        recipientID: packet.recipientID,
-                        timestamp: packet.timestamp,
-                        payload: relayPayload,
-                        signature: packet.signature,
-                        ttl: packet.ttl - 1
+        alice.simulateConnection(with: bob)
+        bob.simulateConnection(with: charlie)
+
+        await confirmation("Charlie receives relayed message") { charlieReceivesMessage in
+            // Set up relay in Bob
+            bob.packetDeliveryHandler = { packet in
+                // Bob should relay to Charlie
+                if let message = BitchatMessage(packet.payload),
+                   message.sender == TestConstants.testNickname1 {
+
+                    // Create relay message
+                    let relayMessage = BitchatMessage(
+                        id: message.id,
+                        sender: message.sender,
+                        content: message.content,
+                        timestamp: message.timestamp,
+                        isRelay: true,
+                        originalSender: message.sender,
+                        isPrivate: message.isPrivate,
+                        recipientNickname: message.recipientNickname,
+                        senderPeerID: message.senderPeerID,
+                        mentions: message.mentions
                     )
-                    
-                    // Simulate relay to Charlie
-                    self.charlie.simulateIncomingPacket(relayPacket)
+
+                    if let relayPayload = relayMessage.toBinaryPayload() {
+                        let relayPacket = BitchatPacket(
+                            type: packet.type,
+                            senderID: packet.senderID,
+                            recipientID: packet.recipientID,
+                            timestamp: packet.timestamp,
+                            payload: relayPayload,
+                            signature: packet.signature,
+                            ttl: packet.ttl - 1
+                        )
+
+                        // Simulate relay to Charlie
+                        self.charlie.simulateIncomingPacket(relayPacket)
+                    }
                 }
             }
-        }
-        
-        charlie.messageDeliveryHandler = { message in
-            if message.content == TestConstants.testMessage1 &&
-               message.originalSender == TestConstants.testNickname1 &&
-               message.isRelay {
-                expectation.fulfill()
+
+            charlie.messageDeliveryHandler = { message in
+                if message.content == TestConstants.testMessage1 &&
+                   message.originalSender == TestConstants.testNickname1 &&
+                   message.isRelay {
+                    charlieReceivesMessage()
+                }
             }
+
+            alice.sendMessage(TestConstants.testMessage1, mentions: [], to: nil)
         }
-        
-        // Alice sends message
-        alice.sendMessage(TestConstants.testMessage1, mentions: [], to: nil)
-        
-        wait(for: [expectation], timeout: TestConstants.defaultTimeout)
     }
     
-    func testMultiHopRelay() {
+    @Test func multiHopRelay() async {
         // Topology: Alice -> Bob -> Charlie -> David
-        simulateConnection(alice, bob)
-        simulateConnection(bob, charlie)
-        simulateConnection(charlie, david)
+        alice.simulateConnection(with: bob)
+        bob.simulateConnection(with: charlie)
+        charlie.simulateConnection(with: david)
         
-        let expectation = XCTestExpectation(description: "David receives multi-hop message")
-        
-        // Set up relay chain
-        setupRelayHandler(bob, nextHops: [charlie])
-        setupRelayHandler(charlie, nextHops: [david])
-        // Allow handlers to install
-        let sendDelay = DispatchTime.now() + 0.05
-        
-        david.messageDeliveryHandler = { message in
-            if message.content == TestConstants.testMessage1 &&
-               message.originalSender == TestConstants.testNickname1 &&
-               message.isRelay {
-                expectation.fulfill()
+        await confirmation("David receives multi-hop message") { davidReceivesMessage in
+            // Set up relay chain
+            setupRelayHandler(bob, nextHops: [charlie])
+            setupRelayHandler(charlie, nextHops: [david])
+            
+            david.messageDeliveryHandler = { message in
+                if message.content == TestConstants.testMessage1 &&
+                   message.originalSender == TestConstants.testNickname1 &&
+                   message.isRelay {
+                    davidReceivesMessage()
+                }
             }
+            
+            alice.sendMessage(TestConstants.testMessage1, mentions: [], to: nil)
         }
-        
-        // Alice sends message
-        DispatchQueue.main.asyncAfter(deadline: sendDelay) {
-            self.alice.sendMessage(TestConstants.testMessage1, mentions: [], to: nil)
-        }
-        
-        wait(for: [expectation], timeout: TestConstants.defaultTimeout)
     }
     
     // MARK: - TTL (Time To Live) Tests
     
-    func testTTLDecrement() {
+    @Test func ttlDecrement() async {
         // Create a chain longer than TTL
-        let nodes = [alice!, bob!, charlie!, david!]
+        let nodes = [alice, bob, charlie, david]
         
         // Connect in chain
         for i in 0..<nodes.count-1 {
-            simulateConnection(nodes[i], nodes[i+1])
+            nodes[i].simulateConnection(with: nodes[i+1])
             if i > 0 && i < nodes.count-1 {
                 setupRelayHandler(nodes[i], nextHops: [nodes[i+1]])
             }
         }
         
-        let expectation = XCTestExpectation(description: "Message dropped due to TTL")
-        expectation.isInverted = true // Should NOT be fulfilled
-        
-        david.messageDeliveryHandler = { message in
-            if message.content == TestConstants.testMessage1 {
-                expectation.fulfill() // This should not happen
+        await confirmation("Message dropped due to TTL", expectedCount: 0) { receiveMessage in
+            david.messageDeliveryHandler = { message in
+                if message.content == TestConstants.testMessage1 {
+                    receiveMessage() // This should not happen
+                }
+            }
+            
+            // Inject at Bob with TTL=2 so Charlie sees it (TTL->1) and does not relay to David
+            let msg = TestHelpers.createTestMessage(
+                content: TestConstants.testMessage1,
+                sender: TestConstants.testNickname1,
+                senderPeerID: PeerID(str: alice.peerID)
+            )
+
+            if let payload = msg.toBinaryPayload() {
+                let pkt = TestHelpers.createTestPacket(senderID: PeerID(str: alice.peerID), payload: payload, ttl: 2)
+                bob.simulateIncomingPacket(pkt)
             }
         }
-        
-        // Inject at Bob with TTL=2 so Charlie sees it (TTL->1) and does not relay to David
-        let msg = TestHelpers.createTestMessage(content: TestConstants.testMessage1, sender: TestConstants.testNickname1, senderPeerID: PeerID(str: alice.peerID))
-        if let payload = msg.toBinaryPayload() {
-            let pkt = TestHelpers.createTestPacket(senderID: PeerID(str: alice.peerID), payload: payload, ttl: 2)
-            bob.simulateIncomingPacket(pkt)
-        }
-        
-        wait(for: [expectation], timeout: TestConstants.shortTimeout)
     }
     
-    func testZeroTTLNotRelayed() {
-        simulateConnection(alice, bob)
-        simulateConnection(bob, charlie)
+    @Test func zeroTTLNotRelayed() async {
+        alice.simulateConnection(with: bob)
+        bob.simulateConnection(with: charlie)
         
-        let expectation = XCTestExpectation(description: "Zero TTL message not relayed")
-        expectation.isInverted = true
-        
-        charlie.messageDeliveryHandler = { message in
-            if message.content == "Zero TTL message" {
-                expectation.fulfill() // Should not happen
+        await confirmation("Zero TTL message not relayed", expectedCount: 0) { receiveMessage in
+            charlie.messageDeliveryHandler = { message in
+                if message.content == "Zero TTL message" {
+                    receiveMessage() // Should not happen
+                }
+            }
+            
+            // Create packet with TTL=0
+            let message = TestHelpers.createTestMessage(content: "Zero TTL message")
+            if let payload = message.toBinaryPayload() {
+                let packet = TestHelpers.createTestPacket(payload: payload, ttl: 0)
+                alice.simulateIncomingPacket(packet)
             }
         }
-        
-        // Create packet with TTL=0
-        let message = TestHelpers.createTestMessage(content: "Zero TTL message")
-        if let payload = message.toBinaryPayload() {
-            let packet = TestHelpers.createTestPacket(payload: payload, ttl: 0)
-            alice.simulateIncomingPacket(packet)
-        }
-        
-        wait(for: [expectation], timeout: TestConstants.shortTimeout)
     }
     
     // MARK: - Duplicate Detection Tests
     
-    func testDuplicateMessagePrevention() {
-        simulateConnection(alice, bob)
+    @Test func duplicateMessagePrevention() async {
+        alice.simulateConnection(with: bob)
         
         var messageCount = 0
-        let expectation = XCTestExpectation(description: "Only one message received")
         
-        bob.messageDeliveryHandler = { message in
-            if message.content == TestConstants.testMessage1 {
-                messageCount += 1
-                if messageCount == 1 {
-                    // Send duplicate after small delay
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        self.alice.sendMessage(TestConstants.testMessage1, mentions: [], to: nil, messageID: message.id)
+        await confirmation("Only one message received") { receiveMessage in
+            bob.messageDeliveryHandler = { message in
+                if message.content == TestConstants.testMessage1 {
+                    receiveMessage()
+                    messageCount += 1
+                    if messageCount == 1 {
+                        // Send duplicate after small delay
+                        alice.sendMessage(TestConstants.testMessage1, mentions: [], to: nil, messageID: message.id)
+                    } else {
+                        Issue.record("Duplicate message was not filtered")
                     }
-                } else {
-                    XCTFail("Duplicate message was not filtered")
                 }
             }
+            
+            // Send original message
+            alice.sendMessage(TestConstants.testMessage1, mentions: [], to: nil)
         }
+    }
+    
+    @Test func duplicateContentAsNewMessageNotPrevented() async {
+        alice.simulateConnection(with: bob)
         
-        // Send original message
-        alice.sendMessage(TestConstants.testMessage1, mentions: [], to: nil)
+        var messageCount = 0
         
-        // Wait to ensure duplicate would have been received
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            XCTAssertEqual(messageCount, 1)
-            expectation.fulfill()
+        await confirmation("Only one message received", expectedCount: 2) { receiveMessage in
+            bob.messageDeliveryHandler = { message in
+                if message.content == TestConstants.testMessage1 {
+                    receiveMessage()
+                    messageCount += 1
+                    if messageCount == 1 {
+                        // Send the same content as a new message
+                        alice.sendMessage(TestConstants.testMessage1, mentions: [], to: nil)
+                    }
+                }
+            }
+            
+            // Send original message
+            alice.sendMessage(TestConstants.testMessage1, mentions: [], to: nil)
         }
-        
-        wait(for: [expectation], timeout: TestConstants.defaultTimeout)
     }
     
     // MARK: - Mention Tests
     
-    func testMessageWithMentions() {
-        simulateConnection(alice, bob)
-        simulateConnection(alice, charlie)
-        
-        let expectation = XCTestExpectation(description: "Mentioned users receive notification")
+    @Test func messageWithMentions() async {
+        alice.simulateConnection(with: bob)
+        alice.simulateConnection(with: charlie)
         
         var mentionedUsers: Set<String> = []
         
-        bob.messageDeliveryHandler = { message in
-            if let mentions = message.mentions, mentions.contains(TestConstants.testNickname2) {
-                mentionedUsers.insert(TestConstants.testNickname2)
+        await confirmation("Mentioned users receive notification", expectedCount: 2) { receiveMention in
+            bob.messageDeliveryHandler = { message in
+                if message.mentions?.contains(TestConstants.testNickname2) == true {
+                    mentionedUsers.insert(TestConstants.testNickname2)
+                    receiveMention()
+                }
             }
-        }
-        
-        charlie.messageDeliveryHandler = { message in
-            if let mentions = message.mentions, mentions.contains(TestConstants.testNickname3) {
-                mentionedUsers.insert(TestConstants.testNickname3)
+            
+            charlie.messageDeliveryHandler = { message in
+                if message.mentions?.contains(TestConstants.testNickname3) == true {
+                    mentionedUsers.insert(TestConstants.testNickname3)
+                    receiveMention()
+                }
             }
+            
+            // Alice mentions Bob and Charlie
+            alice.sendMessage(
+                "Hey @\(TestConstants.testNickname2) and @\(TestConstants.testNickname3)!",
+                mentions: [TestConstants.testNickname2, TestConstants.testNickname3],
+                to: nil
+            )
         }
         
-        // Alice mentions Bob and Charlie
-        alice.sendMessage(
-            "Hey @\(TestConstants.testNickname2) and @\(TestConstants.testNickname3)!",
-            mentions: [TestConstants.testNickname2, TestConstants.testNickname3],
-            to: nil
-        )
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            XCTAssertEqual(mentionedUsers, [TestConstants.testNickname2, TestConstants.testNickname3])
-            expectation.fulfill()
-        }
-        
-        wait(for: [expectation], timeout: TestConstants.defaultTimeout)
+        #expect(mentionedUsers == [TestConstants.testNickname2, TestConstants.testNickname3])
     }
     
     // MARK: - Network Topology Tests
     
-    func testMeshTopologyBroadcast() {
+    @Test func meshTopologyBroadcast() async {
         // Create mesh: Everyone connected to everyone
-        let nodes = [alice!, bob!, charlie!, david!]
+        let nodes = [alice, bob, charlie, david]
         for i in 0..<nodes.count {
             for j in i+1..<nodes.count {
-                simulateConnection(nodes[i], nodes[j])
+                nodes[i].simulateConnection(with: nodes[j])
             }
         }
         
-        var receivedCount = 0
-        let expectation = XCTestExpectation(description: "All nodes receive message")
-        
-        for (index, node) in nodes.enumerated() where index > 0 {
-            node.messageDeliveryHandler = { message in
-                if message.content == TestConstants.testMessage1 {
-                    receivedCount += 1
-                    if receivedCount == 3 { // Bob, Charlie, David
-                        expectation.fulfill()
+        await confirmation("All nodes receive message", expectedCount: 3) { receiveMessage in
+            for (index, node) in nodes.enumerated() where index > 0 {
+                node.messageDeliveryHandler = { message in
+                    if message.content == TestConstants.testMessage1 {
+                        receiveMessage()
                     }
                 }
             }
+            
+            alice.sendMessage(TestConstants.testMessage1, mentions: [], to: nil)
         }
-        
-        // Alice broadcasts
-        alice.sendMessage(TestConstants.testMessage1, mentions: [], to: nil)
-        
-        wait(for: [expectation], timeout: TestConstants.defaultTimeout)
     }
     
-    func testPartialMeshRelay() {
+    @Test func partialMeshRelay() async {
         // Partial mesh: Alice -> Bob, Bob -> Charlie, Charlie -> David, David -> Alice
-        simulateConnection(alice, bob)
-        simulateConnection(bob, charlie)
-        simulateConnection(charlie, david)
-        simulateConnection(david, alice)
+        alice.simulateConnection(with: bob)
+        bob.simulateConnection(with: charlie)
+        charlie.simulateConnection(with: david)
+        david.simulateConnection(with: alice)
         
         // Setup relay handlers
         setupRelayHandler(bob, nextHops: [charlie])
         setupRelayHandler(charlie, nextHops: [david])
         setupRelayHandler(david, nextHops: [alice])
-        let sendDelay2 = DispatchTime.now() + 0.05
         
-        var receivedCount = 0
-        let expectation = XCTestExpectation(description: "Message reaches all nodes once")
-        
-        let checkCompletion = {
-            if receivedCount == 3 { // Bob, Charlie, David should receive
-                expectation.fulfill()
-            }
-        }
-        
-        for node in [bob!, charlie!, david!] {
-            node.messageDeliveryHandler = { message in
-                if message.content == TestConstants.testMessage1 {
-                    receivedCount += 1
-                    checkCompletion()
+        await confirmation("Message reaches all nodes once", expectedCount: 3) { receiveMessage in
+            for node in [bob, charlie, david] {
+                node.messageDeliveryHandler = { message in
+                    if message.content == TestConstants.testMessage1 {
+                        receiveMessage()
+                    }
                 }
             }
+            
+            alice.sendMessage(TestConstants.testMessage1, mentions: [], to: nil)
         }
-        
-        // Alice broadcasts
-        DispatchQueue.main.asyncAfter(deadline: sendDelay2) {
-            self.alice.sendMessage(TestConstants.testMessage1, mentions: [], to: nil)
-        }
-        
-        wait(for: [expectation], timeout: TestConstants.defaultTimeout)
     }
     
     // MARK: - Performance and Stress Tests
     
-    func testHighVolumeMessaging() {
-        simulateConnection(alice, bob)
+    @Test func highVolumeMessaging() async {
+        alice.simulateConnection(with: bob)
         
         let messageCount = 100
-        var receivedCount = 0
-        let expectation = XCTestExpectation(description: "All messages received")
         
-        bob.messageDeliveryHandler = { message in
-            if message.sender == TestConstants.testNickname1 {
-                receivedCount += 1
-                if receivedCount == messageCount {
-                    expectation.fulfill()
+        await confirmation("All messages received", expectedCount: messageCount) { receiveMessage in
+            bob.messageDeliveryHandler = { message in
+                if message.sender == TestConstants.testNickname1 {
+                    receiveMessage()
                 }
             }
-        }
-        
-        // Send many messages rapidly
-        for i in 0..<messageCount {
-            alice.sendMessage("Message \(i)", mentions: [], to: nil)
-        }
-        
-        wait(for: [expectation], timeout: TestConstants.longTimeout)
-        XCTAssertEqual(receivedCount, messageCount)
-    }
-    
-    func testLargeMessageBroadcast() {
-        simulateConnection(alice, bob)
-        
-        let expectation = XCTestExpectation(description: "Large message received")
-        
-        bob.messageDeliveryHandler = { message in
-            if message.content == TestConstants.testLongMessage {
-                expectation.fulfill()
+            
+            // Send many messages rapidly
+            for i in 0..<messageCount {
+                alice.sendMessage("Message \(i)", mentions: [], to: nil)
             }
         }
+    }
+    
+    @Test func largeMessageBroadcast() async {
+        alice.simulateConnection(with: bob)
         
-        // Send large message
-        alice.sendMessage(TestConstants.testLongMessage, mentions: [], to: nil)
-        
-        wait(for: [expectation], timeout: TestConstants.defaultTimeout)
+        await confirmation("Large message received") { receiveLargeMessage in
+            bob.messageDeliveryHandler = { message in
+                if message.content == TestConstants.testLongMessage {
+                    receiveLargeMessage()
+                }
+            }
+            
+            alice.sendMessage(TestConstants.testLongMessage, mentions: [], to: nil)
+        }
     }
     
     // MARK: - Helper Methods
-    
-    private func createMockService(peerID: PeerID, nickname: String) -> MockBluetoothMeshService {
-        let service = MockBluetoothMeshService()
-        service.myPeerID = peerID.id
-        service.mockNickname = nickname
-        return service
-    }
-    
-    private func simulateConnection(_ peer1: MockBluetoothMeshService, _ peer2: MockBluetoothMeshService) {
-        peer1.simulateConnectedPeer(peer2.peerID)
-        peer2.simulateConnectedPeer(peer1.peerID)
-    }
-    
-    private func setupRelayHandler(_ node: MockBluetoothMeshService, nextHops: [MockBluetoothMeshService]) {
+
+    private func setupRelayHandler(_ node: MockBLEService, nextHops: [MockBLEService]) {
         node.packetDeliveryHandler = { packet in
             // Check if should relay
             guard packet.ttl > 1 else { return }
-            
+
             if let message = BitchatMessage(packet.payload) {
                 // Don't relay own messages
-                guard message.senderPeerID != node.peerID else { return }
+                guard message.senderPeerID?.id != node.peerID else { return }
                 
                 // Create relay message
                 let relayMessage = BitchatMessage(

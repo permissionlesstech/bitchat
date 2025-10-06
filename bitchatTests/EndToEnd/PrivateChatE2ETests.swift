@@ -6,140 +6,110 @@
 // For more information, see <https://unlicense.org>
 //
 
-import XCTest
+import Testing
 import CryptoKit
 @testable import bitchat
 
-final class PrivateChatE2ETests: XCTestCase {
+// TODO: Remove once MockBLEService is refactored to fix race condition
+@Suite(.serialized)
+struct PrivateChatE2ETests {
     
-    var alice: MockBluetoothMeshService!
-    var bob: MockBluetoothMeshService!
-    var charlie: MockBluetoothMeshService!
+    private let alice: MockBLEService
+    private let bob: MockBLEService
+    private let charlie: MockBLEService
+    private let mockKeychain: MockKeychain
     
-    private var mockKeychain: MockKeychain!
-    
-    override func setUp() {
-        super.setUp()
+    init() {
         MockBLEService.resetTestBus()
-        
-        // Create services
-        alice = createMockService(peerID: TestConstants.testPeerID1, nickname: TestConstants.testNickname1)
-        bob = createMockService(peerID: TestConstants.testPeerID2, nickname: TestConstants.testNickname2)
-        charlie = createMockService(peerID: TestConstants.testPeerID3, nickname: TestConstants.testNickname3)
+
+        // Create services with unique peer IDs to avoid collision with other test suites
+        alice = MockBLEService(peerID: "PRIV_ALICE_", nickname: TestConstants.testNickname1)
+        bob = MockBLEService(peerID: "PRIV_BOB___", nickname: TestConstants.testNickname2)
+        charlie = MockBLEService(peerID: "PRIV_CHARLE", nickname: TestConstants.testNickname3)
         mockKeychain = MockKeychain()
-        
-        // Delivery tracking is now handled internally by BLEService
-    }
-    
-    override func tearDown() {
-        alice = nil
-        bob = nil
-        charlie = nil
-        mockKeychain = nil
-        super.tearDown()
     }
     
     // MARK: - Basic Private Messaging Tests
-    
-    func testSimplePrivateMessageShouldNotBeSentWithoutConnection() {
-        // Intentionally commented out to test
-        // simulateConnection(alice, bob)
-        
-        let expectation = XCTestExpectation(description: "Bob should not receive a private message")
-        expectation.isInverted = true
-        
-        bob.messageDeliveryHandler = { message in
-            if message.content == TestConstants.testMessage1 &&
-               message.isPrivate &&
-               message.sender == TestConstants.testNickname1 {
-                expectation.fulfill()
+
+    @Test func simplePrivateMessageShouldNotBeSentWithoutConnection() async {
+        // Intentionally not connecting alice and bob to test
+
+        var bobReceivedMessage = false
+
+        await confirmation("Bob should not receive a private message", expectedCount: 0) { bobReceivesMessage in
+            bob.messageDeliveryHandler = { message in
+                if message.content == TestConstants.testMessage1 &&
+                   message.isPrivate &&
+                   message.sender == TestConstants.testNickname1 {
+                    bobReceivedMessage = true
+                    bobReceivesMessage()
+                }
             }
-        }
-        
-        // Alice sends private message to Bob
-        alice.sendPrivateMessage(
-            TestConstants.testMessage1,
-            to: TestConstants.testPeerID2,
-            recipientNickname: TestConstants.testNickname2
-        )
-        
-        wait(for: [expectation], timeout: TestConstants.shortTimeout)
-    }
-    
-    func testSimplePrivateMessage() {
-        simulateConnection(alice, bob)
-        
-        let expectation = XCTestExpectation(description: "Bob receives private message")
-        
-        bob.messageDeliveryHandler = { message in
-            if message.content == TestConstants.testMessage1 && 
-               message.isPrivate &&
-               message.sender == TestConstants.testNickname1 {
-                expectation.fulfill()
-            }
-        }
-        
-        // Alice sends private message to Bob
-        alice.sendPrivateMessage(
-            TestConstants.testMessage1,
-            to: TestConstants.testPeerID2,
-            recipientNickname: TestConstants.testNickname2
-        )
-        
-        wait(for: [expectation], timeout: TestConstants.shortTimeout)
-    }
-    
-    func testPrivateMessageNotReceivedByOthers() {
-        // Connect all three
-        simulateConnection(alice, bob)
-        simulateConnection(alice, charlie)
-        
-        let bobExpectation = XCTestExpectation(description: "Bob receives private message")
-        let charlieExpectation = XCTestExpectation(description: "Charlie should not receive")
-        charlieExpectation.isInverted = true
-        
-        bob.messageDeliveryHandler = { message in
-            if message.content == TestConstants.testMessage1 && message.isPrivate {
-                bobExpectation.fulfill()
-            }
-        }
-        
-        charlie.messageDeliveryHandler = { message in
-            if message.content == TestConstants.testMessage1 {
-                charlieExpectation.fulfill() // Should not happen
-            }
-        }
-        
-        // Small delay to ensure connections are registered before send
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            // Alice sends private message to Bob only
-            self.alice.sendPrivateMessage(
+
+            // Alice sends private message to Bob
+            alice.sendPrivateMessage(
                 TestConstants.testMessage1,
-                to: TestConstants.testPeerID2,
+                to: PeerID(str: bob.peerID),
+                recipientNickname: TestConstants.testNickname2
+            )
+
+            // Wait a bit to ensure message would have been delivered if it was going to be
+            try? await Task.sleep(nanoseconds: UInt64(TestConstants.shortTimeout * 1_000_000_000))
+        }
+
+        #expect(!bobReceivedMessage, "Bob should not have received the message")
+    }
+
+    @Test func simplePrivateMessage() async {
+        alice.simulateConnection(with: bob)
+        
+        await confirmation("Bob receives private message") { bobReceivesMessage in
+            bob.messageDeliveryHandler = { message in
+                if message.content == TestConstants.testMessage1 &&
+                   message.isPrivate &&
+                   message.sender == TestConstants.testNickname1 {
+                    bobReceivesMessage()
+                }
+            }
+            
+            // Alice sends private message to Bob
+            alice.sendPrivateMessage(
+                TestConstants.testMessage1,
+                to: PeerID(str: bob.peerID),
                 recipientNickname: TestConstants.testNickname2
             )
         }
-        
-        wait(for: [bobExpectation, charlieExpectation], timeout: TestConstants.shortTimeout)
     }
     
-    // MARK: - Delivery Acknowledgment Tests
-    
-    // NOTE: DeliveryTracker has been removed in BLEService.
-    // Delivery tracking is now handled internally.
-    
-    
-    // MARK: - Message Retry Tests
-    
-    // NOTE: MessageRetryService has been removed in BLEService.
-    // Retry logic is now handled internally.
-    
-    
+    @Test func privateMessageNotReceivedByOthers() async {
+        alice.simulateConnection(with: bob)
+        alice.simulateConnection(with: charlie)
+        
+        await confirmation("Bob receives private message") { bobReceivesMessage in
+            bob.messageDeliveryHandler = { message in
+                if message.content == TestConstants.testMessage1 && message.isPrivate {
+                    bobReceivesMessage()
+                }
+            }
+            
+            charlie.messageDeliveryHandler = { message in
+                if message.content == TestConstants.testMessage1 {
+                    Issue.record("Charlie should not receive")
+                }
+            }
+
+            alice.sendPrivateMessage(
+                TestConstants.testMessage1,
+                to: PeerID(str: bob.peerID),
+                recipientNickname: TestConstants.testNickname2
+            )
+        }
+    }
     
     // MARK: - End-to-End Encryption Tests
     
-    func testPrivateMessageEncryption() {
-        simulateConnection(alice, bob)
+    @Test func privateMessageEncryption() async {
+        alice.simulateConnection(with: bob)
         
         // Setup Noise sessions
         let aliceKey = Curve25519.KeyAgreement.PrivateKey()
@@ -150,166 +120,144 @@ final class PrivateChatE2ETests: XCTestCase {
         
         // Establish encrypted session
         do {
-            let handshake1 = try aliceManager.initiateHandshake(with: TestConstants.testPeerID2)
-            let handshake2 = try bobManager.handleIncomingHandshake(from: TestConstants.testPeerID1, message: handshake1)!
-            let handshake3 = try aliceManager.handleIncomingHandshake(from: TestConstants.testPeerID2, message: handshake2)!
-            _ = try bobManager.handleIncomingHandshake(from: TestConstants.testPeerID1, message: handshake3)
+            let handshake1 = try aliceManager.initiateHandshake(with: PeerID(str: bob.peerID))
+            let handshake2 = try bobManager.handleIncomingHandshake(from: PeerID(str: alice.peerID), message: handshake1)!
+            let handshake3 = try aliceManager.handleIncomingHandshake(from: PeerID(str: bob.peerID), message: handshake2)!
+            _ = try bobManager.handleIncomingHandshake(from: PeerID(str: alice.peerID), message: handshake3)
         } catch {
-            XCTFail("Failed to establish Noise session: \(error)")
+            Issue.record("Failed to establish Noise session: \(error)")
         }
         
-        let expectation = XCTestExpectation(description: "Encrypted message received")
-        
-        // Setup packet handlers for encryption
-        alice.packetDeliveryHandler = { packet in
-            // Encrypt outgoing private messages
-            if packet.type == 0x01,
-               let message = BitchatMessage(packet.payload),
-               message.isPrivate {
-                do {
-                    let encrypted = try aliceManager.encrypt(packet.payload, for: TestConstants.testPeerID2)
-                    let encryptedPacket = BitchatPacket(
-                        type: 0x02, // Encrypted message type
-                        senderID: packet.senderID,
-                        recipientID: packet.recipientID,
-                        timestamp: packet.timestamp,
-                        payload: encrypted,
-                        signature: packet.signature,
-                        ttl: packet.ttl
-                    )
-                    self.bob.simulateIncomingPacket(encryptedPacket)
-                } catch {
-                    XCTFail("Encryption failed: \(error)")
-                }
-            }
-        }
-        
-        bob.packetDeliveryHandler = { packet in
-            // Decrypt incoming encrypted messages
-            if packet.type == 0x02 {
-                do {
-                    let decrypted = try bobManager.decrypt(packet.payload, from: TestConstants.testPeerID1)
-                    if let message = BitchatMessage(decrypted) {
-                        XCTAssertEqual(message.content, TestConstants.testMessage1)
-                        XCTAssertTrue(message.isPrivate)
-                        expectation.fulfill()
+        await confirmation("Encrypted message received") { receiveEncryptedMessage in
+            // Setup packet handlers for encryption
+            alice.packetDeliveryHandler = { packet in
+                // Encrypt outgoing private messages
+                if packet.type == 0x01,
+                   let message = BitchatMessage(packet.payload),
+                   message.isPrivate {
+                    do {
+                        let encrypted = try aliceManager.encrypt(packet.payload, for: PeerID(str: bob.peerID))
+                        let encryptedPacket = BitchatPacket(
+                            type: 0x02, // Encrypted message type
+                            senderID: packet.senderID,
+                            recipientID: packet.recipientID,
+                            timestamp: packet.timestamp,
+                            payload: encrypted,
+                            signature: packet.signature,
+                            ttl: packet.ttl
+                        )
+                        self.bob.simulateIncomingPacket(encryptedPacket)
+                    } catch {
+                        Issue.record("Encryption failed: \(error)")
                     }
-                } catch {
-                    XCTFail("Decryption failed: \(error)")
                 }
             }
-        }
-        
-        // Send encrypted private message
-        alice.sendPrivateMessage(
-            TestConstants.testMessage1,
-            to: TestConstants.testPeerID2,
-            recipientNickname: TestConstants.testNickname2
-        )
-        
-        wait(for: [expectation], timeout: TestConstants.defaultTimeout)
-    }
-    
-    // MARK: - Multi-hop Private Message Tests
-    
-    func testPrivateMessageRelay() {
-        // Setup: Alice -> Bob -> Charlie
-        simulateConnection(alice, bob)
-        simulateConnection(bob, charlie)
-        
-        let expectation = XCTestExpectation(description: "Private message relayed to Charlie")
-        
-        // Bob relays private messages for Charlie
-        bob.packetDeliveryHandler = { packet in
-            if let recipientID = packet.recipientID,
-               String(data: recipientID, encoding: .utf8) == TestConstants.testPeerID3 {
-                // Relay to Charlie
-                var relayPacket = packet
-                relayPacket.ttl = packet.ttl - 1
-                self.charlie.simulateIncomingPacket(relayPacket)
-            }
-        }
-        
-        charlie.messageDeliveryHandler = { message in
-            if message.content == TestConstants.testMessage1 &&
-               message.isPrivate &&
-               message.recipientNickname == TestConstants.testNickname3 {
-                expectation.fulfill()
-            }
-        }
-        
-        // Alice sends private message to Charlie (through Bob)
-        alice.sendPrivateMessage(
-            TestConstants.testMessage1,
-            to: TestConstants.testPeerID3,
-            recipientNickname: TestConstants.testNickname3
-        )
-        
-        wait(for: [expectation], timeout: TestConstants.defaultTimeout)
-    }
-    
-    // MARK: - Performance Tests
-    
-    func testPrivateMessageThroughput() {
-        simulateConnection(alice, bob)
-        
-        let messageCount = 100
-        var receivedCount = 0
-        let expectation = XCTestExpectation(description: "All private messages received")
-        
-        bob.messageDeliveryHandler = { message in
-            if message.isPrivate && message.sender == TestConstants.testNickname1 {
-                receivedCount += 1
-                if receivedCount == messageCount {
-                    expectation.fulfill()
+            
+            bob.packetDeliveryHandler = { packet in
+                // Decrypt incoming encrypted messages
+                if packet.type == 0x02 {
+                    do {
+                        let decrypted = try bobManager.decrypt(packet.payload, from: PeerID(str: alice.peerID))
+                        if let message = BitchatMessage(decrypted) {
+                            #expect(message.content == TestConstants.testMessage1)
+                            #expect(message.isPrivate)
+                            receiveEncryptedMessage()
+                        }
+                    } catch {
+                        Issue.record("Decryption failed: \(error)")
+                    }
                 }
             }
-        }
-        
-        // Send many private messages
-        for i in 0..<messageCount {
+            
+            // Send encrypted private message
             alice.sendPrivateMessage(
-                "Private message \(i)",
+                TestConstants.testMessage1,
                 to: TestConstants.testPeerID2,
                 recipientNickname: TestConstants.testNickname2
             )
         }
-        
-        wait(for: [expectation], timeout: TestConstants.longTimeout)
-        XCTAssertEqual(receivedCount, messageCount)
     }
     
-    func testLargePrivateMessage() {
-        simulateConnection(alice, bob)
+    // MARK: - Multi-hop Private Message Tests
+    
+    @Test func privateMessageRelay() async {
+        // Setup: Alice -> Bob -> Charlie
+        alice.simulateConnection(with: bob)
+        bob.simulateConnection(with: charlie)
         
-        let expectation = XCTestExpectation(description: "Large private message received")
+        await confirmation("Private message relayed to Charlie") { charlieReceivesMessage in
+            // Bob relays private messages for Charlie
+            bob.packetDeliveryHandler = { packet in
+                if let recipientID = packet.recipientID,
+                   String(data: recipientID, encoding: .utf8) == charlie.peerID {
+                    // Relay to Charlie
+                    var relayPacket = packet
+                    relayPacket.ttl = packet.ttl - 1
+                    self.charlie.simulateIncomingPacket(relayPacket)
+                }
+            }
+            
+            charlie.messageDeliveryHandler = { message in
+                if message.content == TestConstants.testMessage1 &&
+                    message.isPrivate &&
+                    message.recipientNickname == TestConstants.testNickname3 {
+                    charlieReceivesMessage()
+                }
+            }
+            
+            // Alice sends private message to Charlie (through Bob)
+            alice.sendPrivateMessage(
+                TestConstants.testMessage1,
+                to: PeerID(str: charlie.peerID),
+                recipientNickname: TestConstants.testNickname3
+            )
+        }
+    }
+    
+    // MARK: - Performance Tests
+    
+    @Test func privateMessageThroughput() async {
+        alice.simulateConnection(with: bob)
         
-        bob.messageDeliveryHandler = { message in
-            if message.content == TestConstants.testLongMessage && message.isPrivate {
-                expectation.fulfill()
+        let messageCount = 100
+        var receivedCount = 0
+        
+        await confirmation("All private messages received") { receivePrivateMessage in
+            bob.messageDeliveryHandler = { message in
+                if message.isPrivate && message.sender == TestConstants.testNickname1 {
+                    receivedCount += 1
+                    if receivedCount == messageCount {
+                        receivePrivateMessage()
+                    }
+                }
+            }
+            
+            // Send many private messages
+            for i in 0..<messageCount {
+                alice.sendPrivateMessage(
+                    "Private message \(i)",
+                    to: TestConstants.testPeerID2,
+                    recipientNickname: TestConstants.testNickname2
+                )
             }
         }
-        
-        alice.sendPrivateMessage(
-            TestConstants.testLongMessage,
-            to: TestConstants.testPeerID2,
-            recipientNickname: TestConstants.testNickname2
-        )
-        
-        wait(for: [expectation], timeout: TestConstants.defaultTimeout)
     }
-    
-    // MARK: - Helper Methods
-    
-    private func createMockService(peerID: PeerID, nickname: String) -> MockBluetoothMeshService {
-        let service = MockBluetoothMeshService()
-        service.myPeerID = peerID.id
-        service.mockNickname = nickname
-        return service
-    }
-    
-    private func simulateConnection(_ peer1: MockBluetoothMeshService, _ peer2: MockBluetoothMeshService) {
-        peer1.simulateConnectedPeer(peer2.peerID)
-        peer2.simulateConnectedPeer(peer1.peerID)
+
+    @Test func largePrivateMessage() async {
+        alice.simulateConnection(with: bob)
+
+        await confirmation("Large private message received") { receiveLargeMessage in
+            bob.messageDeliveryHandler = { message in
+                if message.content == TestConstants.testLongMessage && message.isPrivate {
+                    receiveLargeMessage()
+                }
+            }
+
+            alice.sendPrivateMessage(
+                TestConstants.testLongMessage,
+                to: TestConstants.testPeerID2,
+                recipientNickname: TestConstants.testNickname2
+            )
+        }
     }
 }

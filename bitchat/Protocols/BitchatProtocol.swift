@@ -59,6 +59,7 @@
 ///
 
 import Foundation
+import CoreBluetooth
 
 // MARK: - Message Types
 
@@ -164,14 +165,17 @@ protocol BitchatDelegate: AnyObject {
     func didConnectToPeer(_ peerID: String)
     func didDisconnectFromPeer(_ peerID: String)
     func didUpdatePeerList(_ peers: [String])
-    
+
     // Optional method to check if a fingerprint belongs to a favorite peer
     func isFavorite(fingerprint: String) -> Bool
-    
+
     func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus)
 
     // Low-level events for better separation of concerns
     func didReceiveNoisePayload(from peerID: String, type: NoisePayloadType, payload: Data, timestamp: Date)
+
+    // Bluetooth state updates for user notifications
+    func didUpdateBluetoothState(_ state: CBManagerState)
     func didReceivePublicMessage(from peerID: String, nickname: String, content: String, timestamp: Date)
 }
 
