@@ -7,6 +7,7 @@
 //
 
 import Testing
+import struct Foundation.UUID
 @testable import bitchat
 
 @Suite(.serialized)
@@ -20,13 +21,11 @@ struct PublicChatE2ETests {
     private var receivedMessages: [String: [BitchatMessage]] = [:]
     
     init() {
-        MockBLEService.resetTestBus()
-
-        // Create mock services with unique peer IDs to avoid collision with other test suites
-        alice = MockBLEService(peerID: "PUB_ALICE__", nickname: TestConstants.testNickname1)
-        bob = MockBLEService(peerID: "PUB_BOB____", nickname: TestConstants.testNickname2)
-        charlie = MockBLEService(peerID: "PUB_CHARLIE", nickname: TestConstants.testNickname3)
-        david = MockBLEService(peerID: "PUB_DAVID__", nickname: TestConstants.testNickname4)
+        // Create mock services with unique peer IDs to avoid any collision
+        alice = MockBLEService(peerID: PeerID(str: UUID().uuidString), nickname: TestConstants.testNickname1)
+        bob = MockBLEService(peerID: PeerID(str: UUID().uuidString), nickname: TestConstants.testNickname2)
+        charlie = MockBLEService(peerID: PeerID(str: UUID().uuidString), nickname: TestConstants.testNickname3)
+        david = MockBLEService(peerID: PeerID(str: UUID().uuidString), nickname: TestConstants.testNickname4)
     }
     
     // MARK: - Basic Broadcasting Tests
