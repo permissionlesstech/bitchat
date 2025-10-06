@@ -129,6 +129,38 @@ struct ContentView: View {
                         )
                 }
                 
+                // Right edge swipe zone for easier sidebar opening (iOS-native behavior)
+                if !showSidebar {
+                    HStack {
+                        Spacer()
+                        Color.clear
+                            .frame(width: 20)
+                            .contentShape(Rectangle())
+                            .gesture(
+                                DragGesture()
+                                    .onChanged { value in
+                                        let translationWidth = value.translation.width.isNaN ? 0 : value.translation.width
+                                        if translationWidth < 0 {
+                                            sidebarDragOffset = max(translationWidth, -300)
+                                        }
+                                    }
+                                    .onEnded { value in
+                                        let translationWidth = value.translation.width.isNaN ? 0 : value.translation.width
+                                        let velocity = value.velocity.width.isNaN ? 0 : value.velocity.width
+                                        withAnimation(.easeOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                                            if translationWidth < -50 || velocity < -300 {
+                                                showSidebar = true
+                                                sidebarDragOffset = 0
+                                            } else {
+                                                sidebarDragOffset = 0
+                                            }
+                                        }
+                                    }
+                            )
+                    }
+                    .allowsHitTesting(true)
+                }
+
                 // Sidebar overlay
                 HStack(spacing: 0) {
                     // Tap to dismiss area
@@ -924,14 +956,37 @@ struct ContentView: View {
                 Spacer()
             }
             .background(backgroundColor)
-            .gesture(
+            .simultaneousGesture(
                 DragGesture()
+                    .onChanged { value in
+                        let translationWidth = value.translation.width.isNaN ? 0 : value.translation.width
+                        let translationHeight = value.translation.height.isNaN ? 0 : value.translation.height
+
+                        // Only handle horizontal drags on the sidebar
+                        guard abs(translationWidth) > abs(translationHeight) * 1.5 else { return }
+
+                        if translationWidth > 0 {
+                            sidebarDragOffset = min(translationWidth, 300)
+                        }
+                    }
                     .onEnded { value in
-                        let translation = value.translation.width.isNaN ? 0 : value.translation.width
+                        let translationWidth = value.translation.width.isNaN ? 0 : value.translation.width
+                        let translationHeight = value.translation.height.isNaN ? 0 : value.translation.height
                         let velocity = value.velocity.width.isNaN ? 0 : value.velocity.width
-                        if translation > 100 || (translation > 50 && velocity > 500) {
-                            showSidebar = false
+
+                        // Only handle if drag is predominantly horizontal
+                        guard abs(translationWidth) > abs(translationHeight) * 1.5 else {
                             sidebarDragOffset = 0
+                            return
+                        }
+
+                        withAnimation(.easeOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                            if translationWidth > 100 || (translationWidth > 50 && velocity > 500) {
+                                showSidebar = false
+                                sidebarDragOffset = 0
+                            } else {
+                                sidebarDragOffset = 0
+                            }
                         }
                     }
             )
@@ -952,29 +1007,42 @@ struct ContentView: View {
         }
         .background(backgroundColor)
         .foregroundColor(textColor)
-        .gesture(
+        .simultaneousGesture(
             DragGesture()
                 .onChanged { value in
-                    let translation = value.translation.width.isNaN ? 0 : value.translation.width
-                    if !showSidebar && translation < 0 {
-                        sidebarDragOffset = max(translation, -300)
-                    } else if showSidebar && translation > 0 {
-                        sidebarDragOffset = min(-300 + translation, 0)
+                    let translationWidth = value.translation.width.isNaN ? 0 : value.translation.width
+                    let translationHeight = value.translation.height.isNaN ? 0 : value.translation.height
+
+                    // Only handle if drag is predominantly horizontal (prevents interfering with scroll)
+                    guard abs(translationWidth) > abs(translationHeight) * 1.5 else { return }
+
+                    if !showSidebar && translationWidth < 0 {
+                        sidebarDragOffset = max(translationWidth, -300)
+                    } else if showSidebar && translationWidth > 0 {
+                        sidebarDragOffset = min(-300 + translationWidth, 0)
                     }
                 }
                 .onEnded { value in
-                    let translation = value.translation.width.isNaN ? 0 : value.translation.width
+                    let translationWidth = value.translation.width.isNaN ? 0 : value.translation.width
+                    let translationHeight = value.translation.height.isNaN ? 0 : value.translation.height
                     let velocity = value.velocity.width.isNaN ? 0 : value.velocity.width
+
+                    // Only handle if drag is predominantly horizontal
+                    guard abs(translationWidth) > abs(translationHeight) * 1.5 else {
+                        sidebarDragOffset = 0
+                        return
+                    }
+
                     withAnimation(.easeOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
                         if !showSidebar {
-                            if translation < -100 || (translation < -50 && velocity < -500) {
+                            if translationWidth < -100 || (translationWidth < -50 && velocity < -500) {
                                 showSidebar = true
                                 sidebarDragOffset = 0
                             } else {
                                 sidebarDragOffset = 0
                             }
                         } else {
-                            if translation > 100 || (translation > 50 && velocity > 500) {
+                            if translationWidth > 100 || (translationWidth > 50 && velocity > 500) {
                                 showSidebar = false
                                 sidebarDragOffset = 0
                             } else {
