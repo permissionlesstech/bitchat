@@ -137,11 +137,18 @@ struct ContentView: View {
                             .frame(width: 20)
                             .contentShape(Rectangle())
                             .gesture(
-                                DragGesture()
+                                DragGesture(minimumDistance: 5)
                                     .onChanged { value in
                                         let translationWidth = value.translation.width.isNaN ? 0 : value.translation.width
                                         if translationWidth < 0 {
-                                            sidebarDragOffset = max(translationWidth, -300)
+                                            let newOffset = max(translationWidth, -300)
+                                            if abs(newOffset - sidebarDragOffset) > 2 {
+                                                var transaction = Transaction()
+                                                transaction.disablesAnimations = true
+                                                withTransaction(transaction) {
+                                                    sidebarDragOffset = newOffset
+                                                }
+                                            }
                                         }
                                     }
                                     .onEnded { value in
@@ -173,31 +180,19 @@ struct ContentView: View {
                             }
                         }
                     
-                    // Only render sidebar content when it's visible or animating
-                    if showSidebar || sidebarDragOffset != 0 {
-                        sidebarView
-                            #if os(macOS)
-                            .frame(width: min(300, max(0, geometry.size.width.isNaN ? 300 : geometry.size.width) * 0.4))
-                            #else
-                            .frame(width: max(0, geometry.size.width.isNaN ? 300 : geometry.size.width) * 0.7)
-                            #endif
-                            .transition(.move(edge: .trailing))
-                    } else {
-                        // Empty placeholder when hidden
-                        Color.clear
-                            #if os(macOS)
-                            .frame(width: min(300, max(0, geometry.size.width.isNaN ? 300 : geometry.size.width) * 0.4))
-                            #else
-                            .frame(width: max(0, geometry.size.width.isNaN ? 300 : geometry.size.width) * 0.7)
-                            #endif
-                    }
+                    // Always render sidebar to avoid layout recalculation during drag
+                    sidebarView
+                        #if os(macOS)
+                        .frame(width: min(300, max(0, geometry.size.width.isNaN ? 300 : geometry.size.width) * 0.4))
+                        #else
+                        .frame(width: max(0, geometry.size.width.isNaN ? 300 : geometry.size.width) * 0.7)
+                        #endif
                 }
                 .offset(x: {
                     let dragOffset = sidebarDragOffset.isNaN ? 0 : sidebarDragOffset
                     let width = geometry.size.width.isNaN ? 0 : max(0, geometry.size.width)
                     return showSidebar ? dragOffset : width + dragOffset
                 }())
-                .animation(.easeInOut(duration: TransportConfig.uiAnimationSidebarSeconds), value: showSidebar)
             }
         }
         #if os(macOS)
@@ -957,7 +952,7 @@ struct ContentView: View {
             }
             .background(backgroundColor)
             .simultaneousGesture(
-                DragGesture()
+                DragGesture(minimumDistance: 10)
                     .onChanged { value in
                         let translationWidth = value.translation.width.isNaN ? 0 : value.translation.width
                         let translationHeight = value.translation.height.isNaN ? 0 : value.translation.height
@@ -966,7 +961,14 @@ struct ContentView: View {
                         guard abs(translationWidth) > abs(translationHeight) * 1.5 else { return }
 
                         if translationWidth > 0 {
-                            sidebarDragOffset = min(translationWidth, 300)
+                            let newOffset = min(translationWidth, 300)
+                            if abs(newOffset - sidebarDragOffset) > 2 {
+                                var transaction = Transaction()
+                                transaction.disablesAnimations = true
+                                withTransaction(transaction) {
+                                    sidebarDragOffset = newOffset
+                                }
+                            }
                         }
                     }
                     .onEnded { value in
@@ -1008,7 +1010,7 @@ struct ContentView: View {
         .background(backgroundColor)
         .foregroundColor(textColor)
         .simultaneousGesture(
-            DragGesture()
+            DragGesture(minimumDistance: 10)
                 .onChanged { value in
                     let translationWidth = value.translation.width.isNaN ? 0 : value.translation.width
                     let translationHeight = value.translation.height.isNaN ? 0 : value.translation.height
@@ -1017,9 +1019,23 @@ struct ContentView: View {
                     guard abs(translationWidth) > abs(translationHeight) * 1.5 else { return }
 
                     if !showSidebar && translationWidth < 0 {
-                        sidebarDragOffset = max(translationWidth, -300)
+                        let newOffset = max(translationWidth, -300)
+                        if abs(newOffset - sidebarDragOffset) > 2 {
+                            var transaction = Transaction()
+                            transaction.disablesAnimations = true
+                            withTransaction(transaction) {
+                                sidebarDragOffset = newOffset
+                            }
+                        }
                     } else if showSidebar && translationWidth > 0 {
-                        sidebarDragOffset = min(-300 + translationWidth, 0)
+                        let newOffset = min(-300 + translationWidth, 0)
+                        if abs(newOffset - sidebarDragOffset) > 2 {
+                            var transaction = Transaction()
+                            transaction.disablesAnimations = true
+                            withTransaction(transaction) {
+                                sidebarDragOffset = newOffset
+                            }
+                        }
                     }
                 }
                 .onEnded { value in
