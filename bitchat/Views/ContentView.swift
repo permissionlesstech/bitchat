@@ -195,7 +195,7 @@ struct ContentView: View {
                 .offset(x: {
                     let dragOffset = sidebarDragOffset.isNaN ? 0 : sidebarDragOffset
                     let width = geometry.size.width.isNaN ? 0 : max(0, geometry.size.width)
-                    return showSidebar ? -dragOffset : width - dragOffset
+                    return showSidebar ? dragOffset : width + dragOffset
                 }())
                 .animation(.easeInOut(duration: TransportConfig.uiAnimationSidebarSeconds), value: showSidebar)
             }
