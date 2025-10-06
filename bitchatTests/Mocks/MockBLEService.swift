@@ -359,10 +359,6 @@ extension MockBLEService {
         mockNickname = nickname
     }
 
-    var peerID: PeerID {
-        PeerID(str: myPeerID)
-    }
-
     func simulateConnection(with otherPeer: MockBLEService) {
         simulateConnectedPeer(otherPeer.myPeerID)
         otherPeer.simulateConnectedPeer(myPeerID)

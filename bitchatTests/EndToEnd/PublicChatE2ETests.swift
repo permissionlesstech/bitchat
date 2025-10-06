@@ -184,11 +184,11 @@ struct PublicChatE2ETests {
             let msg = TestHelpers.createTestMessage(
                 content: TestConstants.testMessage1,
                 sender: TestConstants.testNickname1,
-                senderPeerID: alice.peerID
+                senderPeerID: PeerID(str: alice.peerID)
             )
 
             if let payload = msg.toBinaryPayload() {
-                let pkt = TestHelpers.createTestPacket(senderID: alice.peerID, payload: payload, ttl: 2)
+                let pkt = TestHelpers.createTestPacket(senderID: PeerID(str: alice.peerID), payload: payload, ttl: 2)
                 bob.simulateIncomingPacket(pkt)
             }
         }
@@ -386,10 +386,10 @@ struct PublicChatE2ETests {
         node.packetDeliveryHandler = { packet in
             // Check if should relay
             guard packet.ttl > 1 else { return }
-            
+
             if let message = BitchatMessage(packet.payload) {
                 // Don't relay own messages
-                guard message.senderPeerID != node.peerID else { return }
+                guard message.senderPeerID?.id != node.peerID else { return }
                 
                 // Create relay message
                 let relayMessage = BitchatMessage(
