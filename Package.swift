@@ -49,7 +49,7 @@ let package = Package(
                 "README.md"
             ],
             resources: [
-                .process("Localization")
+                .process("LocalizationTestsConfig.json")
             ]
         )
     ]
