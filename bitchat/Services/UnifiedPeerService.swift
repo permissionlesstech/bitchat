@@ -18,14 +18,14 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     // MARK: - Published Properties
     
     @Published private(set) var peers: [BitchatPeer] = []
-    @Published private(set) var connectedPeerIDs: Set<String> = []
+    @Published private(set) var connectedPeerIDs: Set<PeerID> = []
     @Published private(set) var favorites: [BitchatPeer] = []
     @Published private(set) var mutualFavorites: [BitchatPeer] = []
     
     // MARK: - Private Properties
     
-    private var peerIndex: [String: BitchatPeer] = [:]
-    private var fingerprintCache: [String: String] = [:]  // peerID -> fingerprint
+    private var peerIndex: [PeerID: BitchatPeer] = [:]
+    private var fingerprintCache: [PeerID: String] = [:]
     private let meshService: Transport
     private let identityManager: SecureIdentityStateManagerProtocol
     weak var messageRouter: MessageRouter?
@@ -97,7 +97,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
             
             // Update fingerprint cache
             if let publicKey = peerInfo.noisePublicKey {
-                fingerprintCache[peerID.id] = publicKey.sha256Fingerprint()
+                fingerprintCache[peerID] = publicKey.sha256Fingerprint()
             }
         }
         
@@ -114,12 +114,12 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
             }
             if isConnectedByNickname { continue }
             
-            let peer = buildPeerFromFavorite(favorite: favorite, peerID: peerID.id)
+            let peer = buildPeerFromFavorite(favorite: favorite, peerID: peerID)
             enrichedPeers.append(peer)
             addedPeerIDs.insert(peerID)
             
             // Update fingerprint cache
-            fingerprintCache[peerID.id] = favoriteKey.sha256Fingerprint()
+            fingerprintCache[peerID] = favoriteKey.sha256Fingerprint()
         }
         
         // Phase 3: Sort peers
@@ -137,10 +137,10 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         // Phase 4: Build subsets and indices
         var favoritesList: [BitchatPeer] = []
         var mutualsList: [BitchatPeer] = []
-        var newIndex: [String: BitchatPeer] = [:]
+        var newIndex: [PeerID: BitchatPeer] = [:]
         
         for peer in enrichedPeers {
-            newIndex[peer.peerID.id] = peer
+            newIndex[peer.peerID] = peer
             
             if peer.isFavorite {
                 favoritesList.append(peer)
@@ -155,7 +155,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
             p.isConnected || p.isReachable || p.isMutualFavorite
         }
         self.peers = filtered
-        self.connectedPeerIDs = Set(connected.map(\.id))
+        self.connectedPeerIDs = connected
         self.favorites = favoritesList
         self.mutualFavorites = mutualsList
         self.peerIndex = newIndex
@@ -204,10 +204,10 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     
     private func buildPeerFromFavorite(
         favorite: FavoritesPersistenceService.FavoriteRelationship,
-        peerID: String
+        peerID: PeerID
     ) -> BitchatPeer {
         var peer = BitchatPeer(
-            peerID: PeerID(str: peerID),
+            peerID: peerID,
             noisePublicKey: favorite.peerNoisePublicKey,
             nickname: favorite.peerNickname,
             lastSeen: favorite.lastUpdated,
@@ -224,8 +224,8 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     // MARK: - Public Methods
     
     /// Get peer by ID
-    func getPeer(by id: String) -> BitchatPeer? {
-        return peerIndex[id]
+    func getPeer(by peerID: PeerID) -> BitchatPeer? {
+        return peerIndex[peerID]
     }
     
     /// Get peer ID for nickname
@@ -238,13 +238,8 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         return nil
     }
     
-    /// Check if peer is online
-    func isOnline(_ peerID: String) -> Bool {
-        return connectedPeerIDs.contains(peerID)
-    }
-    
     /// Check if peer is blocked
-    func isBlocked(_ peerID: String) -> Bool {
+    func isBlocked(_ peerID: PeerID) -> Bool {
         // Get fingerprint
         guard let fingerprint = getFingerprint(for: peerID) else { return false }
         
@@ -257,8 +252,8 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     }
     
     /// Toggle favorite status
-    func toggleFavorite(_ peerID: String) {
-        guard let peer = getPeer(by: peerID) else { 
+    func toggleFavorite(_ peerID: PeerID) {
+        guard let peer = getPeer(by: peerID) else {
             SecureLogger.warning("⚠️ Cannot toggle favorite - peer not found: \(peerID)", category: .session)
             return 
         }
@@ -273,7 +268,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         
         if actualNickname.isEmpty {
             // Try to get from mesh service's current peer list
-            if let meshPeerNickname = meshService.peerNickname(peerID: PeerID(str: peerID)) {
+            if let meshPeerNickname = meshService.peerNickname(peerID: peerID) {
                 actualNickname = meshPeerNickname
                 SecureLogger.debug("🔍 Got nickname from mesh service: '\(actualNickname)'", category: .session)
             }
@@ -306,10 +301,10 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         
         // Send favorite notification to the peer via router (mesh or Nostr)
         if let router = messageRouter {
-            router.sendFavoriteNotification(to: PeerID(str: peerID), isFavorite: !wasFavorite)
+            router.sendFavoriteNotification(to: peerID, isFavorite: !wasFavorite)
         } else {
             // Fallback to mesh-only if router not yet wired
-            meshService.sendFavoriteNotification(to: PeerID(str: peerID), isFavorite: !wasFavorite)
+            meshService.sendFavoriteNotification(to: peerID, isFavorite: !wasFavorite)
         }
         
         // Force update of peers to reflect the change
@@ -321,46 +316,14 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         }
     }
     
-    /// Toggle blocked status
-    func toggleBlocked(_ peerID: String) {
-        guard let fingerprint = getFingerprint(for: peerID) else { return }
-        
-        // Get or create social identity
-        var identity = identityManager.getSocialIdentity(for: fingerprint)
-            ?? SocialIdentity(
-                fingerprint: fingerprint,
-                localPetname: nil,
-                claimedNickname: getPeer(by: peerID)?.displayName ?? "Unknown",
-                trustLevel: .unknown,
-                isFavorite: false,
-                isBlocked: false,
-                notes: nil
-            )
-        
-        // Toggle blocked status
-        identity.isBlocked = !identity.isBlocked
-        
-        // Can't be both favorite and blocked
-        if identity.isBlocked {
-            identity.isFavorite = false
-            // Also remove from favorites service
-            if let peer = getPeer(by: peerID) {
-                favoritesService.removeFavorite(peerNoisePublicKey: peer.noisePublicKey)
-            }
-        }
-        
-        identityManager.updateSocialIdentity(identity)
-    }
-    
-    /// Get fingerprint for peer ID
-    func getFingerprint(for peerID: String) -> String? {
+    func getFingerprint(for peerID: PeerID) -> String? {
         // Check cache first
         if let cached = fingerprintCache[peerID] {
             return cached
         }
         
         // Try to get from mesh service
-        if let fingerprint = meshService.getFingerprint(for: PeerID(str: peerID)) {
+        if let fingerprint = meshService.getFingerprint(for: peerID) {
             fingerprintCache[peerID] = fingerprint
             return fingerprint
         }
@@ -378,13 +341,13 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     // MARK: - Compatibility Methods (for easy migration)
     
     var allPeers: [BitchatPeer] { peers }
-    var connectedPeers: [String] { Array(connectedPeerIDs) }
-    var favoritePeers: Set<String> { 
-        Set(favorites.compactMap { getFingerprint(for: $0.peerID.id) })
+    var connectedPeers: [PeerID] { Array(connectedPeerIDs) }
+    var favoritePeers: Set<String> {
+        Set(favorites.compactMap { getFingerprint(for: $0.peerID) })
     }
     var blockedUsers: Set<String> {
         Set(peers.compactMap { peer in
-            isBlocked(peer.peerID.id) ? getFingerprint(for: peer.peerID.id) : nil
+            isBlocked(peer.peerID) ? getFingerprint(for: peer.peerID) : nil
         })
     }
 }
