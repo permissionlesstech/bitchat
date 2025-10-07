@@ -125,11 +125,7 @@ struct LocationNotesView: View {
                 .font(.bitchatSystem(size: 12, design: .monospaced))
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            if manager.state == .loading && !manager.initialLoadComplete {
-                Text(Strings.loadingRecent)
-                    .font(.bitchatSystem(size: 11, design: .monospaced))
-                    .foregroundColor(.secondary)
-            } else if manager.state == .noRelays {
+            if manager.state == .noRelays {
                 Text(Strings.relaysPaused)
                     .font(.bitchatSystem(size: 11, design: .monospaced))
                     .foregroundColor(.secondary)

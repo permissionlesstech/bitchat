@@ -74,6 +74,7 @@ final class LocationNotesManager: ObservableObject {
     @Published private(set) var state: State = .loading
     @Published private(set) var errorMessage: String?
     private var subscriptionID: String?
+    private var noteIDs = Set<String>() // O(1) duplicate detection
     private let dependencies: LocationNotesDependencies
 
     private enum Strings {
@@ -103,6 +104,7 @@ final class LocationNotesManager: ObservableObject {
         }
         geohash = norm
         notes.removeAll()
+        noteIDs.removeAll()
         subscribe()
     }
 
@@ -112,6 +114,7 @@ final class LocationNotesManager: ObservableObject {
             subscriptionID = nil
         }
         notes.removeAll()
+        noteIDs.removeAll()
         subscribe()
     }
 
@@ -147,7 +150,8 @@ final class LocationNotesManager: ObservableObject {
             guard event.kind == NostrProtocol.EventKind.textNote.rawValue else { return }
             // Ensure matching tag
             guard event.tags.contains(where: { $0.count >= 2 && $0[0].lowercased() == "g" && $0[1].lowercased() == self.geohash }) else { return }
-            if self.notes.contains(where: { $0.id == event.id }) { return }
+            guard !self.noteIDs.contains(event.id) else { return }
+            self.noteIDs.insert(event.id)
             let nick = event.tags.first(where: { $0.first?.lowercased() == "n" && $0.count >= 2 })?.dropFirst().first
             let ts = Date(timeIntervalSince1970: TimeInterval(event.created_at))
             let note = Note(id: event.id, pubkey: event.pubkey, content: event.content, createdAt: ts, nickname: nick)
@@ -188,9 +192,10 @@ final class LocationNotesManager: ObservableObject {
                 id: event.id,
                 pubkey: id.publicKeyHex,
                 content: trimmed,
-                createdAt: dependencies.now(),
+                createdAt: Date(timeIntervalSince1970: TimeInterval(event.created_at)),
                 nickname: nickname
             )
+            self.noteIDs.insert(event.id)
             self.notes.insert(echo, at: 0)
             self.state = .ready
             self.errorMessage = nil
