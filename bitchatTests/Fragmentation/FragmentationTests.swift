@@ -127,19 +127,19 @@ struct FragmentationTests {
 
 extension FragmentationTests {
     private final class CaptureDelegate: BitchatDelegate {
-        var publicMessages: [(peerID: String, nickname: String, content: String)] = []
+        var publicMessages: [(peerID: PeerID, nickname: String, content: String)] = []
         func didReceiveMessage(_ message: BitchatMessage) {}
-        func didConnectToPeer(_ peerID: String) {}
-        func didDisconnectFromPeer(_ peerID: String) {}
-        func didUpdatePeerList(_ peers: [String]) {}
+        func didConnectToPeer(_ peerID: PeerID) {}
+        func didDisconnectFromPeer(_ peerID: PeerID) {}
+        func didUpdatePeerList(_ peers: [PeerID]) {}
         func isFavorite(fingerprint: String) -> Bool { false }
         func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {}
-        func didReceiveNoisePayload(from peerID: String, type: NoisePayloadType, payload: Data, timestamp: Date) {}
+        func didReceiveNoisePayload(from peerID: PeerID, type: NoisePayloadType, payload: Data, timestamp: Date) {}
         func didUpdateBluetoothState(_ state: CBManagerState) {}
-        func didReceivePublicMessage(from peerID: String, nickname: String, content: String, timestamp: Date) {
+        func didReceivePublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date) {
             publicMessages.append((peerID, nickname, content))
         }
-        func didReceiveRegionalPublicMessage(from peerID: String, nickname: String, content: String, timestamp: Date) {}
+        func didReceiveRegionalPublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date) {}
     }
 
     // Helper: build a large message packet (unencrypted public message)

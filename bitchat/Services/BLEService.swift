@@ -60,6 +60,9 @@ final class BLEService: NSObject {
         var lastSeen: Date
     }
     private var peers: [String: PeerInfo] = [:]
+    private var currentPeerIDs: [PeerID] {
+        peers.keys.map { PeerID(str: $0) }
+    }
     
     // 4. Efficient Message Deduplication
     private let messageDeduplicator = MessageDeduplicator()
@@ -934,7 +937,7 @@ func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeriph
             guard let self = self else { return }
             
             // Get current peer list (after removal)
-            let currentPeerIDs = self.collectionsQueue.sync { Array(self.peers.keys) }
+            let currentPeerIDs = self.collectionsQueue.sync { self.currentPeerIDs }
             
             if let peerID = peerID {
                 self.notifyPeerDisconnectedDebounced(peerID.id)
@@ -1355,7 +1358,7 @@ extension BLEService: CBPeripheralManagerDelegate {
                 guard let self = self else { return }
                 
                 // Get current peer list (after removal)
-                let currentPeerIDs = self.collectionsQueue.sync { Array(self.peers.keys) }
+                let currentPeerIDs = self.collectionsQueue.sync { self.currentPeerIDs }
                 
                 self.notifyPeerDisconnectedDebounced(peerID.id)
                 // Publish snapshots so UnifiedPeerService can refresh icons promptly
@@ -2549,11 +2552,11 @@ extension BLEService {
             guard let self = self else { return }
             
             // Get current peer list (after addition)
-            let currentPeerIDs = self.collectionsQueue.sync { Array(self.peers.keys) }
+            let currentPeerIDs = self.collectionsQueue.sync { self.currentPeerIDs }
             
             // Only notify of connection for new or reconnected peers when it is a direct announce
             if (packet.ttl == self.messageTTL) && (isNewPeer || isReconnectedPeer) {
-                self.delegate?.didConnectToPeer(peerID)
+                self.delegate?.didConnectToPeer(PeerID(str: peerID))
                 // Schedule initial unicast sync to this peer
                 self.gossipSyncManager?.scheduleInitialSyncToPeer(PeerID(str: peerID), delaySeconds: 1.0)
             }
@@ -2700,7 +2703,7 @@ extension BLEService {
 
         let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
         notifyUI { [weak self] in
-            self?.delegate?.didReceivePublicMessage(from: peerID, nickname: senderNickname, content: content, timestamp: ts)
+            self?.delegate?.didReceivePublicMessage(from: PeerID(str: peerID), nickname: senderNickname, content: content, timestamp: ts)
         }
     }
     
@@ -2738,6 +2741,7 @@ extension BLEService {
     }
     
     private func handleNoiseEncrypted(_ packet: BitchatPacket, from peerID: String) {
+        let peerID = PeerID(str: peerID)
         SecureLogger.debug("🔐 handleNoiseEncrypted called for packet from \(peerID)")
         
         guard let recipientID = packet.recipientID else {
@@ -2752,10 +2756,10 @@ extension BLEService {
         }
         
         // Update lastSeen for the peer we received from (important for private messages)
-        updatePeerLastSeen(peerID)
+        updatePeerLastSeen(peerID.id)
         
         do {
-            let decrypted = try noiseService.decrypt(packet.payload, from: PeerID(str: peerID))
+            let decrypted = try noiseService.decrypt(packet.payload, from: peerID)
             guard decrypted.count > 0 else { return }
             
             // First byte indicates the payload type
@@ -2795,8 +2799,8 @@ extension BLEService {
             // We received an encrypted message before establishing a session with this peer.
             // Trigger a handshake so future messages can be decrypted.
             SecureLogger.debug("🔑 Encrypted message from \(peerID) without session; initiating handshake")
-            if !noiseService.hasSession(with: PeerID(str: peerID)) {
-                initiateNoiseHandshake(with: peerID)
+            if !noiseService.hasSession(with: peerID) {
+                initiateNoiseHandshake(with: peerID.id)
             }
         } catch {
             SecureLogger.error("❌ Failed to decrypt message from \(peerID): \(error)")
@@ -2815,9 +2819,9 @@ extension BLEService {
             guard let self = self else { return }
             
             // Get current peer list (after removal)
-            let currentPeerIDs = self.collectionsQueue.sync { Array(self.peers.keys) }
+            let currentPeerIDs = self.collectionsQueue.sync { self.currentPeerIDs }
             
-            self.delegate?.didDisconnectFromPeer(peerID)
+            self.delegate?.didDisconnectFromPeer(PeerID(str: peerID))
             self.delegate?.didUpdatePeerList(currentPeerIDs)
         }
     }
@@ -2937,7 +2941,7 @@ extension BLEService {
         let now = Date()
         let last = recentDisconnectNotifies[peerID]
         if last == nil || now.timeIntervalSince(last!) >= TransportConfig.bleDisconnectNotifyDebounceSeconds {
-            delegate?.didDisconnectFromPeer(peerID)
+            delegate?.didDisconnectFromPeer(PeerID(str: peerID))
             recentDisconnectNotifies[peerID] = now
         } else {
             // Suppressed duplicate disconnect notification
@@ -3078,13 +3082,13 @@ extension BLEService {
         // Update UI if there were direct disconnections or offline removals
         if !disconnectedPeers.isEmpty || removedOfflineCount > 0 {
             notifyUI { [weak self] in
-                guard let self = self else { return }
+                guard let self else { return }
                 
                 // Get current peer list (after removal)
-                let currentPeerIDs = self.collectionsQueue.sync { Array(self.peers.keys) }
+                let currentPeerIDs = self.collectionsQueue.sync { self.currentPeerIDs }
                 
                 for peerID in disconnectedPeers {
-                    self.delegate?.didDisconnectFromPeer(peerID)
+                    self.delegate?.didDisconnectFromPeer(PeerID(str: peerID))
                 }
                 // Publish snapshots so UnifiedPeerService updates connection/reachability icons
                 self.requestPeerDataPublish()
