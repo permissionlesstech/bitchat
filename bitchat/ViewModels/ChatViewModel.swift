@@ -3041,92 +3041,61 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     }
     
     
-    // MARK: - Emergency Functions
-    
+    // MARK: - Emergency Functions (Delegated to EmergencyPanicService)
+
     // PANIC: Emergency data clearing for activist safety
     @MainActor
     func panicClearAllData() {
-        // Messages are processed immediately - nothing to flush
-        
-        // Clear all messages
-        messages.removeAll()
-        privateChatManager.privateChats.removeAll()
-        privateChatManager.unreadMessages.removeAll()
-        
-        // Delete all keychain data (including Noise and Nostr keys)
-        _ = keychain.deleteAllKeychainData()
-        
-        // Clear UserDefaults identity data
-        userDefaults.removeObject(forKey: "bitchat.noiseIdentityKey")
-        userDefaults.removeObject(forKey: "bitchat.messageRetentionKey")
-        
-        // Clear verified fingerprints
-        verifiedFingerprints.removeAll()
-        // Verified fingerprints are cleared when identity data is cleared below
-        
-        // Reset nickname to anonymous
-        nickname = "anon\(Int.random(in: 1000...9999))"
-        saveNickname()
-        
-        // Clear favorites and peer mappings
-        // Clear through SecureIdentityStateManager instead of directly
-        identityManager.clearAllIdentityData()
-        peerIDToPublicKeyFingerprint.removeAll()
-        
-        // Clear persistent favorites from keychain
-        FavoritesPersistenceService.shared.clearAllFavorites()
-        
-        // Identity manager has cleared persisted identity data above
-        
-        // Clear autocomplete state
-        autocompleteSuggestions.removeAll()
-        showAutocomplete = false
-        autocompleteRange = nil
-        selectedAutocompleteIndex = 0
-        
-        // Clear selected private chat
-        selectedPrivateChatPeer = nil
-        selectedPrivateChatFingerprint = nil
-        
-        // Clear read receipt tracking
-        sentReadReceipts.removeAll()
-        processedNostrAcks.removeAll()
-        
-        // Clear all caches
-        invalidateEncryptionCache()
-        
-        // IMPORTANT: Clear Nostr-related state
-        // Disconnect from Nostr relays and clear subscriptions
-        nostrRelayManager?.disconnect()
-        nostrRelayManager = nil
-        
-        // Clear Nostr identity associations
-        NostrIdentityBridge.clearAllAssociations()
-        
-        // Disconnect from all peers and clear persistent identity
-        // This will force creation of a new identity (new fingerprint) on next launch
-        meshService.emergencyDisconnectAll()
-        if let bleService = meshService as? BLEService {
-            bleService.resetIdentityForPanic(currentNickname: nickname)
-        }
-        
-        // No need to force UserDefaults synchronization
-        
-        // Reinitialize Nostr with new identity
-        // This will generate new Nostr keys derived from new Noise keys
-        Task { @MainActor in
-            // Small delay to ensure cleanup completes
-            try? await Task.sleep(nanoseconds: TransportConfig.uiAsyncShortSleepNs) // 0.1 seconds
-            
-            // Reinitialize Nostr relay manager with new identity
-            nostrRelayManager = NostrRelayManager()
-            setupNostrMessageHandling()
-            nostrRelayManager?.connect()
-        }
-        
-        // Force immediate UI update for panic mode
-        // UI updates immediately - no flushing needed
-        
+        EmergencyPanicService.executePanicClear(
+            keychain: keychain,
+            identityManager: identityManager,
+            favoritesService: FavoritesPersistenceService.shared,
+            userDefaults: userDefaults,
+            meshService: meshService,
+            clearMessages: { [weak self] in
+                self?.messages.removeAll()
+            },
+            clearPrivateChats: { [weak self] in
+                self?.privateChatManager.privateChats.removeAll()
+                self?.privateChatManager.unreadMessages.removeAll()
+            },
+            clearVerifiedFingerprints: { [weak self] in
+                self?.verifiedFingerprints.removeAll()
+            },
+            clearPeerMappings: { [weak self] in
+                self?.peerIDToPublicKeyFingerprint.removeAll()
+            },
+            clearAutocomplete: { [weak self] in
+                self?.autocompleteSuggestions.removeAll()
+                self?.showAutocomplete = false
+                self?.autocompleteRange = nil
+                self?.selectedAutocompleteIndex = 0
+            },
+            clearPrivateChatSelection: { [weak self] in
+                self?.selectedPrivateChatPeer = nil
+                self?.selectedPrivateChatFingerprint = nil
+            },
+            clearReceiptTracking: { [weak self] in
+                self?.sentReadReceipts.removeAll()
+                self?.processedNostrAcks.removeAll()
+            },
+            clearCaches: { [weak self] in
+                self?.invalidateEncryptionCache()
+            },
+            disconnectNostr: { [weak self] in
+                self?.nostrRelayManager?.disconnect()
+                self?.nostrRelayManager = nil
+            },
+            generateNewNickname: { [weak self] in
+                self?.nickname = "anon\(Int.random(in: 1000...9999))"
+                self?.saveNickname()
+            },
+            reinitializeNostr: { [weak self] in
+                self?.nostrRelayManager = NostrRelayManager()
+                self?.setupNostrMessageHandling()
+                self?.nostrRelayManager?.connect()
+            }
+        )
     }
     
     // MARK: - Autocomplete
