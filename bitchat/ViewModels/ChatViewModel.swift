@@ -123,6 +123,16 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     // Computed property for backward compatibility
     var geohashPeople: [GeoPerson] { geohashParticipantsService.geohashPeople }
 
+    // MARK: - System Messaging
+
+    /// Service for creating system messages
+    private let systemMessaging = SystemMessagingService()
+
+    // MARK: - Delivery Tracking
+
+    /// Service for tracking message delivery status
+    private let deliveryTracking = DeliveryTrackingService()
+
     // MARK: - Published Properties
 
     @Published var messages: [BitchatMessage] = []
@@ -4091,68 +4101,31 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         return identityManager.isFavorite(fingerprint: fingerprint)
     }
     
-    // MARK: - Delivery Tracking
-    
+    // MARK: - Delivery Tracking (Delegated to DeliveryTrackingService)
+
     func didReceiveReadReceipt(_ receipt: ReadReceipt) {
-        // Find the message and update its read status
         updateMessageDeliveryStatus(receipt.originalMessageID, status: .read(by: receipt.readerNickname, at: receipt.timestamp))
     }
-    
+
     func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {
         updateMessageDeliveryStatus(messageID, status: status)
     }
-    
+
     private func updateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {
-        
-        // Helper function to check if we should skip this update
-        func shouldSkipUpdate(currentStatus: DeliveryStatus?, newStatus: DeliveryStatus) -> Bool {
-            guard let current = currentStatus else { return false }
-            
-            // Don't downgrade from read to delivered
-            switch (current, newStatus) {
-            case (.read, .delivered):
-                return true
-            case (.read, .sent):
-                return true
-            default:
-                return false
+        deliveryTracking.updateStatus(
+            messageID: messageID,
+            status: status,
+            messages: &messages,
+            privateChats: &privateChats,
+            notifyChange: { [weak self] in
+                self?.objectWillChange.send()
             }
-        }
-        
-        // Update in main messages
-        if let index = messages.firstIndex(where: { $0.id == messageID }) {
-            let currentStatus = messages[index].deliveryStatus
-            if !shouldSkipUpdate(currentStatus: currentStatus, newStatus: status) {
-                messages[index].deliveryStatus = status
-            }
-        }
-        
-        // Update in private chats
-        for (peerID, chatMessages) in privateChats {
-            guard let index = chatMessages.firstIndex(where: { $0.id == messageID }) else { continue }
-            
-            let currentStatus = chatMessages[index].deliveryStatus
-            guard !shouldSkipUpdate(currentStatus: currentStatus, newStatus: status) else { continue }
-            
-            // Update delivery status directly (BitchatMessage is a class/reference type)
-            privateChats[peerID]?[index].deliveryStatus = status
-        }
-        
-        // Trigger UI update for delivery status change
-        DispatchQueue.main.async { [weak self] in
-            self?.objectWillChange.send()
-        }
-        
-    }
-    
-    // MARK: - Helper for System Messages
-    private func addSystemMessage(_ content: String, timestamp: Date = Date()) {
-        let systemMessage = BitchatMessage(
-            sender: "system",
-            content: content,
-            timestamp: timestamp,
-            isRelay: false
         )
+    }
+
+    // MARK: - Helper for System Messages (Using SystemMessagingService)
+    private func addSystemMessage(_ content: String, timestamp: Date = Date()) {
+        let systemMessage = systemMessaging.createSystemMessage(content: content, timestamp: timestamp)
         messages.append(systemMessage)
     }
 
@@ -4160,12 +4133,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     /// If mesh is currently active, also append to the visible `messages`.
     @MainActor
     private func addMeshOnlySystemMessage(_ content: String) {
-        let systemMessage = BitchatMessage(
-            sender: "system",
-            content: content,
-            timestamp: Date(),
-            isRelay: false
-        )
+        let systemMessage = systemMessaging.createSystemMessage(content: content)
         // Persist to mesh timeline
         meshTimeline.append(systemMessage)
         trimMeshTimelineIfNeeded()
@@ -4180,12 +4148,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     /// Also persists the message into the active channel's backing store so it survives timeline rebinds.
     @MainActor
     func addPublicSystemMessage(_ content: String) {
-        let systemMessage = BitchatMessage(
-            sender: "system",
-            content: content,
-            timestamp: Date(),
-            isRelay: false
-        )
+        let systemMessage = systemMessaging.createSystemMessage(content: content)
         // Append to current visible messages
         messages.append(systemMessage)
         // Persist into the backing store for the active channel to survive rebinds
