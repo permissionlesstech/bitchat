@@ -108,6 +108,21 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     /// Message formatting service for styled text rendering
     private lazy var messageFormatter = MessageFormattingService(colorPalette: colorPalette)
 
+    // MARK: - Geohash Participants
+
+    /// Service for tracking participants in geohash channels
+    private lazy var geohashParticipantsService: GeohashParticipantsService = {
+        GeohashParticipantsService(
+            identityManager: identityManager,
+            displayNameProvider: { [weak self] pubkey in
+                self?.displayNameForNostrPubkey(pubkey) ?? "anon#\(pubkey.suffix(4))"
+            }
+        )
+    }()
+
+    // Computed property for backward compatibility
+    var geohashPeople: [GeoPerson] { geohashParticipantsService.geohashPeople }
+
     // MARK: - Published Properties
 
     @Published var messages: [BitchatMessage] = []
@@ -306,10 +321,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     private var lastPublicActivityAt: [String: Date] = [:]   // channelKey -> last activity time
     private var lastPublicActivityNotifyAt: [String: Date] = [:]
     private let channelInactivityThreshold: TimeInterval = TransportConfig.uiChannelInactivityThresholdSeconds
-    // Geohash participants (per geohash: pubkey -> lastSeen)
-    private var geoParticipants: [String: [String: Date]] = [:]
-    @Published private(set) var geohashPeople: [GeoPerson] = []
-    private var geoParticipantsTimer: Timer? = nil
+    // Geohash participants now managed by GeohashParticipantsService
+    // (See lazy var geohashParticipantsService above)
     // Participants who indicated they teleported (by tag in their events)
     @Published private(set) var teleportedGeo: Set<String> = []  // lowercased pubkey hex
     // Sampling subscriptions for multiple geohashes (when channel sheet is open)
@@ -756,8 +769,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
 
         // Invalidate timers to prevent retain cycles
         networkResetTimer?.invalidate()
-        geoParticipantsTimer?.invalidate()
         publicBufferTimer?.invalidate()
+        // geoParticipantsTimer now managed by GeohashParticipantsService (auto-cleanup in its deinit)
 
         // Clean up Combine subscriptions (automatic but explicit)
         cancellables.removeAll()
@@ -854,6 +867,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         }
     }
     
+    @MainActor
     private func subscribeNostrEvent(_ event: NostrEvent) {
         guard event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue,
               !processedNostrEvents.contains(event.id)
@@ -1447,7 +1461,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 SecureLogger.debug("RenderGuard: mesh timeline contains \(emptyMesh) empty messages", category: .session)
             }
             stopGeoParticipantsTimer()
-            geohashPeople = []
+            // geohashPeople now cleared via service.setCurrentGeohash(nil)
             teleportedGeo.removeAll()
         case .location(let ch):
             // Persist the cleaned/sorted timeline for this geohash
@@ -1472,12 +1486,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             geoDmSubscriptionID = nil
         }
         currentGeohash = nil
+        geohashParticipantsService.setCurrentGeohash(nil)
         // Reset nickname cache for geochat participants
         geoNicknames.removeAll()
-        geohashPeople = []
         
         guard case .location(let ch) = channel else { return }
         currentGeohash = ch.geohash
+        geohashParticipantsService.setCurrentGeohash(ch.geohash)
         
         // Ensure self appears immediately in the people list; mark teleported state only when truly teleported
         if let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
@@ -1506,6 +1521,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         subscribeToGeoChat(ch)
     }
     
+    @MainActor
     private func handleNostrEvent(_ event: NostrEvent) {
         // Only handle ephemeral kind 20000 with matching tag
         guard event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue else { return }
@@ -1751,42 +1767,19 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     // MARK: - Geohash Participants
     // GeoPerson moved to Models/GeoPerson.swift for shared use
 
+    @MainActor
     private func recordGeoParticipant(pubkeyHex: String) {
-        guard let gh = currentGeohash else { return }
-        let key = pubkeyHex.lowercased()
-        var map = geoParticipants[gh] ?? [:]
-        map[key] = Date()
-        geoParticipants[gh] = map
-        refreshGeohashPeople()
+        geohashParticipantsService.recordParticipant(pubkeyHex: pubkeyHex)
     }
 
+    @MainActor
     private func recordGeoParticipant(pubkeyHex: String, geohash: String) {
-        let key = pubkeyHex.lowercased()
-        var map = geoParticipants[geohash] ?? [:]
-        map[key] = Date()
-        geoParticipants[geohash] = map
-        // Only refresh list if this geohash is currently selected
-        if currentGeohash == geohash {
-            refreshGeohashPeople()
-        }
+        geohashParticipantsService.recordParticipant(pubkeyHex: pubkeyHex, geohash: geohash)
     }
 
     private func refreshGeohashPeople() {
-        guard let gh = currentGeohash else { geohashPeople = []; return }
-        let cutoff = Date().addingTimeInterval(-TransportConfig.uiRecentCutoffFiveMinutesSeconds)
-        var map = geoParticipants[gh] ?? [:]
-        // Prune expired entries
-        map = map.filter { $0.value >= cutoff }
-        // Remove blocked Nostr pubkeys
-        map = map.filter { !identityManager.isNostrBlocked(pubkeyHexLowercased: $0.key) }
-        geoParticipants[gh] = map
-        // Build display list
-        let people = map
-            .map { (pub, seen) in
-                GeoPerson(id: pub, displayName: displayNameForNostrPubkey(pub), lastSeen: seen)
-            }
-            .sorted { $0.lastSeen > $1.lastSeen }
-        geohashPeople = people
+        // Refresh is now handled automatically by GeohashParticipantsService
+        // This is a no-op for backward compatibility
     }
 
     @MainActor
@@ -1817,39 +1810,26 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     }
 
     private func startGeoParticipantsTimer() {
-        stopGeoParticipantsTimer()
-        geoParticipantsTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.refreshGeohashPeople()
-            }
-        }
+        // Timer now managed by GeohashParticipantsService
+        // Started automatically when currentGeohash is set
     }
 
     private func stopGeoParticipantsTimer() {
-        geoParticipantsTimer?.invalidate()
-        geoParticipantsTimer = nil
+        // Timer now managed by GeohashParticipantsService
+        // Stopped automatically when currentGeohash is cleared
     }
     
     // MARK: - Public helpers
     /// Return the current, pruned, sorted people list for the active geohash without mutating state.
     @MainActor
     func visibleGeohashPeople() -> [GeoPerson] {
-        guard let gh = currentGeohash else { return [] }
-        let cutoff = Date().addingTimeInterval(-TransportConfig.uiRecentCutoffFiveMinutesSeconds)
-        let map = (geoParticipants[gh] ?? [:])
-            .filter { $0.value >= cutoff }
-            .filter { !identityManager.isNostrBlocked(pubkeyHexLowercased: $0.key) }
-        let people = map
-            .map { (pub, seen) in GeoPerson(id: pub, displayName: displayNameForNostrPubkey(pub), lastSeen: seen) }
-            .sorted { $0.lastSeen > $1.lastSeen }
-        return people
+        return geohashParticipantsService.visiblePeople()
     }
+
     /// Returns the current participant count for a specific geohash, using the 5-minute activity window.
     @MainActor
     func geohashParticipantCount(for geohash: String) -> Int {
-        let cutoff = Date().addingTimeInterval(-TransportConfig.uiRecentCutoffFiveMinutesSeconds)
-        let map = geoParticipants[geohash] ?? [:]
-        return map.values.filter { $0 >= cutoff }.count
+        return geohashParticipantsService.participantCount(for: geohash)
     }
 
     // Geohash block helpers
@@ -1861,13 +1841,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     func blockGeohashUser(pubkeyHexLowercased: String, displayName: String) {
         let hex = pubkeyHexLowercased.lowercased()
         identityManager.setNostrBlocked(hex, isBlocked: true)
-        
+
         // Remove from participants for all geohashes
-        for (gh, var map) in geoParticipants {
-            map.removeValue(forKey: hex)
-            geoParticipants[gh] = map
-        }
-        refreshGeohashPeople()
+        geohashParticipantsService.removeParticipant(pubkeyHexLowercased: hex)
         
         // Remove their public messages from current geohash timeline and visible list
         if let gh = currentGeohash {
@@ -1963,13 +1939,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         }
     }
     
+    @MainActor
     private func subscribeNostrEvent(_ event: NostrEvent, gh: String) {
         guard event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue else { return }
-        
+
         // Compute current participant count (5-minute window) BEFORE updating with this event
-        let cutoff = Date().addingTimeInterval(-TransportConfig.uiRecentCutoffFiveMinutesSeconds)
-        let existingCount = geoParticipants[gh]?.values.filter { $0 >= cutoff }.count ?? 0
-        
+        let existingCount = geohashParticipantsService.participantCount(for: gh)
+
         // Update participants for this specific geohash
         recordGeoParticipant(pubkeyHex: event.pubkey, geohash: gh)
         
