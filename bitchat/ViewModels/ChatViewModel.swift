@@ -3467,50 +3467,17 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     //
 
     
-    // Helper to resolve nickname for a peer ID through various sources
+    // Helper to resolve nickname for a peer ID through various sources (Delegated to PeerLookupService)
     @MainActor
     func resolveNickname(for peerID: String) -> String {
-        // Guard against empty or very short peer IDs
-        guard !peerID.isEmpty else {
-            return "unknown"
-        }
-        
-        // Check if this might already be a nickname (not a hex peer ID)
-        // Peer IDs are hex strings, so they only contain 0-9 and a-f
-        let isHexID = peerID.allSatisfy { $0.isHexDigit }
-        if !isHexID {
-            // If it's already a nickname, just return it
-            return peerID
-        }
-        
-        // First try direct peer nicknames from mesh service
-        let peerNicknames = meshService.getPeerNicknames()
-        if let nickname = peerNicknames[PeerID(str: peerID)] {
-            return nickname
-        }
-        
-        // Try to resolve through fingerprint and social identity
-        if let fingerprint = getFingerprint(for: peerID) {
-            if let identity = identityManager.getSocialIdentity(for: fingerprint) {
-                // Prefer local petname if set
-                if let petname = identity.localPetname {
-                    return petname
-                }
-                // Otherwise use their claimed nickname
-                return identity.claimedNickname
+        return PeerLookupService.resolveNickname(
+            for: peerID,
+            meshService: meshService,
+            identityManager: identityManager,
+            getFingerprint: { [weak self] peerID in
+                self?.getFingerprint(for: peerID)
             }
-        }
-        
-        // Use anonymous with shortened peer ID
-        // Ensure we have at least 4 characters for the prefix
-        let prefixLength = min(4, peerID.count)
-        let prefix = String(peerID.prefix(prefixLength))
-        
-        // Avoid "anonanon" by checking if ID already starts with "anon"
-        if prefix.starts(with: "anon") {
-            return "peer\(prefix)"
-        }
-        return "anon\(prefix)"
+        )
     }
     
     func getMyFingerprint() -> String {
