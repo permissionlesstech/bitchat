@@ -128,6 +128,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     /// Spam filter service using token bucket rate limiting
     private let spamFilter = SpamFilterService()
 
+    // MARK: - Color Palette
+
+    /// Color palette service for consistent peer colors
+    private let colorPalette = ColorPaletteService()
+
     // MARK: - Published Properties
 
     @Published var messages: [BitchatMessage] = []
@@ -3254,9 +3259,26 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         
         // Not cached, format the message
         var result = AttributedString()
-        
-        let baseColor: Color = isSelf ? .orange : peerColor(for: message, isDark: isDark)
-        
+
+        let baseColor: Color = isSelf ? .orange : colorPalette.peerColor(
+            for: message,
+            isDark: isDark,
+            myPeerID: meshService.myPeerID.id,
+            myNostrPubkey: {
+                if case .location(let ch) = activeChannel,
+                   let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
+                    return id.publicKeyHex.lowercased()
+                }
+                return nil
+            }(),
+            nostrKeyMapping: nostrKeyMapping,
+            allPeers: allPeers,
+            geohashPeople: visibleGeohashPeople().map { (id: $0.id, seed: "nostr:" + $0.id) },
+            getNoiseKeyForShortID: { [weak self] shortID in
+                self?.getNoiseKeyForShortID(shortID)
+            }
+        )
+
         if message.sender != "system" {
             // Sender (at the beginning) with light-gray suffix styling if present
             let (baseName, suffix) = message.sender.splitSuffix()
@@ -3796,37 +3818,35 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         }
     }
 
-    @MainActor
-    private func peerColor(for message: BitchatMessage, isDark: Bool) -> Color {
-        if let spid = message.senderPeerID?.id {
-            if spid.hasPrefix("nostr:") || spid.hasPrefix("nostr_") {
-                let bare: String = {
-                    if spid.hasPrefix("nostr:") { return String(spid.dropFirst(6)) }
-                    if spid.hasPrefix("nostr_") { return String(spid.dropFirst(6)) }
-                    return spid
-                }()
-                let full = nostrKeyMapping[spid]?.lowercased() ?? bare.lowercased()
-                return getNostrPaletteColor(for: full, isDark: isDark)
-            } else if spid.count == 16 {
-                // Mesh short ID
-                return getPeerPaletteColor(for: spid, isDark: isDark)
-            } else {
-                return getPeerPaletteColor(for: spid.lowercased(), isDark: isDark)
-            }
-        }
-        // Fallback when we only have a display name
-        return Color(peerSeed: message.sender.lowercased(), isDark: isDark)
-    }
-
     // Public helpers for views to color peers consistently in lists
     @MainActor
     func colorForNostrPubkey(_ pubkeyHexLowercased: String, isDark: Bool) -> Color {
-        return getNostrPaletteColor(for: pubkeyHexLowercased.lowercased(), isDark: isDark)
+        let myHex: String? = {
+            if case .location(let ch) = LocationChannelManager.shared.selectedChannel,
+               let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
+                return id.publicKeyHex.lowercased()
+            }
+            return nil
+        }()
+        return colorPalette.colorForNostrPubkey(
+            pubkeyHexLowercased: pubkeyHexLowercased.lowercased(),
+            isDark: isDark,
+            myNostrPubkey: myHex,
+            geohashPeople: visibleGeohashPeople().map { (id: $0.id, seed: "nostr:" + $0.id) }
+        )
     }
 
     @MainActor
     func colorForMeshPeer(id peerID: String, isDark: Bool) -> Color {
-        return getPeerPaletteColor(for: peerID, isDark: isDark)
+        return colorPalette.colorForMeshPeer(
+            peerID: peerID,
+            isDark: isDark,
+            myPeerID: meshService.myPeerID.id,
+            allPeers: allPeers,
+            getNoiseKeyForShortID: { [weak self] shortID in
+                self?.getNoiseKeyForShortID(shortID)
+            }
+        )
     }
 
     private func trimMeshTimelineIfNeeded() {
@@ -3835,275 +3855,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         }
     }
 
-    // MARK: - Peer List Minimal-Distance Palette
-    private var peerPaletteLight: [String: (slot: Int, ring: Int, hue: Double)] = [:]
-    private var peerPaletteDark: [String: (slot: Int, ring: Int, hue: Double)] = [:]
-    private var peerPaletteSeeds: [String: String] = [:] // peerID -> seed used
-
-    @MainActor
-    private func meshSeed(for peerID: String) -> String {
-        if let full = getNoiseKeyForShortID(peerID)?.lowercased() {
-            return "noise:" + full
-        }
-        return peerID.lowercased()
-    }
-
-    @MainActor
-    private func getPeerPaletteColor(for peerID: String, isDark: Bool) -> Color {
-        // Ensure palette up to date for current peer set and seeds
-        rebuildPeerPaletteIfNeeded()
-
-        let entry = (isDark ? peerPaletteDark[peerID] : peerPaletteLight[peerID])
-        let orange = Color.orange
-        if peerID == meshService.myPeerID { return orange }
-        let saturation: Double = isDark ? 0.80 : 0.70
-        let baseBrightness: Double = isDark ? 0.75 : 0.45
-        let ringDelta = isDark ? TransportConfig.uiPeerPaletteRingBrightnessDeltaDark : TransportConfig.uiPeerPaletteRingBrightnessDeltaLight
-        if let e = entry {
-            let brightness = min(1.0, max(0.0, baseBrightness + ringDelta * Double(e.ring)))
-            return Color(hue: e.hue, saturation: saturation, brightness: brightness)
-        }
-        // Fallback to seed color if not in palette (e.g., transient)
-        return Color(peerSeed: meshSeed(for: peerID), isDark: isDark)
-    }
-
-    @MainActor
-    private func rebuildPeerPaletteIfNeeded() {
-        // Build current peer->seed map (excluding self)
-        let myID = meshService.myPeerID
-        var currentSeeds: [String: String] = [:]
-        for p in allPeers where p.peerID != myID {
-            currentSeeds[p.peerID.id] = meshSeed(for: p.peerID.id)
-        }
-        // If seeds unchanged and palette exists for both themes, skip
-        if currentSeeds == peerPaletteSeeds,
-           peerPaletteLight.keys.count == currentSeeds.count,
-           peerPaletteDark.keys.count == currentSeeds.count {
-            return
-        }
-        peerPaletteSeeds = currentSeeds
-
-        // Generate evenly spaced hue slots avoiding self-orange range
-        let slotCount = max(8, TransportConfig.uiPeerPaletteSlots)
-        let avoidCenter = 30.0 / 360.0
-        let avoidDelta = TransportConfig.uiColorHueAvoidanceDelta
-        var slots: [Double] = []
-        for i in 0..<slotCount {
-            let hue = Double(i) / Double(slotCount)
-            if abs(hue - avoidCenter) < avoidDelta { continue }
-            slots.append(hue)
-        }
-        if slots.isEmpty {
-            // Safety: if avoidance consumed all (shouldn't happen), fall back to full slots
-            for i in 0..<slotCount { slots.append(Double(i) / Double(slotCount)) }
-        }
-
-        // Helper to compute circular distance
-        func circDist(_ a: Double, _ b: Double) -> Double {
-            let d = abs(a - b)
-            return d > 0.5 ? 1.0 - d : d
-        }
-
-        // Assign slots to peers to maximize minimal distance, deterministically
-        let peers = currentSeeds.keys.sorted() // stable order
-        // Preferred slot index by seed (wrapping to available slots)
-        let prefIndex: [String: Int] = Dictionary(uniqueKeysWithValues: peers.map { id in
-            let h = (currentSeeds[id] ?? id).djb2()
-            // Map to available slot range deterministically
-            let idx = Int(h % UInt64(slots.count))
-            return (id, idx)
-        })
-
-        func assign(for seeds: [String: String]) -> [String: (slot: Int, ring: Int, hue: Double)] {
-            var mapping: [String: (slot: Int, ring: Int, hue: Double)] = [:]
-            var usedSlots = Set<Int>()
-            var usedHues: [Double] = []
-
-            // Keep previous assignments if still valid to minimize churn
-            let prev = peerPaletteLight.isEmpty ? peerPaletteDark : peerPaletteLight
-            for (id, entry) in prev {
-                if seeds.keys.contains(id), entry.slot < slots.count { // slot index still valid
-                    mapping[id] = (entry.slot, entry.ring, slots[entry.slot])
-                    usedSlots.insert(entry.slot)
-                    usedHues.append(slots[entry.slot])
-                }
-            }
-
-            // First ring assignment using free slots
-            let unassigned = peers.filter { mapping[$0] == nil }
-            for id in unassigned {
-                // If a preferred slot free, take it
-                let preferred = prefIndex[id] ?? 0
-                if !usedSlots.contains(preferred) && preferred < slots.count {
-                    mapping[id] = (preferred, 0, slots[preferred])
-                    usedSlots.insert(preferred)
-                    usedHues.append(slots[preferred])
-                    continue
-                }
-                // Choose free slot maximizing minimal distance to used hues
-                var bestSlot: Int? = nil
-                var bestScore: Double = -1
-                for sIdx in 0..<slots.count where !usedSlots.contains(sIdx) {
-                    let hue = slots[sIdx]
-                    let minDist = usedHues.isEmpty ? 1.0 : usedHues.map { circDist(hue, $0) }.min() ?? 1.0
-                    // Bias toward preferred index for stability
-                    let bias = 1.0 - (Double((abs(sIdx - (prefIndex[id] ?? 0)) % slots.count)) / Double(slots.count))
-                    let score = minDist + 0.05 * bias
-                    if score > bestScore { bestScore = score; bestSlot = sIdx }
-                }
-                if let s = bestSlot {
-                    mapping[id] = (s, 0, slots[s])
-                    usedSlots.insert(s)
-                    usedHues.append(slots[s])
-                }
-            }
-
-            // Overflow peers: assign additional rings by reusing slots with stable preference
-            let stillUnassigned = peers.filter { mapping[$0] == nil }
-            if !stillUnassigned.isEmpty {
-                for (idx, id) in stillUnassigned.enumerated() {
-                    let preferred = prefIndex[id] ?? 0
-                    // Spread over slots by rotating from preferred with a golden-step
-                    let goldenStep = 7 // small prime step for dispersion
-                    let s = (preferred + idx * goldenStep) % slots.count
-                    mapping[id] = (s, 1, slots[s])
-                }
-            }
-
-            return mapping
-        }
-
-        let mapping = assign(for: currentSeeds)
-        peerPaletteLight = mapping
-        peerPaletteDark = mapping
-    }
-
-    // MARK: - Nostr People Minimal-Distance Palette (same algo)
-    private var nostrPaletteLight: [String: (slot: Int, ring: Int, hue: Double)] = [:]
-    private var nostrPaletteDark: [String: (slot: Int, ring: Int, hue: Double)] = [:]
-    private var nostrPaletteSeeds: [String: String] = [:] // pubkey -> seed used
-
-    @MainActor
-    private func getNostrPaletteColor(for pubkeyHexLowercased: String, isDark: Bool) -> Color {
-        rebuildNostrPaletteIfNeeded()
-        let entry = (isDark ? nostrPaletteDark[pubkeyHexLowercased] : nostrPaletteLight[pubkeyHexLowercased])
-        let myHex: String? = {
-            if case .location(let ch) = LocationChannelManager.shared.selectedChannel,
-               let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
-                return id.publicKeyHex.lowercased()
-            }
-            return nil
-        }()
-        if let me = myHex, pubkeyHexLowercased == me { return .orange }
-        let saturation: Double = isDark ? 0.80 : 0.70
-        let baseBrightness: Double = isDark ? 0.75 : 0.45
-        let ringDelta = isDark ? TransportConfig.uiPeerPaletteRingBrightnessDeltaDark : TransportConfig.uiPeerPaletteRingBrightnessDeltaLight
-        if let e = entry {
-            let brightness = min(1.0, max(0.0, baseBrightness + ringDelta * Double(e.ring)))
-            return Color(hue: e.hue, saturation: saturation, brightness: brightness)
-        }
-        // Fallback to seed color if not in palette (e.g., transient)
-        return Color(peerSeed: "nostr:" + pubkeyHexLowercased, isDark: isDark)
-    }
-
-    @MainActor
-    private func rebuildNostrPaletteIfNeeded() {
-        // Build seeds map from currently visible geohash people (excluding self)
-        let myHex: String? = {
-            if case .location(let ch) = LocationChannelManager.shared.selectedChannel,
-               let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
-                return id.publicKeyHex.lowercased()
-            }
-            return nil
-        }()
-        let people = visibleGeohashPeople()
-        var currentSeeds: [String: String] = [:]
-        for p in people where p.id != myHex { currentSeeds[p.id] = "nostr:" + p.id }
-
-        if currentSeeds == nostrPaletteSeeds,
-           nostrPaletteLight.keys.count == currentSeeds.count,
-           nostrPaletteDark.keys.count == currentSeeds.count {
-            return
-        }
-        nostrPaletteSeeds = currentSeeds
-
-        let slotCount = max(8, TransportConfig.uiPeerPaletteSlots)
-        let avoidCenter = 30.0 / 360.0
-        let avoidDelta = TransportConfig.uiColorHueAvoidanceDelta
-        var slots: [Double] = []
-        for i in 0..<slotCount {
-            let hue = Double(i) / Double(slotCount)
-            if abs(hue - avoidCenter) < avoidDelta { continue }
-            slots.append(hue)
-        }
-        if slots.isEmpty {
-            for i in 0..<slotCount { slots.append(Double(i) / Double(slotCount)) }
-        }
-
-        func circDist(_ a: Double, _ b: Double) -> Double {
-            let d = abs(a - b)
-            return d > 0.5 ? 1.0 - d : d
-        }
-
-        let peers = currentSeeds.keys.sorted()
-        let prefIndex: [String: Int] = Dictionary(uniqueKeysWithValues: peers.map { id in
-            let h = (currentSeeds[id] ?? id).djb2()
-            let idx = Int(h % UInt64(slots.count))
-            return (id, idx)
-        })
-
-        var mapping: [String: (slot: Int, ring: Int, hue: Double)] = [:]
-        var usedSlots = Set<Int>()
-        var usedHues: [Double] = []
-
-        let prev = nostrPaletteLight.isEmpty ? nostrPaletteDark : nostrPaletteLight
-        for (id, entry) in prev {
-            if peers.contains(id), entry.slot < slots.count {
-                mapping[id] = (entry.slot, entry.ring, slots[entry.slot])
-                usedSlots.insert(entry.slot)
-                usedHues.append(slots[entry.slot])
-            }
-        }
-
-        let unassigned = peers.filter { mapping[$0] == nil }
-        for id in unassigned {
-            let preferred = prefIndex[id] ?? 0
-            if !usedSlots.contains(preferred) && preferred < slots.count {
-                mapping[id] = (preferred, 0, slots[preferred])
-                usedSlots.insert(preferred)
-                usedHues.append(slots[preferred])
-                continue
-            }
-            var bestSlot: Int? = nil
-            var bestScore: Double = -1
-            for sIdx in 0..<slots.count where !usedSlots.contains(sIdx) {
-                let hue = slots[sIdx]
-                let minDist = usedHues.isEmpty ? 1.0 : usedHues.map { circDist(hue, $0) }.min() ?? 1.0
-                let bias = 1.0 - (Double((abs(sIdx - (prefIndex[id] ?? 0)) % slots.count)) / Double(slots.count))
-                let score = minDist + 0.05 * bias
-                if score > bestScore { bestScore = score; bestSlot = sIdx }
-            }
-            if let s = bestSlot {
-                mapping[id] = (s, 0, slots[s])
-                usedSlots.insert(s)
-                usedHues.append(slots[s])
-            }
-        }
-
-        let stillUnassigned = peers.filter { mapping[$0] == nil }
-        if !stillUnassigned.isEmpty {
-            for (idx, id) in stillUnassigned.enumerated() {
-                let preferred = prefIndex[id] ?? 0
-                let goldenStep = 7
-                let s = (preferred + idx * goldenStep) % slots.count
-                mapping[id] = (s, 1, slots[s])
-            }
-        }
-
-        nostrPaletteLight = mapping
-        nostrPaletteDark = mapping
-    }
-
+    // MARK: - Message Management
     // Clear the current public channel's timeline (visible + persistent buffer)
     @MainActor
     func clearCurrentPublicTimeline() {
