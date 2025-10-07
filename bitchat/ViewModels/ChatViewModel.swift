@@ -5135,8 +5135,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         // Classify origin: geochat if senderPeerID starts with 'nostr:', else mesh (or system)
         let isGeo = finalMessage.senderPeerID?.isGeoChat == true
 
-        // Apply spam filter (per-sender and per-content rate limits)
-        if !spamFilter.shouldAllow(
+        // Apply spam filter ONLY to geohash messages (internet spam risk)
+        // Mesh messages are from local trusted peers via Bluetooth - no spam filtering needed
+        if isGeo && !spamFilter.shouldAllow(
             message: finalMessage,
             nostrKeyMapping: nostrKeyMapping,
             getNoiseKeyForShortID: { [weak self] shortID in
