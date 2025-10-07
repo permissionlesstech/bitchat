@@ -4795,29 +4795,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         }
         return nil
     }
-    
-    /// Process action messages (hugs, slaps) into system messages
+
+    /// Process action messages (hugs, slaps) into system messages (Delegated)
     private func processActionMessage(_ message: BitchatMessage) -> BitchatMessage {
-        let isActionMessage = message.content.hasPrefix("* ") && message.content.hasSuffix(" *") &&
-                              (message.content.contains("🫂") || message.content.contains("🐟") || 
-                               message.content.contains("took a screenshot"))
-        
-        if isActionMessage {
-            return BitchatMessage(
-                id: message.id,
-                sender: "system",
-                content: String(message.content.dropFirst(2).dropLast(2)), // Remove * * wrapper
-                timestamp: message.timestamp,
-                isRelay: message.isRelay,
-                originalSender: message.originalSender,
-                isPrivate: message.isPrivate,
-                recipientNickname: message.recipientNickname,
-                senderPeerID: message.senderPeerID,
-                mentions: message.mentions,
-                deliveryStatus: message.deliveryStatus
-            )
-        }
-        return message
+        return ActionMessageProcessor.process(message)
     }
     
     /// Migrate private chats when peer reconnects with new ID
