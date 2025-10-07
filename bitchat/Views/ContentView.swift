@@ -1289,7 +1289,9 @@ struct ContentView: View {
                 .onAppear { viewModel.isLocationChannelsSheetPresented = true }
                 .onDisappear { viewModel.isLocationChannelsSheetPresented = false }
         }
-        .sheet(isPresented: $showLocationNotes) {
+        .sheet(isPresented: $showLocationNotes, onDismiss: {
+            notesGeohash = nil
+        }) {
             Group {
                 if let gh = notesGeohash ?? LocationChannelManager.shared.availableChannels.first(where: { $0.level == .building })?.geohash {
                     LocationNotesView(geohash: gh, onNotesCountChanged: { cnt in sheetNotesCount = cnt })
