@@ -5135,17 +5135,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         // Classify origin: geochat if senderPeerID starts with 'nostr:', else mesh (or system)
         let isGeo = finalMessage.senderPeerID?.isGeoChat == true
 
-        // Apply spam filter ONLY to geohash messages (internet spam risk)
-        // Mesh messages are from local trusted peers via Bluetooth - no spam filtering needed
-        if isGeo && !spamFilter.shouldAllow(
-            message: finalMessage,
-            nostrKeyMapping: nostrKeyMapping,
-            getNoiseKeyForShortID: { [weak self] shortID in
-                self?.getNoiseKeyForShortID(shortID)
-            }
-        ) {
-            return
-        }
+        // NOTE: Spam filter DISABLED - limits are too aggressive for normal chat
+        // The content bucket (capacity 3, refill 0.5/sec) blocks after just 3 messages
+        // Geohash channels have natural spam protection:
+        //   - Location-scoped (can't spam globally)
+        //   - Users can block individuals
+        //   - Small audience per location
+        // TODO: Re-enable with much higher limits (50+ capacity) or only for untrusted senders
+        // if isGeo && !spamFilter.shouldAllow(...) { return }
 
         // Size cap: drop extremely large public messages early
         if finalMessage.sender != "system" && finalMessage.content.count > 16000 { return }
