@@ -2039,29 +2039,16 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     }
 
     private func displayNameForNostrPubkey(_ pubkeyHex: String) -> String {
-        let suffix = String(pubkeyHex.suffix(4))
-        // If this is our per-geohash identity, use our nickname
-        if let gh = currentGeohash, let myGeoIdentity = try? NostrIdentityBridge.deriveIdentity(forGeohash: gh) {
-            if myGeoIdentity.publicKeyHex.lowercased() == pubkeyHex.lowercased() {
-                return nickname + "#" + suffix
-            }
-        }
-        // If we have a known nickname tag for this pubkey, use it
-        if let nick = geoNicknames[pubkeyHex.lowercased()], !nick.isEmpty {
-            return nick + "#" + suffix
-        }
-        // Otherwise, anonymous with collision-resistant suffix
-        return "anon#\(suffix)"
+        return NostrDisplayNameService.displayName(
+            forPubkey: pubkeyHex,
+            currentGeohash: currentGeohash,
+            currentNickname: nickname,
+            geoNicknames: geoNicknames
+        )
     }
 
-    // Helper: display name for current active channel (for notifications)
     private func activeChannelDisplayName() -> String {
-        switch activeChannel {
-        case .mesh:
-            return "#mesh"
-        case .location(let ch):
-            return "#\(ch.geohash)"
-        }
+        return NostrDisplayNameService.channelDisplayName(activeChannel)
     }
 
     // Dedup helper with small memory cap
