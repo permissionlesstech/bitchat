@@ -4592,17 +4592,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         }
     }
 
-    // MARK: - Base64URL utils
+    // MARK: - Base64URL utils (Delegated to Utils/Base64URL.swift)
     private static func base64URLDecode(_ s: String) -> Data? {
-        var str = s.replacingOccurrences(of: "-", with: "+")
-                    .replacingOccurrences(of: "_", with: "/")
-        // Add padding if needed
-        let rem = str.count % 4
-        if rem > 0 { str.append(String(repeating: "=", count: 4 - rem)) }
-        return Data(base64Encoded: str)
+        return Base64URL.decode(s)
     }
-    
-    //
     
     @MainActor
     private func handleFavoriteNotificationFromMesh(_ content: String, from peerID: String, senderNickname: String) {
