@@ -51,6 +51,12 @@ final class LocationNotesCounter: ObservableObject {
         self.dependencies = testDependencies
     }
 
+    deinit {
+        // Note: deinit cannot call @MainActor functions
+        // Subscription cleanup will happen automatically when counter is deallocated
+        SecureLogger.debug("LocationNotesCounter deinitialized", category: .session)
+    }
+
     func subscribe(geohash gh: String) {
         let norm = gh.lowercased()
         if geohash == norm, subscriptionID != nil { return }

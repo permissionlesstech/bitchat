@@ -45,7 +45,13 @@ final class FavoritesPersistenceService: ObservableObject {
             }
             .assign(to: &$mutualFavorites)
     }
-    
+
+    deinit {
+        // Clean up Combine subscriptions
+        cancellables.removeAll()
+        SecureLogger.debug("FavoritesPersistenceService deinitialized", category: .session)
+    }
+
     /// Add or update a favorite
     func addFavorite(
         peerNoisePublicKey: Data,

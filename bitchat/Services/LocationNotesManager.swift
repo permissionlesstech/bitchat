@@ -101,6 +101,12 @@ final class LocationNotesManager: ObservableObject {
         subscribe()
     }
 
+    deinit {
+        // Note: deinit cannot call @MainActor functions
+        // Subscription cleanup will happen automatically when manager is deallocated
+        SecureLogger.debug("LocationNotesManager deinitialized", category: .session)
+    }
+
     func setGeohash(_ newGeohash: String) {
         let norm = newGeohash.lowercased()
         guard norm != geohash else { return }

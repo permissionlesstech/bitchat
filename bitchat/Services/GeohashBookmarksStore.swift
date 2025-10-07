@@ -1,3 +1,4 @@
+import BitLogger
 import Foundation
 import Combine
 #if os(iOS) || os(macOS)
@@ -26,6 +27,14 @@ final class GeohashBookmarksStore: ObservableObject {
     init(storage: UserDefaults = .standard) {
         self.storage = storage
         load()
+    }
+
+    deinit {
+        #if os(iOS) || os(macOS)
+        // Cancel any pending geocoding operations
+        geocoder.cancelGeocode()
+        #endif
+        SecureLogger.debug("GeohashBookmarksStore deinitialized", category: .session)
     }
 
     // MARK: - Public API

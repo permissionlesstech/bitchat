@@ -27,6 +27,14 @@ final class PrivateChatManager: ObservableObject {
         self.meshService = meshService
     }
 
+    deinit {
+        // Clean state on deinitialization
+        privateChats.removeAll()
+        unreadMessages.removeAll()
+        sentReadReceipts.removeAll()
+        SecureLogger.debug("PrivateChatManager deinitialized", category: .session)
+    }
+
     // Cap for messages stored per private chat
     private let privateChatCap = TransportConfig.privateChatCap
     

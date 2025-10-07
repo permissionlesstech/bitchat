@@ -46,7 +46,17 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
             updatePeers()
         }
     }
-    
+
+    deinit {
+        // Clean up NotificationCenter observers
+        NotificationCenter.default.removeObserver(self)
+
+        // Clean up Combine subscriptions
+        cancellables.removeAll()
+
+        SecureLogger.debug("UnifiedPeerService deinitialized", category: .session)
+    }
+
     // MARK: - Setup
     
     private func setupSubscriptions() {

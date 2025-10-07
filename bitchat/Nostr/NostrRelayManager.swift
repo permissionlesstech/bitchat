@@ -109,7 +109,27 @@ final class NostrRelayManager: ObservableObject {
             }
             .store(in: &cancellables)
     }
-    
+
+    deinit {
+        // Cancel reconnection timer
+        reconnectionTimer?.invalidate()
+
+        // Cancel all EOSE tracker timers
+        for (_, tracker) in eoseTrackers {
+            tracker.timer?.invalidate()
+        }
+
+        // Close all WebSocket connections
+        for (_, task) in connections {
+            task.cancel(with: .goingAway, reason: nil)
+        }
+
+        // Clear subscriptions
+        cancellables.removeAll()
+
+        SecureLogger.debug("NostrRelayManager deinitialized", category: .session)
+    }
+
     /// Connect to all configured relays
     func connect() {
         // Global network policy gate

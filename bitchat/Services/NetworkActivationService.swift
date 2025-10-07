@@ -20,6 +20,12 @@ final class NetworkActivationService: ObservableObject {
 
     private init() {}
 
+    deinit {
+        // Clean up Combine subscriptions
+        cancellables.removeAll()
+        SecureLogger.debug("NetworkActivationService deinitialized", category: .session)
+    }
+
     func start() {
         guard !started else { return }
         started = true
