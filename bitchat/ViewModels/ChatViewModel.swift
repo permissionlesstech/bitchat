@@ -4801,100 +4801,23 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         return ActionMessageProcessor.process(message)
     }
     
-    /// Migrate private chats when peer reconnects with new ID
+    /// Migrate private chats when peer reconnects with new ID (Delegated)
     @MainActor
     private func migratePrivateChatsIfNeeded(for peerID: String, senderNickname: String) {
-        let currentFingerprint = getFingerprint(for: peerID)
-        
-        if privateChats[peerID] == nil || privateChats[peerID]?.isEmpty == true {
-            var migratedMessages: [BitchatMessage] = []
-            var oldPeerIDsToRemove: [String] = []
-            
-            // Only migrate messages from the last 24 hours to prevent old messages from flooding
-            let cutoffTime = Date().addingTimeInterval(-TransportConfig.uiMigrationCutoffSeconds)
-            
-            for (oldPeerID, messages) in privateChats {
-                if oldPeerID != peerID {
-                    let oldFingerprint = peerIDToPublicKeyFingerprint[oldPeerID]
-                    
-                    // Filter messages to only recent ones
-                    let recentMessages = messages.filter { $0.timestamp > cutoffTime }
-                    
-                    // Skip if no recent messages
-                    guard !recentMessages.isEmpty else { continue }
-                    
-                    // Check fingerprint match first (most reliable)
-                    if let currentFp = currentFingerprint,
-                       let oldFp = oldFingerprint,
-                       currentFp == oldFp {
-                        migratedMessages.append(contentsOf: recentMessages)
-                        
-                        // Only remove old peer ID if we migrated ALL its messages
-                        if recentMessages.count == messages.count {
-                            oldPeerIDsToRemove.append(oldPeerID)
-                        } else {
-                            // Keep old messages in original location but don't show in UI
-                            SecureLogger.info("📦 Partially migrating \(recentMessages.count) of \(messages.count) messages from \(oldPeerID)", category: .session)
-                        }
-                        
-                        SecureLogger.info("📦 Migrating \(recentMessages.count) recent messages from old peer ID \(oldPeerID) to \(peerID) (fingerprint match)", category: .session)
-                    } else if currentFingerprint == nil || oldFingerprint == nil {
-                        // Check if this chat contains messages with this sender by nickname
-                        let isRelevantChat = recentMessages.contains { msg in
-                            (msg.sender == senderNickname && msg.sender != nickname) ||
-                            (msg.sender == nickname && msg.recipientNickname == senderNickname)
-                        }
-                        
-                        if isRelevantChat {
-                            migratedMessages.append(contentsOf: recentMessages)
-                            
-                            // Only remove if all messages were migrated
-                            if recentMessages.count == messages.count {
-                                oldPeerIDsToRemove.append(oldPeerID)
-                            }
-                            
-                            SecureLogger.warning("📦 Migrating \(recentMessages.count) recent messages from old peer ID \(oldPeerID) to \(peerID) (nickname match)", category: .session)
-                        }
-                    }
-                }
+        PrivateChatMigrationService.migrateIfNeeded(
+            newPeerID: peerID,
+            senderNickname: senderNickname,
+            currentNickname: nickname,
+            currentFingerprint: getFingerprint(for: peerID),
+            privateChats: &privateChats,
+            unreadMessages: &unreadPrivateMessages,
+            peerIDToFingerprintMapping: peerIDToPublicKeyFingerprint,
+            selectedPrivateChatPeer: &selectedPrivateChatPeer,
+            updatePrivateChatPeer: { [weak self] newID in
+                self?.selectedPrivateChatPeer = newID
             }
-            
-            // Remove old peer ID entries
-            if !oldPeerIDsToRemove.isEmpty {
-                // Track if we need to update selectedPrivateChatPeer
-                let needsSelectedUpdate = oldPeerIDsToRemove.contains { selectedPrivateChatPeer == $0 }
-                
-                // Directly modify privateChats to minimize UI disruption
-                for oldPeerID in oldPeerIDsToRemove {
-                    privateChats.removeValue(forKey: oldPeerID)
-                    unreadPrivateMessages.remove(oldPeerID)
-                }
-                
-                // Add or update messages for the new peer ID
-                if var existingMessages = privateChats[peerID] {
-                    // Merge with existing messages, replace-by-id semantics
-                    for msg in migratedMessages {
-                        if let i = existingMessages.firstIndex(where: { $0.id == msg.id }) {
-                            existingMessages[i] = msg
-                        } else {
-                            existingMessages.append(msg)
-                        }
-                    }
-                    existingMessages.sort { $0.timestamp < $1.timestamp }
-                    privateChats[peerID] = existingMessages
-                } else {
-                    // Initialize with migrated messages
-                    privateChats[peerID] = migratedMessages
-                }
-                privateChatManager.sanitizeChat(for: peerID)
-                
-                // Update selectedPrivateChatPeer if it was pointing to an old ID
-                if needsSelectedUpdate {
-                    selectedPrivateChatPeer = peerID
-                    SecureLogger.info("📱 Updated selectedPrivateChatPeer from old ID to \(peerID) during migration", category: .session)
-                }
-            }
-        }
+        )
+        privateChatManager.sanitizeChat(for: peerID)
     }
     
     /// Handle incoming private message
