@@ -28,7 +28,7 @@ struct FragmentationTests {
         ble.delegate = capture
         
         // Construct a big packet (3KB) from a remote sender (not our own ID)
-        let remoteShortID = "1122334455667788"
+        let remoteShortID: PeerID = "1122334455667788"
         let original = makeLargePublicPacket(senderShortHex: remoteShortID, size: 3_000)
         
         // Use a small fragment size to ensure multiple pieces
@@ -59,7 +59,7 @@ struct FragmentationTests {
         let capture = CaptureDelegate()
         ble.delegate = capture
         
-        let remoteShortID = "A1B2C3D4E5F60708"
+        let remoteShortID: PeerID = "A1B2C3D4E5F60708"
         let original = makeLargePublicPacket(senderShortHex: remoteShortID, size: 2048)
         var frags = fragmentPacket(original, fragmentSize: 300)
         
@@ -89,7 +89,7 @@ struct FragmentationTests {
         let capture = CaptureDelegate()
         ble.delegate = capture
         
-        let remoteShortID = "0011223344556677"
+        let remoteShortID: PeerID = "0011223344556677"
         let original = makeLargePublicPacket(senderShortHex: remoteShortID, size: 1000)
         let fragments = fragmentPacket(original, fragmentSize: 250)
         
@@ -143,12 +143,12 @@ extension FragmentationTests {
     }
 
     // Helper: build a large message packet (unencrypted public message)
-    private func makeLargePublicPacket(senderShortHex: String, size: Int) -> BitchatPacket {
+    private func makeLargePublicPacket(senderShortHex: PeerID, size: Int) -> BitchatPacket {
         let content = String(repeating: "A", count: size)
         let payload = Data(content.utf8)
         let pkt = BitchatPacket(
             type: MessageType.message.rawValue,
-            senderID: Data(hexString: senderShortHex) ?? Data(),
+            senderID: Data(hexString: senderShortHex.id) ?? Data(),
             recipientID: nil,
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             payload: payload,
