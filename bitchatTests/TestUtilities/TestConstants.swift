@@ -7,16 +7,17 @@
 //
 
 import Foundation
+@testable import bitchat
 
 struct TestConstants {
     static let defaultTimeout: TimeInterval = 5.0
     static let shortTimeout: TimeInterval = 1.0
     static let longTimeout: TimeInterval = 10.0
     
-    static let testPeerID1 = "PEER1234"
-    static let testPeerID2 = "PEER5678"
-    static let testPeerID3 = "PEER9012"
-    static let testPeerID4 = "PEER3456"
+    static let testPeerID1: PeerID = "PEER1234"
+    static let testPeerID2: PeerID = "PEER5678"
+    static let testPeerID3: PeerID = "PEER9012"
+    static let testPeerID4: PeerID = "PEER3456"
     
     static let testNickname1 = "Alice"
     static let testNickname2 = "Bob"

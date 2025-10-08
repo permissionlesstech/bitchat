@@ -16,7 +16,7 @@ final class LocationNotesManagerTests: XCTestCase {
 //            now: { Date() }
 //        )
 //
-//        let manager = LocationNotesManager(geohash: "abcd1234", dependencies: deps)
+//        let manager = LocationNotesManager(geohash: "u4pruydq", dependencies: deps)
 //
 //        XCTAssertFalse(subscribeCalled)
 //        XCTAssertEqual(manager.state, .noRelays)
@@ -66,7 +66,7 @@ final class LocationNotesManagerTests: XCTestCase {
             now: { Date() }
         )
 
-        let manager = LocationNotesManager(geohash: "abcd1234", dependencies: deps)
+        let manager = LocationNotesManager(geohash: "u4pruydq", dependencies: deps)
         XCTAssertEqual(relaysCaptured, ["wss://relay.one"])
         XCTAssertEqual(manager.state, .loading)
 
@@ -74,7 +74,7 @@ final class LocationNotesManagerTests: XCTestCase {
             pubkey: "pub",
             createdAt: Date(),
             kind: .textNote,
-            tags: [["g", "abcd1234"]],
+            tags: [["g", "u4pruydq"]],
             content: "hi"
         )
         event.id = "event1"
@@ -102,7 +102,7 @@ final class LocationNotesCounterTests: XCTestCase {
         )
 
         let counter = LocationNotesCounter(testDependencies: deps)
-        counter.subscribe(geohash: "abcdefgh")
+        counter.subscribe(geohash: "u4pruydq")
 
         XCTAssertFalse(subscribeCalled)
         XCTAssertFalse(counter.relayAvailable)
@@ -126,13 +126,13 @@ final class LocationNotesCounterTests: XCTestCase {
         )
 
         let counter = LocationNotesCounter(testDependencies: deps)
-        counter.subscribe(geohash: "abcdefgh")
+        counter.subscribe(geohash: "u4pruydq")
 
         var first = NostrEvent(
             pubkey: "pub",
             createdAt: Date(),
             kind: .textNote,
-            tags: [["g", "abcdefgh"]],
+            tags: [["g", "u4pruydq"]],
             content: "a"
         )
         first.id = "eventA"

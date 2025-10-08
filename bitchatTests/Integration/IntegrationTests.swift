@@ -587,11 +587,10 @@ final class IntegrationTests: XCTestCase {
     
     // MARK: - Helper Methods
     
-    private func createNode(_ name: String, peerID: String) {
+    private func createNode(_ name: String, peerID: PeerID) {
         let node = MockBluetoothMeshService()
         node.myPeerID = peerID
         node.mockNickname = name
-        node._testRegister()
         nodes[name] = node
         
         // Create Noise manager

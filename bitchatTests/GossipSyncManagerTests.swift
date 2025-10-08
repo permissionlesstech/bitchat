@@ -60,7 +60,7 @@ private final class RecordingDelegate: GossipSyncManager.Delegate {
         onSend?()
     }
 
-    func sendPacket(to peerID: String, packet: BitchatPacket) {
+    func sendPacket(to peerID: PeerID, packet: BitchatPacket) {
         sendPacket(packet)
     }
 

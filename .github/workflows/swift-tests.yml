@@ -24,4 +24,4 @@ jobs:
         run: swift build
 
       - name: Run Tests
-        run: swift test --parallel --disable-swift-testing  # so it only runs xctests: https://github.com/swiftlang/swift-package-manager/issues/8529#issuecomment-2815711345
+        run: swift test --parallel

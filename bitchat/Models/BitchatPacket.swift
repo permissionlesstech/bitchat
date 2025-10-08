@@ -34,12 +34,12 @@ struct BitchatPacket: Codable {
     }
     
     // Convenience initializer for new binary format
-    init(type: UInt8, ttl: UInt8, senderID: String, payload: Data) {
+    init(type: UInt8, ttl: UInt8, senderID: PeerID, payload: Data) {
         self.version = 1
         self.type = type
         // Convert hex string peer ID to binary data (8 bytes)
         var senderData = Data()
-        var tempID = senderID
+        var tempID = senderID.id
         while tempID.count >= 2 {
             let hexByte = String(tempID.prefix(2))
             if let byte = UInt8(hexByte, radix: 16) {
