@@ -353,7 +353,7 @@ final class IntegrationTests: XCTestCase {
     func testLargeScaleNetwork() {
         // Create larger network
         for i in 5...10 {
-            createNode("Node\(i)", peerID: "PEER\(i)")
+            createNode("Node\(i)", peerID: PeerID(str: "PEER\(i)"))
         }
         
         // Connect in ring topology with cross-connections

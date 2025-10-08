@@ -34,7 +34,7 @@ struct FragmentationTests {
         ble.delegate = capture
         
         // Construct a big packet (3KB) from a remote sender (not our own ID)
-        let remoteShortID: PeerID = "1122334455667788"
+        let remoteShortID = PeerID(str: "1122334455667788")
         let original = makeLargePublicPacket(senderShortHex: remoteShortID, size: 3_000)
         
         // Use a small fragment size to ensure multiple pieces
@@ -69,7 +69,7 @@ struct FragmentationTests {
         let capture = CaptureDelegate()
         ble.delegate = capture
         
-        let remoteShortID: PeerID = "A1B2C3D4E5F60708"
+        let remoteShortID = PeerID(str: "A1B2C3D4E5F60708")
         let original = makeLargePublicPacket(senderShortHex: remoteShortID, size: 2048)
         var frags = fragmentPacket(original, fragmentSize: 300)
         
@@ -103,7 +103,7 @@ struct FragmentationTests {
         let capture = CaptureDelegate()
         ble.delegate = capture
         
-        let remoteShortID: PeerID = "0011223344556677"
+        let remoteShortID = PeerID(str: "0011223344556677")
         let original = makeLargePublicPacket(senderShortHex: remoteShortID, size: 1000)
         let fragments = fragmentPacket(original, fragmentSize: 250)
         

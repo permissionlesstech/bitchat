@@ -37,8 +37,8 @@ final class NoiseProtocolTests: XCTestCase {
     func testHandshakePerformance() {
         measure {
             do {
-                let alice = NoiseSession(peerID: "bob", role: .initiator, keychain: mockKeychain, localStaticKey: aliceKey)
-                let bob = NoiseSession(peerID: "alice", role: .responder, keychain: mockKeychain, localStaticKey: bobKey)
+                let alice = NoiseSession(peerID: PeerID(str: "bob"), role: .initiator, keychain: mockKeychain, localStaticKey: aliceKey)
+                let bob = NoiseSession(peerID: PeerID(str: "alice"), role: .responder, keychain: mockKeychain, localStaticKey: bobKey)
                 try performHandshake(initiator: alice, responder: bob)
             } catch {
                 XCTFail("Handshake failed: \(error)")

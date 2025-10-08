@@ -32,7 +32,7 @@ final class MockBLEService: NSObject {
     // MARK: - Properties matching BLEService
     
     weak var delegate: BitchatDelegate?
-    var myPeerID: PeerID = "MOCK1234"
+    var myPeerID = PeerID(str: "MOCK1234")
     var myNickname: String = "MockUser"
     
     private let mockKeychain = MockKeychain()

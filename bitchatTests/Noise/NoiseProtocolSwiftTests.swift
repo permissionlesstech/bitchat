@@ -271,11 +271,11 @@ actor NoiseProtocolSwiftTests {
     
     @Test func sessionIsolation() throws {
         // Create two separate session pairs
-        let aliceSession1 = NoiseSession(peerID: "peer1", role: .initiator, keychain: mockKeychain, localStaticKey: aliceKey)
-        let bobSession1 = NoiseSession(peerID: "alice1", role: .responder, keychain: mockKeychain, localStaticKey: bobKey)
+        let aliceSession1 = NoiseSession(peerID: PeerID(str: "peer1"), role: .initiator, keychain: mockKeychain, localStaticKey: aliceKey)
+        let bobSession1 = NoiseSession(peerID: PeerID(str: "alice1"), role: .responder, keychain: mockKeychain, localStaticKey: bobKey)
         
-        let aliceSession2 = NoiseSession(peerID: "peer2", role: .initiator, keychain: mockKeychain, localStaticKey: aliceKey)
-        let bobSession2 = NoiseSession(peerID: "alice2", role: .responder, keychain: mockKeychain, localStaticKey: bobKey)
+        let aliceSession2 = NoiseSession(peerID: PeerID(str: "peer2"), role: .initiator, keychain: mockKeychain, localStaticKey: aliceKey)
+        let bobSession2 = NoiseSession(peerID: PeerID(str: "alice2"), role: .responder, keychain: mockKeychain, localStaticKey: bobKey)
         
         // Establish both pairs
         try performHandshake(initiator: aliceSession1, responder: bobSession1)
