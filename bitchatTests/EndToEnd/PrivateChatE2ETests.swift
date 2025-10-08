@@ -171,7 +171,7 @@ struct PrivateChatE2ETests {
             // Send encrypted private message
             alice.sendPrivateMessage(
                 TestConstants.testMessage1,
-                to: TestConstants.testPeerID2,
+                to: bob.peerID,
                 recipientNickname: TestConstants.testNickname2
             )
         }
@@ -235,7 +235,7 @@ struct PrivateChatE2ETests {
             for i in 0..<messageCount {
                 alice.sendPrivateMessage(
                     "Private message \(i)",
-                    to: TestConstants.testPeerID2,
+                    to: bob.peerID,
                     recipientNickname: TestConstants.testNickname2
                 )
             }
@@ -254,7 +254,7 @@ struct PrivateChatE2ETests {
 
             alice.sendPrivateMessage(
                 TestConstants.testLongMessage,
-                to: TestConstants.testPeerID2,
+                to: bob.peerID,
                 recipientNickname: TestConstants.testNickname2
             )
         }

@@ -66,14 +66,14 @@ final class NoiseProtocolTests: XCTestCase {
     
     private func establishSessions() throws {
         aliceSession = NoiseSession(
-            peerID: TestConstants.testPeerID2,
+            peerID: PeerID(str: UUID().uuidString),
             role: .initiator,
             keychain: mockKeychain,
             localStaticKey: aliceKey
         )
         
         bobSession = NoiseSession(
-            peerID: TestConstants.testPeerID1,
+            peerID: PeerID(str: UUID().uuidString),
             role: .responder,
             keychain: mockKeychain,
             localStaticKey: bobKey

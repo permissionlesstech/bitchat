@@ -30,7 +30,7 @@ final class TestHelpers {
     static func createTestMessage(
         content: String = TestConstants.testMessage1,
         sender: String = TestConstants.testNickname1,
-        senderPeerID: PeerID = TestConstants.testPeerID1,
+        senderPeerID: PeerID = PeerID(str: UUID().uuidString),
         isPrivate: Bool = false,
         recipientNickname: String? = nil,
         mentions: [String]? = nil
@@ -51,7 +51,7 @@ final class TestHelpers {
     
     static func createTestPacket(
         type: UInt8 = 0x01,
-        senderID: PeerID = TestConstants.testPeerID1,
+        senderID: PeerID = PeerID(str: UUID().uuidString),
         recipientID: PeerID? = nil,
         payload: Data = "test payload".data(using: .utf8)!,
         signature: Data? = nil,
