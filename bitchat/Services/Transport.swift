@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-/// Abstract transport interface used by ChatViewModel and services.
+/// Abstract transport interface used by BitchatViewModel and services.
 /// BLEService implements this protocol; a future Nostr transport can too.
 struct TransportPeerSnapshot: Equatable, Hashable {
     let id: String
@@ -41,11 +41,11 @@ protocol Transport: AnyObject {
 
     // Messaging
     func sendMessage(_ content: String, mentions: [String])
-    func sendPrivateMessage(_ content: String, to peerID: String, recipientNickname: String, messageID: String)
+    @MainActor func sendPrivateMessage(_ content: String, to peerID: String, recipientNickname: String, messageID: String)
     func sendReadReceipt(_ receipt: ReadReceipt, to peerID: String)
-    func sendFavoriteNotification(to peerID: String, isFavorite: Bool)
+    @MainActor func sendFavoriteNotification(to peerID: String, isFavorite: Bool)
     func sendBroadcastAnnounce()
-    func sendDeliveryAck(for messageID: String, to peerID: String)
+    @MainActor func sendDeliveryAck(for messageID: String, to peerID: String)
 
     // QR verification (optional for transports)
     func sendVerifyChallenge(to peerID: String, noiseKeyHex: String, nonceA: Data)

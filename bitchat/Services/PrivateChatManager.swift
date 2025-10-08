@@ -8,19 +8,20 @@
 
 import Foundation
 import SwiftUI
+import Combine
 
 /// Manages all private chat functionality
-class PrivateChatManager: ObservableObject {
-    @Published var privateChats: [String: [BitchatMessage]] = [:]
-    @Published var selectedPeer: String? = nil
-    @Published var unreadMessages: Set<String> = []
+@Observable class PrivateChatManager {
+    var privateChats: [String: [BitchatMessage]] = [:]
+    var selectedPeer: String? = nil
+    var unreadMessages: Set<String> = []
     
-    private var selectedPeerFingerprint: String? = nil
-    var sentReadReceipts: Set<String> = []  // Made accessible for ChatViewModel
+    @ObservationIgnored private var selectedPeerFingerprint: String? = nil
+    @ObservationIgnored var sentReadReceipts: Set<String> = []  // Made accessible for BitchatViewModel
     
-    weak var meshService: Transport?
+    @ObservationIgnored  weak var meshService: Transport?
     // Route acks/receipts via MessageRouter (chooses mesh or Nostr)
-    weak var messageRouter: MessageRouter?
+    @ObservationIgnored weak var messageRouter: MessageRouter?
     
     init(meshService: Transport? = nil) {
         self.meshService = meshService
@@ -54,85 +55,44 @@ class PrivateChatManager: ObservableObject {
     }
     
     /// Send a private message
-    func sendMessage(_ content: String, to peerID: String) {
-        guard let meshService = meshService,
-              let peerNickname = meshService.peerNickname(peerID: peerID) else {
-            return
-        }
-        
-        let messageID = UUID().uuidString
-        
-        // Create local message
-        let message = BitchatMessage(
-            id: messageID,
-            sender: meshService.myNickname,
-            content: content,
-            timestamp: Date(),
-            isRelay: false,
-            originalSender: nil,
-            isPrivate: true,
-            recipientNickname: peerNickname,
-            senderPeerID: meshService.myPeerID,
-            mentions: nil,
-            deliveryStatus: .sending
-        )
-        
-        // Add to chat
-        if privateChats[peerID] == nil { privateChats[peerID] = [] }
-        privateChats[peerID]?.append(message)
-        // Enforce per-chat cap on local append
-        if var arr = privateChats[peerID], arr.count > privateChatCap {
-            let remove = arr.count - privateChatCap
-            arr.removeFirst(remove)
-            privateChats[peerID] = arr
-        }
-        
-        // Send via mesh service
-        meshService.sendPrivateMessage(content, to: peerID, recipientNickname: peerNickname, messageID: messageID)
-    }
-    
-    /// Handle incoming private message
-    func handleIncomingMessage(_ message: BitchatMessage) {
-        guard let senderPeerID = message.senderPeerID else { return }
-        
-        // Initialize chat if needed
-        if privateChats[senderPeerID] == nil {
-            privateChats[senderPeerID] = []
-        }
-        
-        // Deduplicate by ID: replace existing message if present, else append
-        if let idx = privateChats[senderPeerID]?.firstIndex(where: { $0.id == message.id }) {
-            privateChats[senderPeerID]?[idx] = message
-        } else {
-            privateChats[senderPeerID]?.append(message)
-        }
-
-        // Sanitize chat to avoid duplicate IDs and sort by timestamp
-        sanitizeChat(for: senderPeerID)
-        // Enforce cap after sanitize
-        if var arr = privateChats[senderPeerID], arr.count > privateChatCap {
-            let remove = arr.count - privateChatCap
-            arr.removeFirst(remove)
-            privateChats[senderPeerID] = arr
-        }
-        
-        // Mark as unread if not in this chat
-        if selectedPeer != senderPeerID {
-            unreadMessages.insert(senderPeerID)
-            
-            // Avoid notifying for messages already marked as read (dup/resubscribe cases)
-            if !sentReadReceipts.contains(message.id) {
-                NotificationService.shared.sendPrivateMessageNotification(
-                    from: message.sender,
-                    message: message.content,
-                    peerID: senderPeerID
-                )
-            }
-        } else {
-            // Send read receipt if viewing this chat
-            sendReadReceipt(for: message)
-        }
-    }
+//    func sendMessage(_ content: String, to peerID: String) {
+//        guard let meshService = meshService,
+//              let peerNickname = meshService.peerNickname(peerID: peerID) else {
+//            return
+//        }
+//        
+//        let messageID = UUID().uuidString
+//        
+//        // Create local message
+//        let message = BitchatMessage(
+//            id: messageID,
+//            sender: meshService.myNickname,
+//            content: content,
+//            timestamp: Date(),
+//            isRelay: false,
+//            originalSender: nil,
+//            isPrivate: true,
+//            recipientNickname: peerNickname,
+//            senderPeerID: meshService.myPeerID,
+//            mentions: nil,
+//            deliveryStatus: .sending
+//        )
+//        
+//        // Add to chat
+//        if privateChats[peerID] == nil { privateChats[peerID] = [] }
+//        privateChats[peerID]?.append(message)
+//        // Enforce per-chat cap on local append
+//        if var arr = privateChats[peerID], arr.count > privateChatCap {
+//            let remove = arr.count - privateChatCap
+//            arr.removeFirst(remove)
+//            privateChats[peerID] = arr
+//        }
+//        
+//        // Send via mesh service
+//        Task { @MainActor in
+//            meshService.sendPrivateMessage(content, to: peerID, recipientNickname: peerNickname, messageID: messageID)
+//        }
+//    }
 
     /// Remove duplicate messages by ID and keep chronological order
     func sanitizeChat(for peerID: String) {

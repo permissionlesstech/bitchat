@@ -3,7 +3,7 @@ import Combine
 
 /// Manages persistent favorite relationships between peers
 @MainActor
-class FavoritesPersistenceService: ObservableObject {
+class FavoritesPersistenceService {
     
     struct FavoriteRelationship: Codable {
         let peerNoisePublicKey: Data
@@ -22,23 +22,14 @@ class FavoritesPersistenceService: ObservableObject {
     private static let storageKey = "chat.bitchat.favorites"
     private static let keychainService = "chat.bitchat.favorites"
     
-    @Published private(set) var favorites: [Data: FavoriteRelationship] = [:] // Noise pubkey -> relationship
-    @Published private(set) var mutualFavorites: Set<Data> = []
+    private(set) var favorites: [Data: FavoriteRelationship] = [:] // Noise pubkey -> relationship
     
-    private let userDefaults = UserDefaults.standard
-    private var cancellables = Set<AnyCancellable>()
+    private let userDefaults = UserDefaults(suiteName: "group.chat.bitchat")
     
     static let shared = FavoritesPersistenceService()
     
     private init() {
         loadFavorites()
-        
-        // Update mutual favorites when favorites change
-        $favorites
-            .map { favorites in
-                Set(favorites.compactMap { $0.value.isMutual ? $0.key : nil })
-            }
-            .assign(to: &$mutualFavorites)
     }
     
     /// Add or update a favorite
@@ -283,21 +274,6 @@ class FavoritesPersistenceService: ObservableObject {
                 "isKeyUpdate": true
             ]
         )
-    }
-    
-    /// Get all favorites (including non-mutual)
-    func getAllFavorites() -> [FavoriteRelationship] {
-        favorites.values.filter { $0.isFavorite }
-    }
-    
-    /// Get only mutual favorites
-    func getMutualFavorites() -> [FavoriteRelationship] {
-        favorites.values.filter { $0.isMutual }
-    }
-    
-    /// Get all favorite relationships (including where they favorited us)
-    func getAllRelationships() -> [FavoriteRelationship] {
-        Array(favorites.values)
     }
     
     /// Clear all favorites - used for panic mode

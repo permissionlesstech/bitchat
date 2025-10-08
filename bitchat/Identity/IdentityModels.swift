@@ -151,20 +151,8 @@ struct IdentityCache: Codable {
     // Last interaction timestamps (privacy: optional)
     var lastInteractions: [String: Date] = [:] 
     
-    // Blocked Nostr pubkeys (lowercased hex) for geohash chats
-    var blockedNostrPubkeys: Set<String> = []
-    
     // Schema version for future migrations
     var version: Int = 1
-}
-
-// MARK: - Identity Resolution
-
-enum IdentityHint {
-    case unknown
-    case likelyKnown(fingerprint: String)
-    case ambiguous(candidates: Set<String>)
-    case verified(fingerprint: String)
 }
 
 // MARK: - Pending Actions
@@ -174,8 +162,6 @@ struct PendingActions {
     var setTrustLevel: TrustLevel?
     var setPetname: String?
 }
-
-//
 
 // MARK: - Migration Support
 //

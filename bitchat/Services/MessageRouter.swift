@@ -135,6 +135,6 @@ final class MessageRouter {
     }
 
     func flushAllOutbox() {
-        for key in Array(outbox.keys) { flushOutbox(for: key) }
+        for key in outbox.keys { flushOutbox(for: key) }
     }
 }

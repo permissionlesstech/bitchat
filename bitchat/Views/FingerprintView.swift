@@ -9,7 +9,7 @@
 import SwiftUI
 
 struct FingerprintView: View {
-    @ObservedObject var viewModel: ChatViewModel
+    @ObservedObject var viewModel: BitchatViewModel
     let peerID: String
     @Environment(\.dismiss) var dismiss
     @Environment(\.colorScheme) var colorScheme

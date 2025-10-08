@@ -6,7 +6,7 @@ struct InputValidator {
     
     // MARK: - Constants
     
-    struct Limits {
+    enum Limits {
         static let maxNicknameLength = 50
         static let maxMessageLength = 10_000
         static let maxReasonLength = 200
@@ -86,11 +86,6 @@ struct InputValidator {
     // Note: Message type validation is performed closer to decoding using
     // MessageType/NoisePayloadType enums; keeping validator free of stale lists.
     
-    /// Validates hop count is reasonable
-    static func validateHopCount(_ hopCount: UInt8) -> Bool {
-        return hopCount <= 10 // Prevent excessive forwarding
-    }
-    
     /// Validates timestamp is reasonable (not too far in past or future)
     static func validateTimestamp(_ timestamp: Date) -> Bool {
         let now = Date()
@@ -99,37 +94,10 @@ struct InputValidator {
         return timestamp >= oneHourAgo && timestamp <= oneHourFromNow
     }
     
-    /// Validates data size for different contexts
-    static func validateDataSize(_ data: Data, maxSize: Int) -> Bool {
-        return data.count > 0 && data.count <= maxSize
-    }
-    
     // MARK: - Binary Data Validation
-    
-    /// Validates UUID format
-    static func validateUUID(_ uuid: String) -> Bool {
-        // Remove dashes and validate hex
-        let cleaned = uuid.replacingOccurrences(of: "-", with: "")
-        return cleaned.count == 32 && cleaned.allSatisfy { $0.isHexDigit }
-    }
-    
     /// Validates public key data
     static func validatePublicKey(_ keyData: Data) -> Bool {
         // Curve25519 public keys are 32 bytes
         return keyData.count == 32
-    }
-    
-    /// Validates signature data
-    static func validateSignature(_ signature: Data) -> Bool {
-        // Ed25519 signatures are 64 bytes
-        return signature.count == 64
-    }
-}
-
-// MARK: - Character Extensions
-
-private extension Character {
-    var isHexDigit: Bool {
-        return "0123456789abcdefABCDEF".contains(self)
     }
 }

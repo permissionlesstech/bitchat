@@ -11,7 +11,7 @@ import Security
 import os.log
 
 class KeychainManager {
-    static let shared = KeychainManager()
+    nonisolated(unsafe) static let shared = KeychainManager()
     
     // Use consistent service name for all keychain items
     private let service = "chat.bitchat"

@@ -3,7 +3,7 @@ import CryptoKit
 
 /// QR verification scaffolding: schema, signing, and basic challenge/response helpers.
 final class VerificationService {
-    static let shared = VerificationService()
+    nonisolated(unsafe) static let shared = VerificationService()
 
     // Injected Noise service from the running transport (do NOT create new BLEService)
     private var noise: NoiseEncryptionService?
@@ -67,51 +67,6 @@ final class VerificationService {
                   let nonce = val("nonce"), let sig = val("sig") else { return nil }
             return VerificationQR(v: v, noiseKeyHex: noise, signKeyHex: sign, npub: val("npub"), nickname: nick, ts: ts, nonceB64: nonce, sigHex: sig)
         }
-    }
-
-    // MARK: - Public API
-
-    /// Build a signed QR string for the current identity
-    func buildMyQRString(nickname: String, npub: String?) -> String? {
-        // Simple short-lived cache to speed up sheet opening
-        struct Cache { static var last: (nick: String, npub: String?, builtAt: Date, value: String)? }
-        if let c = Cache.last, c.nick == nickname, c.npub == npub, Date().timeIntervalSince(c.builtAt) < 60 {
-            return c.value
-        }
-        guard let noise = noise else { return nil }
-        let noiseKey = noise.getStaticPublicKeyData().hexEncodedString()
-        let signKey = noise.getSigningPublicKeyData().hexEncodedString()
-        let ts = Int64(Date().timeIntervalSince1970)
-        var nonce = Data(count: 16)
-        _ = nonce.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 16, $0.baseAddress!) }
-        let nonceB64 = nonce.base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
-        let payload = VerificationQR(v: 1, noiseKeyHex: noiseKey, signKeyHex: signKey, npub: npub, nickname: nickname, ts: ts, nonceB64: nonceB64, sigHex: "")
-        let msg = payload.canonicalBytes()
-        guard let sig = noise.signData(msg) else { return nil }
-        let signed = VerificationQR(v: payload.v,
-                                    noiseKeyHex: payload.noiseKeyHex,
-                                    signKeyHex: payload.signKeyHex,
-                                    npub: payload.npub,
-                                    nickname: payload.nickname,
-                                    ts: payload.ts,
-                                    nonceB64: payload.nonceB64,
-                                    sigHex: sig.map { String(format: "%02x", $0) }.joined())
-        let out = signed.toURLString()
-        Cache.last = (nickname, npub, Date(), out)
-        return out
-    }
-
-    /// Verify a scanned QR and return the parsed payload if valid (signature + freshness checks)
-    func verifyScannedQR(_ urlString: String, maxAge: TimeInterval = TransportConfig.verificationQRMaxAgeSeconds) -> VerificationQR? {
-        guard let url = URL(string: urlString), let qr = VerificationQR.fromURL(url) else { return nil }
-        // Freshness
-        let now = Date().timeIntervalSince1970
-        if now - Double(qr.ts) > maxAge { return nil }
-        // Verify signature using embedded ed25519 signKey
-        guard let sig = Data(hexString: qr.sigHex), let signKey = Data(hexString: qr.signKeyHex) else { return nil }
-        guard let noise = noise else { return nil }
-        let ok = noise.verifySignature(sig, for: qr.canonicalBytes(), publicKey: signKey)
-        return ok ? qr : nil
     }
 
     // MARK: - Noise payloads (scaffold only)

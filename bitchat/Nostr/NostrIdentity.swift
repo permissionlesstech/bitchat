@@ -110,7 +110,7 @@ struct NostrIdentityBridge {
     private static let currentIdentityKey = "nostr-current-identity"
     private static let deviceSeedKey = "nostr-device-seed"
     // In-memory cache to avoid transient keychain access issues
-    private static var deviceSeedCache: Data?
+    nonisolated(unsafe) private static var deviceSeedCache: Data?
     
     /// Get or create the current Nostr identity
     static func getCurrentNostrIdentity() throws -> NostrIdentity? {
@@ -157,62 +157,6 @@ struct NostrIdentityBridge {
         // Note: We can't efficiently delete all noise-nostr associations 
         // without tracking them, but they'll be orphaned and eventually cleaned up
         // The important part is deleting the current identity so a new one is generated
-    }
-
-    // MARK: - Per-Geohash Identities (Location Channels)
-
-    /// Returns a stable device seed used to derive unlinkable per-geohash identities.
-    /// Stored only on device keychain.
-    private static func getOrCreateDeviceSeed() -> Data {
-        if let cached = deviceSeedCache { return cached }
-        if let existing = KeychainHelper.load(key: deviceSeedKey, service: keychainService) {
-            // Migrate to AfterFirstUnlockThisDeviceOnly for stability during lock
-            KeychainHelper.save(key: deviceSeedKey, data: existing, service: keychainService, accessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
-            deviceSeedCache = existing
-            return existing
-        }
-        var seed = Data(count: 32)
-        _ = seed.withUnsafeMutableBytes { ptr in
-            SecRandomCopyBytes(kSecRandomDefault, 32, ptr.baseAddress!)
-        }
-        // Ensure availability after first unlock to prevent unintended rotation when locked
-        KeychainHelper.save(key: deviceSeedKey, data: seed, service: keychainService, accessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
-        deviceSeedCache = seed
-        return seed
-    }
-
-    /// Derive a deterministic, unlinkable Nostr identity for a given geohash.
-    /// Uses HMAC-SHA256(deviceSeed, geohash) as private key material, with fallback rehashing
-    /// if the candidate is not a valid secp256k1 private key.
-    static func deriveIdentity(forGeohash geohash: String) throws -> NostrIdentity {
-        let seed = getOrCreateDeviceSeed()
-        guard let msg = geohash.data(using: .utf8) else {
-            throw NSError(domain: "NostrIdentity", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid geohash string"])
-        }
-
-        func candidateKey(iteration: UInt32) -> Data {
-            var input = Data(msg)
-            var iterBE = iteration.bigEndian
-            withUnsafeBytes(of: &iterBE) { bytes in
-                input.append(contentsOf: bytes)
-            }
-            let code = CryptoKit.HMAC<CryptoKit.SHA256>.authenticationCode(for: input, using: SymmetricKey(data: seed))
-            return Data(code)
-        }
-
-        // Try a few iterations to ensure a valid key can be formed
-        for i in 0..<10 {
-            let keyData = candidateKey(iteration: UInt32(i))
-            if let identity = try? NostrIdentity(privateKeyData: keyData) {
-                return identity
-            }
-        }
-        // As a final fallback, hash the seed+msg and try again
-        var combined = Data()
-        combined.append(seed)
-        combined.append(msg)
-        let fallback = Data(CryptoKit.SHA256.hash(data: combined))
-        return try NostrIdentity(privateKeyData: fallback)
     }
 }
 

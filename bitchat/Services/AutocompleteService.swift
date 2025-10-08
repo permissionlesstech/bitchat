@@ -28,11 +28,6 @@ class AutocompleteService {
             return (mentionSuggestions, mentionRange)
         }
         
-        // Don't handle command autocomplete here - ContentView handles it with better UI
-        // if let (commandSuggestions, commandRange) = getCommandSuggestions(textToPosition) {
-        //     return (commandSuggestions, commandRange)
-        // }
-        
         return ([], nil)
     }
     
@@ -70,27 +65,7 @@ class AutocompleteService {
             .prefix(5)
             .map { "@\($0)" }
         
-        return suggestions.isEmpty ? nil : (Array(suggestions), fullRange)
-    }
-    
-    private func getCommandSuggestions(_ text: String) -> ([String], NSRange)? {
-        guard let regex = commandRegex else { return nil }
-        
-        let nsText = text as NSString
-        let matches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: nsText.length))
-        
-        guard let match = matches.last else { return nil }
-        
-        let fullRange = match.range(at: 0)
-        let captureRange = match.range(at: 1)
-        let prefix = nsText.substring(with: captureRange).lowercased()
-        
-        let suggestions = commands
-            .filter { $0.hasPrefix("/\(prefix)") }
-            .sorted()
-            .prefix(5)
-        
-        return suggestions.isEmpty ? nil : (Array(suggestions), fullRange)
+        return suggestions.isEmpty ? nil : (suggestions, fullRange)
     }
     
     private func needsArgument(command: String) -> Bool {

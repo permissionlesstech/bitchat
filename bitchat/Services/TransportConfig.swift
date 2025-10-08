@@ -12,7 +12,6 @@ enum TransportConfig {
     // UI / Storage Caps
     static let privateChatCap: Int = 1337
     static let meshTimelineCap: Int = 1337
-    static let geoTimelineCap: Int = 1337
     static let contentLRUCap: Int = 2000
 
     // Timers
@@ -104,18 +103,6 @@ enum TransportConfig {
     static let locationDistanceFilterLiveMeters: Double = 21.0
     static let locationLiveRefreshInterval: TimeInterval = 5.0
 
-    // Notifications (geohash)
-    static let uiGeoNotifyCooldownSeconds: TimeInterval = 60.0
-    static let uiGeoNotifySnippetMaxLen: Int = 80
-
-    // Nostr geohash
-    static let nostrGeohashInitialLookbackSeconds: TimeInterval = 3600
-    static let nostrGeohashInitialLimit: Int = 200
-    static let nostrGeoRelayCount: Int = 5
-    static let nostrGeohashSampleLookbackSeconds: TimeInterval = 300
-    static let nostrGeohashSampleLimit: Int = 100
-    static let nostrDMSubscribeLookbackSeconds: TimeInterval = 86400
-
     // Nostr helpers
     static let nostrShortKeyDisplayLength: Int = 8
     static let nostrConvKeyPrefixLength: Int = 16
@@ -136,9 +123,6 @@ enum TransportConfig {
     static let nostrRelayBackoffMultiplier: Double = 2.0
     static let nostrRelayMaxReconnectAttempts: Int = 10
     static let nostrRelayDefaultFetchLimit: Int = 100
-
-    // Geo relay directory
-    static let geoRelayFetchIntervalSeconds: TimeInterval = 60 * 60 * 24
 
     // BLE operational delays
     static let bleInitialAnnounceDelaySeconds: TimeInterval = 0.6

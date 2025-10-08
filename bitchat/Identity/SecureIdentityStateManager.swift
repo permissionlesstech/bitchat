@@ -96,7 +96,7 @@ import CryptoKit
 /// Singleton manager for secure identity state persistence and retrieval.
 /// Provides thread-safe access to identity mappings with encryption at rest.
 /// All identity data is stored encrypted in the device Keychain for security.
-class SecureIdentityStateManager {
+class SecureIdentityStateManager: @unchecked Sendable {
     static let shared = SecureIdentityStateManager()
     
     private let keychain = KeychainManager.shared
@@ -206,22 +206,6 @@ class SecureIdentityStateManager {
         }
     }
     
-    // MARK: - Identity Resolution
-    
-    func resolveIdentity(peerID: String, claimedNickname: String) -> IdentityHint {
-        queue.sync {
-            // Check if we have candidates based on nickname
-            if let fingerprints = cache.nicknameIndex[claimedNickname] {
-                if fingerprints.count == 1 {
-                    return .likelyKnown(fingerprint: fingerprints.first!)
-                } else {
-                    return .ambiguous(candidates: fingerprints)
-                }
-            }
-            return .unknown
-        }
-    }
-    
     // MARK: - Social Identity Management
     
     func getSocialIdentity(for fingerprint: String) -> SocialIdentity? {
@@ -301,23 +285,12 @@ class SecureIdentityStateManager {
         }
     }
 
-    /// Retrieve cryptographic identity by fingerprint
-    func getCryptographicIdentity(for fingerprint: String) -> CryptographicIdentity? {
-        queue.sync { cryptographicIdentities[fingerprint] }
-    }
-
     /// Find cryptographic identities whose fingerprint prefix matches a peerID (16-hex) short ID
     func getCryptoIdentitiesByPeerIDPrefix(_ peerID: String) -> [CryptographicIdentity] {
         queue.sync {
             // Defensive: ensure hex and correct length
             guard peerID.count == 16, peerID.allSatisfy({ $0.isHexDigit }) else { return [] }
             return cryptographicIdentities.values.filter { $0.fingerprint.hasPrefix(peerID) }
-        }
-    }
-    
-    func getAllSocialIdentities() -> [SocialIdentity] {
-        queue.sync {
-            return Array(cache.socialIdentities.values)
         }
     }
     
@@ -348,16 +321,6 @@ class SecureIdentityStateManager {
     }
     
     // MARK: - Favorites Management
-    
-    func getFavorites() -> Set<String> {
-        queue.sync {
-            let favorites = cache.socialIdentities.values
-                .filter { $0.isFavorite }
-                .map { $0.fingerprint }
-            return Set(favorites)
-        }
-    }
-    
     func setFavorite(_ fingerprint: String, isFavorite: Bool) {
         queue.async(flags: .barrier) {
             if var identity = self.cache.socialIdentities[fingerprint] {
@@ -420,30 +383,6 @@ class SecureIdentityStateManager {
             self.saveIdentityCache()
         }
     }
-
-    // MARK: - Geohash (Nostr) Blocking
-    
-    func isNostrBlocked(pubkeyHexLowercased: String) -> Bool {
-        queue.sync {
-            return cache.blockedNostrPubkeys.contains(pubkeyHexLowercased.lowercased())
-        }
-    }
-    
-    func setNostrBlocked(_ pubkeyHexLowercased: String, isBlocked: Bool) {
-        let key = pubkeyHexLowercased.lowercased()
-        queue.async(flags: .barrier) {
-            if isBlocked {
-                self.cache.blockedNostrPubkeys.insert(key)
-            } else {
-                self.cache.blockedNostrPubkeys.remove(key)
-            }
-            self.saveIdentityCache()
-        }
-    }
-    
-    func getBlockedNostrPubkeys() -> Set<String> {
-        queue.sync { cache.blockedNostrPubkeys }
-    }
     
     // MARK: - Ephemeral Session Management
     
@@ -454,65 +393,6 @@ class SecureIdentityStateManager {
                 sessionStart: Date(),
                 handshakeState: handshakeState
             )
-        }
-    }
-    
-    func updateHandshakeState(peerID: String, state: HandshakeState) {
-        queue.async(flags: .barrier) {
-            self.ephemeralSessions[peerID]?.handshakeState = state
-            
-            // If handshake completed, update last interaction
-            if case .completed(let fingerprint) = state {
-                self.cache.lastInteractions[fingerprint] = Date()
-                self.saveIdentityCache()
-            }
-        }
-    }
-    
-    func getHandshakeState(peerID: String) -> HandshakeState? {
-        queue.sync {
-            return ephemeralSessions[peerID]?.handshakeState
-        }
-    }
-    
-    // MARK: - Pending Actions
-    
-    func setPendingAction(peerID: String, action: PendingActions) {
-        queue.async(flags: .barrier) {
-            self.pendingActions[peerID] = action
-        }
-    }
-    
-    func applyPendingActions(peerID: String, fingerprint: String) {
-        queue.async(flags: .barrier) {
-            guard let actions = self.pendingActions[peerID] else { return }
-            
-            // Get or create social identity
-            var identity = self.cache.socialIdentities[fingerprint] ?? SocialIdentity(
-                fingerprint: fingerprint,
-                localPetname: nil,
-                claimedNickname: "Unknown",
-                trustLevel: .unknown,
-                isFavorite: false,
-                isBlocked: false,
-                notes: nil
-            )
-            
-            // Apply pending actions
-            if let toggleFavorite = actions.toggleFavorite {
-                identity.isFavorite = toggleFavorite
-            }
-            if let trustLevel = actions.setTrustLevel {
-                identity.trustLevel = trustLevel
-            }
-            if let petname = actions.setPetname {
-                identity.localPetname = petname
-            }
-            
-            // Save updated identity
-            self.cache.socialIdentities[fingerprint] = identity
-            self.pendingActions.removeValue(forKey: peerID)
-            self.saveIdentityCache()
         }
     }
     

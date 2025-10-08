@@ -89,6 +89,7 @@
 ///
 
 import Foundation
+import Combine
 
 extension Data {
     func trimmingNullBytes() -> Data {

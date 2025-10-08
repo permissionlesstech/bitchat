@@ -60,6 +60,7 @@
 
 import Foundation
 import CryptoKit
+import CoreBluetooth.CBManager
 
 // MARK: - Message Padding
 
@@ -397,7 +398,7 @@ enum DeliveryStatus: Codable, Equatable {
 /// Handles both broadcast messages and private encrypted messages,
 /// with support for mentions, replies, and delivery tracking.
 /// - Note: This is the primary data model for chat messages
-class BitchatMessage: Codable {
+class BitchatMessage: Codable, @unchecked Sendable {
     let id: String
     let sender: String
     let content: String
@@ -462,10 +463,10 @@ extension BitchatMessage: Equatable {
 // MARK: - Delegate Protocol
 
 protocol BitchatDelegate: AnyObject {
-    func didReceiveMessage(_ message: BitchatMessage)
-    func didConnectToPeer(_ peerID: String)
+    @MainActor func didReceiveMessage(_ message: BitchatMessage)
+    @MainActor func didConnectToPeer(_ peerID: String) async
     func didDisconnectFromPeer(_ peerID: String)
-    func didUpdatePeerList(_ peers: [String])
+    @MainActor func didUpdatePeerList(_ peers: Dictionary<String, BLEService.PeerInfo>.Keys)
     
     // Optional method to check if a fingerprint belongs to a favorite peer
     func isFavorite(fingerprint: String) -> Bool
@@ -473,27 +474,10 @@ protocol BitchatDelegate: AnyObject {
     func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus)
 
     // Low-level events for better separation of concerns
-    func didReceiveNoisePayload(from peerID: String, type: NoisePayloadType, payload: Data, timestamp: Date)
-    func didReceivePublicMessage(from peerID: String, nickname: String, content: String, timestamp: Date)
-}
-
-// Provide default implementation to make it effectively optional
-extension BitchatDelegate {
-    func isFavorite(fingerprint: String) -> Bool {
-        return false
-    }
+    @MainActor func didReceiveNoisePayload(from peerID: String, type: NoisePayloadType, payload: Data, timestamp: Date)
+    @MainActor func didReceivePublicMessage(from peerID: String, nickname: String, content: String, timestamp: Date)
     
-    func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {
-        // Default empty implementation
-    }
-
-    func didReceiveNoisePayload(from peerID: String, type: NoisePayloadType, payload: Data, timestamp: Date) {
-        // Default empty implementation
-    }
-
-    func didReceivePublicMessage(from peerID: String, nickname: String, content: String, timestamp: Date) {
-        // Default empty implementation
-    }
+    func updateBluetoothState(_ state: CBManagerState)
 }
 
 // MARK: - Noise Payload Helpers

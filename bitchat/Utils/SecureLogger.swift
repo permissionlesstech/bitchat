@@ -35,14 +35,14 @@ class SecureLogger {
     
     // MARK: - Cached Regex Patterns
     
-    private static let fingerprintPattern = #/[a-fA-F0-9]{64}/#
-    private static let base64Pattern = #/[A-Za-z0-9+/]{40,}={0,2}/#
-    private static let passwordPattern = #/password["\s:=]+["']?[^"'\s]+["']?/#
-    private static let peerIDPattern = #/peerID: ([a-zA-Z0-9]{8})[a-zA-Z0-9]+/#
+    nonisolated(unsafe) private static let fingerprintPattern = #/[a-fA-F0-9]{64}/#
+    nonisolated(unsafe) private static let base64Pattern = #/[A-Za-z0-9+/]{40,}={0,2}/#
+    nonisolated(unsafe) private static let passwordPattern = #/password["\s:=]+["']?[^"'\s]+["']?/#
+    nonisolated(unsafe) private static let peerIDPattern = #/peerID: ([a-zA-Z0-9]{8})[a-zA-Z0-9]+/#
     
     // MARK: - Sanitization Cache
     
-    private static let sanitizationCache: NSCache<NSString, NSString> = {
+    nonisolated(unsafe) private static let sanitizationCache: NSCache<NSString, NSString> = {
         let cache = NSCache<NSString, NSString>()
         cache.countLimit = 100 // Keep last 100 sanitized strings
         return cache

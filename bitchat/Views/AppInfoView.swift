@@ -28,7 +28,6 @@ struct AppInfoView: View {
             static let extendedRange = ("antenna.radiowaves.left.and.right", "extended range", "messages relay through peers, going the distance")
             static let mentions = ("at", "mentions", "use @nickname to notify specific people")
             static let favorites = ("star.fill", "favorites", "get notified when your favorite people join")
-            static let geohash = ("number", "local channels", "geohash channels to chat with people in nearby regions over decentralized anonymous relays")
         }
         
         enum Privacy {
@@ -41,12 +40,11 @@ struct AppInfoView: View {
         enum HowToUse {
             static let title = "HOW TO USE"
             static let instructions = [
-                "• set your nickname by tapping it",
-                "• tap #mesh to change channels",
-                "• tap people icon for sidebar",
-                "• tap a peer's name to start a DM",
-                "• triple-tap chat to clear",
-                "• type / for commands"
+                "• Set your nickname by tapping it",
+                "• Tap people icon for sidebar",
+                "• Tap a peer's name to start a DM",
+                "• Triple-tap chat to clear",
+                "• Type / for commands"
             ]
         }
         
@@ -66,7 +64,7 @@ struct AppInfoView: View {
                     dismiss()
                 }
                 .buttonStyle(.plain)
-                .foregroundColor(textColor)
+                .foregroundStyle(textColor)
                 .padding()
             }
             .background(backgroundColor.opacity(0.95))
@@ -89,7 +87,7 @@ struct AppInfoView: View {
                     Button("close") {
                         dismiss()
                     }
-                    .foregroundColor(textColor)
+                    .foregroundStyle(textColor)
                 }
             }
         }
@@ -103,11 +101,11 @@ struct AppInfoView: View {
             VStack(alignment: .center, spacing: 8) {
                 Text(Strings.appName)
                     .font(.system(size: 32, weight: .bold, design: .monospaced))
-                    .foregroundColor(textColor)
+                    .foregroundStyle(textColor)
                 
                 Text(Strings.tagline)
                     .font(.system(size: 16, design: .monospaced))
-                    .foregroundColor(secondaryTextColor)
+                    .foregroundStyle(secondaryTextColor)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical)
@@ -131,10 +129,6 @@ struct AppInfoView: View {
                 FeatureRow(icon: Strings.Features.favorites.0,
                           title: Strings.Features.favorites.1,
                           description: Strings.Features.favorites.2)
-                
-                FeatureRow(icon: Strings.Features.geohash.0,
-                          title: Strings.Features.geohash.1,
-                          description: Strings.Features.geohash.2)
                 
                 FeatureRow(icon: Strings.Features.mentions.0,
                           title: Strings.Features.mentions.1,
@@ -168,17 +162,17 @@ struct AppInfoView: View {
                     }
                 }
                 .font(.system(size: 14, design: .monospaced))
-                .foregroundColor(textColor)
+                .foregroundStyle(textColor)
             }
             
             // Warning
             VStack(alignment: .leading, spacing: 6) {
                 SectionHeader(Strings.Warning.title)
-                    .foregroundColor(Color.red)
+                    .foregroundStyle(Color.red)
                 
                 Text(Strings.Warning.message)
                     .font(.system(size: 14, design: .monospaced))
-                    .foregroundColor(Color.red)
+                    .foregroundStyle(Color.red)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.top, 6)
@@ -208,7 +202,7 @@ struct SectionHeader: View {
     var body: some View {
         Text(title)
             .font(.system(size: 16, weight: .bold, design: .monospaced))
-            .foregroundColor(textColor)
+            .foregroundStyle(textColor)
             .padding(.top, 8)
     }
 }
@@ -231,17 +225,17 @@ struct FeatureRow: View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 20))
-                .foregroundColor(textColor)
+                .foregroundStyle(textColor)
                 .frame(width: 30)
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                    .foregroundColor(textColor)
+                    .foregroundStyle(textColor)
                 
                 Text(description)
                     .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(secondaryTextColor)
+                    .foregroundStyle(secondaryTextColor)
                     .fixedSize(horizontal: false, vertical: true)
             }
             
