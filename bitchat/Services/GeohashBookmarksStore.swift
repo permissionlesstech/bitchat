@@ -216,15 +216,4 @@ final class GeohashBookmarksStore: ObservableObject {
         }
     }
     #endif
-
-    #if DEBUG
-    /// Testing-only reset helper
-    func _resetForTesting() {
-        bookmarks.removeAll()
-        membership.removeAll()
-        bookmarkNames.removeAll()
-        persist()
-        persistNames()
-    }
-    #endif
 }
