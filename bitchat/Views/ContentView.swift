@@ -1188,8 +1188,7 @@ struct ContentView: View {
                         showLocationNotes = true
                     }) {
                         HStack(alignment: .center, spacing: 4) {
-                            let currentCount = (notesCounter.count ?? 0)
-                            let hasNotes = (!notesCounter.initialLoadComplete ? max(currentCount, sheetNotesCount) : currentCount) > 0
+                            let hasNotes = (notesCounter.count ?? 0) > 0
                             Image(systemName: "long.text.page.and.pencil")
                                 .font(.bitchatSystem(size: 12))
                                 .foregroundColor(hasNotes ? textColor : Color.gray)
@@ -1290,7 +1289,9 @@ struct ContentView: View {
                 .onAppear { viewModel.isLocationChannelsSheetPresented = true }
                 .onDisappear { viewModel.isLocationChannelsSheetPresented = false }
         }
-        .sheet(isPresented: $showLocationNotes) {
+        .sheet(isPresented: $showLocationNotes, onDismiss: {
+            notesGeohash = nil
+        }) {
             Group {
                 if let gh = notesGeohash ?? LocationChannelManager.shared.availableChannels.first(where: { $0.level == .building })?.geohash {
                     LocationNotesView(geohash: gh, onNotesCountChanged: { cnt in sheetNotesCount = cnt })

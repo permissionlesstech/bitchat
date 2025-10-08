@@ -281,12 +281,12 @@ private final class MockBitchatDelegate: BitchatDelegate {
         messageHandler(message)
     }
     
-    func didConnectToPeer(_ peerID: String) {}
-    func didDisconnectFromPeer(_ peerID: String) {}
-    func didUpdatePeerList(_ peers: [String]) {}
+    func didConnectToPeer(_ peerID: PeerID) {}
+    func didDisconnectFromPeer(_ peerID: PeerID) {}
+    func didUpdatePeerList(_ peers: [PeerID]) {}
     func isFavorite(fingerprint: String) -> Bool { return false }
     func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {}
-    func didReceiveNoisePayload(from peerID: String, type: NoisePayloadType, payload: Data, timestamp: Date) {}
+    func didReceiveNoisePayload(from peerID: PeerID, type: NoisePayloadType, payload: Data, timestamp: Date) {}
     func didUpdateBluetoothState(_ state: CBManagerState) {}
     func didReceivePublicMessage(from peerID: String, nickname: String, content: String, timestamp: Date) {}
 }

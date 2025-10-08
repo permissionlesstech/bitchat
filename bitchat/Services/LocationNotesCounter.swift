@@ -54,6 +54,11 @@ final class LocationNotesCounter: ObservableObject {
     func subscribe(geohash gh: String) {
         let norm = gh.lowercased()
         if geohash == norm, subscriptionID != nil { return }
+        // Validate geohash (building-level precision: 8 chars)
+        guard Geohash.isValidBuildingGeohash(norm) else {
+            SecureLogger.warning("LocationNotesCounter: rejecting invalid geohash '\(norm)' (expected 8 valid base32 chars)", category: .session)
+            return
+        }
         // Unsubscribe previous without clearing count to avoid flicker
         if let sub = subscriptionID { dependencies.unsubscribe(sub) }
         subscriptionID = nil
@@ -74,7 +79,7 @@ final class LocationNotesCounter: ObservableObject {
         }
 
         subscriptionID = subID
-        let filter = NostrFilter.geohashNotes(norm, since: nil, limit: 500)
+        let filter = NostrFilter.geohashNotes(norm, since: nil, limit: 200)
         dependencies.subscribe(filter, subID, relays, { [weak self] event in
             guard let self = self else { return }
             guard event.kind == NostrProtocol.EventKind.textNote.rawValue else { return }

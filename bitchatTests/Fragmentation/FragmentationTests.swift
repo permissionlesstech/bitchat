@@ -28,7 +28,7 @@ struct FragmentationTests {
         ble.delegate = capture
         
         // Construct a big packet (3KB) from a remote sender (not our own ID)
-        let remoteShortID = "1122334455667788"
+        let remoteShortID: PeerID = "1122334455667788"
         let original = makeLargePublicPacket(senderShortHex: remoteShortID, size: 3_000)
         
         // Use a small fragment size to ensure multiple pieces
@@ -59,7 +59,7 @@ struct FragmentationTests {
         let capture = CaptureDelegate()
         ble.delegate = capture
         
-        let remoteShortID = "A1B2C3D4E5F60708"
+        let remoteShortID: PeerID = "A1B2C3D4E5F60708"
         let original = makeLargePublicPacket(senderShortHex: remoteShortID, size: 2048)
         var frags = fragmentPacket(original, fragmentSize: 300)
         
@@ -89,7 +89,7 @@ struct FragmentationTests {
         let capture = CaptureDelegate()
         ble.delegate = capture
         
-        let remoteShortID = "0011223344556677"
+        let remoteShortID: PeerID = "0011223344556677"
         let original = makeLargePublicPacket(senderShortHex: remoteShortID, size: 1000)
         let fragments = fragmentPacket(original, fragmentSize: 250)
         
@@ -127,28 +127,28 @@ struct FragmentationTests {
 
 extension FragmentationTests {
     private final class CaptureDelegate: BitchatDelegate {
-        var publicMessages: [(peerID: String, nickname: String, content: String)] = []
+        var publicMessages: [(peerID: PeerID, nickname: String, content: String)] = []
         func didReceiveMessage(_ message: BitchatMessage) {}
-        func didConnectToPeer(_ peerID: String) {}
-        func didDisconnectFromPeer(_ peerID: String) {}
-        func didUpdatePeerList(_ peers: [String]) {}
+        func didConnectToPeer(_ peerID: PeerID) {}
+        func didDisconnectFromPeer(_ peerID: PeerID) {}
+        func didUpdatePeerList(_ peers: [PeerID]) {}
         func isFavorite(fingerprint: String) -> Bool { false }
         func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {}
-        func didReceiveNoisePayload(from peerID: String, type: NoisePayloadType, payload: Data, timestamp: Date) {}
+        func didReceiveNoisePayload(from peerID: PeerID, type: NoisePayloadType, payload: Data, timestamp: Date) {}
         func didUpdateBluetoothState(_ state: CBManagerState) {}
-        func didReceivePublicMessage(from peerID: String, nickname: String, content: String, timestamp: Date) {
+        func didReceivePublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date) {
             publicMessages.append((peerID, nickname, content))
         }
-        func didReceiveRegionalPublicMessage(from peerID: String, nickname: String, content: String, timestamp: Date) {}
+        func didReceiveRegionalPublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date) {}
     }
 
     // Helper: build a large message packet (unencrypted public message)
-    private func makeLargePublicPacket(senderShortHex: String, size: Int) -> BitchatPacket {
+    private func makeLargePublicPacket(senderShortHex: PeerID, size: Int) -> BitchatPacket {
         let content = String(repeating: "A", count: size)
         let payload = Data(content.utf8)
         let pkt = BitchatPacket(
             type: MessageType.message.rawValue,
-            senderID: Data(hexString: senderShortHex) ?? Data(),
+            senderID: Data(hexString: senderShortHex.id) ?? Data(),
             recipientID: nil,
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             payload: payload,

@@ -162,9 +162,9 @@ enum DeliveryStatus: Codable, Equatable, Hashable {
 
 protocol BitchatDelegate: AnyObject {
     func didReceiveMessage(_ message: BitchatMessage)
-    func didConnectToPeer(_ peerID: String)
-    func didDisconnectFromPeer(_ peerID: String)
-    func didUpdatePeerList(_ peers: [String])
+    func didConnectToPeer(_ peerID: PeerID)
+    func didDisconnectFromPeer(_ peerID: PeerID)
+    func didUpdatePeerList(_ peers: [PeerID])
 
     // Optional method to check if a fingerprint belongs to a favorite peer
     func isFavorite(fingerprint: String) -> Bool
@@ -172,11 +172,11 @@ protocol BitchatDelegate: AnyObject {
     func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus)
 
     // Low-level events for better separation of concerns
-    func didReceiveNoisePayload(from peerID: String, type: NoisePayloadType, payload: Data, timestamp: Date)
+    func didReceiveNoisePayload(from peerID: PeerID, type: NoisePayloadType, payload: Data, timestamp: Date)
 
     // Bluetooth state updates for user notifications
     func didUpdateBluetoothState(_ state: CBManagerState)
-    func didReceivePublicMessage(from peerID: String, nickname: String, content: String, timestamp: Date)
+    func didReceivePublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date)
 }
 
 // Provide default implementation to make it effectively optional
@@ -189,11 +189,11 @@ extension BitchatDelegate {
         // Default empty implementation
     }
 
-    func didReceiveNoisePayload(from peerID: String, type: NoisePayloadType, payload: Data, timestamp: Date) {
+    func didReceiveNoisePayload(from peerID: PeerID, type: NoisePayloadType, payload: Data, timestamp: Date) {
         // Default empty implementation
     }
 
-    func didReceivePublicMessage(from peerID: String, nickname: String, content: String, timestamp: Date) {
+    func didReceivePublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date) {
         // Default empty implementation
     }
 }

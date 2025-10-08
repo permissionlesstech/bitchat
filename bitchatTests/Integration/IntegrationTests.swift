@@ -484,13 +484,10 @@ final class IntegrationTests: XCTestCase {
 
         guard let aliceManager = noiseManagers["Alice"],
               let bobManager = noiseManagers["Bob"],
-              let aliceStringPeerID = nodes["Alice"]?.peerID,
-              let bobStringPeerID = nodes["Bob"]?.peerID else {
+              let alicePeerID = nodes["Alice"]?.peerID,
+              let bobPeerID = nodes["Bob"]?.peerID else {
             return XCTFail("Missing managers or peer IDs")
         }
-        
-        let alicePeerID = PeerID(str: aliceStringPeerID)
-        let bobPeerID = PeerID(str: bobStringPeerID)
 
         // Baseline: encrypt from Alice, decrypt at Bob
         let plaintext1 = Data("hello-secure".utf8)
@@ -592,7 +589,7 @@ final class IntegrationTests: XCTestCase {
     
     private func createNode(_ name: String, peerID: PeerID) {
         let node = MockBluetoothMeshService()
-        node.myPeerID = peerID.id
+        node.myPeerID = peerID
         node.mockNickname = name
         nodes[name] = node
         
@@ -669,9 +666,9 @@ final class IntegrationTests: XCTestCase {
               let peer1ID = nodes[node1]?.peerID,
               let peer2ID = nodes[node2]?.peerID else { return }
         
-        let msg1 = try manager1.initiateHandshake(with: PeerID(str: peer2ID))
-        let msg2 = try manager2.handleIncomingHandshake(from: PeerID(str: peer1ID), message: msg1)!
-        let msg3 = try manager1.handleIncomingHandshake(from: PeerID(str: peer2ID), message: msg2)!
-        _ = try manager2.handleIncomingHandshake(from: PeerID(str: peer1ID), message: msg3)
+        let msg1 = try manager1.initiateHandshake(with: peer2ID)
+        let msg2 = try manager2.handleIncomingHandshake(from: peer1ID, message: msg1)!
+        let msg3 = try manager1.handleIncomingHandshake(from: peer2ID, message: msg2)!
+        _ = try manager2.handleIncomingHandshake(from: peer1ID, message: msg3)
     }
 }
