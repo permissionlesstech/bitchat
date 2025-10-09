@@ -83,118 +83,131 @@ struct ContentView: View {
     // MARK: - Body
     
     var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                // Base layer - Main public chat (always visible)
-                mainChatView
-                    .onAppear { viewModel.currentColorScheme = colorScheme }
-                    .onChange(of: colorScheme) { newValue in
-                        viewModel.currentColorScheme = newValue
-                    }
-                
-                // Private chat slide-over
-                if viewModel.selectedPrivateChatPeer != nil {
-                    privateChatView
-                        .frame(width: geometry.size.width)
-                        .background(backgroundColor)
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .trailing),
-                            removal: .move(edge: .trailing)
-                        ))
-                        .offset(x: showPrivateChat ? -1 : max(0, geometry.size.width))
-                        .offset(x: backSwipeOffset.isNaN ? 0 : backSwipeOffset)
-                        .gesture(
-                            DragGesture()
-                                .onChanged { value in
-                                    if value.translation.width > 0 && !value.translation.width.isNaN {
-                                        let maxWidth = max(0, geometry.size.width)
-                                        backSwipeOffset = min(value.translation.width, maxWidth.isNaN ? 0 : maxWidth)
-                                    }
-                                }
-                                .onEnded { value in
-                                    let translation = value.translation.width.isNaN ? 0 : value.translation.width
-                                    let velocity = value.velocity.width.isNaN ? 0 : value.velocity.width
-                                    if translation > TransportConfig.uiBackSwipeTranslationLarge || (translation > TransportConfig.uiBackSwipeTranslationSmall && velocity > TransportConfig.uiBackSwipeVelocityThreshold) {
-                                        withAnimation(.easeOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
-                                            showPrivateChat = false
-                                            backSwipeOffset = 0
-                                            viewModel.endPrivateChat()
-                                        }
-                                    } else {
-                                        withAnimation(.easeOut(duration: TransportConfig.uiAnimationShortSeconds)) {
-                                            backSwipeOffset = 0
-                                        }
-                                    }
-                                }
-                        )
+        VStack(spacing: 0) {
+            mainHeaderView
+                .onAppear { viewModel.currentColorScheme = colorScheme }
+                .onChange(of: colorScheme) { newValue in
+                    viewModel.currentColorScheme = newValue
                 }
-                
-                // Right edge swipe zone for easier sidebar opening (iOS-native behavior)
-                if !showSidebar {
-                    HStack {
-                        Spacer()
-                        Color.clear
-                            .frame(width: 20)
-                            .contentShape(Rectangle())
+
+            Divider()
+
+            // Messages area with overlays
+            GeometryReader { geometry in
+                ZStack {
+                    // Base layer - public messages
+                    messagesView(privatePeer: nil, isAtBottom: $isAtBottomPublic)
+                        .background(backgroundColor)
+
+                    // Private chat slide-over (full screen with own header/input)
+                    if viewModel.selectedPrivateChatPeer != nil {
+                        privateChatView
+                            .frame(width: geometry.size.width)
+                            .background(backgroundColor)
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .trailing),
+                                removal: .move(edge: .trailing)
+                            ))
+                            .offset(x: showPrivateChat ? -1 : max(0, geometry.size.width))
+                            .offset(x: backSwipeOffset.isNaN ? 0 : backSwipeOffset)
                             .gesture(
-                                DragGesture(minimumDistance: 5)
+                                DragGesture()
                                     .onChanged { value in
-                                        let translationWidth = value.translation.width.isNaN ? 0 : value.translation.width
-                                        if translationWidth < 0 {
-                                            let newOffset = max(translationWidth, -300)
-                                            if abs(newOffset - sidebarDragOffset) > 2 {
-                                                var transaction = Transaction()
-                                                transaction.disablesAnimations = true
-                                                withTransaction(transaction) {
-                                                    sidebarDragOffset = newOffset
-                                                }
-                                            }
+                                        if value.translation.width > 0 && !value.translation.width.isNaN {
+                                            let maxWidth = max(0, geometry.size.width)
+                                            backSwipeOffset = min(value.translation.width, maxWidth.isNaN ? 0 : maxWidth)
                                         }
                                     }
                                     .onEnded { value in
-                                        let translationWidth = value.translation.width.isNaN ? 0 : value.translation.width
+                                        let translation = value.translation.width.isNaN ? 0 : value.translation.width
                                         let velocity = value.velocity.width.isNaN ? 0 : value.velocity.width
-                                        withAnimation(.easeOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
-                                            if translationWidth < -50 || velocity < -300 {
-                                                showSidebar = true
-                                                sidebarDragOffset = 0
-                                            } else {
-                                                sidebarDragOffset = 0
+                                        if translation > TransportConfig.uiBackSwipeTranslationLarge || (translation > TransportConfig.uiBackSwipeTranslationSmall && velocity > TransportConfig.uiBackSwipeVelocityThreshold) {
+                                            withAnimation(.easeOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                                                showPrivateChat = false
+                                                backSwipeOffset = 0
+                                                viewModel.endPrivateChat()
+                                            }
+                                        } else {
+                                            withAnimation(.easeOut(duration: TransportConfig.uiAnimationShortSeconds)) {
+                                                backSwipeOffset = 0
                                             }
                                         }
                                     }
                             )
                     }
-                    .allowsHitTesting(true)
-                }
 
-                // Sidebar overlay
-                HStack(spacing: 0) {
-                    // Tap to dismiss area
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-            withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
-                                showSidebar = false
-                                sidebarDragOffset = 0
-                            }
+                    // Right edge swipe zone for easier sidebar opening (iOS-native behavior)
+                    if !showSidebar && viewModel.selectedPrivateChatPeer == nil {
+                        HStack {
+                            Spacer()
+                            Color.clear
+                                .frame(width: 20)
+                                .contentShape(Rectangle())
+                                .gesture(
+                                    DragGesture(minimumDistance: 5)
+                                        .onChanged { value in
+                                            let translationWidth = value.translation.width.isNaN ? 0 : value.translation.width
+                                            if translationWidth < 0 {
+                                                let newOffset = max(translationWidth, -300)
+                                                sidebarDragOffset = newOffset
+                                            }
+                                        }
+                                        .onEnded { value in
+                                            let translationWidth = value.translation.width.isNaN ? 0 : value.translation.width
+                                            let velocity = value.velocity.width.isNaN ? 0 : value.velocity.width
+                                            withAnimation(.easeOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                                                if translationWidth < -50 || velocity < -300 {
+                                                    showSidebar = true
+                                                    sidebarDragOffset = 0
+                                                } else {
+                                                    sidebarDragOffset = 0
+                                                }
+                                            }
+                                        }
+                                )
                         }
-                    
-                    // Always render sidebar to avoid layout recalculation during drag
-                    sidebarView
-                        #if os(macOS)
-                        .frame(width: min(300, max(0, geometry.size.width.isNaN ? 300 : geometry.size.width) * 0.4))
-                        #else
-                        .frame(width: max(0, geometry.size.width.isNaN ? 300 : geometry.size.width) * 0.7)
-                        #endif
+                        .allowsHitTesting(true)
+                    }
+
+                    // Sidebar overlay (only over messages area, not input)
+                    if viewModel.selectedPrivateChatPeer == nil {
+                        HStack(spacing: 0) {
+                            // Tap to dismiss area
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                    withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                                        showSidebar = false
+                                        sidebarDragOffset = 0
+                                    }
+                                }
+
+                            // Always render sidebar to avoid layout recalculation during drag
+                            sidebarView
+                                #if os(macOS)
+                                .frame(width: min(300, max(0, geometry.size.width.isNaN ? 300 : geometry.size.width) * 0.4))
+                                #else
+                                .frame(width: max(0, geometry.size.width.isNaN ? 300 : geometry.size.width) * 0.7)
+                                #endif
+                        }
+                        .offset(x: {
+                            let dragOffset = sidebarDragOffset.isNaN ? 0 : sidebarDragOffset
+                            let width = geometry.size.width.isNaN ? 0 : max(0, geometry.size.width)
+                            return showSidebar ? dragOffset : width + dragOffset
+                        }())
+                    }
                 }
-                .offset(x: {
-                    let dragOffset = sidebarDragOffset.isNaN ? 0 : sidebarDragOffset
-                    let width = geometry.size.width.isNaN ? 0 : max(0, geometry.size.width)
-                    return showSidebar ? dragOffset : width + dragOffset
-                }())
+            }
+
+            Divider()
+
+            // Input always accessible below sidebar (only in public chat)
+            if viewModel.selectedPrivateChatPeer == nil {
+                inputView
             }
         }
+        .background(backgroundColor)
+        .foregroundColor(textColor)
         #if os(macOS)
         .frame(minWidth: 600, minHeight: 400)
         #endif
@@ -951,7 +964,7 @@ struct ContentView: View {
                 Spacer()
             }
             .background(backgroundColor)
-            .simultaneousGesture(
+            .gesture(
                 DragGesture(minimumDistance: 10)
                     .onChanged { value in
                         let translationWidth = value.translation.width.isNaN ? 0 : value.translation.width
@@ -962,13 +975,7 @@ struct ContentView: View {
 
                         if translationWidth > 0 {
                             let newOffset = min(translationWidth, 300)
-                            if abs(newOffset - sidebarDragOffset) > 2 {
-                                var transaction = Transaction()
-                                transaction.disablesAnimations = true
-                                withTransaction(transaction) {
-                                    sidebarDragOffset = newOffset
-                                }
-                            }
+                            sidebarDragOffset = newOffset
                         }
                     }
                     .onEnded { value in
@@ -998,78 +1005,7 @@ struct ContentView: View {
     }
     
     // MARK: - View Components
-    
-    private var mainChatView: some View {
-        VStack(spacing: 0) {
-            mainHeaderView
-            Divider()
-            messagesView(privatePeer: nil, isAtBottom: $isAtBottomPublic)
-            Divider()
-            inputView
-        }
-        .background(backgroundColor)
-        .foregroundColor(textColor)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 10)
-                .onChanged { value in
-                    let translationWidth = value.translation.width.isNaN ? 0 : value.translation.width
-                    let translationHeight = value.translation.height.isNaN ? 0 : value.translation.height
 
-                    // Only handle if drag is predominantly horizontal (prevents interfering with scroll)
-                    guard abs(translationWidth) > abs(translationHeight) * 1.5 else { return }
-
-                    if !showSidebar && translationWidth < 0 {
-                        let newOffset = max(translationWidth, -300)
-                        if abs(newOffset - sidebarDragOffset) > 2 {
-                            var transaction = Transaction()
-                            transaction.disablesAnimations = true
-                            withTransaction(transaction) {
-                                sidebarDragOffset = newOffset
-                            }
-                        }
-                    } else if showSidebar && translationWidth > 0 {
-                        let newOffset = min(-300 + translationWidth, 0)
-                        if abs(newOffset - sidebarDragOffset) > 2 {
-                            var transaction = Transaction()
-                            transaction.disablesAnimations = true
-                            withTransaction(transaction) {
-                                sidebarDragOffset = newOffset
-                            }
-                        }
-                    }
-                }
-                .onEnded { value in
-                    let translationWidth = value.translation.width.isNaN ? 0 : value.translation.width
-                    let translationHeight = value.translation.height.isNaN ? 0 : value.translation.height
-                    let velocity = value.velocity.width.isNaN ? 0 : value.velocity.width
-
-                    // Only handle if drag is predominantly horizontal
-                    guard abs(translationWidth) > abs(translationHeight) * 1.5 else {
-                        sidebarDragOffset = 0
-                        return
-                    }
-
-                    withAnimation(.easeOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
-                        if !showSidebar {
-                            if translationWidth < -100 || (translationWidth < -50 && velocity < -500) {
-                                showSidebar = true
-                                sidebarDragOffset = 0
-                            } else {
-                                sidebarDragOffset = 0
-                            }
-                        } else {
-                            if translationWidth > 100 || (translationWidth > 50 && velocity > 500) {
-                                showSidebar = false
-                                sidebarDragOffset = 0
-                            } else {
-                                sidebarDragOffset = 0
-                            }
-                        }
-                    }
-                }
-        )
-    }
-    
     private var privateChatView: some View {
         HStack(spacing: 0) {
             // Vertical separator bar
