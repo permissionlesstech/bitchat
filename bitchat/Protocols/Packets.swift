@@ -119,7 +119,7 @@ struct PrivateMessagePacket {
 
         var data = Data()
         let estimatedMessageLength = 1 + 1 + messageIDData.count
-        let estimatedContentLength = contentData.count > 255 ? 1 + 3 + contentData.count : 1 + 2 + contentData.count
+    let estimatedContentLength = contentData.count >= 255 ? 1 + 3 + contentData.count : 1 + 2 + contentData.count
         data.reserveCapacity(estimatedMessageLength + estimatedContentLength)
 
         data.append(TLVType.messageID.rawValue)
@@ -164,7 +164,7 @@ struct PrivateMessagePacket {
 
     private func appendContentTLV(value: Data, into buffer: inout Data) {
         buffer.append(TLVType.content.rawValue)
-        if value.count <= 255 {
+        if value.count < 255 {
             buffer.append(UInt8(value.count))
         } else {
             buffer.append(0xFF)
