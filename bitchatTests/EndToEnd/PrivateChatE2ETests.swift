@@ -11,21 +11,19 @@ import CryptoKit
 import struct Foundation.UUID
 @testable import bitchat
 
-// TODO: Remove once MockBLEService is refactored to fix race condition
-@Suite(.serialized)
 struct PrivateChatE2ETests {
     
     private let alice: MockBLEService
     private let bob: MockBLEService
     private let charlie: MockBLEService
-    private let mockKeychain: MockKeychain
+    private let mockKeychain = MockKeychain()
+    private let bus = MockBLEBus()
     
     init() {
         // Create services with unique peer IDs to avoid any collision
-        alice = MockBLEService(peerID: PeerID(str: UUID().uuidString), nickname: TestConstants.testNickname1)
-        bob = MockBLEService(peerID: PeerID(str: UUID().uuidString), nickname: TestConstants.testNickname2)
-        charlie = MockBLEService(peerID: PeerID(str: UUID().uuidString), nickname: TestConstants.testNickname3)
-        mockKeychain = MockKeychain()
+        alice = MockBLEService(peerID: PeerID(str: UUID().uuidString), nickname: TestConstants.testNickname1, bus: bus)
+        bob = MockBLEService(peerID: PeerID(str: UUID().uuidString), nickname: TestConstants.testNickname2, bus: bus)
+        charlie = MockBLEService(peerID: PeerID(str: UUID().uuidString), nickname: TestConstants.testNickname3, bus: bus)
     }
     
     // MARK: - Basic Private Messaging Tests

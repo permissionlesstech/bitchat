@@ -15,23 +15,13 @@ final class TestNetworkHelper {
     var nodes: [String: MockBLEService] = [:]
     var noiseManagers: [String: NoiseSessionManager] = [:]
     let mockKeychain = MockKeychain()
-    
-    // MARK: - Lifecycle hooks
-    
-    init() {
-        MockBLEService.resetTestBus()
-        MockBLEService.autoFloodEnabled = true
-    }
-    
-    deinit {
-        MockBLEService.autoFloodEnabled = false
-    }
+    private let bus = MockBLEBus(autoFloodEnabled: true)
     
     // MARK: - Node/Manager management
     
     @discardableResult
     func createNode(_ name: String, peerID: PeerID) -> MockBLEService {
-        let node = MockBLEService()
+        let node = MockBLEService(bus: bus)
         node.myPeerID = peerID
         node.mockNickname = name
         nodes[name] = node
