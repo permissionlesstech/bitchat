@@ -51,6 +51,15 @@ struct CatalogVariationValue: Decodable {
     let stringUnit: CatalogStringUnit?
 }
 
+// MARK: - Convenience
+
+extension CatalogEntry {
+    func isValid(for locale: String) -> Bool {
+        guard let localization = localizations[locale] else { return nil != nil }
+        return localization.stringUnit != nil
+    }
+}
+
 // MARK: - Configuration Types
 
 /// Configuration structure for localization tests

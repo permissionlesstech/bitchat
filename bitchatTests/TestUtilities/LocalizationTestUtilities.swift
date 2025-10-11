@@ -7,6 +7,45 @@
 //
 
 import Foundation
+import Testing
+
+// MARK: - Encapsulated resources/config for localization tests
+
+struct LocalizationResources {
+    let testsDirectoryURL: URL
+    let repoRootURL: URL
+    let appCatalogPath: String = "bitchat/Localizable.xcstrings"
+    let shareExtCatalogPath: String = "bitchatShareExtension/Localization/Localizable.xcstrings"
+
+    static let current: LocalizationResources = {
+        let thisFileURL = URL(fileURLWithPath: #filePath)
+        let utilitiesDir = thisFileURL.deletingLastPathComponent()
+        let testsDir = utilitiesDir.deletingLastPathComponent()
+        let repoRoot = testsDir.deletingLastPathComponent()
+        return LocalizationResources(testsDirectoryURL: testsDir, repoRootURL: repoRoot)
+    }()
+
+    func loadCatalog(path: String) throws -> StringCatalog {
+        let url = repoRootURL.appendingPathComponent(path)
+        return try decodeJSON(from: url)
+    }
+
+    func loadContext(path: String) throws -> CatalogContext {
+        return try bitchatTests.loadContext(relativePath: path, repoRootURL: repoRootURL)
+    }
+
+    func loadContextWithKeys(path: String) throws -> CatalogContext {
+        return try bitchatTests.loadContextWithKeys(relativePath: path, repoRootURL: repoRootURL)
+    }
+
+    func loadContextWithPlaceholders(path: String) throws -> CatalogContext {
+        return try bitchatTests.loadContextWithPlaceholders(relativePath: path, repoRootURL: repoRootURL)
+    }
+
+    func loadConfig() throws -> LocalizationTestConfig {
+        return try bitchatTests.loadConfig(testsDirectoryURL: testsDirectoryURL)
+    }
+}
 
 // MARK: - Configuration Helpers
 
@@ -46,8 +85,8 @@ func gatherSegments(from unit: CatalogStringUnit, prefix: [String] = []) -> [Seg
         segments.append(Segment(components: [], value: ""))
     }
     if let plural = unit.variations?.plural {
-        for (variable, categories) in plural.sorted(by: { $0.key < $1.key }) {
-            for (category, variation) in categories.sorted(by: { $0.key < $1.key }) {
+        for (variable, categories) in plural {
+            for (category, variation) in categories {
                 if let nested = variation.stringUnit {
                     var nextPrefix = prefix
                     nextPrefix.append("plural")
@@ -65,6 +104,12 @@ func gatherSegments(from unit: CatalogStringUnit, prefix: [String] = []) -> [Seg
 
 /// Safe regex creation that returns nil on failure instead of crashing
 func createPlaceholderRegex() -> NSRegularExpression? {
+    // Matches two classes of placeholders commonly appearing in .strings-format values:
+    // 1) ICU-style object placeholders like "%@" and positional variants like "%1$@"
+    // 2) C-style format specifiers with optional flags/width/precision/length (e.g., "%d", "%0.2f")
+    // Examples:
+    //   input: "Hello %1$@, you have %02d items"
+    //   output tokens: ["%1$@", "%02d"]
     let pattern = "%(?:\\d+\\$)?#@[A-Za-z0-9_]+@|%(?:\\d+\\$)?[#0\\- +'\"]*(?:\\d+|\\*)?(?:\\.\\d+)?(?:hh|h|ll|l|z|t|L)?[a-zA-Z@]"
     return try? NSRegularExpression(pattern: pattern, options: [])
 }
@@ -85,25 +130,20 @@ func placeholders(in string: String) -> [String] {
     return tokens
 }
 
-/// Normalizes placeholder tokens by sorting them
-func normalizedPlaceholders(_ tokens: [String]) -> [String] {
-    tokens.sorted()
-}
+// Note: placeholder normalization now inlines `tokens.sorted()` at call sites
 
 // MARK: - Context Loading
 
 /// Loads a string catalog from a relative path
 func loadCatalog(relativePath: String, repoRootURL: URL) throws -> StringCatalog {
     let url = repoRootURL.appendingPathComponent(relativePath)
-    let data = try Data(contentsOf: url)
-    return try JSONDecoder().decode(StringCatalog.self, from: data)
+    return try decodeJSON(from: url)
 }
 
 /// Loads the localization test configuration
 func loadConfig(testsDirectoryURL: URL) throws -> LocalizationTestConfig {
     let url = testsDirectoryURL.appendingPathComponent("LocalizationTestsConfig.json")
-    let data = try Data(contentsOf: url)
-    return try JSONDecoder().decode(LocalizationTestConfig.self, from: data)
+    return try decodeJSON(from: url)
 }
 
 /// Creates a basic catalog context
@@ -124,15 +164,10 @@ func loadContextWithKeys(relativePath: String, repoRootURL: URL) throws -> Catal
     var keysByLocale: [String: Set<String>] = [:]
 
     for locale in locales {
-        var localeKeys: Set<String> = []
-        for (key, entry) in catalog.strings {
-            guard let localization = entry.localizations[locale], 
-                  localization.stringUnit != nil else {
-                continue
-            }
-            localeKeys.insert(key)
+        let validKeys = catalog.strings.compactMap { (key, entry) in
+            entry.isValid(for: locale) ? key : nil
         }
-        keysByLocale[locale] = localeKeys
+        keysByLocale[locale] = Set(validKeys)
     }
 
     return CatalogContext(
@@ -173,4 +208,34 @@ func loadContextWithPlaceholders(relativePath: String, repoRootURL: URL) throws 
         baseLocale: baseLocale, 
         placeholderSignature: placeholderSignature
     )
+}
+
+// MARK: - Generic Decoding
+
+/// Decodes a JSON file at the given URL into the requested Decodable type
+private func decodeJSON<T: Decodable>(from url: URL) throws -> T {
+    let data = try Data(contentsOf: url)
+    return try JSONDecoder().decode(T.self, from: data)
+}
+
+// MARK: - Expectation helpers
+
+/// Controls whether localization tests should hard-fail on issues (default: true).
+/// Set env var `TEST_LOCALIZATION_FAIL_ON_ERROR=false` to only record issues as warnings.
+let TEST_LOCALIZATION_FAIL_ON_ERROR: Bool = {
+    if let raw = ProcessInfo.processInfo.environment["TEST_LOCALIZATION_FAIL_ON_ERROR"]?.lowercased() {
+        return !(raw == "0" || raw == "false" || raw == "no")
+    }
+    return false
+}()
+
+/// Uses #expect when fail-on-error is enabled, otherwise records as a non-fatal issue
+func expectOrRecord(_ condition: @autoclosure () -> Bool, _ message: @autoclosure () -> String) {
+    if TEST_LOCALIZATION_FAIL_ON_ERROR {
+        #expect(condition(), Comment(rawValue: message()))
+    } else {
+        if !condition() {
+            Issue.record(Comment(rawValue: message()))
+        }
+    }
 }

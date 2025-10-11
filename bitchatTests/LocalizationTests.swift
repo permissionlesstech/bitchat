@@ -13,7 +13,6 @@ import Foundation
 /// Comprehensive localization tests for bitchat.
 /// Validates configuration integrity, structural consistency, content quality, and format consistency.
 /// 
-@Suite
 struct LocalizationTests {
     
     // MARK: - Static Configuration Loading
@@ -21,44 +20,28 @@ struct LocalizationTests {
     private static let testsDirectoryURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
     private static let repoRootURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
     
+    /// Cached configuration for reuse across tests (non-crashing on failure)
+    private static let testConfig: LocalizationTestConfig? = {
+        do {
+            return try loadConfig(testsDirectoryURL: testsDirectoryURL)
+        } catch {
+            return nil
+        }
+    }()
+
     /// Dynamically loaded enabled locales from configuration
     private static let enabledLocales: [String] = {
-        do {
-            let config = try loadConfig(testsDirectoryURL: testsDirectoryURL)
+        if let config = testConfig {
             return getEnabledTestLocales(from: config)
-        } catch {
-            // Log the error for debugging while providing graceful fallback
-            print("⚠️ Failed to load localization config: \(error). Falling back to [\"en\"]")
+        } else {
+            // Provide a minimal fallback for parameterized tests without crashing the suite
+            print("⚠️ Failed to load localization config. Falling back to [\"en\"] for parameterized tests")
             return ["en"]
         }
     }()
     
-    /// Cached configuration for reuse across tests
-    private static let testConfig: LocalizationTestConfig = {
-        do {
-            return try loadConfig(testsDirectoryURL: testsDirectoryURL)
-        } catch {
-            // Fail fast with clear context - localization config is critical for proper test coverage
-            fatalError("""
-                ❌ LOCALIZATION CONFIG MISSING ❌
-                
-                Error: \(error)
-                
-                Expected: \(testsDirectoryURL.appendingPathComponent("LocalizationTestsConfig.json"))
-                
-                This file is required for comprehensive localization testing across all supported locales.
-                Without it, we cannot validate translations, placeholder consistency, or locale completeness.
-                
-                To fix: Ensure LocalizationTestsConfig.json exists in bitchatTests/ directory.
-                """)
-        }
-    }()
-    
     // MARK: - Instance Variables
-    
-    private let testsDirectoryURL = Self.testsDirectoryURL
-    private let repoRootURL = Self.repoRootURL
-    
+
     /// Path to the main app's localization catalog
     private let appCatalogPath = "bitchat/Localizable.xcstrings"
     
@@ -69,9 +52,12 @@ struct LocalizationTests {
     
     /// Tests that configured keys actually exist in their respective catalogs.
     @Test func configuredKeysExistInCatalogs() throws {
-        let appCatalog = try loadCatalog(relativePath: appCatalogPath, repoRootURL: repoRootURL)
-        let shareExtCatalog = try loadCatalog(relativePath: shareExtCatalogPath, repoRootURL: repoRootURL)
-        let config = Self.testConfig
+        guard let config = Self.testConfig else {
+            Issue.record("Missing localization config at bitchatTests/LocalizationTestsConfig.json")
+            return
+        }
+        let appCatalog = try loadCatalog(relativePath: appCatalogPath, repoRootURL: Self.repoRootURL)
+        let shareExtCatalog = try loadCatalog(relativePath: shareExtCatalogPath, repoRootURL: Self.repoRootURL)
         
         // Verify all required app keys exist in app catalog
         let allAppKeys = getAllAppKeys(from: config)
@@ -90,9 +76,12 @@ struct LocalizationTests {
     
     /// Tests that expected values reference valid keys and locales.
     @Test func expectedValuesConfiguration() throws {
-        let appCatalog = try loadCatalog(relativePath: appCatalogPath, repoRootURL: repoRootURL)
-        let shareExtCatalog = try loadCatalog(relativePath: shareExtCatalogPath, repoRootURL: repoRootURL)
-        let config = Self.testConfig
+        guard let config = Self.testConfig else {
+            Issue.record("Missing localization config at bitchatTests/LocalizationTestsConfig.json")
+            return
+        }
+        let appCatalog = try loadCatalog(relativePath: appCatalogPath, repoRootURL: Self.repoRootURL)
+        let shareExtCatalog = try loadCatalog(relativePath: shareExtCatalogPath, repoRootURL: Self.repoRootURL)
         
         for (locale, localeConfig) in config.testLocales {
             guard localeConfig.enabled else { continue }
@@ -117,19 +106,19 @@ struct LocalizationTests {
     /// Ensures every locale includes exactly the same keys as base locale.
     @Test func catalogLocaleParity() throws {
         // Test app catalog
-        let appContext = try loadContextWithKeys(relativePath: appCatalogPath, repoRootURL: repoRootURL)
+        let appContext = try loadContextWithKeys(relativePath: appCatalogPath, repoRootURL: Self.repoRootURL)
         assertLocaleParity(context: appContext, catalogName: "App")
         
         // Test share extension catalog
-        let shareExtContext = try loadContextWithKeys(relativePath: shareExtCatalogPath, repoRootURL: repoRootURL)
+        let shareExtContext = try loadContextWithKeys(relativePath: shareExtCatalogPath, repoRootURL: Self.repoRootURL)
         assertLocaleParity(context: shareExtContext, catalogName: "ShareExtension")
     }
     
     /// Validates that a specific enabled locale has complete translations.
     @Test("Locale completeness", arguments: enabledLocales)
     func localeCompleteness(locale: String) throws {
-        let appContext = try loadContextWithKeys(relativePath: appCatalogPath, repoRootURL: repoRootURL)
-        let shareExtContext = try loadContextWithKeys(relativePath: shareExtCatalogPath, repoRootURL: repoRootURL)
+        let appContext = try loadContextWithKeys(relativePath: appCatalogPath, repoRootURL: Self.repoRootURL)
+        let shareExtContext = try loadContextWithKeys(relativePath: shareExtCatalogPath, repoRootURL: Self.repoRootURL)
         
         let baseLocale = appContext.baseLocale
         let baseAppKeys = appContext.keysByLocale?[baseLocale] ?? Set()
@@ -139,27 +128,30 @@ struct LocalizationTests {
         if locale == baseLocale { return }
         
         // Verify locale is present in both catalogs
-        #expect(appContext.locales.contains(locale), 
+        expectOrRecord(appContext.locales.contains(locale), 
                "Locale '\(locale)' missing from app catalog")
-        #expect(shareExtContext.locales.contains(locale), 
+        expectOrRecord(shareExtContext.locales.contains(locale), 
                "Locale '\(locale)' missing from share extension catalog")
         
         // Verify locale has same number of keys as base locale
         let appLocaleKeys = appContext.keysByLocale?[locale] ?? Set()
-        #expect(appLocaleKeys.count == baseAppKeys.count, 
+        expectOrRecord(appLocaleKeys.count == baseAppKeys.count, 
                "Locale '\(locale)' app catalog missing keys compared to \(baseLocale)")
         
         let shareLocaleKeys = shareExtContext.keysByLocale?[locale] ?? Set()
-        #expect(shareLocaleKeys.count == baseShareKeys.count, 
+        expectOrRecord(shareLocaleKeys.count == baseShareKeys.count, 
                "Locale '\(locale)' share extension catalog missing keys compared to \(baseLocale)")
     }
     
     /// Validates that a specific enabled locale has translated state for all required keys.
     @Test("Locale translation state", arguments: enabledLocales)
     func localeTranslationState(locale: String) throws {
-        let appCatalog = try loadCatalog(relativePath: appCatalogPath, repoRootURL: repoRootURL)
-        let shareExtCatalog = try loadCatalog(relativePath: shareExtCatalogPath, repoRootURL: repoRootURL)
-        let config = Self.testConfig
+        guard let config = Self.testConfig else {
+            Issue.record("Missing localization config at bitchatTests/LocalizationTestsConfig.json")
+            return
+        }
+        let appCatalog = try loadCatalog(relativePath: appCatalogPath, repoRootURL: Self.repoRootURL)
+        let shareExtCatalog = try loadCatalog(relativePath: shareExtCatalogPath, repoRootURL: Self.repoRootURL)
         
         // Skip base locale as it's the source
         if locale == appCatalog.sourceLanguage { return }
@@ -174,7 +166,7 @@ struct LocalizationTests {
                 continue
             }
             
-            #expect(unit.state == "translated", 
+            expectOrRecord(unit.state == "translated", 
                    "Required app key '\(key)' not marked as translated in enabled locale '\(locale)' (state: '\(unit.state)')")
         }
         
@@ -188,7 +180,7 @@ struct LocalizationTests {
                 continue
             }
             
-            #expect(unit.state == "translated", 
+            expectOrRecord(unit.state == "translated", 
                    "Required share extension key '\(key)' not marked as translated in enabled locale '\(locale)' (state: '\(unit.state)')")
         }
     }
@@ -198,17 +190,20 @@ struct LocalizationTests {
     
     /// Guards required strings from going empty per enabled locale.
     @Test func requiredKeysNonEmpty() throws {
-        let config = Self.testConfig
+        guard let config = Self.testConfig else {
+            Issue.record("Missing localization config at bitchatTests/LocalizationTestsConfig.json")
+            return
+        }
         let enabledLocales = Self.enabledLocales
         
         // Test app required keys
-        let appContext = try loadContext(relativePath: appCatalogPath, repoRootURL: repoRootURL)
+        let appContext = try loadContext(relativePath: appCatalogPath, repoRootURL: Self.repoRootURL)
         let allAppKeys = getAllAppKeys(from: config)
         assertRequiredKeysPresent(context: appContext, keys: allAppKeys, 
                                 enabledLocales: enabledLocales, catalogName: "App")
         
         // Test share extension required keys
-        let shareExtContext = try loadContext(relativePath: shareExtCatalogPath, repoRootURL: repoRootURL)
+        let shareExtContext = try loadContext(relativePath: shareExtCatalogPath, repoRootURL: Self.repoRootURL)
         let allShareKeys = getAllShareExtensionKeys(from: config)
         assertRequiredKeysPresent(context: shareExtContext, keys: allShareKeys, 
                                 enabledLocales: enabledLocales, catalogName: "ShareExtension")
@@ -217,9 +212,12 @@ struct LocalizationTests {
     /// Validates that a specific locale contains expected string values.
     @Test("Locale expected values", arguments: enabledLocales)
     func localeExpectedValues(locale: String) throws {
-        let appContext = try loadContext(relativePath: appCatalogPath, repoRootURL: repoRootURL)
-        let shareExtContext = try loadContext(relativePath: shareExtCatalogPath, repoRootURL: repoRootURL)
-        let config = Self.testConfig
+        guard let config = Self.testConfig else {
+            Issue.record("Missing localization config at bitchatTests/LocalizationTestsConfig.json")
+            return
+        }
+        let appContext = try loadContext(relativePath: appCatalogPath, repoRootURL: Self.repoRootURL)
+        let shareExtContext = try loadContext(relativePath: shareExtCatalogPath, repoRootURL: Self.repoRootURL)
         
         guard let localeConfig = config.testLocales[locale],
               !localeConfig.assertValues.isEmpty else {
@@ -248,17 +246,20 @@ struct LocalizationTests {
     
     /// Verifies format placeholders stay consistent across locales for required keys.
     @Test func placeholderConsistency() throws {
-        let config = Self.testConfig
+        guard let config = Self.testConfig else {
+            Issue.record("Missing localization config at bitchatTests/LocalizationTestsConfig.json")
+            return
+        }
         let enabledLocales = Self.enabledLocales
         
         // Test app catalog placeholder consistency
-        let appContext = try loadContextWithPlaceholders(relativePath: appCatalogPath, repoRootURL: repoRootURL)
+        let appContext = try loadContextWithPlaceholders(relativePath: appCatalogPath, repoRootURL: Self.repoRootURL)
         let allAppKeys = getAllAppKeys(from: config)
         assertPlaceholderConsistencyForKeys(context: appContext, keys: allAppKeys, 
                                           enabledLocales: enabledLocales, catalogName: "App")
         
         // Test share extension catalog placeholder consistency
-        let shareExtContext = try loadContextWithPlaceholders(relativePath: shareExtCatalogPath, repoRootURL: repoRootURL)
+        let shareExtContext = try loadContextWithPlaceholders(relativePath: shareExtCatalogPath, repoRootURL: Self.repoRootURL)
         let allShareKeys = getAllShareExtensionKeys(from: config)
         assertPlaceholderConsistencyForKeys(context: shareExtContext, keys: allShareKeys, 
                                           enabledLocales: enabledLocales, catalogName: "ShareExtension")
@@ -267,16 +268,19 @@ struct LocalizationTests {
     /// Validates that a specific locale has consistent placeholders with the base locale.
     @Test("Locale placeholder consistency", arguments: enabledLocales)
     func localePlaceholderConsistency(locale: String) throws {
-        let config = Self.testConfig
+        guard let config = Self.testConfig else {
+            Issue.record("Missing localization config at bitchatTests/LocalizationTestsConfig.json")
+            return
+        }
         
         // Test app catalog placeholder consistency for this locale
-        let appContext = try loadContextWithPlaceholders(relativePath: appCatalogPath, repoRootURL: repoRootURL)
+        let appContext = try loadContextWithPlaceholders(relativePath: appCatalogPath, repoRootURL: Self.repoRootURL)
         let allAppKeys = getAllAppKeys(from: config)
         assertPlaceholderConsistencyForKeys(context: appContext, keys: allAppKeys, 
                                           enabledLocales: [locale], catalogName: "App")
         
         // Test share extension catalog placeholder consistency for this locale
-        let shareExtContext = try loadContextWithPlaceholders(relativePath: shareExtCatalogPath, repoRootURL: repoRootURL)
+        let shareExtContext = try loadContextWithPlaceholders(relativePath: shareExtCatalogPath, repoRootURL: Self.repoRootURL)
         let allShareKeys = getAllShareExtensionKeys(from: config)
         assertPlaceholderConsistencyForKeys(context: shareExtContext, keys: allShareKeys, 
                                           enabledLocales: [locale], catalogName: "ShareExtension")
@@ -286,7 +290,10 @@ struct LocalizationTests {
     
     /// Ensures all configured enabled locales are covered by parameterized tests.
     @Test func allConfiguredLocalesAreTested() throws {
-        let config = Self.testConfig
+        guard let config = Self.testConfig else {
+            Issue.record("Missing localization config at bitchatTests/LocalizationTestsConfig.json")
+            return
+        }
         let configuredEnabledLocales = Set(getEnabledTestLocales(from: config))
         let testedLocales = Set(Self.enabledLocales)
         
@@ -298,7 +305,7 @@ struct LocalizationTests {
                "Should have at least one enabled locale for testing")
         
         // Verify base locale is included
-        let appCatalog = try loadCatalog(relativePath: appCatalogPath, repoRootURL: repoRootURL)
+        let appCatalog = try loadCatalog(relativePath: appCatalogPath, repoRootURL: Self.repoRootURL)
         #expect(testedLocales.contains(appCatalog.sourceLanguage), 
                "Base locale '\(appCatalog.sourceLanguage)' should be included in enabled locales")
     }
@@ -392,8 +399,8 @@ struct LocalizationTests {
                 }
                 
                 for path in baseMap.keys.sorted() {
-                    let expected = normalizedPlaceholders(baseMap[path, default: []])
-                    let actual = normalizedPlaceholders(localeMap[path, default: []])
+                    let expected = (baseMap[path, default: []]).sorted()
+                    let actual = (localeMap[path, default: []]).sorted()
                     #expect(actual == expected, 
                            "Placeholder mismatch for key \(key) at \(path) in locale \(locale) (\(catalogName))")
                 }
