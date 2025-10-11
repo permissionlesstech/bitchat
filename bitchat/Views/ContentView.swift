@@ -19,7 +19,12 @@ import UIKit
 
 // MARK: - Main Content View
 
+@MainActor
 struct ContentView: View {
+    private struct ScrollRequest: Equatable {
+        let id = UUID()
+        let target: String
+    }
     // MARK: - Properties
     
     @EnvironmentObject var viewModel: ChatViewModel
@@ -46,7 +51,8 @@ struct ContentView: View {
     @State private var isAtBottomPublic: Bool = true
     @State private var isAtBottomPrivate: Bool = true
     @State private var lastScrollTime: Date = .distantPast
-    @State private var scrollThrottleTimer: Timer?
+    @State private var scrollThrottleTask: Task<Void, Never>?
+    @State private var pendingScrollRequest: ScrollRequest?
     @State private var autocompleteDebounceTimer: Timer?
     @State private var showLocationChannelsSheet = false
     @State private var showVerifySheet = false
@@ -78,6 +84,30 @@ struct ContentView: View {
 
     private var headerLineLimit: Int? {
         dynamicTypeSize.isAccessibilitySize ? 2 : 1
+    }
+
+    private func enqueueScroll(target: String) {
+        pendingScrollRequest = ScrollRequest(target: target)
+    }
+
+    private func scheduleScroll(target: String, delay: TimeInterval) {
+        scrollThrottleTask?.cancel()
+        scrollThrottleTask = nil
+        if delay <= 0 {
+            lastScrollTime = Date()
+            enqueueScroll(target: target)
+            scrollThrottleTask = nil
+            return
+        }
+        let nanoseconds = UInt64(max(delay, 0) * 1_000_000_000)
+        scrollThrottleTask = Task { [target] in
+            try? await Task.sleep(nanoseconds: nanoseconds)
+            await MainActor.run {
+                lastScrollTime = Date()
+                enqueueScroll(target: target)
+                scrollThrottleTask = nil
+            }
+        }
     }
     
     // MARK: - Body
@@ -296,8 +326,8 @@ struct ContentView: View {
             Text(viewModel.bluetoothAlertMessage)
         }
         .onDisappear {
-            // Clean up timers
-            scrollThrottleTimer?.invalidate()
+            scrollThrottleTask?.cancel()
+            scrollThrottleTask = nil
             autocompleteDebounceTimer?.invalidate()
         }
     }
@@ -422,6 +452,11 @@ struct ContentView: View {
                 .padding(.vertical, 4)
             }
             .background(backgroundColor)
+            .onChange(of: pendingScrollRequest) { request in
+                guard let request else { return }
+                proxy.scrollTo(request.target, anchor: .bottom)
+                pendingScrollRequest = nil
+            }
             .onOpenURL { url in
                 guard url.scheme == "bitchat", url.host == "user" else { return }
                 let id = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
@@ -543,44 +578,27 @@ struct ContentView: View {
                     let lastMsg = viewModel.messages.last!
                     let isFromSelf = (lastMsg.sender == viewModel.nickname) || lastMsg.sender.hasPrefix(viewModel.nickname + "#")
                     if !isFromSelf {
-                        // Only autoscroll when user is at/near bottom
                         guard isAtBottom.wrappedValue else { return }
                     } else {
-                        // Ensure we consider ourselves at bottom for subsequent messages
                         isAtBottom.wrappedValue = true
                     }
-                    // Throttle scroll animations to prevent excessive UI updates
                     let now = Date()
-                    if now.timeIntervalSince(lastScrollTime) > TransportConfig.uiScrollThrottleSeconds {
-                        // Immediate scroll if enough time has passed
-                        lastScrollTime = now
-                        let contextKey: String = {
-                            switch locationManager.selectedChannel {
-                            case .mesh: return "mesh"
-                            case .location(let ch): return "geo:\(ch.geohash)"
-                            }
-                        }()
-                        let count = windowCountPublic
-                        let target = viewModel.messages.suffix(count).last.map { "\(contextKey)|\($0.id)" }
-                        DispatchQueue.main.async {
-                            if let target = target { proxy.scrollTo(target, anchor: .bottom) }
+                    let contextKey: String = {
+                        switch locationManager.selectedChannel {
+                        case .mesh: return "mesh"
+                        case .location(let ch): return "geo:\(ch.geohash)"
                         }
-                    } else {
-                        // Schedule a delayed scroll
-                        scrollThrottleTimer?.invalidate()
-                        scrollThrottleTimer = Timer.scheduledTimer(withTimeInterval: TransportConfig.uiScrollThrottleSeconds, repeats: false) { _ in
-                            lastScrollTime = Date()
-                        let contextKey: String = {
-                            switch locationManager.selectedChannel {
-                            case .mesh: return "mesh"
-                            case .location(let ch): return "geo:\(ch.geohash)"
-                            }
-                        }()
-                            let count = windowCountPublic
-                            let target = viewModel.messages.suffix(count).last.map { "\(contextKey)|\($0.id)" }
-                            DispatchQueue.main.async {
-                                if let target = target { proxy.scrollTo(target, anchor: .bottom) }
-                            }
+                    }()
+                    let count = windowCountPublic
+                        if let target = viewModel.messages.suffix(count).last.map({ "\(contextKey)|\($0.id)" }) {
+                            let elapsed = now.timeIntervalSince(lastScrollTime)
+                            if elapsed > TransportConfig.uiScrollThrottleSeconds {
+                                scrollThrottleTask?.cancel()
+                                lastScrollTime = now
+                                enqueueScroll(target: target)
+                            } else {
+                                let remaining = TransportConfig.uiScrollThrottleSeconds - elapsed
+                                scheduleScroll(target: target, delay: remaining)
                         }
                     }
                 }
@@ -598,26 +616,18 @@ struct ContentView: View {
                     } else {
                         isAtBottom.wrappedValue = true
                     }
-                    // Same throttling for private chats
                     let now = Date()
-                    if now.timeIntervalSince(lastScrollTime) > TransportConfig.uiScrollThrottleSeconds {
-                        lastScrollTime = now
-                        let contextKey = "dm:\(peerID)"
-                        let count = windowCountPrivate[peerID] ?? 300
-                        let target = messages.suffix(count).last.map { "\(contextKey)|\($0.id)" }
-                        DispatchQueue.main.async {
-                            if let target = target { proxy.scrollTo(target, anchor: .bottom) }
-                        }
-                    } else {
-                        scrollThrottleTimer?.invalidate()
-                        scrollThrottleTimer = Timer.scheduledTimer(withTimeInterval: TransportConfig.uiScrollThrottleSeconds, repeats: false) { _ in
-                            lastScrollTime = Date()
-                            let contextKey = "dm:\(peerID)"
-                            let count = windowCountPrivate[peerID] ?? 300
-                            let target = messages.suffix(count).last.map { "\(contextKey)|\($0.id)" }
-                            DispatchQueue.main.async {
-                                if let target = target { proxy.scrollTo(target, anchor: .bottom) }
-                            }
+                    let contextKey = "dm:\(peerID)"
+                    let count = windowCountPrivate[peerID] ?? 300
+                    if let target = messages.suffix(count).last.map({ "\(contextKey)|\($0.id)" }) {
+                        let elapsed = now.timeIntervalSince(lastScrollTime)
+                        if elapsed > TransportConfig.uiScrollThrottleSeconds {
+                            scrollThrottleTask?.cancel()
+                            lastScrollTime = now
+                            enqueueScroll(target: target)
+                        } else {
+                            let remaining = TransportConfig.uiScrollThrottleSeconds - elapsed
+                            scheduleScroll(target: target, delay: remaining)
                         }
                     }
                 }
@@ -695,9 +705,9 @@ struct ContentView: View {
                         }
                         .buttonStyle(.plain)
                         .background(Color.gray.opacity(0.1))
-                    }
                 }
-                .background(backgroundColor)
+            }
+            .background(backgroundColor)
                 .overlay(
                     RoundedRectangle(cornerRadius: 4)
                         .stroke(secondaryTextColor.opacity(0.3), lineWidth: 1)
@@ -791,9 +801,11 @@ struct ContentView: View {
                     
                     // Debounce autocomplete updates to reduce calls during rapid typing
                     autocompleteDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { _ in
-                        // Get cursor position (approximate - end of text for now)
-                        let cursorPosition = newValue.count
-                        viewModel.updateAutocomplete(for: newValue, cursorPosition: cursorPosition)
+                        Task { @MainActor in
+                            // Get cursor position (approximate - end of text for now)
+                            let cursorPosition = newValue.count
+                            viewModel.updateAutocomplete(for: newValue, cursorPosition: cursorPosition)
+                        }
                     }
                     
                     // Check for command autocomplete (instant, no debounce needed)

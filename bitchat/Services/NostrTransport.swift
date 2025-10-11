@@ -50,10 +50,11 @@ final class NostrTransport: Transport {
     
     // Nostr does not use Noise sessions here; return a cached placeholder to avoid reallocation
     private static var cachedNoiseService: NoiseEncryptionService?
+    private static let noiseServiceLock = NSLock()
     func getNoiseService() -> NoiseEncryptionService {
-        if let noiseService = Self.cachedNoiseService {
-            return noiseService
-        }
+        Self.noiseServiceLock.lock()
+        defer { Self.noiseServiceLock.unlock() }
+        if let noiseService = Self.cachedNoiseService { return noiseService }
         let noiseService = NoiseEncryptionService(keychain: keychain)
         Self.cachedNoiseService = noiseService
         return noiseService

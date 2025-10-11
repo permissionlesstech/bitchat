@@ -160,6 +160,7 @@ enum DeliveryStatus: Codable, Equatable, Hashable {
 
 // MARK: - Delegate Protocol
 
+@MainActor
 protocol BitchatDelegate: AnyObject {
     func didReceiveMessage(_ message: BitchatMessage)
     func didConnectToPeer(_ peerID: PeerID)
@@ -180,6 +181,7 @@ protocol BitchatDelegate: AnyObject {
 }
 
 // Provide default implementation to make it effectively optional
+@MainActor
 extension BitchatDelegate {
     func isFavorite(fingerprint: String) -> Bool {
         return false

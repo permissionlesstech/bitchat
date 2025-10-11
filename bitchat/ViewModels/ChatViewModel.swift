@@ -91,6 +91,7 @@ import UIKit
 /// Manages the application state and business logic for BitChat.
 /// Acts as the primary coordinator between UI components and backend services,
 /// implementing the BitchatDelegate protocol to handle network events.
+@MainActor
 final class ChatViewModel: ObservableObject, BitchatDelegate {
     // Precompiled regexes and detectors reused across formatting
     private enum Regexes {
@@ -229,14 +230,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     private let networkResetGraceSeconds: TimeInterval = TransportConfig.networkResetGraceSeconds // avoid refiring on short drops/reconnects
     @Published var nickname: String = "" {
         didSet {
-            // Trim whitespace whenever nickname is set
             let trimmed = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed != nickname {
                 nickname = trimmed
+                return
             }
-            // Update mesh service nickname if it's initialized
-            if meshService.myPeerID != "" {
-                meshService.setNickname(nickname)
+            if meshService.myPeerID != "", meshService.myNickname != trimmed {
+                meshService.setNickname(trimmed)
             }
         }
     }

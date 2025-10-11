@@ -49,9 +49,10 @@ struct BitchatApp: App {
                     // Inject live Noise service into VerificationService to avoid creating new BLE instances
                     VerificationService.shared.configure(with: chatViewModel.meshService.getNoiseService())
                     // Prewarm Nostr identity and QR to make first VERIFY sheet fast
+                    let nickname = chatViewModel.nickname
                     DispatchQueue.global(qos: .utility).async {
                         let npub = try? NostrIdentityBridge.getCurrentNostrIdentity()?.npub
-                        _ = VerificationService.shared.buildMyQRString(nickname: chatViewModel.nickname, npub: npub)
+                        _ = VerificationService.shared.buildMyQRString(nickname: nickname, npub: npub)
                     }
                     #if os(iOS)
                     appDelegate.chatViewModel = chatViewModel
@@ -237,29 +238,29 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
         let identifier = notification.request.identifier
         let userInfo = notification.request.content.userInfo
         
-        // Check if this is a private message notification
-        if identifier.hasPrefix("private-") {
-            // Get peer ID from userInfo
-            if let peerID = userInfo["peerID"] as? String {
-                // Don't show notification if the private chat is already open
-                if chatViewModel?.selectedPrivateChatPeer == peerID {
-                    completionHandler([])
-                    return
-                }
+        Task { @MainActor [weak self] in
+            guard let self = self else {
+                completionHandler([.banner, .sound])
+                return
             }
-        }
-        // Suppress geohash activity notification if we're already in that geohash channel
-        if identifier.hasPrefix("geo-activity-"),
-           let deep = userInfo["deeplink"] as? String,
-           let gh = deep.components(separatedBy: "/").last {
-            if case .location(let ch) = LocationChannelManager.shared.selectedChannel, ch.geohash == gh {
+            // Check if this is a private message notification and chat already open
+            if identifier.hasPrefix("private-"),
+               let peerID = userInfo["peerID"] as? String,
+               self.chatViewModel?.selectedPrivateChatPeer == peerID {
                 completionHandler([])
                 return
             }
+            // Suppress geohash activity notification if we're already in that geohash channel
+            if identifier.hasPrefix("geo-activity-"),
+               let deep = userInfo["deeplink"] as? String,
+               let gh = deep.components(separatedBy: "/").last,
+               case .location(let ch) = LocationChannelManager.shared.selectedChannel,
+               ch.geohash == gh {
+                completionHandler([])
+                return
+            }
+            completionHandler([.banner, .sound])
         }
-        
-        // Show notification in all other cases
-        completionHandler([.banner, .sound])
     }
 }
 
