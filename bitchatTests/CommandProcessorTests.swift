@@ -1,54 +1,42 @@
-import XCTest
+import Testing
 @testable import bitchat
 
-final class CommandProcessorTests: XCTestCase {
-    
-    var identityManager: MockIdentityManager!
-    
-    override func setUp() {
-        super.setUp()
-        // Provide a minimal identity manager for commands that query identity/block lists
-        identityManager = MockIdentityManager(MockKeychain())
-    }
-    
-    override func tearDown() {
-        identityManager = nil
-        super.tearDown()
-    }
+struct CommandProcessorTests {
+    private var identityManager = MockIdentityManager(MockKeychain())
 
     @MainActor
-    func test_slap_notFoundGrammar() {
+    @Test func slapNotFoundGrammar() {
         let processor = CommandProcessor(chatViewModel: nil, meshService: nil, identityManager: identityManager)
         let result = processor.process("/slap @system")
         switch result {
         case .error(let message):
-            XCTAssertEqual(message, "cannot slap system: not found")
+            #expect(message == "cannot slap system: not found")
         default:
-            XCTFail("Expected error result")
+            Issue.record("Expected error result")
         }
     }
 
     @MainActor
-    func test_hug_notFoundGrammar() {
+    @Test func hugNotFoundGrammar() {
         let processor = CommandProcessor(chatViewModel: nil, meshService: nil, identityManager: identityManager)
         let result = processor.process("/hug @system")
         switch result {
         case .error(let message):
-            XCTAssertEqual(message, "cannot hug system: not found")
+            #expect(message == "cannot hug system: not found")
         default:
-            XCTFail("Expected error result")
+            Issue.record("Expected error result")
         }
     }
-
+    
     @MainActor
-    func test_slap_usageMessage() {
+    @Test func slapUsageMessage() {
         let processor = CommandProcessor(chatViewModel: nil, meshService: nil, identityManager: identityManager)
         let result = processor.process("/slap")
         switch result {
         case .error(let message):
-            XCTAssertEqual(message, "usage: /slap <nickname>")
+            #expect(message == "usage: /slap <nickname>")
         default:
-            XCTFail("Expected error result for usage message")
+            Issue.record("Expected error result for usage message")
         }
     }
 }

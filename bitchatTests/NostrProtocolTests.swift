@@ -5,20 +5,20 @@
 // Tests for NIP-17 gift-wrapped private messages
 //
 
-import XCTest
+import Testing
+import CryptoKit
+import Foundation
 @testable import bitchat
 
-final class NostrProtocolTests: XCTestCase {
+struct NostrProtocolTests {
     
-    func testNIP17MessageRoundTrip() throws {
+    @Test func nip17MessageRoundTrip() throws {
         // Create sender and recipient identities
         let sender = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
         
-        #if DEBUG
         print("Sender pubkey: \(sender.publicKeyHex)")
         print("Recipient pubkey: \(recipient.publicKeyHex)")
-        #endif
         
         // Create a test message
         let originalContent = "Hello from NIP-17 test!"
@@ -30,10 +30,8 @@ final class NostrProtocolTests: XCTestCase {
             senderIdentity: sender
         )
         
-        #if DEBUG
         print("Gift wrap created with ID: \(giftWrap.id)")
         print("Gift wrap pubkey: \(giftWrap.pubkey)")
-        #endif
         
         // Decrypt the gift wrap
         let (decryptedContent, senderPubkey, timestamp) = try NostrProtocol.decryptPrivateMessage(
@@ -42,20 +40,18 @@ final class NostrProtocolTests: XCTestCase {
         )
         
         // Verify
-        XCTAssertEqual(decryptedContent, originalContent)
-        XCTAssertEqual(senderPubkey, sender.publicKeyHex)
+        #expect(decryptedContent == originalContent)
+        #expect(senderPubkey == sender.publicKeyHex)
         
         // Verify timestamp is reasonable (within last minute)
         let messageDate = Date(timeIntervalSince1970: TimeInterval(timestamp))
         let timeDiff = abs(messageDate.timeIntervalSinceNow)
-        XCTAssertLessThan(timeDiff, 60, "Message timestamp should be recent")
+        #expect(timeDiff < 60, "Message timestamp should be recent")
         
-        #if DEBUG
         print("✅ Successfully decrypted message: '\(decryptedContent)' from \(senderPubkey) at \(messageDate)")
-        #endif
     }
     
-    func testGiftWrapUsesUniqueEphemeralKeys() throws {
+    @Test func giftWrapUsesUniqueEphemeralKeys() throws {
         // Create identities
         let sender = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
@@ -74,11 +70,10 @@ final class NostrProtocolTests: XCTestCase {
         )
         
         // Gift wrap pubkeys should be different (unique ephemeral keys)
-        XCTAssertNotEqual(message1.pubkey, message2.pubkey)
-        #if DEBUG
+        #expect(message1.pubkey != message2.pubkey)
+        
         print("Message 1 gift wrap pubkey: \(message1.pubkey)")
         print("Message 2 gift wrap pubkey: \(message2.pubkey)")
-        #endif
         
         // Both should decrypt successfully
         let (content1, _, _) = try NostrProtocol.decryptPrivateMessage(
@@ -90,11 +85,11 @@ final class NostrProtocolTests: XCTestCase {
             recipientIdentity: recipient
         )
         
-        XCTAssertEqual(content1, "Message 1")
-        XCTAssertEqual(content2, "Message 2")
+        #expect(content1 == "Message 1")
+        #expect(content2 == "Message 2")
     }
     
-    func testDecryptionFailsWithWrongRecipient() throws {
+    @Test func decryptionFailsWithWrongRecipient() throws {
         let sender = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
         let wrongRecipient = try NostrIdentity.generate()
@@ -107,13 +102,20 @@ final class NostrProtocolTests: XCTestCase {
         )
         
         // Try to decrypt with wrong recipient
-        XCTAssertThrowsError(try NostrProtocol.decryptPrivateMessage(
-            giftWrap: giftWrap,
-            recipientIdentity: wrongRecipient
-        )) { error in
-            #if DEBUG
-            print("Expected error when decrypting with wrong key: \(error)")
-            #endif
+        if #available(macOS 14.4, iOS 17.4, *) {
+            #expect(throws: CryptoKitError.authenticationFailure) {
+                try NostrProtocol.decryptPrivateMessage(
+                    giftWrap: giftWrap,
+                    recipientIdentity: wrongRecipient
+                )
+            }
+        } else {
+            #expect(throws: (any Error).self) {
+                try NostrProtocol.decryptPrivateMessage(
+                    giftWrap: giftWrap,
+                    recipientIdentity: wrongRecipient
+                )
+            }
         }
     }
 
@@ -125,10 +127,11 @@ final class NostrProtocolTests: XCTestCase {
         // Build a DELIVERED ack embedded payload (geohash-style, no recipient peer ID)
         let messageID = "TEST-MSG-DELIVERED-1"
         let senderPeerID = "0123456789abcdef" // 8-byte hex peer ID
-        guard let embedded = NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(type: .delivered, messageID: messageID, senderPeerID: senderPeerID) else {
-            XCTFail("Failed to embed delivered ack")
-            return
-        }
+
+        let embedded = try #require(
+            NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(type: .delivered, messageID: messageID, senderPeerID: senderPeerID),
+            "Failed to embed delivered ack"
+        )
 
         // Create NIP-17 gift wrap to recipient (uses NIP-44 v2 internally)
         let giftWrap = try NostrProtocol.createPrivateMessage(
@@ -138,7 +141,7 @@ final class NostrProtocolTests: XCTestCase {
         )
 
         // Ensure v2 format was used for ciphertext
-        XCTAssertTrue(giftWrap.content.hasPrefix("v2:"))
+        #expect(giftWrap.content.hasPrefix("v2:"))
 
         // Decrypt as recipient
         let (content, senderPubkey, _) = try NostrProtocol.decryptPrivateMessage(
@@ -147,39 +150,37 @@ final class NostrProtocolTests: XCTestCase {
         )
 
         // Verify sender is correct
-        XCTAssertEqual(senderPubkey, sender.publicKeyHex)
+        #expect(senderPubkey == sender.publicKeyHex)
 
         // Parse BitChat payload
-        XCTAssertTrue(content.hasPrefix("bitchat1:"))
+        #expect(content.hasPrefix("bitchat1:"))
         let base64url = String(content.dropFirst("bitchat1:".count))
-        guard let packetData = Self.base64URLDecode(base64url),
-              let packet = BitchatPacket.from(packetData) else {
-            return XCTFail("Failed to decode bitchat packet")
-        }
-        XCTAssertEqual(packet.type, MessageType.noiseEncrypted.rawValue)
-        guard let payload = NoisePayload.decode(packet.payload) else {
-            return XCTFail("Failed to decode NoisePayload")
-        }
+        let packetData = try #require(Self.base64URLDecode(base64url))
+        let packet = try #require(BitchatPacket.from(packetData), "Failed to decode bitchat packet")
+        
+        #expect(packet.type == MessageType.noiseEncrypted.rawValue)
+        let payload = try #require(NoisePayload.decode(packet.payload), "Failed to decode NoisePayload")
+        
         switch payload.type {
         case .delivered:
             let mid = String(data: payload.data, encoding: .utf8)
-            XCTAssertEqual(mid, messageID)
+            #expect(mid == messageID)
         default:
-            XCTFail("Unexpected payload type: \(payload.type)")
+            Issue.record("Unexpected payload type: \(payload.type)")
         }
     }
 
-    func testAckRoundTripNIP44V2_ReadReceipt() throws {
+    @Test func ackRoundTripNIP44V2_ReadReceipt() throws {
         // Identities
         let sender = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
-
+        
         let messageID = "TEST-MSG-READ-1"
         let senderPeerID = "fedcba9876543210" // 8-byte hex peer ID
-        guard let embedded = NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(type: .readReceipt, messageID: messageID, senderPeerID: senderPeerID) else {
-            XCTFail("Failed to embed read ack")
-            return
-        }
+        let embedded = try #require(
+            NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(type: .readReceipt, messageID: messageID, senderPeerID: senderPeerID),
+            "Failed to embed read ack"
+        )
 
         let giftWrap = try NostrProtocol.createPrivateMessage(
             content: embedded,
@@ -187,30 +188,28 @@ final class NostrProtocolTests: XCTestCase {
             senderIdentity: sender
         )
 
-        XCTAssertTrue(giftWrap.content.hasPrefix("v2:"))
+        #expect(giftWrap.content.hasPrefix("v2:"))
 
         let (content, senderPubkey, _) = try NostrProtocol.decryptPrivateMessage(
             giftWrap: giftWrap,
             recipientIdentity: recipient
         )
-        XCTAssertEqual(senderPubkey, sender.publicKeyHex)
+        #expect(senderPubkey == sender.publicKeyHex)
 
-        XCTAssertTrue(content.hasPrefix("bitchat1:"))
+        #expect(content.hasPrefix("bitchat1:"))
         let base64url = String(content.dropFirst("bitchat1:".count))
-        guard let packetData = Self.base64URLDecode(base64url),
-              let packet = BitchatPacket.from(packetData) else {
-            return XCTFail("Failed to decode bitchat packet")
-        }
-        XCTAssertEqual(packet.type, MessageType.noiseEncrypted.rawValue)
-        guard let payload = NoisePayload.decode(packet.payload) else {
-            return XCTFail("Failed to decode NoisePayload")
-        }
+        let packetData = try #require(Self.base64URLDecode(base64url))
+        let packet = try #require(BitchatPacket.from(packetData), "Failed to decode bitchat packet")
+        
+        #expect(packet.type == MessageType.noiseEncrypted.rawValue)
+        let payload = try #require(NoisePayload.decode(packet.payload), "Failed to decode NoisePayload")
+        
         switch payload.type {
         case .readReceipt:
             let mid = String(data: payload.data, encoding: .utf8)
-            XCTAssertEqual(mid, messageID)
+            #expect(mid == messageID)
         default:
-            XCTFail("Unexpected payload type: \(payload.type)")
+            Issue.record("Unexpected payload type: \(payload.type)")
         }
     }
 

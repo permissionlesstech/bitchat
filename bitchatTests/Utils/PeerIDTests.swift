@@ -6,11 +6,11 @@
 // For more information, see <https://unlicense.org>
 //
 
-import XCTest
+import Testing
+import Foundation
 @testable import bitchat
 
-final class PeerIDTests: XCTestCase {
-    
+struct PeerIDTests {
     private let hex16 = "0011223344556677"
     private let hex64 = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
     
@@ -22,212 +22,205 @@ final class PeerIDTests: XCTestCase {
     
     // MARK: - Empty prefix
     
-    func test_init_empty_prefix_with16() {
+    @Test func empty_prefix_with16() {
         let peerID = PeerID(str: hex16)
-        XCTAssertEqual(peerID.id, hex16)
-        XCTAssertEqual(peerID.bare, hex16)
-        XCTAssertEqual(peerID.prefix, .empty)
+        #expect(peerID.id == hex16)
+        #expect(peerID.bare == hex16)
+        #expect(peerID.prefix == .empty)
     }
     
-    func test_init_empty_prefix_with64() {
+    @Test func empty_prefix_with64() {
         let peerID = PeerID(str: hex64)
-        XCTAssertEqual(peerID.id, hex64)
-        XCTAssertEqual(peerID.bare, hex64)
-        XCTAssertEqual(peerID.prefix, .empty)
+        #expect(peerID.id == hex64)
+        #expect(peerID.bare == hex64)
+        #expect(peerID.prefix == .empty)
     }
     
     // MARK: - Mesh prefix
     
-    func test_init_mesh_prefix_with16() {
+    @Test func mesh_prefix_with16() {
         let str = "mesh:" + hex16
         let peerID = PeerID(str: str)
-        XCTAssertEqual(peerID.id, str)
-        XCTAssertEqual(peerID.bare, hex16)
-        XCTAssertEqual(peerID.prefix, .mesh)
+        #expect(peerID.id == str)
+        #expect(peerID.bare == hex16)
+        #expect(peerID.prefix == .mesh)
     }
     
-    func test_init_mesh_prefix_with64() {
+    @Test func mesh_prefix_with64() {
         let str = "mesh:" + hex64
         let peerID = PeerID(str: str)
-        XCTAssertEqual(peerID.id, str)
-        XCTAssertEqual(peerID.bare, hex64)
-        XCTAssertEqual(peerID.prefix, .mesh)
+        #expect(peerID.id == str)
+        #expect(peerID.bare == hex64)
+        #expect(peerID.prefix == .mesh)
     }
     
     // MARK: - Name prefix
     
-    func test_init_name_prefix() {
+    @Test func name_prefix() {
         let str = "name:some_name"
         let peerID = PeerID(str: str)
-        XCTAssertEqual(peerID.id, str)
-        XCTAssertEqual(peerID.bare, "some_name")
-        XCTAssertEqual(peerID.prefix, .name)
+        #expect(peerID.id == str)
+        #expect(peerID.bare == "some_name")
+        #expect(peerID.prefix == .name)
     }
     
     // MARK: - Noise prefix
     
-    func test_init_noise_prefix_with16() {
+    @Test func noise_prefix_with16() {
         let str = "noise:" + hex16
         let peerID = PeerID(str: str)
-        XCTAssertEqual(peerID.id, str)
-        XCTAssertEqual(peerID.bare, hex16)
-        XCTAssertEqual(peerID.prefix, .noise)
+        #expect(peerID.id == str)
+        #expect(peerID.bare == hex16)
+        #expect(peerID.prefix == .noise)
     }
     
-    func test_init_noise_prefix_with64() {
+    @Test func noise_prefix_with64() {
         let str = "noise:" + hex64
         let peerID = PeerID(str: str)
-        XCTAssertEqual(peerID.id, str)
-        XCTAssertEqual(peerID.bare, hex64)
-        XCTAssertEqual(peerID.prefix, .noise)
+        #expect(peerID.id == str)
+        #expect(peerID.bare == hex64)
+        #expect(peerID.prefix == .noise)
     }
     
     // MARK: - GeoDM prefix
     
-    func test_init_geoDM_prefix_with16() {
+    @Test func geoDM_prefix_with16() {
         let str = "nostr_" + hex16
         let peerID = PeerID(str: str)
-        XCTAssertEqual(peerID.id, str)
-        XCTAssertEqual(peerID.bare, hex16)
-        XCTAssertEqual(peerID.prefix, .geoDM)
+        #expect(peerID.id == str)
+        #expect(peerID.bare == hex16)
+        #expect(peerID.prefix == .geoDM)
     }
     
-    func test_init_geoDM_prefix_with64() {
+    @Test func geoDM_prefix_with64() {
         let str = "nostr_" + hex64
         let peerID = PeerID(str: str)
-        XCTAssertEqual(peerID.id, str)
-        XCTAssertEqual(peerID.bare, hex64)
-        XCTAssertEqual(peerID.prefix, .geoDM)
+        #expect(peerID.id == str)
+        #expect(peerID.bare == hex64)
+        #expect(peerID.prefix == .geoDM)
     }
     
     // MARK: - GeoChat prefix
     
-    func test_init_geoChat_prefix_with16() {
+    @Test func geoChat_prefix_with16() {
         let str = "nostr:" + hex16
         let peerID = PeerID(str: str)
-        XCTAssertEqual(peerID.id, str)
-        XCTAssertEqual(peerID.bare, hex16)
-        XCTAssertEqual(peerID.prefix, .geoChat)
+        #expect(peerID.id == str)
+        #expect(peerID.bare == hex16)
+        #expect(peerID.prefix == .geoChat)
     }
     
-    func test_init_geoChat_prefix_with64() {
+    @Test func geoChat_prefix_with64() {
         let str = "nostr:" + hex64
         let peerID = PeerID(str: str)
-        XCTAssertEqual(peerID.id, str)
-        XCTAssertEqual(peerID.bare, hex64)
-        XCTAssertEqual(peerID.prefix, .geoChat)
+        #expect(peerID.id == str)
+        #expect(peerID.bare == hex64)
+        #expect(peerID.prefix == .geoChat)
     }
     
     // MARK: - Edge cases
     
-    func test_init_with_unknown_prefix() {
+    @Test func with_unknown_prefix() {
         let str = "unknown:" + hex16
         let peerID = PeerID(str: str)
         // Falls back to .empty
-        XCTAssertEqual(peerID.id, str)
-        XCTAssertEqual(peerID.bare, str)
-        XCTAssertEqual(peerID.prefix, .empty)
+        #expect(peerID.id == str)
+        #expect(peerID.bare == str)
+        #expect(peerID.prefix == .empty)
     }
     
-    func test_init_with_only_prefix_no_bare() {
+    @Test func with_only_prefix_no_bare() {
         let str = "mesh:"
         let peerID = PeerID(str: str)
-        XCTAssertEqual(peerID.id, str)
-        XCTAssertEqual(peerID.bare, "")
-        XCTAssertEqual(peerID.prefix, .mesh)
+        #expect(peerID.id == str)
+        #expect(peerID.bare == "")
+        #expect(peerID.prefix == .mesh)
     }
     
     // MARK: - init?(data:)
     
-    func test_init_data_valid_utf8() {
+    @Test func data_valid_utf8() {
         let peerID = PeerID(data: Data(hex16.utf8))
-        XCTAssertNotNil(peerID)
-        XCTAssertEqual(peerID?.bare, hex16)
-        XCTAssertEqual(peerID?.prefix, .empty)
+        #expect(peerID != nil)
+        #expect(peerID?.bare == hex16)
+        #expect(peerID?.prefix == .empty)
     }
     
-    func test_init_data_invalid_utf8() {
+    @Test func data_invalid_utf8() {
         // Random invalid UTF8
         let bytes: [UInt8] = [0xFF, 0xFE, 0xFA]
         let peerID = PeerID(data: Data(bytes))
-        XCTAssertNil(peerID)
+        #expect(peerID == nil)
     }
     
     // MARK: - init(str: Substring)
     
-    func test_init_substring() {
+    @Test func substring() {
         let substring = hex64.prefix(16)
         let peerID = PeerID(str: substring)
-        XCTAssertEqual(peerID.id, String(substring))
-        XCTAssertEqual(peerID.bare, String(substring))
-        XCTAssertEqual(peerID.prefix, .empty)
+        #expect(peerID.id == String(substring))
+        #expect(peerID.bare == String(substring))
+        #expect(peerID.prefix == .empty)
     }
     
     // MARK: - init(nostr_ pubKey:)
     
-    func test_init_nostrUnderscore_pubKey() {
+    @Test func nostrUnderscore_pubKey() {
         let pubKey = hex64
         let peerID = PeerID(nostr_: pubKey)
-        XCTAssertEqual(peerID.id, "nostr_\(pubKey.prefix(TransportConfig.nostrConvKeyPrefixLength))")
-        XCTAssertEqual(peerID.bare, String(pubKey.prefix(TransportConfig.nostrConvKeyPrefixLength)))
-        XCTAssertEqual(peerID.prefix, .geoDM)
+        #expect(peerID.id == "nostr_\(pubKey.prefix(TransportConfig.nostrConvKeyPrefixLength))")
+        #expect(peerID.bare == String(pubKey.prefix(TransportConfig.nostrConvKeyPrefixLength)))
+        #expect(peerID.prefix == .geoDM)
     }
     
     // MARK: - init(nostr pubKey:)
     
-    func test_init_nostr_pubKey() {
+    @Test func nostr_pubKey() {
         let pubKey = hex64
         let peerID = PeerID(nostr: pubKey)
-        XCTAssertEqual(peerID.id, "nostr:\(pubKey.prefix(TransportConfig.nostrShortKeyDisplayLength))")
-        XCTAssertEqual(peerID.bare, String(pubKey.prefix(TransportConfig.nostrShortKeyDisplayLength)))
-        XCTAssertEqual(peerID.prefix, .geoChat)
+        #expect(peerID.id == "nostr:\(pubKey.prefix(TransportConfig.nostrShortKeyDisplayLength))")
+        #expect(peerID.bare == String(pubKey.prefix(TransportConfig.nostrShortKeyDisplayLength)))
+        #expect(peerID.prefix == .geoChat)
     }
     
     // MARK: - init(publicKey:)
     
-    func test_init_publicKey_derivesFingerprint() {
+    @Test func publicKey_derivesFingerprint() {
         let publicKey = Data(hex64.utf8)
         let expected = publicKey.sha256Fingerprint().prefix(16)
         let peerID = PeerID(publicKey: publicKey)
-        XCTAssertEqual(peerID.bare, String(expected))
-        XCTAssertEqual(peerID.prefix, .empty)
+        #expect(peerID.bare == String(expected))
+        #expect(peerID.prefix == .empty)
     }
     
     // MARK: - toShort()
     
-    func test_toShort_whenNoiseKeyExists() {
+    @Test func toShort_whenNoiseKeyExists() {
         let peerID = PeerID(str: hex64)
         let short = peerID.toShort()
-        
-        // `toShort()` should derive 16-hex peerID
         let expected = Data(hexString: hex64)!.sha256Fingerprint().prefix(16)
-        
-        XCTAssertEqual(short.bare, String(expected))
-        XCTAssertEqual(short.prefix, .empty)
+        #expect(short.bare == String(expected))
+        #expect(short.prefix == .empty)
     }
     
-    func test_toShort_whenNoiseKeyExists_withNoisePrefix() {
+    @Test func toShort_whenNoiseKeyExists_withNoisePrefix() {
         let peerID = PeerID(str: "noise:" + hex64)
         let short = peerID.toShort()
-        
-        // `toShort()` should derive 16-hex peerID
         let expected = Data(hexString: hex64)!.sha256Fingerprint().prefix(16)
-        
-        XCTAssertEqual(short.bare, String(expected))
-        XCTAssertEqual(short.prefix, .empty)
-        XCTAssertEqual(peerID.prefix, .noise)
+        #expect(short.bare == String(expected))
+        #expect(short.prefix == .empty)
+        #expect(peerID.prefix == .noise)
     }
     
-    func test_toShort_whenNoNoiseKey() {
+    @Test func toShort_whenNoNoiseKey() {
         let peerID = PeerID(str: "some_random_key")
         let short = peerID.toShort()
-        XCTAssertEqual(short, peerID) // unchanged
+        #expect(short == peerID)
     }
-
     
     // MARK: - Codable
 
-    func test_codable_emptyPrefix() throws {
+    @Test func codable_emptyPrefix() throws {
         struct Dummy: Codable, Equatable {
             let name: String
             let peerID: PeerID
@@ -237,13 +230,13 @@ final class PeerIDTests: XCTestCase {
         let jsonString = "{\"name\":\"some name\",\"peerID\":\"\(str)\"}"
         
         let decoded = try JSONDecoder().decode(Dummy.self, from: Data(jsonString.utf8))
-        XCTAssertEqual(decoded.peerID, PeerID(str: str))
+        #expect(decoded.peerID == PeerID(str: str))
         
         let encoded = try encoder.encode(decoded)
-        XCTAssertEqual(String(data: encoded, encoding: .utf8), jsonString)
+        #expect(String(data: encoded, encoding: .utf8) == jsonString)
     }
 
-    func test_codable_withPrefix() throws {
+    @Test func codable_withPrefix() throws {
         struct Dummy: Codable, Equatable {
             let peerID: PeerID
         }
@@ -252,193 +245,191 @@ final class PeerIDTests: XCTestCase {
         let jsonString = "{\"peerID\":\"\(str)\"}"
         
         let decoded = try JSONDecoder().decode(Dummy.self, from: Data(jsonString.utf8))
-        XCTAssertEqual(decoded.peerID, PeerID(str: str))
-        XCTAssertEqual(decoded.peerID.bare, hex16)
-        XCTAssertEqual(decoded.peerID.prefix, .geoDM)
+        #expect(decoded.peerID == PeerID(str: str))
+        #expect(decoded.peerID.bare == hex16)
+        #expect(decoded.peerID.prefix == .geoDM)
         
         let encoded = try encoder.encode(decoded)
-        XCTAssertEqual(String(data: encoded, encoding: .utf8), jsonString)
+        #expect(String(data: encoded, encoding: .utf8) == jsonString)
     }
 
-    func test_codable_multiplePrefixes() throws {
+    @Test func codable_multiplePrefixes() throws {
         // Loop across all Prefix cases (except .empty since already tested)
         for prefix in PeerID.Prefix.allCases where prefix != .empty {
             let bare = hex16
             let str = prefix.rawValue + bare
             
             let decoded = try JSONDecoder().decode(PeerID.self, from: Data("\"\(str)\"".utf8))
-            XCTAssertEqual(decoded.prefix, prefix)
-            XCTAssertEqual(decoded.bare, bare)
+            #expect(decoded.prefix == prefix)
+            #expect(decoded.bare == bare)
             
             let encoded = try encoder.encode(decoded)
-            XCTAssertEqual(String(data: encoded, encoding: .utf8), "\"\(str)\"")
+            #expect(String(data: encoded, encoding: .utf8) == "\"\(str)\"")
         }
     }
     
     // MARK: - Comparable
     
-    func test_comparable_sorting_and_equality() {
+    @Test func comparable_sorting_and_equality() {
         let p1 = PeerID(str: "aaa")
         let p2 = PeerID(str: "bbb")
         let p3 = PeerID(str: "bbb")
         
-        XCTAssertTrue(p1 < p2)
-        XCTAssertFalse(p2 < p1)
-        XCTAssertEqual(p2, p3)
+        #expect(p1 < p2)
+        #expect(p2 >= p1)
+        #expect(p2 == p3)
         
         let sorted = [p2, p1].sorted()
-        XCTAssertEqual(sorted, [p1, p2])
+        #expect(sorted == [p1, p2])
     }
     
-    func test_equality() {
+    @Test func equality() {
         let string = "aaa"
         let peerID = PeerID(str: string)
         let badString = "bbb"
         
         // PeerID == String
-        XCTAssertTrue(peerID == string)
-        XCTAssertTrue(peerID == Optional(string))
-        XCTAssertTrue(Optional(peerID) == string)
-        XCTAssertTrue(Optional(peerID) == Optional(string))
+        #expect(peerID == string)
+        #expect(peerID == Optional(string))
+        #expect(Optional(peerID) == string)
+        #expect(Optional(peerID) == Optional(string))
 
         // PeerID != String
-        XCTAssertTrue(peerID != badString)
-        XCTAssertTrue(peerID != Optional(badString))
-        XCTAssertTrue(Optional(peerID) != badString)
-        XCTAssertTrue(Optional(peerID) != Optional(badString))
+        #expect(peerID != badString)
+        #expect(peerID != Optional(badString))
+        #expect(Optional(peerID) != badString)
+        #expect(Optional(peerID) != Optional(badString))
         
         // String == PeerID
-        XCTAssertTrue(string == peerID)
-        XCTAssertTrue(Optional(string) == peerID)
-        XCTAssertTrue(string == Optional(peerID))
-        XCTAssertTrue(Optional(string) == Optional(peerID))
+        #expect(string == peerID)
+        #expect(Optional(string) == peerID)
+        #expect(string == Optional(peerID))
+        #expect(Optional(string) == Optional(peerID))
 
         // String != PeerID
-        XCTAssertTrue(badString != peerID)
-        XCTAssertTrue(Optional(badString) != peerID)
-        XCTAssertTrue(badString != Optional(peerID))
-        XCTAssertTrue(Optional(badString) != Optional(peerID))
+        #expect(badString != peerID)
+        #expect(Optional(badString) != peerID)
+        #expect(badString != Optional(peerID))
+        #expect(Optional(badString) != Optional(peerID))
         
+        // Regular PeerID <> PeerID
+        #expect(peerID == PeerID(str: "aaa"))
+        #expect(peerID == Optional(PeerID(str: "aaa")))
+        #expect(PeerID(str: "aaa") == peerID)
+        #expect(Optional(PeerID(str: "aaa")) == Optional(peerID))
         
-        // Make sure the regular PeerID <> PeerID is not broken
-        XCTAssertTrue(peerID == PeerID(str: "aaa"))
-        XCTAssertTrue(peerID == Optional(PeerID(str: "aaa")))
-        XCTAssertTrue(PeerID(str: "aaa") == peerID)
-        XCTAssertTrue(Optional(PeerID(str: "aaa")) == Optional(peerID))
-        
-        XCTAssertTrue(peerID != PeerID(str: "bbb"))
-        XCTAssertTrue(peerID != Optional(PeerID(str: "bbb")))
-        XCTAssertTrue(PeerID(str: "bbb") != peerID)
-        XCTAssertTrue(Optional(PeerID(str: "bbb")) != Optional(peerID))
+        #expect(peerID != PeerID(str: "bbb"))
+        #expect(peerID != Optional(PeerID(str: "bbb")))
+        #expect(PeerID(str: "bbb") != peerID)
+        #expect(Optional(PeerID(str: "bbb")) != Optional(peerID))
     }
     
     // MARK: - Computed properties
     
-    func test_isEmpty_true_and_false() {
-        XCTAssertTrue(PeerID(str: "").isEmpty)
-        XCTAssertFalse(PeerID(str: "abc").isEmpty)
+    @Test func isEmpty_true_and_false() {
+        #expect(PeerID(str: "").isEmpty)
+        #expect(!PeerID(str: "abc").isEmpty)
     }
     
-    func test_isGeoChat() {
-        XCTAssertTrue(PeerID(str: "nostr:abcdef").isGeoChat)
-        XCTAssertFalse(PeerID(str: "nostr_abcdef").isGeoChat) // different prefix
+    @Test func isGeoChat() {
+        #expect(PeerID(str: "nostr:abcdef").isGeoChat)
+        #expect(!PeerID(str: "nostr_abcdef").isGeoChat)
     }
     
-    func test_isGeoDM() {
-        XCTAssertTrue(PeerID(str: "nostr_abcdef").isGeoDM)
-        XCTAssertFalse(PeerID(str: "nostr:abcdef").isGeoDM)
+    @Test func isGeoDM() {
+        #expect(PeerID(str: "nostr_abcdef").isGeoDM)
+        #expect(!PeerID(str: "nostr:abcdef").isGeoDM)
     }
     
-    func test_toPercentEncoded() {
+    @Test func toPercentEncoded() {
         let peerID = PeerID(str: "name:some value/with spaces?")
         let encoded = peerID.toPercentEncoded()
         // spaces and ? should be percent-encoded in urlPathAllowed
-        XCTAssertEqual(encoded, "name%3Asome%20value/with%20spaces%3F")
+        #expect(encoded == "name%3Asome%20value/with%20spaces%3F")
     }
     
     // MARK: - Validation
     
-    func test_accepts_short_hex_peer_id() {
-        XCTAssertTrue(PeerID(str: "0011223344556677").isValid)
-        XCTAssertTrue(PeerID(str: "aabbccddeeff0011").isValid)
+    @Test func accepts_short_hex_peer_id() {
+        #expect(PeerID(str: "0011223344556677").isValid)
+        #expect(PeerID(str: "aabbccddeeff0011").isValid)
     }
     
-    func test_accepts_full_noise_key_hex() {
+    @Test func accepts_full_noise_key_hex() {
         let hex64 = String(repeating: "ab", count: 32) // 64 hex chars
-        XCTAssertTrue(PeerID(str: hex64).isValid)
+        #expect(PeerID(str: hex64).isValid)
     }
     
-    func test_accepts_internal_alnum_dash_underscore() {
-        XCTAssertTrue(PeerID(str: "peer_123-ABC").isValid)
-        XCTAssertTrue(PeerID(str: "nostr_user_01").isValid)
+    @Test func accepts_internal_alnum_dash_underscore() {
+        #expect(PeerID(str: "peer_123-ABC").isValid)
+        #expect(PeerID(str: "nostr_user_01").isValid)
     }
     
-    func test_rejects_invalid_characters() {
-        XCTAssertFalse(PeerID(str: "peer!@#").isValid)
-        XCTAssertFalse(PeerID(str: "gggggggggggggggg").isValid) // not hex for short form
+    @Test func rejects_invalid_characters() {
+        #expect(!PeerID(str: "peer!@#").isValid)
+        #expect(!PeerID(str: "gggggggggggggggg").isValid) // not hex for short form
     }
     
-    func test_rejects_too_long() {
+    @Test func rejects_too_long() {
         let tooLong = String(repeating: "a", count: 65)
-        XCTAssertFalse(PeerID(str: tooLong).isValid)
+        #expect(!PeerID(str: tooLong).isValid)
     }
     
-    func test_isShort() {
-        XCTAssertTrue(PeerID(str: hex16).isShort)
-        XCTAssertFalse(PeerID(str: "abcd").isShort) // wrong length
+    @Test func isShort() {
+        #expect(PeerID(str: hex16).isShort)
+        #expect(!PeerID(str: "abcd").isShort) // wrong length
     }
     
-    func test_isNoiseKeyHex_and_noiseKey() {
+    @Test func isNoiseKeyHex_and_noiseKey() {
         let hex64 = String(repeating: "ab", count: 32) // 64 chars valid hex
         let peerID = PeerID(str: hex64)
-        XCTAssertTrue(peerID.isNoiseKeyHex)
-        XCTAssertNotNil(peerID.noiseKey)
+        #expect(peerID.isNoiseKeyHex)
+        #expect(peerID.noiseKey != nil)
         
         let prefixedPeerID = PeerID(str: "noise:" + hex64)
-        XCTAssertTrue(prefixedPeerID.isNoiseKeyHex)
-        XCTAssertNotNil(prefixedPeerID.noiseKey)
+        #expect(prefixedPeerID.isNoiseKeyHex)
+        #expect(prefixedPeerID.noiseKey != nil)
         
         let bad = String(repeating: "z", count: 64) // invalid hex
         let badPeerID = PeerID(str: bad)
-        XCTAssertFalse(badPeerID.isNoiseKeyHex)
-        XCTAssertNil(badPeerID.noiseKey)
+        #expect(!badPeerID.isNoiseKeyHex)
+        #expect(badPeerID.noiseKey == nil)
     }
     
-    func test_prefixes() {
+    @Test func prefixes() {
         let hex64 = String(repeating: "a", count: 64)
-        XCTAssertTrue(PeerID(str: "noise:\(hex64)").isValid)
-        XCTAssertTrue(PeerID(str: "nostr:\(hex64)").isValid)
-        XCTAssertTrue(PeerID(str: "nostr_\(hex64)").isValid)
+        #expect(PeerID(str: "noise:\(hex64)").isValid)
+        #expect(PeerID(str: "nostr:\(hex64)").isValid)
+        #expect(PeerID(str: "nostr_\(hex64)").isValid)
 
         let hex63 = String(repeating: "a", count: 63)
-        XCTAssertTrue(PeerID(str: "noise:\(hex63)").isValid)
-        XCTAssertTrue(PeerID(str: "nostr:\(hex63)").isValid)
-        XCTAssertTrue(PeerID(str: "nostr_\(hex63)").isValid)
+        #expect(PeerID(str: "noise:\(hex63)").isValid)
+        #expect(PeerID(str: "nostr:\(hex63)").isValid)
+        #expect(PeerID(str: "nostr_\(hex63)").isValid)
 
         let hex16 = String(repeating: "a", count: 16)
-        XCTAssertTrue(PeerID(str: "noise:\(hex16)").isValid)
-        XCTAssertTrue(PeerID(str: "nostr:\(hex16)").isValid)
-        XCTAssertTrue(PeerID(str: "nostr_\(hex16)").isValid)
+        #expect(PeerID(str: "noise:\(hex16)").isValid)
+        #expect(PeerID(str: "nostr:\(hex16)").isValid)
+        #expect(PeerID(str: "nostr_\(hex16)").isValid)
 
         let hex8 = String(repeating: "a", count: 8)
-        XCTAssertTrue(PeerID(str: "noise:\(hex8)").isValid)
-        XCTAssertTrue(PeerID(str: "nostr:\(hex8)").isValid)
-        XCTAssertTrue(PeerID(str: "nostr_\(hex8)").isValid)
+        #expect(PeerID(str: "noise:\(hex8)").isValid)
+        #expect(PeerID(str: "nostr:\(hex8)").isValid)
+        #expect(PeerID(str: "nostr_\(hex8)").isValid)
 
         let mesh = "mesh:abcdefg"
-        XCTAssertTrue(PeerID(str: "name:\(mesh)").isValid)
+        #expect(PeerID(str: "name:\(mesh)").isValid)
 
         let name = "name:some_name"
-        XCTAssertTrue(PeerID(str: "name:\(name)").isValid)
+        #expect(PeerID(str: "name:\(name)").isValid)
 
         let badName = "name:bad:name"
-        XCTAssertFalse(PeerID(str: "name:\(badName)").isValid)
+        #expect(!PeerID(str: "name:\(badName)").isValid)
 
         // Too long
         let hex65 = String(repeating: "a", count: 65)
-        XCTAssertFalse(PeerID(str: "noise:\(hex65)").isValid)
-        XCTAssertFalse(PeerID(str: "nostr:\(hex65)").isValid)
-        XCTAssertFalse(PeerID(str: "nostr_\(hex65)").isValid)
+        #expect(!PeerID(str: "noise:\(hex65)").isValid)
+        #expect(!PeerID(str: "nostr:\(hex65)").isValid)
+        #expect(!PeerID(str: "nostr_\(hex65)").isValid)
     }
 }
-

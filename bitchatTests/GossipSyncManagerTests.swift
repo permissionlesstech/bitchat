@@ -4,7 +4,7 @@ import XCTest
 
 final class GossipSyncManagerTests: XCTestCase {
     func testConcurrentPacketIntakeAndSyncRequest() {
-        let manager = GossipSyncManager(myPeerID: "0102030405060708")
+        let manager = GossipSyncManager(myPeerID: PeerID(str: "0102030405060708"))
         let delegate = RecordingDelegate()
         let sendExpectation = expectation(description: "sync request sent")
         delegate.onSend = { sendExpectation.fulfill() }
@@ -32,7 +32,7 @@ final class GossipSyncManagerTests: XCTestCase {
         }
 
         DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.002) {
-            manager.scheduleInitialSyncToPeer("FFFFFFFFFFFFFFFF", delaySeconds: 0.0)
+            manager.scheduleInitialSyncToPeer(PeerID(str: "FFFFFFFFFFFFFFFF"), delaySeconds: 0.0)
         }
 
         group.wait()
