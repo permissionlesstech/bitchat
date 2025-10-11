@@ -315,48 +315,49 @@ final class BLEService: NSObject {
         startServices()
     }
     
+    // Ensure this runs on message queue to avoid main thread blocking
     func sendMessage(_ content: String, mentions: [String] = [], to recipientID: String? = nil, messageID: String? = nil, timestamp: Date? = nil) {
-        // Ensure this runs on message queue to avoid main thread blocking
-        messageQueue.async { [weak self] in
-            guard let self = self else { return }
-            
-            guard content.count <= self.maxMessageLength else {
-                SecureLogger.error("Message too long: \(content.count) chars", category: .session)
-                return
+        // Call directly if already on messageQueue, otherwise dispatch
+        if DispatchQueue.getSpecific(key: messageQueueKey) == nil {
+            messageQueue.async { [weak self] in
+                self?.sendMessage(content, mentions: mentions, to: recipientID, messageID: messageID, timestamp: timestamp)
             }
-            
-            let finalMessageID = messageID ?? UUID().uuidString
-            let _ = UInt64(Date().timeIntervalSince1970 * 1000)
-            
-            if let recipientID = recipientID {
-                // Private message
-                self.sendPrivateMessage(content, to: recipientID, messageID: finalMessageID)
-            } else {
-                // Public broadcast
-                // Create packet with explicit fields so we can sign it
-                let basePacket = BitchatPacket(
-                    type: MessageType.message.rawValue,
-                    senderID: Data(hexString: self.myPeerID.id) ?? Data(),
-                    recipientID: nil,
-                    timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                    payload: Data(content.utf8),
-                    signature: nil,
-                    ttl: self.messageTTL
-                )
-                guard let signedPacket = self.noiseService.signPacket(basePacket) else {
-                    SecureLogger.error("❌ Failed to sign public message", category: .security)
-                    return
-                }
-                // Pre-mark our own broadcast as processed to avoid handling relayed self copy
-                let senderHex = signedPacket.senderID.hexEncodedString()
-                let dedupID = "\(senderHex)-\(signedPacket.timestamp)-\(signedPacket.type)"
-                self.messageDeduplicator.markProcessed(dedupID)
-                // Call synchronously since we're already on background queue
-                self.broadcastPacket(signedPacket)
-                // Track our own broadcast for sync
-                self.gossipSyncManager?.onPublicPacketSeen(signedPacket)
-            }
+            return
         }
+        
+        guard content.count <= maxMessageLength else {
+            SecureLogger.error("Message too long: \(content.count) chars", category: .session)
+            return
+        }
+        
+        if let recipientID {
+            sendPrivateMessage(content, to: recipientID, messageID: messageID ?? UUID().uuidString)
+            return
+        }
+        
+        // Public broadcast
+        // Create packet with explicit fields so we can sign it
+        let basePacket = BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: Data(hexString: myPeerID.id) ?? Data(),
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: Data(content.utf8),
+            signature: nil,
+            ttl: messageTTL
+        )
+        guard let signedPacket = noiseService.signPacket(basePacket) else {
+            SecureLogger.error("❌ Failed to sign public message", category: .security)
+            return
+        }
+        // Pre-mark our own broadcast as processed to avoid handling relayed self copy
+        let senderHex = signedPacket.senderID.hexEncodedString()
+        let dedupID = "\(senderHex)-\(signedPacket.timestamp)-\(signedPacket.type)"
+        messageDeduplicator.markProcessed(dedupID)
+        // Call synchronously since we're already on background queue
+        broadcastPacket(signedPacket)
+        // Track our own broadcast for sync
+        gossipSyncManager?.onPublicPacketSeen(signedPacket)
     }
     
     // MARK: - Transport Protocol Conformance
@@ -590,11 +591,7 @@ final class BLEService: NSObject {
                     signature: nil,
                     ttl: messageTTL
                 )
-                if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
-                    broadcastPacket(packet)
-                } else {
-                    messageQueue.async { [weak self] in self?.broadcastPacket(packet) }
-                }
+                broadcastPacket(packet)
             } catch {
                 SecureLogger.error("Failed to send read receipt: \(error)")
             }
@@ -677,19 +674,11 @@ final class BLEService: NSObject {
 // MARK: - GossipSyncManager Delegate
 extension BLEService: GossipSyncManager.Delegate {
     func sendPacket(_ packet: BitchatPacket) {
-        if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
-            broadcastPacket(packet)
-        } else {
-            messageQueue.async { [weak self] in self?.broadcastPacket(packet) }
-        }
+        broadcastPacket(packet)
     }
 
     func sendPacket(to peerID: PeerID, packet: BitchatPacket) {
-        if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
-            sendPacketDirected(packet, to: peerID)
-        } else {
-            messageQueue.async { [weak self] in self?.sendPacketDirected(packet, to: peerID) }
-        }
+        sendPacketDirected(packet, to: peerID)
     }
 
     func signPacketForBroadcast(_ packet: BitchatPacket) -> BitchatPacket {
@@ -1056,13 +1045,7 @@ extension BLEService {
                 peers[normalizedID] = p
             }
         }
-        if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
-            handleReceivedPacket(packet, from: fromPeerID)
-        } else {
-            messageQueue.async { [weak self] in
-                self?.handleReceivedPacket(packet, from: fromPeerID)
-            }
-        }
+        handleReceivedPacket(packet, from: fromPeerID)
     }
 }
 #endif
@@ -1570,11 +1553,7 @@ extension BLEService {
                 signature: nil,
                 ttl: messageTTL
             )
-            if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
-                broadcastPacket(packet)
-            } else {
-                messageQueue.async { [weak self] in self?.broadcastPacket(packet) }
-            }
+            broadcastPacket(packet)
         } catch {
             SecureLogger.error("Failed to send verification payload: \(error)")
         }
@@ -1765,23 +1744,17 @@ extension BLEService {
                     }
                 }
                 
-            let packet = BitchatPacket(
-                type: MessageType.noiseEncrypted.rawValue,
-                senderID: myPeerIDData,
-                recipientID: recipientData,
-                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                payload: encrypted,
-                signature: nil,
-                ttl: messageTTL
-            )
-                // Call directly if already on messageQueue, otherwise dispatch
-                if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
-                    broadcastPacket(packet)
-                } else {
-                    messageQueue.async { [weak self] in
-                        self?.broadcastPacket(packet)
-                    }
-                }
+                let packet = BitchatPacket(
+                    type: MessageType.noiseEncrypted.rawValue,
+                    senderID: myPeerIDData,
+                    recipientID: recipientData,
+                    timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                    payload: encrypted,
+                    signature: nil,
+                    ttl: messageTTL
+                )
+                
+                broadcastPacket(packet)
                 
                 // Notify delegate that message was sent
                 notifyUI { [weak self] in
@@ -1828,14 +1801,7 @@ extension BLEService {
                 signature: nil,
                 ttl: messageTTL
             )
-            // Call directly if on messageQueue, otherwise dispatch
-            if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
-                broadcastPacket(packet)
-            } else {
-                messageQueue.async { [weak self] in
-                    self?.broadcastPacket(packet)
-                }
-            }
+            broadcastPacket(packet)
         } catch {
             SecureLogger.error("Failed to initiate handshake: \(error)")
         }
@@ -1901,6 +1867,14 @@ extension BLEService {
     // MARK: Packet Broadcasting
     
     private func broadcastPacket(_ packet: BitchatPacket) {
+        // Call directly if already on messageQueue, otherwise dispatch
+        if DispatchQueue.getSpecific(key: messageQueueKey) == nil {
+            messageQueue.async { [weak self] in
+                self?.broadcastPacket(packet)
+            }
+            return
+        }
+        
         // Encode once using a small per-type padding policy, then delegate by type
         let padForBLE = padPolicy(for: packet.type)
         guard let data = packet.toBinaryData(padding: padForBLE) else {
@@ -2091,6 +2065,14 @@ extension BLEService {
 
     // Directed send helper (unicast to a specific peerID) without altering packet contents
     private func sendPacketDirected(_ packet: BitchatPacket, to peerID: PeerID) {
+        // Call directly if already on messageQueue, otherwise dispatch
+        if DispatchQueue.getSpecific(key: messageQueueKey) == nil {
+            messageQueue.async { [weak self] in
+                self?.sendPacketDirected(packet, to: peerID)
+            }
+            return
+        }
+        
         guard let data = packet.toBinaryData(padding: false) else { return }
         sendOnAllLinks(packet: packet, data: data, pad: false, directedOnlyPeer: peerID)
     }
@@ -2125,9 +2107,8 @@ extension BLEService {
             }
             return out
         }
-        guard !toSend.isEmpty else { return }
         for (_, packet) in toSend {
-            messageQueue.async { [weak self] in self?.broadcastPacket(packet) }
+            broadcastPacket(packet)
         }
     }
 
@@ -2288,6 +2269,14 @@ extension BLEService {
     // MARK: Packet Reception
     
     private func handleReceivedPacket(_ packet: BitchatPacket, from peerID: PeerID) {
+        // Call directly if already on messageQueue, otherwise dispatch
+        if DispatchQueue.getSpecific(key: messageQueueKey) == nil {
+            messageQueue.async { [weak self] in
+                self?.handleReceivedPacket(packet, from: peerID)
+            }
+            return
+        }
+        
         // Deduplication (thread-safe)
         let senderID = PeerID(hexData: packet.senderID)
         // Include packet type in message ID to prevent collisions between different packet types
@@ -2888,14 +2877,8 @@ extension BLEService {
             return
         }
         
-        // Call directly if on messageQueue, otherwise dispatch
-        if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
-            broadcastPacket(signedPacket)
-        } else {
-            messageQueue.async { [weak self] in
-                self?.broadcastPacket(signedPacket)
-            }
-        }
+        broadcastPacket(signedPacket)
+        
         // Ensure our own announce is included in sync state
         gossipSyncManager?.onPublicPacketSeen(signedPacket)
     }
