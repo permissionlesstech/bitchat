@@ -166,14 +166,14 @@ final class NoiseProtocolTests: XCTestCase {
     func testSessionManagerBasicOperations() throws {
         let manager = NoiseSessionManager(localStaticKey: aliceKey, keychain: mockKeychain)
         
-        // Create session
-        let session = manager.createSession(for: TestConstants.testPeerID2, role: .initiator)
-        XCTAssertNotNil(session)
+        XCTAssertNil(manager.getSession(for: TestConstants.testPeerID2))
+        
+        _ = try manager.initiateHandshake(with: TestConstants.testPeerID2)
+        XCTAssertNotNil(manager.getSession(for: TestConstants.testPeerID2))
         
         // Get session
         let retrieved = manager.getSession(for: TestConstants.testPeerID2)
         XCTAssertNotNil(retrieved)
-        XCTAssertTrue(session === retrieved)
         
         // Remove session
         manager.removeSession(for: TestConstants.testPeerID2)
