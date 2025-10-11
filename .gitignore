@@ -66,6 +66,9 @@ __pycache__/
 *.tmp
 *.temp
 
+## Cache
+.cache/
+
 # Local build results
 .Result*/
 .Result*.xcresult/
