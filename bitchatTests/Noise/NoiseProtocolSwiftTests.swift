@@ -12,7 +12,7 @@ import Foundation
 @testable import bitchat
 
 @Suite(.serialized) // Otherwise it's freezing (could be because of mutability)
-actor NoiseProtocolSwiftTests {
+struct NoiseProtocolSwiftTests {
     
     private let aliceKey = Curve25519.KeyAgreement.PrivateKey()
     private let bobKey = Curve25519.KeyAgreement.PrivateKey()
@@ -21,13 +21,10 @@ actor NoiseProtocolSwiftTests {
     private let alicePeerID = PeerID(str: UUID().uuidString)
     private let bobPeerID = PeerID(str: UUID().uuidString)
     
-    private var aliceSession: NoiseSession!
-    private var bobSession: NoiseSession!
+    private let aliceSession: NoiseSession
+    private let bobSession: NoiseSession
     
-    // MARK: - Basic Handshake Tests
-    
-    @Test func xxPatternHandshake() throws {
-        // Create sessions
+    init() {
         aliceSession = NoiseSession(
             peerID: alicePeerID,
             role: .initiator,
@@ -41,7 +38,11 @@ actor NoiseProtocolSwiftTests {
             keychain: mockKeychain,
             localStaticKey: bobKey
         )
-        
+    }
+    
+    // MARK: - Basic Handshake Tests
+    
+    @Test func xxPatternHandshake() throws {
         // Alice starts handshake (message 1)
         let message1 = try aliceSession.startHandshake()
         #expect(!message1.isEmpty)
@@ -74,13 +75,6 @@ actor NoiseProtocolSwiftTests {
     }
     
     @Test func handshakeStateValidation() throws {
-        aliceSession = NoiseSession(
-            peerID: alicePeerID,
-            role: .initiator,
-            keychain: mockKeychain,
-            localStaticKey: aliceKey
-        )
-        
         // Cannot process message before starting handshake
         #expect(throws: NoiseSessionError.invalidState) {
             try aliceSession.processHandshakeMessage(Data())
@@ -98,8 +92,7 @@ actor NoiseProtocolSwiftTests {
     // MARK: - Encryption/Decryption Tests
     
     @Test func basicEncryptionDecryption() throws {
-        // Establish sessions
-        try establishSessions()
+        try performHandshake(initiator: aliceSession, responder: bobSession)
         
         let plaintext = "Hello, Bob!".data(using: .utf8)!
         
@@ -114,7 +107,7 @@ actor NoiseProtocolSwiftTests {
     }
     
     @Test func bidirectionalEncryption() throws {
-        try establishSessions()
+        try performHandshake(initiator: aliceSession, responder: bobSession)
         
         // Alice -> Bob
         let aliceMessage = "Hello from Alice".data(using: .utf8)!
@@ -130,7 +123,7 @@ actor NoiseProtocolSwiftTests {
     }
     
     @Test func largeMessageEncryption() throws {
-        try establishSessions()
+        try performHandshake(initiator: aliceSession, responder: bobSession)
         
         // Create a large message
         let largeMessage = TestHelpers.generateRandomData(length: 100_000)
@@ -143,13 +136,6 @@ actor NoiseProtocolSwiftTests {
     }
     
     @Test func encryptionBeforeHandshake() {
-        aliceSession = NoiseSession(
-            peerID: alicePeerID,
-            role: .initiator,
-            keychain: mockKeychain,
-            localStaticKey: aliceKey
-        )
-        
         let plaintext = "test".data(using: .utf8)!
         
         #expect(throws: NoiseSessionError.notEstablished) {
@@ -235,7 +221,7 @@ actor NoiseProtocolSwiftTests {
     // MARK: - Security Tests
     
     @Test func tamperedCiphertextDetection() throws {
-        try establishSessions()
+        try performHandshake(initiator: aliceSession, responder: bobSession)
         
         let plaintext = "Secret message".data(using: .utf8)!
         var ciphertext = try aliceSession.encrypt(plaintext)
@@ -256,7 +242,7 @@ actor NoiseProtocolSwiftTests {
     }
     
     @Test func replayPrevention() throws {
-        try establishSessions()
+        try performHandshake(initiator: aliceSession, responder: bobSession)
         
         let plaintext = "Test message".data(using: .utf8)!
         let ciphertext = try aliceSession.encrypt(plaintext)
@@ -342,8 +328,8 @@ actor NoiseProtocolSwiftTests {
     
     @Test func nonceDesynchronizationRecovery() throws {
         // Create two sessions
-        aliceSession = NoiseSession(peerID: alicePeerID, role: .initiator, keychain: mockKeychain, localStaticKey: aliceKey)
-        bobSession = NoiseSession(peerID: bobPeerID, role: .responder, keychain: mockKeychain, localStaticKey: bobKey)
+        let aliceSession = NoiseSession(peerID: alicePeerID, role: .initiator, keychain: mockKeychain, localStaticKey: aliceKey)
+        let bobSession = NoiseSession(peerID: bobPeerID, role: .responder, keychain: mockKeychain, localStaticKey: bobKey)
         
         // Establish sessions
         try performHandshake(initiator: aliceSession, responder: bobSession)
@@ -529,24 +515,6 @@ actor NoiseProtocolSwiftTests {
     }
     
     // MARK: - Helper Methods
-    
-    private func establishSessions() throws {
-        aliceSession = NoiseSession(
-            peerID: alicePeerID,
-            role: .initiator,
-            keychain: mockKeychain,
-            localStaticKey: aliceKey
-        )
-        
-        bobSession = NoiseSession(
-            peerID: bobPeerID,
-            role: .responder,
-            keychain: mockKeychain,
-            localStaticKey: bobKey
-        )
-        
-        try performHandshake(initiator: aliceSession, responder: bobSession)
-    }
     
     private func performHandshake(initiator: NoiseSession, responder: NoiseSession) throws {
         let msg1 = try initiator.startHandshake()
