@@ -872,6 +872,8 @@ struct ContentView: View {
                     }
                     Button(action: {
                         withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                            showSidebar = false
+                            showVerifySheet = false
                             viewModel.endPrivateChat()
                         }
                     }) {
