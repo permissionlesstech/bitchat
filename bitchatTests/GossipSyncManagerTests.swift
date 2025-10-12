@@ -102,6 +102,17 @@ final class GossipSyncManagerTests: XCTestCase {
         let senderData = Data(hexString: peerHex) ?? Data()
         let staleTimestampMs = UInt64(Date().addingTimeInterval(-(config.stalePeerTimeoutSeconds + 1)).timeIntervalSince1970 * 1000)
 
+        let freshMessage = BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: senderData,
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: Data([0xAA]),
+            signature: nil,
+            ttl: 1
+        )
+        manager.onPublicPacketSeen(freshMessage)
+
         let announcePacket = BitchatPacket(
             type: MessageType.announce.rawValue,
             senderID: senderData,
@@ -117,6 +128,7 @@ final class GossipSyncManagerTests: XCTestCase {
         manager._performMaintenanceSynchronously()
 
         XCTAssertFalse(manager._hasAnnouncement(for: PeerID(str: peerHex)))
+        XCTAssertEqual(manager._messageCount(for: PeerID(str: peerHex)), 0)
     }
 }
 

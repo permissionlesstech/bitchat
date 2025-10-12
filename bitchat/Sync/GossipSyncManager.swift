@@ -100,7 +100,11 @@ final class GossipSyncManager {
         guard isPacketFresh(packet) else { return }
 
         if isAnnounce {
-            guard isAnnouncementFresh(packet) else { return }
+            guard isAnnouncementFresh(packet) else {
+                let sender = packet.senderID.hexEncodedString().lowercased()
+                removeState(forNormalizedPeerID: sender)
+                return
+            }
         }
 
         let idHex = PacketIdUtil.computeId(packet).hexEncodedString()
@@ -117,7 +121,7 @@ final class GossipSyncManager {
                 }
             }
         } else if isAnnounce {
-            let sender = packet.senderID.hexEncodedString()
+            let sender = packet.senderID.hexEncodedString().lowercased()
             latestAnnouncementByPeer[sender] = (id: idHex, packet: packet)
         }
     }
@@ -267,12 +271,11 @@ final class GossipSyncManager {
         guard nowMs >= timeoutMs else { return }
         let cutoff = nowMs - timeoutMs
         let stalePeerIDs = latestAnnouncementByPeer.compactMap { (peerHex, pair) -> String? in
-            pair.packet.timestamp < cutoff ? peerHex : nil
+            pair.packet.timestamp < cutoff ? peerHex.lowercased() : nil
         }
         guard !stalePeerIDs.isEmpty else { return }
-        for peerHex in stalePeerIDs {
-            let peerID = PeerID(str: peerHex)
-            _removeAnnouncementForPeer(peerID)
+        for peerKey in stalePeerIDs {
+            removeState(forNormalizedPeerID: peerKey)
         }
     }
 
@@ -285,8 +288,11 @@ final class GossipSyncManager {
 
     private func _removeAnnouncementForPeer(_ peerID: PeerID) {
         let normalizedPeerID = peerID.id.lowercased()
-        _ = latestAnnouncementByPeer.removeValue(forKey: normalizedPeerID)
+        removeState(forNormalizedPeerID: normalizedPeerID)
+    }
 
+    private func removeState(forNormalizedPeerID normalizedPeerID: String) {
+        _ = latestAnnouncementByPeer.removeValue(forKey: normalizedPeerID)
         // Remove messages from this peer
         // Collect IDs to remove first to avoid concurrent modification
         let messageIdsToRemove = messages.compactMap { (id, message) -> String? in
