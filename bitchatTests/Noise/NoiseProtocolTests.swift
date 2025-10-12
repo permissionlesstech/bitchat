@@ -1,5 +1,5 @@
 //
-// NoiseProtocolSwiftTests.swift
+// NoiseProtocolTests.swift
 // bitchatTests
 //
 // This is free and unencumbered software released into the public domain.
@@ -11,7 +11,7 @@ import CryptoKit
 import Foundation
 @testable import bitchat
 
-struct NoiseProtocolSwiftTests {
+struct NoiseProtocolTests {
     
     private let aliceKey = Curve25519.KeyAgreement.PrivateKey()
     private let bobKey = Curve25519.KeyAgreement.PrivateKey()
