@@ -12,9 +12,9 @@ import SwiftUI
 
 /// Manages all private chat functionality
 final class PrivateChatManager: ObservableObject {
-    @Published var privateChats: [String: [BitchatMessage]] = [:]
-    @Published var selectedPeer: String? = nil
-    @Published var unreadMessages: Set<String> = []
+    @Published var privateChats: [PeerID: [BitchatMessage]] = [:]
+    @Published var selectedPeer: PeerID? = nil
+    @Published var unreadMessages: Set<PeerID> = []
     
     private var selectedPeerFingerprint: String? = nil
     var sentReadReceipts: Set<String> = []  // Made accessible for ChatViewModel
@@ -32,7 +32,7 @@ final class PrivateChatManager: ObservableObject {
     
     /// Start a private chat with a peer
     func startChat(with peerID: PeerID) {
-        selectedPeer = peerID.id
+        selectedPeer = peerID
         
         // Store fingerprint for persistence across reconnections
         if let fingerprint = meshService?.getFingerprint(for: peerID) {
@@ -43,8 +43,8 @@ final class PrivateChatManager: ObservableObject {
         markAsRead(from: peerID)
         
         // Initialize chat if needed
-        if privateChats[peerID.id] == nil {
-            privateChats[peerID.id] = []
+        if privateChats[peerID] == nil {
+            privateChats[peerID] = []
         }
     }
     
@@ -56,7 +56,7 @@ final class PrivateChatManager: ObservableObject {
 
     /// Remove duplicate messages by ID and keep chronological order
     func sanitizeChat(for peerID: PeerID) {
-        guard let arr = privateChats[peerID.id] else { return }
+        guard let arr = privateChats[peerID] else { return }
         if arr.count <= 1 {
             return
         }
@@ -75,15 +75,15 @@ final class PrivateChatManager: ObservableObject {
             }
         }
 
-        privateChats[peerID.id] = deduped
+        privateChats[peerID] = deduped
     }
     
     /// Mark messages from a peer as read
     func markAsRead(from peerID: PeerID) {
-        unreadMessages.remove(peerID.id)
+        unreadMessages.remove(peerID)
         
         // Send read receipts for unread messages that haven't been sent yet
-        if let messages = privateChats[peerID.id] {
+        if let messages = privateChats[peerID] {
             for message in messages {
                 if message.senderPeerID == peerID && !message.isRelay && !sentReadReceipts.contains(message.id) {
                     sendReadReceipt(for: message)

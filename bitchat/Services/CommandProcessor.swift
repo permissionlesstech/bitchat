@@ -42,7 +42,7 @@ final class CommandProcessor {
             case .location: return true
             }
         }()
-        let inGeoDM = (chatViewModel?.selectedPrivateChatPeer?.hasPrefix("nostr_") == true)
+        let inGeoDM = chatViewModel?.selectedPrivateChatPeer?.isGeoDM == true
 
         switch cmd {
         case "/m", "/msg":
