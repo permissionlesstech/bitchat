@@ -276,7 +276,7 @@ private extension SecureLogger {
         }
         
         // Cache the result
-        cacheQueue.async(flags: .barrier) {
+        cacheQueue.sync {
             sanitizationCache.setObject(sanitized as NSString, forKey: key)
         }
         
