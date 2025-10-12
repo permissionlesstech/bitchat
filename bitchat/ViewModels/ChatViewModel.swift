@@ -260,8 +260,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     var selectedPrivateChatPeer: String? { 
         get { privateChatManager.selectedPeer }
         set { 
-            if let peer = newValue {
-                privateChatManager.startChat(with: peer)
+            if let peerID = PeerID(str: newValue) {
+                privateChatManager.startChat(with: peerID)
             } else {
                 privateChatManager.endChat()
             }
@@ -2665,7 +2665,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             }
         }
         
-        privateChatManager.startChat(with: peerID)
+        privateChatManager.startChat(with: PeerID(str: peerID))
         
         // Also mark messages as read for Nostr ACKs
         // This ensures read receipts are sent even for consolidated messages
@@ -3014,7 +3014,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     
     @MainActor
     func markPrivateMessagesAsRead(from peerID: String) {
-        privateChatManager.markAsRead(from: peerID)
+        privateChatManager.markAsRead(from: PeerID(str: peerID))
         
         // Handle GeoDM (nostr_*) read receipts directly via per-geohash identity
         if peerID.hasPrefix("nostr_"),
@@ -5268,7 +5268,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             privateChats[targetPeerID]?.append(message)
         }
         // Sanitize to avoid duplicate IDs
-        privateChatManager.sanitizeChat(for: targetPeerID)
+        privateChatManager.sanitizeChat(for: PeerID(str: targetPeerID))
     }
     
     @MainActor
@@ -5288,7 +5288,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         } else {
             privateChats[ephemeralPeerID]?.append(message)
         }
-        privateChatManager.sanitizeChat(for: ephemeralPeerID)
+        privateChatManager.sanitizeChat(for: PeerID(str: ephemeralPeerID))
     }
     
     @MainActor
@@ -5807,7 +5807,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                     // Initialize with migrated messages
                     privateChats[peerID] = migratedMessages
                 }
-                privateChatManager.sanitizeChat(for: peerID)
+                privateChatManager.sanitizeChat(for: PeerID(str: peerID))
                 
                 // Update selectedPrivateChatPeer if it was pointing to an old ID
                 if needsSelectedUpdate {

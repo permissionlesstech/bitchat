@@ -31,11 +31,11 @@ final class PrivateChatManager: ObservableObject {
     private let privateChatCap = TransportConfig.privateChatCap
     
     /// Start a private chat with a peer
-    func startChat(with peerID: String) {
-        selectedPeer = peerID
+    func startChat(with peerID: PeerID) {
+        selectedPeer = peerID.id
         
         // Store fingerprint for persistence across reconnections
-        if let fingerprint = meshService?.getFingerprint(for: PeerID(str: peerID)) {
+        if let fingerprint = meshService?.getFingerprint(for: peerID) {
             selectedPeerFingerprint = fingerprint
         }
         
@@ -43,8 +43,8 @@ final class PrivateChatManager: ObservableObject {
         markAsRead(from: peerID)
         
         // Initialize chat if needed
-        if privateChats[peerID] == nil {
-            privateChats[peerID] = []
+        if privateChats[peerID.id] == nil {
+            privateChats[peerID.id] = []
         }
     }
     
@@ -55,8 +55,8 @@ final class PrivateChatManager: ObservableObject {
     }
 
     /// Remove duplicate messages by ID and keep chronological order
-    func sanitizeChat(for peerID: String) {
-        guard let arr = privateChats[peerID] else { return }
+    func sanitizeChat(for peerID: PeerID) {
+        guard let arr = privateChats[peerID.id] else { return }
         if arr.count <= 1 {
             return
         }
@@ -75,15 +75,15 @@ final class PrivateChatManager: ObservableObject {
             }
         }
 
-        privateChats[peerID] = deduped
+        privateChats[peerID.id] = deduped
     }
     
     /// Mark messages from a peer as read
-    func markAsRead(from peerID: String) {
-        unreadMessages.remove(peerID)
+    func markAsRead(from peerID: PeerID) {
+        unreadMessages.remove(peerID.id)
         
         // Send read receipts for unread messages that haven't been sent yet
-        if let messages = privateChats[peerID] {
+        if let messages = privateChats[peerID.id] {
             for message in messages {
                 if message.senderPeerID == peerID && !message.isRelay && !sentReadReceipts.contains(message.id) {
                     sendReadReceipt(for: message)
