@@ -6,39 +6,30 @@
 // For more information, see <https://unlicense.org>
 //
 
-import XCTest
+import Foundation
 import CryptoKit
+import Testing
 @testable import bitchat
 
-final class IntegrationTests: XCTestCase {
+struct IntegrationTests {
     
-    private var helper: TestNetworkHelper!
+    private var helper = TestNetworkHelper()
     
-    override func setUp() {
-        super.setUp()
-        helper = TestNetworkHelper()
-        
-        // Create a network of nodes
+    init() {
         helper.createNode("Alice", peerID: PeerID(str: UUID().uuidString))
         helper.createNode("Bob", peerID: PeerID(str: UUID().uuidString))
         helper.createNode("Charlie", peerID: PeerID(str: UUID().uuidString))
         helper.createNode("David", peerID: PeerID(str: UUID().uuidString))
     }
     
-    override func tearDown() {
-        helper = nil
-        super.tearDown()
-    }
-    
     // MARK: - Multi-Peer Scenarios
     
-    func testFullMeshCommunication() {
+    @Test func fullMeshCommunication() async throws {
         helper.connectFullMesh()
         
-        let expectation = XCTestExpectation(description: "All nodes communicate")
         var messageMatrix: [String: Set<String>] = [:]
-        
         for (senderName, _) in helper.nodes { messageMatrix[senderName] = [] }
+        
         for (receiverName, receiver) in helper.nodes {
             receiver.messageDeliveryHandler = { message in
                 let parts = message.content.components(separatedBy: " ")
@@ -51,249 +42,227 @@ final class IntegrationTests: XCTestCase {
         }
         
         for (name, node) in helper.nodes {
-            node.sendMessage("Hello from \(name)", mentions: [], to: nil)
+            node.sendMessage("Hello from \(name)")
         }
         
-        // Wait and verify
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            // Each sender should have reached all other nodes
-            for (sender, receivers) in messageMatrix {
-                let expectedReceivers = Set(self.helper.nodes.keys.filter { $0 != sender })
-                XCTAssertEqual(receivers, expectedReceivers, "\(sender) didn't reach all nodes")
-            }
-            expectation.fulfill()
+        // Each sender should have reached all other nodes
+        for (sender, receivers) in messageMatrix {
+            let expectedReceivers = Set(helper.nodes.keys.filter { $0 != sender })
+            #expect(receivers == expectedReceivers, "\(sender) didn't reach all nodes")
         }
-        
-        wait(for: [expectation], timeout: TestConstants.defaultTimeout)
     }
     
-    func testDynamicTopologyChanges() {
+    @Test func dynamicTopologyChanges() async throws {
         // Start with Alice -> Bob -> Charlie
         helper.connect("Alice", "Bob")
         helper.connect("Bob", "Charlie")
         
-        let expectation = XCTestExpectation(description: "Topology changes handled")
-        var phase = 1
-        
-        // Phase 1: Test initial topology
-        helper.nodes["Charlie"]!.messageDeliveryHandler = { message in
-            if phase == 1 && message.sender == "Alice" {
-                // Now change topology: disconnect Bob, connect Alice-Charlie
-                self.helper.disconnect("Alice", "Bob")
-                self.helper.disconnect("Bob", "Charlie")
-                self.helper.connect("Alice", "Charlie")
-                phase = 2
-                
-                // Send another message
-                self.helper.nodes["Alice"]!.sendMessage("Direct message", mentions: [], to: nil)
-            } else if phase == 2 && message.content == "Direct message" {
-                expectation.fulfill()
+        try await confirmation("Topology changes handled") { receiveMessage in
+            var phase = 1
+            
+            helper.nodes["Charlie"]!.messageDeliveryHandler = { message in
+                if phase == 1 && message.sender == "Alice" {
+                    // Now change topology: disconnect Bob, connect Alice-Charlie
+                    helper.disconnect("Alice", "Bob")
+                    helper.disconnect("Bob", "Charlie")
+                    helper.connect("Alice", "Charlie")
+                    phase = 2
+                    
+                    // Send another message
+                    helper.nodes["Alice"]!.sendMessage("Direct message")
+                } else if phase == 2 && message.content == "Direct message" {
+                    receiveMessage()
+                }
             }
+            
+            // Allow relay handler to be set before first send
+            try await sleep(0.05)
+            helper.nodes["Alice"]!.sendMessage("Relayed message")
         }
-        
-        // Initial message through relay
-        // Allow relay handler to be set before first send
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            self.helper.nodes["Alice"]!.sendMessage("Relayed message", mentions: [], to: nil)
-        }
-        
-        wait(for: [expectation], timeout: TestConstants.defaultTimeout)
     }
     
-    func testNetworkPartitionRecovery() {
+    @Test func networkPartitionRecovery() async throws {
         // Create two partitions
         helper.connect("Alice", "Bob")
         helper.connect("Charlie", "David")
         
-        let expectation = XCTestExpectation(description: "Partitions merge and communicate")
         let messagesBeforeMerge = 0
         var messagesAfterMerge = 0
         
-        // Monitor cross-partition messages
-        helper.nodes["David"]!.messageDeliveryHandler = { message in
-            if message.sender == "Alice" {
-                messagesAfterMerge += 1
-                if messagesAfterMerge == 1 {
-                    expectation.fulfill()
+        try await confirmation("Partitions merge and communicate") { receiveMessage in
+            // Monitor cross-partition messages
+            helper.nodes["David"]!.messageDeliveryHandler = { message in
+                if message.sender == "Alice" {
+                    messagesAfterMerge += 1
+                    if messagesAfterMerge == 1 {
+                        receiveMessage()
+                    }
                 }
             }
-        }
-        
-        // Try to send across partition (should fail)
-        helper.nodes["Alice"]!.sendMessage("Before merge", mentions: [], to: nil)
-        
-        // Merge partitions after delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            
+            // Try to send across partition (should fail)
+            helper.nodes["Alice"]!.sendMessage("Before merge")
+            
+            // Merge partitions after delay
+            try await sleep(0.05)
             // Connect partitions
-            self.helper.connect("Bob", "Charlie")
+            helper.connect("Bob", "Charlie")
             
             // Enable relay
-            self.helper.setupRelay("Bob", nextHops: ["Charlie"])
-            self.helper.setupRelay("Charlie", nextHops: ["David"])
+            helper.setupRelay("Bob", nextHops: ["Charlie"])
+            helper.setupRelay("Charlie", nextHops: ["David"])
             
             // Send message across merged network
-            self.helper.nodes["Alice"]!.sendMessage("After merge", mentions: [], to: nil)
+            helper.nodes["Alice"]!.sendMessage("After merge")
         }
         
-        wait(for: [expectation], timeout: TestConstants.defaultTimeout)
-        XCTAssertEqual(messagesBeforeMerge, 0)
-        XCTAssertEqual(messagesAfterMerge, 1)
+        #expect(messagesBeforeMerge == 0)
+        #expect(messagesAfterMerge == 1)
     }
     
     // MARK: - Mixed Message Type Scenarios
     
-    func testMixedPublicPrivateMessages() throws {
+    @Test func mixedPublicPrivateMessages() async throws {
         helper.connectFullMesh()
         
-        let expectation = XCTestExpectation(description: "Mixed messages handled correctly")
         var publicCount = 0
         var privateCount = 0
         
-        // Bob monitors messages
-        helper.nodes["Bob"]!.messageDeliveryHandler = { message in
-            if message.isPrivate && message.recipientNickname == "Bob" {
-                privateCount += 1
-            } else if !message.isPrivate {
-                publicCount += 1
+        await confirmation("Mixed messages handled correctly") { completion in
+            // Bob monitors messages
+            helper.nodes["Bob"]!.messageDeliveryHandler = { message in
+                if message.isPrivate && message.recipientNickname == "Bob" {
+                    privateCount += 1
+                } else if !message.isPrivate {
+                    publicCount += 1
+                }
+                
+                if publicCount == 2 && privateCount == 1 {
+                    completion()
+                }
             }
             
-            if publicCount == 2 && privateCount == 1 {
-                expectation.fulfill()
-            }
+            // Alice sends mixed messages
+            helper.nodes["Alice"]!.sendMessage("Public 1")
+            helper.nodes["Alice"]!.sendPrivateMessage("Private to Bob", to: helper.nodes["Bob"]!.peerID, recipientNickname: "Bob")
+            helper.nodes["Alice"]!.sendMessage("Public 2")
         }
         
-        // Alice sends mixed messages
-        helper.nodes["Alice"]!.sendMessage("Public 1", mentions: [], to: nil)
-        helper.nodes["Alice"]!.sendPrivateMessage("Private to Bob", to: helper.nodes["Bob"]!.peerID, recipientNickname: "Bob")
-        helper.nodes["Alice"]!.sendMessage("Public 2", mentions: [], to: nil)
-        
-        wait(for: [expectation], timeout: TestConstants.defaultTimeout)
-        XCTAssertEqual(publicCount, 2)
-        XCTAssertEqual(privateCount, 1)
+        #expect(publicCount == 2)
+        #expect(privateCount == 1)
     }
     
-    func testEncryptedAndUnencryptedMix() throws {
+    @Test func encryptedAndUnencryptedMix() async throws {
         helper.connect("Alice", "Bob")
         
         // Setup Noise session
         try helper.establishNoiseSession("Alice", "Bob")
         
-        let expectation = XCTestExpectation(description: "Both encrypted and plain messages work")
         var plainCount = 0
         var encryptedCount = 0
         
-        // Setup handlers
-        // Plain path: send public message and count at Bob
-        helper.nodes["Bob"]!.messageDeliveryHandler = { message in
-            if message.content == "Plain message" { plainCount += 1 }
-            if plainCount == 1 && encryptedCount == 1 { expectation.fulfill() }
-        }
-
-        // Encrypted path: use NoiseSessionManager explicitly
-        let plaintext = "Encrypted message".data(using: .utf8)!
-        let ciphertext = try helper.noiseManagers["Alice"]!.encrypt(plaintext, for: helper.nodes["Bob"]!.peerID)
-        helper.nodes["Bob"]!.packetDeliveryHandler = { packet in
-            if packet.type == MessageType.noiseEncrypted.rawValue {
-                if let data = try? self.helper.noiseManagers["Bob"]!.decrypt(ciphertext, from: self.helper.nodes["Alice"]!.peerID),
-                   data == plaintext {
-                    encryptedCount = 1
-                    if plainCount == 1 { expectation.fulfill() }
+        try await confirmation("Both encrypted and plain messages work") { completion in
+            // Plain path: send public message and count at Bob
+            helper.nodes["Bob"]!.messageDeliveryHandler = { message in
+                if message.content == "Plain message" {
+                    plainCount += 1
+                }
+                if plainCount == 1 && encryptedCount == 1 {
+                    completion()
                 }
             }
+            
+            // Encrypted path: use NoiseSessionManager explicitly
+            let plaintext = "Encrypted message".data(using: .utf8)!
+            let ciphertext = try helper.noiseManagers["Alice"]!.encrypt(plaintext, for: helper.nodes["Bob"]!.peerID)
+            
+            helper.nodes["Bob"]!.packetDeliveryHandler = { packet in
+                if packet.type == MessageType.noiseEncrypted.rawValue {
+                    if let data = try? helper.noiseManagers["Bob"]!.decrypt(ciphertext, from: helper.nodes["Alice"]!.peerID),
+                       data == plaintext {
+                        encryptedCount = 1
+                        if plainCount == 1 {
+                            completion()
+                        }
+                    }
+                }
+            }
+            
+            helper.nodes["Alice"]!.sendMessage("Plain message")
+            // Deliver encrypted packet directly
+            let encPacket = TestHelpers.createTestPacket(type: MessageType.noiseEncrypted.rawValue, payload: ciphertext)
+            helper.nodes["Bob"]!.simulateIncomingPacket(encPacket)
         }
-
-        helper.nodes["Alice"]!.sendMessage("Plain message", mentions: [], to: nil)
-        // Deliver encrypted packet directly
-        let encPacket = TestHelpers.createTestPacket(type: MessageType.noiseEncrypted.rawValue, payload: ciphertext)
-        helper.nodes["Bob"]!.simulateIncomingPacket(encPacket)
-        
-        wait(for: [expectation], timeout: TestConstants.defaultTimeout)
     }
     
     // MARK: - Network Resilience Tests
     
-    func testMessageDeliveryUnderChurn() {
+    @Test func messageDeliveryUnderChurn() async throws {
         // Start with stable network
         helper.connectFullMesh()
         
-        let expectation = XCTestExpectation(description: "Messages delivered despite churn")
-        var receivedMessages = Set<String>()
         let totalMessages = 10
         
-        // David tracks received messages
-        helper.nodes["David"]!.messageDeliveryHandler = { message in
-            receivedMessages.insert(message.content)
-            if receivedMessages.count == totalMessages {
-                expectation.fulfill()
+        try await confirmation("Messages delivered despite churn", expectedCount: totalMessages) { completion in
+            // David tracks received messages
+            helper.nodes["David"]!.messageDeliveryHandler = { message in
+                completion()
             }
-        }
-        
-        // Send messages while churning network
-        for i in 0..<totalMessages {
-            helper.nodes["Alice"]!.sendMessage("Message \(i)", mentions: [], to: nil)
             
-            // Simulate churn
-            if i % 3 == 0 {
-                // Disconnect and reconnect random connection
-                let pairs = [("Alice", "Bob"), ("Bob", "Charlie"), ("Charlie", "David")]
-                let randomPair = pairs.randomElement()!
-                self.helper.disconnect(randomPair.0, randomPair.1)
+            // Send messages while churning network
+            for i in 0..<totalMessages {
+                helper.nodes["Alice"]!.sendMessage("Message \(i)")
                 
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    self.helper.connect(randomPair.0, randomPair.1)
+                // Simulate churn
+                if i % 3 == 0 {
+                    // Disconnect and reconnect random connection
+                    let pairs = [("Alice", "Bob"), ("Bob", "Charlie"), ("Charlie", "David")]
+                    let randomPair = pairs.randomElement()!
+                    helper.disconnect(randomPair.0, randomPair.1)
+                    try await sleep(0.01)
+                    helper.connect(randomPair.0, randomPair.1)
                 }
             }
         }
+    }
+    
+    @Test func peerPresenceTrackingAndReconnection() async throws {
+        helper.connect("Alice", "Bob")
         
-        wait(for: [expectation], timeout: TestConstants.longTimeout)
-        XCTAssertEqual(receivedMessages.count, totalMessages)
-    }
-    
-    func testPeerPresenceTrackingAndReconnection() {
-        // Test that after disconnect/reconnect, message delivery resumes
-        helper.connect("Alice", "Bob")
-
-        let expectation = XCTestExpectation(description: "Delivery after reconnection")
-        var delivered = false
-
-        helper.nodes["Bob"]!.messageDeliveryHandler = { message in
-            if message.content == "After reconnect" && !delivered {
-                delivered = true
-                expectation.fulfill()
+        await confirmation("Delivery after reconnection") { delivered in
+            helper.nodes["Bob"]!.messageDeliveryHandler = { message in
+                if message.content == "After reconnect" {
+                    delivered()
+                }
             }
+            
+            // Simulate disconnect (out of range)
+            helper.disconnect("Alice", "Bob")
+            // Reconnect
+            helper.connect("Alice", "Bob")
+            
+            // Send after reconnection
+            helper.nodes["Alice"]!.sendMessage("After reconnect")
         }
-
-        // Simulate disconnect (out of range)
-        helper.disconnect("Alice", "Bob")
-        // Reconnect
-        helper.connect("Alice", "Bob")
-
-        // Send after reconnection
-        helper.nodes["Alice"]!.sendMessage("After reconnect", mentions: [], to: nil)
-
-        wait(for: [expectation], timeout: TestConstants.defaultTimeout)
-        XCTAssertTrue(delivered)
     }
     
-    func testEncryptedMessageAfterPeerRestart() {
-        // Test that encrypted messages work after one peer restarts
+    @Test func encryptedMessageAfterPeerRestart() async throws {
         helper.connect("Alice", "Bob")
         do {
             try helper.establishNoiseSession("Alice", "Bob")
         } catch {
-            XCTFail("Failed to establish Noise session: \(error)")
+            Issue.record("Failed to establish Noise session: \(error)")
         }
         
         // Exchange an encrypted message
-        let firstExpectation = XCTestExpectation(description: "First message received")
-        helper.nodes["Bob"]!.messageDeliveryHandler = { message in
-            if message.content == "Before restart" && message.isPrivate {
-                firstExpectation.fulfill()
+        await confirmation("First message received") { received in
+            helper.nodes["Bob"]!.messageDeliveryHandler = { message in
+                if message.content == "Before restart" && message.isPrivate {
+                    received()
+                }
             }
+            helper.nodes["Alice"]!.sendPrivateMessage("Before restart", to: helper.nodes["Bob"]!.peerID, recipientNickname: "Bob")
         }
-        
-        helper.nodes["Alice"]!.sendPrivateMessage("Before restart", to: helper.nodes["Bob"]!.peerID, recipientNickname: "Bob")
-        wait(for: [firstExpectation], timeout: TestConstants.defaultTimeout)
         
         // Simulate Bob restart by recreating his Noise manager
         let bobKey = Curve25519.KeyAgreement.PrivateKey()
@@ -306,38 +275,37 @@ final class IntegrationTests: XCTestCase {
             let m3 = try helper.noiseManagers["Bob"]!.handleIncomingHandshake(from: helper.nodes["Alice"]!.peerID, message: m2)!
             _ = try helper.noiseManagers["Alice"]!.handleIncomingHandshake(from: helper.nodes["Bob"]!.peerID, message: m3)
         } catch {
-            XCTFail("Failed to re-establish Noise session after restart: \(error)")
+            Issue.record("Failed to re-establish Noise session after restart: \(error)")
         }
         
-        // Now messages should work again
-        let secondExpectation = XCTestExpectation(description: "Message after restart received")
-        helper.nodes["Alice"]!.messageDeliveryHandler = { message in
-            if message.content == "After restart success" && message.isPrivate {
-                secondExpectation.fulfill()
-            }
-        }
-        
-        // Simulate encrypted message using managers
-        do {
-            let plaintext = "After restart success".data(using: .utf8)!
-            let ciphertext = try helper.noiseManagers["Bob"]!.encrypt(plaintext, for: helper.nodes["Alice"]!.peerID)
-            let packet = TestHelpers.createTestPacket(type: MessageType.noiseEncrypted.rawValue, payload: ciphertext)
-            helper.nodes["Alice"]!.packetDeliveryHandler = { pkt in
-                if pkt.type == MessageType.noiseEncrypted.rawValue {
-                    if let data = try? self.helper.noiseManagers["Alice"]!.decrypt(pkt.payload, from: self.helper.nodes["Bob"]!.peerID),
-                       String(data: data, encoding: .utf8) == "After restart success" {
-                        secondExpectation.fulfill()
-                    }
+        // Now messages should work again - simulate encrypted packet
+        await confirmation("Message after restart received") { received in
+            helper.nodes["Alice"]!.messageDeliveryHandler = { message in
+                if message.content == "After restart success" && message.isPrivate {
+                    received()
                 }
             }
-            helper.nodes["Alice"]!.simulateIncomingPacket(packet)
-        } catch {
-            XCTFail("Encryption after restart failed: \(error)")
+            
+            do {
+                let plaintext = "After restart success".data(using: .utf8)!
+                let ciphertext = try helper.noiseManagers["Bob"]!.encrypt(plaintext, for: helper.nodes["Alice"]!.peerID)
+                let packet = TestHelpers.createTestPacket(type: MessageType.noiseEncrypted.rawValue, payload: ciphertext)
+                helper.nodes["Alice"]!.packetDeliveryHandler = { pkt in
+                    if pkt.type == MessageType.noiseEncrypted.rawValue {
+                        if let data = try? helper.noiseManagers["Alice"]!.decrypt(pkt.payload, from: helper.nodes["Bob"]!.peerID),
+                           String(data: data, encoding: .utf8) == "After restart success" {
+                            received()
+                        }
+                    }
+                }
+                helper.nodes["Alice"]!.simulateIncomingPacket(packet)
+            } catch {
+                Issue.record("Encryption after restart failed: \(error)")
+            }
         }
-        wait(for: [secondExpectation], timeout: TestConstants.defaultTimeout)
     }
     
-    func testLargeScaleNetwork() {
+    @Test func largeScaleNetwork() async throws {
         // Create larger network
         for i in 5...10 {
             helper.createNode("Node\(i)", peerID: PeerID(str: "PEER\(i)"))
@@ -355,64 +323,54 @@ final class IntegrationTests: XCTestCase {
             }
         }
         
-        let expectation = XCTestExpectation(description: "Large network handles broadcast")
-        var nodesReached = Set<String>()
-        
-        // All nodes except Alice listen
-        for (name, node) in helper.nodes where name != "Alice" {
-            node.messageDeliveryHandler = { message in
-                if message.content == "Broadcast test" {
-                    nodesReached.insert(name)
-                    if nodesReached.count == self.helper.nodes.count - 1 {
-                        expectation.fulfill()
+        await confirmation("Large network handles broadcast", expectedCount: helper.nodes.count - 1) { nodeReaced in
+            // All nodes except Alice listen
+            for (name, node) in helper.nodes where name != "Alice" {
+                node.messageDeliveryHandler = { message in
+                    if message.content == "Broadcast test" {
+                        nodeReaced()
                     }
                 }
             }
+            
+            // Alice broadcasts
+            helper.nodes["Alice"]!.sendMessage("Broadcast test")
         }
-        
-        // Alice broadcasts
-        helper.nodes["Alice"]!.sendMessage("Broadcast test", mentions: [], to: nil)
-        
-        wait(for: [expectation], timeout: TestConstants.longTimeout)
-        XCTAssertEqual(nodesReached.count, helper.nodes.count - 1)
     }
     
     // MARK: - Stress Tests
     
-    func testHighLoadScenario() {
+    @Test func highLoadScenario() async throws {
         helper.connectFullMesh()
         
         let messagesPerNode = 25
         let expectedTotal = messagesPerNode * helper.nodes.count * (helper.nodes.count - 1)
-        var receivedTotal = 0
-        let expectation = XCTestExpectation(description: "High load handled")
         
-        // Each node tracks messages
-        for (_, node) in helper.nodes {
-            node.messageDeliveryHandler = { _ in
-                receivedTotal += 1
-                if receivedTotal >= (expectedTotal - 2) {
-                    expectation.fulfill()
+        await confirmation("High load handled", expectedCount: expectedTotal) { received in
+            // Each node tracks messages
+            for (_, node) in helper.nodes {
+                node.messageDeliveryHandler = { _ in
+                    received()
                 }
             }
-        }
-        
-        // All nodes send many messages simultaneously
-        DispatchQueue.concurrentPerform(iterations: helper.nodes.count) { index in
-            let nodeName = Array(self.helper.nodes.keys).sorted()[index]
-            for i in 0..<messagesPerNode {
-                self.helper.nodes[nodeName]!.sendMessage("\(nodeName) message \(i)", mentions: [], to: nil)
+            
+            // All nodes send many messages simultaneously
+            await withTaskGroup(of: Void.self) { group in
+                for (name, node) in helper.nodes {
+                    group.addTask {
+                        for i in 0..<messagesPerNode {
+                            node.sendMessage("\(name) message \(i)")
+                        }
+                    }
+                }
+                await group.waitForAll()
             }
         }
-        
-        wait(for: [expectation], timeout: TestConstants.longTimeout)
-        XCTAssertGreaterThanOrEqual(receivedTotal, expectedTotal - 2)
     }
     
-    func testMixedTrafficPatterns() {
+    @Test func mixedTrafficPatterns() async throws {
         helper.connectFullMesh()
         
-        let expectation = XCTestExpectation(description: "Mixed traffic handled")
         var metrics = [
             "public": 0,
             "private": 0,
@@ -440,135 +398,119 @@ final class IntegrationTests: XCTestCase {
         }
         
         // Generate mixed traffic
-        helper.nodes["Alice"]!.sendMessage("Public broadcast", mentions: [], to: nil)
+        helper.nodes["Alice"]!.sendMessage("Public broadcast")
         helper.nodes["Alice"]!.sendPrivateMessage("Private to Bob", to: helper.nodes["Bob"]!.peerID, recipientNickname: "Bob")
-        helper.nodes["Bob"]!.sendMessage("Mentioning @Charlie", mentions: ["Charlie"], to: nil)
+        helper.nodes["Bob"]!.sendMessage("Mentioning @Charlie", mentions: ["Charlie"])
         
         // Disconnect to force relay
         helper.disconnect("Alice", "David")
-        helper.nodes["Alice"]!.sendMessage("Needs relay to David", mentions: [], to: nil)
+        helper.nodes["Alice"]!.sendMessage("Needs relay to David")
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            XCTAssertGreaterThan(metrics["public"]!, 0)
-            XCTAssertGreaterThan(metrics["private"]!, 0)
-            XCTAssertGreaterThan(metrics["mentions"]!, 0)
-            expectation.fulfill()
-        }
-        
-        wait(for: [expectation], timeout: TestConstants.defaultTimeout)
+        #expect(metrics["public", default: 0] > 0)
+        #expect(metrics["private", default: 0] > 0)
+        #expect(metrics["mentions", default: 0] > 0)
     }
     
     // MARK: - Security Integration Tests
     // Replacement for the legacy NACK test: verifies that after a
     // decryption failure, peers can rehandshake via NoiseSessionManager
     // and resume secure communication.
-    func testRehandshakeAfterDecryptionFailure() throws {
+    @Test func rehandshakeAfterDecryptionFailure() throws {
         // Alice <-> Bob connected
         helper.connect("Alice", "Bob")
-
+        
         // Establish initial Noise session
         try helper.establishNoiseSession("Alice", "Bob")
-
+        
         guard let aliceManager = helper.noiseManagers["Alice"],
               let bobManager = helper.noiseManagers["Bob"],
               let alicePeerID = helper.nodes["Alice"]?.peerID,
-              let bobPeerID = helper.nodes["Bob"]?.peerID else {
-            return XCTFail("Missing managers or peer IDs")
+              let bobPeerID = helper.nodes["Bob"]?.peerID
+        else {
+            Issue.record("Missing managers or peer IDs")
+            return
         }
-
+        
         // Baseline: encrypt from Alice, decrypt at Bob
         let plaintext1 = Data("hello-secure".utf8)
         let encrypted1 = try aliceManager.encrypt(plaintext1, for: bobPeerID)
         let decrypted1 = try bobManager.decrypt(encrypted1, from: alicePeerID)
-        XCTAssertEqual(decrypted1, plaintext1)
-
+        #expect(decrypted1 == plaintext1)
+        
         // Simulate decryption failure by corrupting ciphertext
-        var corrupted = encrypted1
-        if !corrupted.isEmpty { corrupted[corrupted.count - 1] ^= 0xFF }
-        do {
+        let corrupted = encrypted1.prefix(15)
+        #expect(throws: NoiseError.invalidCiphertext) {
             _ = try bobManager.decrypt(corrupted, from: alicePeerID)
-            XCTFail("Corrupted ciphertext should not decrypt")
-        } catch {
-            // Expected: treat as session desync and rehandshake
         }
-
+        
         // Bob initiates a new handshake; clear Bob's session first so initiateHandshake won't throw
         bobManager.removeSession(for: alicePeerID)
         try helper.establishNoiseSession("Bob", "Alice")
-
+        
         // After rehandshake, encryption/decryption works again
         let plaintext2 = Data("hello-again".utf8)
         let encrypted2 = try aliceManager.encrypt(plaintext2, for: bobPeerID)
         let decrypted2 = try bobManager.decrypt(encrypted2, from: alicePeerID)
-        XCTAssertEqual(decrypted2, plaintext2)
+        #expect(decrypted2 == plaintext2)
     }
     
-    func testEndToEndSecurityScenario() throws {
+    @Test func endToEndSecurityScenario() async throws {
         helper.connect("Alice", "Bob")
         helper.connect("Bob", "Charlie") // Charlie will try to eavesdrop
         
         // Establish secure session between Alice and Bob only
         try helper.establishNoiseSession("Alice", "Bob")
         
-        let expectation = XCTestExpectation(description: "Secure communication maintained")
-        var bobDecrypted = false
-        var charlieIntercepted = false
-        
-        // Setup encryption at Alice
-        helper.nodes["Alice"]!.packetDeliveryHandler = { packet in
-            if packet.type == 0x01,
-               let message = BitchatMessage(packet.payload),
-               message.isPrivate && packet.recipientID != nil {
-                // Encrypt private messages
-                if let encrypted = try? self.helper.noiseManagers["Alice"]!.encrypt(packet.payload, for: self.helper.nodes["Bob"]!.peerID) {
-                    let encPacket = BitchatPacket(
-                        type: 0x02,
-                        senderID: packet.senderID,
-                        recipientID: packet.recipientID,
-                        timestamp: packet.timestamp,
-                        payload: encrypted,
-                        signature: packet.signature,
-                        ttl: packet.ttl
-                    )
-                    self.helper.nodes["Bob"]!.simulateIncomingPacket(encPacket)
+        await confirmation("Secure communication maintained", expectedCount: 2) { receivedPacket in
+            
+            // Setup encryption at Alice
+            helper.nodes["Alice"]!.packetDeliveryHandler = { packet in
+                if packet.type == 0x01,
+                   let message = BitchatMessage(packet.payload),
+                   message.isPrivate && packet.recipientID != nil {
+                    // Encrypt private messages
+                    if let encrypted = try? helper.noiseManagers["Alice"]!.encrypt(packet.payload, for: helper.nodes["Bob"]!.peerID) {
+                        let encPacket = BitchatPacket(
+                            type: 0x02,
+                            senderID: packet.senderID,
+                            recipientID: packet.recipientID,
+                            timestamp: packet.timestamp,
+                            payload: encrypted,
+                            signature: packet.signature,
+                            ttl: packet.ttl
+                        )
+                        helper.nodes["Bob"]!.simulateIncomingPacket(encPacket)
+                    }
                 }
             }
-        }
-        
-        // Bob can decrypt
-        helper.nodes["Bob"]!.packetDeliveryHandler = { packet in
-            if packet.type == 0x02 {
-                if let decrypted = try? self.helper.noiseManagers["Bob"]!.decrypt(packet.payload, from: self.helper.nodes["Alice"]!.peerID),
-                   let message = BitchatMessage(decrypted) {
-                    bobDecrypted = message.content == "Secret message"
-                    expectation.fulfill()
-                }
-                
-                // Relay encrypted packet to Charlie
-                self.helper.nodes["Charlie"]!.simulateIncomingPacket(packet)
-            }
-        }
-        
-        // Charlie cannot decrypt
-        helper.nodes["Charlie"]!.packetDeliveryHandler = { packet in
-            if packet.type == 0x02 {
-                charlieIntercepted = true
-                // Try to decrypt (should fail)
-                do {
-                    _ = try self.helper.noiseManagers["Charlie"]?.decrypt(packet.payload, from: self.helper.nodes["Alice"]!.peerID)
-                    XCTFail("Charlie should not be able to decrypt")
-                } catch {
-                    // Expected
+            
+            // Bob can decrypt
+            helper.nodes["Bob"]!.packetDeliveryHandler = { packet in
+                if packet.type == 0x02 {
+                    receivedPacket()
+                    if let decrypted = try? helper.noiseManagers["Bob"]!.decrypt(packet.payload, from: helper.nodes["Alice"]!.peerID) {
+                        #expect(BitchatMessage(decrypted)?.content == "Secret message")
+                    } else {
+                        Issue.record("Bob was unable to decrypt the message")
+                    }
+                    
+                    // Relay encrypted packet to Charlie
+                    helper.nodes["Charlie"]!.simulateIncomingPacket(packet)
                 }
             }
+            
+            // Charlie cannot decrypt
+            helper.nodes["Charlie"]!.packetDeliveryHandler = { packet in
+                if packet.type == 0x02 {
+                    receivedPacket()
+                    #expect(throws: NoiseSessionError.sessionNotFound, "Charlie should not be able to decrypt") {
+                        _ = try helper.noiseManagers["Charlie"]?.decrypt(packet.payload, from: helper.nodes["Alice"]!.peerID)
+                    }
+                }
+            }
+            
+            // Send encrypted private message
+            helper.nodes["Alice"]!.sendPrivateMessage("Secret message", to: helper.nodes["Bob"]!.peerID, recipientNickname: "Bob")
         }
-        
-        // Send encrypted private message
-        helper.nodes["Alice"]!.sendPrivateMessage("Secret message", to: helper.nodes["Bob"]!.peerID, recipientNickname: "Bob")
-        
-        wait(for: [expectation], timeout: TestConstants.defaultTimeout)
-        XCTAssertTrue(bobDecrypted)
-        XCTAssertTrue(charlieIntercepted)
     }
 }
-
