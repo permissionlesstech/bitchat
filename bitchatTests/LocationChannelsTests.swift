@@ -37,7 +37,7 @@ final class LocationChannelsTests: XCTestCase {
 
     func testPerGeohashIdentityDeterministic() throws {
         // Derive twice for same geohash; should be identical
-        let idBridge = NostrIdentityBridge()
+        let idBridge = NostrIdentityBridge(keychain: MockKeychainHelper())
         let gh = "u4pruy"
         let id1 = try idBridge.deriveIdentity(forGeohash: gh)
         let id2 = try idBridge.deriveIdentity(forGeohash: gh)
