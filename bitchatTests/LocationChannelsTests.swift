@@ -37,9 +37,10 @@ final class LocationChannelsTests: XCTestCase {
 
     func testPerGeohashIdentityDeterministic() throws {
         // Derive twice for same geohash; should be identical
+        let idBridge = NostrIdentityBridge()
         let gh = "u4pruy"
-        let id1 = try NostrIdentityBridge.deriveIdentity(forGeohash: gh)
-        let id2 = try NostrIdentityBridge.deriveIdentity(forGeohash: gh)
+        let id1 = try idBridge.deriveIdentity(forGeohash: gh)
+        let id2 = try idBridge.deriveIdentity(forGeohash: gh)
         XCTAssertEqual(id1.publicKeyHex, id2.publicKeyHex)
     }
 }

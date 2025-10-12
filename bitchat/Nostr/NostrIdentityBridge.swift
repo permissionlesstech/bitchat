@@ -2,15 +2,15 @@ import Foundation
 import CryptoKit
 
 /// Bridge between Noise and Nostr identities
-struct NostrIdentityBridge {
-    private static let keychainService = "chat.bitchat.nostr"
-    private static let currentIdentityKey = "nostr-current-identity"
-    private static let deviceSeedKey = "nostr-device-seed"
+final class NostrIdentityBridge {
+    private let keychainService = "chat.bitchat.nostr"
+    private let currentIdentityKey = "nostr-current-identity"
+    private let deviceSeedKey = "nostr-device-seed"
     // In-memory cache to avoid transient keychain access issues
-    private static var deviceSeedCache: Data?
+    private var deviceSeedCache: Data?
     
     /// Get or create the current Nostr identity
-    static func getCurrentNostrIdentity() throws -> NostrIdentity? {
+    func getCurrentNostrIdentity() throws -> NostrIdentity? {
         // Check if we already have a Nostr identity
         if let existingData = KeychainHelper.load(key: currentIdentityKey, service: keychainService),
            let identity = try? JSONDecoder().decode(NostrIdentity.self, from: existingData) {
@@ -28,7 +28,7 @@ struct NostrIdentityBridge {
     }
     
     /// Associate a Nostr identity with a Noise public key (for favorites)
-    static func associateNostrIdentity(_ nostrPubkey: String, with noisePublicKey: Data) {
+    func associateNostrIdentity(_ nostrPubkey: String, with noisePublicKey: Data) {
         let key = "nostr-noise-\(noisePublicKey.base64EncodedString())"
         if let data = nostrPubkey.data(using: .utf8) {
             KeychainHelper.save(key: key, data: data, service: keychainService)
@@ -36,7 +36,7 @@ struct NostrIdentityBridge {
     }
     
     /// Get Nostr public key associated with a Noise public key
-    static func getNostrPublicKey(for noisePublicKey: Data) -> String? {
+    func getNostrPublicKey(for noisePublicKey: Data) -> String? {
         let key = "nostr-noise-\(noisePublicKey.base64EncodedString())"
         guard let data = KeychainHelper.load(key: key, service: keychainService),
               let pubkey = String(data: data, encoding: .utf8) else {
@@ -46,7 +46,7 @@ struct NostrIdentityBridge {
     }
     
     /// Clear all Nostr identity associations and current identity
-    static func clearAllAssociations() {
+    func clearAllAssociations() {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: keychainService,
@@ -78,7 +78,7 @@ struct NostrIdentityBridge {
 
     /// Returns a stable device seed used to derive unlinkable per-geohash identities.
     /// Stored only on device keychain.
-    private static func getOrCreateDeviceSeed() -> Data {
+    private func getOrCreateDeviceSeed() -> Data {
         if let cached = deviceSeedCache { return cached }
         if let existing = KeychainHelper.load(key: deviceSeedKey, service: keychainService) {
             // Migrate to AfterFirstUnlockThisDeviceOnly for stability during lock
@@ -99,7 +99,7 @@ struct NostrIdentityBridge {
     /// Derive a deterministic, unlinkable Nostr identity for a given geohash.
     /// Uses HMAC-SHA256(deviceSeed, geohash) as private key material, with fallback rehashing
     /// if the candidate is not a valid secp256k1 private key.
-    static func deriveIdentity(forGeohash geohash: String) throws -> NostrIdentity {
+    func deriveIdentity(forGeohash geohash: String) throws -> NostrIdentity {
         let seed = getOrCreateDeviceSeed()
         guard let msg = geohash.data(using: .utf8) else {
             throw NSError(domain: "NostrIdentity", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid geohash string"])

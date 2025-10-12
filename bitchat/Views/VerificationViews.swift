@@ -292,7 +292,7 @@ struct VerificationSheetView: View {
     private var boxColor: Color { Color.gray.opacity(0.1) }
 
     private func myQRString() -> String {
-        let npub = try? NostrIdentityBridge.getCurrentNostrIdentity()?.npub
+        let npub = try? viewModel.idBridge.getCurrentNostrIdentity()?.npub
         return VerificationService.shared.buildMyQRString(nickname: viewModel.nickname, npub: npub) ?? ""
     }
 
