@@ -13,6 +13,9 @@ final class GossipSyncManager {
         var gcsMaxBytes: Int = 400           // filter size budget (128..1024)
         var gcsTargetFpr: Double = 0.01      // 1%
         var maxMessageAgeSeconds: TimeInterval = 900  // 15 min - discard older messages
+        var maintenanceIntervalSeconds: TimeInterval = 30.0
+        var stalePeerCleanupIntervalSeconds: TimeInterval = 60.0
+        var stalePeerTimeoutSeconds: TimeInterval = 60.0
     }
 
     private let myPeerID: PeerID
@@ -27,6 +30,7 @@ final class GossipSyncManager {
     // Timer
     private var periodicTimer: DispatchSourceTimer?
     private let queue = DispatchQueue(label: "mesh.sync", qos: .utility)
+    private var lastStalePeerCleanup: Date = .distantPast
 
     init(myPeerID: PeerID, config: Config = Config()) {
         self.myPeerID = myPeerID
@@ -36,10 +40,10 @@ final class GossipSyncManager {
     func start() {
         stop()
         let timer = DispatchSource.makeTimerSource(queue: queue)
-        timer.schedule(deadline: .now() + 30.0, repeating: 30.0, leeway: .seconds(1))
+        let interval = max(0.1, config.maintenanceIntervalSeconds)
+        timer.schedule(deadline: .now() + interval, repeating: interval, leeway: .seconds(1))
         timer.setEventHandler { [weak self] in
-            self?.cleanupExpiredMessages()
-            self?.sendRequestSync()
+            self?.performPeriodicMaintenance()
         }
         timer.resume()
         periodicTimer = timer
@@ -73,6 +77,15 @@ final class GossipSyncManager {
         return packet.timestamp >= cutoffMs
     }
 
+    private func isAnnouncementFresh(_ packet: BitchatPacket) -> Bool {
+        guard config.stalePeerTimeoutSeconds > 0 else { return true }
+        let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
+        let timeoutMs = UInt64(config.stalePeerTimeoutSeconds * 1000)
+        guard nowMs >= timeoutMs else { return true }
+        let cutoffMs = nowMs - timeoutMs
+        return packet.timestamp >= cutoffMs
+    }
+
     private func _onPublicPacketSeen(_ packet: BitchatPacket) {
         let mt = MessageType(rawValue: packet.type)
         let isBroadcastRecipient: Bool = {
@@ -85,6 +98,10 @@ final class GossipSyncManager {
 
         // Reject expired packets to prevent ghost peers and old messages
         guard isPacketFresh(packet) else { return }
+
+        if isAnnounce {
+            guard isAnnouncementFresh(packet) else { return }
+        }
 
         let idHex = PacketIdUtil.computeId(packet).hexEncodedString()
 
@@ -230,6 +247,35 @@ final class GossipSyncManager {
         }
     }
 
+    private func performPeriodicMaintenance(now: Date = Date()) {
+        cleanupExpiredMessages()
+        cleanupStaleAnnouncementsIfNeeded(now: now)
+        sendRequestSync()
+    }
+
+    private func cleanupStaleAnnouncementsIfNeeded(now: Date) {
+        guard now.timeIntervalSince(lastStalePeerCleanup) >= config.stalePeerCleanupIntervalSeconds else {
+            return
+        }
+        lastStalePeerCleanup = now
+        cleanupStaleAnnouncements(now: now)
+    }
+
+    private func cleanupStaleAnnouncements(now: Date) {
+        let timeoutMs = UInt64(config.stalePeerTimeoutSeconds * 1000)
+        let nowMs = UInt64(now.timeIntervalSince1970 * 1000)
+        guard nowMs >= timeoutMs else { return }
+        let cutoff = nowMs - timeoutMs
+        let stalePeerIDs = latestAnnouncementByPeer.compactMap { (peerHex, pair) -> String? in
+            pair.packet.timestamp < cutoff ? peerHex : nil
+        }
+        guard !stalePeerIDs.isEmpty else { return }
+        for peerHex in stalePeerIDs {
+            let peerID = PeerID(str: peerHex)
+            _removeAnnouncementForPeer(peerID)
+        }
+    }
+
     // Explicit removal hook for LEAVE/stale peer
     func removeAnnouncementForPeer(_ peerID: PeerID) {
         queue.async { [weak self] in
@@ -254,3 +300,25 @@ final class GossipSyncManager {
         }
     }
 }
+
+#if DEBUG
+extension GossipSyncManager {
+    func _performMaintenanceSynchronously(now: Date = Date()) {
+        queue.sync {
+            performPeriodicMaintenance(now: now)
+        }
+    }
+
+    func _hasAnnouncement(for peerID: PeerID) -> Bool {
+        queue.sync {
+            latestAnnouncementByPeer[peerID.id.lowercased()] != nil
+        }
+    }
+
+    func _messageCount(for peerID: PeerID) -> Int {
+        queue.sync {
+            messages.values.filter { $0.senderID.hexEncodedString().lowercased() == peerID.id.lowercased() }.count
+        }
+    }
+}
+#endif
