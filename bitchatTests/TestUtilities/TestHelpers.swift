@@ -90,7 +90,7 @@ final class TestHelpers {
             if Date().timeIntervalSince(start) > timeout {
                 throw TestError.timeout
             }
-            try await Task.sleep(nanoseconds: 10_000_000) // 10ms
+            try await sleep(0.01)
         }
     }
     
@@ -104,7 +104,7 @@ final class TestHelpers {
             }
             
             group.addTask {
-                try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                try await sleep(1)
                 throw TestError.timeout
             }
             
@@ -119,4 +119,8 @@ enum TestError: Error {
     case timeout
     case unexpectedValue
     case testFailure(String)
+}
+
+func sleep(_ seconds: TimeInterval) async throws {
+    try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
 }

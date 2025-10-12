@@ -51,7 +51,7 @@ struct PrivateChatE2ETests {
             )
 
             // Wait a bit to ensure message would have been delivered if it was going to be
-            try? await Task.sleep(nanoseconds: UInt64(TestConstants.shortTimeout * 1_000_000_000))
+            try? await sleep(0.1)
         }
 
         #expect(!bobReceivedMessage, "Bob should not have received the message")

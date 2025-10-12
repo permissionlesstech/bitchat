@@ -73,7 +73,7 @@ struct BLEServiceTests {
             service.sendMessage("Hello, world!")
             
             // Allow async processing
-            try await Task.sleep(nanoseconds: 100_000_000) // 0.1s
+            try await sleep(0.5)
         }
         #expect(service.sentMessages.count == 1)
     }
@@ -97,7 +97,7 @@ struct BLEServiceTests {
             )
             
             // Allow async processing
-            try await Task.sleep(nanoseconds: 100_000_000) // 0.1s
+            try await sleep(0.5)
         }
         #expect(service.sentMessages.count == 1)
     }
@@ -113,7 +113,7 @@ struct BLEServiceTests {
             service.sendMessage("@alice @bob check this out", mentions: ["alice", "bob"])
             
             // Allow async processing
-            try await Task.sleep(nanoseconds: 100_000_000) // 0.1s
+            try await sleep(0.5)
         }
     }
     
@@ -146,7 +146,7 @@ struct BLEServiceTests {
             service.simulateIncomingMessage(incomingMessage)
             
             // Allow async processing
-            try await Task.sleep(nanoseconds: 100_000_000) // 0.1s
+            try await sleep(0.5)
         }
     }
     
@@ -189,7 +189,7 @@ struct BLEServiceTests {
             service.simulateIncomingPacket(packet)
             
             // Allow async processing
-            try await Task.sleep(nanoseconds: 100_000_000) // 0.1s
+            try await sleep(0.5)
         }
     }
     
@@ -231,7 +231,7 @@ struct BLEServiceTests {
             service.sendMessage("Test delivery")
             
             // Allow async processing
-            try await Task.sleep(nanoseconds: 100_000_000) // 0.1s
+            try await sleep(0.5)
         }
     }
     
@@ -273,7 +273,7 @@ struct BLEServiceTests {
             service.simulateIncomingPacket(packet)
             
             // Allow async processing
-            try await Task.sleep(nanoseconds: 100_000_000) // 0.1s
+            try await sleep(0.5)
         }
     }
 }

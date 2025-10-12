@@ -30,11 +30,11 @@ struct GossipSyncManagerTests {
                     ttl: 1
                 )
                 manager.onPublicPacketSeen(packet)
-                try await Task.sleep(nanoseconds: 1_000_000) // 0.001s
+                try await sleep(0.001)
             }
 
             manager.scheduleInitialSyncToPeer(PeerID(str: "FFFFFFFFFFFFFFFF"), delaySeconds: 0.0)
-            try await Task.sleep(nanoseconds: 2_000_000) // 0.002s
+            try await sleep(0.002)
         }
 
         let lastPacket = try #require(delegate.lastPacket, "Expected sync packet to be sent")
