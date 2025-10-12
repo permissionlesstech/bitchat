@@ -1,8 +1,14 @@
 import Foundation
 
+protocol KeychainHelperProtocol {
+    func save(key: String, data: Data, service: String, accessible: CFString?)
+    func load(key: String, service: String) -> Data?
+    func delete(key: String, service: String)
+}
+
 /// Keychain helper for secure storage
-struct KeychainHelper {
-    static func save(key: String, data: Data, service: String, accessible: CFString? = nil) {
+struct KeychainHelper: KeychainHelperProtocol {
+    func save(key: String, data: Data, service: String, accessible: CFString? = nil) {
         var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -17,7 +23,7 @@ struct KeychainHelper {
         SecItemAdd(query as CFDictionary, nil)
     }
     
-    static func load(key: String, service: String) -> Data? {
+    func load(key: String, service: String) -> Data? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -32,7 +38,7 @@ struct KeychainHelper {
         return result as? Data
     }
     
-    static func delete(key: String, service: String) {
+    func delete(key: String, service: String) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,

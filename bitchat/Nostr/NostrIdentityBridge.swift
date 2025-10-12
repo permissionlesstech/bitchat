@@ -9,10 +9,16 @@ final class NostrIdentityBridge {
     // In-memory cache to avoid transient keychain access issues
     private var deviceSeedCache: Data?
     
+    private let keychain: KeychainHelperProtocol
+    
+    init(keychain: KeychainHelperProtocol = KeychainHelper()) {
+        self.keychain = keychain
+    }
+    
     /// Get or create the current Nostr identity
     func getCurrentNostrIdentity() throws -> NostrIdentity? {
         // Check if we already have a Nostr identity
-        if let existingData = KeychainHelper.load(key: currentIdentityKey, service: keychainService),
+        if let existingData = keychain.load(key: currentIdentityKey, service: keychainService),
            let identity = try? JSONDecoder().decode(NostrIdentity.self, from: existingData) {
             return identity
         }
@@ -22,7 +28,7 @@ final class NostrIdentityBridge {
         
         // Store it
         let data = try JSONEncoder().encode(nostrIdentity)
-        KeychainHelper.save(key: currentIdentityKey, data: data, service: keychainService)
+        keychain.save(key: currentIdentityKey, data: data, service: keychainService, accessible: nil)
         
         return nostrIdentity
     }
@@ -31,14 +37,14 @@ final class NostrIdentityBridge {
     func associateNostrIdentity(_ nostrPubkey: String, with noisePublicKey: Data) {
         let key = "nostr-noise-\(noisePublicKey.base64EncodedString())"
         if let data = nostrPubkey.data(using: .utf8) {
-            KeychainHelper.save(key: key, data: data, service: keychainService)
+            keychain.save(key: key, data: data, service: keychainService, accessible: nil)
         }
     }
     
     /// Get Nostr public key associated with a Noise public key
     func getNostrPublicKey(for noisePublicKey: Data) -> String? {
         let key = "nostr-noise-\(noisePublicKey.base64EncodedString())"
-        guard let data = KeychainHelper.load(key: key, service: keychainService),
+        guard let data = keychain.load(key: key, service: keychainService),
               let pubkey = String(data: data, encoding: .utf8) else {
             return nil
         }
@@ -80,9 +86,9 @@ final class NostrIdentityBridge {
     /// Stored only on device keychain.
     private func getOrCreateDeviceSeed() -> Data {
         if let cached = deviceSeedCache { return cached }
-        if let existing = KeychainHelper.load(key: deviceSeedKey, service: keychainService) {
+        if let existing = keychain.load(key: deviceSeedKey, service: keychainService) {
             // Migrate to AfterFirstUnlockThisDeviceOnly for stability during lock
-            KeychainHelper.save(key: deviceSeedKey, data: existing, service: keychainService, accessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
+            keychain.save(key: deviceSeedKey, data: existing, service: keychainService, accessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
             deviceSeedCache = existing
             return existing
         }
@@ -91,7 +97,7 @@ final class NostrIdentityBridge {
             SecRandomCopyBytes(kSecRandomDefault, 32, ptr.baseAddress!)
         }
         // Ensure availability after first unlock to prevent unintended rotation when locked
-        KeychainHelper.save(key: deviceSeedKey, data: seed, service: keychainService, accessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
+        keychain.save(key: deviceSeedKey, data: seed, service: keychainService, accessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
         deviceSeedCache = seed
         return seed
     }
