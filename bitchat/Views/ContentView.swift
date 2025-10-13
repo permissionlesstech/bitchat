@@ -30,6 +30,7 @@ struct ContentView: View {
     @State private var textFieldSelection: NSRange? = nil
     @FocusState private var isTextFieldFocused: Bool
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var showPeerList = false
     @State private var showSidebar = false
@@ -872,6 +873,7 @@ struct ContentView: View {
                     }
                     Button(action: {
                         withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                            dismiss()
                             showSidebar = false
                             showVerifySheet = false
                             viewModel.endPrivateChat()
@@ -1029,6 +1031,20 @@ struct ContentView: View {
         }
         .background(backgroundColor)
         .foregroundColor(textColor)
+        .gesture(
+            DragGesture(minimumDistance: 25, coordinateSpace: .local)
+                .onEnded { value in
+                    let horizontal = value.translation.width
+                    let vertical = abs(value.translation.height)
+                    guard horizontal > 80, vertical < 60 else { return }
+                    withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                        dismiss()
+                        showSidebar = false
+                        showVerifySheet = false
+                        viewModel.endPrivateChat()
+                    }
+                }
+        )
     }
 
     private func privateHeaderInfo(context: PrivateHeaderContext, privatePeerID: String) -> some View {
