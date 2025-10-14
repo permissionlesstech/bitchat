@@ -42,7 +42,7 @@ final class CommandProcessor {
             case .location: return true
             }
         }()
-        let inGeoDM = (chatViewModel?.selectedPrivateChatPeer?.hasPrefix("nostr_") == true)
+        let inGeoDM = chatViewModel?.selectedPrivateChatPeer?.isGeoDM == true
 
         switch cmd {
         case "/m", "/msg":
@@ -104,7 +104,7 @@ final class CommandProcessor {
         case .location(let ch):
             // Geohash context: show visible geohash participants (exclude self)
             guard let vm = chatViewModel else { return .success(message: "nobody around") }
-            let myHex = (try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash))?.publicKeyHex.lowercased()
+            let myHex = (try? chatViewModel?.idBridge.deriveIdentity(forGeohash: ch.geohash))?.publicKeyHex.lowercased()
             let people = vm.visibleGeohashPeople().filter { person in
                 if let me = myHex { return person.id.lowercased() != me }
                 return true

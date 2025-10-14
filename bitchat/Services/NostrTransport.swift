@@ -16,9 +16,11 @@ final class NostrTransport: Transport {
     private var isSendingReadAcks = false
     private let readAckInterval: TimeInterval = TransportConfig.nostrReadAckInterval
     private let keychain: KeychainManagerProtocol
+    private let idBridge: NostrIdentityBridge
 
-    init(keychain: KeychainManagerProtocol) {
+    init(keychain: KeychainManagerProtocol, idBridge: NostrIdentityBridge) {
         self.keychain = keychain
+        self.idBridge = idBridge
     }
 
     // MARK: - Transport Protocol Conformance
@@ -65,7 +67,7 @@ final class NostrTransport: Transport {
     func sendPrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) {
         Task { @MainActor in
             guard let recipientNpub = resolveRecipientNpub(for: peerID) else { return }
-            guard let senderIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() else { return }
+            guard let senderIdentity = try? idBridge.getCurrentNostrIdentity() else { return }
             SecureLogger.debug("NostrTransport: preparing PM to \(recipientNpub.prefix(16))… for peerID \(peerID.id.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
             // Convert recipient npub -> hex (x-only)
             let recipientHex: String
@@ -102,7 +104,7 @@ final class NostrTransport: Transport {
     func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {
         Task { @MainActor in
             guard let recipientNpub = resolveRecipientNpub(for: peerID) else { return }
-            guard let senderIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() else { return }
+            guard let senderIdentity = try? idBridge.getCurrentNostrIdentity() else { return }
             let content = isFavorite ? "[FAVORITED]:\(senderIdentity.npub)" : "[UNFAVORITED]:\(senderIdentity.npub)"
             SecureLogger.debug("NostrTransport: preparing FAVORITE(\(isFavorite)) to \(recipientNpub.prefix(16))…", category: .session)
             // Convert recipient npub -> hex
@@ -129,7 +131,7 @@ final class NostrTransport: Transport {
     func sendDeliveryAck(for messageID: String, to peerID: PeerID) {
         Task { @MainActor in
             guard let recipientNpub = resolveRecipientNpub(for: peerID) else { return }
-            guard let senderIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() else { return }
+            guard let senderIdentity = try? idBridge.getCurrentNostrIdentity() else { return }
             SecureLogger.debug("NostrTransport: preparing DELIVERED ack for id=\(messageID.prefix(8))… to \(recipientNpub.prefix(16))…", category: .session)
             let recipientHex: String
             do {
@@ -212,7 +214,7 @@ extension NostrTransport {
         let item = readQueue.removeFirst()
         Task { @MainActor in
             guard let recipientNpub = resolveRecipientNpub(for: item.peerID) else { scheduleNextReadAck(); return }
-            guard let senderIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() else { scheduleNextReadAck(); return }
+            guard let senderIdentity = try? idBridge.getCurrentNostrIdentity() else { scheduleNextReadAck(); return }
             SecureLogger.debug("NostrTransport: preparing READ ack for id=\(item.receipt.originalMessageID.prefix(8))… to \(recipientNpub.prefix(16))…", category: .session)
             // Convert recipient npub -> hex
             let recipientHex: String

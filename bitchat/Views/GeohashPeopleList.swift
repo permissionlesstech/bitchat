@@ -28,7 +28,7 @@ struct GeohashPeopleList: View {
         } else {
             let myHex: String? = {
                 if case .location(let ch) = LocationChannelManager.shared.selectedChannel,
-                   let id = try? NostrIdentityBridge.deriveIdentity(forGeohash: ch.geohash) {
+                   let id = try? viewModel.idBridge.deriveIdentity(forGeohash: ch.geohash) {
                     return id.publicKeyHex.lowercased()
                 }
                 return nil

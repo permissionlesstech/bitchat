@@ -532,7 +532,7 @@ struct ContentView: View {
             }
             .onChange(of: viewModel.privateChats) { _ in
                 if let peerID = privatePeer,
-                   let messages = viewModel.privateChats[peerID],
+                   let messages = viewModel.privateChats[PeerID(str: peerID)],
                    !messages.isEmpty {
                     // If the newest private message is from me, always scroll
                     let lastMsg = messages.last!
@@ -664,7 +664,7 @@ struct ContentView: View {
                         (["/w"], nil, "see who's online")
                     ]
                     let isGeoPublic: Bool = { if case .location = locationManager.selectedChannel { return true }; return false }()
-                    let isGeoDM: Bool = (viewModel.selectedPrivateChatPeer?.hasPrefix("nostr_") == true)
+                    let isGeoDM = viewModel.selectedPrivateChatPeer?.isGeoDM == true
                     let favInfo: [(commands: [String], syntax: String?, description: String)] = [
                         (["/fav"], "<nickname>", "add to favorites"),
                         (["/unfav"], "<nickname>", "remove from favorites")
@@ -748,7 +748,7 @@ struct ContentView: View {
                             if case .location = locationManager.selectedChannel { return true }
                             return false
                         }()
-                        let isGeoDM: Bool = (viewModel.selectedPrivateChatPeer?.hasPrefix("nostr_") == true)
+                        let isGeoDM = viewModel.selectedPrivateChatPeer?.isGeoDM == true
                         var commandDescriptions = [
                             ("/block", String(localized: "content.commands.block", comment: "Description for /block command")),
                             ("/clear", String(localized: "content.commands.clear", comment: "Description for /clear command")),
@@ -957,7 +957,7 @@ struct ContentView: View {
 
     private var privateChatSheetView: some View {
         VStack(spacing: 0) {
-            if let privatePeerID = viewModel.selectedPrivateChatPeer {
+            if let privatePeerID = viewModel.selectedPrivateChatPeer?.id {
                 let headerContext = makePrivateHeaderContext(for: privatePeerID)
 
                 HStack(spacing: 12) {
@@ -1023,7 +1023,7 @@ struct ContentView: View {
                 .background(backgroundColor)
             }
 
-            messagesView(privatePeer: viewModel.selectedPrivateChatPeer, isAtBottom: $isAtBottomPrivate)
+            messagesView(privatePeer: viewModel.selectedPrivateChatPeer?.id, isAtBottom: $isAtBottomPrivate)
                 .background(backgroundColor)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             Divider()
