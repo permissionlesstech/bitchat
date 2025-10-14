@@ -26,6 +26,7 @@ final class FavoritesPersistenceService: ObservableObject {
 
     private static let storageKey = "chat.bitchat.favorites"
     private static let keychainService = "chat.bitchat.favorites"
+    private let keychain: KeychainHelperProtocol
     
     @Published private(set) var favorites: [Data: FavoriteRelationship] = [:] // Noise pubkey -> relationship
     @Published private(set) var mutualFavorites: Set<Data> = []
@@ -35,7 +36,8 @@ final class FavoritesPersistenceService: ObservableObject {
     
     static let shared = FavoritesPersistenceService()
     
-    private init() {
+    init(keychain: KeychainHelperProtocol = KeychainHelper()) {
+        self.keychain = keychain
         loadFavorites()
         
         // Update mutual favorites when favorites change
@@ -196,7 +198,7 @@ final class FavoritesPersistenceService: ObservableObject {
         saveFavorites()
         
         // Delete from keychain directly
-        KeychainHelper.delete(
+        keychain.delete(
             key: Self.storageKey,
             service: Self.keychainService
         )
@@ -216,10 +218,11 @@ final class FavoritesPersistenceService: ObservableObject {
             let data = try encoder.encode(relationships)
             
             // Store in keychain for security
-            KeychainHelper.save(
+            keychain.save(
                 key: Self.storageKey,
                 data: data,
-                service: Self.keychainService
+                service: Self.keychainService,
+                accessible: nil
             )
             
             // Successfully saved favorites
@@ -231,7 +234,7 @@ final class FavoritesPersistenceService: ObservableObject {
     private func loadFavorites() {
         // Loading favorites from keychain
         
-        guard let data = KeychainHelper.load(
+        guard let data = keychain.load(
             key: Self.storageKey,
             service: Self.keychainService
         ) else { 

@@ -14,6 +14,8 @@ struct LocationNotesDependencies {
     var sendEvent: SendEvent
     var deriveIdentity: (_ geohash: String) throws -> NostrIdentity
     var now: () -> Date
+    
+    private static let idBridge = NostrIdentityBridge()
 
     static let live = LocationNotesDependencies(
         relayLookup: { geohash, count in
@@ -35,7 +37,7 @@ struct LocationNotesDependencies {
             NostrRelayManager.shared.sendEvent(event, to: relays)
         },
         deriveIdentity: { geohash in
-            try NostrIdentityBridge.deriveIdentity(forGeohash: geohash)
+            try idBridge.deriveIdentity(forGeohash: geohash)
         },
         now: { Date() }
     )

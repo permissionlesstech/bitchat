@@ -94,6 +94,7 @@ final class BLEService: NSObject {
     private var noiseService: NoiseEncryptionService
     private let identityManager: SecureIdentityStateManagerProtocol
     private let keychain: KeychainManagerProtocol
+    private let idBridge: NostrIdentityBridge
     private var myPeerIDData: Data = Data()
 
     // MARK: - Advertising Privacy
@@ -198,8 +199,13 @@ final class BLEService: NSObject {
     
     // MARK: - Initialization
     
-    init(keychain: KeychainManagerProtocol, identityManager: SecureIdentityStateManagerProtocol) {
+    init(
+        keychain: KeychainManagerProtocol,
+        idBridge: NostrIdentityBridge,
+        identityManager: SecureIdentityStateManagerProtocol
+    ) {
         self.keychain = keychain
+        self.idBridge = idBridge
         noiseService = NoiseEncryptionService(keychain: keychain)
         self.identityManager = identityManager
         super.init()
@@ -613,7 +619,7 @@ final class BLEService: NSObject {
         var content = isFavorite ? "[FAVORITED]" : "[UNFAVORITED]"
         
         // Add our Nostr public key if available
-        if let myNostrIdentity = try? NostrIdentityBridge.getCurrentNostrIdentity() {
+        if let myNostrIdentity = try? idBridge.getCurrentNostrIdentity() {
             content += ":" + myNostrIdentity.npub
             SecureLogger.debug("📝 Sending favorite notification with Nostr npub: \(myNostrIdentity.npub)", category: .session)
         }
@@ -2200,6 +2206,16 @@ extension BLEService {
     }
     
     private func handleFragment(_ packet: BitchatPacket, from peerID: PeerID) {
+        if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
+            _handleFragment(packet, from: peerID)
+        } else {
+            messageQueue.async(flags: .barrier) { [weak self] in
+                self?._handleFragment(packet, from: peerID)
+            }
+        }
+    }
+
+    private func _handleFragment(_ packet: BitchatPacket, from peerID: PeerID) {
         // Don't process our own fragments
         if peerID == myPeerID {
             return

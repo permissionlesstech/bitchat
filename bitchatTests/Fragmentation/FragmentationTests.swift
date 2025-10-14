@@ -15,15 +15,21 @@ struct FragmentationTests {
     
     private let mockKeychain: MockKeychain
     private let mockIdentityManager: MockIdentityManager
+    private let idBridge: NostrIdentityBridge
     
     init() {
         mockKeychain = MockKeychain()
         mockIdentityManager = MockIdentityManager(mockKeychain)
+        idBridge = NostrIdentityBridge(keychain: MockKeychainHelper())
     }
     
     @Test("Reassembly from fragments delivers a public message")
     func reassemblyFromFragmentsDeliversPublicMessage() async throws {
-        let ble = BLEService(keychain: mockKeychain, identityManager: mockIdentityManager)
+        let ble = BLEService(
+            keychain: mockKeychain,
+            idBridge: idBridge,
+            identityManager: mockIdentityManager
+        )
         let capture = CaptureDelegate()
         ble.delegate = capture
         
@@ -55,7 +61,11 @@ struct FragmentationTests {
     
     @Test("Duplicate fragment does not break reassembly")
     func duplicateFragmentDoesNotBreakReassembly() async throws {
-        let ble = BLEService(keychain: mockKeychain, identityManager: mockIdentityManager)
+        let ble = BLEService(
+            keychain: mockKeychain,
+            idBridge: idBridge,
+            identityManager: mockIdentityManager
+        )
         let capture = CaptureDelegate()
         ble.delegate = capture
         
@@ -85,7 +95,11 @@ struct FragmentationTests {
     
     @Test("Invalid fragment header is ignored")
     func invalidFragmentHeaderIsIgnored() async throws {
-        let ble = BLEService(keychain: mockKeychain, identityManager: mockIdentityManager)
+        let ble = BLEService(
+            keychain: mockKeychain,
+            idBridge: idBridge,
+            identityManager: mockIdentityManager
+        )
         let capture = CaptureDelegate()
         ble.delegate = capture
         

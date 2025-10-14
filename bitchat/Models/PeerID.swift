@@ -161,9 +161,14 @@ extension PeerID {
                 id.rangeOfCharacter(from: validCharset.inverted) == nil
     }
     
+    /// Returns true if the `bare` id is all hex
+    var isHex: Bool {
+        bare.allSatisfy { $0.isHexDigit }
+    }
+    
     /// Short routing IDs (exact 16-hex)
     var isShort: Bool {
-        bare.count == Constants.hexIDLength && Data(hexString: bare) != nil
+        bare.count == Constants.hexIDLength && isHex
     }
     
     /// Full Noise key hex (exact 64-hex)

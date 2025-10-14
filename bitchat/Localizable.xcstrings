@@ -177,7 +177,41 @@
             "state": "translated",
             "value": "bitchat"
           }
-        }
+    }
+  }
+    },
+    "%@ active": {
+      "comment": "A label at the bottom of the people list sheet showing the number of active users.",
+      "localizations": {
+        "ar": { "stringUnit": { "state": "translated", "value": "%@ نشطين" } },
+        "bn": { "stringUnit": { "state": "translated", "value": "%@ সক্রিয়" } },
+        "de": { "stringUnit": { "state": "translated", "value": "%@ aktiv" } },
+        "en": { "stringUnit": { "state": "translated", "value": "%@ active" } },
+        "es": { "stringUnit": { "state": "translated", "value": "%@ activos" } },
+        "fil": { "stringUnit": { "state": "translated", "value": "%@ aktibo" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "%@ actifs" } },
+        "he": { "stringUnit": { "state": "translated", "value": "%@ פעילים" } },
+        "hi": { "stringUnit": { "state": "translated", "value": "%@ सक्रिय" } },
+        "id": { "stringUnit": { "state": "translated", "value": "%@ aktif" } },
+        "it": { "stringUnit": { "state": "translated", "value": "%@ attivi" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "%@ 人がアクティブ" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "활성 사용자 %@명" } },
+        "ms": { "stringUnit": { "state": "translated", "value": "%@ aktif" } },
+        "ne": { "stringUnit": { "state": "translated", "value": "%@ सक्रिय" } },
+        "nl": { "stringUnit": { "state": "translated", "value": "%@ actief" } },
+        "pl": { "stringUnit": { "state": "translated", "value": "%@ aktywni" } },
+        "pt": { "stringUnit": { "state": "translated", "value": "%@ ativos" } },
+        "pt-BR": { "stringUnit": { "state": "translated", "value": "%@ ativos" } },
+        "ru": { "stringUnit": { "state": "translated", "value": "%@ активных" } },
+        "sv": { "stringUnit": { "state": "translated", "value": "%@ aktiva" } },
+        "ta": { "stringUnit": { "state": "translated", "value": "%@ செயலில்" } },
+        "th": { "stringUnit": { "state": "translated", "value": "%@ กำลังใช้งาน" } },
+        "tr": { "stringUnit": { "state": "translated", "value": "%@ aktif" } },
+        "uk": { "stringUnit": { "state": "translated", "value": "%@ активних" } },
+        "ur": { "stringUnit": { "state": "translated", "value": "%@ فعال" } },
+        "vi": { "stringUnit": { "state": "translated", "value": "%@ đang hoạt động" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "活跃用户 %@ 名" } },
+        "zh-Hant": { "stringUnit": { "state": "translated", "value": "活躍使用者 %@ 位" } }
       }
     },
     "app_info.close": {
