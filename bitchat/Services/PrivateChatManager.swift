@@ -12,9 +12,9 @@ import SwiftUI
 
 /// Manages all private chat functionality
 final class PrivateChatManager: ObservableObject {
-    @Published var privateChats: [String: [BitchatMessage]] = [:]
-    @Published var selectedPeer: String? = nil
-    @Published var unreadMessages: Set<String> = []
+    @Published var privateChats: [PeerID: [BitchatMessage]] = [:]
+    @Published var selectedPeer: PeerID? = nil
+    @Published var unreadMessages: Set<PeerID> = []
     
     private var selectedPeerFingerprint: String? = nil
     var sentReadReceipts: Set<String> = []  // Made accessible for ChatViewModel
@@ -31,11 +31,11 @@ final class PrivateChatManager: ObservableObject {
     private let privateChatCap = TransportConfig.privateChatCap
     
     /// Start a private chat with a peer
-    func startChat(with peerID: String) {
+    func startChat(with peerID: PeerID) {
         selectedPeer = peerID
         
         // Store fingerprint for persistence across reconnections
-        if let fingerprint = meshService?.getFingerprint(for: PeerID(str: peerID)) {
+        if let fingerprint = meshService?.getFingerprint(for: peerID) {
             selectedPeerFingerprint = fingerprint
         }
         
@@ -55,7 +55,7 @@ final class PrivateChatManager: ObservableObject {
     }
 
     /// Remove duplicate messages by ID and keep chronological order
-    func sanitizeChat(for peerID: String) {
+    func sanitizeChat(for peerID: PeerID) {
         guard let arr = privateChats[peerID] else { return }
         if arr.count <= 1 {
             return
@@ -79,7 +79,7 @@ final class PrivateChatManager: ObservableObject {
     }
     
     /// Mark messages from a peer as read
-    func markAsRead(from peerID: String) {
+    func markAsRead(from peerID: PeerID) {
         unreadMessages.remove(peerID)
         
         // Send read receipts for unread messages that haven't been sent yet

@@ -91,6 +91,7 @@ struct TextMessageView: View {
     .environmentObject(
         ChatViewModel(
             keychain: keychain,
+            idBridge: NostrIdentityBridge(),
             identityManager: SecureIdentityStateManager(keychain)
         )
     )

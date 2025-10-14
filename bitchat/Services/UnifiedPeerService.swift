@@ -27,6 +27,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     private var peerIndex: [PeerID: BitchatPeer] = [:]
     private var fingerprintCache: [PeerID: String] = [:]
     private let meshService: Transport
+    private let idBridge: NostrIdentityBridge
     private let identityManager: SecureIdentityStateManagerProtocol
     weak var messageRouter: MessageRouter?
     private let favoritesService = FavoritesPersistenceService.shared
@@ -34,8 +35,13 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     
     // MARK: - Initialization
     
-    init(meshService: Transport, identityManager: SecureIdentityStateManagerProtocol) {
+    init(
+        meshService: Transport,
+        idBridge: NostrIdentityBridge,
+        identityManager: SecureIdentityStateManagerProtocol
+    ) {
         self.meshService = meshService
+        self.idBridge = idBridge
         self.identityManager = identityManager
         
         // Subscribe to changes from both services
@@ -285,7 +291,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
             var peerNostrKey = peer.nostrPublicKey
             if peerNostrKey == nil {
                 // Try to get from NostrIdentityBridge association
-                peerNostrKey = NostrIdentityBridge.getNostrPublicKey(for: peer.noisePublicKey)
+                peerNostrKey = idBridge.getNostrPublicKey(for: peer.noisePublicKey)
             }
             
             // Add favorite
