@@ -46,6 +46,90 @@ final class GossipSyncManagerTests: XCTestCase {
         XCTAssertEqual(lastPacket.type, MessageType.requestSync.rawValue)
         XCTAssertNotNil(RequestSyncPacket.decode(from: lastPacket.payload))
     }
+
+    func testStaleAnnouncementsArePurgedWithMessages() {
+        var config = GossipSyncManager.Config()
+        config.stalePeerCleanupIntervalSeconds = 0
+        config.stalePeerTimeoutSeconds = 5
+
+        let manager = GossipSyncManager(myPeerID: "0102030405060708", config: config)
+        let peerHex = "0011223344556677"
+        let senderData = Data(hexString: peerHex) ?? Data()
+        let initialTimestampMs = UInt64(Date().timeIntervalSince1970 * 1000)
+
+        let announcePacket = BitchatPacket(
+            type: MessageType.announce.rawValue,
+            senderID: senderData,
+            recipientID: nil,
+            timestamp: initialTimestampMs,
+            payload: Data(),
+            signature: nil,
+            ttl: 1
+        )
+
+        let messagePacket = BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: senderData,
+            recipientID: nil,
+            timestamp: initialTimestampMs,
+            payload: Data([0x01]),
+            signature: nil,
+            ttl: 1
+        )
+
+        manager.onPublicPacketSeen(announcePacket)
+        manager.onPublicPacketSeen(messagePacket)
+
+        // Flush queue without triggering stale cleanup yet
+        manager._performMaintenanceSynchronously(now: Date())
+        XCTAssertTrue(manager._hasAnnouncement(for: PeerID(str: peerHex)))
+        XCTAssertEqual(manager._messageCount(for: PeerID(str: peerHex)), 1)
+
+        // Run cleanup past the timeout
+        let future = Date().addingTimeInterval(config.stalePeerTimeoutSeconds + 1)
+        manager._performMaintenanceSynchronously(now: future)
+        XCTAssertFalse(manager._hasAnnouncement(for: PeerID(str: peerHex)))
+        XCTAssertEqual(manager._messageCount(for: PeerID(str: peerHex)), 0)
+    }
+
+    func testIgnoresAnnounceOlderThanStaleTimeout() {
+        var config = GossipSyncManager.Config()
+        config.stalePeerTimeoutSeconds = 5
+        config.maxMessageAgeSeconds = 100
+
+        let manager = GossipSyncManager(myPeerID: "0102030405060708", config: config)
+        let peerHex = "8899aabbccddeeff"
+        let senderData = Data(hexString: peerHex) ?? Data()
+        let staleTimestampMs = UInt64(Date().addingTimeInterval(-(config.stalePeerTimeoutSeconds + 1)).timeIntervalSince1970 * 1000)
+
+        let freshMessage = BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: senderData,
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: Data([0xAA]),
+            signature: nil,
+            ttl: 1
+        )
+        manager.onPublicPacketSeen(freshMessage)
+
+        let announcePacket = BitchatPacket(
+            type: MessageType.announce.rawValue,
+            senderID: senderData,
+            recipientID: nil,
+            timestamp: staleTimestampMs,
+            payload: Data(),
+            signature: nil,
+            ttl: 1
+        )
+
+        manager.onPublicPacketSeen(announcePacket)
+
+        manager._performMaintenanceSynchronously()
+
+        XCTAssertFalse(manager._hasAnnouncement(for: PeerID(str: peerHex)))
+        XCTAssertEqual(manager._messageCount(for: PeerID(str: peerHex)), 0)
+    }
 }
 
 private final class RecordingDelegate: GossipSyncManager.Delegate {
