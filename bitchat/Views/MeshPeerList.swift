@@ -21,8 +21,8 @@ struct MeshPeerList: View {
         let myPeerID = viewModel.meshService.myPeerID
         let mapped: [(peer: BitchatPeer, isMe: Bool, hasUnread: Bool, enc: EncryptionStatus)] = viewModel.allPeers.map { peer in
             let isMe = peer.peerID == myPeerID
-            let hasUnread = viewModel.hasUnreadMessages(for: peer.peerID.id)
-            let enc = viewModel.getEncryptionStatus(for: peer.peerID.id)
+            let hasUnread = viewModel.hasUnreadMessages(for: peer.peerID)
+            let enc = viewModel.getEncryptionStatus(for: peer.peerID)
             return (peer, isMe, hasUnread, enc)
         }
         // Stable visual order without mutating state here
@@ -47,7 +47,7 @@ struct MeshPeerList: View {
                     let peer = item.peer
                     let isMe = item.isMe
                     HStack(spacing: 4) {
-                        let assigned = viewModel.colorForMeshPeer(id: peer.peerID.id, isDark: colorScheme == .dark)
+                        let assigned = viewModel.colorForMeshPeer(id: peer.peerID, isDark: colorScheme == .dark)
                         let baseColor = isMe ? Color.orange : assigned
                         if isMe {
                             Image(systemName: "person.fill")
@@ -89,7 +89,7 @@ struct MeshPeerList: View {
                             }
                         }
 
-                        if !isMe, viewModel.isPeerBlocked(peer.peerID.id) {
+                        if !isMe, viewModel.isPeerBlocked(peer.peerID) {
                             Image(systemName: "nosign")
                                 .font(.bitchatSystem(size: 10))
                                 .foregroundColor(.red)
@@ -105,7 +105,7 @@ struct MeshPeerList: View {
                                 }
                             } else {
                                 // Offline: prefer showing verified badge from persisted fingerprints
-                                if let fp = viewModel.getFingerprint(for: peer.peerID.id),
+                                if let fp = viewModel.getFingerprint(for: peer.peerID),
                                    viewModel.verifiedFingerprints.contains(fp) {
                                     Image(systemName: "checkmark.seal.fill")
                                         .font(.bitchatSystem(size: 10))

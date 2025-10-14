@@ -148,17 +148,18 @@ struct NoiseProtocolTests {
     
     // MARK: - Session Manager Tests
     
-    @Test func sessionManagerBasicOperations() {
+    @Test func sessionManagerBasicOperations() throws {
         let manager = NoiseSessionManager(localStaticKey: aliceKey, keychain: mockKeychain)
-        
-        // Create session
-        let session = manager.createSession(for: alicePeerID, role: .initiator)
-        
+
+        #expect(manager.getSession(for: alicePeerID) == nil)
+
+        _ = try manager.initiateHandshake(with: alicePeerID)
+        #expect(manager.getSession(for: alicePeerID) != nil)
+
         // Get session
         let retrieved = manager.getSession(for: alicePeerID)
         #expect(retrieved != nil)
-        #expect(session === retrieved)
-        
+
         // Remove session
         manager.removeSession(for: alicePeerID)
         #expect(manager.getSession(for: alicePeerID) == nil)
