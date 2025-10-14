@@ -1031,16 +1031,14 @@ struct ContentView: View {
         }
         .background(backgroundColor)
         .foregroundColor(textColor)
-        .gesture(
+        .highPriorityGesture(
             DragGesture(minimumDistance: 25, coordinateSpace: .local)
                 .onEnded { value in
                     let horizontal = value.translation.width
                     let vertical = abs(value.translation.height)
                     guard horizontal > 80, vertical < 60 else { return }
                     withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
-                        dismiss()
-                        showSidebar = false
-                        showVerifySheet = false
+                        showSidebar = true
                         viewModel.endPrivateChat()
                     }
                 }
