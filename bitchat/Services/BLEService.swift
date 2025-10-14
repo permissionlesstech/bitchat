@@ -2206,6 +2206,16 @@ extension BLEService {
     }
     
     private func handleFragment(_ packet: BitchatPacket, from peerID: PeerID) {
+        if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
+            _handleFragment(packet, from: peerID)
+        } else {
+            messageQueue.async(flags: .barrier) { [weak self] in
+                self?._handleFragment(packet, from: peerID)
+            }
+        }
+    }
+
+    private func _handleFragment(_ packet: BitchatPacket, from peerID: PeerID) {
         // Don't process our own fragments
         if peerID == myPeerID {
             return
