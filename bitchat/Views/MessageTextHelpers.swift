@@ -37,15 +37,16 @@ extension String {
     }
 
     // Extract up to `max` Cashu tokens (cashuA/cashuB). Allow dot '.' and shorter lengths.
-    func extractCashuTokens(max: Int = 3) -> [String] {
+    func extractCashuLinks(max: Int = 3) -> [String] {
         let regex = RegexCache.cashu
         let ns = self as NSString
         let range = NSRange(location: 0, length: ns.length)
         var found: [String] = []
-        for m in regex.matches(in: self, options: [], range: range) {
+        for m in regex.matches(in: self, range: range) {
             if m.numberOfRanges > 0 {
                 let token = ns.substring(with: m.range(at: 0))
-                found.append(token)
+                let enc = token.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-_"))) ?? token
+                found.append("cashu:\(enc)")
                 if found.count >= max { break }
             }
         }
@@ -58,19 +59,19 @@ extension String {
         let ns = self as NSString
         let full = NSRange(location: 0, length: ns.length)
         // lightning: scheme
-        for m in RegexCache.lightningScheme.matches(in: self, options: [], range: full) {
+        for m in RegexCache.lightningScheme.matches(in: self, range: full) {
             let s = ns.substring(with: m.range(at: 0))
             results.append(s)
             if results.count >= max { return results }
         }
         // BOLT11
-        for m in RegexCache.bolt11.matches(in: self, options: [], range: full) {
+        for m in RegexCache.bolt11.matches(in: self, range: full) {
             let s = ns.substring(with: m.range(at: 0))
             results.append("lightning:\(s)")
             if results.count >= max { return results }
         }
         // LNURL bech32
-        for m in RegexCache.lnurl.matches(in: self, options: [], range: full) {
+        for m in RegexCache.lnurl.matches(in: self, range: full) {
             let s = ns.substring(with: m.range(at: 0))
             results.append("lightning:\(s)")
             if results.count >= max { return results }

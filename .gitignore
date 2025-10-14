@@ -9,9 +9,6 @@ plans/
 CLAUDE.md
 AGENTS.md
 
-## User settings
-xcuserdata/
-
 ## compatibility with Xcode 8 and earlier (ignoring not required starting Xcode 9)
 *.xcscmblueprint
 *.xccheckout
@@ -57,7 +54,8 @@ iOSInjectionProject/
 
 ## Xcode project
 *.xcodeproj/project.xcworkspace/
-*.xcodeproj/xcshareddata/
+## Xcode User settings
+xcuserdata/
 
 ## Python
 __pycache__/
@@ -67,6 +65,9 @@ __pycache__/
 ## Temporary files
 *.tmp
 *.temp
+
+## Cache
+.cache/
 
 # Local build results
 .Result*/

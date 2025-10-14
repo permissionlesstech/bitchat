@@ -2,8 +2,8 @@ import Foundation
 import CoreBluetooth
 
 /// Represents a peer in the BitChat network with all associated metadata
-struct BitchatPeer: Identifiable, Equatable {
-    let id: String // Hex-encoded peer ID
+struct BitchatPeer: Equatable {
+    let peerID: PeerID // Hex-encoded peer ID
     let noisePublicKey: Data
     let nickname: String
     let lastSeen: Date
@@ -51,7 +51,7 @@ struct BitchatPeer: Identifiable, Equatable {
     
     // Display helpers
     var displayName: String {
-        nickname.isEmpty ? String(id.prefix(8)) : nickname
+        nickname.isEmpty ? String(peerID.id.prefix(8)) : nickname
     }
     
     var statusIcon: String {
@@ -73,14 +73,14 @@ struct BitchatPeer: Identifiable, Equatable {
     
     // Initialize from mesh service data
     init(
-        id: String,
+        peerID: PeerID,
         noisePublicKey: Data,
         nickname: String,
         lastSeen: Date = Date(),
         isConnected: Bool = false,
         isReachable: Bool = false
     ) {
-        self.id = id
+        self.peerID = peerID
         self.noisePublicKey = noisePublicKey
         self.nickname = nickname
         self.lastSeen = lastSeen
@@ -93,8 +93,6 @@ struct BitchatPeer: Identifiable, Equatable {
     }
     
     static func == (lhs: BitchatPeer, rhs: BitchatPeer) -> Bool {
-        lhs.id == rhs.id
+        lhs.peerID == rhs.peerID
     }
 }
-
-//

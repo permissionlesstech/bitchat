@@ -21,7 +21,7 @@ final class BitchatMessage: Codable {
     let originalSender: String?
     let isPrivate: Bool
     let recipientNickname: String?
-    let senderPeerID: String?
+    let senderPeerID: PeerID?
     let mentions: [String]?  // Array of mentioned nicknames
     var deliveryStatus: DeliveryStatus? // Delivery tracking
     
@@ -42,7 +42,19 @@ final class BitchatMessage: Codable {
         case isPrivate, recipientNickname, senderPeerID, mentions, deliveryStatus
     }
     
-    init(id: String? = nil, sender: String, content: String, timestamp: Date, isRelay: Bool, originalSender: String? = nil, isPrivate: Bool = false, recipientNickname: String? = nil, senderPeerID: String? = nil, mentions: [String]? = nil, deliveryStatus: DeliveryStatus? = nil) {
+    init(
+        id: String? = nil,
+        sender: String,
+        content: String,
+        timestamp: Date,
+        isRelay: Bool,
+        originalSender: String? = nil,
+        isPrivate: Bool = false,
+        recipientNickname: String? = nil,
+        senderPeerID: PeerID? = nil,
+        mentions: [String]? = nil,
+        deliveryStatus: DeliveryStatus? = nil
+    ) {
         self.id = id ?? UUID().uuidString
         self.sender = sender
         self.content = content
@@ -151,7 +163,7 @@ extension BitchatMessage {
             data.append(recipData.prefix(255))
         }
         
-        if let senderPeerID = senderPeerID, let peerData = senderPeerID.data(using: .utf8) {
+        if let peerData = senderPeerID?.id.data(using: .utf8) {
             data.append(UInt8(min(peerData.count, 255)))
             data.append(peerData.prefix(255))
         }
@@ -264,11 +276,11 @@ extension BitchatMessage {
             }
         }
         
-        var senderPeerID: String?
+        var senderPeerID: PeerID?
         if hasSenderPeerID && offset < dataCopy.count {
             let length = Int(dataCopy[offset]); offset += 1
             if offset + length <= dataCopy.count {
-                senderPeerID = String(data: dataCopy[offset..<offset+length], encoding: .utf8)
+                senderPeerID = PeerID(data: dataCopy[offset..<offset+length])
                 offset += length
             }
         }

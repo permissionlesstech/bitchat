@@ -6,7 +6,7 @@ This test suite uses an in-memory networking harness to make end-to-end and inte
 
 - **File:** `bitchatTests/Mocks/MockBLEService.swift`
 - **Registry/Adjacency:** Global `registry` maps `peerID` to a `MockBLEService` instance; `adjacency` records simulated links between peers.
-- **Setup:** Call `MockBLEService.resetTestBus()` in `setUp()` to clear state between tests; use `_testRegister()` when creating a node to register immediately.
+- **Setup:** Call `MockBLEService.resetTestBus()` in `setUp()` to clear state between tests.
 - **Topology:** Use `simulateConnectedPeer(_:)` and `simulateDisconnectedPeer(_:)` to add/remove links. `connectFullMesh()` helpers in tests build larger topologies.
 - **Handlers:** Tests can observe data via `messageDeliveryHandler` (decoded `BitchatMessage`) and `packetDeliveryHandler` (raw `BitchatPacket`).
 - **De‑duplication:** A thread-safe `seenMessageIDs` prevents duplicate deliveries during flooding/relays.
@@ -35,8 +35,8 @@ This test suite uses an in-memory networking harness to make end-to-end and inte
 
 ## Quick Start
 
-- Create nodes with `_testRegister()` and connect them:
-  - `let svc = MockBLEService(); svc.myPeerID = "PEER1"; svc._testRegister()`
+- Create nodes and connect them:
+  - `let svc = MockBLEService(); svc.myPeerID = "PEER1"`
   - `svc.simulateConnectedPeer("PEER2")`
 - Observe messages:
   - `svc.messageDeliveryHandler = { msg in /* asserts */ }`

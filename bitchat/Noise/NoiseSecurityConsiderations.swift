@@ -52,11 +52,6 @@ struct NoiseSecurityValidator {
     static func validateHandshakeMessageSize(_ data: Data) -> Bool {
         return data.count <= NoiseSecurityConstants.maxHandshakeMessageSize
     }
-    
-    /// Validate peer ID format using unified validator
-    static func validatePeerID(_ peerID: String) -> Bool {
-        return InputValidator.validatePeerID(peerID)
-    }
 }
 
 // MARK: - Enhanced Noise Session with Security
@@ -136,8 +131,8 @@ final class SecureNoiseSession: NoiseSession {
 // MARK: - Rate Limiter
 
 final class NoiseRateLimiter {
-    private var handshakeTimestamps: [String: [Date]] = [:] // peerID -> timestamps
-    private var messageTimestamps: [String: [Date]] = [:] // peerID -> timestamps
+    private var handshakeTimestamps: [PeerID: [Date]] = [:]
+    private var messageTimestamps: [PeerID: [Date]] = [:]
     
     // Global rate limiting
     private var globalHandshakeTimestamps: [Date] = []
@@ -145,7 +140,7 @@ final class NoiseRateLimiter {
     
     private let queue = DispatchQueue(label: "chat.bitchat.noise.ratelimit", attributes: .concurrent)
     
-    func allowHandshake(from peerID: String) -> Bool {
+    func allowHandshake(from peerID: PeerID) -> Bool {
         return queue.sync(flags: .barrier) {
             let now = Date()
             let oneMinuteAgo = now.addingTimeInterval(-60)
@@ -174,7 +169,7 @@ final class NoiseRateLimiter {
         }
     }
     
-    func allowMessage(from peerID: String) -> Bool {
+    func allowMessage(from peerID: PeerID) -> Bool {
         return queue.sync(flags: .barrier) {
             let now = Date()
             let oneSecondAgo = now.addingTimeInterval(-1)
@@ -203,7 +198,7 @@ final class NoiseRateLimiter {
         }
     }
     
-    func reset(for peerID: String) {
+    func reset(for peerID: PeerID) {
         queue.async(flags: .barrier) {
             self.handshakeTimestamps.removeValue(forKey: peerID)
             self.messageTimestamps.removeValue(forKey: peerID)

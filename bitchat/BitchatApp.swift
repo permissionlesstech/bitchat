@@ -6,6 +6,7 @@
 // For more information, see <https://unlicense.org>
 //
 
+import Tor
 import SwiftUI
 import UserNotifications
 
@@ -25,11 +26,15 @@ struct BitchatApp: App {
     @NSApplicationDelegateAdaptor(MacAppDelegate.self) var appDelegate
     #endif
     
+    private let idBridge = NostrIdentityBridge()
+    
     init() {
         let keychain = KeychainManager()
+        let idBridge = self.idBridge
         _chatViewModel = StateObject(
             wrappedValue: ChatViewModel(
                 keychain: keychain,
+                idBridge: idBridge,
                 identityManager: SecureIdentityStateManager(keychain)
             )
         )
@@ -49,7 +54,7 @@ struct BitchatApp: App {
                     VerificationService.shared.configure(with: chatViewModel.meshService.getNoiseService())
                     // Prewarm Nostr identity and QR to make first VERIFY sheet fast
                     DispatchQueue.global(qos: .utility).async {
-                        let npub = try? NostrIdentityBridge.getCurrentNostrIdentity()?.npub
+                        let npub = try? idBridge.getCurrentNostrIdentity()?.npub
                         _ = VerificationService.shared.buildMyQRString(nickname: chatViewModel.nickname, npub: npub)
                     }
                     #if os(iOS)

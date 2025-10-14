@@ -26,6 +26,7 @@ final class FavoritesPersistenceService: ObservableObject {
 
     private static let storageKey = "chat.bitchat.favorites"
     private static let keychainService = "chat.bitchat.favorites"
+    private let keychain: KeychainHelperProtocol
     
     @Published private(set) var favorites: [Data: FavoriteRelationship] = [:] // Noise pubkey -> relationship
     @Published private(set) var mutualFavorites: Set<Data> = []
@@ -35,7 +36,8 @@ final class FavoritesPersistenceService: ObservableObject {
     
     static let shared = FavoritesPersistenceService()
     
-    private init() {
+    init(keychain: KeychainHelperProtocol = KeychainHelper()) {
+        self.keychain = keychain
         loadFavorites()
         
         // Update mutual favorites when favorites change
@@ -179,12 +181,11 @@ final class FavoritesPersistenceService: ObservableObject {
 
     /// Resolve favorite status by short peer ID (16-hex derived from Noise pubkey)
     /// Falls back to scanning favorites and matching on derived peer ID.
-    func getFavoriteStatus(forPeerID peerID: String) -> FavoriteRelationship? {
+    func getFavoriteStatus(forPeerID peerID: PeerID) -> FavoriteRelationship? {
         // Quick sanity: peerID should be 16 hex chars (8 bytes)
-        guard peerID.count == 16 else { return nil }
-        for (pubkey, rel) in favorites {
-            let derived = PeerIDUtils.derivePeerID(fromPublicKey: pubkey)
-            if derived == peerID { return rel }
+        guard peerID.isShort else { return nil }
+        for (pubkey, rel) in favorites where PeerID(publicKey: pubkey) == peerID {
+            return rel
         }
         return nil
     }
@@ -197,7 +198,7 @@ final class FavoritesPersistenceService: ObservableObject {
         saveFavorites()
         
         // Delete from keychain directly
-        KeychainHelper.delete(
+        keychain.delete(
             key: Self.storageKey,
             service: Self.keychainService
         )
@@ -217,10 +218,11 @@ final class FavoritesPersistenceService: ObservableObject {
             let data = try encoder.encode(relationships)
             
             // Store in keychain for security
-            KeychainHelper.save(
+            keychain.save(
                 key: Self.storageKey,
                 data: data,
-                service: Self.keychainService
+                service: Self.keychainService,
+                accessible: nil
             )
             
             // Successfully saved favorites
@@ -232,7 +234,7 @@ final class FavoritesPersistenceService: ObservableObject {
     private func loadFavorites() {
         // Loading favorites from keychain
         
-        guard let data = KeychainHelper.load(
+        guard let data = keychain.load(
             key: Self.storageKey,
             service: Self.keychainService
         ) else { 

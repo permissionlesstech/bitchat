@@ -61,10 +61,20 @@ extension PeerID {
         }
     }
     
+    /// Convenience init to handle `Optional<String>`
+    init?(str: (any StringProtocol)?) {
+        guard let str else { return nil }
+        self.init(str: str)
+    }
+    
     /// Convenience init to create PeerID by converting Data to String
     init?(data: Data) {
-        guard let str = String(data: data, encoding: .utf8) else { return nil }
-        self.init(str: str)
+        self.init(str: String(data: data, encoding: .utf8))
+    }
+    
+    /// Convenience init to "hide" hex-encoding implementation detail
+    init(hexData: Data) {
+        self.init(str: hexData.hexEncodedString())
     }
 }
 
@@ -151,9 +161,14 @@ extension PeerID {
                 id.rangeOfCharacter(from: validCharset.inverted) == nil
     }
     
+    /// Returns true if the `bare` id is all hex
+    var isHex: Bool {
+        bare.allSatisfy { $0.isHexDigit }
+    }
+    
     /// Short routing IDs (exact 16-hex)
     var isShort: Bool {
-        id.count == Constants.hexIDLength && Data(hexString: id) != nil
+        bare.count == Constants.hexIDLength && isHex
     }
     
     /// Full Noise key hex (exact 64-hex)
@@ -163,8 +178,8 @@ extension PeerID {
     
     /// Full Noise key (exact 64-hex) as Data
     var noiseKey: Data? {
-        guard id.count == Constants.maxIDLength else { return nil }
-        return Data(hexString: id)
+        guard bare.count == Constants.maxIDLength else { return nil }
+        return Data(hexString: bare)
     }
 }
 
@@ -174,4 +189,29 @@ extension PeerID: Comparable {
     static func < (lhs: PeerID, rhs: PeerID) -> Bool {
         lhs.id < rhs.id
     }
+}
+
+// MARK: - String Interop Helpers
+
+// MARK: CustomStringConvertible
+
+extension PeerID: CustomStringConvertible {
+    /// So it returns the actual `id` like before even inside another String
+    var description: String {
+        id
+    }
+}
+
+// MARK: Custom Equatable w/ String & Optionality
+
+// PeerID <> String
+extension Optional where Wrapped == PeerID {
+    static func ==(lhs: Optional<Wrapped>, rhs: Optional<String>) -> Bool   { lhs?.id == rhs }
+    static func !=(lhs: Optional<Wrapped>, rhs: Optional<String>) -> Bool   { lhs?.id != rhs }
+}
+
+// String <> PeerID
+extension Optional where Wrapped == String {
+    static func ==(lhs: Optional<Wrapped>, rhs: Optional<PeerID>) -> Bool   { lhs == rhs?.id }
+    static func !=(lhs: Optional<Wrapped>, rhs: Optional<PeerID>) -> Bool   { lhs != rhs?.id }
 }

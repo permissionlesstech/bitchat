@@ -44,3 +44,21 @@ final class MockKeychain: KeychainManagerProtocol {
         storage["identity_noiseStaticKey"] != nil
     }
 }
+
+final class MockKeychainHelper: KeychainHelperProtocol {
+    private typealias Service = String
+    private typealias Key = String
+    private var storage: [Service: [Key: Data]] = [:]
+    
+    func save(key: String, data: Data, service: String, accessible: CFString?) {
+        storage[service]?[key] = data
+    }
+    
+    func load(key: String, service: String) -> Data? {
+        storage[service]?[key]
+    }
+    
+    func delete(key: String, service: String) {
+        storage[service]?.removeValue(forKey: key)
+    }
+}

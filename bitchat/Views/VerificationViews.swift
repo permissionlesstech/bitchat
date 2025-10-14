@@ -109,6 +109,7 @@ struct ImageWrapper: View {
 struct QRScanView: View {
     @EnvironmentObject var viewModel: ChatViewModel
     var isActive: Bool = true
+    var onSuccess: (() -> Void)? = nil  // Called when verification succeeds
     @State private var input = ""
     @State private var result: String = "" // not shown for iOS scanner
     @State private var lastValid: String = ""
@@ -131,10 +132,18 @@ struct QRScanView: View {
         VStack(alignment: .leading, spacing: 12) {
             #if os(iOS)
             CameraScannerView(isActive: isActive) { code in
+                // Deduplicate: ignore if we just processed this exact QR code
+                guard code != lastValid else { return }
+
                 if let qr = VerificationService.shared.verifyScannedQR(code) {
                     let ok = viewModel.beginQRVerification(with: qr)
-                    if !ok { /* already pending; continue scanning */ }
-                    lastValid = code
+                    if ok {
+                        // Successfully initiated verification; remember this QR to prevent re-scanning
+                        lastValid = code
+                        // Close scanner and return to "My QR" view
+                        onSuccess?()
+                    }
+                    // If !ok, peer not found or already pending - don't set lastValid so user can retry
                 } else {
                     // ignore invalid reads; continue scanning
                 }
@@ -148,9 +157,22 @@ struct QRScanView: View {
                 .frame(height: 100)
                 .border(Color.gray.opacity(0.4))
             Button(Strings.validate) {
+                // Deduplicate: ignore if we just processed this exact QR
+                guard input != lastValid else {
+                    result = Strings.requested("")  // Already processed
+                    return
+                }
+
                 if let qr = VerificationService.shared.verifyScannedQR(input) {
                     let ok = viewModel.beginQRVerification(with: qr)
-                    result = ok ? Strings.requested(qr.nickname) : Strings.notFound
+                    if ok {
+                        result = Strings.requested(qr.nickname)
+                        lastValid = input
+                        // Close scanner and return to "My QR" view
+                        onSuccess?()
+                    } else {
+                        result = Strings.notFound
+                    }
                 } else {
                     result = Strings.invalid
                 }
@@ -270,7 +292,7 @@ struct VerificationSheetView: View {
     private var boxColor: Color { Color.gray.opacity(0.1) }
 
     private func myQRString() -> String {
-        let npub = try? NostrIdentityBridge.getCurrentNostrIdentity()?.npub
+        let npub = try? viewModel.idBridge.getCurrentNostrIdentity()?.npub
         return VerificationService.shared.buildMyQRString(nickname: viewModel.nickname, npub: npub) ?? ""
     }
 
@@ -308,12 +330,16 @@ struct VerificationSheetView: View {
                             .multilineTextAlignment(.center)
                             .foregroundColor(accentColor)
                         #if os(iOS)
-                        QRScanView(isActive: showingScanner)
+                        QRScanView(isActive: showingScanner, onSuccess: {
+                            showingScanner = false
+                        })
                             .environmentObject(viewModel)
                             .frame(height: 280)
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                         #else
-                        QRScanView()
+                        QRScanView(onSuccess: {
+                            showingScanner = false
+                        })
                             .environmentObject(viewModel)
                         #endif
                     }
@@ -347,7 +373,7 @@ struct VerificationSheetView: View {
                 }
 
                 // Optional: Remove verification for selected peer (if verified)
-                if let pid = viewModel.selectedPrivateChatPeer,
+                if let pid = viewModel.selectedPrivateChatPeer?.id,
                    let fp = viewModel.getFingerprint(for: pid),
                    viewModel.verifiedFingerprints.contains(fp) {
                     Button(action: { viewModel.unverifyFingerprint(for: pid) }) {

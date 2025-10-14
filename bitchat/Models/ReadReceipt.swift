@@ -79,7 +79,7 @@ struct ReadReceipt: Codable {
         
         guard let readerIDData = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
         let readerID = readerIDData.hexEncodedString()
-        guard InputValidator.validatePeerID(readerID) else { return nil }
+        guard PeerID(str: readerID).isValid else { return nil }
         
         guard let timestamp = dataCopy.readDate(at: &offset),
               InputValidator.validateTimestamp(timestamp),
