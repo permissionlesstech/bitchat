@@ -2652,18 +2652,20 @@ extension BLEService {
 
         var accepted = false
         var senderNickname: String = ""
+        // Snapshot peers to avoid concurrent mutation while iterating during nickname collision checks.
+        let peersSnapshot = collectionsQueue.sync { peers }
 
         // If the packet is from ourselves (e.g., recovered via sync TTL==0), accept immediately
         if peerID == myPeerID {
             accepted = true
             senderNickname = myNickname
         }
-        else if let info = peers[peerID], info.isVerifiedNickname {
+        else if let info = peersSnapshot[peerID], info.isVerifiedNickname {
             // Known verified peer path
             accepted = true
             senderNickname = info.nickname
             // Handle nickname collisions
-            let hasCollision = peers.values.contains { $0.isConnected && $0.nickname == info.nickname && $0.peerID != peerID } || (myNickname == info.nickname)
+            let hasCollision = peersSnapshot.values.contains { $0.isConnected && $0.nickname == info.nickname && $0.peerID != peerID } || (myNickname == info.nickname)
             if hasCollision {
                 senderNickname += "#" + String(peerID.id.prefix(4))
             }
