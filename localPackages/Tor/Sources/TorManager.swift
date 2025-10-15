@@ -1,11 +1,23 @@
 import BitLogger
 import Foundation
+#if canImport(Network)
 import Network
+#endif
+#if canImport(Darwin)
 import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
 
-// Declare C entrypoint for Tor when statically linked from an xcframework.
-@_silgen_name("tor_main")
-private func tor_main_c(_ argc: Int32, _ argv: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?) -> Int32
+#if !canImport(Network)
+private final class NWPathMonitor {
+    var pathUpdateHandler: ((Any) -> Void)?
+
+    func start(queue: DispatchQueue) {
+        // Path monitoring is unavailable on this platform; nothing to do.
+    }
+}
+#endif
 
 // Preferred: tiny C glue that uses Tor's embedding API (tor_api.h)
 @_silgen_name("tor_host_start")
@@ -286,150 +298,6 @@ public final class TorManager: ObservableObject {
         }
     }
 
-    // MARK: - Dynamic loader path (no Swift module required)
-
-    /// Attempt to locate an embedded tor framework binary and launch Tor via `tor_run_main`.
-    /// Returns true if the attempt started and port probing was scheduled.
-    private func startTorViaDlopen() -> Bool {
-        guard let fwURL = frameworkBinaryURL() else {
-            SecureLogger.warning("TorManager: no embedded tor framework found", category: .session)
-            return false
-        }
-
-        // Load the library
-        let mode = RTLD_NOW | RTLD_LOCAL
-        SecureLogger.info("TorManager: dlopen(\(fwURL.lastPathComponent))…", category: .session)
-        guard let handle = dlopen(fwURL.path, mode) else {
-            let err = String(cString: dlerror())
-            self.lastError = NSError(domain: "TorManager", code: -10, userInfo: [NSLocalizedDescriptionKey: "dlopen failed: \(err)"])
-            self.isStarting = false
-            return false
-        }
-
-        // Resolve tor_main(argc, argv)
-        typealias TorMainType = @convention(c) (Int32, UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?) -> Int32
-        guard let sym = dlsym(handle, "tor_main") else {
-            // Keep handle open but report error
-            let err = String(cString: dlerror())
-            self.lastError = NSError(domain: "TorManager", code: -11, userInfo: [NSLocalizedDescriptionKey: "dlsym tor_main failed: \(err)"])
-            self.isStarting = false
-            return false
-        }
-        let torMain = unsafeBitCast(sym, to: TorMainType.self)
-        self._dlHandle = handle
-
-        // Prepare args: tor -f <torrc>
-        var argv: [String] = ["tor"]
-        if let torrc = torrcURL()?.path {
-            argv.append(contentsOf: ["-f", torrc])
-        }
-        // Run Tor on a background thread to avoid blocking the main actor
-        SecureLogger.info("TorManager: launching tor_main with torrc", category: .session)
-        let argc = Int32(argv.count)
-        DispatchQueue.global(qos: .utility).async {
-            // Build stable C argv in this thread
-            let cStrings: [UnsafeMutablePointer<CChar>?] = argv.map { strdup($0) }
-            let cArgv = UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>.allocate(capacity: cStrings.count + 1)
-            for i in 0..<cStrings.count { cArgv[i] = cStrings[i] }
-            cArgv[cStrings.count] = nil
-
-            _ = torMain(argc, cArgv)
-
-            // Free args after exit (Tor usually never returns)
-            for ptr in cStrings.compactMap({ $0 }) { free(ptr) }
-            cArgv.deallocate()
-        }
-
-        // Start control-port monitor and probe readiness asynchronously
-        startControlMonitorIfNeeded()
-        Task.detached(priority: .userInitiated) { [weak self] in
-            guard let self else { return }
-            let ready = await self.waitForSocksReady(timeout: 60.0)
-            await MainActor.run {
-                self.socksReady = ready
-                if !ready {
-                    self.lastError = NSError(domain: "TorManager", code: -12, userInfo: [NSLocalizedDescriptionKey: "Tor SOCKS not reachable after dlopen start"])
-                    SecureLogger.error("TorManager: SOCKS not reachable (timeout)", category: .session)
-                } else {
-                    SecureLogger.info("TorManager: SOCKS ready at \(self.socksHost):\(self.socksPort)", category: .session)
-                }
-                // isStarting will be cleared when bootstrap reaches 100%
-            }
-        }
-
-        return true
-    }
-
-    private var _dlHandle: UnsafeMutableRawPointer?
-
-    private func frameworkBinaryURL() -> URL? {
-        // Try common embedded locations for the framework binary name
-        let candidates = [
-            "tor-nolzma.framework/tor-nolzma",
-            "Tor.framework/Tor",
-        ]
-        if let base = Bundle.main.privateFrameworksURL {
-            for rel in candidates {
-                let url = base.appendingPathComponent(rel)
-                if FileManager.default.fileExists(atPath: url.path) { return url }
-            }
-        }
-        // For macOS apps, also try Contents/Frameworks explicitly
-        #if os(macOS)
-        if let appURL = Bundle.main.bundleURL as URL?,
-           let frameworksURL = Optional(appURL.appendingPathComponent("Contents/Frameworks", isDirectory: true)) {
-            for rel in candidates {
-                let url = frameworksURL.appendingPathComponent(rel)
-                if FileManager.default.fileExists(atPath: url.path) { return url }
-            }
-        }
-        #endif
-        return nil
-    }
-
-    // MARK: - Static-link path (no module import)
-    private func startTorViaLinkedSymbol() -> Bool {
-        // Attempt to start tor_run_main directly (statically linked). If the
-        // symbol is not present at link-time, builds will fail — which is
-        // expected when the xcframework is absent.
-        var argv: [String] = ["tor"]
-        if let torrc = torrcURL()?.path { argv.append(contentsOf: ["-f", torrc]) }
-
-        SecureLogger.info("TorManager: starting tor_main (static)", category: .session)
-        let argc = Int32(argv.count)
-        DispatchQueue.global(qos: .utility).async {
-            // Build stable C argv in this thread
-            let cStrings: [UnsafeMutablePointer<CChar>?] = argv.map { strdup($0) }
-            let cArgv = UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>.allocate(capacity: cStrings.count + 1)
-            for i in 0..<cStrings.count { cArgv[i] = cStrings[i] }
-            cArgv[cStrings.count] = nil
-
-            _ = tor_main_c(argc, cArgv)
-
-            // If tor_main ever returns, free memory
-            for ptr in cStrings.compactMap({ $0 }) { free(ptr) }
-            cArgv.deallocate()
-        }
-
-        // Start control monitor early
-        startControlMonitorIfNeeded()
-        Task.detached(priority: .userInitiated) { [weak self] in
-            guard let self else { return }
-            let ready = await self.waitForSocksReady(timeout: 60.0)
-            await MainActor.run {
-                self.socksReady = ready
-                if ready {
-                    SecureLogger.info("TorManager: SOCKS ready at \(self.socksHost):\(self.socksPort)", category: .session)
-                } else {
-                    self.lastError = NSError(domain: "TorManager", code: -13, userInfo: [NSLocalizedDescriptionKey: "Tor SOCKS not reachable after static start"])
-                    SecureLogger.error("TorManager: SOCKS not reachable (timeout)", category: .session)
-                }
-                // isStarting will be cleared when bootstrap reaches 100%
-            }
-        }
-        return true
-    }
-    
     // MARK: - ControlPort monitoring (bootstrap progress)
     private func startControlMonitorIfNeeded() {
         guard !controlMonitorStarted else { return }
@@ -439,10 +307,6 @@ public final class TorManager: ObservableObject {
             await self?.bootstrapPollLoop()
         }
     }
-
-    private func controlMonitorLoop() async {}
-
-    private func tryControlSessionOnce() async -> Bool { false }
 
     // iOS: Poll GETINFO periodically to track bootstrap progress without long-lived control readers.
     private func bootstrapPollLoop() async {

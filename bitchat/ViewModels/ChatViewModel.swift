@@ -2164,16 +2164,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         return "anon#\(suffix)"
     }
 
-    // Helper: display name for current active channel (for notifications)
-    private func activeChannelDisplayName() -> String {
-        switch activeChannel {
-        case .mesh:
-            return "#mesh"
-        case .location(let ch):
-            return "#\(ch.geohash)"
-        }
-    }
-
     // Dedup helper with small memory cap
     private func recordProcessedEvent(_ id: String) {
         processedNostrEvents.insert(id)
@@ -5351,61 +5341,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         )
     }
     
-    @MainActor
-    private func handleNostrAcknowledgment(content: String, from senderPubkey: String) {
-        // Parse ACK format: "ACK:TYPE:MESSAGE_ID"
-        let parts = content.split(separator: ":", maxSplits: 2)
-        guard parts.count >= 3 else {
-            SecureLogger.warning("⚠️ Invalid ACK format: \(content)", category: .session)
-            return
-        }
-        
-        let ackType = String(parts[1])
-        let messageId = String(parts[2])
-        
-        // Check if we've already processed this ACK
-        let ackKey = "\(messageId):\(ackType):\(senderPubkey)"
-        if processedNostrAcks.contains(ackKey) {
-            // Skip duplicate ACK
-            return
-        }
-        processedNostrAcks.insert(ackKey)
-        
-        SecureLogger.debug("📨 Received \(ackType) ACK for message \(messageId.prefix(16))... from \(senderPubkey.prefix(16))...", category: .session)
-        
-        // Verify the sender has a valid Noise key
-        guard findNoiseKey(for: senderPubkey) != nil else {
-            // Cannot find Noise key for ACK sender
-            return
-        }
-        
-        // Find and update the message status in ALL private chats (both stable and ephemeral)
-        var messageFound = false
-        for (chatPeerID, messages) in privateChats {
-            if let index = messages.firstIndex(where: { $0.id == messageId }) {
-                // Update delivery status based on ACK type
-                switch ackType {
-                case "DELIVERED":
-                    privateChats[chatPeerID]?[index].deliveryStatus = .delivered(to: "recipient", at: Date())
-                case "READ":
-                    privateChats[chatPeerID]?[index].deliveryStatus = .read(by: "recipient", at: Date())
-                default:
-                    SecureLogger.warning("⚠️ Unknown ACK type: \(ackType)", category: .session)
-                }
-                
-                messageFound = true
-                SecureLogger.info("✅ Updated message \(messageId.prefix(16))... status to \(ackType) in chat \(chatPeerID.id.prefix(16))...", category: .session)
-                // Don't break - continue to update in all chats where this message exists
-            }
-        }
-        
-        if messageFound {
-            objectWillChange.send()
-        } else {
-            SecureLogger.warning("⚠️ Could not find message \(messageId) to update status from ACK", category: .session)
-        }
-    }
-
     // MARK: - Base64URL utils
     private static func base64URLDecode(_ s: String) -> Data? {
         var str = s.replacingOccurrences(of: "-", with: "+")
@@ -5462,111 +5397,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             let action = isFavorite ? "favorited" : "unfavorited"
             addMeshOnlySystemMessage("\(senderNickname) \(action) you")
         }
-    }
-    
-    @MainActor
-    private func handleNostrMessageFromUnknownSender(
-        messageId: String,
-        content: String,
-        senderPubkey: String,
-        senderNickname: String? = nil,
-        timestamp: Date
-    ) {
-        // Check if we already have this message in local storage
-        for (_, messages) in privateChats {
-            if messages.contains(where: { $0.id == messageId }) {
-                return // Skipping duplicate message
-            }
-        }
-        
-        // Check if we've read this message before (in a previous session)
-        let wasReadBefore = sentReadReceipts.contains(messageId)
-        
-        // Try to find sender by checking all known peers for nickname matches
-        // This is a fallback when we receive Nostr messages from someone not in favorites
-        
-        // For now, create a temporary peer ID based on Nostr pubkey
-        // This allows the message to be displayed even without Noise key mapping
-        let tempPeerID = PeerID(nostr_: senderPubkey)
-        
-        // Check if we're viewing this unknown sender's chat
-        let isViewingThisChat = selectedPrivateChatPeer == tempPeerID
-        
-        // Check if message is recent (less than 30 seconds old)
-        let messageAgeSeconds = Date().timeIntervalSince(timestamp)
-        let isRecentMessage = messageAgeSeconds < 30
-        
-        // Determine if we should mark as unread BEFORE adding to chats
-        // During startup phase, only block OLD messages from being marked as unread
-        // Recent messages should always be marked as unread if not previously read
-        let shouldMarkAsUnread = !wasReadBefore && !isViewingThisChat && (isRecentMessage || !isStartupPhase)
-        
-        // Use provided nickname or try to extract from previous messages
-        var finalSenderNickname = senderNickname ?? "Unknown"
-        
-        // If no nickname provided, check if we have any previous messages from this Nostr key
-        if senderNickname == nil {
-            for (_, messages) in privateChats {
-                if let previousMessage = messages.first(where: { 
-                    $0.senderPeerID == tempPeerID 
-                }) {
-                    finalSenderNickname = previousMessage.sender
-                    break
-                }
-            }
-        }
-        
-        // Create the message
-        let message = BitchatMessage(
-            id: messageId,
-            sender: finalSenderNickname,
-            content: content,
-            timestamp: timestamp,
-            isRelay: false,
-            originalSender: nil,
-            isPrivate: true,
-            recipientNickname: nickname,
-            senderPeerID: tempPeerID,
-            mentions: nil,
-            deliveryStatus: .delivered(to: nickname, at: Date())
-        )
-        
-        // Store in private chats
-        if privateChats[tempPeerID] == nil {
-            privateChats[tempPeerID] = []
-        }
-        privateChats[tempPeerID]?.append(message)
-        
-        // For unknown senders (no Noise key), skip sending Nostr ACKs
-        
-        // Handle based on read status
-        if wasReadBefore {
-            // Message was read in a previous session - don't mark as unread or notify
-            // Not marking previously-read message as unread
-        } else if isViewingThisChat {
-            // Viewing this chat - mark as read
-            // No read ACKs for unknown senders
-        } else {
-            // Not viewing and not previously read
-            // Use pre-calculated shouldMarkAsUnread to avoid UI flicker
-            if shouldMarkAsUnread {
-                unreadPrivateMessages.insert(tempPeerID)
-                
-                // Only notify if it's a recent message
-                if isRecentMessage {
-                    NotificationService.shared.sendPrivateMessageNotification(
-                        from: finalSenderNickname,
-                        message: content,
-                        peerID: tempPeerID.id
-                    )
-                } else {
-                    // Not notifying for old message
-                }
-            }
-            // Not notifying for old message
-        }
-        
-        SecureLogger.info("📬 Stored Nostr message from unknown sender \(finalSenderNickname) in temporary peer \(tempPeerID)", category: .session)
     }
     
     @MainActor
