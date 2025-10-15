@@ -197,19 +197,36 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     // Persistent recent content map (LRU) to speed near-duplicate checks
     private var contentLRUMap: [String: Date] = [:]
     private var contentLRUOrder: [String] = []
+    private var contentLRUHead = 0
     private let contentLRUCap = TransportConfig.contentLRUCap
     private func recordContentKey(_ key: String, timestamp: Date) {
         if contentLRUMap[key] == nil { contentLRUOrder.append(key) }
         contentLRUMap[key] = timestamp
-        if contentLRUOrder.count > contentLRUCap {
-            let overflow = contentLRUOrder.count - contentLRUCap
-            for _ in 0..<overflow {
-                if let victim = contentLRUOrder.first {
-                    contentLRUOrder.removeFirst()
-                    contentLRUMap.removeValue(forKey: victim)
-                }
-            }
+        trimContentLRUIfNeeded()
+    }
+
+    private func trimContentLRUIfNeeded() {
+        let activeCount = contentLRUOrder.count - contentLRUHead
+        guard activeCount > contentLRUCap else { return }
+
+        let overflow = activeCount - contentLRUCap
+        for _ in 0..<overflow {
+            guard let victim = popOldestContentKey() else { break }
+            contentLRUMap.removeValue(forKey: victim)
         }
+    }
+
+    private func popOldestContentKey() -> String? {
+        guard contentLRUHead < contentLRUOrder.count else { return nil }
+        let victim = contentLRUOrder[contentLRUHead]
+        contentLRUHead += 1
+
+        // Periodically compact the backing storage to avoid unbounded growth.
+        if contentLRUHead >= 32 && contentLRUHead * 2 >= contentLRUOrder.count {
+            contentLRUOrder.removeFirst(contentLRUHead)
+            contentLRUHead = 0
+        }
+        return victim
     }
     // MARK: - Published Properties
     
@@ -348,6 +365,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     // PeerManager replaced by UnifiedPeerService
     private var processedNostrEvents = Set<String>()  // Simple deduplication
     private var processedNostrEventOrder: [String] = []
+    private var processedNostrEventHead = 0
     private let maxProcessedNostrEvents = TransportConfig.uiProcessedNostrEventsCap
     private let userDefaults = UserDefaults.standard
     private let keychain: KeychainManagerProtocol
@@ -2178,15 +2196,30 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     private func recordProcessedEvent(_ id: String) {
         processedNostrEvents.insert(id)
         processedNostrEventOrder.append(id)
-        if processedNostrEventOrder.count > maxProcessedNostrEvents {
-            let overflow = processedNostrEventOrder.count - maxProcessedNostrEvents
-            for _ in 0..<overflow {
-                if let old = processedNostrEventOrder.first {
-                    processedNostrEventOrder.removeFirst()
-                    processedNostrEvents.remove(old)
-                }
-            }
+        trimProcessedNostrEventsIfNeeded()
+    }
+
+    private func trimProcessedNostrEventsIfNeeded() {
+        let activeCount = processedNostrEventOrder.count - processedNostrEventHead
+        guard activeCount > maxProcessedNostrEvents else { return }
+
+        let overflow = activeCount - maxProcessedNostrEvents
+        for _ in 0..<overflow {
+            guard let old = popOldestProcessedEvent() else { break }
+            processedNostrEvents.remove(old)
         }
+    }
+
+    private func popOldestProcessedEvent() -> String? {
+        guard processedNostrEventHead < processedNostrEventOrder.count else { return nil }
+        let value = processedNostrEventOrder[processedNostrEventHead]
+        processedNostrEventHead += 1
+
+        if processedNostrEventHead >= 32 && processedNostrEventHead * 2 >= processedNostrEventOrder.count {
+            processedNostrEventOrder.removeFirst(processedNostrEventHead)
+            processedNostrEventHead = 0
+        }
+        return value
     }
     
     /// Sends an encrypted private message to a specific peer.
@@ -4836,11 +4869,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     
     private func parseMentions(from content: String) -> [String] {
         // Allow optional disambiguation suffix '#abcd' for duplicate nicknames
-        let pattern = "@([\\p{L}0-9_]+(?:#[a-fA-F0-9]{4})?)"
-        let regex = try? NSRegularExpression(pattern: pattern, options: [])
+        let regex = Regexes.mention
         let nsContent = content as NSString
         let nsLen = nsContent.length
-        let matches = regex?.matches(in: content, options: [], range: NSRange(location: 0, length: nsLen)) ?? []
+        let matches = regex.matches(in: content, options: [], range: NSRange(location: 0, length: nsLen))
         
         var mentions: [String] = []
         let peerNicknames = meshService.getPeerNicknames()
