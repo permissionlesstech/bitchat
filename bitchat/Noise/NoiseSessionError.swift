@@ -6,10 +6,9 @@
 // For more information, see <https://unlicense.org>
 //
 
-enum NoiseSessionError: Error {
+enum NoiseSessionError: Error, Equatable {
     case invalidState
     case notEstablished
     case sessionNotFound
-    case handshakeFailed(Error)
     case alreadyEstablished
 }

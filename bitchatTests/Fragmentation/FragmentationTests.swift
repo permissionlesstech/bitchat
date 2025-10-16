@@ -34,7 +34,7 @@ struct FragmentationTests {
         ble.delegate = capture
         
         // Construct a big packet (3KB) from a remote sender (not our own ID)
-        let remoteShortID: PeerID = "1122334455667788"
+        let remoteShortID = PeerID(str: "1122334455667788")
         let original = makeLargePublicPacket(senderShortHex: remoteShortID, size: 3_000)
         
         // Use a small fragment size to ensure multiple pieces
@@ -45,15 +45,15 @@ struct FragmentationTests {
         
         // Inject fragments spaced out to avoid concurrent mutation inside BLEService
         for (i, fragment) in shuffled.enumerated() {
-            let delay = UInt64(5 * i) * 1_000_000 // nanoseconds
+            let delay = 5 * Double(i) * 0.001
             Task {
-                try await Task.sleep(nanoseconds: delay)
+                try await sleep(delay)
                 ble._test_handlePacket(fragment, fromPeerID: remoteShortID)
             }
         }
         
         // Allow async processing
-        try await Task.sleep(nanoseconds: 500_000_000) // 0.5s
+        try await sleep(0.5)
         
         #expect(capture.publicMessages.count == 1)
         #expect(capture.publicMessages.first?.content.count == 3_000)
@@ -69,7 +69,7 @@ struct FragmentationTests {
         let capture = CaptureDelegate()
         ble.delegate = capture
         
-        let remoteShortID: PeerID = "A1B2C3D4E5F60708"
+        let remoteShortID = PeerID(str: "A1B2C3D4E5F60708")
         let original = makeLargePublicPacket(senderShortHex: remoteShortID, size: 2048)
         var frags = fragmentPacket(original, fragmentSize: 300)
         
@@ -79,16 +79,16 @@ struct FragmentationTests {
         }
         
         for (i, fragment) in frags.enumerated() {
-            let delay = UInt64(5 * i) * 1_000_000 // nanoseconds
+            let delay = 5 * Double(i) * 0.001
             Task {
-                try await Task.sleep(nanoseconds: delay)
+                try await sleep(delay)
                 ble._test_handlePacket(fragment, fromPeerID: remoteShortID)
             }
         }
         
         // Allow async processing
-        try await Task.sleep(nanoseconds: 500_000_000) // 0.5s
-        
+        try await sleep(0.5)
+
         #expect(capture.publicMessages.count == 1)
         #expect(capture.publicMessages.first?.content.count == 2048)
     }
@@ -103,7 +103,7 @@ struct FragmentationTests {
         let capture = CaptureDelegate()
         ble.delegate = capture
         
-        let remoteShortID: PeerID = "0011223344556677"
+        let remoteShortID = PeerID(str: "0011223344556677")
         let original = makeLargePublicPacket(senderShortHex: remoteShortID, size: 1000)
         let fragments = fragmentPacket(original, fragmentSize: 250)
         
@@ -124,16 +124,16 @@ struct FragmentationTests {
         }
         
         for (i, fragment) in corrupted.enumerated() {
-            let delay = UInt64(5 * i) * 1_000_000 // nanoseconds
+            let delay = 5 * Double(i) * 0.001
             Task {
-                try await Task.sleep(nanoseconds: delay)
+                try await sleep(delay)
                 ble._test_handlePacket(fragment, fromPeerID: remoteShortID)
             }
         }
         
         // Allow async processing
-        try await Task.sleep(nanoseconds: 500_000_000) // 0.5s
-        
+        try await sleep(0.5)
+
         // Should not deliver since one fragment is invalid and reassembly can't complete
         #expect(capture.publicMessages.isEmpty)
     }

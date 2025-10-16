@@ -30,7 +30,7 @@ final class TestHelpers {
     static func createTestMessage(
         content: String = TestConstants.testMessage1,
         sender: String = TestConstants.testNickname1,
-        senderPeerID: PeerID = TestConstants.testPeerID1,
+        senderPeerID: PeerID = PeerID(str: UUID().uuidString),
         isPrivate: Bool = false,
         recipientNickname: String? = nil,
         mentions: [String]? = nil
@@ -51,7 +51,7 @@ final class TestHelpers {
     
     static func createTestPacket(
         type: UInt8 = 0x01,
-        senderID: PeerID = TestConstants.testPeerID1,
+        senderID: PeerID = PeerID(str: UUID().uuidString),
         recipientID: PeerID? = nil,
         payload: Data = "test payload".data(using: .utf8)!,
         signature: Data? = nil,
@@ -90,7 +90,7 @@ final class TestHelpers {
             if Date().timeIntervalSince(start) > timeout {
                 throw TestError.timeout
             }
-            try await Task.sleep(nanoseconds: 10_000_000) // 10ms
+            try await sleep(0.01)
         }
     }
     
@@ -104,7 +104,7 @@ final class TestHelpers {
             }
             
             group.addTask {
-                try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                try await sleep(1)
                 throw TestError.timeout
             }
             
@@ -121,14 +121,6 @@ enum TestError: Error {
     case testFailure(String)
 }
 
-// MARK: - PeerID String Helpers
-
-/// Raw String can be passed as PeerID
-extension PeerID: @retroactive ExpressibleByStringLiteral {
-    public init(stringLiteral value: String) {
-        self.init(str: value)
-    }
+func sleep(_ seconds: TimeInterval) async throws {
+    try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
 }
-
-/// Interpolated String can be passed as PeerID
-extension PeerID: @retroactive ExpressibleByStringInterpolation {}

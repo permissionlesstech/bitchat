@@ -1,7 +1,8 @@
-import XCTest
+import Testing
+import Foundation
 @testable import bitchat
 
-final class NotificationStreamAssemblerTests: XCTestCase {
+struct NotificationStreamAssemblerTests {
     private func makePacket(timestamp: UInt64 = 0x0102030405) -> BitchatPacket {
         let sender = Data([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77])
         return BitchatPacket(
@@ -15,60 +16,51 @@ final class NotificationStreamAssemblerTests: XCTestCase {
         )
     }
 
-    func testAssemblesSingleFrameAcrossChunks() {
+    @Test func assemblesSingleFrameAcrossChunks() throws {
         var assembler = NotificationStreamAssembler()
         let packet = makePacket()
-        guard let frame = packet.toBinaryData(padding: false) else {
-            return XCTFail("Failed to encode packet")
-        }
-        XCTAssertNotNil(BinaryProtocol.decode(frame))
+        let frame = try #require(packet.toBinaryData(padding: false), "Failed to encode packet")
+
+        #expect(BinaryProtocol.decode(frame) != nil)
         let payloadLen = (Int(frame[12]) << 8) | Int(frame[13])
-        XCTAssertEqual(payloadLen, packet.payload.count)
+        #expect(payloadLen == packet.payload.count)
 
         let splitIndex = min(20, max(1, frame.count / 2))
         let first = frame.prefix(splitIndex)
         let second = frame.suffix(from: splitIndex)
-        XCTAssertEqual(first.count + second.count, frame.count)
+        #expect(first.count + second.count == frame.count)
 
         var result = assembler.append(first)
-        XCTAssertTrue(result.frames.isEmpty)
-        XCTAssertTrue(result.droppedPrefixes.isEmpty)
-        XCTAssertFalse(result.reset)
+        #expect(result.frames.isEmpty)
+        #expect(result.droppedPrefixes.isEmpty)
+        #expect(!result.reset)
 
         result = assembler.append(second)
-        XCTAssertEqual(result.frames.count, 1)
-        XCTAssertTrue(result.droppedPrefixes.isEmpty)
-        XCTAssertFalse(result.reset)
+        #expect(result.frames.count == 1)
+        #expect(result.droppedPrefixes.isEmpty)
+        #expect(!result.reset)
 
-        guard let frameData = result.frames.first else {
-            return XCTFail("Missing frame data")
-        }
-        if frameData.count != frame.count {
-            XCTFail("Frame size mismatch: expected \(frame.count) got \(frameData.count)\nframe=\(Array(frame))\nassembled=\(Array(frameData))")
-            return
-        }
-        guard let decoded = BinaryProtocol.decode(frameData) else {
-            return XCTFail("Failed to decode frame")
-        }
-        XCTAssertEqual(decoded.type, packet.type)
-        XCTAssertEqual(decoded.payload, packet.payload)
-        XCTAssertEqual(decoded.senderID, packet.senderID)
-        XCTAssertEqual(decoded.timestamp, packet.timestamp)
+        let frameData = try #require(result.frames.first, "Missing frame data")
+        #expect(frameData.count == frame.count)
+        
+        let decoded = try #require(BinaryProtocol.decode(frameData), "Failed to decode frame")
+        #expect(decoded.type == packet.type)
+        #expect(decoded.payload == packet.payload)
+        #expect(decoded.senderID == packet.senderID)
+        #expect(decoded.timestamp == packet.timestamp)
 
         var directAssembler = NotificationStreamAssembler()
         let directResult = directAssembler.append(frame)
-        XCTAssertEqual(directResult.frames.first?.count, frame.count)
+        #expect(directResult.frames.first?.count == frame.count)
     }
 
-    func testAssemblesMultipleFramesSequentially() {
+    @Test func assemblesMultipleFramesSequentially() throws {
         var assembler = NotificationStreamAssembler()
         let packet1 = makePacket(timestamp: 0xABC)
         let packet2 = makePacket(timestamp: 0xDEF)
 
-        guard let frame1 = packet1.toBinaryData(padding: false),
-              let frame2 = packet2.toBinaryData(padding: false) else {
-            return XCTFail("Failed to encode packets")
-        }
+        let frame1 = try #require(packet1.toBinaryData(padding: false), "Failed to encode packet")
+        let frame2 = try #require(packet2.toBinaryData(padding: false), "Failed to encode packet")
 
         var combined = Data()
         combined.append(frame1)
@@ -77,35 +69,30 @@ final class NotificationStreamAssemblerTests: XCTestCase {
         let secondChunk = combined.suffix(from: 20)
 
         var result = assembler.append(firstChunk)
-        XCTAssertTrue(result.frames.isEmpty)
+        #expect(result.frames.isEmpty)
 
         result = assembler.append(secondChunk)
-        XCTAssertEqual(result.frames.count, 2)
-        guard let decoded1 = BinaryProtocol.decode(result.frames[0]),
-              let decoded2 = BinaryProtocol.decode(result.frames[1]) else {
-            return XCTFail("Failed to decode frames")
-        }
-        XCTAssertEqual(decoded1.timestamp, packet1.timestamp)
-        XCTAssertEqual(decoded2.timestamp, packet2.timestamp)
+        #expect(result.frames.count == 2)
+        
+        let decoded1 = try #require(BinaryProtocol.decode(result.frames[0]), "Failed to decode frame")
+        let decoded2 = try #require(BinaryProtocol.decode(result.frames[1]), "Failed to decode frame")
+        #expect(decoded1.timestamp == packet1.timestamp)
+        #expect(decoded2.timestamp == packet2.timestamp)
     }
 
-    func testDropsInvalidPrefixByte() {
+    @Test func dropsInvalidPrefixByte() throws {
         var assembler = NotificationStreamAssembler()
         let packet = makePacket(timestamp: 0xF00)
-        guard let frame = packet.toBinaryData(padding: false) else {
-            return XCTFail("Failed to encode packet")
-        }
+        let frame = try #require(packet.toBinaryData(padding: false), "Failed to encode packet")
         var noisyFrame = Data([0x00])
         noisyFrame.append(frame)
 
         let result = assembler.append(noisyFrame)
-        XCTAssertEqual(result.droppedPrefixes, [0x00])
-        XCTAssertEqual(result.frames.count, 1)
-        XCTAssertFalse(result.reset)
+        #expect(result.droppedPrefixes == [0x00])
+        #expect(result.frames.count == 1)
+        #expect(result.reset == false)
 
-        guard let decoded = BinaryProtocol.decode(result.frames[0]) else {
-            return XCTFail("Failed to decode frame after drop")
-        }
-        XCTAssertEqual(decoded.timestamp, packet.timestamp)
+        let decoded = try #require(BinaryProtocol.decode(result.frames[0]), "Failed to decode frame after drop")
+        #expect(decoded.timestamp == packet.timestamp)
     }
 }

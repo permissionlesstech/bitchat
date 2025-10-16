@@ -6,265 +6,275 @@
 // For more information, see <https://unlicense.org>
 //
 
-import XCTest
+import Testing
 import CoreBluetooth
 @testable import bitchat
 
-final class BLEServiceTests: XCTestCase {
+struct BLEServiceTests {
+    private let service: MockBLEService
+    private let myUUID = UUID()
+    private let bus = MockBLEBus()
     
-    var service: MockBLEService!
-    
-    override func setUp() {
-        super.setUp()
-        service = MockBLEService()
-        service.myPeerID = "TEST1234"
+    init() {
+        service = MockBLEService.init(bus: bus)
+        service.myPeerID = PeerID(str: myUUID.uuidString)
         service.mockNickname = "TestUser"
-    }
-    
-    override func tearDown() {
-        service = nil
-        super.tearDown()
     }
     
     // MARK: - Basic Functionality Tests
     
-    func testServiceInitialization() {
-        XCTAssertNotNil(service)
-        XCTAssertEqual(service.myPeerID, "TEST1234")
-        XCTAssertEqual(service.myNickname, "TestUser")
+    @Test func serviceInitialization() {
+        #expect(service.myPeerID == PeerID(str: myUUID.uuidString))
+        #expect(service.myNickname == "TestUser")
     }
     
-    func testPeerConnection() {
-        // Test connecting a peer
-        service.simulateConnectedPeer("PEER5678")
-        XCTAssertTrue(service.isPeerConnected("PEER5678"))
-        XCTAssertEqual(service.getConnectedPeers().count, 1)
+    @Test func peerConnection() {
+        let somePeerID = PeerID(str: UUID().uuidString)
         
-        // Test disconnecting a peer
-        service.simulateDisconnectedPeer("PEER5678")
-        XCTAssertFalse(service.isPeerConnected("PEER5678"))
-        XCTAssertEqual(service.getConnectedPeers().count, 0)
+        service.simulateConnectedPeer(somePeerID)
+        #expect(service.isPeerConnected(somePeerID))
+        #expect(service.getConnectedPeers().count == 1)
+        
+        service.simulateDisconnectedPeer(somePeerID)
+        #expect(!service.isPeerConnected(somePeerID))
+        #expect(service.getConnectedPeers().count == 0)
     }
     
-    func testMultiplePeerConnections() {
-        service.simulateConnectedPeer("PEER1")
-        service.simulateConnectedPeer("PEER2")
-        service.simulateConnectedPeer("PEER3")
+    @Test func multiplePeerConnections() {
+        let peerID1 = PeerID(str: UUID().uuidString)
+        let peerID2 = PeerID(str: UUID().uuidString)
+        let peerID3 = PeerID(str: UUID().uuidString)
+
+        service.simulateConnectedPeer(peerID1)
+        service.simulateConnectedPeer(peerID2)
+        service.simulateConnectedPeer(peerID3)
         
-        XCTAssertEqual(service.getConnectedPeers().count, 3)
-        XCTAssertTrue(service.isPeerConnected("PEER1"))
-        XCTAssertTrue(service.isPeerConnected("PEER2"))
-        XCTAssertTrue(service.isPeerConnected("PEER3"))
+        #expect(service.getConnectedPeers().count == 3)
+        #expect(service.isPeerConnected(peerID1))
+        #expect(service.isPeerConnected(peerID2))
+        #expect(service.isPeerConnected(peerID3))
         
-        service.simulateDisconnectedPeer("PEER2")
-        XCTAssertEqual(service.getConnectedPeers().count, 2)
-        XCTAssertFalse(service.isPeerConnected("PEER2"))
+        service.simulateDisconnectedPeer(peerID2)
+        #expect(service.getConnectedPeers().count == 2)
+        #expect(!service.isPeerConnected(peerID2))
     }
     
     // MARK: - Message Sending Tests
     
-    func testSendPublicMessage() {
-        let expectation = XCTestExpectation(description: "Message sent")
-        
-        let delegate = MockBitchatDelegate { message in
-            XCTAssertEqual(message.content, "Hello, world!")
-            XCTAssertEqual(message.sender, "TestUser")
-            XCTAssertFalse(message.isPrivate)
-            expectation.fulfill()
+    @Test func sendPublicMessage() async throws {
+        try await confirmation { receivedPublicMessage in
+            let delegate = MockBitchatDelegate { message in
+                #expect(message.content == "Hello, world!")
+                #expect(message.sender == "TestUser")
+                #expect(!message.isPrivate)
+                receivedPublicMessage()
+            }
+            service.delegate = delegate
+            service.sendMessage("Hello, world!")
+            
+            // Allow async processing
+            try await sleep(0.5)
         }
-        service.delegate = delegate
-        
-        service.sendMessage("Hello, world!")
-        
-        wait(for: [expectation], timeout: 1.0)
-        XCTAssertEqual(service.sentMessages.count, 1)
+        #expect(service.sentMessages.count == 1)
     }
     
-    func testSendPrivateMessage() {
-        let expectation = XCTestExpectation(description: "Private message sent")
-        
-        let delegate = MockBitchatDelegate { message in
-            XCTAssertEqual(message.content, "Secret message")
-            XCTAssertEqual(message.sender, "TestUser")
-            XCTAssertTrue(message.isPrivate)
-            XCTAssertEqual(message.recipientNickname, "Bob")
-            expectation.fulfill()
+    @Test func sendPrivateMessage() async throws {
+        try await confirmation { receivedPrivateMessage in
+            let delegate = MockBitchatDelegate { message in
+                #expect(message.content == "Secret message")
+                #expect(message.sender == "TestUser")
+                #expect(message.senderPeerID == PeerID(str: myUUID.uuidString))
+                #expect(message.isPrivate)
+                #expect(message.recipientNickname == "Bob")
+                receivedPrivateMessage()
+            }
+            service.delegate = delegate
+            service.sendPrivateMessage(
+                "Secret message",
+                to: PeerID(str: UUID().uuidString),
+                recipientNickname: "Bob",
+                messageID: "MSG123"
+            )
+            
+            // Allow async processing
+            try await sleep(0.5)
         }
-        service.delegate = delegate
-        
-        service.sendPrivateMessage("Secret message", to: "PEER5678", recipientNickname: "Bob", messageID: "MSG123")
-        
-        wait(for: [expectation], timeout: 1.0)
-        XCTAssertEqual(service.sentMessages.count, 1)
+        #expect(service.sentMessages.count == 1)
     }
     
-    func testSendMessageWithMentions() {
-        let expectation = XCTestExpectation(description: "Message with mentions sent")
-        
-        let delegate = MockBitchatDelegate { message in
-            XCTAssertEqual(message.content, "@alice @bob check this out")
-            XCTAssertEqual(message.mentions, ["alice", "bob"])
-            expectation.fulfill()
+    @Test func sendMessageWithMentions() async throws {
+        try await confirmation { receivedMessageWithMentions in
+            let delegate = MockBitchatDelegate { message in
+                #expect(message.content == "@alice @bob check this out")
+                #expect(message.mentions == ["alice", "bob"])
+                receivedMessageWithMentions()
+            }
+            service.delegate = delegate
+            service.sendMessage("@alice @bob check this out", mentions: ["alice", "bob"])
+            
+            // Allow async processing
+            try await sleep(0.5)
         }
-        service.delegate = delegate
-        
-        service.sendMessage("@alice @bob check this out", mentions: ["alice", "bob"])
-        
-        wait(for: [expectation], timeout: 1.0)
     }
     
     // MARK: - Message Reception Tests
     
-    func testSimulateIncomingMessage() {
-        let expectation = XCTestExpectation(description: "Message received")
-        
-        let delegate = MockBitchatDelegate { message in
-            XCTAssertEqual(message.content, "Incoming message")
-            XCTAssertEqual(message.sender, "RemoteUser")
-            expectation.fulfill()
+    @Test func simulateIncomingMessage() async throws {
+        try await confirmation { receiveMessage in
+            let peerID = PeerID(str: UUID().uuidString)
+            
+            let delegate = MockBitchatDelegate { message in
+                #expect(message.content == "Incoming message")
+                #expect(message.sender == "RemoteUser")
+                #expect(message.senderPeerID == peerID)
+                receiveMessage()
+            }
+            service.delegate = delegate
+            
+            let incomingMessage = BitchatMessage(
+                id: "MSG456",
+                sender: "RemoteUser",
+                content: "Incoming message",
+                timestamp: Date(),
+                isRelay: false,
+                originalSender: nil,
+                isPrivate: false,
+                recipientNickname: nil,
+                senderPeerID: peerID,
+                mentions: nil
+            )
+            service.simulateIncomingMessage(incomingMessage)
+            
+            // Allow async processing
+            try await sleep(0.5)
         }
-        service.delegate = delegate
-        
-        let incomingMessage = BitchatMessage(
-            id: "MSG456",
-            sender: "RemoteUser",
-            content: "Incoming message",
-            timestamp: Date(),
-            isRelay: false,
-            originalSender: nil,
-            isPrivate: false,
-            recipientNickname: nil,
-            senderPeerID: "REMOTE123",
-            mentions: nil
-        )
-        
-        service.simulateIncomingMessage(incomingMessage)
-        
-        wait(for: [expectation], timeout: 1.0)
     }
     
-    func testSimulateIncomingPacket() {
-        let expectation = XCTestExpectation(description: "Packet processed")
-        
-        let delegate = MockBitchatDelegate { message in
-            XCTAssertEqual(message.content, "Packet message")
-            expectation.fulfill()
+    @Test func simulateIncomingPacket() async throws {
+        try await confirmation { processPacket in
+            let peerID = PeerID(str: UUID().uuidString)
+            
+            let delegate = MockBitchatDelegate { message in
+                #expect(message.content == "Packet message")
+                #expect(message.senderPeerID == peerID)
+                processPacket()
+            }
+            service.delegate = delegate
+            
+            let message = BitchatMessage(
+                id: "MSG789",
+                sender: "PacketSender",
+                content: "Packet message",
+                timestamp: Date(),
+                isRelay: false,
+                originalSender: nil,
+                isPrivate: false,
+                recipientNickname: nil,
+                senderPeerID: peerID,
+                mentions: nil
+            )
+            
+            let payload = try #require(message.toBinaryPayload(), "Failed to create binary payload")
+            
+            let packet = BitchatPacket(
+                type: 0x01,
+                senderID: peerID.id.data(using: .utf8)!,
+                recipientID: nil,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: payload,
+                signature: nil,
+                ttl: 3
+            )
+            
+            service.simulateIncomingPacket(packet)
+            
+            // Allow async processing
+            try await sleep(0.5)
         }
-        service.delegate = delegate
-        
-        let message = BitchatMessage(
-            id: "MSG789",
-            sender: "PacketSender",
-            content: "Packet message",
-            timestamp: Date(),
-            isRelay: false,
-            originalSender: nil,
-            isPrivate: false,
-            recipientNickname: nil,
-            senderPeerID: "PACKET123",
-            mentions: nil
-        )
-        
-        guard let payload = message.toBinaryPayload() else {
-            XCTFail("Failed to create binary payload")
-            return
-        }
-        
-        let packet = BitchatPacket(
-            type: 0x01,
-            senderID: "PACKET123".data(using: .utf8)!,
-            recipientID: nil,
-            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-            payload: payload,
-            signature: nil,
-            ttl: 3
-        )
-        
-        service.simulateIncomingPacket(packet)
-        
-        wait(for: [expectation], timeout: 1.0)
     }
     
     // MARK: - Peer Nickname Tests
     
-    func testGetPeerNicknames() {
-        service.simulateConnectedPeer("PEER1")
-        service.simulateConnectedPeer("PEER2")
+    @Test func getPeerNicknames() {
+        let peerID1 = PeerID(str: UUID().uuidString)
+        let peerID2 = PeerID(str: UUID().uuidString)
+
+        service.simulateConnectedPeer(peerID1)
+        service.simulateConnectedPeer(peerID2)
         
         let nicknames = service.getPeerNicknames()
-        XCTAssertEqual(nicknames.count, 2)
-        XCTAssertEqual(nicknames["PEER1"], "MockPeer_PEER1")
-        XCTAssertEqual(nicknames["PEER2"], "MockPeer_PEER2")
+        #expect(nicknames.count == 2)
+        #expect(nicknames[peerID1] == "MockPeer_\(peerID1)")
+        #expect(nicknames[peerID2] == "MockPeer_\(peerID2)")
     }
     
     // MARK: - Service State Tests
     
-    func testStartStopServices() {
-        // These are mock implementations, just ensure they don't crash
+    @Test func startStopServices() {
         service.startServices()
         service.stopServices()
-        
-        // Service should still be functional after start/stop
-        service.simulateConnectedPeer("PEER999")
-        XCTAssertTrue(service.isPeerConnected("PEER999"))
+        let somePeerID = PeerID(str: UUID().uuidString)
+        service.simulateConnectedPeer(somePeerID)
+        #expect(service.isPeerConnected(somePeerID))
     }
     
     // MARK: - Message Delivery Handler Tests
     
-    func testMessageDeliveryHandler() {
-        let expectation = XCTestExpectation(description: "Delivery handler called")
-        
-        service.packetDeliveryHandler = { packet in
-            if let msg = BitchatMessage(packet.payload) {
-                XCTAssertEqual(msg.content, "Test delivery")
-                expectation.fulfill()
+    @Test func messageDeliveryHandler() async throws {
+        try await confirmation { deliveryHandler in
+            service.packetDeliveryHandler = { packet in
+                if let msg = BitchatMessage(packet.payload) {
+                    #expect(msg.content == "Test delivery")
+                    deliveryHandler()
+                }
             }
+            service.sendMessage("Test delivery")
+            
+            // Allow async processing
+            try await sleep(0.5)
         }
-        
-        service.sendMessage("Test delivery")
-        
-        wait(for: [expectation], timeout: 1.0)
     }
     
-    func testPacketDeliveryHandler() {
-        let expectation = XCTestExpectation(description: "Packet handler called")
-        
-        service.packetDeliveryHandler = { packet in
-            XCTAssertEqual(packet.type, 0x01)
-            expectation.fulfill()
+    @Test func packetDeliveryHandler() async throws {
+        try await confirmation("Packet handler called") { packetHandler in
+            let peerID = PeerID(str: UUID().uuidString)
+            
+            service.packetDeliveryHandler = { packet in
+                #expect(packet.type == 0x01)
+                #expect(packet.senderID == Data(peerID.id.utf8))
+                packetHandler()
+            }
+            
+            let message = BitchatMessage(
+                id: "PKT123",
+                sender: "TestSender",
+                content: "Test packet",
+                timestamp: Date(),
+                isRelay: false,
+                originalSender: nil,
+                isPrivate: false,
+                recipientNickname: nil,
+                senderPeerID: peerID,
+                mentions: nil
+            )
+            
+            let payload = try #require(message.toBinaryPayload(), "Failed to create payload")
+            
+            let packet = BitchatPacket(
+                type: 0x01,
+                senderID: peerID.id.data(using: .utf8)!,
+                recipientID: nil,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: payload,
+                signature: nil,
+                ttl: 3
+            )
+            
+            service.simulateIncomingPacket(packet)
+            
+            // Allow async processing
+            try await sleep(0.5)
         }
-        
-        let message = BitchatMessage(
-            id: "PKT123",
-            sender: "TestSender",
-            content: "Test packet",
-            timestamp: Date(),
-            isRelay: false,
-            originalSender: nil,
-            isPrivate: false,
-            recipientNickname: nil,
-            senderPeerID: "TEST123",
-            mentions: nil
-        )
-        
-        guard let payload = message.toBinaryPayload() else {
-            XCTFail("Failed to create payload")
-            return
-        }
-        
-        let packet = BitchatPacket(
-            type: 0x01,
-            senderID: "TEST123".data(using: .utf8)!,
-            recipientID: nil,
-            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-            payload: payload,
-            signature: nil,
-            ttl: 3
-        )
-        
-        service.simulateIncomingPacket(packet)
-        
-        wait(for: [expectation], timeout: 1.0)
     }
 }
 

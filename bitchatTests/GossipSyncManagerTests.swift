@@ -1,24 +1,28 @@
 import Foundation
-import XCTest
+import Testing
 @testable import bitchat
 
-final class GossipSyncManagerTests: XCTestCase {
-    func testConcurrentPacketIntakeAndSyncRequest() {
-        let manager = GossipSyncManager(myPeerID: "0102030405060708")
+struct GossipSyncManagerTests {
+
+    private let myPeerID = PeerID(str: "0102030405060708")
+    
+    @Test func concurrentPacketIntakeAndSyncRequest() async throws {
+        let manager = GossipSyncManager(myPeerID: myPeerID)
         let delegate = RecordingDelegate()
-        let sendExpectation = expectation(description: "sync request sent")
-        delegate.onSend = { sendExpectation.fulfill() }
         manager.delegate = delegate
 
-        let iterations = 200
-        let group = DispatchGroup()
+        try await confirmation("sync request sent") { sent in
+            delegate.onSend = {
+                sent()
+            }
 
-        for i in 0..<iterations {
-            group.enter()
-            DispatchQueue.global(qos: .userInitiated).async {
+            let iterations = 200
+            let senderID = try #require(Data(hexString: "1122334455667788"))
+            
+            for i in 0..<iterations {
                 let packet = BitchatPacket(
                     type: MessageType.message.rawValue,
-                    senderID: Data(hexString: "1122334455667788") ?? Data(),
+                    senderID: senderID,
                     recipientID: nil,
                     timestamp: 1_000_000 + UInt64(i),
                     payload: Data([UInt8(truncatingIfNeeded: i)]),
@@ -26,35 +30,26 @@ final class GossipSyncManagerTests: XCTestCase {
                     ttl: 1
                 )
                 manager.onPublicPacketSeen(packet)
-                Thread.sleep(forTimeInterval: 0.001)
-                group.leave()
+                try await sleep(0.001)
             }
+
+            manager.scheduleInitialSyncToPeer(PeerID(str: "FFFFFFFFFFFFFFFF"), delaySeconds: 0.0)
+            try await sleep(0.002)
         }
 
-        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.002) {
-            manager.scheduleInitialSyncToPeer("FFFFFFFFFFFFFFFF", delaySeconds: 0.0)
-        }
-
-        group.wait()
-        wait(for: [sendExpectation], timeout: 2.0)
-
-        guard let lastPacket = delegate.lastPacket else {
-            XCTFail("Expected sync packet to be sent")
-            return
-        }
-
-        XCTAssertEqual(lastPacket.type, MessageType.requestSync.rawValue)
-        XCTAssertNotNil(RequestSyncPacket.decode(from: lastPacket.payload))
+        let lastPacket = try #require(delegate.lastPacket, "Expected sync packet to be sent")
+        #expect(lastPacket.type == MessageType.requestSync.rawValue)
+        #expect(RequestSyncPacket.decode(from: lastPacket.payload) != nil)
     }
 
-    func testStaleAnnouncementsArePurgedWithMessages() {
+    @Test func staleAnnouncementsArePurgedWithMessages() throws {
         var config = GossipSyncManager.Config()
         config.stalePeerCleanupIntervalSeconds = 0
         config.stalePeerTimeoutSeconds = 5
 
-        let manager = GossipSyncManager(myPeerID: "0102030405060708", config: config)
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config)
         let peerHex = "0011223344556677"
-        let senderData = Data(hexString: peerHex) ?? Data()
+        let senderData = try #require(Data(hexString: peerHex))
         let initialTimestampMs = UInt64(Date().timeIntervalSince1970 * 1000)
 
         let announcePacket = BitchatPacket(
@@ -82,24 +77,24 @@ final class GossipSyncManagerTests: XCTestCase {
 
         // Flush queue without triggering stale cleanup yet
         manager._performMaintenanceSynchronously(now: Date())
-        XCTAssertTrue(manager._hasAnnouncement(for: PeerID(str: peerHex)))
-        XCTAssertEqual(manager._messageCount(for: PeerID(str: peerHex)), 1)
-
+        #expect(manager._hasAnnouncement(for: PeerID(str: peerHex)))
+        #expect(manager._messageCount(for: PeerID(str: peerHex)) == 1)
+        
         // Run cleanup past the timeout
         let future = Date().addingTimeInterval(config.stalePeerTimeoutSeconds + 1)
         manager._performMaintenanceSynchronously(now: future)
-        XCTAssertFalse(manager._hasAnnouncement(for: PeerID(str: peerHex)))
-        XCTAssertEqual(manager._messageCount(for: PeerID(str: peerHex)), 0)
+        #expect(manager._hasAnnouncement(for: PeerID(str: peerHex)) == false)
+        #expect(manager._messageCount(for: PeerID(str: peerHex)) == 0)
     }
 
-    func testIgnoresAnnounceOlderThanStaleTimeout() {
+    @Test func ignoresAnnounceOlderThanStaleTimeout() throws {
         var config = GossipSyncManager.Config()
         config.stalePeerTimeoutSeconds = 5
         config.maxMessageAgeSeconds = 100
 
-        let manager = GossipSyncManager(myPeerID: "0102030405060708", config: config)
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config)
         let peerHex = "8899aabbccddeeff"
-        let senderData = Data(hexString: peerHex) ?? Data()
+        let senderData = try #require(Data(hexString: peerHex))
         let staleTimestampMs = UInt64(Date().addingTimeInterval(-(config.stalePeerTimeoutSeconds + 1)).timeIntervalSince1970 * 1000)
 
         let freshMessage = BitchatPacket(
@@ -127,8 +122,8 @@ final class GossipSyncManagerTests: XCTestCase {
 
         manager._performMaintenanceSynchronously()
 
-        XCTAssertFalse(manager._hasAnnouncement(for: PeerID(str: peerHex)))
-        XCTAssertEqual(manager._messageCount(for: PeerID(str: peerHex)), 0)
+        #expect(manager._hasAnnouncement(for: PeerID(str: peerHex)) == false)
+        #expect(manager._messageCount(for: PeerID(str: peerHex)) == 0)
     }
 }
 

@@ -235,10 +235,10 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     }
     
     /// Get peer ID for nickname
-    func getPeerID(for nickname: String) -> String? {
+    func getPeerID(for nickname: String) -> PeerID? {
         for peer in peers {
             if peer.displayName == nickname || peer.nickname == nickname {
-                return peer.peerID.id
+                return peer.peerID
             }
         }
         return nil
@@ -347,7 +347,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     // MARK: - Compatibility Methods (for easy migration)
     
     var allPeers: [BitchatPeer] { peers }
-    var connectedPeers: [PeerID] { Array(connectedPeerIDs) }
+    var connectedPeers: Set<PeerID> { connectedPeerIDs }
     var favoritePeers: Set<String> {
         Set(favorites.compactMap { getFingerprint(for: $0.peerID) })
     }
