@@ -4,10 +4,12 @@
 # Default recipe - shows available commands
 default:
     @echo "BitChat macOS Build Commands:"
+    @echo "  just setup   - Complete setup (check + configure entitlements)"
     @echo "  just run     - Build and run the macOS app"
     @echo "  just build   - Build the macOS app only"
     @echo "  just clean   - Clean build artifacts and restore original files"
     @echo "  just check   - Check prerequisites"
+    @echo "  just setup-entitlements - Configure entitlements for your Team ID"
     @echo ""
     @echo "Original files are preserved - modifications are temporary for builds only"
 
@@ -17,6 +19,15 @@ check:
     @command -v xcodebuild >/dev/null 2>&1 || (echo "❌ Xcode not found. Install Xcode from App Store" && exit 1)
     @security find-identity -v -p codesigning | grep -q "Developer ID" || (echo "⚠️  No Developer ID found - code signing may fail" && exit 0)
     @echo "✅ All prerequisites met"
+
+# Configure entitlements for your Team ID
+setup-entitlements:
+    @echo "Configuring entitlements for your Team ID..."
+    @./scripts/setup-entitlements.sh
+
+# Complete setup process
+setup: check setup-entitlements
+    @echo "🎉 Setup complete! Ready to build BitChat"
 
 # Backup original files
 backup:
