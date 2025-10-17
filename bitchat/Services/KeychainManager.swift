@@ -27,34 +27,6 @@ final class KeychainManager: KeychainManagerProtocol {
     private let service = BitchatApp.bundleID
     private let appGroup = "group.\(BitchatApp.bundleID)"
     
-    private func isSandboxed() -> Bool {
-        #if os(macOS)
-        // More robust sandbox detection using multiple methods
-        
-        // Method 1: Check environment variable (can be spoofed)
-        let environment = ProcessInfo.processInfo.environment
-        let hasEnvVar = environment["APP_SANDBOX_CONTAINER_ID"] != nil
-        
-        // Method 2: Check if we can access a path outside sandbox
-        let homeDir = FileManager.default.homeDirectoryForCurrentUser
-        let testPath = homeDir.appendingPathComponent("../../../tmp/bitchat_sandbox_test_\(UUID().uuidString)")
-        let canWriteOutsideSandbox = FileManager.default.createFile(atPath: testPath.path, contents: nil, attributes: nil)
-        if canWriteOutsideSandbox {
-            try? FileManager.default.removeItem(at: testPath)
-        }
-        
-        // Method 3: Check container path
-        let containerPath = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first?.path ?? ""
-        let hasContainerPath = containerPath.contains("/Containers/")
-        
-        // If any method indicates sandbox, we consider it sandboxed
-        return hasEnvVar || !canWriteOutsideSandbox || hasContainerPath
-        #else
-        // iOS is always sandboxed
-        return true
-        #endif
-    }
-    
     // MARK: - Identity Keys
     
     func saveIdentityKey(_ keyData: Data, forKey key: String) -> Bool {

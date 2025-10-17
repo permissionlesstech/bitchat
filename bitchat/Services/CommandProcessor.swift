@@ -65,14 +65,11 @@ final class CommandProcessor {
         case "/unfav":
             if inGeoPublic || inGeoDM { return .error(message: "favorites are only for mesh peers in #mesh") }
             return handleFavorite(args, add: false)
-        //
-        case "/help", "/h":
-            return .error(message: "unknown command: \(cmd)")
         default:
             return .error(message: "unknown command: \(cmd)")
         }
     }
-    
+
     // MARK: - Command Handlers
     
     private func handleMessage(_ args: String) -> CommandResult {
@@ -311,19 +308,4 @@ final class CommandProcessor {
         }
     }
     
-    private func handleHelp() -> CommandResult {
-        let helpText = """
-        commands:
-        /msg @name - start private chat
-        /who - list who's online
-        /clear - clear messages
-        /hug @name - send a hug
-        /slap @name - slap with a trout
-        /fav @name - add to favorites
-        /unfav @name - remove from favorites
-        /block @name - block
-        /unblock @name - unblock
-        """
-        return .success(message: helpText)
-    }
 }

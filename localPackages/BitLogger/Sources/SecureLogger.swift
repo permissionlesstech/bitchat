@@ -7,7 +7,53 @@
 //
 
 import Foundation
+#if canImport(os.log)
 import os.log
+#else
+public struct OSLog {
+    public let subsystem: String
+    public let category: String
+
+    public init(subsystem: String, category: String) {
+        self.subsystem = subsystem
+        self.category = category
+    }
+}
+
+public struct OSLogType: CustomStringConvertible {
+    private let label: String
+
+    private init(_ label: String) {
+        self.label = label
+    }
+
+    public var description: String { label }
+
+    public static let debug = OSLogType("debug")
+    public static let info = OSLogType("info")
+    public static let `default` = OSLogType("default")
+    public static let error = OSLogType("error")
+    public static let fault = OSLogType("fault")
+}
+
+@usableFromInline
+let secureLoggerFallbackFormatter: ISO8601DateFormatter = {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return formatter
+}()
+
+@usableFromInline
+func os_log(_ message: StaticString, log: OSLog, type: OSLogType, _ args: CVarArg...) {
+    let rawFormat = String(describing: message)
+    let format = rawFormat
+        .replacingOccurrences(of: "%{public}@", with: "%@")
+        .replacingOccurrences(of: "%{private}@", with: "%@")
+    let formatted = String(format: format, arguments: args)
+    let timestamp = secureLoggerFallbackFormatter.string(from: Date())
+    print("[\(timestamp)] [\(log.subsystem)::\(log.category)] [\(type.description)] \(formatted)")
+}
+#endif
 
 /// Centralized security-aware logging framework
 /// Provides safe logging that filters sensitive data and security events

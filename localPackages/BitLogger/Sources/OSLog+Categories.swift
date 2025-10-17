@@ -6,11 +6,13 @@
 // For more information, see <https://unlicense.org>
 //
 
+#if canImport(os.log)
 import os.log
+#endif
 
 public extension OSLog {
     private static let subsystem = "chat.bitchat"
-    
+
     static let noise        = OSLog(subsystem: subsystem, category: "noise")
     static let encryption   = OSLog(subsystem: subsystem, category: "encryption")
     static let keychain     = OSLog(subsystem: subsystem, category: "keychain")
