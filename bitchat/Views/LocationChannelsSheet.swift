@@ -599,7 +599,7 @@ extension LocationChannelsSheet {
         switch level {
         case .region:
             return ""
-        default:
+        case .building, .block, .neighborhood, .city, .province:
             return "~"
         }
     }

@@ -37,6 +37,10 @@
 	<string>bitchat uses Bluetooth to discover and connect with other bitchat users nearby.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>bitchat uses the camera to scan QR codes to verify peers.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>bitchat lets you pick images from your photo library to share with nearby peers.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>bitchat uses the microphone to record voice notes that relay across the mesh.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>bitchat uses your approximate location to compute local geohash channels for optional public chats. Exact GPS is never shared.</string>
 	<key>UIBackgroundModes</key>

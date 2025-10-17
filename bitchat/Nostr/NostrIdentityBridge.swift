@@ -8,9 +8,12 @@ final class NostrIdentityBridge {
     private let deviceSeedKey = "nostr-device-seed"
     // In-memory cache to avoid transient keychain access issues
     private var deviceSeedCache: Data?
-    
+    // Cache derived identities to avoid repeated crypto during view rendering
+    private var derivedIdentityCache: [String: NostrIdentity] = [:]
+    private let cacheLock = NSLock()
+
     private let keychain: KeychainHelperProtocol
-    
+
     init(keychain: KeychainHelperProtocol = KeychainHelper()) {
         self.keychain = keychain
     }
@@ -106,6 +109,14 @@ final class NostrIdentityBridge {
     /// Uses HMAC-SHA256(deviceSeed, geohash) as private key material, with fallback rehashing
     /// if the candidate is not a valid secp256k1 private key.
     func deriveIdentity(forGeohash geohash: String) throws -> NostrIdentity {
+        // Check cache first to avoid repeated crypto + keychain I/O during view rendering
+        cacheLock.lock()
+        if let cached = derivedIdentityCache[geohash] {
+            cacheLock.unlock()
+            return cached
+        }
+        cacheLock.unlock()
+
         let seed = getOrCreateDeviceSeed()
         guard let msg = geohash.data(using: .utf8) else {
             throw NSError(domain: "NostrIdentity", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid geohash string"])
@@ -125,11 +136,22 @@ final class NostrIdentityBridge {
         for i in 0..<10 {
             let keyData = candidateKey(iteration: UInt32(i))
             if let identity = try? NostrIdentity(privateKeyData: keyData) {
+                // Cache the result
+                cacheLock.lock()
+                derivedIdentityCache[geohash] = identity
+                cacheLock.unlock()
                 return identity
             }
         }
         // As a final fallback, hash the seed+msg and try again
         let fallback = (seed + msg).sha256Hash()
-        return try NostrIdentity(privateKeyData: fallback)
+        let identity = try NostrIdentity(privateKeyData: fallback)
+
+        // Cache the result
+        cacheLock.lock()
+        derivedIdentityCache[geohash] = identity
+        cacheLock.unlock()
+
+        return identity
     }
 }
