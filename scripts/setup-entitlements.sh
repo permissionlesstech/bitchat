@@ -71,14 +71,18 @@ for file in $ENTITLEMENTS_FILES; do
     # Create backup
     cp "$file" "$BACKUP_DIR/$filename.backup"
     
-    # Check if file contains the generic group identifier
-    if grep -q "group.chat.bitchat" "$file" && ! grep -q "group.chat.bitchat.$TEAM_ID" "$file"; then
-        # Update the file
-        sed -i.tmp "s/group\.chat\.bitchat/group.chat.bitchat.$TEAM_ID/g" "$file"
+    # Check if file needs updating
+    if grep -q "group.chat.bitchat.$TEAM_ID" "$file"; then
+        echo -e "    ${YELLOW}⚠️  Already configured for Team ID: $TEAM_ID${NC}"
+    elif grep -q "group.chat.bitchat" "$file"; then
+        # Replace the entire group.chat.bitchat.* pattern (handles re-runs with different Team IDs)
+        sed -i.tmp "s/group\.chat\.bitchat\.[^<]*/group.chat.bitchat.$TEAM_ID/g" "$file"
+        # Also handle the base case without any Team ID suffix
+        sed -i.tmp "s/group\.chat\.bitchat</group.chat.bitchat.$TEAM_ID</g" "$file"
         rm "$file.tmp"
         echo -e "    ${GREEN}✅ Updated group identifier${NC}"
     else
-        echo -e "    ${YELLOW}⚠️  Already configured or no changes needed${NC}"
+        echo -e "    ${YELLOW}⚠️  No group identifier found${NC}"
     fi
 done
 
