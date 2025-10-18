@@ -2358,19 +2358,25 @@ extension BLEService {
             
         case .requestSync:
             handleRequestSync(packet, from: senderID)
-            
+
         case .noiseHandshake:
             handleNoiseHandshake(packet, from: senderID)
-            
+
         case .noiseEncrypted:
             handleNoiseEncrypted(packet, from: senderID)
-            
+
         case .fragment:
             handleFragment(packet, from: senderID)
-            
+
+        case .binaryMetadata:
+            handleBinaryTransferMetadata(packet, from: senderID)
+
+        case .binaryChunk:
+            handleBinaryTransferChunk(packet, from: senderID)
+
         case .leave:
             handleLeave(packet, from: senderID)
-            
+
         default:
             SecureLogger.warning("⚠️ Unknown message type: \(packet.type)", category: .session)
             break
@@ -2712,6 +2718,36 @@ extension BLEService {
         let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
         notifyUI { [weak self] in
             self?.delegate?.didReceivePublicMessage(from: peerID, nickname: senderNickname, content: content, timestamp: ts)
+        }
+    }
+
+    private func handleBinaryTransferMetadata(_ packet: BitchatPacket, from peerID: PeerID) {
+        guard let metadata = BinaryTransferMetadata(data: packet.payload) else {
+            SecureLogger.error("❌ Failed to decode binary transfer metadata from \(peerID.id.prefix(8))…", category: .session)
+            return
+        }
+
+        SecureLogger.debug(
+            "📦 Received binary metadata \(metadata.kind.description) size=\(metadata.totalSize) from \(peerID.id.prefix(8))…",
+            category: .session
+        )
+        notifyUI { [weak self] in
+            self?.delegate?.didReceiveBinaryTransferMetadata(metadata, from: peerID)
+        }
+    }
+
+    private func handleBinaryTransferChunk(_ packet: BitchatPacket, from peerID: PeerID) {
+        guard let chunk = BinaryTransferChunk(data: packet.payload) else {
+            SecureLogger.error("❌ Failed to decode binary transfer chunk from \(peerID.id.prefix(8))…", category: .session)
+            return
+        }
+
+        SecureLogger.debug(
+            "📦 Received binary chunk #\(chunk.sequenceNumber + 1)/\(chunk.totalChunks) for transfer \(chunk.transferID.uuidString.prefix(8))…",
+            category: .session
+        )
+        notifyUI { [weak self] in
+            self?.delegate?.didReceiveBinaryTransferChunk(chunk, from: peerID)
         }
     }
     

@@ -64,14 +64,16 @@ import CoreBluetooth
 // MARK: - Message Types
 
 /// Simplified BitChat protocol message types.
-/// Reduced from 24 types to just 6 essential ones.
+/// Reduced from 24 types to a focused set of essentials.
 /// All private communication metadata (receipts, status) is embedded in noiseEncrypted payloads.
 enum MessageType: UInt8 {
     // Public messages (unencrypted)
     case announce = 0x01        // "I'm here" with nickname
-    case message = 0x02         // Public chat message  
+    case message = 0x02         // Public chat message
     case leave = 0x03           // "I'm leaving"
     case requestSync = 0x21     // GCS filter-based sync request (local-only)
+    case binaryMetadata = 0x30  // Metadata describing an upcoming binary transfer
+    case binaryChunk = 0x31     // Individual binary transfer chunk
     
     // Noise encryption
     case noiseHandshake = 0x10  // Handshake (init or response determined by payload)
@@ -86,6 +88,8 @@ enum MessageType: UInt8 {
         case .message: return "message"
         case .leave: return "leave"
         case .requestSync: return "requestSync"
+        case .binaryMetadata: return "binaryMetadata"
+        case .binaryChunk: return "binaryChunk"
         case .noiseHandshake: return "noiseHandshake"
         case .noiseEncrypted: return "noiseEncrypted"
         case .fragment: return "fragment"
@@ -174,6 +178,10 @@ protocol BitchatDelegate: AnyObject {
     // Low-level events for better separation of concerns
     func didReceiveNoisePayload(from peerID: PeerID, type: NoisePayloadType, payload: Data, timestamp: Date)
 
+    // Binary transfer primitives
+    func didReceiveBinaryTransferMetadata(_ metadata: BinaryTransferMetadata, from peerID: PeerID)
+    func didReceiveBinaryTransferChunk(_ chunk: BinaryTransferChunk, from peerID: PeerID)
+
     // Bluetooth state updates for user notifications
     func didUpdateBluetoothState(_ state: CBManagerState)
     func didReceivePublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date)
@@ -194,6 +202,14 @@ extension BitchatDelegate {
     }
 
     func didReceivePublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date) {
+        // Default empty implementation
+    }
+
+    func didReceiveBinaryTransferMetadata(_ metadata: BinaryTransferMetadata, from peerID: PeerID) {
+        // Default empty implementation
+    }
+
+    func didReceiveBinaryTransferChunk(_ chunk: BinaryTransferChunk, from peerID: PeerID) {
         // Default empty implementation
     }
 }
