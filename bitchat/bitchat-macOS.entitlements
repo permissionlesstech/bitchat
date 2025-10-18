@@ -10,11 +10,19 @@
 	</array>
 	<key>com.apple.security.device.bluetooth</key>
 	<true/>
+	<key>com.apple.security.device.microphone</key>
+	<true/>
 	<key>com.apple.security.personal-information.location</key>
 	<true/>
 	<key>com.apple.security.network.client</key>
 	<true/>
 	<key>com.apple.security.network.server</key>
+	<true/>
+	<key>com.apple.security.files.user-selected.read-only</key>
+	<true/>
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+	<key>com.apple.security.assets.pictures.read-only</key>
 	<true/>
 </dict>
 </plist>

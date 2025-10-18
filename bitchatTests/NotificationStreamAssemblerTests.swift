@@ -95,4 +95,57 @@ struct NotificationStreamAssemblerTests {
         let decoded = try #require(BinaryProtocol.decode(result.frames[0]), "Failed to decode frame after drop")
         #expect(decoded.timestamp == packet.timestamp)
     }
+
+    func testAssemblesCompressedLargeFrame() throws {
+        var assembler = NotificationStreamAssembler()
+
+        // Keep the fixture below FileTransferLimits.maxPayloadBytes so encoding succeeds while still exercising compression.
+        let largeContent = Data(repeating: 0x41, count: 600_000)
+        let filePacket = BitchatFilePacket(
+            fileName: "large.bin",
+            fileSize: UInt64(largeContent.count),
+            mimeType: "application/octet-stream",
+            content: largeContent
+        )
+        let tlvPayload = try #require(filePacket.encode(), "Failed to encode file packet")
+
+        let senderID = Data(repeating: 0xAA, count: BinaryProtocol.senderIDSize)
+        let packet = BitchatPacket(
+            type: MessageType.fileTransfer.rawValue,
+            senderID: senderID,
+            recipientID: nil,
+            timestamp: 0x010203040506,
+            payload: tlvPayload,
+            signature: nil,
+            ttl: 3,
+            version: 2
+        )
+
+        let frame = try #require(packet.toBinaryData(padding: false), "Failed to encode packet frame")
+
+        #expect(BinaryProtocol.Offsets.flags < frame.count)
+        let flags = frame[frame.startIndex + BinaryProtocol.Offsets.flags]
+        #expect((flags & BinaryProtocol.Flags.isCompressed) != 0, "Frame should be compressed for large payloads")
+
+        let splitIndex = min(4096, frame.count / 2)
+        var result = assembler.append(frame.prefix(splitIndex))
+        #expect(result.frames.isEmpty)
+
+        result = assembler.append(frame.suffix(from: splitIndex))
+        #expect(result.frames.count == 1)
+        #expect(result.droppedPrefixes.isEmpty)
+        #expect(result.reset == false)
+
+        let assembled = try #require(result.frames.first, "Missing assembled frame")
+        #expect(assembled.count == frame.count)
+
+        let decodedPacket = try #require(BinaryProtocol.decode(assembled), "Failed to decode compressed frame")
+        #expect(decodedPacket.payload.count == tlvPayload.count)
+
+        let decodedFile = try #require(BitchatFilePacket.decode(decodedPacket.payload), "Failed to decode TLV payload")
+        #expect(decodedFile.fileName == filePacket.fileName)
+        #expect(decodedFile.mimeType == filePacket.mimeType)
+        #expect(decodedFile.content.count == largeContent.count)
+        #expect(decodedFile.content.prefix(32) == largeContent.prefix(32))
+    }
 }
