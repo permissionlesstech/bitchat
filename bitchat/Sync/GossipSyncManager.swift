@@ -92,7 +92,7 @@ final class GossipSyncManager {
             guard let r = packet.recipientID else { return true }
             return r.count == 8 && r.allSatisfy { $0 == 0xFF }
         }()
-        let isBroadcastMessage = (mt == .message && isBroadcastRecipient)
+        let isBroadcastMessage = ((mt == .message || mt == .binaryMetadata) && isBroadcastRecipient)
         let isAnnounce = (mt == .announce)
         guard isBroadcastMessage || isAnnounce else { return }
 
