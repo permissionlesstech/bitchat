@@ -163,14 +163,22 @@ final class LocationNotesManager: ObservableObject {
 
         subscriptionID = subID
         initialLoadComplete = false
-        // For persistent notes, allow relays to return recent history without an aggressive time cutoff
-        let filter = NostrFilter.geohashNotes(geohash, since: nil, limit: 200)
+
+        // Subscribe to center + 8 neighbors (± 1 grid)
+        let neighbors = Geohash.neighbors(of: geohash)
+        let allGeohashes = [geohash] + neighbors
+        let filter = NostrFilter.geohashNotes(allGeohashes, since: nil, limit: 200)
+
+        // Build a set of valid geohashes for tag matching (includes all 9 cells)
+        let validGeohashes = Set(allGeohashes.map { $0.lowercased() })
 
         dependencies.subscribe(filter, subID, relays, { [weak self] event in
             guard let self = self else { return }
             guard event.kind == NostrProtocol.EventKind.textNote.rawValue else { return }
-            // Ensure matching tag
-            guard event.tags.contains(where: { $0.count >= 2 && $0[0].lowercased() == "g" && $0[1].lowercased() == self.geohash }) else { return }
+            // Ensure matching tag - accept any of our 9 geohashes
+            guard event.tags.contains(where: { tag in
+                tag.count >= 2 && tag[0].lowercased() == "g" && validGeohashes.contains(tag[1].lowercased())
+            }) else { return }
             guard !self.noteIDs.contains(event.id) else { return }
             self.noteIDs.insert(event.id)
             let nick = event.tags.first(where: { $0.first?.lowercased() == "n" && $0.count >= 2 })?.dropFirst().first

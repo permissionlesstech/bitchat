@@ -141,7 +141,7 @@ struct LocationNotesView: View {
         String(
             format: String(localized: "location_notes.header", comment: "Header displaying the geohash and localized note count"),
             locale: .current,
-            geohash, count
+            "\(geohash) ± 1", count
         )
     }
 
