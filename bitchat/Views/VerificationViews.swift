@@ -388,10 +388,6 @@ struct VerificationSheetView: View {
             .padding(.vertical, 14)
         }
         .background(backgroundColor)
-        #if os(iOS)
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
-        #endif
         .onDisappear { showingScanner = false }
     }
 }
