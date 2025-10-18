@@ -784,7 +784,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         )
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(appWillTerminate),
+            selector: #selector(applicationWillTerminate),
             name: NSApplication.willTerminateNotification,
             object: nil
         )
@@ -840,7 +840,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         )
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(appWillTerminate),
+            selector: #selector(applicationWillTerminate),
             name: UIApplication.willTerminateNotification,
             object: nil
         )
@@ -2977,24 +2977,21 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         // No-op; avoid forcing synchronize on resign
     }
     
+    /// Save identity state without stopping services (for backgrounding)
+    func saveIdentityState() {
+        // Force save any pending identity changes (verifications, favorites, etc)
+        identityManager.forceSave()
+
+        // Verify identity key is still there
+        _ = keychain.verifyIdentityKeyExists()
+    }
+
     @objc func applicationWillTerminate() {
         // Send leave message to all peers
         meshService.stopServices()
-        
-        // Force save any pending identity changes (verifications, favorites, etc)
-        identityManager.forceSave()
-        
-        // Verify identity key is still there
-        _ = keychain.verifyIdentityKeyExists()
-        
-        // No need to force synchronize here
-        
-        // Verify identity key after save
-        _ = keychain.verifyIdentityKeyExists()
-    }
-    
-    @objc private func appWillTerminate() {
-        // No need to force synchronize here
+
+        // Save identity state
+        saveIdentityState()
     }
     
     @MainActor

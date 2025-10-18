@@ -84,6 +84,9 @@ struct BitchatApp: App {
                         }
                         // Proactively disconnect Nostr to avoid spurious socket errors while Tor is down
                         NostrRelayManager.shared.disconnect()
+                        // Force save identity state (verifications, favorites, etc) before backgrounding
+                        // iOS may terminate the app from background without calling applicationWillTerminate
+                        chatViewModel.saveIdentityState()
                         didEnterBackground = true
                     case .active:
                         // Restart services when becoming active
