@@ -49,6 +49,7 @@ struct ContentView: View {
     @State private var showVerifySheet = false
     @State private var expandedMessageIDs: Set<String> = []
     @State private var showLocationNotes = false
+    @State private var customGeohash: String = ""
     @State private var notesGeohash: String? = nil
     @ScaledMetric(relativeTo: .body) private var headerHeight: CGFloat = 44
     @ScaledMetric(relativeTo: .subheadline) private var headerPeerIconSize: CGFloat = 11
@@ -1380,8 +1381,11 @@ struct ContentView: View {
         .frame(height: headerHeight)
         .padding(.horizontal, 12)
         .sheet(isPresented: $showLocationChannelsSheet) {
-            LocationChannelsSheet(isPresented: $showLocationChannelsSheet)
-                .onAppear { viewModel.isLocationChannelsSheetPresented = true }
+            LocationChannelsSheet(isPresented: $showLocationChannelsSheet, customGeohash: $customGeohash)
+                .onAppear {
+                    viewModel.isLocationChannelsSheetPresented = true
+                    customGeohash = ""
+                }
                 .onDisappear { viewModel.isLocationChannelsSheetPresented = false }
         }
         .sheet(isPresented: $showLocationNotes, onDismiss: {
