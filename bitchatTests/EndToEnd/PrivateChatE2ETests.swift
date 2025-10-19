@@ -186,11 +186,11 @@ struct PrivateChatE2ETests {
             // Bob relays private messages for Charlie
             bob.packetDeliveryHandler = { packet in
                 if let recipientID = packet.recipientID,
-                   String(data: recipientID, encoding: .utf8) == charlie.peerID {
+                   PeerID(data: recipientID) == charlie.peerID {
                     // Relay to Charlie
                     var relayPacket = packet
                     relayPacket.ttl = packet.ttl - 1
-                    self.charlie.simulateIncomingPacket(relayPacket)
+                    charlie.simulateIncomingPacket(relayPacket)
                 }
             }
             

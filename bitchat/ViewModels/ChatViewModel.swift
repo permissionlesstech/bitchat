@@ -261,7 +261,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 nickname = trimmed
             }
             // Update mesh service nickname if it's initialized
-            if meshService.myPeerID != "" {
+            if !meshService.myPeerID.isEmpty {
                 meshService.setNickname(nickname)
             }
         }
@@ -4103,7 +4103,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             if let spid = message.senderPeerID {
                 if case .location(let ch) = activeChannel, spid.id.hasPrefix("nostr:") {
                     if let myGeo = try? idBridge.deriveIdentity(forGeohash: ch.geohash) {
-                        return spid == "nostr:\(myGeo.publicKeyHex.prefix(TransportConfig.nostrShortKeyDisplayLength))"
+                        return spid == PeerID(nostr: myGeo.publicKeyHex)
                     }
                 }
                 return spid == meshService.myPeerID
@@ -5623,7 +5623,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             }
 
             // Validate recipient
-            if let rid = packet.recipientID, rid.hexEncodedString() != meshService.myPeerID {
+            if PeerID(hexData: packet.recipientID) != meshService.myPeerID {
                 return
             }
 

@@ -734,8 +734,7 @@ final class BLEService: NSObject {
     }
 
     private func sendEncrypted(_ packet: BitchatPacket, data: Data, pad: Bool) {
-        guard let recipientID = packet.recipientID else { return }
-        let recipientPeerID = PeerID(hexData: recipientID)
+        guard let recipientPeerID = PeerID(hexData: packet.recipientID) else { return }
         var sentEncrypted = false
 
         // Per-link limits for the specific peer
@@ -1039,8 +1038,7 @@ final class BLEService: NSObject {
 
         // Skip directed packets that are not intended for us
         if let recipient = packet.recipientID {
-            let recipientHex = recipient.hexEncodedString()
-            if recipientHex != myPeerID && !recipient.allSatisfy({ $0 == 0xFF }) {
+            if PeerID(hexData: recipient) != myPeerID && !recipient.allSatisfy({ $0 == 0xFF }) {
                 return
             }
         }
@@ -1122,10 +1120,7 @@ final class BLEService: NSObject {
             marker = "[file] \(fileName)"
         }
 
-        let isPrivateMessage: Bool = {
-            guard let recipient = packet.recipientID else { return false }
-            return recipient.hexEncodedString() == myPeerID
-        }()
+        let isPrivateMessage = PeerID(hexData: packet.recipientID) == myPeerID
 
         if isPrivateMessage {
             updatePeerLastSeen(peerID)
@@ -3078,9 +3073,9 @@ extension BLEService {
         
         // Verify that the sender's derived ID from the announced noise public key matches the packet senderID
         // This helps detect relayed or spoofed announces. Only warn in release; assert in debug.
-        let derivedFromKey = PeerID(publicKey: announcement.noisePublicKey).id
+        let derivedFromKey = PeerID(publicKey: announcement.noisePublicKey)
         if derivedFromKey != peerID {
-            SecureLogger.warning("⚠️ Announce sender mismatch: derived \(derivedFromKey.prefix(8))… vs packet \(peerID.id.prefix(8))…", category: .security)
+            SecureLogger.warning("⚠️ Announce sender mismatch: derived \(derivedFromKey.id.prefix(8))… vs packet \(peerID.id.prefix(8))…", category: .security)
 
         }
         
@@ -3366,8 +3361,7 @@ extension BLEService {
     
     private func handleNoiseHandshake(_ packet: BitchatPacket, from peerID: PeerID) {
         // Use NoiseEncryptionService for handshake processing
-        if let recipientID = packet.recipientID,
-           recipientID.hexEncodedString() == myPeerID {
+        if PeerID(hexData: packet.recipientID) == myPeerID {
             // Handshake is for us
             do {
                 if let response = try noiseService.processHandshakeMessage(from: peerID, message: packet.payload) {
@@ -3400,14 +3394,13 @@ extension BLEService {
     private func handleNoiseEncrypted(_ packet: BitchatPacket, from peerID: PeerID) {
         SecureLogger.debug("🔐 handleNoiseEncrypted called for packet from \(peerID)")
         
-        guard let recipientID = packet.recipientID else {
+        guard let recipientID = PeerID(hexData: packet.recipientID) else {
             SecureLogger.warning("⚠️ Encrypted message has no recipient ID", category: .session)
             return
         }
         
-        let recipientHex = recipientID.hexEncodedString()
-        if recipientHex != myPeerID {
-            SecureLogger.debug("🔐 Encrypted message not for me (for \(recipientHex), I am \(myPeerID))", category: .session)
+        if recipientID != myPeerID {
+            SecureLogger.debug("🔐 Encrypted message not for me (for \(recipientID), I am \(myPeerID))", category: .session)
             return
         }
         
