@@ -1213,12 +1213,7 @@ struct ContentView: View {
                     .foregroundColor(textColor)
 
                 if !privatePeerID.isGeoDM {
-                    let statusPeerID: PeerID = {
-                        if privatePeerID.id.count == 64, let short = viewModel.getShortIDForNoiseKey(privatePeerID.id) {
-                            return short
-                        }
-                        return context.headerPeerID
-                    }()
+                    let statusPeerID = viewModel.getShortIDForNoiseKey(privatePeerID)
                     let encryptionStatus = viewModel.getEncryptionStatus(for: statusPeerID)
                     if let icon = encryptionStatus.icon {
                         Image(systemName: icon)
@@ -1252,13 +1247,7 @@ struct ContentView: View {
     }
 
     private func makePrivateHeaderContext(for privatePeerID: PeerID) -> PrivateHeaderContext {
-        let headerPeerID: PeerID = {
-            if privatePeerID.id.count == 64, let short = viewModel.getShortIDForNoiseKey(privatePeerID.id) {
-                return short
-            }
-            return privatePeerID
-        }()
-
+        let headerPeerID = viewModel.getShortIDForNoiseKey(privatePeerID)
         let peer = viewModel.getPeer(byID: headerPeerID)
 
         let displayName: String = {

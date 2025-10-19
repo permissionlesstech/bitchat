@@ -65,10 +65,7 @@ struct FingerprintView: View {
             
             VStack(alignment: .leading, spacing: 16) {
                 // Prefer short mesh ID for session/encryption status
-                let statusPeerID: PeerID = {
-                    if peerID.id.count == 64, let short = viewModel.getShortIDForNoiseKey(peerID.id) { return short }
-                    return peerID
-                }()
+                let statusPeerID = viewModel.getShortIDForNoiseKey(peerID)
                 // Resolve a friendly name
                 let peerNickname: String = {
                     if let p = viewModel.getPeer(byID: statusPeerID) { return p.displayName }
