@@ -43,6 +43,7 @@ struct ContentView: View {
     @State private var showPeerList = false
     @State private var showSidebar = false
     @State private var showAppInfo = false
+    @State private var filteredCommands: [CommandInfo] = []
     @State private var showCommandSuggestions = false
     @State private var commandSuggestions: [String] = []
     @State private var showMessageActions = false
@@ -606,67 +607,10 @@ struct ContentView: View {
             }
 
             // Command suggestions
-            if showCommandSuggestions && !commandSuggestions.isEmpty {
+            if showCommandSuggestions {
                 VStack(alignment: .leading, spacing: 0) {
-                    // Define commands with aliases and syntax
-                    let baseInfo: [(commands: [String], syntax: String?, description: String)] = [
-                        (["/block"], "[nickname]", "block or list blocked peers"),
-                        (["/clear"], nil, "clear chat messages"),
-                        (["/hug"], "<nickname>", "send someone a warm hug"),
-                        (["/m", "/msg"], "<nickname> [message]", "send private message"),
-                        (["/slap"], "<nickname>", "slap someone with a trout"),
-                        (["/unblock"], "<nickname>", "unblock a peer"),
-                        (["/w"], nil, "see who's online")
-                    ]
-                    let isGeoPublic: Bool = { if case .location = locationManager.selectedChannel { return true }; return false }()
-                    let isGeoDM = viewModel.selectedPrivateChatPeer?.isGeoDM == true
-                    let favInfo: [(commands: [String], syntax: String?, description: String)] = [
-                        (["/fav"], "<nickname>", "add to favorites"),
-                        (["/unfav"], "<nickname>", "remove from favorites")
-                    ]
-                    let commandInfo = baseInfo + ((isGeoPublic || isGeoDM) ? [] : favInfo)
-
-                    // Build the display
-                    let allCommands = commandInfo
-
-                    // Show matching commands
-                    ForEach(commandSuggestions, id: \.self) { command in
-                        // Find the command info for this suggestion
-                        if let info = allCommands.first(where: { $0.commands.contains(command) }) {
-                            Button(action: {
-                                // Replace current text with selected command
-                                messageText = command + " "
-                                showCommandSuggestions = false
-                                commandSuggestions = []
-                            }) {
-                                HStack {
-                                    // Show all aliases together
-                                    Text(info.commands.joined(separator: ", "))
-                                        .font(.bitchatSystem(size: 11, design: .monospaced))
-                                        .foregroundColor(textColor)
-                                        .fontWeight(.medium)
-
-                                    // Show syntax if any
-                                    if let syntax = info.syntax {
-                                        Text(syntax)
-                                            .font(.bitchatSystem(size: 10, design: .monospaced))
-                                            .foregroundColor(secondaryTextColor.opacity(0.8))
-                                    }
-
-                                    Spacer()
-
-                                    // Show description
-                                    Text(info.description)
-                                        .font(.bitchatSystem(size: 10, design: .monospaced))
-                                        .foregroundColor(secondaryTextColor)
-                                }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 3)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .buttonStyle(.plain)
-                            .background(Color.gray.opacity(0.1))
-                        }
+                    ForEach(filteredCommands, id: \.id) { info in
+                        commandRow(for: info)
                     }
                 }
                 .background(backgroundColor)
@@ -676,6 +620,7 @@ struct ContentView: View {
                 )
                 .padding(.horizontal, 12)
             }
+
 
             // Recording indicator
             if isPreparingVoiceNote || isRecordingVoiceNote {
@@ -709,67 +654,28 @@ struct ContentView: View {
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .onChange(of: messageText) { newValue in
-                    // Cancel previous debounce timer
                     autocompleteDebounceTimer?.invalidate()
-
-                    // Debounce autocomplete updates to reduce calls during rapid typing
                     autocompleteDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { _ in
-                        // Get cursor position (approximate - end of text for now)
                         let cursorPosition = newValue.count
                         viewModel.updateAutocomplete(for: newValue, cursorPosition: cursorPosition)
                     }
 
-                    // Check for command autocomplete (instant, no debounce needed)
                     if newValue.hasPrefix("/") && newValue.count >= 1 {
-                        // Build context-aware command list
+                        let input = newValue.lowercased()
                         let isGeoPublic: Bool = {
                             if case .location = locationManager.selectedChannel { return true }
                             return false
                         }()
                         let isGeoDM = viewModel.selectedPrivateChatPeer?.isGeoDM == true
-                        var commandDescriptions = [
-                            ("/block", String(localized: "content.commands.block", comment: "Description for /block command")),
-                            ("/clear", String(localized: "content.commands.clear", comment: "Description for /clear command")),
-                            ("/hug", String(localized: "content.commands.hug", comment: "Description for /hug command")),
-                            ("/m", String(localized: "content.commands.message", comment: "Description for /m command")),
-                            ("/slap", String(localized: "content.commands.slap", comment: "Description for /slap command")),
-                            ("/unblock", String(localized: "content.commands.unblock", comment: "Description for /unblock command")),
-                            ("/w", String(localized: "content.commands.who", comment: "Description for /w command"))
-                        ]
-                        // Only show favorites commands when not in geohash context
-                        if !(isGeoPublic || isGeoDM) {
-                            commandDescriptions.append(("/fav", String(localized: "content.commands.favorite", comment: "Description for /fav command")))
-                            commandDescriptions.append(("/unfav", String(localized: "content.commands.unfavorite", comment: "Description for /unfav command")))
+                        let allCommands = CommandInfo.all(isGeoPublic: isGeoPublic, isGeoDM: isGeoDM)
+
+                        filteredCommands = allCommands.filter { info in
+                            info.commands.contains { $0.starts(with: input) }
                         }
-
-                        let input = newValue.lowercased()
-
-                        // Map of aliases to primary commands
-                        let aliases: [String: String] = [
-                            "/join": "/j",
-                            "/msg": "/m"
-                        ]
-
-                        // Filter commands, but convert aliases to primary
-                        commandSuggestions = commandDescriptions
-                            .filter { $0.0.starts(with: input) }
-                            .map { $0.0 }
-
-                        // Also check if input matches an alias
-                        for (alias, primary) in aliases {
-                            if alias.starts(with: input) && !commandSuggestions.contains(primary) {
-                                if commandDescriptions.contains(where: { $0.0 == primary }) {
-                                    commandSuggestions.append(primary)
-                                }
-                            }
-                        }
-
-                        // Remove duplicates and sort
-                        commandSuggestions = Array(Set(commandSuggestions)).sorted()
-                        showCommandSuggestions = !commandSuggestions.isEmpty
+                        showCommandSuggestions = !filteredCommands.isEmpty
                     } else {
                         showCommandSuggestions = false
-                        commandSuggestions = []
+                        filteredCommands = []
                     }
                 }
 
@@ -788,6 +694,38 @@ struct ContentView: View {
         .background(backgroundColor.opacity(0.95))
     }
 
+    private func commandRow(for info: CommandInfo) -> some View {
+        Button(action: {
+            // Escolher o primeiro comando como default ao clicar
+            messageText = info.commands.first! + " "
+            showCommandSuggestions = false
+            commandSuggestions = []
+        }) {
+            HStack {
+                Text(info.commands.joined(separator: ", "))
+                    .font(.bitchatSystem(size: 11, design: .monospaced))
+                    .foregroundColor(textColor)
+                    .fontWeight(.medium)
+                
+                if let syntaxKey = info.syntax {
+                    Text( NSLocalizedString(syntaxKey, comment: "") )
+                        .font(.bitchatSystem(size: 10, design: .monospaced))
+                        .foregroundColor(secondaryTextColor.opacity(0.8))
+                }
+                Spacer()
+                
+                Text(NSLocalizedString(info.descriptionKey, comment: ""))
+                    .font(.bitchatSystem(size: 10, design: .monospaced))
+                    .foregroundColor(secondaryTextColor)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 3)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .buttonStyle(.plain)
+        .background(Color.gray.opacity(0.1))
+    }
+    
     private func handleOpenURL(_ url: URL) {
         guard url.scheme == "bitchat" else { return }
         switch url.host {

@@ -89,6 +89,34 @@ import UIKit
 #endif
 import UniformTypeIdentifiers
 
+// MARK: - Enum Commands Info
+
+struct CommandInfo {
+    let id = UUID()
+    let commands: [String]
+    let syntax: String?
+    let descriptionKey: String
+    
+    static func all(isGeoPublic: Bool, isGeoDM: Bool) -> [CommandInfo] {
+        var commands: [CommandInfo] = [
+            CommandInfo(commands: ["/block"], syntax: "content.input.nickname_placeholder", descriptionKey: "content.commands.block"),
+            CommandInfo(commands: ["/clear"], syntax: nil, descriptionKey: "content.commands.clear"),
+            CommandInfo(commands: ["/hug"], syntax: "content.input.nickname_placeholder", descriptionKey: "content.commands.hug"),
+            CommandInfo(commands: ["/m", "/msg"], syntax: "content.input.nickname_placeholder", descriptionKey: "content.commands.message"),
+            CommandInfo(commands: ["/slap"], syntax: "content.input.nickname_placeholder", descriptionKey: "content.commands.slap"),
+            CommandInfo(commands: ["/unblock"], syntax: "content.input.nickname_placeholder", descriptionKey: "content.commands.unblock"),
+            CommandInfo(commands: ["/w"], syntax: nil, descriptionKey: "content.commands.who")
+        ]
+
+        if !(isGeoPublic || isGeoDM) {
+            commands.append(CommandInfo(commands: ["/fav"], syntax: "content.input.nickname_placeholder", descriptionKey: "content.commands.favorite"))
+            commands.append(CommandInfo(commands: ["/unfav"], syntax: "content.input.nickname_placeholder", descriptionKey: "content.commands.unfavorite"))
+        }
+
+        return commands
+    }
+}
+
 /// Manages the application state and business logic for BitChat.
 /// Acts as the primary coordinator between UI components and backend services,
 /// implementing the BitchatDelegate protocol to handle network events.
