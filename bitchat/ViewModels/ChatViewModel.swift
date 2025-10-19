@@ -4256,13 +4256,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         let noiseService = meshService.getNoiseService()
         
         if noiseService.hasEstablishedSession(with: peerID) {
-            // Check if fingerprint is verified using our persisted data
-            if let fingerprint = getFingerprint(for: peerID),
-               verifiedFingerprints.contains(fingerprint) {
-                peerEncryptionStatus[peerID] = .noiseVerified
-            } else {
-                peerEncryptionStatus[peerID] = .noiseSecured
-            }
+            peerEncryptionStatus[peerID] = encryptionStatus(for: peerID)
         } else if noiseService.hasSession(with: peerID) {
             // Session exists but not established - handshaking
             peerEncryptionStatus[peerID] = .noiseHandshaking
@@ -4297,27 +4291,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         // Determine status based on session state
         switch sessionState {
         case .established:
-            // We have encryption, now check if it's verified
-            if let fingerprint = getFingerprint(for: peerID) {
-                if verifiedFingerprints.contains(fingerprint) {
-                    status = .noiseVerified
-                } else {
-                    status = .noiseSecured
-                }
-            } else {
-                // We have a session but no fingerprint yet - still secured
-                status = .noiseSecured
-            }
+            status = encryptionStatus(for: peerID)
         case .handshaking, .handshakeQueued:
             // If we've ever established a session, show secured instead of handshaking
             if hasEverEstablishedSession {
                 // Check if it was verified before
-                if let fingerprint = getFingerprint(for: peerID),
-                   verifiedFingerprints.contains(fingerprint) {
-                    status = .noiseVerified
-                } else {
-                    status = .noiseSecured
-                }
+                status = encryptionStatus(for: peerID)
             } else {
                 // First time establishing - show handshaking
                 status = .noiseHandshaking
@@ -4326,12 +4305,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             // If we've ever established a session, show secured instead of no handshake
             if hasEverEstablishedSession {
                 // Check if it was verified before
-                if let fingerprint = getFingerprint(for: peerID),
-                   verifiedFingerprints.contains(fingerprint) {
-                    status = .noiseVerified
-                } else {
-                    status = .noiseSecured
-                }
+                status = encryptionStatus(for: peerID)
             } else {
                 // Never established - show no handshake
                 status = .noHandshake
@@ -4340,12 +4314,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             // If we've ever established a session, show secured instead of failed
             if hasEverEstablishedSession {
                 // Check if it was verified before
-                if let fingerprint = getFingerprint(for: peerID),
-                   verifiedFingerprints.contains(fingerprint) {
-                    status = .noiseVerified
-                } else {
-                    status = .noiseSecured
-                }
+                status = encryptionStatus(for: peerID)
             } else {
                 // Never established - show failed
                 status = .none
@@ -4736,16 +4705,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         let noiseService = meshService.getNoiseService()
         
         if noiseService.hasEstablishedSession(with: peerID) {
-            if let fingerprint = getFingerprint(for: peerID) {
-                if verifiedFingerprints.contains(fingerprint) {
-                    peerEncryptionStatus[peerID] = .noiseVerified
-                } else {
-                    peerEncryptionStatus[peerID] = .noiseSecured
-                }
-            } else {
-                // Session established but no fingerprint yet
-                peerEncryptionStatus[peerID] = .noiseSecured
-            }
+            peerEncryptionStatus[peerID] = encryptionStatus(for: peerID)
         } else if noiseService.hasSession(with: peerID) {
             peerEncryptionStatus[peerID] = .noiseHandshaking
         } else {
@@ -4773,6 +4733,16 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     @MainActor
     func getFingerprint(for peerID: PeerID) -> String? {
         return unifiedPeerService.getFingerprint(for: peerID)
+    }
+    
+    /// Check if fingerprint is verified using our persisted data
+    @MainActor
+    private func encryptionStatus(for peerID: PeerID) -> EncryptionStatus {
+        if let fp = getFingerprint(for: peerID), verifiedFingerprints.contains(fp) {
+            return .noiseVerified
+        } else {
+            return .noiseSecured
+        }
     }
     
     /// Helper to resolve nickname for a peer ID through various sources
