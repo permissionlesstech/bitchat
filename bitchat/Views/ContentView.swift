@@ -713,7 +713,7 @@ struct ContentView: View {
                 }
                 Spacer()
                 
-                Text(NSLocalizedString(info.descriptionKey, comment: ""))
+                Text(info.localizedDescription)
                     .font(.bitchatSystem(size: 10, design: .monospaced))
                     .foregroundColor(secondaryTextColor)
             }
