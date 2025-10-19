@@ -706,8 +706,8 @@ struct ContentView: View {
                     .foregroundColor(textColor)
                     .fontWeight(.medium)
                 
-                if let syntaxKey = info.syntax {
-                    Text( NSLocalizedString(syntaxKey, comment: "") )
+                if let syntaxText = info.localizedSyntax {
+                    Text(syntaxText)
                         .font(.bitchatSystem(size: 10, design: .monospaced))
                         .foregroundColor(secondaryTextColor.opacity(0.8))
                 }

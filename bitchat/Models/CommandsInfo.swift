@@ -23,10 +23,10 @@ enum CommandInfo: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var syntax: String? {
+    var localizedSyntax: String? {
         switch self {
         case .block, .hug, .message, .slap, .unblock, .favorite, .unfavorite:
-            return "content.input.nickname_placeholder"
+            return NSLocalizedString("content.input.nickname_placeholder", comment: "")
         default:
             return nil
         }
