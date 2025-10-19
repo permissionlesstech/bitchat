@@ -1060,10 +1060,8 @@ final class BLEService: NSObject {
             return
         }
 
-        let mime = MimeType(filePacket.mimeType) ?? .octetStream
-
-        guard mime.isAllowed else {
-            SecureLogger.warning("🚫 MIME REJECT: '\(mime)' not supported. Size=\(filePacket.content.count)b from \(peerID.id.prefix(8))...", category: .security)
+        guard let mime = MimeType(filePacket.mimeType), mime.isAllowed else {
+            SecureLogger.warning("🚫 MIME REJECT: '\(filePacket.mimeType ?? "<empty>")' not supported. Size=\(filePacket.content.count)b from \(peerID.id.prefix(8))...", category: .security)
             return
         }
 
@@ -1305,31 +1303,6 @@ final class BLEService: NSObject {
             return destination
         } catch {
             SecureLogger.error("❌ Failed to persist incoming media: \(error)", category: .session)
-            return nil
-        }
-    }
-
-    private func defaultExtension(for mimeType: String) -> String? {
-        switch mimeType.lowercased() {
-        case "audio/mp4", "audio/m4a", "audio/aac":
-            return "m4a"
-        case "audio/mpeg":
-            return "mp3"
-        case "audio/wav", "audio/x-wav":
-            return "wav"
-        case "audio/ogg":
-            return "ogg"
-        case "image/jpeg":
-            return "jpg"
-        case "image/png":
-            return "png"
-        case "image/webp":
-            return "webp"
-        case "image/gif":
-            return "gif"
-        case "application/pdf":
-            return "pdf"
-        default:
             return nil
         }
     }
