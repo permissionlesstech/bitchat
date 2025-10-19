@@ -1060,43 +1060,29 @@ final class BLEService: NSObject {
             return
         }
 
-        let mime = (filePacket.mimeType ?? "application/octet-stream").lowercased()
+        let mime = MimeType(filePacket.mimeType) ?? .octetStream
 
-        // Validate MIME type against whitelist
-        guard isAllowedMimeType(mime) else {
-            SecureLogger.warning("🚫 MIME REJECT: '\(mime)' not in whitelist. Size=\(filePacket.content.count)b from \(peerID.id.prefix(8))...", category: .security)
+        guard mime.isAllowed else {
+            SecureLogger.warning("🚫 MIME REJECT: '\(mime)' not supported. Size=\(filePacket.content.count)b from \(peerID.id.prefix(8))...", category: .security)
             return
         }
 
         // Validate content matches declared MIME type (magic byte check)
-        guard validateContentMatchesMime(data: filePacket.content, declaredMime: mime) else {
+        guard mime.matches(data: filePacket.content) else {
             let prefix = filePacket.content.prefix(20).map { String(format: "%02x", $0) }.joined(separator: " ")
             SecureLogger.warning("🚫 MAGIC REJECT: MIME='\(mime)' size=\(filePacket.content.count)b prefix=[\(prefix)] from \(peerID.id.prefix(8))...", category: .security)
             return
         }
 
-        let category: IncomingMediaCategory
-        if mime.hasPrefix("audio/") {
-            category = .audio
-        } else if mime.hasPrefix("image/") {
-            category = .image
-        } else {
-            category = .other
-        }
-
-        let fallbackExt = defaultExtension(for: mime) ?? (category == .image ? "jpg" : category == .audio ? "m4a" : "bin")
+        let fallbackExt = mime.defaultExtension
         let subdirectory: String
-        let prefix: String
-        switch category {
+        switch mime.category {
         case .audio:
             subdirectory = "voicenotes/incoming"
-            prefix = "voice"
         case .image:
             subdirectory = "images/incoming"
-            prefix = "image"
-        case .other:
+        case .file:
             subdirectory = "files/incoming"
-            prefix = "file"
         }
 
         guard let destination = saveIncomingFile(
@@ -1104,19 +1090,19 @@ final class BLEService: NSObject {
             preferredName: filePacket.fileName,
             subdirectory: subdirectory,
             fallbackExtension: fallbackExt,
-            defaultPrefix: prefix
+            defaultPrefix: mime.category.rawValue
         ) else {
             return
         }
 
         let marker: String
         let fileName = destination.lastPathComponent
-        switch category {
+        switch mime.category {
         case .audio:
             marker = "[voice] \(fileName)"
         case .image:
             marker = "[image] \(fileName)"
-        case .other:
+        case .file:
             marker = "[file] \(fileName)"
         }
 
@@ -1217,74 +1203,6 @@ final class BLEService: NSObject {
     }
     
     // MARK: - Helper Functions
-    
-    private enum IncomingMediaCategory {
-        case audio
-        case image
-        case other
-    }
-
-    private func isAllowedMimeType(_ mime: String) -> Bool {
-        let allowed: Set<String> = [
-            "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp",
-            "audio/mp4", "audio/m4a", "audio/aac", "audio/mpeg", "audio/mp3",
-            "audio/wav", "audio/x-wav", "audio/ogg",
-            "application/pdf", "application/octet-stream"
-        ]
-        return allowed.contains(mime.lowercased())
-    }
-
-    private func validateContentMatchesMime(data: Data, declaredMime: String) -> Bool {
-        guard !data.isEmpty else { return false }
-        let mime = declaredMime.lowercased()
-
-        // Generic type - can't validate
-        if mime == "application/octet-stream" { return true }
-
-        switch mime {
-        case "image/jpeg", "image/jpg":
-            return data.count >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF
-
-        case "image/png":
-            return data.count >= 8 &&
-                   data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47 &&
-                   data[4] == 0x0D && data[5] == 0x0A && data[6] == 0x1A && data[7] == 0x0A
-
-        case "image/gif":
-            return data.count >= 6 && data[0] == 0x47 && data[1] == 0x49 && data[2] == 0x46 &&
-                   data[3] == 0x38 && (data[4] == 0x37 || data[4] == 0x39) && data[5] == 0x61
-
-        case "image/webp":
-            return data.count >= 12 &&
-                   data[0] == 0x52 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x46 &&
-                   data[8] == 0x57 && data[9] == 0x45 && data[10] == 0x42 && data[11] == 0x50
-
-        case "audio/m4a", "audio/mp4", "audio/aac":
-            // AVAudioRecorder output varies by platform - be lenient
-            // Security: size already capped + sandboxed execution
-            return data.count > 100  // Min reasonable audio size
-
-        case "audio/mpeg", "audio/mp3":
-            if data.count >= 3 && data[0] == 0x49 && data[1] == 0x44 && data[2] == 0x33 { return true }
-            return data.count >= 2 && data[0] == 0xFF && (data[1] & 0xE0) == 0xE0
-
-        case "audio/wav", "audio/x-wav":
-            return data.count >= 12 &&
-                   data[0] == 0x52 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x46 &&
-                   data[8] == 0x57 && data[9] == 0x41 && data[10] == 0x56 && data[11] == 0x45
-
-        case "audio/ogg":
-            return data.count >= 4 &&
-                   data[0] == 0x4F && data[1] == 0x67 && data[2] == 0x67 && data[3] == 0x53
-
-        case "application/pdf":
-            return data.count >= 4 &&
-                   data[0] == 0x25 && data[1] == 0x50 && data[2] == 0x44 && data[3] == 0x46
-
-        default:
-            return false
-        }
-    }
 
     private func applicationFilesDirectory() throws -> URL {
         let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
