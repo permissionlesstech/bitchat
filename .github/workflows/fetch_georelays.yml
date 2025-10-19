@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   update-relay-data:
@@ -17,24 +18,54 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-      
+          fetch-depth: 0
+
       - name: Fetch GeoRelays
         run: |
-          wget https://raw.githubusercontent.com/permissionlesstech/georelays/refs/heads/main/nostr_relays.csv
+          wget -q https://raw.githubusercontent.com/permissionlesstech/georelays/refs/heads/main/nostr_relays.csv
           mv nostr_relays.csv ./relays/online_relays_gps.csv
 
-      - name: Check for changes
-        id: git-check
+      - name: Configure git
         run: |
-          git diff --exit-code || echo "changes=true" >> $GITHUB_OUTPUT
-    
-      - name: Commit and push changes
-        if: steps.git-check.outputs.changes == 'true'
+          git config user.email "action@github.com"
+          git config user.name "GitHub Action"
+
+      - name: Create update branch if changes
+        id: create_branch
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
+          # exit early if no changes
+          if git diff --quiet --relays/online_relays_gps.csv; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # branch name with timestamp
+          BRANCH="update-georelays-$(date -u +%Y%m%dT%H%M%SZ)"
+          git checkout -b "$BRANCH"
+
           git add relays/online_relays_gps.csv
-          git commit -m "Automated update of relay data - $(date -u)"
-          git push
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          git commit -m "Automated update of relay data - $(date -u --rfc-3339=seconds)"
+          echo "changed=true" >> $GITHUB_OUTPUT
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+
+      - name: Push branch
+        if: steps.create_branch.outputs.changed == 'true'
+        run: |
+          git push --set-upstream origin "${{ steps.create_branch.outputs.branch }}"
+
+      - name: Create pull request
+        if: steps.create_branch.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: Automated update of relay data
+          branch: ${{ steps.create_branch.outputs.branch }}
+          base: main
+          title: Automated update of relay data
+          body: |
+            This PR was created automatically by the scheduled workflow. It updates relays/online_relays_gps.csv from the GeoRelays source.
+          labels: automated, georelays
+
+      - name: No changes
+        if: steps.create_branch.outputs.changed != 'true'
+        run: echo "No changes to relays/online_relays_gps.csv"
