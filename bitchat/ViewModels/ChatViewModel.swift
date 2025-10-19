@@ -145,6 +145,19 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         }
     }
 
+    private typealias GeoOutgoingContext = (channel: GeohashChannel, event: NostrEvent, identity: NostrIdentity, teleported: Bool)
+
+    @MainActor
+    private var canSendMediaInCurrentContext: Bool {
+        if let peer = selectedPrivateChatPeer {
+            return !(peer.isGeoDM || peer.isGeoChat)
+        }
+        switch activeChannel {
+        case .mesh: return true
+        case .location: return false
+        }
+    }
+
     private var rateBucketsBySender: [String: TokenBucket] = [:]
     private var rateBucketsByContent: [String: TokenBucket] = [:]
     private let senderBucketCapacity: Double = TransportConfig.uiSenderRateBucketCapacity
@@ -1443,20 +1456,48 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         // Parse mentions from the content (use original content for user intent)
         let mentions = parseMentions(from: content)
 
+        var geoContext: GeoOutgoingContext? = nil
+
         // Add message to local display
         var displaySender = nickname
         var localSenderPeerID = meshService.myPeerID
-        if case .location(let ch) = activeChannel,
-           let myGeoIdentity = try? idBridge.deriveIdentity(forGeohash: ch.geohash) {
-            let suffix = String(myGeoIdentity.publicKeyHex.suffix(4))
-            displaySender = nickname + "#" + suffix
-            localSenderPeerID = PeerID(nostr: myGeoIdentity.publicKeyHex)
+        var messageID: String? = nil
+        var messageTimestamp = Date()
+
+        switch activeChannel {
+        case .mesh:
+            break
+        case .location(let ch):
+            do {
+                let identity = try idBridge.deriveIdentity(forGeohash: ch.geohash)
+                let suffix = String(identity.publicKeyHex.suffix(4))
+                displaySender = nickname + "#" + suffix
+                localSenderPeerID = PeerID(nostr: identity.publicKeyHex)
+                let teleported = LocationChannelManager.shared.teleported
+                let event = try NostrProtocol.createEphemeralGeohashEvent(
+                    content: trimmed,
+                    geohash: ch.geohash,
+                    senderIdentity: identity,
+                    nickname: nickname,
+                    teleported: teleported
+                )
+                messageID = event.id
+                messageTimestamp = Date(timeIntervalSince1970: TimeInterval(event.created_at))
+                geoContext = (channel: ch, event: event, identity: identity, teleported: teleported)
+            } catch {
+                SecureLogger.error("❌ Failed to prepare geohash message: \(error)", category: .session)
+                addSystemMessage(
+                    String(localized: "system.location.send_failed", comment: "System message when a location channel send fails")
+                )
+                return
+            }
         }
 
         let message = BitchatMessage(
+            id: messageID,
             sender: displaySender,
             content: trimmed,
-            timestamp: Date(),
+            timestamp: messageTimestamp,
             isRelay: false,
             senderPeerID: localSenderPeerID,
             mentions: mentions.isEmpty ? nil : mentions
@@ -1487,10 +1528,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
 
         // UI updates automatically via @Published var messages
 
-        updateChannelActivityTimeThenSend(content: content, trimmed: trimmed, mentions: mentions)
+        updateChannelActivityTimeThenSend(content: content, trimmed: trimmed, mentions: mentions, geoContext: geoContext)
     }
 
-    private func updateChannelActivityTimeThenSend(content: String, trimmed: String, mentions: [String]) {
+    private func updateChannelActivityTimeThenSend(content: String, trimmed: String, mentions: [String], geoContext: GeoOutgoingContext?) {
         switch activeChannel {
         case .mesh:
             lastPublicActivityAt["mesh"] = Date()
@@ -1498,58 +1539,54 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             meshService.sendMessage(content, mentions: mentions)
         case .location(let ch):
             lastPublicActivityAt["geo:\(ch.geohash)"] = Date()
+            guard let context = geoContext, context.channel.geohash == ch.geohash else {
+                SecureLogger.error("Geo: missing send context for \(ch.geohash)", category: .session)
+                addSystemMessage(
+                    String(localized: "system.location.send_failed", comment: "System message when a location channel send fails")
+                )
+                return
+            }
             // Send to geohash channel via Nostr ephemeral
             Task { @MainActor in
-                sendGeohash(ch: ch, content: trimmed)
+                self.sendGeohash(context: context)
             }
         }
     }
     
     @MainActor
-    private func sendGeohash(ch: GeohashChannel, content: String) {
-        do {
-            let identity = try idBridge.deriveIdentity(forGeohash: ch.geohash)
+    private func sendGeohash(context: GeoOutgoingContext) {
+        let ch = context.channel
+        let event = context.event
+        let identity = context.identity
 
-            let event = try NostrProtocol.createEphemeralGeohashEvent(
-                content: content,
-                geohash: ch.geohash,
-                senderIdentity: identity,
-                nickname: nickname,
-                teleported: LocationChannelManager.shared.teleported
-            )
-            
-            let targetRelays = GeoRelayDirectory.shared.closestRelays(
-                toGeohash: ch.geohash,
-                count: TransportConfig.nostrGeoRelayCount
-            )
-            
-            if targetRelays.isEmpty {
-                SecureLogger.warning("Geo: no geohash relays available for \(ch.geohash); not sending", category: .session)
-            } else {
-                NostrRelayManager.shared.sendEvent(event, to: targetRelays)
-            }
+        let targetRelays = GeoRelayDirectory.shared.closestRelays(
+            toGeohash: ch.geohash,
+            count: TransportConfig.nostrGeoRelayCount
+        )
 
-            // Track ourselves as active participant
-            recordGeoParticipant(pubkeyHex: identity.publicKeyHex)
-            nostrKeyMapping[PeerID(nostr: identity.publicKeyHex)] = identity.publicKeyHex
-            SecureLogger.debug("GeoTeleport: sent geo message pub=\(identity.publicKeyHex.prefix(8))… teleported=\(LocationChannelManager.shared.teleported)", category: .session)
-            
-            // If we tagged this as teleported, also mark our pubkey in teleportedGeo for UI
-            // Only when not in our regional set (and regional list is known)
-            let hasRegional = !LocationChannelManager.shared.availableChannels.isEmpty
-            let inRegional = LocationChannelManager.shared.availableChannels.contains { $0.geohash == ch.geohash }
-            
-            if LocationChannelManager.shared.teleported && hasRegional && !inRegional {
-                let key = identity.publicKeyHex.lowercased()
-                teleportedGeo = teleportedGeo.union([key])
-                SecureLogger.info("GeoTeleport: mark self teleported key=\(key.prefix(8))… total=\(teleportedGeo.count)", category: .session)
-            }
-        } catch {
-            SecureLogger.error("❌ Failed to send geohash message: \(error)", category: .session)
-            addSystemMessage(
-                String(localized: "system.location.send_failed", comment: "System message when a location channel send fails")
-            )
+        if targetRelays.isEmpty {
+            SecureLogger.warning("Geo: no geohash relays available for \(ch.geohash); not sending", category: .session)
+        } else {
+            NostrRelayManager.shared.sendEvent(event, to: targetRelays)
         }
+
+        // Track ourselves as active participant
+        recordGeoParticipant(pubkeyHex: identity.publicKeyHex)
+        nostrKeyMapping[PeerID(nostr: identity.publicKeyHex)] = identity.publicKeyHex
+        SecureLogger.debug("GeoTeleport: sent geo message pub=\(identity.publicKeyHex.prefix(8))… teleported=\(context.teleported)", category: .session)
+
+        // If we tagged this as teleported, also mark our pubkey in teleportedGeo for UI
+        // Only when not in our regional set (and regional list is known)
+        let hasRegional = !LocationChannelManager.shared.availableChannels.isEmpty
+        let inRegional = LocationChannelManager.shared.availableChannels.contains { $0.geohash == ch.geohash }
+
+        if context.teleported && hasRegional && !inRegional {
+            let key = identity.publicKeyHex.lowercased()
+            teleportedGeo = teleportedGeo.union([key])
+            SecureLogger.info("GeoTeleport: mark self teleported key=\(key.prefix(8))… total=\(teleportedGeo.count)", category: .session)
+        }
+
+        recordProcessedEvent(event.id)
     }
 
     @MainActor
@@ -2407,6 +2444,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
 
     @MainActor
     func sendVoiceNote(at url: URL) {
+        guard canSendMediaInCurrentContext else {
+            SecureLogger.info("Voice note blocked outside mesh/private context", category: .session)
+            try? FileManager.default.removeItem(at: url)
+            addSystemMessage("Voice notes are only available in mesh chats.")
+            return
+        }
+
         let targetPeer = selectedPrivateChatPeer
         let message = enqueueMediaMessage(content: "[voice] \(url.lastPathComponent)", targetPeer: targetPeer?.id)
         let messageID = message.id
@@ -2455,6 +2499,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
 
     @MainActor
     func sendImage(from sourceURL: URL, cleanup: (() -> Void)? = nil) {
+        guard canSendMediaInCurrentContext else {
+            SecureLogger.info("Image send blocked outside mesh/private context", category: .session)
+            cleanup?()
+            addSystemMessage("Images are only available in mesh chats.")
+            return
+        }
+
         let targetPeer = selectedPrivateChatPeer
 
         Task.detached(priority: .userInitiated) { [weak self] in

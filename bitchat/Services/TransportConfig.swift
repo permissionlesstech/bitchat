@@ -145,6 +145,9 @@ enum TransportConfig {
 
     // Geo relay directory
     static let geoRelayFetchIntervalSeconds: TimeInterval = 60 * 60 * 24
+    static let geoRelayRefreshCheckIntervalSeconds: TimeInterval = 60 * 60
+    static let geoRelayRetryInitialSeconds: TimeInterval = 60
+    static let geoRelayRetryMaxSeconds: TimeInterval = 60 * 60
 
     // BLE operational delays
     static let bleInitialAnnounceDelaySeconds: TimeInterval = 0.6

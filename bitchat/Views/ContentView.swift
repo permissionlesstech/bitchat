@@ -1806,7 +1806,19 @@ private extension ContentView {
     }
 
     private var shouldShowMediaControls: Bool {
-        if viewModel.selectedPrivateChatPeer != nil {
+        if let peer = viewModel.selectedPrivateChatPeer, !(peer.isGeoDM || peer.isGeoChat) {
+            return true
+        }
+        switch locationManager.selectedChannel {
+        case .mesh:
+            return true
+        case .location:
+            return false
+        }
+    }
+
+    private var shouldShowVoiceControl: Bool {
+        if let peer = viewModel.selectedPrivateChatPeer, !(peer.isGeoDM || peer.isGeoChat) {
             return true
         }
         switch locationManager.selectedChannel {
@@ -1851,17 +1863,23 @@ private extension ContentView {
         #endif
     }
 
+    @ViewBuilder
     var sendOrMicButton: some View {
         let hasText = !trimmedMessageText.isEmpty
-        return ZStack {
-            micButtonView
-                .opacity(hasText ? 0 : 1)
-                .allowsHitTesting(!hasText)
+        if shouldShowVoiceControl {
+            ZStack {
+                micButtonView
+                    .opacity(hasText ? 0 : 1)
+                    .allowsHitTesting(!hasText)
+                sendButtonView(enabled: hasText)
+                    .opacity(hasText ? 1 : 0)
+                    .allowsHitTesting(hasText)
+            }
+            .frame(width: 36, height: 36)
+        } else {
             sendButtonView(enabled: hasText)
-                .opacity(hasText ? 1 : 0)
-                .allowsHitTesting(hasText)
+                .frame(width: 36, height: 36)
         }
-        .frame(width: 36, height: 36)
     }
 
     private var micButtonView: some View {
@@ -1914,6 +1932,7 @@ private extension ContentView {
     }
 
     func startVoiceRecording() {
+        guard shouldShowVoiceControl else { return }
         guard !isRecordingVoiceNote && !isPreparingVoiceNote else { return }
         isPreparingVoiceNote = true
         Task { @MainActor in
