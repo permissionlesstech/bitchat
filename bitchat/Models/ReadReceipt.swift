@@ -11,11 +11,11 @@ import Foundation
 struct ReadReceipt: Codable {
     let originalMessageID: String
     let receiptID: String
-    var readerID: String  // Who read it
+    var readerID: PeerID  // Who read it
     let readerNickname: String
     let timestamp: Date
     
-    init(originalMessageID: String, readerID: String, readerNickname: String) {
+    init(originalMessageID: String, readerID: PeerID, readerNickname: String) {
         self.originalMessageID = originalMessageID
         self.receiptID = UUID().uuidString
         self.readerID = readerID
@@ -24,7 +24,7 @@ struct ReadReceipt: Codable {
     }
     
     // For binary decoding
-    private init(originalMessageID: String, receiptID: String, readerID: String, readerNickname: String, timestamp: Date) {
+    private init(originalMessageID: String, receiptID: String, readerID: PeerID, readerNickname: String, timestamp: Date) {
         self.originalMessageID = originalMessageID
         self.receiptID = receiptID
         self.readerID = readerID
@@ -48,7 +48,7 @@ struct ReadReceipt: Codable {
         data.appendUUID(receiptID)
         // ReaderID as 8-byte hex string
         var readerData = Data()
-        var tempID = readerID
+        var tempID = readerID.id
         while tempID.count >= 2 && readerData.count < 8 {
             let hexByte = String(tempID.prefix(2))
             if let byte = UInt8(hexByte, radix: 16) {
@@ -78,8 +78,8 @@ struct ReadReceipt: Codable {
               let receiptID = dataCopy.readUUID(at: &offset) else { return nil }
         
         guard let readerIDData = dataCopy.readFixedBytes(at: &offset, count: 8) else { return nil }
-        let readerID = readerIDData.hexEncodedString()
-        guard PeerID(str: readerID).isValid else { return nil }
+        let readerID = PeerID(hexData: readerIDData)
+        guard readerID.isValid else { return nil }
         
         guard let timestamp = dataCopy.readDate(at: &offset),
               InputValidator.validateTimestamp(timestamp),
