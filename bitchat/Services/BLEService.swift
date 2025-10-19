@@ -984,7 +984,7 @@ final class BLEService: NSObject {
         writeOrEnqueue(data, to: peripheral, characteristic: characteristic)
     }
 
-    private func handleFileTransfer(_ packet: BitchatPacket, from peerID: String) {
+    private func handleFileTransfer(_ packet: BitchatPacket, from peerID: PeerID) {
         if peerID == myPeerID && packet.ttl != 0 { return }
 
         var accepted = false
@@ -995,22 +995,22 @@ final class BLEService: NSObject {
         if peerID == myPeerID {
             accepted = true
             senderNickname = myNickname
-        } else if let info = peersSnapshot[PeerID(str: peerID)], info.isVerifiedNickname {
+        } else if let info = peersSnapshot[peerID], info.isVerifiedNickname {
             accepted = true
             senderNickname = info.nickname
-            let hasCollision = peersSnapshot.values.contains { $0.isConnected && $0.nickname == info.nickname && $0.peerID.id != peerID } || (myNickname == info.nickname)
+            let hasCollision = peersSnapshot.values.contains { $0.isConnected && $0.nickname == info.nickname && $0.peerID != peerID } || (myNickname == info.nickname)
             if hasCollision {
-                senderNickname += "#" + String(peerID.prefix(4))
+                senderNickname += "#" + String(peerID.id.prefix(4))
             }
-        } else if let info = peersSnapshot[PeerID(str: peerID)], info.isConnected {
+        } else if let info = peersSnapshot[peerID], info.isConnected {
             accepted = true
-            senderNickname = info.nickname.isEmpty ? "anon" + String(peerID.prefix(4)) : info.nickname
-            let hasCollision = peersSnapshot.values.contains { $0.isConnected && $0.nickname == info.nickname && $0.peerID.id != peerID } || (myNickname == info.nickname)
+            senderNickname = info.nickname.isEmpty ? "anon" + String(peerID.id.prefix(4)) : info.nickname
+            let hasCollision = peersSnapshot.values.contains { $0.isConnected && $0.nickname == info.nickname && $0.peerID != peerID } || (myNickname == info.nickname)
             if hasCollision {
-                senderNickname += "#" + String(peerID.prefix(4))
+                senderNickname += "#" + String(peerID.id.prefix(4))
             }
         } else if let signature = packet.signature, let packetData = packet.toBinaryDataForSigning() {
-            let candidates = identityManager.getCryptoIdentitiesByPeerIDPrefix(PeerID(str: peerID))
+            let candidates = identityManager.getCryptoIdentitiesByPeerIDPrefix(peerID)
             for candidate in candidates {
                 if let signingKey = candidate.signingPublicKey,
                    noiseService.verifySignature(signature, for: packetData, publicKey: signingKey) {
@@ -1018,22 +1018,22 @@ final class BLEService: NSObject {
                     if let social = identityManager.getSocialIdentity(for: candidate.fingerprint) {
                         senderNickname = social.localPetname ?? social.claimedNickname
                     } else {
-                        senderNickname = "anon" + String(peerID.prefix(4))
+                        senderNickname = "anon" + String(peerID.id.prefix(4))
                     }
                     break
                 }
             }
             if !accepted && packet.ttl == 0 {
                 accepted = true
-                senderNickname = "anon" + String(peerID.prefix(4))
+                senderNickname = "anon" + String(peerID.id.prefix(4))
             }
         } else if packet.ttl == 0 {
             accepted = true
-            senderNickname = "anon" + String(peerID.prefix(4))
+            senderNickname = "anon" + String(peerID.id.prefix(4))
         }
 
         guard accepted else {
-            SecureLogger.warning("🚫 Dropping file transfer from unverified or unknown peer \(peerID.prefix(8))…", category: .security)
+            SecureLogger.warning("🚫 Dropping file transfer from unverified or unknown peer \(peerID.id.prefix(8))…", category: .security)
             return
         }
 
@@ -1066,14 +1066,14 @@ final class BLEService: NSObject {
 
         // Validate MIME type against whitelist
         guard isAllowedMimeType(mime) else {
-            SecureLogger.warning("🚫 MIME REJECT: '\(mime)' not in whitelist. Size=\(filePacket.content.count)b from \(peerID.prefix(8))...", category: .security)
+            SecureLogger.warning("🚫 MIME REJECT: '\(mime)' not in whitelist. Size=\(filePacket.content.count)b from \(peerID.id.prefix(8))...", category: .security)
             return
         }
 
         // Validate content matches declared MIME type (magic byte check)
         guard validateContentMatchesMime(data: filePacket.content, declaredMime: mime) else {
             let prefix = filePacket.content.prefix(20).map { String(format: "%02x", $0) }.joined(separator: " ")
-            SecureLogger.warning("🚫 MAGIC REJECT: MIME='\(mime)' size=\(filePacket.content.count)b prefix=[\(prefix)] from \(peerID.prefix(8))...", category: .security)
+            SecureLogger.warning("🚫 MAGIC REJECT: MIME='\(mime)' size=\(filePacket.content.count)b prefix=[\(prefix)] from \(peerID.id.prefix(8))...", category: .security)
             return
         }
 
@@ -1128,7 +1128,7 @@ final class BLEService: NSObject {
         }()
 
         if isPrivateMessage {
-            updatePeerLastSeen(PeerID(str: peerID))
+            updatePeerLastSeen(peerID)
         }
 
         let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
@@ -1140,10 +1140,10 @@ final class BLEService: NSObject {
             originalSender: nil,
             isPrivate: isPrivateMessage,
             recipientNickname: nil,
-            senderPeerID: PeerID(str: peerID)
+            senderPeerID: peerID
         )
 
-        SecureLogger.debug("📁 Stored incoming media from \(peerID.prefix(8))… -> \(destination.lastPathComponent)", category: .session)
+        SecureLogger.debug("📁 Stored incoming media from \(peerID.id.prefix(8))… -> \(destination.lastPathComponent)", category: .session)
 
         notifyUI { [weak self] in
             self?.delegate?.didReceiveMessage(message)
@@ -3028,7 +3028,7 @@ extension BLEService {
             handleFragment(packet, from: senderID)
             
         case .fileTransfer:
-            handleFileTransfer(packet, from: senderID.id)
+            handleFileTransfer(packet, from: senderID)
             
         case .leave:
             handleLeave(packet, from: senderID)
