@@ -670,7 +670,7 @@ struct ContentView: View {
                         let allCommands = CommandInfo.all(isGeoPublic: isGeoPublic, isGeoDM: isGeoDM)
 
                         filteredCommands = allCommands.filter { info in
-                            info.commands.contains { $0.starts(with: input) }
+                            info.rawValue.starts(with: input)
                         }
                         showCommandSuggestions = !filteredCommands.isEmpty
                     } else {
@@ -696,13 +696,12 @@ struct ContentView: View {
 
     private func commandRow(for info: CommandInfo) -> some View {
         Button(action: {
-            // Escolher o primeiro comando como default ao clicar
-            messageText = info.commands.first! + " "
+            messageText = info.rawValue + " "
             showCommandSuggestions = false
             commandSuggestions = []
         }) {
             HStack {
-                Text(info.commands.joined(separator: ", "))
+                Text(info.rawValue)
                     .font(.bitchatSystem(size: 11, design: .monospaced))
                     .foregroundColor(textColor)
                     .fontWeight(.medium)
