@@ -199,7 +199,7 @@ struct ContentView: View {
             set: { _ in viewModel.showingFingerprintFor = nil }
         )) {
             if let peerID = viewModel.showingFingerprintFor {
-                FingerprintView(viewModel: viewModel, peerID: peerID.id)
+                FingerprintView(viewModel: viewModel, peerID: peerID)
             }
         }
 #if os(iOS)
