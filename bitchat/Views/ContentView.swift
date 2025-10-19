@@ -203,7 +203,15 @@ struct ContentView: View {
             }
         }
 #if os(iOS)
-        .sheet(isPresented: $showImagePicker) {
+        // Only present image picker from main view when NOT in a sheet
+        .fullScreenCover(isPresented: Binding(
+            get: { showImagePicker && !showSidebar && viewModel.selectedPrivateChatPeer == nil },
+            set: { newValue in
+                if !newValue {
+                    showImagePicker = false
+                }
+            }
+        )) {
             ImagePickerView(sourceType: imagePickerSourceType) { image in
                 showImagePicker = false
                 if let image = image {
@@ -223,7 +231,15 @@ struct ContentView: View {
         }
 #endif
 #if os(macOS)
-        .sheet(isPresented: $showMacImagePicker) {
+        // Only present Mac image picker from main view when NOT in a sheet
+        .sheet(isPresented: Binding(
+            get: { showMacImagePicker && !showSidebar && viewModel.selectedPrivateChatPeer == nil },
+            set: { newValue in
+                if !newValue {
+                    showMacImagePicker = false
+                }
+            }
+        )) {
             MacImagePickerView { url in
                 showMacImagePicker = false
                 if let url = url {
@@ -905,6 +921,53 @@ struct ContentView: View {
         .foregroundColor(textColor)
         #if os(macOS)
         .frame(minWidth: 420, minHeight: 520)
+        #endif
+        // Present image picker from sheet context when IN a sheet (parent-child pattern)
+        #if os(iOS)
+        .fullScreenCover(isPresented: Binding(
+            get: { showImagePicker && (showSidebar || viewModel.selectedPrivateChatPeer != nil) },
+            set: { newValue in
+                if !newValue {
+                    showImagePicker = false
+                }
+            }
+        )) {
+            ImagePickerView(sourceType: imagePickerSourceType) { image in
+                showImagePicker = false
+                if let image = image {
+                    Task {
+                        do {
+                            let processedURL = try ImageUtils.processImage(image)
+                            await MainActor.run {
+                                viewModel.sendImage(from: processedURL)
+                            }
+                        } catch {
+                            SecureLogger.error("Image processing failed: \(error)", category: .session)
+                        }
+                    }
+                }
+            }
+            .ignoresSafeArea()
+        }
+        #endif
+        #if os(macOS)
+        .sheet(isPresented: $showMacImagePicker) {
+            MacImagePickerView { url in
+                showMacImagePicker = false
+                if let url = url {
+                    Task {
+                        do {
+                            let processedURL = try ImageUtils.processImage(at: url)
+                            await MainActor.run {
+                                viewModel.sendImage(from: processedURL)
+                            }
+                        } catch {
+                            SecureLogger.error("Image processing failed: \(error)", category: .session)
+                        }
+                    }
+                }
+            }
+        }
         #endif
     }
     
