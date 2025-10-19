@@ -284,7 +284,10 @@ final class GeoRelayDirectory {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.prefetchIfNeeded(force: true)
+            guard let self else { return }
+            Task { @MainActor in
+                self.prefetchIfNeeded(force: true)
+            }
         }
         observers.append(torReady)
 
@@ -294,7 +297,10 @@ final class GeoRelayDirectory {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.prefetchIfNeeded()
+            guard let self else { return }
+            Task { @MainActor in
+                self.prefetchIfNeeded()
+            }
         }
         observers.append(didBecomeActive)
 #elseif os(macOS)
@@ -303,7 +309,10 @@ final class GeoRelayDirectory {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.prefetchIfNeeded()
+            guard let self else { return }
+            Task { @MainActor in
+                self.prefetchIfNeeded()
+            }
         }
         observers.append(didBecomeActive)
 #endif
