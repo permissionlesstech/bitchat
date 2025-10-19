@@ -203,10 +203,7 @@ final class MockBLEService: NSObject {
                let target = bus.service(for: recipientPeerID) {
                 target.simulateIncomingPacket(packet)
             } else {
-                // Not directly connected: deliver to neighbors for relay; also deliver directly if target is known
-                if let target = bus.service(for: recipientPeerID) {
-                    target.simulateIncomingPacket(packet)
-                }
+                // Not directly connected: deliver to neighbors for relay
                 for neighbor in neighbors() where neighbor.peerID != recipientPeerID {
                     neighbor.simulateIncomingPacket(packet)
                 }
