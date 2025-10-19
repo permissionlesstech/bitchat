@@ -1,4 +1,5 @@
 import Foundation
+import BitLogger
 
 /// Comprehensive input validation for BitChat protocol
 /// Prevents injection attacks, buffer overflows, and malformed data
@@ -16,14 +17,26 @@ struct InputValidator {
     // MARK: - String Content Validation
     
     /// Validates and sanitizes user-provided strings used in UI
+    ///
+    /// Rejects strings containing control characters to prevent potential security issues
+    /// and UI rendering problems. This strict approach ensures data integrity at input time.
     static func validateUserString(_ string: String, maxLength: Int) -> String? {
         let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         guard trimmed.count <= maxLength else { return nil }
 
         // Reject control characters outright instead of rewriting the string.
+        // This prevents injection attacks and ensures consistent UI rendering.
         let controlChars = CharacterSet.controlCharacters
-        guard trimmed.unicodeScalars.allSatisfy({ !controlChars.contains($0) }) else { return nil }
+        if !trimmed.unicodeScalars.allSatisfy({ !controlChars.contains($0) }) {
+            // Log rejection for monitoring, without exposing actual content for privacy
+            let controlCharCount = trimmed.unicodeScalars.filter { controlChars.contains($0) }.count
+            SecureLogger.debug(
+                "Input validation rejected string (length: \(trimmed.count), control chars: \(controlCharCount))",
+                category: .security
+            )
+            return nil
+        }
 
         return trimmed
     }

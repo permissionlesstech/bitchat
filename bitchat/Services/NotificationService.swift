@@ -29,11 +29,19 @@ final class NotificationService {
         }
     }
     
-    func sendLocalNotification(title: String, body: String, identifier: String, userInfo: [String: Any]? = nil) {
+    func sendLocalNotification(
+        title: String,
+        body: String,
+        identifier: String,
+        userInfo: [String: Any]? = nil,
+        interruptionLevel: UNNotificationInterruptionLevel = .active
+    ) {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
         content.sound = .default
+        content.interruptionLevel = interruptionLevel
+
         if let userInfo = userInfo {
             content.userInfo = userInfo
         }
@@ -77,19 +85,12 @@ final class NotificationService {
         let title = "👥 bitchatters nearby!"
         let body = peerCount == 1 ? "1 person around" : "\(peerCount) people around"
         let identifier = "network-available-\(Date().timeIntervalSince1970)"
-        
-        let content = UNMutableNotificationContent()
-        content.title = title
-        content.body = body
-        content.sound = .default
-        content.interruptionLevel = .timeSensitive  // Make it more prominent
 
-        let request = UNNotificationRequest(
+        sendLocalNotification(
+            title: title,
+            body: body,
             identifier: identifier,
-            content: content,
-            trigger: nil // Deliver immediately
+            interruptionLevel: .timeSensitive
         )
-
-        UNUserNotificationCenter.current().add(request)
     }
 }
