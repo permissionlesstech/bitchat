@@ -17,28 +17,15 @@ struct InputValidator {
     
     /// Validates and sanitizes user-provided strings used in UI
     static func validateUserString(_ string: String, maxLength: Int) -> String? {
-        // Check empty
-        guard !string.isEmpty else { return nil }
-
-        // Trim whitespace
         let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-
-        // Check length
         guard trimmed.count <= maxLength else { return nil }
 
-        // Remove control characters
+        // Reject control characters outright instead of rewriting the string.
         let controlChars = CharacterSet.controlCharacters
-        let cleaned = trimmed.components(separatedBy: controlChars).joined()
-        
-        // Ensure valid UTF-8 (should already be, but double-check)
-        guard cleaned.data(using: .utf8) != nil else { return nil }
-        
-        // Prevent zero-width characters and other invisible unicode
-        let invisibleChars = CharacterSet(charactersIn: "\u{200B}\u{200C}\u{200D}\u{FEFF}")
-        let visible = cleaned.components(separatedBy: invisibleChars).joined()
-        
-        return visible.isEmpty ? nil : visible
+        guard trimmed.unicodeScalars.allSatisfy({ !controlChars.contains($0) }) else { return nil }
+
+        return trimmed
     }
     
     /// Validates nickname
