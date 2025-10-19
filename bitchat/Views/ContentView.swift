@@ -188,10 +188,6 @@ struct ContentView: View {
             )
         ) {
             peopleSheetView
-                #if os(iOS)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                #endif
         }
         .sheet(isPresented: $showAppInfo) {
             AppInfoView()
@@ -223,8 +219,6 @@ struct ContentView: View {
                     }
                 }
             }
-            .presentationDetents([.large])
-            .presentationDragIndicator(.hidden)
             .ignoresSafeArea()
         }
 #endif

@@ -78,9 +78,6 @@ struct LocationNotesView: View {
             .navigationTitle("")
             #endif
         }
-       #if os(iOS)
-        .presentationDetents([.large])
-        #endif
         .background(backgroundColor)
         .onDisappear { manager.cancel() }
         .onChange(of: geohash) { newValue in

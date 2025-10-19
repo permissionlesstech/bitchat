@@ -240,8 +240,6 @@ struct FingerprintView: View {
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(backgroundColor)
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
     }
     
     private func formatFingerprint(_ fingerprint: String) -> String {

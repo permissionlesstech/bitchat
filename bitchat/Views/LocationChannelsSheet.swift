@@ -125,9 +125,6 @@ struct LocationChannelsSheet: View {
             .navigationTitle("")
             #endif
         }
-        #if os(iOS)
-        .presentationDetents([.large])
-        #endif
         #if os(macOS)
         .frame(minWidth: 420, minHeight: 520)
         #endif
