@@ -25,7 +25,7 @@ final class GossipSyncManager {
     // Storage: broadcast messages (ordered by insert), and latest announce per sender
     private var messages: [String: BitchatPacket] = [:] // idHex -> packet
     private var messageOrder: [String] = []
-    private var latestAnnouncementByPeer: [String: (id: String, packet: BitchatPacket)] = [:]
+    private var latestAnnouncementByPeer: [PeerID: (id: String, packet: BitchatPacket)] = [:]
 
     // Timer
     private var periodicTimer: DispatchSourceTimer?
@@ -101,8 +101,8 @@ final class GossipSyncManager {
 
         if isAnnounce {
             guard isAnnouncementFresh(packet) else {
-                let sender = packet.senderID.hexEncodedString().lowercased()
-                removeState(forNormalizedPeerID: sender)
+                let sender = PeerID(hexData: packet.senderID)
+                removeState(for: sender)
                 return
             }
         }
@@ -121,7 +121,7 @@ final class GossipSyncManager {
                 }
             }
         } else if isAnnounce {
-            let sender = packet.senderID.hexEncodedString().lowercased()
+            let sender = PeerID(hexData: packet.senderID)
             latestAnnouncementByPeer[sender] = (id: idHex, packet: packet)
         }
     }
@@ -270,33 +270,28 @@ final class GossipSyncManager {
         let nowMs = UInt64(now.timeIntervalSince1970 * 1000)
         guard nowMs >= timeoutMs else { return }
         let cutoff = nowMs - timeoutMs
-        let stalePeerIDs = latestAnnouncementByPeer.compactMap { (peerHex, pair) -> String? in
-            pair.packet.timestamp < cutoff ? peerHex.lowercased() : nil
+        let stalePeerIDs = latestAnnouncementByPeer.compactMap { peerID, pair in
+            pair.packet.timestamp < cutoff ? peerID : nil
         }
         guard !stalePeerIDs.isEmpty else { return }
         for peerKey in stalePeerIDs {
-            removeState(forNormalizedPeerID: peerKey)
+            removeState(for: peerKey)
         }
     }
 
     // Explicit removal hook for LEAVE/stale peer
     func removeAnnouncementForPeer(_ peerID: PeerID) {
         queue.async { [weak self] in
-            self?._removeAnnouncementForPeer(peerID)
+            self?.removeState(for: peerID)
         }
     }
 
-    private func _removeAnnouncementForPeer(_ peerID: PeerID) {
-        let normalizedPeerID = peerID.id.lowercased()
-        removeState(forNormalizedPeerID: normalizedPeerID)
-    }
-
-    private func removeState(forNormalizedPeerID normalizedPeerID: String) {
-        _ = latestAnnouncementByPeer.removeValue(forKey: normalizedPeerID)
+    private func removeState(for peerID: PeerID) {
+        _ = latestAnnouncementByPeer.removeValue(forKey: peerID)
         // Remove messages from this peer
         // Collect IDs to remove first to avoid concurrent modification
         let messageIdsToRemove = messages.compactMap { (id, message) -> String? in
-            message.senderID.hexEncodedString().lowercased() == normalizedPeerID ? id : nil
+            PeerID(hexData: message.senderID) == peerID ? id : nil
         }
         
         // Remove messages and update messageOrder
@@ -317,13 +312,13 @@ extension GossipSyncManager {
 
     func _hasAnnouncement(for peerID: PeerID) -> Bool {
         queue.sync {
-            latestAnnouncementByPeer[peerID.id.lowercased()] != nil
+            latestAnnouncementByPeer[peerID] != nil
         }
     }
 
     func _messageCount(for peerID: PeerID) -> Int {
         queue.sync {
-            messages.values.filter { $0.senderID.hexEncodedString().lowercased() == peerID.id.lowercased() }.count
+            messages.values.filter { PeerID(hexData: $0.senderID) == peerID }.count
         }
     }
 }

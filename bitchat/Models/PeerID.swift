@@ -35,7 +35,7 @@ struct PeerID: Equatable, Hashable {
     // Private so the callers have to go through a convenience init
     private init(prefix: Prefix, bare: any StringProtocol) {
         self.prefix = prefix
-        self.bare = String(bare)
+        self.bare = String(bare).lowercased()
     }
 }
 
