@@ -47,7 +47,7 @@ struct ContentView: View {
     @State private var commandSuggestions: [String] = []
     @State private var showMessageActions = false
     @State private var selectedMessageSender: String?
-    @State private var selectedMessageSenderID: String?
+    @State private var selectedMessageSenderID: PeerID?
     @FocusState private var isNicknameFieldFocused: Bool
     @State private var isAtBottomPublic: Bool = true
     @State private var isAtBottomPrivate: Bool = true
@@ -285,12 +285,12 @@ struct ContentView: View {
 
             Button("content.actions.direct_message") {
                 if let peerID = selectedMessageSenderID {
-                    if peerID.hasPrefix("nostr:") {
-                        if let full = viewModel.fullNostrHex(forSenderPeerID: PeerID(str: peerID)) {
+                    if peerID.isGeoChat {
+                        if let full = viewModel.fullNostrHex(forSenderPeerID: peerID) {
                             viewModel.startGeohashDM(withPubkeyHex: full)
                         }
                     } else {
-                        viewModel.startPrivateChat(with: PeerID(str: peerID))
+                        viewModel.startPrivateChat(with: peerID)
                     }
                     withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
                         showSidebar = true
@@ -312,8 +312,8 @@ struct ContentView: View {
 
             Button("content.actions.block", role: .destructive) {
                 // Prefer direct geohash block when we have a Nostr sender ID
-                if let peerID = selectedMessageSenderID, peerID.hasPrefix("nostr:"),
-                   let full = viewModel.fullNostrHex(forSenderPeerID: PeerID(str: peerID)),
+                if let peerID = selectedMessageSenderID, peerID.isGeoChat,
+                   let full = viewModel.fullNostrHex(forSenderPeerID: peerID),
                    let sender = selectedMessageSender {
                     viewModel.blockGeohashUser(pubkeyHexLowercased: full, displayName: sender)
                 } else if let sender = selectedMessageSender {
@@ -794,7 +794,7 @@ struct ContentView: View {
         case "user":
             let id = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
             let peerID = PeerID(str: id.removingPercentEncoding ?? id)
-            selectedMessageSenderID = peerID.id
+            selectedMessageSenderID = peerID
 
             if peerID.isGeoDM || peerID.isGeoChat {
                 selectedMessageSender = viewModel.geohashDisplayName(for: peerID)

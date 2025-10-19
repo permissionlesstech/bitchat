@@ -1155,7 +1155,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 NotificationService.shared.sendPrivateMessageNotification(
                     from: senderName,
                     message: pm.content,
-                    peerID: convKey.id
+                    peerID: convKey
                 )
             }
         }
@@ -1876,7 +1876,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             NotificationService.shared.sendPrivateMessageNotification(
                 from: senderName,
                 message: pm.content,
-                peerID: convKey.id
+                peerID: convKey
             )
         }
         
@@ -2453,7 +2453,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         }
 
         let targetPeer = selectedPrivateChatPeer
-        let message = enqueueMediaMessage(content: "[voice] \(url.lastPathComponent)", targetPeer: targetPeer?.id)
+        let message = enqueueMediaMessage(content: "[voice] \(url.lastPathComponent)", targetPeer: targetPeer)
         let messageID = message.id
         let transferId = makeTransferID(messageID: messageID)
 
@@ -2532,7 +2532,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 )
                 guard packet.encode() != nil else { throw MediaSendError.encodingFailed }
                 await MainActor.run {
-                    let message = self.enqueueMediaMessage(content: "[image] \(outputURL.lastPathComponent)", targetPeer: targetPeer?.id)
+                    let message = self.enqueueMediaMessage(content: "[image] \(outputURL.lastPathComponent)", targetPeer: targetPeer)
                     let messageID = message.id
                     let transferId = self.makeTransferID(messageID: messageID)
                     self.registerTransfer(transferId: transferId, messageID: messageID)
@@ -2574,7 +2574,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     }
 
     @MainActor
-    private func enqueueMediaMessage(content: String, targetPeer: String?) -> BitchatMessage {
+    private func enqueueMediaMessage(content: String, targetPeer: PeerID?) -> BitchatMessage {
         let timestamp = Date()
         let message: BitchatMessage
 
@@ -2591,7 +2591,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 deliveryStatus: .sending
             )
             var chats = privateChats
-            chats[PeerID(str: peerID), default: []].append(message)
+            chats[peerID, default: []].append(message)
             privateChats = chats
             trimMessagesIfNeeded()
         } else {
@@ -2604,7 +2604,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 originalSender: nil,
                 isPrivate: false,
                 recipientNickname: nil,
-                senderPeerID: PeerID(str: senderPeerID),
+                senderPeerID: senderPeerID,
                 deliveryStatus: .sending
             )
             messages.append(message)
@@ -2629,29 +2629,28 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         return message
     }
 
-    private func currentPublicSender() -> (name: String, peerID: String) {
+    private func currentPublicSender() -> (name: String, peerID: PeerID) {
         var displaySender = nickname
         var senderPeerID = meshService.myPeerID
         if case .location(let ch) = activeChannel,
            let identity = try? idBridge.deriveIdentity(forGeohash: ch.geohash) {
             let suffix = String(identity.publicKeyHex.suffix(4))
             displaySender = nickname + "#" + suffix
-            let shortKey = identity.publicKeyHex.prefix(TransportConfig.nostrShortKeyDisplayLength)
-            senderPeerID = PeerID(str: "nostr:\(shortKey)")
+            senderPeerID = PeerID(nostr: identity.publicKeyHex)
         }
-        return (displaySender, senderPeerID.id)
+        return (displaySender, senderPeerID)
     }
 
     @MainActor
-    private func nicknameForPeer(_ peerID: String) -> String {
-        if let name = meshService.peerNickname(peerID: PeerID(str: peerID)) {
+    private func nicknameForPeer(_ peerID: PeerID) -> String {
+        if let name = meshService.peerNickname(peerID: peerID) {
             return name
         }
-        if let favorite = FavoritesPersistenceService.shared.getFavoriteStatus(forPeerID: PeerID(str: peerID)),
+        if let favorite = FavoritesPersistenceService.shared.getFavoriteStatus(forPeerID: peerID),
            !favorite.peerNickname.isEmpty {
             return favorite.peerNickname
         }
-        if let noiseKey = Data(hexString: peerID),
+        if let noiseKey = Data(hexString: peerID.id),
            let favorite = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey),
            !favorite.peerNickname.isEmpty {
             return favorite.peerNickname
@@ -4881,7 +4880,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         noiseService.onPeerAuthenticated = { [weak self] peerID, fingerprint in
             DispatchQueue.main.async {
                 guard let self = self else { return }
-                let peerID = PeerID(str: peerID)
 
                 SecureLogger.debug("🔐 Authenticated: \(peerID)", category: .security)
 
@@ -5874,7 +5872,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             NotificationService.shared.sendPrivateMessageNotification(
                 from: senderNickname,
                 message: messageContent,
-                peerID: targetPeerID.id
+                peerID: targetPeerID
             )
         }
     }
@@ -6267,7 +6265,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 NotificationService.shared.sendPrivateMessageNotification(
                     from: message.sender,
                     message: message.content,
-                    peerID: peerID.id
+                    peerID: peerID
                 )
             }
         } else {

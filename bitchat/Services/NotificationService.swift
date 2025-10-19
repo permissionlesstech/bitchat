@@ -61,11 +61,11 @@ final class NotificationService {
         sendLocalNotification(title: title, body: body, identifier: identifier)
     }
     
-    func sendPrivateMessageNotification(from sender: String, message: String, peerID: String) {
+    func sendPrivateMessageNotification(from sender: String, message: String, peerID: PeerID) {
         let title = "🔒 DM from \(sender)"
         let body = message
         let identifier = "private-\(UUID().uuidString)"
-        let userInfo = ["peerID": peerID, "senderName": sender]
+        let userInfo = ["peerID": peerID.id, "senderName": sender]
         
         sendLocalNotification(title: title, body: body, identifier: identifier, userInfo: userInfo)
     }

@@ -2360,7 +2360,6 @@ extension BLEService {
     
     private func configureNoiseServiceCallbacks(for service: NoiseEncryptionService) {
         service.onPeerAuthenticated = { [weak self] peerID, fingerprint in
-            let peerID = PeerID(str: peerID)
             SecureLogger.debug("🔐 Noise session authenticated with \(peerID), fingerprint: \(fingerprint.prefix(16))...")
             self?.messageQueue.async { [weak self] in
                 self?.sendPendingMessagesAfterHandshake(for: peerID)
@@ -3612,7 +3611,7 @@ extension BLEService {
     
     private func checkPeerConnectivity() {
         let now = Date()
-        var disconnectedPeers: [String] = []
+        var disconnectedPeers: [PeerID] = []
         let peerIDsForLinkState: [PeerID] = collectionsQueue.sync { Array(peers.keys) }
         var cachedLinkStates: [PeerID: (hasPeripheral: Bool, hasCentral: Bool)] = [:]
         for peerID in peerIDsForLinkState {
@@ -3635,7 +3634,7 @@ extension BLEService {
                         var updated = peer
                         updated.isConnected = false
                         peers[peerID] = updated
-                        disconnectedPeers.append(peerID.id)
+                        disconnectedPeers.append(peerID)
                     }
                 }
                 // Cleanup: remove peers that are not connected and past reachability retention
@@ -3660,7 +3659,7 @@ extension BLEService {
                 let currentPeerIDs = self.collectionsQueue.sync { self.currentPeerIDs }
                 
                 for peerID in disconnectedPeers {
-                    self.delegate?.didDisconnectFromPeer(PeerID(str: peerID))
+                    self.delegate?.didDisconnectFromPeer(peerID)
                 }
                 // Publish snapshots so UnifiedPeerService updates connection/reachability icons
                 self.requestPeerDataPublish()
