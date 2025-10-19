@@ -334,7 +334,7 @@ final class BLEService: NSObject {
     }
     
     // Ensure this runs on message queue to avoid main thread blocking
-    func sendMessage(_ content: String, mentions: [String] = [], to recipientID: String? = nil, messageID: String? = nil, timestamp: Date? = nil) {
+    func sendMessage(_ content: String, mentions: [String] = [], to recipientID: PeerID? = nil, messageID: String? = nil, timestamp: Date? = nil) {
         // Call directly if already on messageQueue, otherwise dispatch
         if DispatchQueue.getSpecific(key: messageQueueKey) == nil {
             messageQueue.async { [weak self] in
@@ -605,7 +605,7 @@ final class BLEService: NSObject {
     }
     
     func sendPrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) {
-        sendPrivateMessage(content, to: peerID.id, messageID: messageID)
+        sendPrivateMessage(content, to: peerID, messageID: messageID)
     }
 
     func sendFileBroadcast(_ filePacket: BitchatFilePacket, transferId: String) {
@@ -1163,7 +1163,7 @@ final class BLEService: NSObject {
         }
         
         SecureLogger.debug("📤 Sending favorite notification to \(peerID): \(content)", category: .session)
-        sendPrivateMessage(content, to: peerID.id, messageID: UUID().uuidString)
+        sendPrivateMessage(content, to: peerID, messageID: UUID().uuidString)
     }
     
     func sendBroadcastAnnounce() {
@@ -2557,8 +2557,7 @@ extension BLEService {
     
     // MARK: Private Message Handling
     
-    private func sendPrivateMessage(_ content: String, to recipientID: String, messageID: String) {
-        let recipientID = PeerID(str: recipientID)
+    private func sendPrivateMessage(_ content: String, to recipientID: PeerID, messageID: String) {
         SecureLogger.debug("📨 Sending PM to \(recipientID): \(content.prefix(30))...", category: .session)
         
         // Check if we have an established Noise session
