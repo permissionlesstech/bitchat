@@ -2682,18 +2682,43 @@ extension BLEService {
     }
 
     private func startFragmentedPacket(_ context: PendingFragmentTransfer) {
-        if context.packet.type == MessageType.fileTransfer.rawValue {
-            let shouldQueue = collectionsQueue.sync {
-                self.activeTransfers.count >= TransportConfig.bleMaxConcurrentTransfers
+        let packet = context.packet
+        let isFileTransfer = packet.type == MessageType.fileTransfer.rawValue
+        var reservedTransferId: String?
+
+        let releaseReservedSlot: (String) -> Void = { id in
+            TransferProgressManager.shared.cancel(id: id)
+            self.collectionsQueue.async(flags: .barrier) { [weak self] in
+                self?.activeTransfers.removeValue(forKey: id)
             }
-            if shouldQueue {
-                queueFragmentTransfer(context, prioritizeFront: true)
-                return
+            self.messageQueue.async { [weak self] in
+                self?.startNextPendingTransferIfNeeded()
             }
         }
 
-        guard let fullData = context.packet.toBinaryData(padding: context.pad) else { return }
-        let packet = context.packet
+        if isFileTransfer {
+            let candidateId = context.transferId ?? packet.payload.sha256Hex()
+            var didReserve = false
+            collectionsQueue.sync(flags: .barrier) {
+                if self.activeTransfers.count < TransportConfig.bleMaxConcurrentTransfers,
+                   self.activeTransfers[candidateId] == nil {
+                    self.activeTransfers[candidateId] = ActiveTransferState(totalFragments: 0, sentFragments: 0, workItems: [])
+                    didReserve = true
+                }
+            }
+            guard didReserve else {
+                queueFragmentTransfer(context, prioritizeFront: true)
+                return
+            }
+            reservedTransferId = candidateId
+        }
+
+        guard let fullData = packet.toBinaryData(padding: context.pad) else {
+            if let id = reservedTransferId {
+                releaseReservedSlot(id)
+            }
+            return
+        }
         // Fragment the unpadded frame; each fragment will be encoded independently
         let fragmentID = Data((0..<8).map { _ in UInt8.random(in: 0...255) })
         let chunk = context.maxChunk ?? defaultFragmentSize
@@ -2701,7 +2726,12 @@ extension BLEService {
         let fragments = stride(from: 0, to: fullData.count, by: safeChunk).map { offset in
             Data(fullData[offset..<min(offset + safeChunk, fullData.count)])
         }
-        guard !fragments.isEmpty else { return }
+        guard !fragments.isEmpty else {
+            if let id = reservedTransferId {
+                releaseReservedSlot(id)
+            }
+            return
+        }
 
         // Lightweight pacing to reduce floods and allow BLE buffers to drain
         // Also briefly pause scanning during long fragment trains to save battery
@@ -2719,8 +2749,7 @@ extension BLEService {
         let perFragMs = (context.directedPeer != nil || packet.recipientID != nil) ? TransportConfig.bleFragmentSpacingDirectedMs : TransportConfig.bleFragmentSpacingMs
 
         let transferIdentifier: String? = {
-            guard packet.type == MessageType.fileTransfer.rawValue else { return nil }
-            let id = context.transferId ?? packet.payload.sha256Hex()
+            guard let id = reservedTransferId else { return nil }
             collectionsQueue.sync(flags: .barrier) {
                 self.activeTransfers[id] = ActiveTransferState(totalFragments: totalFragments, sentFragments: 0, workItems: [])
             }
