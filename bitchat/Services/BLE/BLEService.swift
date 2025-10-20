@@ -147,7 +147,23 @@ final class BLEService: NSObject {
     private var ingressByMessageID: [String: (link: LinkID, timestamp: Date)] = [:]
 
     // Backpressure-aware write queue per peripheral
-    private var pendingPeripheralWrites: [String: [Data]] = [:]
+    private enum OutboundPriority {
+        case high
+        case low
+    }
+    private struct PendingWrite {
+        let priority: OutboundPriority
+        let data: Data
+    }
+    private struct PendingFragmentTransfer {
+        let packet: BitchatPacket
+        let pad: Bool
+        let maxChunk: Int?
+        let directedPeer: PeerID?
+        let transferId: String?
+    }
+    private var pendingPeripheralWrites: [String: [PendingWrite]] = [:]
+    private var pendingFragmentTransfers: [PendingFragmentTransfer] = []
     // Debounce duplicate disconnect notifies
     private var recentDisconnectNotifies: [PeerID: Date] = [:]
     // Store-and-forward for directed messages when we have no links
@@ -303,6 +319,7 @@ final class BLEService: NSObject {
             recentAnnounceBySender.removeAll()
             recentAnnounceOrder.removeAll()
             pendingPeripheralWrites.removeAll()
+            pendingFragmentTransfers.removeAll()
             pendingNotifications.removeAll()
             pendingDirectedRelays.removeAll()
             ingressByMessageID.removeAll()
@@ -454,10 +471,11 @@ final class BLEService: NSObject {
         
         // Send immediately to all connected peers
         if let data = leavePacket.toBinaryData(padding: false) {
+            let leavePriority = priority(for: leavePacket.type)
             // Send to peripherals we're connected to as central
             for state in peripherals.values where state.isConnected {
                 if let characteristic = state.characteristic {
-                    writeOrEnqueue(data, to: state.peripheral, characteristic: characteristic)
+                    writeOrEnqueue(data, to: state.peripheral, characteristic: characteristic, priority: leavePriority)
                 }
             }
             
@@ -591,10 +609,19 @@ final class BLEService: NSObject {
 
     func cancelTransfer(_ transferId: String) {
         collectionsQueue.async(flags: .barrier) { [weak self] in
-            guard let self = self, let state = self.activeTransfers.removeValue(forKey: transferId) else { return }
-            state.workItems.forEach { $0.cancel() }
-            TransferProgressManager.shared.cancel(id: transferId)
-            SecureLogger.debug("🛑 Cancelled transfer \(transferId.prefix(8))…", category: .session)
+            guard let self = self else { return }
+            if let state = self.activeTransfers.removeValue(forKey: transferId) {
+                state.workItems.forEach { $0.cancel() }
+                TransferProgressManager.shared.cancel(id: transferId)
+                SecureLogger.debug("🛑 Cancelled transfer \(transferId.prefix(8))…", category: .session)
+                self.messageQueue.async { [weak self] in
+                    self?.startNextPendingTransferIfNeeded()
+                }
+            } else if let pendingIndex = self.pendingFragmentTransfers.firstIndex(where: { $0.transferId == transferId }) {
+                self.pendingFragmentTransfers.remove(at: pendingIndex)
+                TransferProgressManager.shared.cancel(id: transferId)
+                SecureLogger.debug("🛑 Removed pending transfer \(transferId.prefix(8))… before start", category: .session)
+            }
         }
     }
     
@@ -737,6 +764,8 @@ final class BLEService: NSObject {
         guard let recipientPeerID = PeerID(hexData: packet.recipientID) else { return }
         var sentEncrypted = false
 
+        let outboundPriority = priority(for: packet.type)
+
         // Per-link limits for the specific peer
         var peripheralMaxLen: Int?
         if let perUUID = (DispatchQueue.getSpecific(key: bleQueueKey) != nil) ? peerToPeripheralUUID[recipientPeerID] : bleQueue.sync(execute: { peerToPeripheralUUID[recipientPeerID] }) {
@@ -769,7 +798,7 @@ final class BLEService: NSObject {
            let state = (DispatchQueue.getSpecific(key: bleQueueKey) != nil) ? peripherals[peripheralUUID] : bleQueue.sync(execute: { peripherals[peripheralUUID] }),
            state.isConnected,
            let characteristic = state.characteristic {
-            writeOrEnqueue(data, to: state.peripheral, characteristic: characteristic)
+            writeOrEnqueue(data, to: state.peripheral, characteristic: characteristic, priority: outboundPriority)
             sentEncrypted = true
         }
 
@@ -826,6 +855,7 @@ final class BLEService: NSObject {
             }
             return nil
         }()
+        let outboundPriority = priority(for: packet.type)
 
         let states = snapshotPeripheralStates()
         var minCentralWriteLen: Int?
@@ -901,7 +931,7 @@ final class BLEService: NSObject {
             let pid = s.peripheral.identifier.uuidString
             guard selectedPeripheralIDs.contains(pid) else { continue }
             if let ch = s.characteristic {
-                writeOrEnqueue(data, to: s.peripheral, characteristic: ch)
+                writeOrEnqueue(data, to: s.peripheral, characteristic: ch, priority: outboundPriority)
             }
         }
         // Notify selected subscribed centrals
@@ -980,7 +1010,7 @@ final class BLEService: NSObject {
         
         // Fire-and-forget principle: always use .withoutResponse for speed
         // CoreBluetooth will handle fragmentation at L2CAP layer
-        writeOrEnqueue(data, to: peripheral, characteristic: characteristic)
+        writeOrEnqueue(data, to: peripheral, characteristic: characteristic, priority: .high)
     }
 
     private func handleFileTransfer(_ packet: BitchatPacket, from peerID: PeerID) {
@@ -2374,7 +2404,16 @@ extension BLEService {
         return Set(scored.prefix(k).map { $0.id })
     }
 
-    private func writeOrEnqueue(_ data: Data, to peripheral: CBPeripheral, characteristic: CBCharacteristic) {
+    private func priority(for packetType: UInt8) -> OutboundPriority {
+        switch MessageType(rawValue: packetType) {
+        case .fragment?, .fileTransfer?:
+            return .low
+        default:
+            return .high
+        }
+    }
+
+    private func writeOrEnqueue(_ data: Data, to peripheral: CBPeripheral, characteristic: CBCharacteristic, priority: OutboundPriority) {
         // BLE operations run on bleQueue; keep queue affinity
         bleQueue.async { [weak self] in
             guard let self = self else { return }
@@ -2390,16 +2429,27 @@ extension BLEService {
                     if newSize > capBytes {
                         SecureLogger.warning("⚠️ Dropping oversized write chunk (\(newSize)B) for peripheral \(uuid)", category: .session)
                     } else {
-                        // Append and trim from the front to respect cap
-                        var total = queue.reduce(0) { $0 + $1.count }
-                        queue.append(data)
+                        let item = PendingWrite(priority: priority, data: data)
+                        var total = queue.reduce(0) { $0 + $1.data.count }
+                        if priority == .high {
+                            let insertIndex = queue.firstIndex { $0.priority == .low } ?? queue.count
+                            queue.insert(item, at: insertIndex)
+                        } else {
+                            queue.append(item)
+                        }
                         total += newSize
                         if total > capBytes {
                             var removedBytes = 0
                             while total > capBytes && !queue.isEmpty {
-                                let removed = queue.removeFirst()
-                                removedBytes += removed.count
-                                total -= removed.count
+                                if let lowIndex = queue.lastIndex(where: { $0.priority == .low }) {
+                                    let removed = queue.remove(at: lowIndex)
+                                    removedBytes += removed.data.count
+                                    total -= removed.data.count
+                                } else {
+                                    let removed = queue.removeLast()
+                                    removedBytes += removed.data.count
+                                    total -= removed.data.count
+                                }
                             }
                             SecureLogger.warning("📉 Trimmed pending write buffer for \(uuid) by \(removedBytes)B to \(total)B", category: .session)
                         }
@@ -2415,7 +2465,7 @@ extension BLEService {
         bleQueue.async { [weak self] in
             guard let self = self else { return }
             guard let state = self.peripherals[uuid], let ch = state.characteristic else { return }
-            var queueCopy: [Data] = []
+            var queueCopy: [PendingWrite] = []
             self.collectionsQueue.sync {
                 queueCopy = self.pendingPeripheralWrites[uuid] ?? []
             }
@@ -2423,7 +2473,7 @@ extension BLEService {
             var sent = 0
             for item in queueCopy {
                 if peripheral.canSendWriteWithoutResponse {
-                    peripheral.writeValue(item, for: ch, type: .withoutResponse)
+                    peripheral.writeValue(item.data, for: ch, type: .withoutResponse)
                     sent += 1
                 } else {
                     break
@@ -2432,12 +2482,13 @@ extension BLEService {
             if sent > 0 {
                 self.collectionsQueue.async(flags: .barrier) {
                     var q = self.pendingPeripheralWrites[uuid] ?? []
-                    if sent <= q.count {
-                        q.removeFirst(sent)
-                    } else {
-                        q.removeAll()
+                    if sent > 0 {
+                        let toRemove = min(sent, q.count)
+                        if toRemove > 0 {
+                            q.removeFirst(toRemove)
+                        }
+                        self.pendingPeripheralWrites[uuid] = q.isEmpty ? nil : q
                     }
-                    self.pendingPeripheralWrites[uuid] = q.isEmpty ? nil : q
                 }
             }
         }
@@ -2628,11 +2679,51 @@ extension BLEService {
     // MARK: Fragmentation (Required for messages > BLE MTU)
     
     private func sendFragmentedPacket(_ packet: BitchatPacket, pad: Bool, maxChunk: Int? = nil, directedOnlyPeer: PeerID? = nil, transferId: String? = nil) {
-        guard let fullData = packet.toBinaryData(padding: pad) else { return }
+        let context = PendingFragmentTransfer(packet: packet, pad: pad, maxChunk: maxChunk, directedPeer: directedOnlyPeer, transferId: transferId)
+        if packet.type == MessageType.fileTransfer.rawValue {
+            let shouldQueue = collectionsQueue.sync {
+                self.activeTransfers.count >= TransportConfig.bleMaxConcurrentTransfers
+            }
+            if shouldQueue {
+                queueFragmentTransfer(context, prioritizeFront: false)
+                return
+            }
+        }
+        startFragmentedPacket(context)
+    }
+
+    private func queueFragmentTransfer(_ context: PendingFragmentTransfer, prioritizeFront: Bool) {
+        collectionsQueue.async(flags: .barrier) { [weak self] in
+            guard let self = self else { return }
+            if prioritizeFront {
+                self.pendingFragmentTransfers.insert(context, at: 0)
+            } else {
+                self.pendingFragmentTransfers.append(context)
+            }
+        }
+        if let transferId = context.transferId {
+            SecureLogger.debug("🚦 Queued media transfer \(transferId.prefix(8))… waiting for slot", category: .session)
+        } else {
+            SecureLogger.debug("🚦 Queued fragment transfer waiting for slot", category: .session)
+        }
+    }
+
+    private func startFragmentedPacket(_ context: PendingFragmentTransfer) {
+        if context.packet.type == MessageType.fileTransfer.rawValue {
+            let shouldQueue = collectionsQueue.sync {
+                self.activeTransfers.count >= TransportConfig.bleMaxConcurrentTransfers
+            }
+            if shouldQueue {
+                queueFragmentTransfer(context, prioritizeFront: true)
+                return
+            }
+        }
+
+        guard let fullData = context.packet.toBinaryData(padding: context.pad) else { return }
+        let packet = context.packet
         // Fragment the unpadded frame; each fragment will be encoded independently
-        
         let fragmentID = Data((0..<8).map { _ in UInt8.random(in: 0...255) })
-        let chunk = maxChunk ?? defaultFragmentSize
+        let chunk = context.maxChunk ?? defaultFragmentSize
         let safeChunk = max(64, chunk)
         let fragments = stride(from: 0, to: fullData.count, by: safeChunk).map { offset in
             Data(fullData[offset..<min(offset + safeChunk, fullData.count)])
@@ -2646,18 +2737,17 @@ extension BLEService {
             bleQueue.async { [weak self] in
                 guard let self = self, let c = self.centralManager, c.state == .poweredOn else { return }
                 if c.isScanning { c.stopScan() }
-                // Resume scanning after we expect last fragment to be sent
-            let expectedMs = min(TransportConfig.bleExpectedWriteMaxMs, totalFragments * TransportConfig.bleExpectedWritePerFragmentMs) // ~8ms per fragment
+                let expectedMs = min(TransportConfig.bleExpectedWriteMaxMs, totalFragments * TransportConfig.bleExpectedWritePerFragmentMs)
                 self.bleQueue.asyncAfter(deadline: .now() + .milliseconds(expectedMs)) { [weak self] in
                     self?.startScanning()
                 }
             }
         }
-        let perFragMs = (directedOnlyPeer != nil || packet.recipientID != nil) ? TransportConfig.bleFragmentSpacingDirectedMs : TransportConfig.bleFragmentSpacingMs
+        let perFragMs = (context.directedPeer != nil || packet.recipientID != nil) ? TransportConfig.bleFragmentSpacingDirectedMs : TransportConfig.bleFragmentSpacingMs
 
         let transferIdentifier: String? = {
             guard packet.type == MessageType.fileTransfer.rawValue else { return nil }
-            let id = transferId ?? packet.payload.sha256Hex()
+            let id = context.transferId ?? packet.payload.sha256Hex()
             collectionsQueue.sync(flags: .barrier) {
                 self.activeTransfers[id] = ActiveTransferState(totalFragments: totalFragments, sentFragments: 0, workItems: [])
             }
@@ -2674,10 +2764,9 @@ extension BLEService {
             payload.append(contentsOf: withUnsafeBytes(of: UInt16(fragments.count).bigEndian) { Data($0) })
             payload.append(packet.type)
             payload.append(fragment)
-            
-            // Choose recipient for the fragment: directed override if provided
+
             let fragmentRecipient: Data? = {
-                if let only = directedOnlyPeer { return Data(hexString: only.id) }
+                if let only = context.directedPeer { return Data(hexString: only.id) }
                 return packet.recipientID
             }()
 
@@ -2727,10 +2816,36 @@ extension BLEService {
         collectionsQueue.async(flags: .barrier) { [weak self] in
             guard let self = self, var state = self.activeTransfers[transferId] else { return }
             state.sentFragments = min(state.sentFragments + 1, state.totalFragments)
-            self.activeTransfers[transferId] = state
-            TransferProgressManager.shared.recordFragmentSent(id: transferId)
-            if state.sentFragments >= state.totalFragments {
+            let isComplete = state.sentFragments >= state.totalFragments
+            if isComplete {
                 self.activeTransfers.removeValue(forKey: transferId)
+            } else {
+                self.activeTransfers[transferId] = state
+            }
+            TransferProgressManager.shared.recordFragmentSent(id: transferId)
+            if isComplete {
+                self.messageQueue.async { [weak self] in
+                    self?.startNextPendingTransferIfNeeded()
+                }
+            }
+        }
+    }
+
+    private func startNextPendingTransferIfNeeded() {
+        collectionsQueue.async(flags: .barrier) { [weak self] in
+            guard let self = self else { return }
+            let limit = TransportConfig.bleMaxConcurrentTransfers
+            var availableSlots = max(0, limit - self.activeTransfers.count)
+            guard availableSlots > 0, !self.pendingFragmentTransfers.isEmpty else { return }
+            var toStart: [PendingFragmentTransfer] = []
+            while availableSlots > 0, !self.pendingFragmentTransfers.isEmpty {
+                toStart.append(self.pendingFragmentTransfers.removeFirst())
+                availableSlots -= 1
+            }
+            for context in toStart {
+                self.messageQueue.async { [weak self] in
+                    self?.startFragmentedPacket(context)
+                }
             }
         }
     }
@@ -2841,8 +2956,9 @@ extension BLEService {
         }
 
         // Decode the original packet bytes we reassembled, so flags/compression are preserved
-        if let originalPacket = BinaryProtocol.decode(reassembled) {
+        if var originalPacket = BinaryProtocol.decode(reassembled) {
             SecureLogger.debug("✅ Reassembled packet id=\(String(format: "%016llx", fragU64)) type=\(originalPacket.type) bytes=\(reassembled.count)", category: .session)
+            originalPacket.ttl = 0
             handleReceivedPacket(originalPacket, from: peerID)
         } else {
             SecureLogger.error("❌ Failed to decode reassembled packet (type=\(originalType), total=\(total))", category: .session)
@@ -2958,6 +3074,7 @@ extension BLEService {
                 senderIsSelf: senderID == myPeerID,
                 isEncrypted: packet.type == MessageType.noiseEncrypted.rawValue,
                 isDirectedEncrypted: (packet.type == MessageType.noiseEncrypted.rawValue) && (packet.recipientID != nil),
+                isFragment: packet.type == MessageType.fragment.rawValue,
                 isDirectedFragment: packet.type == MessageType.fragment.rawValue && packet.recipientID != nil,
                 isHandshake: packet.type == MessageType.noiseHandshake.rawValue,
                 isAnnounce: packet.type == MessageType.announce.rawValue,
