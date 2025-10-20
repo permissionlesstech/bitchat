@@ -10,51 +10,64 @@ import Foundation
 
 // MARK: - CommandInfo Enum
 
-enum CommandInfo: String, CaseIterable, Identifiable {
-    case block = "/block"
-    case clear = "/clear"
-    case hug = "/hug"
-    case message = "/m, /msg"
-    case slap = "/slap"
-    case unblock = "/unblock"
-    case who = "/w"
-    case favorite = "/fav"
-    case unfavorite = "/unfav"
+enum CommandInfo: Identifiable {
+    case block, clear, hug, message, slap, unblock, who, favorite, unfavorite
+    
+    var id: String { name }
 
-    var id: String { rawValue }
-
-    var localizedSyntax: String? {
+    var name: String {
+        String(describing: self)
+    }
+    
+    var aliases: [String] {
+        switch self {
+        case .message:
+            return ["/m", "/msg"]
+        case .who:
+            return ["/w", "/who"]
+        default:
+            return ["/\(name)"]
+        }
+    }
+    
+    var primaryAlias: String { aliases.first ?? "" }
+    
+    var commandsPlaceholderKey: String? {
         switch self {
         case .block, .hug, .message, .slap, .unblock, .favorite, .unfavorite:
-            return NSLocalizedString("content.input.nickname_placeholder", comment: "")
-        default:
+            return "content.input.nickname_placeholder"
+        case .clear, .who:
             return nil
         }
     }
+    
+    var commandsPlaceholder: String? {
+        guard let key = commandsPlaceholderKey else { return nil }
+        return NSLocalizedString(key, comment: "placeholder for \(name) command")
+    }
 
-    var localizedDescription: String {
+    var commandsDescriptionKey: String {
         switch self {
-        case .block: return NSLocalizedString("content.commands.block", comment: "about block command.")
-        case .clear: return NSLocalizedString("content.commands.clear", comment: "about clear command.")
-        case .hug: return NSLocalizedString("content.commands.hug", comment: "about hug command.")
-        case .message: return NSLocalizedString("content.commands.message", comment: "about message command.")
-        case .slap: return NSLocalizedString("content.commands.slap", comment: "about slap command.")
-        case .unblock: return NSLocalizedString("content.commands.unblock", comment: "abbout unblock command.")
-        case .who: return NSLocalizedString("content.commands.who", comment: "about who command.")
-        case .favorite: return NSLocalizedString("content.commands.favorite", comment: "about favorite command.")
-        case .unfavorite: return NSLocalizedString("content.commands.unfavorite", comment: "about unfavorite command.")
+        case .block: return "content.commands.block"
+        case .clear: return "content.commands.clear"
+        case .hug: return "content.commands.hug"
+        case .message: return "content.commands.message"
+        case .slap: return "content.commands.slap"
+        case .unblock: return "content.commands.unblock"
+        case .who: return "content.commands.who"
+        case .favorite: return "content.commands.favorite"
+        case .unfavorite: return "content.commands.unfavorite"
         }
     }
 
+    var commandsDescription: String {
+        NSLocalizedString(commandsDescriptionKey, comment: "about \(name) command")
+    }
+    
     static func all(isGeoPublic: Bool, isGeoDM: Bool) -> [CommandInfo] {
-        var list: [CommandInfo] = [
-            .block, .clear, .hug, .message, .slap, .unblock, .who
-        ]
-
-        if !(isGeoPublic || isGeoDM) {
-            list.append(contentsOf: [.favorite, .unfavorite])
-        }
-
-        return list
+        let mandatory: [CommandInfo] = [.block, .clear, .hug, .message, .slap, .unblock, .who]
+        let optional: [CommandInfo] = [.favorite, .unfavorite]
+        
+        return mandatory + (isGeoPublic || isGeoDM ? [] : optional)
     }
 }

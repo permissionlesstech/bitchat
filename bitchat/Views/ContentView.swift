@@ -609,7 +609,7 @@ struct ContentView: View {
             // Command suggestions
             if showCommandSuggestions {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(filteredCommands, id: \.id) { info in
+                    ForEach(filteredCommands) { info in
                         commandRow(for: info)
                     }
                 }
@@ -618,9 +618,7 @@ struct ContentView: View {
                     RoundedRectangle(cornerRadius: 4)
                         .stroke(secondaryTextColor.opacity(0.3), lineWidth: 1)
                 )
-                .padding(.horizontal, 12)
             }
-
 
             // Recording indicator
             if isPreparingVoiceNote || isRecordingVoiceNote {
@@ -670,7 +668,7 @@ struct ContentView: View {
                         let allCommands = CommandInfo.all(isGeoPublic: isGeoPublic, isGeoDM: isGeoDM)
 
                         filteredCommands = allCommands.filter { info in
-                            info.rawValue.starts(with: input)
+                            info.aliases.contains { $0.starts(with: input) }
                         }
                         showCommandSuggestions = !filteredCommands.isEmpty
                     } else {
@@ -696,24 +694,24 @@ struct ContentView: View {
 
     private func commandRow(for info: CommandInfo) -> some View {
         Button(action: {
-            messageText = info.rawValue + " "
+            messageText = info.primaryAlias + " "
             showCommandSuggestions = false
             commandSuggestions = []
         }) {
             HStack {
-                Text(info.rawValue)
+                Text(info.aliases.joined(separator: ", "))
                     .font(.bitchatSystem(size: 11, design: .monospaced))
                     .foregroundColor(textColor)
                     .fontWeight(.medium)
                 
-                if let syntaxText = info.localizedSyntax {
-                    Text(syntaxText)
+                if let commandPlaceholder = info.commandsPlaceholder {
+                    Text(commandPlaceholder)
                         .font(.bitchatSystem(size: 10, design: .monospaced))
                         .foregroundColor(secondaryTextColor.opacity(0.8))
                 }
                 Spacer()
                 
-                Text(info.localizedDescription)
+                Text(info.commandsDescription)
                     .font(.bitchatSystem(size: 10, design: .monospaced))
                     .foregroundColor(secondaryTextColor)
             }
