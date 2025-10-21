@@ -14,6 +14,7 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
 
     private let queue = DispatchQueue(label: "com.bitchat.voice-recorder")
     private let paddingInterval: TimeInterval = 0.5
+    private let maxRecordingDuration: TimeInterval = 120
 
     private var recorder: AVAudioRecorder?
     private var currentURL: URL?
@@ -75,14 +76,14 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
                 AVFormatIDKey: kAudioFormatMPEG4AAC,
                 AVSampleRateKey: 16_000,
                 AVNumberOfChannelsKey: 1,
-                AVEncoderBitRateKey: 20_000
+                AVEncoderBitRateKey: 16_000
             ]
 
             let audioRecorder = try AVAudioRecorder(url: outputURL, settings: settings)
             audioRecorder.delegate = self
             audioRecorder.isMeteringEnabled = true
             audioRecorder.prepareToRecord()
-            audioRecorder.record()
+            audioRecorder.record(forDuration: maxRecordingDuration)
 
             recorder = audioRecorder
             currentURL = outputURL

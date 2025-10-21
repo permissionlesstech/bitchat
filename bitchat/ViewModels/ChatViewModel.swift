@@ -5469,6 +5469,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         )
         // Append to current visible messages
         messages.append(systemMessage)
+        // Track the content key so relayed copies of the same system-style message are ignored
+        let contentKey = normalizedContentKey(systemMessage.content)
+        recordContentKey(contentKey, timestamp: systemMessage.timestamp)
         // Persist into the backing store for the active channel to survive rebinds
         switch activeChannel {
         case .mesh:
@@ -6285,7 +6288,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         let isGeo = finalMessage.senderPeerID?.isGeoChat == true
 
         // Apply per-sender and per-content rate limits (drop if exceeded)
-        if finalMessage.sender != "system" {
+        // Treat action-style system messages (which carry a senderPeerID) the same as regular user messages
+        let shouldRateLimit = finalMessage.sender != "system" || finalMessage.senderPeerID != nil
+        if shouldRateLimit {
             let senderKey = normalizedSenderKey(for: finalMessage)
             let contentKey = normalizedContentKey(finalMessage.content)
             let now = Date()

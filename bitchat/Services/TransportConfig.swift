@@ -8,6 +8,10 @@ enum TransportConfig {
     static let messageTTLDefault: UInt8 = 7                 // Default TTL for mesh flooding
     static let bleMaxInFlightAssemblies: Int = 128          // Cap concurrent fragment assemblies
     static let bleHighDegreeThreshold: Int = 6              // For adaptive TTL/probabilistic relays
+    static let bleMaxConcurrentTransfers: Int = 2           // Limit simultaneous large media sends
+    static let bleFragmentRelayMinDelayMs: Int = 8          // Faster forwarding for media fragments
+    static let bleFragmentRelayMaxDelayMs: Int = 25         // Upper jitter bound for fragment relays
+    static let bleFragmentRelayTtlCap: UInt8 = 5            // Clamp fragment TTL to contain floods
 
     // UI / Storage Caps
     static let privateChatCap: Int = 1337
