@@ -147,9 +147,21 @@ final class BLEService: NSObject {
     private var ingressByMessageID: [String: (link: LinkID, timestamp: Date)] = [:]
 
     // Backpressure-aware write queue per peripheral
-    private enum OutboundPriority {
-        case high
-        case low
+    private struct OutboundPriority: Comparable {
+        let level: Int
+        let suborder: Int
+
+        static let high = OutboundPriority(level: 0, suborder: 0)
+        static func fragment(totalFragments: Int) -> OutboundPriority {
+            OutboundPriority(level: 1, suborder: max(1, min(totalFragments, Int(UInt16.max))))
+        }
+        static let fileTransfer = OutboundPriority(level: 2, suborder: Int.max - 1)
+        static let low = OutboundPriority(level: 2, suborder: Int.max)
+
+        static func < (lhs: OutboundPriority, rhs: OutboundPriority) -> Bool {
+            if lhs.level != rhs.level { return lhs.level < rhs.level }
+            return lhs.suborder < rhs.suborder
+        }
     }
     private struct PendingWrite {
         let priority: OutboundPriority
@@ -471,7 +483,7 @@ final class BLEService: NSObject {
         
         // Send immediately to all connected peers
         if let data = leavePacket.toBinaryData(padding: false) {
-            let leavePriority = priority(for: leavePacket.type)
+            let leavePriority = priority(for: leavePacket, data: data)
             // Send to peripherals we're connected to as central
             for state in peripherals.values where state.isConnected {
                 if let characteristic = state.characteristic {
@@ -764,7 +776,7 @@ final class BLEService: NSObject {
         guard let recipientPeerID = PeerID(hexData: packet.recipientID) else { return }
         var sentEncrypted = false
 
-        let outboundPriority = priority(for: packet.type)
+        let outboundPriority = priority(for: packet, data: data)
 
         // Per-link limits for the specific peer
         var peripheralMaxLen: Int?
@@ -855,7 +867,7 @@ final class BLEService: NSObject {
             }
             return nil
         }()
-        let outboundPriority = priority(for: packet.type)
+        let outboundPriority = priority(for: packet, data: data)
 
         let states = snapshotPeripheralStates()
         var minCentralWriteLen: Int?
@@ -2377,13 +2389,25 @@ extension BLEService {
         return Set(scored.prefix(k).map { $0.id })
     }
 
-    private func priority(for packetType: UInt8) -> OutboundPriority {
-        switch MessageType(rawValue: packetType) {
-        case .fragment?, .fileTransfer?:
-            return .low
+    private func priority(for packet: BitchatPacket, data: Data) -> OutboundPriority {
+        guard let messageType = MessageType(rawValue: packet.type) else { return .low }
+        switch messageType {
+        case .fragment:
+            let total = fragmentTotalCount(from: packet.payload)
+            return OutboundPriority.fragment(totalFragments: total)
+        case .fileTransfer:
+            return .fileTransfer
         default:
             return .high
         }
+    }
+
+    private func fragmentTotalCount(from payload: Data) -> Int {
+        guard payload.count >= 12 else { return Int(UInt16.max) }
+        let totalHigh = Int(payload[10])
+        let totalLow = Int(payload[11])
+        let total = (totalHigh << 8) | totalLow
+        return max(total, 1)
     }
 
     private func writeOrEnqueue(_ data: Data, to peripheral: CBPeripheral, characteristic: CBCharacteristic, priority: OutboundPriority) {
@@ -2403,28 +2427,19 @@ extension BLEService {
                         SecureLogger.warning("⚠️ Dropping oversized write chunk (\(newSize)B) for peripheral \(uuid)", category: .session)
                     } else {
                         let item = PendingWrite(priority: priority, data: data)
-                        var total = queue.reduce(0) { $0 + $1.data.count }
-                        if priority == .high {
-                            let insertIndex = queue.firstIndex { $0.priority == .low } ?? queue.count
-                            queue.insert(item, at: insertIndex)
-                        } else {
-                            queue.append(item)
-                        }
-                        total += newSize
+                        var total = queue.reduce(0) { $0 + $1.data.count } + newSize
+                        let insertIndex = queue.firstIndex { item.priority < $0.priority } ?? queue.count
+                        queue.insert(item, at: insertIndex)
                         if total > capBytes {
                             var removedBytes = 0
                             while total > capBytes && !queue.isEmpty {
-                                if let lowIndex = queue.lastIndex(where: { $0.priority == .low }) {
-                                    let removed = queue.remove(at: lowIndex)
-                                    removedBytes += removed.data.count
-                                    total -= removed.data.count
-                                } else {
-                                    let removed = queue.removeLast()
-                                    removedBytes += removed.data.count
-                                    total -= removed.data.count
-                                }
+                                let removed = queue.removeLast()
+                                removedBytes += removed.data.count
+                                total -= removed.data.count
                             }
-                            SecureLogger.warning("📉 Trimmed pending write buffer for \(uuid) by \(removedBytes)B to \(total)B", category: .session)
+                            if removedBytes > 0 {
+                                SecureLogger.warning("📉 Trimmed pending write buffer for \(uuid) by \(removedBytes)B to \(total)B", category: .session)
+                            }
                         }
                         self.pendingPeripheralWrites[uuid] = queue.isEmpty ? nil : queue
                     }
