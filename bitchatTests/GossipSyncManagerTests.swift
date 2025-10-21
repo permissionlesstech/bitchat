@@ -125,16 +125,138 @@ struct GossipSyncManagerTests {
         #expect(manager._hasAnnouncement(for: PeerID(str: peerHex)) == false)
         #expect(manager._messageCount(for: PeerID(str: peerHex)) == 0)
     }
+
+    @Test func maintenanceEmitsTypedSyncRequests() throws {
+        var config = GossipSyncManager.Config()
+        config.seenCapacity = 10
+        config.fragmentCapacity = 5
+        config.fileTransferCapacity = 4
+        config.messageSyncIntervalSeconds = 1
+        config.fragmentSyncIntervalSeconds = 1
+        config.fileTransferSyncIntervalSeconds = 1
+        config.maintenanceIntervalSeconds = 0
+
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config)
+        let delegate = RecordingDelegate()
+        manager.delegate = delegate
+
+        let sender = try #require(Data(hexString: "1122334455667788"))
+        let now = UInt64(Date().timeIntervalSince1970 * 1000)
+
+        let announcePacket = BitchatPacket(
+            type: MessageType.announce.rawValue,
+            senderID: sender,
+            recipientID: nil,
+            timestamp: now,
+            payload: Data(),
+            signature: nil,
+            ttl: 1
+        )
+        let messagePacket = BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: sender,
+            recipientID: nil,
+            timestamp: now,
+            payload: Data([0x01]),
+            signature: nil,
+            ttl: 1
+        )
+        let fragmentPacket = BitchatPacket(
+            type: MessageType.fragment.rawValue,
+            senderID: sender,
+            recipientID: nil,
+            timestamp: now,
+            payload: Data([0xAA]),
+            signature: nil,
+            ttl: 1
+        )
+        let filePacket = BitchatPacket(
+            type: MessageType.fileTransfer.rawValue,
+            senderID: sender,
+            recipientID: nil,
+            timestamp: now,
+            payload: Data([0xBB]),
+            signature: nil,
+            ttl: 1,
+            version: 2
+        )
+
+        manager.onPublicPacketSeen(announcePacket)
+        manager.onPublicPacketSeen(messagePacket)
+        manager.onPublicPacketSeen(fragmentPacket)
+        manager.onPublicPacketSeen(filePacket)
+
+        manager._performMaintenanceSynchronously(now: Date())
+
+        let sentPackets = delegate.packets
+        #expect(sentPackets.count == 3)
+        let decoded = sentPackets.compactMap { RequestSyncPacket.decode(from: $0.payload) }
+        #expect(decoded.count == 3)
+        #expect(decoded[0].types == .publicMessages)
+        #expect(decoded[1].types == .fragment)
+        #expect(decoded[2].types == .fileTransfer)
+    }
+
+    @Test func handleRequestSyncHonorsTypeFilter() async throws {
+        var config = GossipSyncManager.Config()
+        config.seenCapacity = 5
+        config.fragmentCapacity = 5
+        config.fileTransferCapacity = 0
+        config.messageSyncIntervalSeconds = 0
+        config.fragmentSyncIntervalSeconds = 0
+        config.fileTransferSyncIntervalSeconds = 0
+
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config)
+        let delegate = RecordingDelegate()
+        manager.delegate = delegate
+
+        let sender = try #require(Data(hexString: "aabbccddeeff0011"))
+        let now = UInt64(Date().timeIntervalSince1970 * 1000)
+
+        let messagePacket = BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: sender,
+            recipientID: nil,
+            timestamp: now,
+            payload: Data([0x10]),
+            signature: nil,
+            ttl: 1
+        )
+
+        let fragmentPacket = BitchatPacket(
+            type: MessageType.fragment.rawValue,
+            senderID: sender,
+            recipientID: nil,
+            timestamp: now,
+            payload: Data([0x20]),
+            signature: nil,
+            ttl: 1
+        )
+
+        manager.onPublicPacketSeen(messagePacket)
+        manager.onPublicPacketSeen(fragmentPacket)
+
+        let peer = PeerID(str: "FFFFFFFFFFFFFFFF")
+        let request = RequestSyncPacket(p: 4, m: 1, data: Data(), types: .fragment)
+        manager.handleRequestSync(from: peer, request: request)
+
+        try await sleep(0.01)
+        let sentPackets = delegate.packets
+        #expect(sentPackets.count == 1)
+        #expect(sentPackets[0].type == MessageType.fragment.rawValue)
+    }
 }
 
 private final class RecordingDelegate: GossipSyncManager.Delegate {
     var onSend: (() -> Void)?
     private(set) var lastPacket: BitchatPacket?
+    private(set) var packets: [BitchatPacket] = []
     private let lock = NSLock()
 
     func sendPacket(_ packet: BitchatPacket) {
         lock.lock()
         lastPacket = packet
+        packets.append(packet)
         lock.unlock()
         onSend?()
     }
