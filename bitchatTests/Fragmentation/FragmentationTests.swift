@@ -209,7 +209,7 @@ extension FragmentationTests {
         func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {}
         func didReceiveNoisePayload(from peerID: PeerID, type: NoisePayloadType, payload: Data, timestamp: Date) {}
         func didUpdateBluetoothState(_ state: CBManagerState) {}
-        func didReceivePublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date) {
+        func didReceivePublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date, messageID: String?) {
             publicMessages.append((peerID, nickname, content))
         }
         func didReceiveRegionalPublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date) {}

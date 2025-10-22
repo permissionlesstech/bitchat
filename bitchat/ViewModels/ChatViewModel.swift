@@ -1529,15 +1529,25 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
 
         // UI updates automatically via @Published var messages
 
-        updateChannelActivityTimeThenSend(content: content, trimmed: trimmed, mentions: mentions, geoContext: geoContext)
+        updateChannelActivityTimeThenSend(content: content,
+                                          trimmed: trimmed,
+                                          mentions: mentions,
+                                          geoContext: geoContext,
+                                          messageID: message.id,
+                                          timestamp: message.timestamp)
     }
 
-    private func updateChannelActivityTimeThenSend(content: String, trimmed: String, mentions: [String], geoContext: GeoOutgoingContext?) {
+    private func updateChannelActivityTimeThenSend(content: String,
+                                                   trimmed: String,
+                                                   mentions: [String],
+                                                   geoContext: GeoOutgoingContext?,
+                                                   messageID: String,
+                                                   timestamp: Date) {
         switch activeChannel {
         case .mesh:
             lastPublicActivityAt["mesh"] = Date()
             // Send via mesh with mentions
-            meshService.sendMessage(content, mentions: mentions)
+            meshService.sendMessage(content, mentions: mentions, messageID: messageID, timestamp: timestamp)
         case .location(let ch):
             lastPublicActivityAt["geo:\(ch.geohash)"] = Date()
             guard let context = geoContext, context.channel.geohash == ch.geohash else {
@@ -3335,7 +3345,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             // In public chat - send to active public channel
             switch activeChannel {
             case .mesh:
-                meshService.sendMessage(screenshotMessage, mentions: [])
+                meshService.sendMessage(screenshotMessage,
+                                        mentions: [],
+                                        messageID: UUID().uuidString,
+                                        timestamp: Date())
             case .location(let ch):
                 Task { @MainActor in
                     do {
@@ -5050,12 +5063,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         }
     }
 
-    func didReceivePublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date) {
+    func didReceivePublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date, messageID: String?) {
         Task { @MainActor in
             let normalized = content.trimmingCharacters(in: .whitespacesAndNewlines)
             let publicMentions = parseMentions(from: normalized)
             let msg = BitchatMessage(
-                id: UUID().uuidString,
+                id: messageID,
                 sender: nickname,
                 content: normalized,
                 timestamp: timestamp,
@@ -5522,7 +5535,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             return
         }
         // Default: send over mesh
-        meshService.sendMessage(content, mentions: [])
+        meshService.sendMessage(content,
+                                mentions: [],
+                                messageID: UUID().uuidString,
+                                timestamp: Date())
     }
     
     // MARK: - Simplified Nostr Integration (Inlined from MessageRouter)
@@ -6308,8 +6324,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
 
         // Persist mesh messages to mesh timeline always
         if !isGeo && finalMessage.sender != "system" {
-            meshTimeline.append(finalMessage)
-            trimMeshTimelineIfNeeded()
+            if !meshTimeline.contains(where: { $0.id == finalMessage.id }) {
+                meshTimeline.append(finalMessage)
+                trimMeshTimelineIfNeeded()
+            }
         }
 
         // Persist geochat messages to per-geohash timeline

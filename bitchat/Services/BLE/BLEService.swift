@@ -67,6 +67,7 @@ final class BLEService: NSObject {
     
     // 4. Efficient Message Deduplication
     private let messageDeduplicator = MessageDeduplicator()
+    private var selfBroadcastMessageIDs: [String: (id: String, timestamp: Date)] = [:]
     private lazy var mediaDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd_HHmmss"
@@ -358,6 +359,9 @@ final class BLEService: NSObject {
         setNickname(currentNickname)
 
         messageDeduplicator.reset()
+        messageQueue.async(flags: .barrier) { [weak self] in
+            self?.selfBroadcastMessageIDs.removeAll()
+        }
         requestPeerDataPublish()
         startServices()
     }
@@ -384,11 +388,13 @@ final class BLEService: NSObject {
         
         // Public broadcast
         // Create packet with explicit fields so we can sign it
+        let sendDate = timestamp ?? Date()
+        let sendTimestampMs = UInt64(sendDate.timeIntervalSince1970 * 1000)
         let basePacket = BitchatPacket(
             type: MessageType.message.rawValue,
             senderID: Data(hexString: myPeerID.id) ?? Data(),
             recipientID: nil,
-            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            timestamp: sendTimestampMs,
             payload: Data(content.utf8),
             signature: nil,
             ttl: messageTTL
@@ -401,6 +407,9 @@ final class BLEService: NSObject {
         let senderHex = signedPacket.senderID.hexEncodedString()
         let dedupID = "\(senderHex)-\(signedPacket.timestamp)-\(signedPacket.type)"
         messageDeduplicator.markProcessed(dedupID)
+        if let messageID {
+            selfBroadcastMessageIDs[dedupID] = (id: messageID, timestamp: sendDate)
+        }
         // Call synchronously since we're already on background queue
         broadcastPacket(signedPacket)
         // Track our own broadcast for sync
@@ -641,6 +650,10 @@ final class BLEService: NSObject {
     func sendMessage(_ content: String, mentions: [String]) {
         // Delegate to the full API with default routing
         sendMessage(content, mentions: mentions, to: nil, messageID: nil, timestamp: nil)
+    }
+
+    func sendMessage(_ content: String, mentions: [String], messageID: String, timestamp: Date) {
+        sendMessage(content, mentions: mentions, to: nil, messageID: messageID, timestamp: timestamp)
     }
     
     func sendPrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) {
@@ -3417,8 +3430,18 @@ extension BLEService {
         SecureLogger.debug("💬 [\(senderNickname)] TTL:\(packet.ttl) (\(pathTag)): \(String(content.prefix(50)))\(content.count > 50 ? "..." : "")", category: .session)
 
         let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
+        var resolvedSelfMessageID: String? = nil
+        if peerID == myPeerID {
+            let senderHex = packet.senderID.hexEncodedString()
+            let dedupID = "\(senderHex)-\(packet.timestamp)-\(packet.type)"
+            resolvedSelfMessageID = selfBroadcastMessageIDs.removeValue(forKey: dedupID)?.id
+        }
         notifyUI { [weak self] in
-            self?.delegate?.didReceivePublicMessage(from: peerID, nickname: senderNickname, content: content, timestamp: ts)
+            self?.delegate?.didReceivePublicMessage(from: peerID,
+                                                    nickname: senderNickname,
+                                                    content: content,
+                                                    timestamp: ts,
+                                                    messageID: resolvedSelfMessageID)
         }
     }
     
@@ -3771,6 +3794,13 @@ extension BLEService {
                 }
                 self.pendingDirectedRelays = cleaned
             }
+        }
+
+        messageQueue.async(flags: .barrier) { [weak self] in
+            guard let self = self else { return }
+            guard !self.selfBroadcastMessageIDs.isEmpty else { return }
+            let cutoff = now.addingTimeInterval(-TransportConfig.messageDedupMaxAgeSeconds)
+            self.selfBroadcastMessageIDs = self.selfBroadcastMessageIDs.filter { cutoff <= $0.value.timestamp }
         }
     }
 
