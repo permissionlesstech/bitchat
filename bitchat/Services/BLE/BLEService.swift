@@ -2803,6 +2803,9 @@ extension BLEService {
                     let isActive = self.collectionsQueue.sync { self.activeTransfers[transferId] != nil }
                     guard isActive else { return }
                 }
+                if fragmentRecipient == nil || fragmentRecipient?.allSatisfy({ $0 == 0xFF }) == true {
+                    self.gossipSyncManager?.onPublicPacketSeen(fragmentPacket)
+                }
                 self.broadcastPacket(fragmentPacket)
                 if let transferId = transferIdentifier {
                     self.markFragmentSent(transferId: transferId)
@@ -2903,6 +2906,14 @@ extension BLEService {
 
         // Sanity checks - add reasonable upper bound on total to prevent DoS
         guard total > 0 && total <= 10000 && index >= 0 && index < total else { return }
+
+        let isBroadcastFragment: Bool = {
+            guard let recipient = packet.recipientID else { return true }
+            return recipient.count == 8 && recipient.allSatisfy { $0 == 0xFF }
+        }()
+        if isBroadcastFragment {
+            gossipSyncManager?.onPublicPacketSeen(packet)
+        }
 
         // Compute fragment key for this assembly
         let key = FragmentKey(sender: senderU64, id: fragU64)
