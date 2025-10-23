@@ -37,6 +37,9 @@ struct PeerID: Equatable, Hashable {
         self.prefix = prefix
         self.bare = String(bare).lowercased()
     }
+
+    /// Represents the absence of a known peer identifier.
+    static let empty = PeerID(str: "")
 }
 
 // MARK: - Convenience Inits

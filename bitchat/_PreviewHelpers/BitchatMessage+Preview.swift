@@ -19,7 +19,7 @@ extension BitchatMessage {
             originalSender: nil,
             isPrivate: false,
             recipientNickname: "Jane Doe",
-            senderPeerID: nil,
+            senderPeerID: .empty,
             mentions: nil,
             deliveryStatus: .sent
         )
