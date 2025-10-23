@@ -57,11 +57,9 @@ struct BitchatApp: App {
                         let npub = try? idBridge.getCurrentNostrIdentity()?.npub
                         _ = VerificationService.shared.buildMyQRString(nickname: chatViewModel.nickname, npub: npub)
                     }
-                    #if os(iOS)
+
                     appDelegate.chatViewModel = chatViewModel
-                    #elseif os(macOS)
-                    appDelegate.chatViewModel = chatViewModel
-                    #endif
+
                     // Initialize network activation policy; will start Tor/Nostr only when allowed
                     NetworkActivationService.shared.start()
                     // Check for shared content
