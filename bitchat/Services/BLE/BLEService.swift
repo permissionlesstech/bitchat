@@ -290,6 +290,7 @@ final class BLEService: NSObject {
 
         // Initialize BLE on background queue to prevent main thread blocking
         // This prevents app freezes during BLE operations
+        #if os(iOS)
         let centralOptions: [String: Any] = [
             CBCentralManagerOptionRestoreIdentifierKey: BLEService.centralRestorationID
         ]
@@ -299,6 +300,10 @@ final class BLEService: NSObject {
             CBPeripheralManagerOptionRestoreIdentifierKey: BLEService.peripheralRestorationID
         ]
         peripheralManager = CBPeripheralManager(delegate: self, queue: bleQueue, options: peripheralOptions)
+        #else
+        centralManager = CBCentralManager(delegate: self, queue: bleQueue)
+        peripheralManager = CBPeripheralManager(delegate: self, queue: bleQueue)
+        #endif
         
         // Single maintenance timer for all periodic tasks (dispatch-based for determinism)
         let timer = DispatchSource.makeTimerSource(queue: bleQueue)
@@ -1473,6 +1478,7 @@ extension BLEService: GossipSyncManager.Delegate {
 // MARK: - CBCentralManagerDelegate
 
 extension BLEService: CBCentralManagerDelegate {
+    #if os(iOS)
     func centralManager(_ central: CBCentralManager, willRestoreState dict: [String : Any]) {
         let restoredPeripherals = (dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral]) ?? []
         let restoredServices = (dict[CBCentralManagerRestoredStateScanServicesKey] as? [CBUUID]) ?? []
@@ -1512,6 +1518,7 @@ extension BLEService: CBCentralManagerDelegate {
             startScanning()
         }
     }
+    #endif
 
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         // Notify delegate about state change on main thread
@@ -2108,6 +2115,7 @@ extension BLEService: CBPeripheralManagerDelegate {
         }
     }
     
+    #if os(iOS)
     func peripheralManager(_ peripheral: CBPeripheralManager, willRestoreState dict: [String : Any]) {
         let restoredServices = (dict[CBPeripheralManagerRestoredStateServicesKey] as? [CBMutableService]) ?? []
         let restoredAdvertisement = (dict[CBPeripheralManagerRestoredStateAdvertisementDataKey] as? [String: Any]) ?? [:]
@@ -2131,6 +2139,7 @@ extension BLEService: CBPeripheralManagerDelegate {
             peripheral.startAdvertising(buildAdvertisementData())
         }
     }
+    #endif
     
     func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBService, error: Error?) {
         if let error = error {
