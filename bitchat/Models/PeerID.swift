@@ -136,6 +136,20 @@ extension PeerID {
     }
 }
 
+extension PeerID {
+    var routingData: Data? {
+        if let direct = Data(hexString: id), direct.count == 8 { return direct }
+        if let bareData = Data(hexString: bare), bareData.count == 8 { return bareData }
+        let short = toShort()
+        return Data(hexString: short.id)
+    }
+
+    init?(routingData: Data) {
+        guard routingData.count == 8 else { return nil }
+        self.init(hexData: routingData)
+    }
+}
+
 // MARK: - Validation
 
 extension PeerID {
