@@ -704,14 +704,14 @@ struct ContentView: View {
                     .foregroundColor(textColor)
                     .fontWeight(.medium)
                 
-                if let commandPlaceholder = info.commandsPlaceholder {
+                if let commandPlaceholder = info.placeholder {
                     Text(commandPlaceholder)
                         .font(.bitchatSystem(size: 10, design: .monospaced))
                         .foregroundColor(secondaryTextColor.opacity(0.8))
                 }
                 Spacer()
                 
-                Text(info.commandsDescription)
+                Text(info.description)
                     .font(.bitchatSystem(size: 10, design: .monospaced))
                     .foregroundColor(secondaryTextColor)
             }
