@@ -22,6 +22,8 @@ final class BLEService: NSObject {
     static let serviceUUID = CBUUID(string: "F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5C") // mainnet
     #endif
     static let characteristicUUID = CBUUID(string: "A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D")
+    private static let centralRestorationID = "chat.bitchat.ble.central"
+    private static let peripheralRestorationID = "chat.bitchat.ble.peripheral"
     
     // Default per-fragment chunk size when link limits are unknown
     private let defaultFragmentSize = TransportConfig.bleDefaultFragmentSize
@@ -288,8 +290,20 @@ final class BLEService: NSObject {
 
         // Initialize BLE on background queue to prevent main thread blocking
         // This prevents app freezes during BLE operations
+        #if os(iOS)
+        let centralOptions: [String: Any] = [
+            CBCentralManagerOptionRestoreIdentifierKey: BLEService.centralRestorationID
+        ]
+        centralManager = CBCentralManager(delegate: self, queue: bleQueue, options: centralOptions)
+
+        let peripheralOptions: [String: Any] = [
+            CBPeripheralManagerOptionRestoreIdentifierKey: BLEService.peripheralRestorationID
+        ]
+        peripheralManager = CBPeripheralManager(delegate: self, queue: bleQueue, options: peripheralOptions)
+        #else
         centralManager = CBCentralManager(delegate: self, queue: bleQueue)
         peripheralManager = CBPeripheralManager(delegate: self, queue: bleQueue)
+        #endif
         
         // Single maintenance timer for all periodic tasks (dispatch-based for determinism)
         let timer = DispatchSource.makeTimerSource(queue: bleQueue)
@@ -1464,6 +1478,48 @@ extension BLEService: GossipSyncManager.Delegate {
 // MARK: - CBCentralManagerDelegate
 
 extension BLEService: CBCentralManagerDelegate {
+    #if os(iOS)
+    func centralManager(_ central: CBCentralManager, willRestoreState dict: [String : Any]) {
+        let restoredPeripherals = (dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral]) ?? []
+        let restoredServices = (dict[CBCentralManagerRestoredStateScanServicesKey] as? [CBUUID]) ?? []
+        let restoredOptions = (dict[CBCentralManagerRestoredStateScanOptionsKey] as? [String: Any]) ?? [:]
+        let allowDuplicates = restoredOptions[CBCentralManagerScanOptionAllowDuplicatesKey] as? Bool
+
+        SecureLogger.info(
+            "♻️ Central restore: peripherals=\(restoredPeripherals.count) services=\(restoredServices.count) allowDuplicates=\(String(describing: allowDuplicates))",
+            category: .session
+        )
+
+        for peripheral in restoredPeripherals {
+            let identifier = peripheral.identifier.uuidString
+            peripheral.delegate = self
+            let existing = peripherals[identifier]
+            let assembler = existing?.assembler ?? NotificationStreamAssembler()
+            let characteristic = existing?.characteristic
+            let peerID = existing?.peerID
+            let wasConnecting = existing?.isConnecting ?? false
+            let wasConnected = existing?.isConnected ?? false
+
+            let restoredState = PeripheralState(
+                peripheral: peripheral,
+                characteristic: characteristic,
+                peerID: peerID,
+                isConnecting: wasConnecting || peripheral.state == .connecting,
+                isConnected: wasConnected || peripheral.state == .connected,
+                lastConnectionAttempt: existing?.lastConnectionAttempt,
+                assembler: assembler
+            )
+            peripherals[identifier] = restoredState
+        }
+
+        captureBluetoothStatus(context: "central-restore")
+
+        if central.state == .poweredOn {
+            startScanning()
+        }
+    }
+    #endif
+
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         // Notify delegate about state change on main thread
         Task { @MainActor in
@@ -2059,6 +2115,32 @@ extension BLEService: CBPeripheralManagerDelegate {
         }
     }
     
+    #if os(iOS)
+    func peripheralManager(_ peripheral: CBPeripheralManager, willRestoreState dict: [String : Any]) {
+        let restoredServices = (dict[CBPeripheralManagerRestoredStateServicesKey] as? [CBMutableService]) ?? []
+        let restoredAdvertisement = (dict[CBPeripheralManagerRestoredStateAdvertisementDataKey] as? [String: Any]) ?? [:]
+
+        SecureLogger.info(
+            "♻️ Peripheral restore: services=\(restoredServices.count) advertisingDataKeys=\(Array(restoredAdvertisement.keys))",
+            category: .session
+        )
+
+        // Attempt to recover characteristic from restored services
+        if characteristic == nil {
+            if let service = restoredServices.first(where: { $0.uuid == BLEService.serviceUUID }),
+               let restoredCharacteristic = service.characteristics?.first(where: { $0.uuid == BLEService.characteristicUUID }) as? CBMutableCharacteristic {
+                characteristic = restoredCharacteristic
+            }
+        }
+
+        captureBluetoothStatus(context: "peripheral-restore")
+
+        if peripheral.state == .poweredOn && !peripheral.isAdvertising {
+            peripheral.startAdvertising(buildAdvertisementData())
+        }
+    }
+    #endif
+    
     func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBService, error: Error?) {
         if let error = error {
             SecureLogger.error("❌ Failed to add service: \(error.localizedDescription)", category: .session)
@@ -2283,6 +2365,59 @@ extension BLEService {
         }
     }
 
+    private func logBluetoothStatus(_ context: String) {
+        bleQueue.async { [weak self] in
+            guard let self = self else { return }
+            self.captureBluetoothStatus(context: context)
+        }
+    }
+
+    private func scheduleBluetoothStatusSample(after delay: TimeInterval, context: String) {
+        bleQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self = self else { return }
+            self.captureBluetoothStatus(context: context)
+        }
+    }
+
+    private func captureBluetoothStatus(context: String) {
+        assert(DispatchQueue.getSpecific(key: bleQueueKey) != nil, "captureBluetoothStatus must run on bleQueue")
+
+        let centralState = centralManager?.state ?? .unknown
+        let isScanning = centralManager?.isScanning ?? false
+        let peripheralState = peripheralManager?.state ?? .unknown
+        let isAdvertising = peripheralManager?.isAdvertising ?? false
+
+        let peerSummary = collectionsQueue.sync {
+            (
+                connected: peers.values.filter { $0.isConnected }.count,
+                known: peers.count,
+                candidates: connectionCandidates.count
+            )
+        }
+
+        #if os(iOS)
+        var backgroundDescriptor = ""
+        var backgroundSeconds: TimeInterval = 0
+        DispatchQueue.main.sync {
+            backgroundSeconds = UIApplication.shared.backgroundTimeRemaining
+        }
+        if backgroundSeconds == .greatestFiniteMagnitude {
+            backgroundDescriptor = " bgRemaining=∞"
+        } else {
+            backgroundDescriptor = String(format: " bgRemaining=%.1fs", backgroundSeconds)
+        }
+        let appPhase = isAppActive ? "foreground" : "background"
+        #else
+        let backgroundDescriptor = ""
+        let appPhase = "foreground"
+        #endif
+
+        SecureLogger.info(
+            "📊 BLE status [\(context)]: phase=\(appPhase) central=\(centralState) scanning=\(isScanning) peripheral=\(peripheralState) advertising=\(isAdvertising) connected=\(peerSummary.connected) known=\(peerSummary.known) candidates=\(peerSummary.candidates)\(backgroundDescriptor)",
+            category: .session
+        )
+    }
+
     /// Safely fetch the current direct-link state for a peer using the BLE queue.
     private func linkState(for peerID: PeerID) -> (hasPeripheral: Bool, hasCentral: Bool) {
         let computeState = { () -> (Bool, Bool) in
@@ -2505,6 +2640,8 @@ extension BLEService {
             centralManager?.stopScan()
             startScanning()
         }
+        logBluetoothStatus("became-active")
+        scheduleBluetoothStatusSample(after: 5.0, context: "active-5s")
         // No Local Name; nothing to refresh for advertising policy
     }
     
@@ -2515,6 +2652,8 @@ extension BLEService {
             centralManager?.stopScan()
             startScanning()
         }
+        logBluetoothStatus("entered-background")
+        scheduleBluetoothStatusSample(after: 15.0, context: "background-15s")
         // No Local Name; nothing to refresh for advertising policy
     }
     #endif
