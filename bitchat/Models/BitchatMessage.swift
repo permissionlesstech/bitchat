@@ -21,7 +21,7 @@ final class BitchatMessage: Codable {
     let originalSender: String?
     let isPrivate: Bool
     let recipientNickname: String?
-    let senderPeerID: PeerID?
+    let senderPeerID: PeerID
     let mentions: [String]?  // Array of mentioned nicknames
     var deliveryStatus: DeliveryStatus? // Delivery tracking
     
@@ -51,7 +51,7 @@ final class BitchatMessage: Codable {
         originalSender: String? = nil,
         isPrivate: Bool = false,
         recipientNickname: String? = nil,
-        senderPeerID: PeerID? = nil,
+        senderPeerID: PeerID = .empty,
         mentions: [String]? = nil,
         deliveryStatus: DeliveryStatus? = nil
     ) {
@@ -66,6 +66,52 @@ final class BitchatMessage: Codable {
         self.senderPeerID = senderPeerID
         self.mentions = mentions
         self.deliveryStatus = deliveryStatus ?? (isPrivate ? .sending : nil)
+    }
+
+    required convenience init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let id = try container.decodeIfPresent(String.self, forKey: .id)
+        let sender = try container.decode(String.self, forKey: .sender)
+        let content = try container.decode(String.self, forKey: .content)
+        let timestamp = try container.decode(Date.self, forKey: .timestamp)
+        let isRelay = try container.decode(Bool.self, forKey: .isRelay)
+        let originalSender = try container.decodeIfPresent(String.self, forKey: .originalSender)
+        let isPrivate = try container.decode(Bool.self, forKey: .isPrivate)
+        let recipientNickname = try container.decodeIfPresent(String.self, forKey: .recipientNickname)
+        let senderPeerID = try container.decodeIfPresent(PeerID.self, forKey: .senderPeerID) ?? .empty
+        let mentions = try container.decodeIfPresent([String].self, forKey: .mentions)
+        let deliveryStatus = try container.decodeIfPresent(DeliveryStatus.self, forKey: .deliveryStatus)
+
+        self.init(
+            id: id,
+            sender: sender,
+            content: content,
+            timestamp: timestamp,
+            isRelay: isRelay,
+            originalSender: originalSender,
+            isPrivate: isPrivate,
+            recipientNickname: recipientNickname,
+            senderPeerID: senderPeerID,
+            mentions: mentions,
+            deliveryStatus: deliveryStatus
+        )
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(sender, forKey: .sender)
+        try container.encode(content, forKey: .content)
+        try container.encode(timestamp, forKey: .timestamp)
+        try container.encode(isRelay, forKey: .isRelay)
+        try container.encodeIfPresent(originalSender, forKey: .originalSender)
+        try container.encode(isPrivate, forKey: .isPrivate)
+        try container.encodeIfPresent(recipientNickname, forKey: .recipientNickname)
+        if !senderPeerID.isEmpty {
+            try container.encode(senderPeerID, forKey: .senderPeerID)
+        }
+        try container.encodeIfPresent(mentions, forKey: .mentions)
+        try container.encodeIfPresent(deliveryStatus, forKey: .deliveryStatus)
     }
 }
 
@@ -113,7 +159,7 @@ extension BitchatMessage {
         if isPrivate { flags |= 0x02 }
         if originalSender != nil { flags |= 0x04 }
         if recipientNickname != nil { flags |= 0x08 }
-        if senderPeerID != nil { flags |= 0x10 }
+        if !senderPeerID.isEmpty { flags |= 0x10 }
         if mentions != nil && !mentions!.isEmpty { flags |= 0x20 }
         
         data.append(flags)
@@ -163,7 +209,7 @@ extension BitchatMessage {
             data.append(recipData.prefix(255))
         }
         
-        if let peerData = senderPeerID?.id.data(using: .utf8) {
+        if !senderPeerID.isEmpty, let peerData = senderPeerID.id.data(using: .utf8) {
             data.append(UInt8(min(peerData.count, 255)))
             data.append(peerData.prefix(255))
         }
@@ -276,11 +322,11 @@ extension BitchatMessage {
             }
         }
         
-        var senderPeerID: PeerID?
+        var senderPeerID: PeerID = .empty
         if hasSenderPeerID && offset < dataCopy.count {
             let length = Int(dataCopy[offset]); offset += 1
             if offset + length <= dataCopy.count {
-                senderPeerID = PeerID(data: dataCopy[offset..<offset+length])
+                senderPeerID = PeerID(data: dataCopy[offset..<offset+length]) ?? .empty
                 offset += length
             }
         }
@@ -323,15 +369,19 @@ extension BitchatMessage {
 // MARK: - Helpers
 
 extension BitchatMessage {
-    
+
     private static let timestampFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm:ss"
         return formatter
     }()
-    
+
     var formattedTimestamp: String {
         Self.timestampFormatter.string(from: timestamp)
+    }
+
+    var hasSenderPeerID: Bool {
+        !senderPeerID.isEmpty
     }
 }
 

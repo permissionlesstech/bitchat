@@ -301,7 +301,7 @@ final class MockBLEService: NSObject {
                     let nextTTL = packet.ttl > 0 ? packet.ttl - 1 : 0
                     for neighbor in neighbors() {
                         // Avoid immediate echo loopback to sender if known
-                        if let sender = message.senderPeerID, sender == neighbor.peerID { continue }
+                        if message.hasSenderPeerID && message.senderPeerID == neighbor.peerID { continue }
                         var relay = packet
                         relay.ttl = nextTTL
                         neighbor.simulateIncomingPacket(relay)

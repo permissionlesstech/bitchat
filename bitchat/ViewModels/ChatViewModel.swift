@@ -154,7 +154,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
 
     @MainActor
     private func normalizedSenderKey(for message: BitchatMessage) -> String {
-        if let spid = message.senderPeerID {
+        if message.hasSenderPeerID {
+            let spid = message.senderPeerID
             if spid.isGeoChat || spid.isGeoDM {
                 let full = (nostrKeyMapping[spid] ?? spid.bare).lowercased()
                 return "nostr:" + full
@@ -1998,8 +1999,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         if let gh = currentGeohash {
             if var arr = geoTimelines[gh] {
                 arr.removeAll { msg in
-                    if let spid = msg.senderPeerID, spid.isGeoDM || spid.isGeoChat {
-                        if let full = nostrKeyMapping[spid]?.lowercased() { return full == hex }
+                    if msg.hasSenderPeerID {
+                        let spid = msg.senderPeerID
+                        if spid.isGeoDM || spid.isGeoChat {
+                            if let full = nostrKeyMapping[spid]?.lowercased() { return full == hex }
+                        }
                     }
                     return false
                 }
@@ -2009,8 +2013,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             switch activeChannel {
             case .location:
                 messages.removeAll { msg in
-                    if let spid = msg.senderPeerID , spid.isGeoDM || spid.isGeoChat {
-                        if let full = nostrKeyMapping[spid]?.lowercased() { return full == hex }
+                    if msg.hasSenderPeerID {
+                        let spid = msg.senderPeerID
+                        if spid.isGeoDM || spid.isGeoChat {
+                            if let full = nostrKeyMapping[spid]?.lowercased() { return full == hex }
+                        }
                     }
                     return false
                 }
@@ -3058,9 +3065,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         
         // Store the Nostr pubkey if provided (for messages from unknown senders)
         if let nostrPubkey = notification.userInfo?["nostrPubkey"] as? String,
-           let senderPeerID = message.senderPeerID {
+           message.hasSenderPeerID {
             // Store mapping for read receipts
-            nostrKeyMapping[senderPeerID] = nostrPubkey
+            nostrKeyMapping[message.senderPeerID] = nostrPubkey
         }
         
         // Process the Nostr message through the same flow as Bluetooth messages
@@ -3199,7 +3206,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 originalSender: nil,
                 isPrivate: false,
                 recipientNickname: nil,
-                senderPeerID: nil,
+                senderPeerID: .empty,
                 mentions: nil
             )
             
@@ -3437,7 +3444,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             for message in messagesToAck {
                 // Only send read ACKs for messages from the peer (not our own)
                 // Check both the ephemeral peer ID and stable Noise key as sender
-                if (message.senderPeerID == peerID || message.senderPeerID == noiseKeyHex) && !message.isRelay {
+                let matchesNoiseKey = noiseKeyHex.map { message.senderPeerID == $0 } ?? false
+                if (message.senderPeerID == peerID || matchesNoiseKey) && !message.isRelay {
                     // Skip if we already sent an ACK for this message
                     if !sentReadReceipts.contains(message.id) {
                         // Use stable Noise key hex if available; else fall back to peerID
@@ -3709,7 +3717,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     func formatMessageAsText(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
         // Determine if this message was sent by self (mesh, geo, or DM)
         let isSelf: Bool = {
-            if let spid = message.senderPeerID {
+            if message.hasSenderPeerID {
+                let spid = message.senderPeerID
                 // In geohash channels, compare against our per-geohash nostr short ID
                 if case .location(let ch) = activeChannel, spid.isGeoChat {
                     let myGeo: NostrIdentity? = {
@@ -3755,7 +3764,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             let fontWeight: Font.Weight = isSelf ? .bold : .medium
             senderStyle.font = .bitchatSystem(size: 14, weight: fontWeight, design: .monospaced)
             // Make sender clickable: encode senderPeerID into a custom URL
-            if let spid = message.senderPeerID, let url = URL(string: "bitchat://user/\(spid.toPercentEncoded())") {
+            if message.hasSenderPeerID,
+               let url = URL(string: "bitchat://user/\(message.senderPeerID.toPercentEncoded())") {
                 senderStyle.link = url
             }
 
@@ -4053,7 +4063,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     @MainActor
     func formatMessageHeader(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
         let isSelf: Bool = {
-            if let spid = message.senderPeerID {
+            if message.hasSenderPeerID {
+                let spid = message.senderPeerID
                 if case .location(let ch) = activeChannel, spid.id.hasPrefix("nostr:") {
                     if let myGeo = try? idBridge.deriveIdentity(forGeohash: ch.geohash) {
                         return spid == "nostr:\(myGeo.publicKeyHex.prefix(TransportConfig.nostrShortKeyDisplayLength))"
@@ -4081,8 +4092,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         var senderStyle = AttributeContainer()
         senderStyle.foregroundColor = baseColor
         senderStyle.font = .bitchatSystem(size: 14, weight: isSelf ? .bold : .medium, design: .monospaced)
-        if let spid = message.senderPeerID,
-           let url = URL(string: "bitchat://user/\(spid.id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? spid.id)") {
+        if message.hasSenderPeerID,
+           let url = URL(string: "bitchat://user/\(message.senderPeerID.id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? message.senderPeerID.id)") {
             senderStyle.link = url
         }
 
@@ -4333,7 +4344,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
 
     @MainActor
     private func peerColor(for message: BitchatMessage, isDark: Bool) -> Color {
-        if let spid = message.senderPeerID {
+        if message.hasSenderPeerID {
+            let spid = message.senderPeerID
             if spid.isGeoChat || spid.isGeoDM {
                 let full = nostrKeyMapping[spid]?.lowercased() ?? spid.bare.lowercased()
                 return getNostrPaletteColor(for: full, isDark: isDark)
@@ -5977,16 +5989,20 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     /// Check if a message should be blocked based on sender
     @MainActor
     private func isMessageBlocked(_ message: BitchatMessage) -> Bool {
-        if let peerID = message.senderPeerID ?? getPeerIDForNickname(message.sender) {
-            // Check mesh/known peers first
-            if isPeerBlocked(peerID) { return true }
-            // Check geohash (Nostr) blocks using mapping to full pubkey
-            if peerID.isGeoChat || peerID.isGeoDM {
-                if let full = nostrKeyMapping[peerID]?.lowercased() {
-                    if identityManager.isNostrBlocked(pubkeyHexLowercased: full) { return true }
-                }
+        var peerID = message.senderPeerID
+        if peerID.isEmpty, let resolved = getPeerIDForNickname(message.sender) {
+            peerID = resolved
+        }
+
+        guard !peerID.isEmpty else { return false }
+
+        // Check mesh/known peers first
+        if isPeerBlocked(peerID) { return true }
+        // Check geohash (Nostr) blocks using mapping to full pubkey
+        if peerID.isGeoChat || peerID.isGeoDM {
+            if let full = nostrKeyMapping[peerID]?.lowercased() {
+                if identityManager.isNostrBlocked(pubkeyHexLowercased: full) { return true }
             }
-            return false
         }
         return false
     }
@@ -6125,12 +6141,17 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     @MainActor
     private func handlePrivateMessage(_ message: BitchatMessage) {
         SecureLogger.debug("📥 handlePrivateMessage called for message from \(message.sender)", category: .session)
-        let senderPeerID = message.senderPeerID ?? getPeerIDForNickname(message.sender)
-        
-        guard let peerID = senderPeerID else { 
-            SecureLogger.warning("⚠️ Could not get peer ID for sender \(message.sender)", category: .session)
-            return 
+        var resolvedSender = message.senderPeerID
+        if resolvedSender.isEmpty, let fallback = getPeerIDForNickname(message.sender) {
+            resolvedSender = fallback
         }
+
+        guard !resolvedSender.isEmpty else {
+            SecureLogger.warning("⚠️ Could not get peer ID for sender \(message.sender)", category: .session)
+            return
+        }
+
+        let peerID = resolvedSender
         
         // Check if this is a favorite/unfavorite notification
         if message.content.hasPrefix("[FAVORITED]") || message.content.hasPrefix("[UNFAVORITED]") {
@@ -6235,7 +6256,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                     readerNickname: nickname
                 )
                 
-                let recipientID = message.senderPeerID ?? peerID
+                let recipientID = message.hasSenderPeerID ? message.senderPeerID : peerID
                 
                 Task { @MainActor in
                     var originalTransport: String? = nil
@@ -6267,7 +6288,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         if isMessageBlocked(finalMessage) { return }
 
         // Classify origin: geochat if senderPeerID starts with 'nostr:', else mesh (or system)
-        let isGeo = finalMessage.senderPeerID?.isGeoChat == true
+        let isGeo = finalMessage.senderPeerID.isGeoChat
 
         // Apply per-sender and per-content rate limits (drop if exceeded)
         if finalMessage.sender != "system" {
