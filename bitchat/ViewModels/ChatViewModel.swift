@@ -248,10 +248,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     @Published var currentColorScheme: ColorScheme = .light
     private let maxMessages = TransportConfig.meshTimelineCap // Maximum messages before oldest are removed
     @Published var isConnected = false
-    private var hasNotifiedNetworkAvailable = false
     private var recentlySeenPeers: Set<PeerID> = []
     private var lastNetworkNotificationTime = Date.distantPast
     private var networkResetTimer: Timer? = nil
+    private var networkEmptyTimer: Timer? = nil
     private let networkResetGraceSeconds: TimeInterval = TransportConfig.networkResetGraceSeconds // avoid refiring on short drops/reconnects
     @Published var nickname: String = "" {
         didSet {
@@ -5229,34 +5229,29 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             self.cleanupStaleUnreadPeerIDs()
             
             // Smart notification logic for "bitchatters nearby"
-            if !peers.isEmpty {
-                // Cancel any pending reset if peers are back
-                self.networkResetTimer?.invalidate()
-                self.networkResetTimer = nil
-                // Count mesh peers that are connected OR recently reachable via mesh relays
-                let meshPeers = peers.filter { peerID in
-                    self.meshService.isPeerConnected(peerID) || self.meshService.isPeerReachable(peerID)
-                }
-                
-                // Rising-edge only: previously zero peers, now > 0 peers
-                let currentPeerSet = Set(meshPeers)
-                let hadNone = self.recentlySeenPeers.isEmpty
-                if meshPeers.count > 0 && hadNone && !self.hasNotifiedNetworkAvailable {
-                    self.hasNotifiedNetworkAvailable = true
-                    self.lastNetworkNotificationTime = Date()
-                    self.recentlySeenPeers = currentPeerSet
-                    NotificationService.shared.sendNetworkAvailableNotification(peerCount: meshPeers.count)
-                    SecureLogger.info("👥 Sent bitchatters nearby notification for \(meshPeers.count) mesh peers", category: .session)
-                }
+            let meshPeers = peers.filter { peerID in
+                self.meshService.isPeerConnected(peerID) || self.meshService.isPeerReachable(peerID)
+            }
+            let meshPeerSet = Set(meshPeers)
+            
+            if meshPeerSet.isEmpty {
+                self.scheduleNetworkEmptyTimer()
             } else {
-                // No peers — immediately reset to allow next rising-edge to notify
-                self.hasNotifiedNetworkAvailable = false
-                self.recentlySeenPeers.removeAll()
-                if self.networkResetTimer != nil {
-                    self.networkResetTimer?.invalidate()
-                    self.networkResetTimer = nil
+                self.invalidateNetworkEmptyTimer()
+                // Trim out peers we no longer observe before comparing for new arrivals
+                self.recentlySeenPeers.formIntersection(meshPeerSet)
+                let newPeers = meshPeerSet.subtracting(self.recentlySeenPeers)
+                
+                if !newPeers.isEmpty {
+                    self.lastNetworkNotificationTime = Date()
+                    self.recentlySeenPeers.formUnion(newPeers)
+                    NotificationService.shared.sendNetworkAvailableNotification(peerCount: meshPeers.count)
+                    SecureLogger.info(
+                        "👥 Sent bitchatters nearby notification for \(meshPeers.count) mesh peers (new: \(newPeers.count))",
+                        category: .session
+                    )
+                    self.scheduleNetworkResetTimer()
                 }
-                SecureLogger.debug("⏳ Mesh empty — reset network notification state", category: .session)
             }
             
             // Register ephemeral sessions for all connected peers
@@ -5325,6 +5320,71 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         // Also clean up old sentReadReceipts to prevent unlimited growth
         // Keep only receipts from messages we still have
         cleanupOldReadReceipts()
+    }
+
+    @MainActor
+    private func scheduleNetworkResetTimer() {
+        networkResetTimer?.invalidate()
+        networkResetTimer = Timer.scheduledTimer(
+            timeInterval: networkResetGraceSeconds,
+            target: self,
+            selector: #selector(onNetworkResetTimerFired(_:)),
+            userInfo: nil,
+            repeats: false
+        )
+    }
+
+    @MainActor
+    @objc private func onNetworkResetTimerFired(_ timer: Timer) {
+        let activeMeshPeers = meshService
+            .currentPeerSnapshots()
+            .filter { snapshot in
+                snapshot.isConnected || meshService.isPeerReachable(snapshot.peerID)
+            }
+        if activeMeshPeers.isEmpty {
+            recentlySeenPeers.removeAll()
+            SecureLogger.debug("⏱️ Network notification window reset after quiet period", category: .session)
+        } else {
+            SecureLogger.debug("⏱️ Skipped network notification reset; still seeing \(activeMeshPeers.count) mesh peers", category: .session)
+        }
+        networkResetTimer = nil
+    }
+
+    @MainActor
+    private func scheduleNetworkEmptyTimer() {
+        guard networkEmptyTimer == nil else { return }
+        networkEmptyTimer = Timer.scheduledTimer(
+            timeInterval: TransportConfig.uiMeshEmptyConfirmationSeconds,
+            target: self,
+            selector: #selector(onNetworkEmptyTimerFired(_:)),
+            userInfo: nil,
+            repeats: false
+        )
+        SecureLogger.debug("⏳ Mesh empty — waiting before resetting notification state", category: .session)
+    }
+
+    @MainActor
+    private func invalidateNetworkEmptyTimer() {
+        if networkEmptyTimer != nil {
+            networkEmptyTimer?.invalidate()
+            networkEmptyTimer = nil
+        }
+    }
+
+    @MainActor
+    @objc private func onNetworkEmptyTimerFired(_ timer: Timer) {
+        let activeMeshPeers = meshService
+            .currentPeerSnapshots()
+            .filter { snapshot in
+                snapshot.isConnected || meshService.isPeerReachable(snapshot.peerID)
+            }
+        if activeMeshPeers.isEmpty {
+            recentlySeenPeers.removeAll()
+            SecureLogger.debug("⏳ Mesh empty — notification state reset after confirmation", category: .session)
+        } else {
+            SecureLogger.debug("⏳ Mesh empty timer cancelled; \(activeMeshPeers.count) mesh peers detected again", category: .session)
+        }
+        networkEmptyTimer = nil
     }
     
     private func cleanupOldReadReceipts() {
