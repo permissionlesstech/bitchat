@@ -124,27 +124,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         }()
     }
 
-    // MARK: - Spam resilience: token buckets
-    private struct TokenBucket {
-        var capacity: Double
-        var tokens: Double
-        var refillPerSec: Double
-        var lastRefill: Date
-
-        mutating func allow(cost: Double = 1.0, now: Date = Date()) -> Bool {
-            let dt = now.timeIntervalSince(lastRefill)
-            if dt > 0 {
-                tokens = min(capacity, tokens + dt * refillPerSec)
-                lastRefill = now
-            }
-            if tokens >= cost {
-                tokens -= cost
-                return true
-            }
-            return false
-        }
-    }
-
     private typealias GeoOutgoingContext = (channel: GeohashChannel, event: NostrEvent, identity: NostrIdentity, teleported: Bool)
 
     @MainActor
@@ -158,12 +137,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         }
     }
 
-    private var rateBucketsBySender: [String: TokenBucket] = [:]
-    private var rateBucketsByContent: [String: TokenBucket] = [:]
-    private let senderBucketCapacity: Double = TransportConfig.uiSenderRateBucketCapacity
-    private let senderBucketRefill: Double = TransportConfig.uiSenderRateBucketRefillPerSec // tokens per second
-    private let contentBucketCapacity: Double = TransportConfig.uiContentRateBucketCapacity
-    private let contentBucketRefill: Double = TransportConfig.uiContentRateBucketRefillPerSec // tokens per second
+    private var publicRateLimiter = MessageRateLimiter(
+        senderCapacity: TransportConfig.uiSenderRateBucketCapacity,
+        senderRefillPerSec: TransportConfig.uiSenderRateBucketRefillPerSec,
+        contentCapacity: TransportConfig.uiContentRateBucketCapacity,
+        contentRefillPerSec: TransportConfig.uiContentRateBucketRefillPerSec
+    )
 
     @MainActor
     private func normalizedSenderKey(for message: BitchatMessage) -> String {
@@ -396,13 +375,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     private var torStatusAnnounced = false
     private var torProgressCancellable: AnyCancellable?
     private var lastTorProgressAnnounced = -1
-    // Queue geohash-only system messages if user isn't on a location channel yet
-    private var pendingGeohashSystemMessages: [String] = []
     // Track whether a Tor restart is pending so we only announce
     // "tor restarted" after an actual restart, not the first launch.
     private var torRestartPending: Bool = false
     // Ensure we set up DM subscription only once per app session
     private var nostrHandlersSetup: Bool = false
+    private var geoChannelCoordinator: GeoChannelCoordinator?
     
     // MARK: - Caches
     
@@ -433,13 +411,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     @Published var isAppInfoPresented: Bool = false
     @Published var showScreenshotPrivacyWarning: Bool = false
     
-    // Messages are naturally ephemeral - no persistent storage
-    // Persist mesh public timeline across channel switches
-    private var meshTimeline: [BitchatMessage] = []
-    private let meshTimelineCap = TransportConfig.meshTimelineCap
-    // Persist per-geohash public timelines across switches
-    private var geoTimelines: [String: [BitchatMessage]] = [:] // geohash -> messages
-    private let geoTimelineCap = TransportConfig.geoTimelineCap
+    private var timelineStore = PublicTimelineStore(
+        meshCap: TransportConfig.meshTimelineCap,
+        geohashCap: TransportConfig.geoTimelineCap
+    )
     // Channel activity tracking for background nudges
     private var lastPublicActivityAt: [String: Date] = [:]   // channelKey -> last activity time
     private var lastPublicActivityNotifyAt: [String: Date] = [:]
@@ -658,14 +633,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                             }
                             self.resubscribeCurrentGeohash()
                             // Re-init sampling for regional + bookmarked geohashes after reconnect
-                            let regional = LocationChannelManager.shared.availableChannels.map { $0.geohash }
-                            let bookmarks = GeohashBookmarksStore.shared.bookmarks
-                            let union = Array(Set(regional).union(bookmarks))
-                            if TorManager.shared.isForeground() {
-                                self.beginGeohashSampling(for: union)
-                            } else {
-                                self.endGeohashSampling()
-                            }
+                            self.geoChannelCoordinator?.refreshSampling()
                         }
                     }
                 }
@@ -682,72 +650,21 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             }
             .store(in: &cancellables)
 
-        // Observe location channel selection
-        LocationChannelManager.shared.$selectedChannel
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] channel in
-                guard let self = self else { return }
-                Task { @MainActor in
-                    self.switchLocationChannel(to: channel)
-                }
+        geoChannelCoordinator = GeoChannelCoordinator(
+            locationManager: LocationChannelManager.shared,
+            bookmarksStore: GeohashBookmarksStore.shared,
+            torManager: TorManager.shared,
+            onChannelSwitch: { [weak self] channel in
+                self?.switchLocationChannel(to: channel)
+            },
+            beginSampling: { [weak self] geohashes in
+                self?.beginGeohashSampling(for: geohashes)
+            },
+            endSampling: { [weak self] in
+                self?.endGeohashSampling()
             }
-            .store(in: &cancellables)
-        // Initialize with current selection
-        Task { @MainActor in
-            self.switchLocationChannel(to: LocationChannelManager.shared.selectedChannel)
-        }
-
-        // Foreground-only: sample nearby geohashes + bookmarks (disabled in background)
-        LocationChannelManager.shared.$availableChannels
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] channels in
-                guard let self = self else { return }
-                let regional = channels.map { $0.geohash }
-                let bookmarks = GeohashBookmarksStore.shared.bookmarks
-                let union = Array(Set(regional).union(bookmarks))
-                Task { @MainActor in
-                    if TorManager.shared.isForeground() {
-                        self.beginGeohashSampling(for: union)
-                    } else {
-                        self.endGeohashSampling()
-                    }
-                }
-            }
-            .store(in: &cancellables)
-
-        // Also observe bookmark changes to update sampling
-        GeohashBookmarksStore.shared.$bookmarks
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] bookmarks in
-                guard let self = self else { return }
-                let regional = LocationChannelManager.shared.availableChannels.map { $0.geohash }
-                let union = Array(Set(regional).union(bookmarks))
-                Task { @MainActor in
-                    if TorManager.shared.isForeground() {
-                        self.beginGeohashSampling(for: union)
-                    } else {
-                        self.endGeohashSampling()
-                    }
-                }
-            }
-            .store(in: &cancellables)
-
-        // Kick off initial sampling if we have regional channels or bookmarks (foreground only)
-        do {
-            let regional = LocationChannelManager.shared.availableChannels.map { $0.geohash }
-            let bookmarks = GeohashBookmarksStore.shared.bookmarks
-            let union = Array(Set(regional).union(bookmarks))
-            if !union.isEmpty && TorManager.shared.isForeground() {
-                Task { @MainActor in self.beginGeohashSampling(for: union) }
-            }
-        }
-        // Refresh channels once when authorized to seed sampling
-        LocationChannelManager.shared.$permissionState
-            .receive(on: DispatchQueue.main)
-            .sink { state in
-                if state == .authorized { LocationChannelManager.shared.refreshChannels() }
-            }
-            .store(in: &cancellables)
+        )
+        geoChannelCoordinator?.start()
 
         // Track teleport flag changes to keep our own teleported marker in sync with regional status
         LocationChannelManager.shared.$teleported
@@ -1504,26 +1421,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             mentions: mentions.isEmpty ? nil : mentions
         )
 
-        // Add to main messages immediately for user feedback
-        messages.append(message)
+        timelineStore.append(message, to: activeChannel)
+        messages = timelineStore.messages(for: activeChannel)
 
         // Update content LRU for near-dup detection
         let ckey = normalizedContentKey(message.content)
         recordContentKey(ckey, timestamp: message.timestamp)
-
-        // Persist to channel-specific timelines
-        switch activeChannel {
-        case .mesh:
-            meshTimeline.append(message)
-            trimMeshTimelineIfNeeded()
-        case .location(let ch):
-            var arr = geoTimelines[ch.geohash] ?? []
-            arr.append(message)
-            if arr.count > geoTimelineCap {
-                arr = Array(arr.suffix(geoTimelineCap))
-            }
-            geoTimelines[ch.geohash] = arr
-        }
 
         trimMessagesIfNeeded()
 
@@ -1611,7 +1514,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         processedNostrEventOrder.removeAll()
         switch channel {
         case .mesh:
-            messages = meshTimeline
+            messages = timelineStore.messages(for: .mesh)
             // Debug: log if any empty messages are present
             let emptyMesh = messages.filter { $0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
             if emptyMesh > 0 {
@@ -1620,18 +1523,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             stopGeoParticipantsTimer()
             geohashPeople = []
             teleportedGeo.removeAll()
-        case .location(let ch):
-            // Persist the cleaned/sorted timeline for this geohash
-            let deduped = geoTimelines[ch.geohash]?.cleanedAndDeduped() ?? []
-            geoTimelines[ch.geohash] = deduped
-            messages = deduped
+        case .location:
+            messages = timelineStore.messages(for: channel)
         }
         // If switching to a location channel, flush any pending geohash-only system messages
-        if case .location = channel, !pendingGeohashSystemMessages.isEmpty {
-            for m in pendingGeohashSystemMessages {
-                addPublicSystemMessage(m)
+        if case .location = channel {
+            for content in timelineStore.drainPendingGeohashSystemMessages() {
+                addPublicSystemMessage(content)
             }
-            pendingGeohashSystemMessages.removeAll(keepingCapacity: false)
         }
         // Unsubscribe previous
         if let sub = geoSubscriptionID {
@@ -2040,26 +1939,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         
         // Remove their public messages from current geohash timeline and visible list
         if let gh = currentGeohash {
-            if var arr = geoTimelines[gh] {
-                arr.removeAll { msg in
-                    if let spid = msg.senderPeerID, spid.isGeoDM || spid.isGeoChat {
-                        if let full = nostrKeyMapping[spid]?.lowercased() { return full == hex }
-                    }
-                    return false
-                }
-                geoTimelines[gh] = arr
+            let predicate: (BitchatMessage) -> Bool = { [self] msg in
+                guard let spid = msg.senderPeerID, spid.isGeoDM || spid.isGeoChat else { return false }
+                if let full = self.nostrKeyMapping[spid]?.lowercased() { return full == hex }
+                return false
             }
-            // Also filter currently bound messages if we are in geohash channel
-            switch activeChannel {
-            case .location:
-                messages.removeAll { msg in
-                    if let spid = msg.senderPeerID , spid.isGeoDM || spid.isGeoChat {
-                        if let full = nostrKeyMapping[spid]?.lowercased() { return full == hex }
-                    }
-                    return false
-                }
-            case .mesh:
-                break
+            timelineStore.removeMessages(in: gh, where: predicate)
+            if case .location = activeChannel {
+                messages.removeAll(where: predicate)
             }
         }
         
@@ -2187,7 +2074,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         Task { @MainActor in
             lastGeoNotificationAt[gh] = now
             // Pre-populate the target geohash timeline so the triggering message appears when user opens it
-            var arr = geoTimelines[gh] ?? []
             let senderSuffix = String(event.pubkey.suffix(4))
             let nick = geoNicknames[event.pubkey.lowercased()]
             let senderName = (nick?.isEmpty == false ? nick! : "anon") + "#" + senderSuffix
@@ -2205,12 +2091,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 senderPeerID: PeerID(nostr: event.pubkey),
                 mentions: mentions.isEmpty ? nil : mentions
             )
-            if !arr.contains(where: { $0.id == msg.id }) {
-                arr.append(msg)
-                if arr.count > geoTimelineCap { arr = Array(arr.suffix(geoTimelineCap)) }
-                geoTimelines[gh] = arr
+            if timelineStore.appendIfAbsent(msg, toGeohash: gh) {
+                NotificationService.shared.sendGeohashActivityNotification(geohash: gh, bodyPreview: preview)
             }
-            NotificationService.shared.sendGeohashActivityNotification(geohash: gh, bodyPreview: preview)
         }
     }
 
@@ -2613,19 +2496,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 senderPeerID: senderPeerID,
                 deliveryStatus: .sending
             )
-            messages.append(message)
-            switch activeChannel {
-            case .mesh:
-                meshTimeline.append(message)
-                trimMeshTimelineIfNeeded()
-            case .location(let ch):
-                var arr = geoTimelines[ch.geohash] ?? []
-                arr.append(message)
-                if arr.count > geoTimelineCap {
-                    arr = Array(arr.suffix(geoTimelineCap))
-                }
-                geoTimelines[ch.geohash] = arr
-            }
+            timelineStore.append(message, to: activeChannel)
+            messages = timelineStore.messages(for: activeChannel)
             trimMessagesIfNeeded()
         }
 
@@ -2762,19 +2634,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             removedMessage = messages.remove(at: idx)
         }
 
-        meshTimeline.removeAll { $0.id == messageID }
-
-        for key in Array(geoTimelines.keys) {
-            var entries = geoTimelines[key] ?? []
-            if let idx = entries.firstIndex(where: { $0.id == messageID }) {
-                removedMessage = removedMessage ?? entries[idx]
-                entries.remove(at: idx)
-                if entries.isEmpty {
-                    geoTimelines.removeValue(forKey: key)
-                } else {
-                    geoTimelines[key] = entries
-                }
-            }
+        if let storeRemoved = timelineStore.removeMessage(withID: messageID) {
+            removedMessage = removedMessage ?? storeRemoved
         }
 
         var chats = privateChats
@@ -4388,16 +4249,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         return getPeerPaletteColor(for: peerID, isDark: isDark)
     }
 
-    private func trimMeshTimelineIfNeeded() {
-        if meshTimeline.count > meshTimelineCap {
-            meshTimeline = Array(meshTimeline.suffix(meshTimelineCap))
-        }
-    }
-
-    // MARK: - Peer List Minimal-Distance Palette
-    private var peerPaletteLight: [String: (slot: Int, ring: Int, hue: Double)] = [:]
-    private var peerPaletteDark: [String: (slot: Int, ring: Int, hue: Double)] = [:]
-    private var peerPaletteSeeds: [String: String] = [:] // peerID -> seed used
+    // MARK: - Peer Palette Coordination
+    private let meshPalette = MinimalDistancePalette(config: .mesh)
+    private let nostrPalette = MinimalDistancePalette(config: .nostr)
 
     @MainActor
     private func meshSeed(for peerID: PeerID) -> String {
@@ -4409,272 +4263,66 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
 
     @MainActor
     private func getPeerPaletteColor(for peerID: PeerID, isDark: Bool) -> Color {
-        // Ensure palette up to date for current peer set and seeds
-        rebuildPeerPaletteIfNeeded()
-
-        let entry = (isDark ? peerPaletteDark[peerID.id] : peerPaletteLight[peerID.id])
-        let orange = Color.orange
-        if peerID == meshService.myPeerID { return orange }
-        let saturation: Double = isDark ? 0.80 : 0.70
-        let baseBrightness: Double = isDark ? 0.75 : 0.45
-        let ringDelta = isDark ? TransportConfig.uiPeerPaletteRingBrightnessDeltaDark : TransportConfig.uiPeerPaletteRingBrightnessDeltaLight
-        if let e = entry {
-            let brightness = min(1.0, max(0.0, baseBrightness + ringDelta * Double(e.ring)))
-            return Color(hue: e.hue, saturation: saturation, brightness: brightness)
+        if peerID == meshService.myPeerID {
+            return .orange
         }
-        // Fallback to seed color if not in palette (e.g., transient)
+
+        meshPalette.ensurePalette(for: currentMeshPaletteSeeds())
+        if let color = meshPalette.color(for: peerID.id, isDark: isDark) {
+            return color
+        }
         return Color(peerSeed: meshSeed(for: peerID), isDark: isDark)
     }
 
     @MainActor
-    private func rebuildPeerPaletteIfNeeded() {
-        // Build current peer->seed map (excluding self)
+    private func currentMeshPaletteSeeds() -> [String: String] {
         let myID = meshService.myPeerID
-        var currentSeeds: [String: String] = [:]
-        for p in allPeers where p.peerID != myID {
-            currentSeeds[p.peerID.id] = meshSeed(for: p.peerID)
+        var seeds: [String: String] = [:]
+        for peer in allPeers where peer.peerID != myID {
+            seeds[peer.peerID.id] = meshSeed(for: peer.peerID)
         }
-        // If seeds unchanged and palette exists for both themes, skip
-        if currentSeeds == peerPaletteSeeds,
-           peerPaletteLight.keys.count == currentSeeds.count,
-           peerPaletteDark.keys.count == currentSeeds.count {
-            return
-        }
-        peerPaletteSeeds = currentSeeds
-
-        // Generate evenly spaced hue slots avoiding self-orange range
-        let slotCount = max(8, TransportConfig.uiPeerPaletteSlots)
-        let avoidCenter = 30.0 / 360.0
-        let avoidDelta = TransportConfig.uiColorHueAvoidanceDelta
-        var slots: [Double] = []
-        for i in 0..<slotCount {
-            let hue = Double(i) / Double(slotCount)
-            if abs(hue - avoidCenter) < avoidDelta { continue }
-            slots.append(hue)
-        }
-        if slots.isEmpty {
-            // Safety: if avoidance consumed all (shouldn't happen), fall back to full slots
-            for i in 0..<slotCount { slots.append(Double(i) / Double(slotCount)) }
-        }
-
-        // Helper to compute circular distance
-        func circDist(_ a: Double, _ b: Double) -> Double {
-            let d = abs(a - b)
-            return d > 0.5 ? 1.0 - d : d
-        }
-
-        // Assign slots to peers to maximize minimal distance, deterministically
-        let peers = currentSeeds.keys.sorted() // stable order
-        // Preferred slot index by seed (wrapping to available slots)
-        let prefIndex: [String: Int] = Dictionary(uniqueKeysWithValues: peers.map { id in
-            let h = (currentSeeds[id] ?? id).djb2()
-            // Map to available slot range deterministically
-            let idx = Int(h % UInt64(slots.count))
-            return (id, idx)
-        })
-
-        func assign(for seeds: [String: String]) -> [String: (slot: Int, ring: Int, hue: Double)] {
-            var mapping: [String: (slot: Int, ring: Int, hue: Double)] = [:]
-            var usedSlots = Set<Int>()
-            var usedHues: [Double] = []
-
-            // Keep previous assignments if still valid to minimize churn
-            let prev = peerPaletteLight.isEmpty ? peerPaletteDark : peerPaletteLight
-            for (id, entry) in prev {
-                if seeds.keys.contains(id), entry.slot < slots.count { // slot index still valid
-                    mapping[id] = (entry.slot, entry.ring, slots[entry.slot])
-                    usedSlots.insert(entry.slot)
-                    usedHues.append(slots[entry.slot])
-                }
-            }
-
-            // First ring assignment using free slots
-            let unassigned = peers.filter { mapping[$0] == nil }
-            for id in unassigned {
-                // If a preferred slot free, take it
-                let preferred = prefIndex[id] ?? 0
-                if !usedSlots.contains(preferred) && preferred < slots.count {
-                    mapping[id] = (preferred, 0, slots[preferred])
-                    usedSlots.insert(preferred)
-                    usedHues.append(slots[preferred])
-                    continue
-                }
-                // Choose free slot maximizing minimal distance to used hues
-                var bestSlot: Int? = nil
-                var bestScore: Double = -1
-                for sIdx in 0..<slots.count where !usedSlots.contains(sIdx) {
-                    let hue = slots[sIdx]
-                    let minDist = usedHues.isEmpty ? 1.0 : usedHues.map { circDist(hue, $0) }.min() ?? 1.0
-                    // Bias toward preferred index for stability
-                    let bias = 1.0 - (Double((abs(sIdx - (prefIndex[id] ?? 0)) % slots.count)) / Double(slots.count))
-                    let score = minDist + 0.05 * bias
-                    if score > bestScore { bestScore = score; bestSlot = sIdx }
-                }
-                if let s = bestSlot {
-                    mapping[id] = (s, 0, slots[s])
-                    usedSlots.insert(s)
-                    usedHues.append(slots[s])
-                }
-            }
-
-            // Overflow peers: assign additional rings by reusing slots with stable preference
-            let stillUnassigned = peers.filter { mapping[$0] == nil }
-            if !stillUnassigned.isEmpty {
-                for (idx, id) in stillUnassigned.enumerated() {
-                    let preferred = prefIndex[id] ?? 0
-                    // Spread over slots by rotating from preferred with a golden-step
-                    let goldenStep = 7 // small prime step for dispersion
-                    let s = (preferred + idx * goldenStep) % slots.count
-                    mapping[id] = (s, 1, slots[s])
-                }
-            }
-
-            return mapping
-        }
-
-        let mapping = assign(for: currentSeeds)
-        peerPaletteLight = mapping
-        peerPaletteDark = mapping
+        return seeds
     }
-
-    // MARK: - Nostr People Minimal-Distance Palette (same algo)
-    private var nostrPaletteLight: [String: (slot: Int, ring: Int, hue: Double)] = [:]
-    private var nostrPaletteDark: [String: (slot: Int, ring: Int, hue: Double)] = [:]
-    private var nostrPaletteSeeds: [String: String] = [:] // pubkey -> seed used
 
     @MainActor
     private func getNostrPaletteColor(for pubkeyHexLowercased: String, isDark: Bool) -> Color {
-        rebuildNostrPaletteIfNeeded()
-        let entry = (isDark ? nostrPaletteDark[pubkeyHexLowercased] : nostrPaletteLight[pubkeyHexLowercased])
-        let myHex: String? = {
-            if case .location(let ch) = LocationChannelManager.shared.selectedChannel,
-               let id = try? idBridge.deriveIdentity(forGeohash: ch.geohash) {
-                return id.publicKeyHex.lowercased()
-            }
-            return nil
-        }()
-        if let me = myHex, pubkeyHexLowercased == me { return .orange }
-        let saturation: Double = isDark ? 0.80 : 0.70
-        let baseBrightness: Double = isDark ? 0.75 : 0.45
-        let ringDelta = isDark ? TransportConfig.uiPeerPaletteRingBrightnessDeltaDark : TransportConfig.uiPeerPaletteRingBrightnessDeltaLight
-        if let e = entry {
-            let brightness = min(1.0, max(0.0, baseBrightness + ringDelta * Double(e.ring)))
-            return Color(hue: e.hue, saturation: saturation, brightness: brightness)
+        let myHex: String? = currentGeohashIdentityHex()
+        if let me = myHex, pubkeyHexLowercased == me {
+            return .orange
         }
-        // Fallback to seed color if not in palette (e.g., transient)
+
+        nostrPalette.ensurePalette(for: currentNostrPaletteSeeds(excluding: myHex))
+        if let color = nostrPalette.color(for: pubkeyHexLowercased, isDark: isDark) {
+            return color
+        }
         return Color(peerSeed: "nostr:" + pubkeyHexLowercased, isDark: isDark)
     }
 
     @MainActor
-    private func rebuildNostrPaletteIfNeeded() {
-        // Build seeds map from currently visible geohash people (excluding self)
-        let myHex: String? = {
-            if case .location(let ch) = LocationChannelManager.shared.selectedChannel,
-               let id = try? idBridge.deriveIdentity(forGeohash: ch.geohash) {
-                return id.publicKeyHex.lowercased()
-            }
-            return nil
-        }()
-        let people = visibleGeohashPeople()
-        var currentSeeds: [String: String] = [:]
-        for p in people where p.id != myHex { currentSeeds[p.id] = "nostr:" + p.id }
-
-        if currentSeeds == nostrPaletteSeeds,
-           nostrPaletteLight.keys.count == currentSeeds.count,
-           nostrPaletteDark.keys.count == currentSeeds.count {
-            return
+    private func currentNostrPaletteSeeds(excluding myHex: String?) -> [String: String] {
+        var seeds: [String: String] = [:]
+        for person in visibleGeohashPeople() {
+            if let myHex, person.id == myHex { continue }
+            seeds[person.id] = "nostr:" + person.id
         }
-        nostrPaletteSeeds = currentSeeds
+        return seeds
+    }
 
-        let slotCount = max(8, TransportConfig.uiPeerPaletteSlots)
-        let avoidCenter = 30.0 / 360.0
-        let avoidDelta = TransportConfig.uiColorHueAvoidanceDelta
-        var slots: [Double] = []
-        for i in 0..<slotCount {
-            let hue = Double(i) / Double(slotCount)
-            if abs(hue - avoidCenter) < avoidDelta { continue }
-            slots.append(hue)
+    @MainActor
+    private func currentGeohashIdentityHex() -> String? {
+        if case .location(let channel) = LocationChannelManager.shared.selectedChannel,
+           let identity = try? idBridge.deriveIdentity(forGeohash: channel.geohash) {
+            return identity.publicKeyHex.lowercased()
         }
-        if slots.isEmpty {
-            for i in 0..<slotCount { slots.append(Double(i) / Double(slotCount)) }
-        }
-
-        func circDist(_ a: Double, _ b: Double) -> Double {
-            let d = abs(a - b)
-            return d > 0.5 ? 1.0 - d : d
-        }
-
-        let peers = currentSeeds.keys.sorted()
-        let prefIndex: [String: Int] = Dictionary(uniqueKeysWithValues: peers.map { id in
-            let h = (currentSeeds[id] ?? id).djb2()
-            let idx = Int(h % UInt64(slots.count))
-            return (id, idx)
-        })
-
-        var mapping: [String: (slot: Int, ring: Int, hue: Double)] = [:]
-        var usedSlots = Set<Int>()
-        var usedHues: [Double] = []
-
-        let prev = nostrPaletteLight.isEmpty ? nostrPaletteDark : nostrPaletteLight
-        for (id, entry) in prev {
-            if peers.contains(id), entry.slot < slots.count {
-                mapping[id] = (entry.slot, entry.ring, slots[entry.slot])
-                usedSlots.insert(entry.slot)
-                usedHues.append(slots[entry.slot])
-            }
-        }
-
-        let unassigned = peers.filter { mapping[$0] == nil }
-        for id in unassigned {
-            let preferred = prefIndex[id] ?? 0
-            if !usedSlots.contains(preferred) && preferred < slots.count {
-                mapping[id] = (preferred, 0, slots[preferred])
-                usedSlots.insert(preferred)
-                usedHues.append(slots[preferred])
-                continue
-            }
-            var bestSlot: Int? = nil
-            var bestScore: Double = -1
-            for sIdx in 0..<slots.count where !usedSlots.contains(sIdx) {
-                let hue = slots[sIdx]
-                let minDist = usedHues.isEmpty ? 1.0 : usedHues.map { circDist(hue, $0) }.min() ?? 1.0
-                let bias = 1.0 - (Double((abs(sIdx - (prefIndex[id] ?? 0)) % slots.count)) / Double(slots.count))
-                let score = minDist + 0.05 * bias
-                if score > bestScore { bestScore = score; bestSlot = sIdx }
-            }
-            if let s = bestSlot {
-                mapping[id] = (s, 0, slots[s])
-                usedSlots.insert(s)
-                usedHues.append(slots[s])
-            }
-        }
-
-        let stillUnassigned = peers.filter { mapping[$0] == nil }
-        if !stillUnassigned.isEmpty {
-            for (idx, id) in stillUnassigned.enumerated() {
-                let preferred = prefIndex[id] ?? 0
-                let goldenStep = 7
-                let s = (preferred + idx * goldenStep) % slots.count
-                mapping[id] = (s, 1, slots[s])
-            }
-        }
-
-        nostrPaletteLight = mapping
-        nostrPaletteDark = mapping
+        return nil
     }
 
     // Clear the current public channel's timeline (visible + persistent buffer)
     @MainActor
     func clearCurrentPublicTimeline() {
         // Clear messages from current timeline
-        switch activeChannel {
-        case .mesh:
-            messages.removeAll()
-            meshTimeline.removeAll()
-        case .location(let ch):
-            messages.removeAll()
-            geoTimelines[ch.geohash] = []
-        }
+        messages.removeAll()
+        timelineStore.clear(channel: activeChannel)
 
         // Delete associated media files (images, voice notes, files) in background
         // Only delete from current chat to avoid removing private chat media
@@ -5520,12 +5168,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             timestamp: Date(),
             isRelay: false
         )
-        // Persist to mesh timeline
-        meshTimeline.append(systemMessage)
-        trimMeshTimelineIfNeeded()
-        // Only show inline if mesh is the active channel
+        timelineStore.append(systemMessage, to: .mesh)
         if case .mesh = activeChannel {
-            messages.append(systemMessage)
+            messages = timelineStore.messages(for: .mesh)
+            trimMessagesIfNeeded()
         }
         objectWillChange.send()
     }
@@ -5540,20 +5186,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             timestamp: Date(),
             isRelay: false
         )
-        // Append to current visible messages
-        messages.append(systemMessage)
+        timelineStore.append(systemMessage, to: activeChannel)
+        messages = timelineStore.messages(for: activeChannel)
         // Track the content key so relayed copies of the same system-style message are ignored
         let contentKey = normalizedContentKey(systemMessage.content)
         recordContentKey(contentKey, timestamp: systemMessage.timestamp)
-        // Persist into the backing store for the active channel to survive rebinds
-        switch activeChannel {
-        case .mesh:
-            meshTimeline.append(systemMessage)
-        case .location(let ch):
-            var arr = geoTimelines[ch.geohash] ?? []
-            arr.append(systemMessage)
-            geoTimelines[ch.geohash] = arr
-        }
+        trimMessagesIfNeeded()
         objectWillChange.send()
     }
 
@@ -5564,7 +5202,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             addPublicSystemMessage(content)
         } else {
             // Not on a location channel yet: queue to show when user switches
-            pendingGeohashSystemMessages.append(content)
+            timelineStore.queueGeohashSystemMessage(content)
         }
     }
     // Send a public message without adding a local user echo.
@@ -6369,14 +6007,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         if shouldRateLimit {
             let senderKey = normalizedSenderKey(for: finalMessage)
             let contentKey = normalizedContentKey(finalMessage.content)
-            let now = Date()
-            var sBucket = rateBucketsBySender[senderKey] ?? TokenBucket(capacity: senderBucketCapacity, tokens: senderBucketCapacity, refillPerSec: senderBucketRefill, lastRefill: now)
-            let senderAllowed = sBucket.allow(now: now)
-            rateBucketsBySender[senderKey] = sBucket
-            var cBucket = rateBucketsByContent[contentKey] ?? TokenBucket(capacity: contentBucketCapacity, tokens: contentBucketCapacity, refillPerSec: contentBucketRefill, lastRefill: now)
-            let contentAllowed = cBucket.allow(now: now)
-            rateBucketsByContent[contentKey] = cBucket
-            if !(senderAllowed && contentAllowed) { return }
+            if !publicRateLimiter.allow(senderKey: senderKey, contentKey: contentKey) { return }
         }
 
         // Size cap: drop extremely large public messages early
@@ -6384,22 +6015,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
 
         // Persist mesh messages to mesh timeline always
         if !isGeo && finalMessage.sender != "system" {
-            if !meshTimeline.contains(where: { $0.id == finalMessage.id }) {
-                meshTimeline.append(finalMessage)
-                trimMeshTimelineIfNeeded()
-            }
+            timelineStore.append(finalMessage, to: .mesh)
         }
 
         // Persist geochat messages to per-geohash timeline
         if isGeo && finalMessage.sender != "system" {
             if let gh = currentGeohash {
-                var arr = geoTimelines[gh] ?? []
-                // Dedup by message ID before appending to per-geohash timeline
-                if !arr.contains(where: { $0.id == finalMessage.id }) {
-                    arr.append(finalMessage)
-                    if arr.count > geoTimelineCap { arr = Array(arr.suffix(geoTimelineCap)) }
-                    geoTimelines[gh] = arr
-                }
+                _ = timelineStore.appendIfAbsent(finalMessage, toGeohash: gh)
             }
         }
 
