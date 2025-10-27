@@ -1962,7 +1962,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         }
         
         // Remove mapping keys pointing to this pubkey to avoid accidental resolution
-        for (k, v) in nostrKeyMapping where v.lowercased() == hex { nostrKeyMapping.removeValue(forKey: k) }
+        for (k, v) in self.nostrKeyMapping where v.lowercased() == hex {
+            self.nostrKeyMapping.removeValue(forKey: k)
+        }
         
         addSystemMessage(
             String(

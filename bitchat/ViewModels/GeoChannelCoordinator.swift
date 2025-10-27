@@ -74,7 +74,8 @@ final class GeoChannelCoordinator {
         locationManager.$permissionState
             .receive(on: DispatchQueue.main)
             .sink { state in
-                if state == .authorized {
+                guard state == .authorized else { return }
+                Task { @MainActor in
                     LocationChannelManager.shared.refreshChannels()
                 }
             }
