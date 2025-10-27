@@ -20,7 +20,7 @@ protocol PublicMessagePipelineDelegate: AnyObject {
 }
 
 @MainActor
-final class PublicMessagePipeline: NSObject {
+final class PublicMessagePipeline {
     weak var delegate: PublicMessagePipelineDelegate?
 
     private var buffer: [BitchatMessage] = []
@@ -41,7 +41,6 @@ final class PublicMessagePipeline: NSObject {
         self.dynamicFlushInterval = baseFlushInterval
         self.maxRecentBatchSamples = maxRecentBatchSamples
         self.dedupWindow = dedupWindow
-        super.init()
     }
 
     deinit {
@@ -67,23 +66,20 @@ final class PublicMessagePipeline: NSObject {
         buffer.removeAll(keepingCapacity: false)
     }
 
-    private func scheduleFlush() {
+}
+
+private extension PublicMessagePipeline {
+    func scheduleFlush() {
         guard timer == nil else { return }
-        timer = Timer.scheduledTimer(
-            timeInterval: dynamicFlushInterval,
-            target: self,
-            selector: #selector(onBufferTimerFired(_:)),
-            userInfo: nil,
-            repeats: false
-        )
+        timer = Timer.scheduledTimer(withTimeInterval: dynamicFlushInterval, repeats: false) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in
+                self.flushBuffer()
+            }
+        }
     }
 
-    @objc
-    private func onBufferTimerFired(_ timer: Timer) {
-        flushBuffer()
-    }
-
-    private func flushBuffer() {
+    func flushBuffer() {
         timer?.invalidate()
         timer = nil
         guard !buffer.isEmpty else { return }
@@ -158,7 +154,7 @@ final class PublicMessagePipeline: NSObject {
         }
     }
 
-    private func updateFlushInterval(withBatchSize size: Int) {
+    func updateFlushInterval(withBatchSize size: Int) {
         recentBatchSizes.append(size)
         if recentBatchSizes.count > maxRecentBatchSamples {
             recentBatchSizes.removeFirst(recentBatchSizes.count - maxRecentBatchSamples)
@@ -169,7 +165,7 @@ final class PublicMessagePipeline: NSObject {
         dynamicFlushInterval = avg > 100.0 ? 0.12 : baseFlushInterval
     }
 
-    private func lateInsertThreshold(for channel: ChannelID) -> TimeInterval {
+    func lateInsertThreshold(for channel: ChannelID) -> TimeInterval {
         switch channel {
         case .mesh:
             return TransportConfig.uiLateInsertThreshold
@@ -178,7 +174,7 @@ final class PublicMessagePipeline: NSObject {
         }
     }
 
-    private func insertionIndex(for timestamp: Date, in messages: [BitchatMessage]) -> Int {
+    func insertionIndex(for timestamp: Date, in messages: [BitchatMessage]) -> Int {
         var low = 0
         var high = messages.count
         while low < high {

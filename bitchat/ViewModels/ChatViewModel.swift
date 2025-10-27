@@ -365,14 +365,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     private let keychain: KeychainManagerProtocol
     private let nicknameKey = "bitchat.nickname"
     // Location channel state (macOS supports manual geohash selection)
-    @Published private var activeChannel: ChannelID = .mesh {
-        didSet {
-            Task { @MainActor [weak self] in
-                guard let self = self else { return }
-                self.publicMessagePipeline.updateActiveChannel(self.activeChannel)
-            }
-        }
-    }
+    @Published private(set) var activeChannel: ChannelID = .mesh
     private var geoSubscriptionID: String? = nil
     private var geoDmSubscriptionID: String? = nil
     private var currentGeohash: String? = nil
@@ -1513,6 +1506,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         // Reset pending public batches to avoid cross-channel bleed
         publicMessagePipeline.reset()
         activeChannel = channel
+        publicMessagePipeline.updateActiveChannel(channel)
         // Reset deduplication set and optionally hydrate timeline for mesh
         processedNostrEvents.removeAll()
         processedNostrEventOrder.removeAll()
