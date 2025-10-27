@@ -77,7 +77,9 @@ final class GeoChannelCoordinator {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
                 guard let self, state == .authorized else { return }
-                self.locationManager.refreshChannels()
+                Task { @MainActor [weak self] in
+                    self?.locationManager.refreshChannels()
+                }
             }
             .store(in: &cancellables)
 
@@ -105,7 +107,6 @@ final class GeoChannelCoordinator {
     func refreshSampling() {
         updateSampling()
     }
-
     private static func defaultLocationManager() -> LocationChannelManager {
         LocationChannelManager.shared
     }
