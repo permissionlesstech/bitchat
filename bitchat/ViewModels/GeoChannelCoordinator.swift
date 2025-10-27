@@ -24,19 +24,21 @@ final class GeoChannelCoordinator {
     private var bookmarkedGeohashes: [String] = []
 
     init(
-        locationManager: LocationChannelManager,
-        bookmarksStore: GeohashBookmarksStore,
-        torManager: TorManager,
+        locationManager: LocationChannelManager? = nil,
+        bookmarksStore: GeohashBookmarksStore? = nil,
+        torManager: TorManager? = nil,
         onChannelSwitch: @escaping (ChannelID) -> Void,
         beginSampling: @escaping ([String]) -> Void,
         endSampling: @escaping () -> Void
     ) {
-        self.locationManager = locationManager
-        self.bookmarksStore = bookmarksStore
-        self.torManager = torManager
+        self.locationManager = locationManager ?? LocationChannelManager.shared
+        self.bookmarksStore = bookmarksStore ?? GeohashBookmarksStore.shared
+        self.torManager = torManager ?? TorManager.shared
         self.onChannelSwitch = onChannelSwitch
         self.beginSampling = beginSampling
         self.endSampling = endSampling
+
+        start()
     }
 
     func start() {
@@ -73,9 +75,10 @@ final class GeoChannelCoordinator {
 
         locationManager.$permissionState
             .receive(on: DispatchQueue.main)
-            .sink { state in
-                if state == .authorized {
-                    LocationChannelManager.shared.refreshChannels()
+            .sink { [weak self] state in
+                guard let self, state == .authorized else { return }
+                Task { @MainActor [weak self] in
+                    self?.locationManager.refreshChannels()
                 }
             }
             .store(in: &cancellables)

@@ -651,9 +651,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             .store(in: &cancellables)
 
         geoChannelCoordinator = GeoChannelCoordinator(
-            locationManager: LocationChannelManager.shared,
-            bookmarksStore: GeohashBookmarksStore.shared,
-            torManager: TorManager.shared,
             onChannelSwitch: { [weak self] channel in
                 self?.switchLocationChannel(to: channel)
             },
@@ -664,7 +661,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                 self?.endGeohashSampling()
             }
         )
-        geoChannelCoordinator?.start()
 
         // Track teleport flag changes to keep our own teleported marker in sync with regional status
         LocationChannelManager.shared.$teleported
@@ -1422,7 +1418,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         )
 
         timelineStore.append(message, to: activeChannel)
-        messages = timelineStore.messages(for: activeChannel)
+        refreshVisibleMessages(from: activeChannel)
 
         // Update content LRU for near-dup detection
         let ckey = normalizedContentKey(message.content)
@@ -1514,7 +1510,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         processedNostrEventOrder.removeAll()
         switch channel {
         case .mesh:
-            messages = timelineStore.messages(for: .mesh)
+            refreshVisibleMessages(from: .mesh)
             // Debug: log if any empty messages are present
             let emptyMesh = messages.filter { $0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
             if emptyMesh > 0 {
@@ -1524,7 +1520,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             geohashPeople = []
             teleportedGeo.removeAll()
         case .location:
-            messages = timelineStore.messages(for: channel)
+            refreshVisibleMessages(from: channel)
         }
         // If switching to a location channel, flush any pending geohash-only system messages
         if case .location = channel {
@@ -4222,6 +4218,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     }
 
     @MainActor
+    private func refreshVisibleMessages(from channel: ChannelID? = nil) {
+        let target = channel ?? activeChannel
+        messages = timelineStore.messages(for: target)
+    }
+
+    @MainActor
     private func peerColor(for message: BitchatMessage, isDark: Bool) -> Color {
         if let spid = message.senderPeerID {
             if spid.isGeoChat || spid.isGeoDM {
@@ -4286,8 +4288,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
 
     @MainActor
     private func getNostrPaletteColor(for pubkeyHexLowercased: String, isDark: Bool) -> Color {
-        let myHex: String? = currentGeohashIdentityHex()
-        if let me = myHex, pubkeyHexLowercased == me {
+        let myHex = currentGeohashIdentityHex()
+        if let myHex, pubkeyHexLowercased == myHex {
             return .orange
         }
 
@@ -4301,8 +4303,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     @MainActor
     private func currentNostrPaletteSeeds(excluding myHex: String?) -> [String: String] {
         var seeds: [String: String] = [:]
-        for person in visibleGeohashPeople() {
-            if let myHex, person.id == myHex { continue }
+        let excluded = myHex ?? ""
+        for person in visibleGeohashPeople() where person.id != excluded {
             seeds[person.id] = "nostr:" + person.id
         }
         return seeds
@@ -5169,10 +5171,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             isRelay: false
         )
         timelineStore.append(systemMessage, to: .mesh)
-        if case .mesh = activeChannel {
-            messages = timelineStore.messages(for: .mesh)
-            trimMessagesIfNeeded()
-        }
+        refreshVisibleMessages()
+        trimMessagesIfNeeded()
         objectWillChange.send()
     }
 
@@ -5187,7 +5187,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
             isRelay: false
         )
         timelineStore.append(systemMessage, to: activeChannel)
-        messages = timelineStore.messages(for: activeChannel)
+        refreshVisibleMessages(from: activeChannel)
         // Track the content key so relayed copies of the same system-style message are ignored
         let contentKey = normalizedContentKey(systemMessage.content)
         recordContentKey(contentKey, timestamp: systemMessage.timestamp)
