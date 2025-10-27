@@ -273,7 +273,7 @@ struct PeerIDTests {
     @Test func comparable_sorting_and_equality() {
         let p1 = PeerID(str: "aaa")
         let p2 = PeerID(str: "bbb")
-        let p3 = PeerID(str: "bbb")
+        let p3 = PeerID(str: "BBB")
         
         #expect(p1 < p2)
         #expect(p2 >= p1)
@@ -284,44 +284,18 @@ struct PeerIDTests {
     }
     
     @Test func equality() {
-        let string = "aaa"
-        let peerID = PeerID(str: string)
-        let badString = "bbb"
-        
-        // PeerID == String
-        #expect(peerID == string)
-        #expect(peerID == Optional(string))
-        #expect(Optional(peerID) == string)
-        #expect(Optional(peerID) == Optional(string))
-
-        // PeerID != String
-        #expect(peerID != badString)
-        #expect(peerID != Optional(badString))
-        #expect(Optional(peerID) != badString)
-        #expect(Optional(peerID) != Optional(badString))
-        
-        // String == PeerID
-        #expect(string == peerID)
-        #expect(Optional(string) == peerID)
-        #expect(string == Optional(peerID))
-        #expect(Optional(string) == Optional(peerID))
-
-        // String != PeerID
-        #expect(badString != peerID)
-        #expect(Optional(badString) != peerID)
-        #expect(badString != Optional(peerID))
-        #expect(Optional(badString) != Optional(peerID))
+        let peerID = PeerID(str: "aaa")
         
         // Regular PeerID <> PeerID
-        #expect(peerID == PeerID(str: "aaa"))
-        #expect(peerID == Optional(PeerID(str: "aaa")))
-        #expect(PeerID(str: "aaa") == peerID)
-        #expect(Optional(PeerID(str: "aaa")) == Optional(peerID))
+        #expect(peerID == PeerID(str: "AAA"))
+        #expect(peerID == Optional(PeerID(str: "AAA")))
+        #expect(PeerID(str: "AAA") == peerID)
+        #expect(Optional(PeerID(str: "AAA")) == Optional(peerID))
         
-        #expect(peerID != PeerID(str: "bbb"))
-        #expect(peerID != Optional(PeerID(str: "bbb")))
-        #expect(PeerID(str: "bbb") != peerID)
-        #expect(Optional(PeerID(str: "bbb")) != Optional(peerID))
+        #expect(peerID != PeerID(str: "BBB"))
+        #expect(peerID != Optional(PeerID(str: "BBB")))
+        #expect(PeerID(str: "BBB") != peerID)
+        #expect(Optional(PeerID(str: "BBB")) != Optional(peerID))
     }
     
     // MARK: - Computed properties

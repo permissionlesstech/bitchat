@@ -64,7 +64,9 @@ final class LocationChannelManager: NSObject, CLLocationManagerDelegate, Observa
         switch status {
         case .authorizedAlways, .authorizedWhenInUse, .authorized:
             break // will compute from location
-        default:
+        case .notDetermined, .restricted, .denied:
+            fallthrough
+        @unknown default:
             if case .location(let ch) = selectedChannel {
                 teleported = teleportedSet.contains(ch.geohash)
             }

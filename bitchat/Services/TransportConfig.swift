@@ -8,6 +8,10 @@ enum TransportConfig {
     static let messageTTLDefault: UInt8 = 7                 // Default TTL for mesh flooding
     static let bleMaxInFlightAssemblies: Int = 128          // Cap concurrent fragment assemblies
     static let bleHighDegreeThreshold: Int = 6              // For adaptive TTL/probabilistic relays
+    static let bleMaxConcurrentTransfers: Int = 2           // Limit simultaneous large media sends
+    static let bleFragmentRelayMinDelayMs: Int = 8          // Faster forwarding for media fragments
+    static let bleFragmentRelayMaxDelayMs: Int = 25         // Upper jitter bound for fragment relays
+    static let bleFragmentRelayTtlCap: UInt8 = 5            // Clamp fragment TTL to contain floods
 
     // UI / Storage Caps
     static let privateChatCap: Int = 1337
@@ -30,7 +34,11 @@ enum TransportConfig {
     static let bleDynamicRSSIThresholdDefault: Int = -90
     static let bleConnectionCandidatesMax: Int = 100
     static let blePendingWriteBufferCapBytes: Int = 1_000_000
-    static let blePendingNotificationsCapCount: Int = 20
+    static let bleNotificationAssemblerHardCapBytes: Int = 8 * 1024 * 1024
+    static let bleAssemblerStallResetMs: Int = 250
+    static let blePendingNotificationsCapCount: Int = 128
+    static let bleNotificationRetryDelayMs: Int = 25
+    static let bleNotificationRetryMaxAttempts: Int = 80
 
     // Nostr
     static let nostrReadAckInterval: TimeInterval = 0.35 // ~3 per second
@@ -62,6 +70,7 @@ enum TransportConfig {
     static let uiAnimationMediumSeconds: TimeInterval = 0.2
     static let uiAnimationSidebarSeconds: TimeInterval = 0.25
     static let uiRecentCutoffFiveMinutesSeconds: TimeInterval = 5 * 60
+    static let uiMeshEmptyConfirmationSeconds: TimeInterval = 30.0
 
     // BLE maintenance & thresholds
     static let bleMaintenanceInterval: TimeInterval = 5.0
@@ -141,6 +150,9 @@ enum TransportConfig {
 
     // Geo relay directory
     static let geoRelayFetchIntervalSeconds: TimeInterval = 60 * 60 * 24
+    static let geoRelayRefreshCheckIntervalSeconds: TimeInterval = 60 * 60
+    static let geoRelayRetryInitialSeconds: TimeInterval = 60
+    static let geoRelayRetryMaxSeconds: TimeInterval = 60 * 60
 
     // BLE operational delays
     static let bleInitialAnnounceDelaySeconds: TimeInterval = 0.6

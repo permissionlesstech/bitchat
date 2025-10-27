@@ -767,7 +767,7 @@ final class NoiseHandshakeState {
             let shared = try localStatic.sharedSecretFromKeyAgreement(with: remoteStatic)
             symmetricState.mixKey(shared.withUnsafeBytes { Data($0) })
             
-        default:
+        case .e, .s:
             break
         }
     }

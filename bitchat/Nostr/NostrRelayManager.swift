@@ -906,6 +906,16 @@ struct NostrFilter: Encodable {
         filter.limit = limit
         return filter
     }
+
+    // For location notes with neighbors: subscribe to multiple geohashes (center + neighbors)
+    static func geohashNotes(_ geohashes: [String], since: Date? = nil, limit: Int = 200) -> NostrFilter {
+        var filter = NostrFilter()
+        filter.kinds = [1]
+        filter.since = since?.timeIntervalSince1970.toInt()
+        filter.tagFilters = ["g": geohashes]
+        filter.limit = limit
+        return filter
+    }
 }
 
 // Dynamic coding key for tag filters

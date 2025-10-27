@@ -68,8 +68,9 @@ struct BinaryProtocolTests {
         let encodedData = try #require(BinaryProtocol.encode(packet), "Failed to encode packet with large payload")
         
         // The encoded size should be smaller than uncompressed due to compression
-        let uncompressedSize = BinaryProtocol.headerSize + BinaryProtocol.senderIDSize + largePayload.count
-        #expect(encodedData.count < uncompressedSize)
+        let headerSize = try #require(BinaryProtocol.headerSize(for: packet.version), "Invalid packet version")
+        let uncompressedSize = headerSize + BinaryProtocol.senderIDSize + largePayload.count
+        #expect(encodedData.count < uncompressedSize, "Compressed packet should be smaller than uncompressed form")
         
         // Decode and verify
         let decodedPacket = try #require(BinaryProtocol.decode(encodedData), "Failed to decode compressed packet")

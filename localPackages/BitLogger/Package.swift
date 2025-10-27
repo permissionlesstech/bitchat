@@ -18,6 +18,10 @@ let package = Package(
         .target(
             name: "BitLogger",
             path: "Sources"
+        ),
+        .testTarget(
+            name: "BitLoggerTests",
+            dependencies: ["BitLogger"]
         )
     ]
 )

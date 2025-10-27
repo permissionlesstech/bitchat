@@ -105,7 +105,7 @@ final class PrivateChatManager: ObservableObject {
         // Create read receipt using the simplified method
         let receipt = ReadReceipt(
             originalMessageID: message.id,
-            readerID: meshService?.myPeerID.id ?? "",
+            readerID: meshService?.myPeerID ?? PeerID(str: ""),
             readerNickname: meshService?.myNickname ?? ""
         )
         
