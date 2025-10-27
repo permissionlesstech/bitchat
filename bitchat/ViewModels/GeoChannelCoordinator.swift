@@ -24,19 +24,21 @@ final class GeoChannelCoordinator {
     private var bookmarkedGeohashes: [String] = []
 
     init(
-        locationManager: LocationChannelManager,
-        bookmarksStore: GeohashBookmarksStore,
-        torManager: TorManager,
+        locationManager: LocationChannelManager? = nil,
+        bookmarksStore: GeohashBookmarksStore? = nil,
+        torManager: TorManager? = nil,
         onChannelSwitch: @escaping (ChannelID) -> Void,
         beginSampling: @escaping ([String]) -> Void,
         endSampling: @escaping () -> Void
     ) {
-        self.locationManager = locationManager
-        self.bookmarksStore = bookmarksStore
-        self.torManager = torManager
+        self.locationManager = locationManager ?? Self.defaultLocationManager()
+        self.bookmarksStore = bookmarksStore ?? GeohashBookmarksStore.shared
+        self.torManager = torManager ?? Self.defaultTorManager()
         self.onChannelSwitch = onChannelSwitch
         self.beginSampling = beginSampling
         self.endSampling = endSampling
+
+        start()
     }
 
     func start() {
@@ -102,5 +104,14 @@ final class GeoChannelCoordinator {
 
     func refreshSampling() {
         updateSampling()
+    }
+
+    private static func defaultLocationManager() -> LocationChannelManager {
+        LocationChannelManager.shared
+    }
+
+    @MainActor
+    private static func defaultTorManager() -> TorManager {
+        TorManager.shared
     }
 }
