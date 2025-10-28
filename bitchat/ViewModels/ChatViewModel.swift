@@ -4461,6 +4461,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         
         // Update secure storage with verified status
         identityManager.setVerified(fingerprint: fingerprint, verified: true)
+        saveIdentityState()
         
         // Update local set for UI
         verifiedFingerprints.insert(fingerprint)
@@ -4473,7 +4474,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     func unverifyFingerprint(for peerID: PeerID) {
         guard let fingerprint = getFingerprint(for: peerID) else { return }
         identityManager.setVerified(fingerprint: fingerprint, verified: false)
-        identityManager.forceSave()
+        saveIdentityState()
         verifiedFingerprints.remove(fingerprint)
         updateEncryptionStatus(for: peerID)
     }
@@ -4682,7 +4683,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                         let short = fp.prefix(8)
                         SecureLogger.info("🔐 Marking verified fingerprint: \(short)", category: .security)
                         identityManager.setVerified(fingerprint: fp, verified: true)
-                        identityManager.forceSave()
+                        saveIdentityState()
                         verifiedFingerprints.insert(fp)
                         let name = unifiedPeerService.getPeer(by: peerID)?.nickname ?? resolveNickname(for: peerID)
                         NotificationService.shared.sendLocalNotification(

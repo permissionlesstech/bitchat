@@ -84,9 +84,6 @@ struct BitchatApp: App {
                         }
                         // Proactively disconnect Nostr to avoid spurious socket errors while Tor is down
                         NostrRelayManager.shared.disconnect()
-                        // Force save identity state (verifications, favorites, etc) before backgrounding
-                        // iOS may terminate the app from background without calling applicationWillTerminate
-                        chatViewModel.saveIdentityState()
                         didEnterBackground = true
                     case .active:
                         // Restart services when becoming active
@@ -191,6 +188,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
         return true
+    }
+    
+    func applicationWillTerminate(_ application: UIApplication) {
+        chatViewModel?.applicationWillTerminate()
     }
 }
 #endif
