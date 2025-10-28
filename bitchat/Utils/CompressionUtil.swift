@@ -61,15 +61,13 @@ struct CompressionUtil {
         // 1. Data is too small
         // 2. Data appears to be already compressed (high entropy)
         guard data.count >= compressionThreshold else { return false }
-        
-        // Simple entropy check - count unique bytes
-        var byteFrequency = [UInt8: Int]()
-        for byte in data {
-            byteFrequency[byte, default: 0] += 1
-        }
-        
-        // If we have very high byte diversity, data is likely already compressed
-        let uniqueByteRatio = Double(byteFrequency.count) / Double(min(data.count, 256))
+
+        // Quick uniqueness check — a high diversity of bytes usually means the
+        // payload is already compressed. We only need to know how many unique
+        // values exist rather than keeping full frequency counts.
+        let uniqueByteCount = Set(data).count
+        let sampleSize = min(data.count, 256)
+        let uniqueByteRatio = Double(uniqueByteCount) / Double(sampleSize)
         return uniqueByteRatio < 0.9 // Compress if less than 90% unique bytes
     }
 }

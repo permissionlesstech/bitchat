@@ -13,10 +13,10 @@ enum ImageUtilsError: Error {
 }
 
 enum ImageUtils {
-    private static let compressionQuality: CGFloat = 0.85
-    private static let targetImageBytes: Int = 60_000
+    private static let compressionQuality: CGFloat = 0.82
+    private static let targetImageBytes: Int = 45_000
 
-    static func processImage(at url: URL, maxDimension: CGFloat = 512) throws -> URL {
+    static func processImage(at url: URL, maxDimension: CGFloat = 448) throws -> URL {
         // Security H1: Check file size BEFORE reading into memory
         let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
         guard let fileSize = attrs[.size] as? Int else {
@@ -38,7 +38,7 @@ enum ImageUtils {
     }
 
     #if os(iOS)
-    static func processImage(_ image: UIImage, maxDimension: CGFloat = 512) throws -> URL {
+    static func processImage(_ image: UIImage, maxDimension: CGFloat = 448) throws -> URL {
         return try autoreleasepool {
             // Scale the image first
             let scaled = scaledImage(image, maxDimension: maxDimension)
@@ -106,7 +106,7 @@ enum ImageUtils {
         return data as Data
     }
     #else
-    static func processImage(_ image: NSImage, maxDimension: CGFloat = 512) throws -> URL {
+    static func processImage(_ image: NSImage, maxDimension: CGFloat = 448) throws -> URL {
         return try autoreleasepool {
             let scaled = scaledImage(image, maxDimension: maxDimension)
             guard let inputCG = scaled.cgImage(forProposedRect: nil, context: nil, hints: nil) else {

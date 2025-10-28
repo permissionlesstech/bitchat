@@ -8,6 +8,14 @@ struct RequestSyncPacket {
     let p: Int
     let m: UInt32
     let data: Data
+    let types: SyncTypeFlags?
+
+    init(p: Int, m: UInt32, data: Data, types: SyncTypeFlags? = nil) {
+        self.p = p
+        self.m = m
+        self.data = data
+        self.types = types
+    }
 
     func encode() -> Data {
         var out = Data()
@@ -25,6 +33,9 @@ struct RequestSyncPacket {
         putTLV(0x02, withUnsafeBytes(of: &mBE) { Data($0) })
         // data
         putTLV(0x03, data)
+        if let typesData = types?.toData() {
+            putTLV(0x04, typesData)
+        }
         return out
     }
 
@@ -33,6 +44,7 @@ struct RequestSyncPacket {
         var p: Int? = nil
         var m: UInt32? = nil
         var payload: Data? = nil
+        var types: SyncTypeFlags? = nil
 
         while off + 3 <= data.count {
             let t = Int(data[off]); off += 1
@@ -52,12 +64,16 @@ struct RequestSyncPacket {
             case 0x03:
                 if v.count > maxAcceptBytes { return nil }
                 payload = v
+            case 0x04:
+                if let decoded = SyncTypeFlags.decode(v) {
+                    types = decoded
+                }
             default:
                 break // forward compatible; ignore unknown TLVs
             }
         }
 
         guard let pp = p, let mm = m, let dd = payload, pp >= 1, mm > 0 else { return nil }
-        return RequestSyncPacket(p: pp, m: mm, data: dd)
+        return RequestSyncPacket(p: pp, m: mm, data: dd, types: types)
     }
 }

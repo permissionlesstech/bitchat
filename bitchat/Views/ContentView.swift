@@ -47,7 +47,7 @@ struct ContentView: View {
     @State private var commandSuggestions: [String] = []
     @State private var showMessageActions = false
     @State private var selectedMessageSender: String?
-    @State private var selectedMessageSenderID: String?
+    @State private var selectedMessageSenderID: PeerID?
     @FocusState private var isNicknameFieldFocused: Bool
     @State private var isAtBottomPublic: Bool = true
     @State private var isAtBottomPrivate: Bool = true
@@ -80,7 +80,7 @@ struct ContentView: View {
     // Timer-based refresh removed; use LocationChannelManager live updates instead
     // Window sizes for rendering (infinite scroll up)
     @State private var windowCountPublic: Int = 300
-    @State private var windowCountPrivate: [String: Int] = [:]
+    @State private var windowCountPrivate: [PeerID: Int] = [:]
     
     // MARK: - Computed Properties
     
@@ -124,7 +124,7 @@ struct ContentView: View {
     
     
     private struct PrivateHeaderContext {
-        let headerPeerID: String
+        let headerPeerID: PeerID
         let peer: BitchatPeer?
         let displayName: String
         let isNostrAvailable: Bool
@@ -188,10 +188,6 @@ struct ContentView: View {
             )
         ) {
             peopleSheetView
-                #if os(iOS)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                #endif
         }
         .sheet(isPresented: $showAppInfo) {
             AppInfoView()
@@ -203,11 +199,19 @@ struct ContentView: View {
             set: { _ in viewModel.showingFingerprintFor = nil }
         )) {
             if let peerID = viewModel.showingFingerprintFor {
-                FingerprintView(viewModel: viewModel, peerID: peerID.id)
+                FingerprintView(viewModel: viewModel, peerID: peerID)
             }
         }
 #if os(iOS)
-        .sheet(isPresented: $showImagePicker) {
+        // Only present image picker from main view when NOT in a sheet
+        .fullScreenCover(isPresented: Binding(
+            get: { showImagePicker && !showSidebar && viewModel.selectedPrivateChatPeer == nil },
+            set: { newValue in
+                if !newValue {
+                    showImagePicker = false
+                }
+            }
+        )) {
             ImagePickerView(sourceType: imagePickerSourceType) { image in
                 showImagePicker = false
                 if let image = image {
@@ -223,13 +227,19 @@ struct ContentView: View {
                     }
                 }
             }
-            .presentationDetents([.large])
-            .presentationDragIndicator(.hidden)
             .ignoresSafeArea()
         }
 #endif
 #if os(macOS)
-        .sheet(isPresented: $showMacImagePicker) {
+        // Only present Mac image picker from main view when NOT in a sheet
+        .sheet(isPresented: Binding(
+            get: { showMacImagePicker && !showSidebar && viewModel.selectedPrivateChatPeer == nil },
+            set: { newValue in
+                if !newValue {
+                    showMacImagePicker = false
+                }
+            }
+        )) {
             MacImagePickerView { url in
                 showMacImagePicker = false
                 if let url = url {
@@ -275,12 +285,12 @@ struct ContentView: View {
 
             Button("content.actions.direct_message") {
                 if let peerID = selectedMessageSenderID {
-                    if peerID.hasPrefix("nostr:") {
-                        if let full = viewModel.fullNostrHex(forSenderPeerID: PeerID(str: peerID)) {
+                    if peerID.isGeoChat {
+                        if let full = viewModel.fullNostrHex(forSenderPeerID: peerID) {
                             viewModel.startGeohashDM(withPubkeyHex: full)
                         }
                     } else {
-                        viewModel.startPrivateChat(with: PeerID(str: peerID))
+                        viewModel.startPrivateChat(with: peerID)
                     }
                     withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
                         showSidebar = true
@@ -302,8 +312,8 @@ struct ContentView: View {
 
             Button("content.actions.block", role: .destructive) {
                 // Prefer direct geohash block when we have a Nostr sender ID
-                if let peerID = selectedMessageSenderID, peerID.hasPrefix("nostr:"),
-                   let full = viewModel.fullNostrHex(forSenderPeerID: PeerID(str: peerID)),
+                if let peerID = selectedMessageSenderID, peerID.isGeoChat,
+                   let full = viewModel.fullNostrHex(forSenderPeerID: peerID),
                    let sender = selectedMessageSender {
                     viewModel.blockGeohashUser(pubkeyHexLowercased: full, displayName: sender)
                 } else if let sender = selectedMessageSender {
@@ -334,9 +344,9 @@ struct ContentView: View {
     
     // MARK: - Message List View
     
-    private func messagesView(privatePeer: String?, isAtBottom: Binding<Bool>) -> some View {
+    private func messagesView(privatePeer: PeerID?, isAtBottom: Binding<Bool>) -> some View {
         let messages: [BitchatMessage] = {
-            if let peerID = PeerID(str: privatePeer) {
+            if let peerID = privatePeer {
                 return viewModel.getPrivateChatMessages(for: peerID)
             }
             return viewModel.messages
@@ -476,7 +486,7 @@ struct ContentView: View {
             }
             .onChange(of: viewModel.privateChats) { _ in
                 if let peerID = privatePeer,
-                   let messages = viewModel.privateChats[PeerID(str: peerID)],
+                   let messages = viewModel.privateChats[peerID],
                    !messages.isEmpty {
                     // If the newest private message is from me, always scroll
                     let lastMsg = messages.last!
@@ -531,7 +541,7 @@ struct ContentView: View {
             }
             .onAppear {
                 // Also check when view appears
-                if let peerID = PeerID(str: privatePeer) {
+                if let peerID = privatePeer {
                     // Try multiple times to ensure read receipts are sent
                     viewModel.markPrivateMessagesAsRead(from: peerID)
                     
@@ -784,7 +794,7 @@ struct ContentView: View {
         case "user":
             let id = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
             let peerID = PeerID(str: id.removingPercentEncoding ?? id)
-            selectedMessageSenderID = peerID.id
+            selectedMessageSenderID = peerID
 
             if peerID.isGeoDM || peerID.isGeoChat {
                 selectedMessageSender = viewModel.geohashDisplayName(for: peerID)
@@ -832,10 +842,10 @@ struct ContentView: View {
     }
 
     private func scrollToBottom(on proxy: ScrollViewProxy,
-                                privatePeer: String?,
+                                privatePeer: PeerID?,
                                 isAtBottom: Binding<Bool>) {
         let targetID: String? = {
-            if let peer = PeerID(str: privatePeer),
+            if let peer = privatePeer,
                let last = viewModel.getPrivateChatMessages(for: peer).suffix(300).last?.id {
                 return "dm:\(peer)|\(last)"
             }
@@ -861,7 +871,7 @@ struct ContentView: View {
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             let secondTarget: String? = {
-                if let peer = PeerID(str: privatePeer),
+                if let peer = privatePeer,
                    let last = viewModel.getPrivateChatMessages(for: peer).suffix(300).last?.id {
                     return "dm:\(peer)|\(last)"
                 }
@@ -911,6 +921,53 @@ struct ContentView: View {
         .foregroundColor(textColor)
         #if os(macOS)
         .frame(minWidth: 420, minHeight: 520)
+        #endif
+        // Present image picker from sheet context when IN a sheet (parent-child pattern)
+        #if os(iOS)
+        .fullScreenCover(isPresented: Binding(
+            get: { showImagePicker && (showSidebar || viewModel.selectedPrivateChatPeer != nil) },
+            set: { newValue in
+                if !newValue {
+                    showImagePicker = false
+                }
+            }
+        )) {
+            ImagePickerView(sourceType: imagePickerSourceType) { image in
+                showImagePicker = false
+                if let image = image {
+                    Task {
+                        do {
+                            let processedURL = try ImageUtils.processImage(image)
+                            await MainActor.run {
+                                viewModel.sendImage(from: processedURL)
+                            }
+                        } catch {
+                            SecureLogger.error("Image processing failed: \(error)", category: .session)
+                        }
+                    }
+                }
+            }
+            .ignoresSafeArea()
+        }
+        #endif
+        #if os(macOS)
+        .sheet(isPresented: $showMacImagePicker) {
+            MacImagePickerView { url in
+                showMacImagePicker = false
+                if let url = url {
+                    Task {
+                        do {
+                            let processedURL = try ImageUtils.processImage(at: url)
+                            await MainActor.run {
+                                viewModel.sendImage(from: processedURL)
+                            }
+                        } catch {
+                            SecureLogger.error("Image processing failed: \(error)", category: .session)
+                        }
+                    }
+                }
+            }
+        }
         #endif
     }
     
@@ -998,14 +1055,14 @@ struct ContentView: View {
                             textColor: textColor,
                             secondaryTextColor: secondaryTextColor,
                             onTapPeer: { peerID in
-                                viewModel.startPrivateChat(with: PeerID(str: peerID))
+                                viewModel.startPrivateChat(with: peerID)
                                 showSidebar = true
                             },
                             onToggleFavorite: { peerID in
-                                viewModel.toggleFavorite(peerID: PeerID(str: peerID))
+                                viewModel.toggleFavorite(peerID: peerID)
                             },
                             onShowFingerprint: { peerID in
-                                viewModel.showFingerprint(for: PeerID(str: peerID))
+                                viewModel.showFingerprint(for: peerID)
                             }
                         )
                     }
@@ -1020,7 +1077,7 @@ struct ContentView: View {
 
     private var privateChatSheetView: some View {
         VStack(spacing: 0) {
-            if let privatePeerID = viewModel.selectedPrivateChatPeer?.id {
+            if let privatePeerID = viewModel.selectedPrivateChatPeer {
                 let headerContext = makePrivateHeaderContext(for: privatePeerID)
 
                 HStack(spacing: 12) {
@@ -1044,12 +1101,11 @@ struct ContentView: View {
 
                     HStack(spacing: 8) {
                         privateHeaderInfo(context: headerContext, privatePeerID: privatePeerID)
-                        let peerID = PeerID(str: headerContext.headerPeerID)
-                        let isFavorite = viewModel.isFavorite(peerID: peerID)
+                        let isFavorite = viewModel.isFavorite(peerID: headerContext.headerPeerID)
 
-                        if !privatePeerID.hasPrefix("nostr_") {
+                        if !privatePeerID.isGeoDM {
                             Button(action: {
-                                viewModel.toggleFavorite(peerID: peerID)
+                                viewModel.toggleFavorite(peerID: headerContext.headerPeerID)
                             }) {
                                 Image(systemName: isFavorite ? "star.fill" : "star")
                                     .font(.bitchatSystem(size: 14))
@@ -1088,7 +1144,7 @@ struct ContentView: View {
                 .background(backgroundColor)
             }
 
-            messagesView(privatePeer: viewModel.selectedPrivateChatPeer?.id, isAtBottom: $isAtBottomPrivate)
+            messagesView(privatePeer: viewModel.selectedPrivateChatPeer, isAtBottom: $isAtBottomPrivate)
                 .background(backgroundColor)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             Divider()
@@ -1110,9 +1166,9 @@ struct ContentView: View {
         )
     }
 
-    private func privateHeaderInfo(context: PrivateHeaderContext, privatePeerID: String) -> some View {
+    private func privateHeaderInfo(context: PrivateHeaderContext, privatePeerID: PeerID) -> some View {
         Button(action: {
-            viewModel.showFingerprint(for: PeerID(str: context.headerPeerID))
+            viewModel.showFingerprint(for: context.headerPeerID)
         }) {
             HStack(spacing: 6) {
                 if let connectionState = context.peer?.connectionState {
@@ -1135,7 +1191,7 @@ struct ContentView: View {
                     case .offline:
                         EmptyView()
                     }
-                } else if viewModel.meshService.isPeerReachable(PeerID(str: context.headerPeerID)) {
+                } else if viewModel.meshService.isPeerReachable(context.headerPeerID) {
                     Image(systemName: "point.3.filled.connected.trianglepath.dotted")
                         .font(.bitchatSystem(size: 14))
                         .foregroundColor(textColor)
@@ -1145,7 +1201,7 @@ struct ContentView: View {
                         .font(.bitchatSystem(size: 14))
                         .foregroundColor(.purple)
                         .accessibilityLabel(String(localized: "content.accessibility.available_nostr", comment: "Accessibility label for Nostr-available peer indicator"))
-                } else if viewModel.meshService.isPeerConnected(PeerID(str: context.headerPeerID)) || viewModel.connectedPeers.contains(PeerID(str: context.headerPeerID)) {
+                } else if viewModel.meshService.isPeerConnected(context.headerPeerID) || viewModel.connectedPeers.contains(context.headerPeerID) {
                     Image(systemName: "dot.radiowaves.left.and.right")
                         .font(.bitchatSystem(size: 14))
                         .foregroundColor(textColor)
@@ -1156,14 +1212,9 @@ struct ContentView: View {
                     .font(.bitchatSystem(size: 16, weight: .medium, design: .monospaced))
                     .foregroundColor(textColor)
 
-                if !privatePeerID.hasPrefix("nostr_") {
-                    let statusPeerID: String = {
-                        if privatePeerID.count == 64, let short = viewModel.getShortIDForNoiseKey(privatePeerID) {
-                            return short.id
-                        }
-                        return context.headerPeerID
-                    }()
-                    let encryptionStatus = viewModel.getEncryptionStatus(for: PeerID(str: statusPeerID))
+                if !privatePeerID.isGeoDM {
+                    let statusPeerID = viewModel.getShortIDForNoiseKey(privatePeerID)
+                    let encryptionStatus = viewModel.getEncryptionStatus(for: statusPeerID)
                     if let icon = encryptionStatus.icon {
                         Image(systemName: icon)
                             .font(.bitchatSystem(size: 14))
@@ -1195,33 +1246,27 @@ struct ContentView: View {
         .frame(height: headerHeight)
     }
 
-    private func makePrivateHeaderContext(for privatePeerID: String) -> PrivateHeaderContext {
-        let headerPeerID: String = {
-            if privatePeerID.count == 64, let short = viewModel.getShortIDForNoiseKey(privatePeerID) {
-                return short.id
-            }
-            return privatePeerID
-        }()
-
-        let peer = viewModel.getPeer(byID: PeerID(str: headerPeerID))
+    private func makePrivateHeaderContext(for privatePeerID: PeerID) -> PrivateHeaderContext {
+        let headerPeerID = viewModel.getShortIDForNoiseKey(privatePeerID)
+        let peer = viewModel.getPeer(byID: headerPeerID)
 
         let displayName: String = {
-            if privatePeerID.hasPrefix("nostr_"), case .location(let ch) = locationManager.selectedChannel {
-                let disp = viewModel.geohashDisplayName(for: PeerID(str: privatePeerID))
+            if privatePeerID.isGeoDM, case .location(let ch) = locationManager.selectedChannel {
+                let disp = viewModel.geohashDisplayName(for: privatePeerID)
                 return "#\(ch.geohash)/@\(disp)"
             }
             if let name = peer?.displayName { return name }
-            if let name = viewModel.meshService.peerNickname(peerID: PeerID(str: headerPeerID)) { return name }
-            if let fav = FavoritesPersistenceService.shared.getFavoriteStatus(for: Data(hexString: headerPeerID) ?? Data()),
+            if let name = viewModel.meshService.peerNickname(peerID: headerPeerID) { return name }
+            if let fav = FavoritesPersistenceService.shared.getFavoriteStatus(for: Data(hexString: headerPeerID.id) ?? Data()),
                !fav.peerNickname.isEmpty { return fav.peerNickname }
-            if headerPeerID.count == 16 {
-                let candidates = viewModel.identityManager.getCryptoIdentitiesByPeerIDPrefix(PeerID(str: headerPeerID))
+            if headerPeerID.id.count == 16 {
+                let candidates = viewModel.identityManager.getCryptoIdentitiesByPeerIDPrefix(headerPeerID)
                 if let id = candidates.first,
                    let social = viewModel.identityManager.getSocialIdentity(for: id.fingerprint) {
                     if let pet = social.localPetname, !pet.isEmpty { return pet }
                     if !social.claimedNickname.isEmpty { return social.claimedNickname }
                 }
-            } else if headerPeerID.count == 64, let keyData = Data(hexString: headerPeerID) {
+            } else if let keyData = headerPeerID.noiseKey {
                 let fp = keyData.sha256Fingerprint()
                 if let social = viewModel.identityManager.getSocialIdentity(for: fp) {
                     if let pet = social.localPetname, !pet.isEmpty { return pet }
@@ -1233,7 +1278,7 @@ struct ContentView: View {
 
         let isNostrAvailable: Bool = {
             guard let connectionState = peer?.connectionState else {
-                if let noiseKey = Data(hexString: headerPeerID),
+                if let noiseKey = Data(hexString: headerPeerID.id),
                    let favoriteStatus = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey),
                    favoriteStatus.isMutual {
                     return true
@@ -1752,7 +1797,7 @@ private extension ContentView {
 
     private func expandWindow(ifNeededFor message: BitchatMessage,
                               allMessages: [BitchatMessage],
-                              privatePeer: String?,
+                              privatePeer: PeerID?,
                               proxy: ScrollViewProxy) {
         let step = TransportConfig.uiWindowStepCount
         let contextKey: String = {
@@ -1812,7 +1857,19 @@ private extension ContentView {
     }
 
     private var shouldShowMediaControls: Bool {
-        if viewModel.selectedPrivateChatPeer != nil {
+        if let peer = viewModel.selectedPrivateChatPeer, !(peer.isGeoDM || peer.isGeoChat) {
+            return true
+        }
+        switch locationManager.selectedChannel {
+        case .mesh:
+            return true
+        case .location:
+            return false
+        }
+    }
+
+    private var shouldShowVoiceControl: Bool {
+        if let peer = viewModel.selectedPrivateChatPeer, !(peer.isGeoDM || peer.isGeoChat) {
             return true
         }
         switch locationManager.selectedChannel {
@@ -1857,17 +1914,23 @@ private extension ContentView {
         #endif
     }
 
+    @ViewBuilder
     var sendOrMicButton: some View {
         let hasText = !trimmedMessageText.isEmpty
-        return ZStack {
-            micButtonView
-                .opacity(hasText ? 0 : 1)
-                .allowsHitTesting(!hasText)
+        if shouldShowVoiceControl {
+            ZStack {
+                micButtonView
+                    .opacity(hasText ? 0 : 1)
+                    .allowsHitTesting(!hasText)
+                sendButtonView(enabled: hasText)
+                    .opacity(hasText ? 1 : 0)
+                    .allowsHitTesting(hasText)
+            }
+            .frame(width: 36, height: 36)
+        } else {
             sendButtonView(enabled: hasText)
-                .opacity(hasText ? 1 : 0)
-                .allowsHitTesting(hasText)
+                .frame(width: 36, height: 36)
         }
-        .frame(width: 36, height: 36)
     }
 
     private var micButtonView: some View {
@@ -1920,6 +1983,7 @@ private extension ContentView {
     }
 
     func startVoiceRecording() {
+        guard shouldShowVoiceControl else { return }
         guard !isRecordingVoiceNote && !isPreparingVoiceNote else { return }
         isPreparingVoiceNote = true
         Task { @MainActor in
