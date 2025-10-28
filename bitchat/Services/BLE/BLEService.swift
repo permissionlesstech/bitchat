@@ -1413,10 +1413,15 @@ final class BLEService: NSObject {
         let noisePub = noiseService.getStaticPublicKeyData()  // For noise handshakes and peer identification
         let signingPub = noiseService.getSigningPublicKeyData()  // For signature verification
         
+        let connectedPeerIDs: [Data] = collectionsQueue.sync {
+            peers.values.filter { $0.isConnected }.compactMap { $0.peerID.routingData }
+        }
+        
         let announcement = AnnouncementPacket(
             nickname: myNickname,
             noisePublicKey: noisePub,
-            signingPublicKey: signingPub
+            signingPublicKey: signingPub,
+            directNeighbors: connectedPeerIDs
         )
         
         guard let payload = announcement.encode() else {
