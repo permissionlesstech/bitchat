@@ -21,8 +21,9 @@ struct BitchatPacket: Codable {
     let payload: Data
     var signature: Data?
     var ttl: UInt8
+    var route: [Data]?
     
-    init(type: UInt8, senderID: Data, recipientID: Data?, timestamp: UInt64, payload: Data, signature: Data?, ttl: UInt8, version: UInt8 = 1) {
+    init(type: UInt8, senderID: Data, recipientID: Data?, timestamp: UInt64, payload: Data, signature: Data?, ttl: UInt8, version: UInt8 = 1, route: [Data]? = nil) {
         self.version = version
         self.type = type
         self.senderID = senderID
@@ -31,6 +32,7 @@ struct BitchatPacket: Codable {
         self.payload = payload
         self.signature = signature
         self.ttl = ttl
+        self.route = route
     }
     
     // Convenience initializer for new binary format
@@ -53,6 +55,7 @@ struct BitchatPacket: Codable {
         self.payload = payload
         self.signature = nil
         self.ttl = ttl
+        self.route = nil
     }
     
     var data: Data? {
@@ -81,7 +84,8 @@ struct BitchatPacket: Codable {
             payload: payload,
             signature: nil, // Remove signature for signing
             ttl: 0, // Use fixed TTL=0 for signing to ensure relay compatibility
-            version: version
+            version: version,
+            route: route
         )
         return BinaryProtocol.encode(unsignedPacket)
     }

@@ -365,7 +365,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     private let keychain: KeychainManagerProtocol
     private let nicknameKey = "bitchat.nickname"
     // Location channel state (macOS supports manual geohash selection)
-    @Published private var activeChannel: ChannelID = .mesh
+    @Published private(set) var activeChannel: ChannelID = .mesh
     private var geoSubscriptionID: String? = nil
     private var geoDmSubscriptionID: String? = nil
     private var currentGeohash: String? = nil
@@ -454,14 +454,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     private var lastMutualToastAt: [String: Date] = [:] // key: fingerprint
 
     // MARK: - Public message batching (UI perf)
-    // Buffer incoming public messages and flush in small batches to reduce UI invalidations
-    private var publicBuffer: [BitchatMessage] = []
-    private var publicBufferTimer: Timer? = nil
-    private let basePublicFlushInterval: TimeInterval = TransportConfig.basePublicFlushInterval
-    private var dynamicPublicFlushInterval: TimeInterval = TransportConfig.basePublicFlushInterval
-    private var recentBatchSizes: [Int] = []
+    private let publicMessagePipeline: PublicMessagePipeline
     @Published private(set) var isBatchingPublic: Bool = false
-    private let lateInsertThreshold: TimeInterval = TransportConfig.uiLateInsertThreshold
     
     // Track sent read receipts to avoid duplicates (persisted across launches)
     // Note: Persistence happens automatically in didSet, no lifecycle observers needed
@@ -507,6 +501,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         self.idBridge = idBridge
         self.identityManager = identityManager
         self.meshService = BLEService(keychain: keychain, idBridge: idBridge, identityManager: identityManager)
+        self.publicMessagePipeline = PublicMessagePipeline()
         
         // Load persisted read receipts
         if let data = UserDefaults.standard.data(forKey: "sentReadReceipts"),
@@ -558,6 +553,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         
         // Start mesh service immediately
         meshService.startServices()
+
+        publicMessagePipeline.delegate = self
+        publicMessagePipeline.updateActiveChannel(activeChannel)
 
         // Check initial Bluetooth state after a brief delay to allow centralManager initialization
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
@@ -722,7 +720,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         )
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(appWillTerminate),
+            selector: #selector(applicationWillTerminate),
             name: NSApplication.willTerminateNotification,
             object: nil
         )
@@ -778,7 +776,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         )
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(appWillTerminate),
+            selector: #selector(applicationWillTerminate),
             name: UIApplication.willTerminateNotification,
             object: nil
         )
@@ -1501,10 +1499,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
 
     @MainActor
     private func switchLocationChannel(to channel: ChannelID) {
-        // Flush pending public buffer to avoid cross-channel bleed
-        publicBufferTimer?.invalidate(); publicBufferTimer = nil
-        publicBuffer.removeAll(keepingCapacity: false)
+        // Reset pending public batches to avoid cross-channel bleed
+        publicMessagePipeline.reset()
         activeChannel = channel
+        publicMessagePipeline.updateActiveChannel(channel)
         // Reset deduplication set and optionally hydrate timeline for mesh
         processedNostrEvents.removeAll()
         processedNostrEventOrder.removeAll()
@@ -3253,24 +3251,21 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         // No-op; avoid forcing synchronize on resign
     }
     
+    /// Save identity state without stopping services (for backgrounding)
+    func saveIdentityState() {
+        // Force save any pending identity changes (verifications, favorites, etc)
+        identityManager.forceSave()
+
+        // Verify identity key is still there
+        _ = keychain.verifyIdentityKeyExists()
+    }
+
     @objc func applicationWillTerminate() {
         // Send leave message to all peers
         meshService.stopServices()
-        
-        // Force save any pending identity changes (verifications, favorites, etc)
-        identityManager.forceSave()
-        
-        // Verify identity key is still there
-        _ = keychain.verifyIdentityKeyExists()
-        
-        // No need to force synchronize here
-        
-        // Verify identity key after save
-        _ = keychain.verifyIdentityKeyExists()
-    }
-    
-    @objc private func appWillTerminate() {
-        // No need to force synchronize here
+
+        // Save identity state
+        saveIdentityState()
     }
     
     @MainActor
@@ -4466,6 +4461,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         
         // Update secure storage with verified status
         identityManager.setVerified(fingerprint: fingerprint, verified: true)
+        saveIdentityState()
         
         // Update local set for UI
         verifiedFingerprints.insert(fingerprint)
@@ -4478,7 +4474,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
     func unverifyFingerprint(for peerID: PeerID) {
         guard let fingerprint = getFingerprint(for: peerID) else { return }
         identityManager.setVerified(fingerprint: fingerprint, verified: false)
-        identityManager.forceSave()
+        saveIdentityState()
         verifiedFingerprints.remove(fingerprint)
         updateEncryptionStatus(for: peerID)
     }
@@ -4687,7 +4683,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
                         let short = fp.prefix(8)
                         SecureLogger.info("🔐 Marking verified fingerprint: \(short)", category: .security)
                         identityManager.setVerified(fingerprint: fp, verified: true)
-                        identityManager.forceSave()
+                        saveIdentityState()
                         verifiedFingerprints.insert(fp)
                         let name = unifiedPeerService.getPeer(by: peerID)?.nickname ?? resolveNickname(for: peerID)
                         NotificationService.shared.sendLocalNotification(
@@ -6043,112 +6039,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate {
         // Append via batching buffer (skip empty content) with simple dedup by ID
         if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             if !messages.contains(where: { $0.id == finalMessage.id }) {
-                enqueuePublic(finalMessage)
+                publicMessagePipeline.enqueue(finalMessage)
             }
         }
-    }
-
-    // MARK: - Public message batching helpers
-    @MainActor
-    private func enqueuePublic(_ message: BitchatMessage) {
-        publicBuffer.append(message)
-        schedulePublicFlush()
-    }
-
-    @MainActor
-    private func schedulePublicFlush() {
-        if publicBufferTimer != nil { return }
-        publicBufferTimer = Timer.scheduledTimer(timeInterval: dynamicPublicFlushInterval,
-                                                 target: self,
-                                                 selector: #selector(onPublicBufferTimerFired(_:)),
-                                                 userInfo: nil,
-                                                 repeats: false)
-    }
-
-    @MainActor
-    private func flushPublicBuffer() {
-        publicBufferTimer?.invalidate()
-        publicBufferTimer = nil
-        guard !publicBuffer.isEmpty else { return }
-
-        // Dedup against existing by id and near-duplicate messages by content (within ~1s), across senders
-        var seenIDs = Set(messages.map { $0.id })
-        var added: [BitchatMessage] = []
-        var batchContentLatest: [String: Date] = [:]
-        for m in publicBuffer {
-            if seenIDs.contains(m.id) { continue }
-            let ckey = normalizedContentKey(m.content)
-            if let ts = contentLRUMap[ckey], abs(ts.timeIntervalSince(m.timestamp)) < 1.0 { continue }
-            if let ts = batchContentLatest[ckey], abs(ts.timeIntervalSince(m.timestamp)) < 1.0 { continue }
-            seenIDs.insert(m.id)
-            added.append(m)
-            batchContentLatest[ckey] = m.timestamp
-        }
-        publicBuffer.removeAll(keepingCapacity: true)
-        guard !added.isEmpty else { return }
-
-        // Indicate batching for conditional UI animations
-        isBatchingPublic = true
-        // Rough chronological order: sort the batch by timestamp before inserting
-        added.sort { $0.timestamp < $1.timestamp }
-        // Channel-aware insertion policy: geohash uses strict ordering; mesh allows small out-of-order appends
-        let threshold: TimeInterval = {
-            switch activeChannel {
-            case .location: return TransportConfig.uiLateInsertThresholdGeo
-            case .mesh: return TransportConfig.uiLateInsertThreshold
-            }
-        }()
-        let lastTs = messages.last?.timestamp ?? .distantPast
-        for m in added {
-            if m.timestamp < lastTs.addingTimeInterval(-threshold) {
-                let idx = insertionIndexByTimestamp(m.timestamp)
-                if idx >= messages.count { messages.append(m) } else { messages.insert(m, at: idx) }
-            } else if threshold == 0 {
-                // Strict ordering for geohash: always insert by timestamp
-                let idx = insertionIndexByTimestamp(m.timestamp)
-                if idx >= messages.count { messages.append(m) } else { messages.insert(m, at: idx) }
-            } else {
-                messages.append(m)
-            }
-            // Record content key for LRU
-            let ckey = normalizedContentKey(m.content)
-            recordContentKey(ckey, timestamp: m.timestamp)
-        }
-        trimMessagesIfNeeded()
-        // Update batch size stats and adjust interval
-        recentBatchSizes.append(added.count)
-        if recentBatchSizes.count > 10 { recentBatchSizes.removeFirst(recentBatchSizes.count - 10) }
-        let avg = recentBatchSizes.isEmpty ? 0.0 : Double(recentBatchSizes.reduce(0, +)) / Double(recentBatchSizes.count)
-        dynamicPublicFlushInterval = avg > 100.0 ? 0.12 : basePublicFlushInterval
-        // Prewarm formatting cache for current UI color scheme only
-        for m in added {
-            _ = self.formatMessageAsText(m, colorScheme: currentColorScheme)
-        }
-        // Reset batching flag (already on main actor)
-        isBatchingPublic = false
-        // If new items arrived during this flush, coalesce by flushing once more next tick
-        if !publicBuffer.isEmpty { schedulePublicFlush() }
-    }
-
-    // Timer selector to avoid @Sendable closure capture issues under Swift 6
-    @MainActor @objc
-    private func onPublicBufferTimerFired(_ timer: Timer) {
-        flushPublicBuffer()
-    }
-
-    @MainActor
-    private func insertionIndexByTimestamp(_ ts: Date) -> Int {
-        var low = 0
-        var high = messages.count
-        while low < high {
-            let mid = (low + high) / 2
-            if messages[mid].timestamp < ts {
-                low = mid + 1
-            } else {
-                high = mid
-            }
-        }
-        return low
     }
     
     /// Check for mentions and send notifications
@@ -6216,3 +6109,37 @@ private func checkForMentions(_ message: BitchatMessage) {
     }
 }
 // End of ChatViewModel class
+
+extension ChatViewModel: PublicMessagePipelineDelegate {
+    func pipelineCurrentMessages(_ pipeline: PublicMessagePipeline) -> [BitchatMessage] {
+        messages
+    }
+
+    func pipeline(_ pipeline: PublicMessagePipeline, setMessages messages: [BitchatMessage]) {
+        self.messages = messages
+    }
+
+    func pipeline(_ pipeline: PublicMessagePipeline, normalizeContent content: String) -> String {
+        normalizedContentKey(content)
+    }
+
+    func pipeline(_ pipeline: PublicMessagePipeline, contentTimestampForKey key: String) -> Date? {
+        contentLRUMap[key]
+    }
+
+    func pipeline(_ pipeline: PublicMessagePipeline, recordContentKey key: String, timestamp: Date) {
+        recordContentKey(key, timestamp: timestamp)
+    }
+
+    func pipelineTrimMessages(_ pipeline: PublicMessagePipeline) {
+        trimMessagesIfNeeded()
+    }
+
+    func pipelinePrewarmMessage(_ pipeline: PublicMessagePipeline, message: BitchatMessage) {
+        _ = formatMessageAsText(message, colorScheme: currentColorScheme)
+    }
+
+    func pipelineSetBatchingState(_ pipeline: PublicMessagePipeline, isBatching: Bool) {
+        isBatchingPublic = isBatching
+    }
+}

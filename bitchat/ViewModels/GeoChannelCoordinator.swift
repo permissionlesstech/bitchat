@@ -31,9 +31,9 @@ final class GeoChannelCoordinator {
         beginSampling: @escaping ([String]) -> Void,
         endSampling: @escaping () -> Void
     ) {
-        self.locationManager = locationManager ?? LocationChannelManager.shared
+        self.locationManager = locationManager ?? Self.defaultLocationManager()
         self.bookmarksStore = bookmarksStore ?? GeohashBookmarksStore.shared
-        self.torManager = torManager ?? TorManager.shared
+        self.torManager = torManager ?? Self.defaultTorManager()
         self.onChannelSwitch = onChannelSwitch
         self.beginSampling = beginSampling
         self.endSampling = endSampling
@@ -106,5 +106,13 @@ final class GeoChannelCoordinator {
 
     func refreshSampling() {
         updateSampling()
+    }
+    private static func defaultLocationManager() -> LocationChannelManager {
+        LocationChannelManager.shared
+    }
+
+    @MainActor
+    private static func defaultTorManager() -> TorManager {
+        TorManager.shared
     }
 }

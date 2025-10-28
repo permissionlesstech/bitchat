@@ -217,7 +217,27 @@ struct PeerIDTests {
         let short = peerID.toShort()
         #expect(short == peerID)
     }
-    
+
+    @Test func routingData_fromShortID() throws {
+        let peerID = PeerID(str: hex16)
+        let routing = try #require(peerID.routingData)
+        #expect(routing.count == 8)
+        #expect(routing == Data(hexString: hex16))
+    }
+
+    @Test func routingData_fromNoiseKey() throws {
+        let peerID = PeerID(str: hex64)
+        let routing = try #require(peerID.routingData)
+        let expectedShort = peerID.toShort()
+        #expect(routing == Data(hexString: expectedShort.id))
+    }
+
+    @Test func routingPeerRoundTrip() throws {
+        let raw = try #require(Data(hexString: hex16))
+        let peerID = try #require(PeerID(routingData: raw))
+        #expect(peerID.routingData == raw)
+    }
+
     // MARK: - Codable
 
     @Test func codable_emptyPrefix() throws {
