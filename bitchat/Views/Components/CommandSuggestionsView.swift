@@ -72,11 +72,19 @@ struct CommandSuggestionsView: View {
 
 @available(iOS 17, macOS 14, *)
 #Preview {
-    @Previewable @State var messageText: String = "/m"
+    @Previewable @State var messageText: String = "/"
+    let keychain = KeychainManager()
+    let viewModel = ChatViewModel(
+        keychain: keychain,
+        idBridge: NostrIdentityBridge(),
+        identityManager: SecureIdentityStateManager(keychain)
+    )
+    
     CommandSuggestionsView(
         messageText: $messageText,
         textColor: .green,
         backgroundColor: .primary,
         secondaryTextColor: .secondary
     )
+    .environmentObject(viewModel)
 }
