@@ -43,9 +43,6 @@ struct ContentView: View {
     @State private var showPeerList = false
     @State private var showSidebar = false
     @State private var showAppInfo = false
-    @State private var filteredCommands: [CommandInfo] = []
-    @State private var showCommandSuggestions = false
-    @State private var commandSuggestions: [String] = []
     @State private var showMessageActions = false
     @State private var selectedMessageSender: String?
     @State private var selectedMessageSenderID: PeerID?
@@ -606,19 +603,12 @@ struct ContentView: View {
                 .padding(.horizontal, 12)
             }
 
-            // Command suggestions
-            if showCommandSuggestions {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(filteredCommands) { info in
-                        commandRow(for: info)
-                    }
-                }
-                .background(backgroundColor)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4)
-                        .stroke(secondaryTextColor.opacity(0.3), lineWidth: 1)
-                )
-            }
+            CommandSuggestionsView(
+                messageText: $messageText,
+                textColor: textColor,
+                backgroundColor: backgroundColor,
+                secondaryTextColor: secondaryTextColor
+            )
 
             // Recording indicator
             if isPreparingVoiceNote || isRecordingVoiceNote {
@@ -657,24 +647,6 @@ struct ContentView: View {
                         let cursorPosition = newValue.count
                         viewModel.updateAutocomplete(for: newValue, cursorPosition: cursorPosition)
                     }
-
-                    if newValue.hasPrefix("/") && newValue.count >= 1 {
-                        let input = newValue.lowercased()
-                        let isGeoPublic: Bool = {
-                            if case .location = locationManager.selectedChannel { return true }
-                            return false
-                        }()
-                        let isGeoDM = viewModel.selectedPrivateChatPeer?.isGeoDM == true
-                        let allCommands = CommandInfo.all(isGeoPublic: isGeoPublic, isGeoDM: isGeoDM)
-
-                        filteredCommands = allCommands.filter { info in
-                            info.aliases.contains { $0.starts(with: input) }
-                        }
-                        showCommandSuggestions = !filteredCommands.isEmpty
-                    } else {
-                        showCommandSuggestions = false
-                        filteredCommands = []
-                    }
                 }
 
                 HStack(alignment: .center, spacing: 4) {
@@ -690,37 +662,6 @@ struct ContentView: View {
         .padding(.top, 6)
         .padding(.bottom, 8)
         .background(backgroundColor.opacity(0.95))
-    }
-
-    private func commandRow(for info: CommandInfo) -> some View {
-        Button(action: {
-            messageText = info.primaryAlias + " "
-            showCommandSuggestions = false
-            commandSuggestions = []
-        }) {
-            HStack {
-                Text(info.aliases.joined(separator: ", "))
-                    .font(.bitchatSystem(size: 11, design: .monospaced))
-                    .foregroundColor(textColor)
-                    .fontWeight(.medium)
-                
-                if let commandPlaceholder = info.placeholder {
-                    Text(commandPlaceholder)
-                        .font(.bitchatSystem(size: 10, design: .monospaced))
-                        .foregroundColor(secondaryTextColor.opacity(0.8))
-                }
-                Spacer()
-                
-                Text(info.description)
-                    .font(.bitchatSystem(size: 10, design: .monospaced))
-                    .foregroundColor(secondaryTextColor)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 3)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .buttonStyle(.plain)
-        .background(Color.gray.opacity(0.1))
     }
     
     private func handleOpenURL(_ url: URL) {
