@@ -14,7 +14,7 @@ enum CommandInfo: String, Identifiable {
     case block
     case clear
     case hug
-    case message
+    case message = "dm"
     case slap
     case unblock
     case who
@@ -23,77 +23,36 @@ enum CommandInfo: String, Identifiable {
     
     var id: String { rawValue }
     
-    var aliases: [String] {
-        switch self {
-        case .message:
-            return ["/m", "/msg"]
-        case .who:
-            return ["/w", "/who"]
-        default:
-            return ["/\(rawValue)"]
-        }
-    }
-    
-    var primaryAlias: String {
-        aliases[0]
-    }
-    
-    private var placeholderKey: String? {
-        switch self {
-        case .clear, .who:
-            return nil
-        default:
-            return "content.input.nickname_placeholder"
-        }
-    }
+    var alias: String { "/" + rawValue }
     
     var placeholder: String? {
-        guard let key = placeholderKey else { return nil }
-        return NSLocalizedString(key, comment: "placeholder for \(rawValue) command")
-    }
-    
-    private var descriptionKey: String {
         switch self {
-        case .block: return "content.commands.block"
-        case .clear: return "content.commands.clear"
-        case .hug: return "content.commands.hug"
-        case .message: return "content.commands.message"
-        case .slap: return "content.commands.slap"
-        case .unblock: return "content.commands.unblock"
-        case .who: return "content.commands.who"
-        case .favorite: return "content.commands.favorite"
-        case .unfavorite: return "content.commands.unfavorite"
+        case .block, .hug, .message, .slap, .unblock, .favorite, .unfavorite:
+            return "<" + String(localized: "content.input.nickname_placeholder") + ">"
+        case .clear, .who:
+            return nil
         }
     }
     
     var description: String {
-        NSLocalizedString(descriptionKey, comment: "about \(rawValue) command")
+        switch self {
+        case .block:        String(localized: "content.commands.block")
+        case .clear:        String(localized: "content.commands.clear")
+        case .hug:          String(localized: "content.commands.hug")
+        case .message:      String(localized: "content.commands.message")
+        case .slap:         String(localized: "content.commands.slap")
+        case .unblock:      String(localized: "content.commands.unblock")
+        case .who:          String(localized: "content.commands.who")
+        case .favorite:     String(localized: "content.commands.favorite")
+        case .unfavorite:   String(localized: "content.commands.unfavorite")
+        }
     }
     
     static func all(isGeoPublic: Bool, isGeoDM: Bool) -> [CommandInfo] {
-        let mandatory: [CommandInfo] = [.block, .clear, .hug, .message, .slap, .unblock, .who]
-        let optional: [CommandInfo] = [.favorite, .unfavorite]
-        let includeOptional = !(isGeoPublic || isGeoDM)
-        
-        return mandatory + (includeOptional ? optional : [])
-    }
-}
-
-// MARK: - Custom Init
-
-extension CommandInfo {
-    init?(from input: String) {
-        let cleaned = input.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-        let rawInput = cleaned.hasPrefix("/") ? String(cleaned.dropFirst()) : cleaned
-        
-        for command in CommandInfo.all(isGeoPublic: false, isGeoDM: false) {
-            let normalizedAliases = command.aliases.map { $0.lowercased().replacingOccurrences(of: "/", with: "") }
-            if normalizedAliases.contains(rawInput) {
-                self = command
-                return
-            }
+        let baseCommands: [CommandInfo] = [.block, .unblock, .clear, .hug, .message, .slap, .who]
+        if isGeoPublic || isGeoDM {
+            return baseCommands + [.favorite, .unfavorite]
         }
-
-        self.init(rawValue: rawInput)
+        return baseCommands
     }
 }

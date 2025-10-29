@@ -18,21 +18,21 @@ struct CommandSuggestionsView: View {
     let secondaryTextColor: Color
     
     private var filteredCommands: [CommandInfo] {
-        guard messageText.hasPrefix("/") else { return [] }
+        guard messageText.hasPrefix("/") && !messageText.contains(" ") else { return [] }
         let isGeoPublic = locationManager.selectedChannel.isLocation
         let isGeoDM = viewModel.selectedPrivateChatPeer?.isGeoDM == true
-        return CommandInfo.all(isGeoPublic: isGeoPublic, isGeoDM: isGeoDM).filter { info in
-            info.aliases.contains { $0.starts(with: messageText.lowercased()) }
+        return CommandInfo.all(isGeoPublic: isGeoPublic, isGeoDM: isGeoDM).filter { command in
+            command.alias.starts(with: messageText.lowercased())
         }
     }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(filteredCommands) { info in
+            ForEach(filteredCommands) { command in
                 Button {
-                    messageText = info.primaryAlias + " "
+                    messageText = command.alias + " "
                 } label: {
-                    buttonRow(for: info)
+                    buttonRow(for: command)
                 }
                 .buttonStyle(.plain)
                 .background(Color.gray.opacity(0.1))
@@ -45,22 +45,22 @@ struct CommandSuggestionsView: View {
         )
     }
     
-    private func buttonRow(for info: CommandInfo) -> some View {
+    private func buttonRow(for command: CommandInfo) -> some View {
         HStack {
-            Text(info.aliases.joined(separator: ", "))
+            Text(command.alias)
                 .font(.bitchatSystem(size: 11, design: .monospaced))
                 .foregroundColor(textColor)
                 .fontWeight(.medium)
             
-            if let commandPlaceholder = info.placeholder {
-                Text(commandPlaceholder)
+            if let placeholder = command.placeholder {
+                Text(placeholder)
                     .font(.bitchatSystem(size: 10, design: .monospaced))
                     .foregroundColor(secondaryTextColor.opacity(0.8))
             }
 
             Spacer()
             
-            Text(info.description)
+            Text(command.description)
                 .font(.bitchatSystem(size: 10, design: .monospaced))
                 .foregroundColor(secondaryTextColor)
         }
