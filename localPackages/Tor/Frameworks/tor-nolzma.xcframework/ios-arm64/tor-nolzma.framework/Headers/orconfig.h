@@ -7,12 +7,12 @@
 /* All assert failures are fatal */
 /* #undef ALL_BUGS_ARE_FATAL */
 
-/* # for 0.4.8.17 Approximate date when this software was released. (Updated
+/* # for 0.4.8.19 Approximate date when this software was released. (Updated
    when the version changes.) */
-#define APPROX_RELEASE_DATE "2025-06-30"
+#define APPROX_RELEASE_DATE "2025-10-06"
 
 /* tor's build directory */
-#define BUILDDIR "/Users/jack/vibe/Tor.framework-408.17.4/build/tor"
+#define BUILDDIR "/Users/jack/vibe/Tor.framework/build/tor"
 
 /* Compiler name */
 #define COMPILER /**/
@@ -24,10 +24,10 @@
 #define COMPILER_VERSION "17.0.0"
 
 /* tor's configuration directory */
-#define CONFDIR "/Users/jack/vibe/Tor.framework-408.17.4/build/iphoneos/libtor-nolzma-arm64/etc/tor"
+#define CONFDIR "/Users/jack/vibe/Tor.framework/build/iphoneos/libtor-nolzma-arm64/etc/tor"
 
 /* Flags passed to configure */
-#define CONFIG_FLAGS "--enable-silent-rules --enable-pic --disable-module-relay --disable-module-dirauth --disable-tool-name-check --disable-unittests --enable-static-openssl --enable-static-libevent --disable-asciidoc --disable-system-torrc --disable-linker-hardening --disable-dependency-tracking --disable-manpage --disable-html-manual --disable-gcc-warnings-advisory --enable-lzma=no --disable-zstd --with-libevent-dir=/Users/jack/vibe/Tor.framework-408.17.4/build/iphoneos/libevent-arm64 --with-openssl-dir=/Users/jack/vibe/Tor.framework-408.17.4/build/iphoneos/libssl-arm64 --prefix=/Users/jack/vibe/Tor.framework-408.17.4/build/iphoneos/libtor-nolzma-arm64 CC=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.5.sdk CPP=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -E -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.5.sdk CFLAGS=-Os -ffunction-sections -fdata-sections -miphoneos-version-min=12.0 CPPFLAGS= -Isrc/core -I/Users/jack/vibe/Tor.framework-408.17.4/build/iphoneos/libssl-arm64/include -I/Users/jack/vibe/Tor.framework-408.17.4/build/iphoneos/libevent-arm64/include -miphoneos-version-min=12.0 LDFLAGS=-lz  LZMA_CFLAGS=-I/Users/jack/vibe/Tor.framework-408.17.4/build/iphoneos/liblzma-arm64/include LZMA_LIBS=/Users/jack/vibe/Tor.framework-408.17.4/build/iphoneos/liblzma-arm64/lib/liblzma.a cross_compiling=yes ac_cv_func__NSGetEnviron=no ac_cv_func_clock_gettime=no ac_cv_func_getentropy=no"
+#define CONFIG_FLAGS "--enable-silent-rules --enable-pic --disable-module-relay --disable-module-dirauth --disable-tool-name-check --disable-unittests --enable-static-openssl --enable-static-libevent --disable-asciidoc --disable-system-torrc --disable-linker-hardening --disable-dependency-tracking --disable-manpage --disable-html-manual --disable-gcc-warnings-advisory --enable-lzma=no --disable-zstd --with-libevent-dir=/Users/jack/vibe/Tor.framework/build/iphoneos/libevent-arm64 --with-openssl-dir=/Users/jack/vibe/Tor.framework/build/iphoneos/libssl-arm64 --prefix=/Users/jack/vibe/Tor.framework/build/iphoneos/libtor-nolzma-arm64 CC=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk -Os -ffunction-sections -fdata-sections CPP=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -E -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk CPPFLAGS=-Isrc/core -I/Users/jack/vibe/Tor.framework/build/iphoneos/libssl-arm64/include -I/Users/jack/vibe/Tor.framework/build/iphoneos/libevent-arm64/include -miphoneos-version-min=12.0 -Os -ffunction-sections -fdata-sections LDFLAGS=-lz cross_compiling=yes ac_cv_func__NSGetEnviron=no ac_cv_func_clock_gettime=no ac_cv_func_getentropy=no"
 
 /* Enable smartlist debugging */
 /* #undef DEBUG_SMARTLIST */
@@ -720,7 +720,7 @@
 #define PACKAGE_NAME "tor"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "tor 0.4.8.17"
+#define PACKAGE_STRING "tor 0.4.8.19"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "tor"
@@ -729,7 +729,7 @@
 #define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "0.4.8.17"
+#define PACKAGE_VERSION "0.4.8.19"
 
 /* How to access the PC from a struct ucontext */
 /* #undef PC_FROM_UCONTEXT */
@@ -780,7 +780,7 @@
 #define SIZEOF___INT64 0
 
 /* tor's sourcedir directory */
-#define SRCDIR "/Users/jack/vibe/Tor.framework-408.17.4/build/tor"
+#define SRCDIR "/Users/jack/vibe/Tor.framework/build/tor"
 
 /* Set to 1 if we can compile a simple stdatomic example. */
 #define STDATOMIC_WORKS 1
@@ -908,7 +908,7 @@
 #define USING_TWOS_COMPLEMENT 1
 
 /* Version number of package */
-#define VERSION "0.4.8.17"
+#define VERSION "0.4.8.19"
 
 /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
    significant byte first (like Motorola and SPARC, unlike Intel). */

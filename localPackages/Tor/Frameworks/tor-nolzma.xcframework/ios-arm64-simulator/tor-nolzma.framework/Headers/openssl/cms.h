@@ -58,7 +58,7 @@ SKM_DEFINE_STACK_OF_INTERNAL(CMS_SignerInfo, CMS_SignerInfo, CMS_SignerInfo)
 #define sk_CMS_SignerInfo_unshift(sk, ptr) OPENSSL_sk_unshift(ossl_check_CMS_SignerInfo_sk_type(sk), ossl_check_CMS_SignerInfo_type(ptr))
 #define sk_CMS_SignerInfo_pop(sk) ((CMS_SignerInfo *)OPENSSL_sk_pop(ossl_check_CMS_SignerInfo_sk_type(sk)))
 #define sk_CMS_SignerInfo_shift(sk) ((CMS_SignerInfo *)OPENSSL_sk_shift(ossl_check_CMS_SignerInfo_sk_type(sk)))
-#define sk_CMS_SignerInfo_pop_free(sk, freefunc) OPENSSL_sk_pop_free(ossl_check_CMS_SignerInfo_sk_type(sk),ossl_check_CMS_SignerInfo_freefunc_type(freefunc))
+#define sk_CMS_SignerInfo_pop_free(sk, freefunc) OPENSSL_sk_pop_free(ossl_check_CMS_SignerInfo_sk_type(sk), ossl_check_CMS_SignerInfo_freefunc_type(freefunc))
 #define sk_CMS_SignerInfo_insert(sk, ptr, idx) OPENSSL_sk_insert(ossl_check_CMS_SignerInfo_sk_type(sk), ossl_check_CMS_SignerInfo_type(ptr), (idx))
 #define sk_CMS_SignerInfo_set(sk, idx, ptr) ((CMS_SignerInfo *)OPENSSL_sk_set(ossl_check_CMS_SignerInfo_sk_type(sk), (idx), ossl_check_CMS_SignerInfo_type(ptr)))
 #define sk_CMS_SignerInfo_find(sk, ptr) OPENSSL_sk_find(ossl_check_CMS_SignerInfo_sk_type(sk), ossl_check_CMS_SignerInfo_type(ptr))
@@ -84,7 +84,7 @@ SKM_DEFINE_STACK_OF_INTERNAL(CMS_RecipientEncryptedKey, CMS_RecipientEncryptedKe
 #define sk_CMS_RecipientEncryptedKey_unshift(sk, ptr) OPENSSL_sk_unshift(ossl_check_CMS_RecipientEncryptedKey_sk_type(sk), ossl_check_CMS_RecipientEncryptedKey_type(ptr))
 #define sk_CMS_RecipientEncryptedKey_pop(sk) ((CMS_RecipientEncryptedKey *)OPENSSL_sk_pop(ossl_check_CMS_RecipientEncryptedKey_sk_type(sk)))
 #define sk_CMS_RecipientEncryptedKey_shift(sk) ((CMS_RecipientEncryptedKey *)OPENSSL_sk_shift(ossl_check_CMS_RecipientEncryptedKey_sk_type(sk)))
-#define sk_CMS_RecipientEncryptedKey_pop_free(sk, freefunc) OPENSSL_sk_pop_free(ossl_check_CMS_RecipientEncryptedKey_sk_type(sk),ossl_check_CMS_RecipientEncryptedKey_freefunc_type(freefunc))
+#define sk_CMS_RecipientEncryptedKey_pop_free(sk, freefunc) OPENSSL_sk_pop_free(ossl_check_CMS_RecipientEncryptedKey_sk_type(sk), ossl_check_CMS_RecipientEncryptedKey_freefunc_type(freefunc))
 #define sk_CMS_RecipientEncryptedKey_insert(sk, ptr, idx) OPENSSL_sk_insert(ossl_check_CMS_RecipientEncryptedKey_sk_type(sk), ossl_check_CMS_RecipientEncryptedKey_type(ptr), (idx))
 #define sk_CMS_RecipientEncryptedKey_set(sk, idx, ptr) ((CMS_RecipientEncryptedKey *)OPENSSL_sk_set(ossl_check_CMS_RecipientEncryptedKey_sk_type(sk), (idx), ossl_check_CMS_RecipientEncryptedKey_type(ptr)))
 #define sk_CMS_RecipientEncryptedKey_find(sk, ptr) OPENSSL_sk_find(ossl_check_CMS_RecipientEncryptedKey_sk_type(sk), ossl_check_CMS_RecipientEncryptedKey_type(ptr))
@@ -110,7 +110,7 @@ SKM_DEFINE_STACK_OF_INTERNAL(CMS_RecipientInfo, CMS_RecipientInfo, CMS_Recipient
 #define sk_CMS_RecipientInfo_unshift(sk, ptr) OPENSSL_sk_unshift(ossl_check_CMS_RecipientInfo_sk_type(sk), ossl_check_CMS_RecipientInfo_type(ptr))
 #define sk_CMS_RecipientInfo_pop(sk) ((CMS_RecipientInfo *)OPENSSL_sk_pop(ossl_check_CMS_RecipientInfo_sk_type(sk)))
 #define sk_CMS_RecipientInfo_shift(sk) ((CMS_RecipientInfo *)OPENSSL_sk_shift(ossl_check_CMS_RecipientInfo_sk_type(sk)))
-#define sk_CMS_RecipientInfo_pop_free(sk, freefunc) OPENSSL_sk_pop_free(ossl_check_CMS_RecipientInfo_sk_type(sk),ossl_check_CMS_RecipientInfo_freefunc_type(freefunc))
+#define sk_CMS_RecipientInfo_pop_free(sk, freefunc) OPENSSL_sk_pop_free(ossl_check_CMS_RecipientInfo_sk_type(sk), ossl_check_CMS_RecipientInfo_freefunc_type(freefunc))
 #define sk_CMS_RecipientInfo_insert(sk, ptr, idx) OPENSSL_sk_insert(ossl_check_CMS_RecipientInfo_sk_type(sk), ossl_check_CMS_RecipientInfo_type(ptr), (idx))
 #define sk_CMS_RecipientInfo_set(sk, idx, ptr) ((CMS_RecipientInfo *)OPENSSL_sk_set(ossl_check_CMS_RecipientInfo_sk_type(sk), (idx), ossl_check_CMS_RecipientInfo_type(ptr)))
 #define sk_CMS_RecipientInfo_find(sk, ptr) OPENSSL_sk_find(ossl_check_CMS_RecipientInfo_sk_type(sk), ossl_check_CMS_RecipientInfo_type(ptr))
@@ -136,7 +136,7 @@ SKM_DEFINE_STACK_OF_INTERNAL(CMS_RevocationInfoChoice, CMS_RevocationInfoChoice,
 #define sk_CMS_RevocationInfoChoice_unshift(sk, ptr) OPENSSL_sk_unshift(ossl_check_CMS_RevocationInfoChoice_sk_type(sk), ossl_check_CMS_RevocationInfoChoice_type(ptr))
 #define sk_CMS_RevocationInfoChoice_pop(sk) ((CMS_RevocationInfoChoice *)OPENSSL_sk_pop(ossl_check_CMS_RevocationInfoChoice_sk_type(sk)))
 #define sk_CMS_RevocationInfoChoice_shift(sk) ((CMS_RevocationInfoChoice *)OPENSSL_sk_shift(ossl_check_CMS_RevocationInfoChoice_sk_type(sk)))
-#define sk_CMS_RevocationInfoChoice_pop_free(sk, freefunc) OPENSSL_sk_pop_free(ossl_check_CMS_RevocationInfoChoice_sk_type(sk),ossl_check_CMS_RevocationInfoChoice_freefunc_type(freefunc))
+#define sk_CMS_RevocationInfoChoice_pop_free(sk, freefunc) OPENSSL_sk_pop_free(ossl_check_CMS_RevocationInfoChoice_sk_type(sk), ossl_check_CMS_RevocationInfoChoice_freefunc_type(freefunc))
 #define sk_CMS_RevocationInfoChoice_insert(sk, ptr, idx) OPENSSL_sk_insert(ossl_check_CMS_RevocationInfoChoice_sk_type(sk), ossl_check_CMS_RevocationInfoChoice_type(ptr), (idx))
 #define sk_CMS_RevocationInfoChoice_set(sk, idx, ptr) ((CMS_RevocationInfoChoice *)OPENSSL_sk_set(ossl_check_CMS_RevocationInfoChoice_sk_type(sk), (idx), ossl_check_CMS_RevocationInfoChoice_type(ptr)))
 #define sk_CMS_RevocationInfoChoice_find(sk, ptr) OPENSSL_sk_find(ossl_check_CMS_RevocationInfoChoice_sk_type(sk), ossl_check_CMS_RevocationInfoChoice_type(ptr))
@@ -168,6 +168,7 @@ CMS_ContentInfo *CMS_ContentInfo_new_ex(OSSL_LIB_CTX *libctx, const char *propq)
 # define CMS_RECIPINFO_KEK               2
 # define CMS_RECIPINFO_PASS              3
 # define CMS_RECIPINFO_OTHER             4
+# define CMS_RECIPINFO_KEM               5
 
 /* S/MIME related flags */
 
@@ -498,6 +499,14 @@ int CMS_RecipientInfo_kari_decrypt(CMS_ContentInfo *cms,
 
 int CMS_SharedInfo_encode(unsigned char **pder, X509_ALGOR *kekalg,
                           ASN1_OCTET_STRING *ukm, int keylen);
+
+int CMS_RecipientInfo_kemri_cert_cmp(CMS_RecipientInfo *ri, X509 *cert);
+int CMS_RecipientInfo_kemri_set0_pkey(CMS_RecipientInfo *ri, EVP_PKEY *pk);
+EVP_CIPHER_CTX *CMS_RecipientInfo_kemri_get0_ctx(CMS_RecipientInfo *ri);
+X509_ALGOR *CMS_RecipientInfo_kemri_get0_kdf_alg(CMS_RecipientInfo *ri);
+int CMS_RecipientInfo_kemri_set_ukm(CMS_RecipientInfo *ri,
+                                    const unsigned char *ukm,
+                                    int ukmLength);
 
 /* Backward compatibility for spelling errors. */
 # define CMS_R_UNKNOWN_DIGEST_ALGORITM CMS_R_UNKNOWN_DIGEST_ALGORITHM

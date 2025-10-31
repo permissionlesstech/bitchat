@@ -122,6 +122,7 @@ void hs_cache_client_intro_state_purge(void);
 
 bool hs_cache_client_new_auth_parse(const ed25519_public_key_t *service_pk);
 
+uint64_t hs_cache_get_max_bytes(void);
 size_t hs_cache_get_total_allocation(void);
 void hs_cache_decrement_allocation(size_t n);
 void hs_cache_increment_allocation(size_t n);

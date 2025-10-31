@@ -1,6 +1,6 @@
 /* Copyright (c) 2003-2004, Roger Dingledine
  * Copyright (c) 2004-2006, Roger Dingledine, Nick Mathewson.
- * Copyright (c) 2007-2021, The Tor Project, Inc. */
+ * Copyright (c) 2007-2025, The Tor Project, Inc. */
 /* See LICENSE for licensing information */
 
 /**
@@ -361,9 +361,9 @@ monotime_coarse_diff_msec32(const monotime_coarse_t *start,
 #endif /* SIZEOF_VOID_P == 8 */
 }
 
-#ifdef TOR_UNIT_TESTS
 void tor_sleep_msec(int msec);
 
+#ifdef TOR_UNIT_TESTS
 void monotime_enable_test_mocking(void);
 void monotime_disable_test_mocking(void);
 void monotime_set_mock_time_nsec(int64_t);

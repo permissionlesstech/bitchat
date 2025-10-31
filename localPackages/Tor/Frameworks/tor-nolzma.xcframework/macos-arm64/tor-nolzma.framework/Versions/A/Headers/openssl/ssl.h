@@ -258,7 +258,7 @@ SKM_DEFINE_STACK_OF_INTERNAL(SRTP_PROTECTION_PROFILE, SRTP_PROTECTION_PROFILE, S
 #define sk_SRTP_PROTECTION_PROFILE_unshift(sk, ptr) OPENSSL_sk_unshift(ossl_check_SRTP_PROTECTION_PROFILE_sk_type(sk), ossl_check_SRTP_PROTECTION_PROFILE_type(ptr))
 #define sk_SRTP_PROTECTION_PROFILE_pop(sk) ((SRTP_PROTECTION_PROFILE *)OPENSSL_sk_pop(ossl_check_SRTP_PROTECTION_PROFILE_sk_type(sk)))
 #define sk_SRTP_PROTECTION_PROFILE_shift(sk) ((SRTP_PROTECTION_PROFILE *)OPENSSL_sk_shift(ossl_check_SRTP_PROTECTION_PROFILE_sk_type(sk)))
-#define sk_SRTP_PROTECTION_PROFILE_pop_free(sk, freefunc) OPENSSL_sk_pop_free(ossl_check_SRTP_PROTECTION_PROFILE_sk_type(sk),ossl_check_SRTP_PROTECTION_PROFILE_freefunc_type(freefunc))
+#define sk_SRTP_PROTECTION_PROFILE_pop_free(sk, freefunc) OPENSSL_sk_pop_free(ossl_check_SRTP_PROTECTION_PROFILE_sk_type(sk), ossl_check_SRTP_PROTECTION_PROFILE_freefunc_type(freefunc))
 #define sk_SRTP_PROTECTION_PROFILE_insert(sk, ptr, idx) OPENSSL_sk_insert(ossl_check_SRTP_PROTECTION_PROFILE_sk_type(sk), ossl_check_SRTP_PROTECTION_PROFILE_type(ptr), (idx))
 #define sk_SRTP_PROTECTION_PROFILE_set(sk, idx, ptr) ((SRTP_PROTECTION_PROFILE *)OPENSSL_sk_set(ossl_check_SRTP_PROTECTION_PROFILE_sk_type(sk), (idx), ossl_check_SRTP_PROTECTION_PROFILE_type(ptr)))
 #define sk_SRTP_PROTECTION_PROFILE_find(sk, ptr) OPENSSL_sk_find(ossl_check_SRTP_PROTECTION_PROFILE_sk_type(sk), ossl_check_SRTP_PROTECTION_PROFILE_type(ptr))
@@ -401,13 +401,16 @@ typedef int (*SSL_async_callback_fn)(SSL *s, void *arg);
 # define SSL_OP_ENABLE_MIDDLEBOX_COMPAT                  SSL_OP_BIT(20)
     /*
      * Prioritize Chacha20Poly1305 when client does.
-     * Modifies SSL_OP_CIPHER_SERVER_PREFERENCE
+     * Modifies SSL_OP_SERVER_PREFERENCE
      */
 # define SSL_OP_PRIORITIZE_CHACHA                        SSL_OP_BIT(21)
     /*
-     * Set on servers to choose the cipher according to server's preferences.
+     * Set on servers to choose cipher, curve or group according to server's
+     * preferences.
      */
-# define SSL_OP_CIPHER_SERVER_PREFERENCE                 SSL_OP_BIT(22)
+# define SSL_OP_SERVER_PREFERENCE                        SSL_OP_BIT(22)
+    /* Equivalent definition for backwards compatibility: */
+# define SSL_OP_CIPHER_SERVER_PREFERENCE SSL_OP_SERVER_PREFERENCE
     /*
      * If set, a server will allow a client to issue an SSLv3.0 version
      * number as latest version supported in the premaster secret, even when
@@ -446,8 +449,8 @@ typedef int (*SSL_async_callback_fn)(SSL *s, void *arg);
 # define SSL_OP_NO_RX_CERTIFICATE_COMPRESSION            SSL_OP_BIT(33)
     /* Enable KTLS TX zerocopy on Linux */
 # define SSL_OP_ENABLE_KTLS_TX_ZEROCOPY_SENDFILE         SSL_OP_BIT(34)
-
-#define SSL_OP_PREFER_NO_DHE_KEX                         SSL_OP_BIT(35)
+# define SSL_OP_PREFER_NO_DHE_KEX                        SSL_OP_BIT(35)
+# define SSL_OP_LEGACY_EC_POINT_FORMATS                  SSL_OP_BIT(36)
 
 /*
  * Option "collections."
@@ -824,7 +827,7 @@ void SSL_get0_next_proto_negotiated(const SSL *s, const unsigned char **data,
 # endif
 
 __owur int SSL_select_next_proto(unsigned char **out, unsigned char *outlen,
-                                 const unsigned char *in, unsigned int inlen,
+                                 const unsigned char *server, unsigned int server_len,
                                  const unsigned char *client,
                                  unsigned int client_len);
 
@@ -1010,7 +1013,7 @@ SKM_DEFINE_STACK_OF_INTERNAL(SSL_CIPHER, const SSL_CIPHER, SSL_CIPHER)
 #define sk_SSL_CIPHER_unshift(sk, ptr) OPENSSL_sk_unshift(ossl_check_SSL_CIPHER_sk_type(sk), ossl_check_SSL_CIPHER_type(ptr))
 #define sk_SSL_CIPHER_pop(sk) ((const SSL_CIPHER *)OPENSSL_sk_pop(ossl_check_SSL_CIPHER_sk_type(sk)))
 #define sk_SSL_CIPHER_shift(sk) ((const SSL_CIPHER *)OPENSSL_sk_shift(ossl_check_SSL_CIPHER_sk_type(sk)))
-#define sk_SSL_CIPHER_pop_free(sk, freefunc) OPENSSL_sk_pop_free(ossl_check_SSL_CIPHER_sk_type(sk),ossl_check_SSL_CIPHER_freefunc_type(freefunc))
+#define sk_SSL_CIPHER_pop_free(sk, freefunc) OPENSSL_sk_pop_free(ossl_check_SSL_CIPHER_sk_type(sk), ossl_check_SSL_CIPHER_freefunc_type(freefunc))
 #define sk_SSL_CIPHER_insert(sk, ptr, idx) OPENSSL_sk_insert(ossl_check_SSL_CIPHER_sk_type(sk), ossl_check_SSL_CIPHER_type(ptr), (idx))
 #define sk_SSL_CIPHER_set(sk, idx, ptr) ((const SSL_CIPHER *)OPENSSL_sk_set(ossl_check_SSL_CIPHER_sk_type(sk), (idx), ossl_check_SSL_CIPHER_type(ptr)))
 #define sk_SSL_CIPHER_find(sk, ptr) OPENSSL_sk_find(ossl_check_SSL_CIPHER_sk_type(sk), ossl_check_SSL_CIPHER_type(ptr))
@@ -1386,6 +1389,8 @@ DECLARE_PEM_rw(SSL_SESSION, SSL_SESSION)
 # define SSL_CTRL_GET0_IMPLEMENTED_GROUPS        139
 # define SSL_CTRL_GET_SIGNATURE_NAME             140
 # define SSL_CTRL_GET_PEER_SIGNATURE_NAME        141
+# define SSL_CTRL_GET_TLSEXT_STATUS_REQ_OCSP_RESP_EX        142
+# define SSL_CTRL_SET_TLSEXT_STATUS_REQ_OCSP_RESP_EX        143
 # define SSL_CERT_SET_FIRST                      1
 # define SSL_CERT_SET_NEXT                       2
 # define SSL_CERT_SET_SERVER                     3
@@ -2404,6 +2409,8 @@ __owur SSL *SSL_new_stream(SSL *s, uint64_t flags);
 __owur int SSL_set_incoming_stream_policy(SSL *s, int policy, uint64_t aec);
 
 #define SSL_ACCEPT_STREAM_NO_BLOCK      (1U << 0)
+#define SSL_ACCEPT_STREAM_UNI           (1U << 1)
+#define SSL_ACCEPT_STREAM_BIDI          (1U << 2)
 __owur SSL *SSL_accept_stream(SSL *s, uint64_t flags);
 __owur size_t SSL_get_accept_stream_queue_len(SSL *s);
 
