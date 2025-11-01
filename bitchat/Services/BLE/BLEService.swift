@@ -500,7 +500,7 @@ final class BLEService: NSObject {
             senderID: myPeerIDData,
             recipientID: nil,
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-            payload: Data(),
+            payload: Data(myNickname.utf8),
             signature: nil,
             ttl: messageTTL
         )
