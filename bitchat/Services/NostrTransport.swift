@@ -113,7 +113,10 @@ final class NostrTransport: Transport {
                 let (hrp, data) = try Bech32.decode(recipientNpub)
                 guard hrp == "npub" else { return }
                 recipientHex = data.hexEncodedString()
-            } catch { return }
+            } catch {
+                SecureLogger.error("NostrTransport: failed to decode recipient npub for favorite notification: \(error.localizedDescription)", category: .session)
+                return
+            }
             guard let embedded = NostrEmbeddedBitChat.encodePMForNostr(content: content, messageID: UUID().uuidString, recipientPeerID: peerID, senderPeerID: senderPeerID) else {
                 SecureLogger.error("NostrTransport: failed to embed favorite notification", category: .session)
                 return
@@ -138,7 +141,10 @@ final class NostrTransport: Transport {
                 let (hrp, data) = try Bech32.decode(recipientNpub)
                 guard hrp == "npub" else { return }
                 recipientHex = data.hexEncodedString()
-            } catch { return }
+            } catch {
+                SecureLogger.error("NostrTransport: failed to decode recipient npub for delivery ack: \(error.localizedDescription)", category: .session)
+                return
+            }
             guard let ack = NostrEmbeddedBitChat.encodeAckForNostr(type: .delivered, messageID: messageID, recipientPeerID: peerID, senderPeerID: senderPeerID) else {
                 SecureLogger.error("NostrTransport: failed to embed DELIVERED ack", category: .session)
                 return
@@ -222,7 +228,11 @@ extension NostrTransport {
                 let (hrp, data) = try Bech32.decode(recipientNpub)
                 guard hrp == "npub" else { scheduleNextReadAck(); return }
                 recipientHex = data.hexEncodedString()
-            } catch { scheduleNextReadAck(); return }
+            } catch {
+                SecureLogger.error("NostrTransport: failed to decode recipient npub for read ack: \(error.localizedDescription)", category: .session)
+                scheduleNextReadAck()
+                return
+            }
             guard let ack = NostrEmbeddedBitChat.encodeAckForNostr(type: .readReceipt, messageID: item.receipt.originalMessageID, recipientPeerID: item.peerID, senderPeerID: senderPeerID) else {
                 SecureLogger.error("NostrTransport: failed to embed READ ack", category: .session)
                 scheduleNextReadAck(); return
