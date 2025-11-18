@@ -222,7 +222,7 @@ final class NoiseCipherState {
         guard combinedPayload.count >= Self.NONCE_SIZE_BYTES else {
             return nil
         }
-
+        
         // Extract 4-byte nonce (big-endian)
         let nonceData = combinedPayload.prefix(Self.NONCE_SIZE_BYTES)
         let extractedNonce = nonceData.withUnsafeBytes { (bytes: UnsafeRawBufferPointer) -> UInt64 in
@@ -233,18 +233,18 @@ final class NoiseCipherState {
             }
             return result
         }
-
+        
         // Extract ciphertext (remaining bytes)
         let ciphertext = combinedPayload.dropFirst(Self.NONCE_SIZE_BYTES)
-
+        
         return (nonce: extractedNonce, ciphertext: Data(ciphertext))
     }
-
+    
     /// Convert nonce to 4-byte array (big-endian)
     private func nonceToBytes(_ nonce: UInt64) -> Data {
         var bytes = Data(count: Self.NONCE_SIZE_BYTES)
         withUnsafeBytes(of: nonce.bigEndian) { ptr in
-            // Copy only the last 4 bytes from the 8-byte UInt64 
+            // Copy only the last 4 bytes from the 8-byte UInt64
             let sourceBytes = ptr.bindMemory(to: UInt8.self)
             bytes.replaceSubrange(0..<Self.NONCE_SIZE_BYTES, with: sourceBytes.suffix(Self.NONCE_SIZE_BYTES))
         }
@@ -273,7 +273,7 @@ final class NoiseCipherState {
         let sealedBox = try ChaChaPoly.seal(plaintext, using: key, nonce: ChaChaPoly.Nonce(data: nonceData), authenticating: associatedData)
         // increment local nonce
         nonce += 1
-               
+        
         // Create combined payload: <nonce><ciphertext>
         let combinedPayload: Data
         if (useExtractedNonce) {
@@ -287,7 +287,7 @@ final class NoiseCipherState {
         if currentNonce > Self.HIGH_NONCE_WARNING_THRESHOLD {
             SecureLogger.warning("High nonce value detected: \(currentNonce) - consider rekeying", category: .encryption)
         }
-                
+        
         return combinedPayload
     }
     
@@ -316,7 +316,7 @@ final class NoiseCipherState {
                 SecureLogger.debug("Replay attack detected: nonce \(extractedNonce) rejected")
                 throw NoiseError.replayDetected
             }
-
+            
             // Split ciphertext and tag
             encryptedData = actualCiphertext.prefix(actualCiphertext.count - 16)
             tag = actualCiphertext.suffix(16)
@@ -451,13 +451,13 @@ final class NoiseSymmetricState {
         }
     }
     
-    func split() -> (NoiseCipherState, NoiseCipherState) {
+    func split(useExtractedNonce: Bool) -> (NoiseCipherState, NoiseCipherState) {
         let output = hkdf(chainingKey: chainingKey, inputKeyMaterial: Data(), numOutputs: 2)
         let tempKey1 = SymmetricKey(data: output[0])
         let tempKey2 = SymmetricKey(data: output[1])
         
-        let c1 = NoiseCipherState(key: tempKey1, useExtractedNonce: true)
-        let c2 = NoiseCipherState(key: tempKey2, useExtractedNonce: true)
+        let c1 = NoiseCipherState(key: tempKey1, useExtractedNonce: useExtractedNonce)
+        let c2 = NoiseCipherState(key: tempKey2, useExtractedNonce: useExtractedNonce)
         
         return (c1, c2)
     }
@@ -507,16 +507,24 @@ final class NoiseHandshakeState {
     private var messagePatterns: [[NoiseMessagePattern]] = []
     private var currentPattern = 0
     
+    // Test support: predetermined ephemeral keys for test vectors
+    private var predeterminedEphemeralKey: Curve25519.KeyAgreement.PrivateKey?
+    private var prologueData: Data
+    
     init(
         role: NoiseRole,
         pattern: NoisePattern,
         keychain: KeychainManagerProtocol,
         localStaticKey: Curve25519.KeyAgreement.PrivateKey? = nil,
-        remoteStaticKey: Curve25519.KeyAgreement.PublicKey? = nil
+        remoteStaticKey: Curve25519.KeyAgreement.PublicKey? = nil,
+        prologue: Data = Data(),
+        predeterminedEphemeralKey: Curve25519.KeyAgreement.PrivateKey? = nil
     ) {
         self.role = role
         self.pattern = pattern
         self.keychain = keychain
+        self.prologueData = prologue
+        self.predeterminedEphemeralKey = predeterminedEphemeralKey
         
         // Initialize static keys
         if let localKey = localStaticKey {
@@ -537,8 +545,8 @@ final class NoiseHandshakeState {
     }
     
     private func mixPreMessageKeys() {
-        // Mix prologue (empty for XX pattern normally)
-        symmetricState.mixHash(Data()) // Empty prologue for XX pattern
+        // Mix prologue
+        symmetricState.mixHash(self.prologueData)
         // For XX pattern, no pre-message keys
         // For IK/NK patterns, we'd mix the responder's static key here
         switch pattern {
@@ -556,15 +564,20 @@ final class NoiseHandshakeState {
         guard currentPattern < messagePatterns.count else {
             throw NoiseError.handshakeComplete
         }
-                
+        
         var messageBuffer = Data()
         let patterns = messagePatterns[currentPattern]
         
         for pattern in patterns {
             switch pattern {
             case .e:
-                // Generate ephemeral key
-                localEphemeralPrivate = Curve25519.KeyAgreement.PrivateKey()
+                // Generate ephemeral key (or use predetermined key for tests)
+                if let predetermined = predeterminedEphemeralKey {
+                    localEphemeralPrivate = predetermined
+                    predeterminedEphemeralKey = nil
+                } else {
+                    localEphemeralPrivate = Curve25519.KeyAgreement.PrivateKey()
+                }
                 localEphemeralPublic = localEphemeralPrivate!.publicKey
                 messageBuffer.append(localEphemeralPublic!.rawRepresentation)
                 symmetricState.mixHash(localEphemeralPublic!.rawRepresentation)
@@ -652,7 +665,7 @@ final class NoiseHandshakeState {
         guard currentPattern < messagePatterns.count else {
             throw NoiseError.handshakeComplete
         }
-                
+        
         var buffer = message
         let patterns = messagePatterns[currentPattern]
         
@@ -776,12 +789,12 @@ final class NoiseHandshakeState {
         return currentPattern >= messagePatterns.count
     }
     
-    func getTransportCiphers() throws -> (send: NoiseCipherState, receive: NoiseCipherState) {
+    func getTransportCiphers(useExtractedNonce: Bool) throws -> (send: NoiseCipherState, receive: NoiseCipherState) {
         guard isHandshakeComplete() else {
             throw NoiseError.handshakeNotComplete
         }
         
-        let (c1, c2) = symmetricState.split()
+        let (c1, c2) = symmetricState.split(useExtractedNonce: useExtractedNonce)
         
         // Initiator uses c1 for sending, c2 for receiving
         // Responder uses c2 for sending, c1 for receiving
