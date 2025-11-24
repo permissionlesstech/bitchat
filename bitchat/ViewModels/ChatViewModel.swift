@@ -934,7 +934,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
         
         switch noisePayload.type {
         case .privateMessage:
-            handlePrivateMessage(payload: noisePayload, senderPubkey: senderPubkey, convKey: convKey, id: id, messageTimestamp: messageTimestamp)
+            handlePrivateMessage(noisePayload, senderPubkey: senderPubkey, convKey: convKey, id: id, messageTimestamp: messageTimestamp)
         case .delivered:
             handleDelivered(noisePayload, senderPubkey: senderPubkey, convKey: convKey)
         case .readReceipt:
@@ -944,71 +944,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
             break
         }
     }
-    
-    private func handlePrivateMessage(
-        payload: NoisePayload,
-        senderPubkey: String,
-        convKey: PeerID,
-        id: NostrIdentity,
-        messageTimestamp: Date
-    ) {
-        guard let pm = PrivateMessagePacket.decode(from: payload.data) else { return }
-        let messageId = pm.messageID
-        
-        sendDeliveryAckIfNeeded(to: messageId, senderPubKey: senderPubkey, from: id)
-        
-        // Respect geohash blocks
-        if identityManager.isNostrBlocked(pubkeyHexLowercased: senderPubkey) {
-            return
-        }
-        
-        // Dedup storage
-        if privateChats[convKey]?.contains(where: { $0.id == messageId }) == true { return }
-        for (_, arr) in privateChats { if arr.contains(where: { $0.id == messageId }) { return } }
-        let senderName = displayNameForNostrPubkey(senderPubkey)
-        
-        let msg = BitchatMessage(
-            id: messageId,
-            sender: senderName,
-            content: pm.content,
-            timestamp: messageTimestamp,
-            isRelay: false,
-            isPrivate: true,
-            recipientNickname: nickname,
-            senderPeerID: convKey,
-            deliveryStatus: .delivered(to: nickname, at: Date())
-        )
-        
-        if privateChats[convKey] == nil {
-            privateChats[convKey] = []
-        }
-        privateChats[convKey]?.append(msg)
-        
-        // pared back: omit view-state log
-        let isViewing = selectedPrivateChatPeer == convKey
-        let wasReadBefore = sentReadReceipts.contains(messageId)
-        let isRecentMessage = Date().timeIntervalSince(messageTimestamp) < 30
-        let shouldMarkUnread = !wasReadBefore && !isViewing && isRecentMessage
-        if shouldMarkUnread {
-            unreadPrivateMessages.insert(convKey)
-        }
-        
-        if isViewing {
-            // pared back: omit pre-send READ log
-            sendReadReceiptIfNeeded(to: messageId, senderPubKey: senderPubkey, from: id)
-        } else {
-            // Notify for truly unread and recent messages when not viewing
-            if shouldMarkUnread {
-                NotificationService.shared.sendPrivateMessageNotification(
-                    from: senderName,
-                    message: pm.content,
-                    peerID: convKey
-                )
-            }
-        }
-        objectWillChange.send()
-    }
-    
+
     private func sendDeliveryAckIfNeeded(to messageId: String, senderPubKey: String, from id: NostrIdentity) {
         guard !sentGeoDeliveryAcks.contains(messageId) else { return }
         let nt = NostrTransport(keychain: keychain, idBridge: idBridge)
@@ -1665,9 +1601,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
         let messageId = pm.messageID
         
         SecureLogger.info("GeoDM: recv PM <- sender=\(senderPubkey.prefix(8))… mid=\(messageId.prefix(8))…", category: .session)
-        
+
         sendDeliveryAckIfNeeded(to: messageId, senderPubKey: senderPubkey, from: id)
-        
+
+        // Respect geohash blocks
+        if identityManager.isNostrBlocked(pubkeyHexLowercased: senderPubkey) {
+            return
+        }
+
         // Duplicate check
         if privateChats[convKey]?.contains(where: { $0.id == messageId }) == true { return }
         for (_, arr) in privateChats {
