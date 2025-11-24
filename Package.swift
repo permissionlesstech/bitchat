@@ -49,7 +49,8 @@ let package = Package(
                 "README.md"
             ],
             resources: [
-                .process("Localization")
+                .process("Localization"),
+                .process("Noise")
             ]
         )
     ]
