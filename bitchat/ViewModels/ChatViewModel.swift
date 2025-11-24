@@ -119,9 +119,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
         static let quickCashuPresence: NSRegularExpression = {
             try! NSRegularExpression(pattern: "\\bcashu[AB][A-Za-z0-9._-]{40,}\\b", options: [])
         }()
-        static let simplifyHTTPURL: NSRegularExpression = {
-            try! NSRegularExpression(pattern: "https?://[^\\s?#]+(?:[?#][^\\s]*)?", options: [.caseInsensitive])
-        }()
     }
 
     private typealias GeoOutgoingContext = (channel: GeohashChannel, event: NostrEvent, identity: NostrIdentity, teleported: Bool)
@@ -159,68 +156,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
         return "name:" + message.sender.lowercased()
     }
 
-    private func normalizedContentKey(_ content: String) -> String {
-        // Lowercase, simplify URLs (strip query/fragment), collapse whitespace, bound length
-        let lowered = content.lowercased()
-        let ns = lowered as NSString
-        let range = NSRange(location: 0, length: ns.length)
-        var simplified = ""
-        var last = 0
-        for m in Regexes.simplifyHTTPURL.matches(in: lowered, options: [], range: range) {
-            if m.range.location > last {
-                simplified += ns.substring(with: NSRange(location: last, length: m.range.location - last))
-            }
-            let url = ns.substring(with: m.range)
-            if let q = url.firstIndex(where: { $0 == "?" || $0 == "#" }) {
-                simplified += String(url[..<q])
-            } else {
-                simplified += url
-            }
-            last = m.range.location + m.range.length
-        }
-        if last < ns.length { simplified += ns.substring(with: NSRange(location: last, length: ns.length - last)) }
-        let trimmed = simplified.trimmingCharacters(in: .whitespacesAndNewlines)
-        let collapsed = trimmed.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
-        let prefix = String(collapsed.prefix(TransportConfig.contentKeyPrefixLength))
-        // Fast djb2 hash
-        let h = prefix.djb2()
-        return String(format: "h:%016llx", h)
-    }
-
-    // Persistent recent content map (LRU) to speed near-duplicate checks
-    private var contentLRUMap: [String: Date] = [:]
-    private var contentLRUOrder: [String] = []
-    private var contentLRUHead = 0
-    private let contentLRUCap = TransportConfig.contentLRUCap
-    private func recordContentKey(_ key: String, timestamp: Date) {
-        if contentLRUMap[key] == nil { contentLRUOrder.append(key) }
-        contentLRUMap[key] = timestamp
-        trimContentLRUIfNeeded()
-    }
-
-    private func trimContentLRUIfNeeded() {
-        let activeCount = contentLRUOrder.count - contentLRUHead
-        guard activeCount > contentLRUCap else { return }
-
-        let overflow = activeCount - contentLRUCap
-        for _ in 0..<overflow {
-            guard let victim = popOldestContentKey() else { break }
-            contentLRUMap.removeValue(forKey: victim)
-        }
-    }
-
-    private func popOldestContentKey() -> String? {
-        guard contentLRUHead < contentLRUOrder.count else { return nil }
-        let victim = contentLRUOrder[contentLRUHead]
-        contentLRUHead += 1
-
-        // Periodically compact the backing storage to avoid unbounded growth.
-        if contentLRUHead >= 32 && contentLRUHead * 2 >= contentLRUOrder.count {
-            contentLRUOrder.removeFirst(contentLRUHead)
-            contentLRUHead = 0
-        }
-        return victim
-    }
     // MARK: - Published Properties
     
     @Published var messages: [BitchatMessage] = []
@@ -247,12 +182,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
     }
     
     // MARK: - Service Delegates
-    
+
     private let commandProcessor: CommandProcessor
     private let messageRouter: MessageRouter
     private let privateChatManager: PrivateChatManager
     private let unifiedPeerService: UnifiedPeerService
     private let autocompleteService: AutocompleteService
+    private let deduplicationService: MessageDeduplicationService
     
     // Computed properties for compatibility
     @MainActor
@@ -356,11 +292,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
     let identityManager: SecureIdentityStateManagerProtocol
     
     private var nostrRelayManager: NostrRelayManager?
-    // PeerManager replaced by UnifiedPeerService
-    private var processedNostrEvents = Set<String>()  // Simple deduplication
-    private var processedNostrEventOrder: [String] = []
-    private var processedNostrEventHead = 0
-    private let maxProcessedNostrEvents = TransportConfig.uiProcessedNostrEventsCap
     private let userDefaults = UserDefaults.standard
     private let keychain: KeychainManagerProtocol
     private let nicknameKey = "bitchat.nickname"
@@ -473,9 +404,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
 
     // Throttle verification response toasts per peer to avoid spam
     private var lastVerifyToastAt: [String: Date] = [:]
-    
-    // Track processed Nostr ACKs to avoid duplicate processing
-    private var processedNostrAcks: Set<String> = []  // "messageId:ackType:senderPubkey" format
+
     // Track which GeoDM messages we've already sent a delivery ACK for (by messageID)
     private var sentGeoDeliveryAcks: Set<String> = []
     
@@ -521,7 +450,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
         // Allow UnifiedPeerService to route favorite notifications via mesh/Nostr
         self.unifiedPeerService.messageRouter = self.messageRouter
         self.autocompleteService = AutocompleteService()
-        
+        self.deduplicationService = MessageDeduplicationService()
+
         // Wire up dependencies
         self.commandProcessor.chatViewModel = self
         self.participantTracker.configure(context: self)
@@ -911,12 +841,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
     
     private func subscribeNostrEvent(_ event: NostrEvent) {
         guard event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue,
-              !processedNostrEvents.contains(event.id)
+              !deduplicationService.hasProcessedNostrEvent(event.id)
         else {
             return
         }
 
-        processedNostrEvents.insert(event.id)
+        deduplicationService.recordNostrEvent(event.id)
         
         if let gh = currentGeohash,
            let myGeoIdentity = try? idBridge.deriveIdentity(forGeohash: gh),
@@ -985,8 +915,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
     }
     
     private func subscribeGiftWrap(_ giftWrap: NostrEvent, id: NostrIdentity) {
-        guard !processedNostrEvents.contains(giftWrap.id) else { return }
-        recordProcessedEvent(giftWrap.id)
+        guard !deduplicationService.hasProcessedNostrEvent(giftWrap.id) else { return }
+        deduplicationService.recordNostrEvent(giftWrap.id)
         
         guard let (content, senderPubkey, rumorTs) = try? NostrProtocol.decryptPrivateMessage(giftWrap: giftWrap, recipientIdentity: id),
               content.hasPrefix("bitchat1:"),
@@ -1425,8 +1355,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
         refreshVisibleMessages(from: activeChannel)
 
         // Update content LRU for near-dup detection
-        let ckey = normalizedContentKey(message.content)
-        recordContentKey(ckey, timestamp: message.timestamp)
+        let ckey = deduplicationService.normalizedContentKey(message.content)
+        deduplicationService.recordContentKey(ckey, timestamp: message.timestamp)
 
         trimMessagesIfNeeded()
 
@@ -1500,7 +1430,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
             SecureLogger.info("GeoTeleport: mark self teleported key=\(key.prefix(8))… total=\(teleportedGeo.count)", category: .session)
         }
 
-        recordProcessedEvent(event.id)
+        deduplicationService.recordNostrEvent(event.id)
     }
 
     @MainActor
@@ -1510,8 +1440,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
         activeChannel = channel
         publicMessagePipeline.updateActiveChannel(channel)
         // Reset deduplication set and optionally hydrate timeline for mesh
-        processedNostrEvents.removeAll()
-        processedNostrEventOrder.removeAll()
+        deduplicationService.clearNostrCaches()
         switch channel {
         case .mesh:
             refreshVisibleMessages(from: .mesh)
@@ -1582,8 +1511,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
         guard event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue else { return }
         
         // Deduplicate
-        if processedNostrEvents.contains(event.id) { return }
-        recordProcessedEvent(event.id)
+        if deduplicationService.hasProcessedNostrEvent(event.id) { return }
+        deduplicationService.recordNostrEvent(event.id)
         
         // Log incoming tags for diagnostics
         let tagSummary = event.tags.map { "[" + $0.joined(separator: ",") + "]" }.joined(separator: ",")
@@ -1685,10 +1614,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
     }
     
     private func handleGiftWrap(_ giftWrap: NostrEvent, id: NostrIdentity) {
-        if processedNostrEvents.contains(giftWrap.id) {
+        if deduplicationService.hasProcessedNostrEvent(giftWrap.id) {
             return
         }
-        recordProcessedEvent(giftWrap.id)
+        deduplicationService.recordNostrEvent(giftWrap.id)
         
         // Decrypt with per-geohash identity
         guard let (content, senderPubkey, rumorTs) = try? NostrProtocol.decryptPrivateMessage(giftWrap: giftWrap, recipientIdentity: id) else {
@@ -2072,36 +2001,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
         return "anon#\(suffix)"
     }
 
-    // Dedup helper with small memory cap
-    private func recordProcessedEvent(_ id: String) {
-        processedNostrEvents.insert(id)
-        processedNostrEventOrder.append(id)
-        trimProcessedNostrEventsIfNeeded()
-    }
-
-    private func trimProcessedNostrEventsIfNeeded() {
-        let activeCount = processedNostrEventOrder.count - processedNostrEventHead
-        guard activeCount > maxProcessedNostrEvents else { return }
-
-        let overflow = activeCount - maxProcessedNostrEvents
-        for _ in 0..<overflow {
-            guard let old = popOldestProcessedEvent() else { break }
-            processedNostrEvents.remove(old)
-        }
-    }
-
-    private func popOldestProcessedEvent() -> String? {
-        guard processedNostrEventHead < processedNostrEventOrder.count else { return nil }
-        let value = processedNostrEventOrder[processedNostrEventHead]
-        processedNostrEventHead += 1
-
-        if processedNostrEventHead >= 32 && processedNostrEventHead * 2 >= processedNostrEventOrder.count {
-            processedNostrEventOrder.removeFirst(processedNostrEventHead)
-            processedNostrEventHead = 0
-        }
-        return value
-    }
-    
     /// Sends an encrypted private message to a specific peer.
     /// - Parameters:
     ///   - content: The message content to encrypt and send
@@ -2453,8 +2352,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
             trimMessagesIfNeeded()
         }
 
-        let key = normalizedContentKey(message.content)
-        recordContentKey(key, timestamp: timestamp)
+        let key = deduplicationService.normalizedContentKey(message.content)
+        deduplicationService.recordContentKey(key, timestamp: timestamp)
         objectWillChange.send()
         return message
     }
@@ -3450,8 +3349,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
         
         // Clear read receipt tracking
         sentReadReceipts.removeAll()
-        processedNostrAcks.removeAll()
-        
+        deduplicationService.clearAll()
+
         // Clear all caches
         invalidateEncryptionCache()
         
@@ -5183,8 +5082,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
         timelineStore.append(systemMessage, to: activeChannel)
         refreshVisibleMessages(from: activeChannel)
         // Track the content key so relayed copies of the same system-style message are ignored
-        let contentKey = normalizedContentKey(systemMessage.content)
-        recordContentKey(contentKey, timestamp: systemMessage.timestamp)
+        let contentKey = deduplicationService.normalizedContentKey(systemMessage.content)
+        deduplicationService.recordContentKey(contentKey, timestamp: systemMessage.timestamp)
         trimMessagesIfNeeded()
         objectWillChange.send()
     }
@@ -5262,8 +5161,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
     @MainActor
     private func handleNostrMessage(_ giftWrap: NostrEvent) {
         // Simple deduplication
-        if processedNostrEvents.contains(giftWrap.id) { return }
-        processedNostrEvents.insert(giftWrap.id)
+        if deduplicationService.hasProcessedNostrEvent(giftWrap.id) { return }
+        deduplicationService.recordNostrEvent(giftWrap.id)
         
         // Client-side filtering: ignore messages older than 24 hours
         // Add 15 minutes buffer since gift wrap timestamps are randomized ±15 minutes
@@ -6000,7 +5899,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
         let shouldRateLimit = finalMessage.sender != "system" || finalMessage.senderPeerID != nil
         if shouldRateLimit {
             let senderKey = normalizedSenderKey(for: finalMessage)
-            let contentKey = normalizedContentKey(finalMessage.content)
+            let contentKey = deduplicationService.normalizedContentKey(finalMessage.content)
             if !publicRateLimiter.allow(senderKey: senderKey, contentKey: contentKey) { return }
         }
 
@@ -6116,15 +6015,15 @@ extension ChatViewModel: PublicMessagePipelineDelegate {
     }
 
     func pipeline(_ pipeline: PublicMessagePipeline, normalizeContent content: String) -> String {
-        normalizedContentKey(content)
+        deduplicationService.normalizedContentKey(content)
     }
 
     func pipeline(_ pipeline: PublicMessagePipeline, contentTimestampForKey key: String) -> Date? {
-        contentLRUMap[key]
+        deduplicationService.contentTimestamp(forKey: key)
     }
 
     func pipeline(_ pipeline: PublicMessagePipeline, recordContentKey key: String, timestamp: Date) {
-        recordContentKey(key, timestamp: timestamp)
+        deduplicationService.recordContentKey(key, timestamp: timestamp)
     }
 
     func pipelineTrimMessages(_ pipeline: PublicMessagePipeline) {
