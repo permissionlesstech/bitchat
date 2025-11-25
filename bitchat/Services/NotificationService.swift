@@ -16,10 +16,18 @@ import AppKit
 
 final class NotificationService {
     static let shared = NotificationService()
-    
+
+    /// Returns true if running in test environment (XCTest, Swift Testing, or SPM tests)
+    private var isRunningTests: Bool {
+        NSClassFromString("XCTestCase") != nil ||
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil ||
+        Bundle.main.bundleIdentifier == nil
+    }
+
     private init() {}
-    
+
     func requestAuthorization() {
+        guard !isRunningTests else { return }
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if granted {
                 // Permission granted
@@ -36,6 +44,7 @@ final class NotificationService {
         userInfo: [String: Any]? = nil,
         interruptionLevel: UNNotificationInterruptionLevel = .active
     ) {
+        guard !isRunningTests else { return }
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body

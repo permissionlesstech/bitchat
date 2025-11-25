@@ -188,7 +188,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
     private let privateChatManager: PrivateChatManager
     private let unifiedPeerService: UnifiedPeerService
     private let autocompleteService: AutocompleteService
-    private let deduplicationService: MessageDeduplicationService
+    let deduplicationService: MessageDeduplicationService  // internal for test access
     
     // Computed properties for compatibility
     @MainActor
@@ -417,17 +417,34 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
     private var nostrKeyMapping: [PeerID: String] = [:]  // senderPeerID -> nostrPubkey
     
     // MARK: - Initialization
-    
+
     @MainActor
-    init(
+    convenience init(
         keychain: KeychainManagerProtocol,
         idBridge: NostrIdentityBridge,
         identityManager: SecureIdentityStateManagerProtocol
     ) {
+        self.init(
+            keychain: keychain,
+            idBridge: idBridge,
+            identityManager: identityManager,
+            transport: BLEService(keychain: keychain, idBridge: idBridge, identityManager: identityManager)
+        )
+    }
+
+    /// Testable initializer that accepts a Transport dependency.
+    /// Use this initializer for unit testing with MockTransport.
+    @MainActor
+    init(
+        keychain: KeychainManagerProtocol,
+        idBridge: NostrIdentityBridge,
+        identityManager: SecureIdentityStateManagerProtocol,
+        transport: Transport
+    ) {
         self.keychain = keychain
         self.idBridge = idBridge
         self.identityManager = identityManager
-        self.meshService = BLEService(keychain: keychain, idBridge: idBridge, identityManager: identityManager)
+        self.meshService = transport
         self.publicMessagePipeline = PublicMessagePipeline()
         
         // Load persisted read receipts
@@ -616,7 +633,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
             }
             .store(in: &cancellables)
         
-        // Request notification permission
+        // Request notification permission (guards test environment internally)
         NotificationService.shared.requestAuthorization()
         
         
