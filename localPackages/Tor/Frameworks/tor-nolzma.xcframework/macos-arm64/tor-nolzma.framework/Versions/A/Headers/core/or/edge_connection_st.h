@@ -89,6 +89,18 @@ struct edge_connection_t {
   uint64_t drain_start_usec;
 
   /**
+   * Monotime timestamp of when we started the XOFF grace period for this edge.
+   *
+   * See the comments on `XOFF_GRACE_PERIOD_USEC` for an explanation on how
+   * this is used.
+   *
+   * A value of 0 is considered "unset". This isn't great, but we set this
+   * field as the output from `monotime_absolute_usec()` which should only ever
+   * be 0 within the first 1 microsecond of initializing the monotonic timer
+   * subsystem. */
+  uint64_t xoff_grace_period_start_usec;
+
+  /**
    * Number of bytes written since we either emptied our buffers,
    * or sent an advisory drate rate. Can wrap, buf if so,
    * we must reset the usec timestamp above. (Or make this u64, idk).

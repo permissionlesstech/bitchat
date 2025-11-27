@@ -38,6 +38,8 @@
 extern "C" {
 #endif
 
+DEFINE_STACK_OF(OCSP_RESPONSE)
+
 /*-
 SSL_CTX -> X509_STORE
                 -> X509_LOOKUP
@@ -80,7 +82,7 @@ SKM_DEFINE_STACK_OF_INTERNAL(X509_LOOKUP, X509_LOOKUP, X509_LOOKUP)
 #define sk_X509_LOOKUP_unshift(sk, ptr) OPENSSL_sk_unshift(ossl_check_X509_LOOKUP_sk_type(sk), ossl_check_X509_LOOKUP_type(ptr))
 #define sk_X509_LOOKUP_pop(sk) ((X509_LOOKUP *)OPENSSL_sk_pop(ossl_check_X509_LOOKUP_sk_type(sk)))
 #define sk_X509_LOOKUP_shift(sk) ((X509_LOOKUP *)OPENSSL_sk_shift(ossl_check_X509_LOOKUP_sk_type(sk)))
-#define sk_X509_LOOKUP_pop_free(sk, freefunc) OPENSSL_sk_pop_free(ossl_check_X509_LOOKUP_sk_type(sk),ossl_check_X509_LOOKUP_freefunc_type(freefunc))
+#define sk_X509_LOOKUP_pop_free(sk, freefunc) OPENSSL_sk_pop_free(ossl_check_X509_LOOKUP_sk_type(sk), ossl_check_X509_LOOKUP_freefunc_type(freefunc))
 #define sk_X509_LOOKUP_insert(sk, ptr, idx) OPENSSL_sk_insert(ossl_check_X509_LOOKUP_sk_type(sk), ossl_check_X509_LOOKUP_type(ptr), (idx))
 #define sk_X509_LOOKUP_set(sk, idx, ptr) ((X509_LOOKUP *)OPENSSL_sk_set(ossl_check_X509_LOOKUP_sk_type(sk), (idx), ossl_check_X509_LOOKUP_type(ptr)))
 #define sk_X509_LOOKUP_find(sk, ptr) OPENSSL_sk_find(ossl_check_X509_LOOKUP_sk_type(sk), ossl_check_X509_LOOKUP_type(ptr))
@@ -106,7 +108,7 @@ SKM_DEFINE_STACK_OF_INTERNAL(X509_OBJECT, X509_OBJECT, X509_OBJECT)
 #define sk_X509_OBJECT_unshift(sk, ptr) OPENSSL_sk_unshift(ossl_check_X509_OBJECT_sk_type(sk), ossl_check_X509_OBJECT_type(ptr))
 #define sk_X509_OBJECT_pop(sk) ((X509_OBJECT *)OPENSSL_sk_pop(ossl_check_X509_OBJECT_sk_type(sk)))
 #define sk_X509_OBJECT_shift(sk) ((X509_OBJECT *)OPENSSL_sk_shift(ossl_check_X509_OBJECT_sk_type(sk)))
-#define sk_X509_OBJECT_pop_free(sk, freefunc) OPENSSL_sk_pop_free(ossl_check_X509_OBJECT_sk_type(sk),ossl_check_X509_OBJECT_freefunc_type(freefunc))
+#define sk_X509_OBJECT_pop_free(sk, freefunc) OPENSSL_sk_pop_free(ossl_check_X509_OBJECT_sk_type(sk), ossl_check_X509_OBJECT_freefunc_type(freefunc))
 #define sk_X509_OBJECT_insert(sk, ptr, idx) OPENSSL_sk_insert(ossl_check_X509_OBJECT_sk_type(sk), ossl_check_X509_OBJECT_type(ptr), (idx))
 #define sk_X509_OBJECT_set(sk, idx, ptr) ((X509_OBJECT *)OPENSSL_sk_set(ossl_check_X509_OBJECT_sk_type(sk), (idx), ossl_check_X509_OBJECT_type(ptr)))
 #define sk_X509_OBJECT_find(sk, ptr) OPENSSL_sk_find(ossl_check_X509_OBJECT_sk_type(sk), ossl_check_X509_OBJECT_type(ptr))
@@ -132,7 +134,7 @@ SKM_DEFINE_STACK_OF_INTERNAL(X509_VERIFY_PARAM, X509_VERIFY_PARAM, X509_VERIFY_P
 #define sk_X509_VERIFY_PARAM_unshift(sk, ptr) OPENSSL_sk_unshift(ossl_check_X509_VERIFY_PARAM_sk_type(sk), ossl_check_X509_VERIFY_PARAM_type(ptr))
 #define sk_X509_VERIFY_PARAM_pop(sk) ((X509_VERIFY_PARAM *)OPENSSL_sk_pop(ossl_check_X509_VERIFY_PARAM_sk_type(sk)))
 #define sk_X509_VERIFY_PARAM_shift(sk) ((X509_VERIFY_PARAM *)OPENSSL_sk_shift(ossl_check_X509_VERIFY_PARAM_sk_type(sk)))
-#define sk_X509_VERIFY_PARAM_pop_free(sk, freefunc) OPENSSL_sk_pop_free(ossl_check_X509_VERIFY_PARAM_sk_type(sk),ossl_check_X509_VERIFY_PARAM_freefunc_type(freefunc))
+#define sk_X509_VERIFY_PARAM_pop_free(sk, freefunc) OPENSSL_sk_pop_free(ossl_check_X509_VERIFY_PARAM_sk_type(sk), ossl_check_X509_VERIFY_PARAM_freefunc_type(freefunc))
 #define sk_X509_VERIFY_PARAM_insert(sk, ptr, idx) OPENSSL_sk_insert(ossl_check_X509_VERIFY_PARAM_sk_type(sk), ossl_check_X509_VERIFY_PARAM_type(ptr), (idx))
 #define sk_X509_VERIFY_PARAM_set(sk, idx, ptr) ((X509_VERIFY_PARAM *)OPENSSL_sk_set(ossl_check_X509_VERIFY_PARAM_sk_type(sk), (idx), ossl_check_X509_VERIFY_PARAM_type(ptr)))
 #define sk_X509_VERIFY_PARAM_find(sk, ptr) OPENSSL_sk_find(ossl_check_X509_VERIFY_PARAM_sk_type(sk), ossl_check_X509_VERIFY_PARAM_type(ptr))
@@ -169,7 +171,7 @@ SKM_DEFINE_STACK_OF_INTERNAL(X509_TRUST, X509_TRUST, X509_TRUST)
 #define sk_X509_TRUST_unshift(sk, ptr) OPENSSL_sk_unshift(ossl_check_X509_TRUST_sk_type(sk), ossl_check_X509_TRUST_type(ptr))
 #define sk_X509_TRUST_pop(sk) ((X509_TRUST *)OPENSSL_sk_pop(ossl_check_X509_TRUST_sk_type(sk)))
 #define sk_X509_TRUST_shift(sk) ((X509_TRUST *)OPENSSL_sk_shift(ossl_check_X509_TRUST_sk_type(sk)))
-#define sk_X509_TRUST_pop_free(sk, freefunc) OPENSSL_sk_pop_free(ossl_check_X509_TRUST_sk_type(sk),ossl_check_X509_TRUST_freefunc_type(freefunc))
+#define sk_X509_TRUST_pop_free(sk, freefunc) OPENSSL_sk_pop_free(ossl_check_X509_TRUST_sk_type(sk), ossl_check_X509_TRUST_freefunc_type(freefunc))
 #define sk_X509_TRUST_insert(sk, ptr, idx) OPENSSL_sk_insert(ossl_check_X509_TRUST_sk_type(sk), ossl_check_X509_TRUST_type(ptr), (idx))
 #define sk_X509_TRUST_set(sk, idx, ptr) ((X509_TRUST *)OPENSSL_sk_set(ossl_check_X509_TRUST_sk_type(sk), (idx), ossl_check_X509_TRUST_type(ptr)))
 #define sk_X509_TRUST_find(sk, ptr) OPENSSL_sk_find(ossl_check_X509_TRUST_sk_type(sk), ossl_check_X509_TRUST_type(ptr))
@@ -413,6 +415,14 @@ X509_LOOKUP_ctrl_ex((x), X509_L_ADD_STORE, (name), 0, NULL,           \
 # define X509_V_ERR_EC_KEY_EXPLICIT_PARAMS               94
 # define X509_V_ERR_RPK_UNTRUSTED                        95
 
+/* additional OCSP status errors */
+# define X509_V_ERR_OCSP_RESP_INVALID                    96
+# define X509_V_ERR_OCSP_SIGNATURE_FAILURE               97
+# define X509_V_ERR_OCSP_NOT_YET_VALID                   98
+# define X509_V_ERR_OCSP_HAS_EXPIRED                     99
+# define X509_V_ERR_OCSP_NO_RESPONSE                    100
+# define X509_V_ERR_CRL_VERIFY_FAILED                   101
+
 /* Certificate verify flags */
 # ifndef OPENSSL_NO_DEPRECATED_1_1_0
 #  define X509_V_FLAG_CB_ISSUER_CHECK             0x0   /* Deprecated */
@@ -463,6 +473,11 @@ X509_LOOKUP_ctrl_ex((x), X509_L_ADD_STORE, (name), 0, NULL,           \
 # define X509_V_FLAG_NO_ALT_CHAINS               0x100000
 /* Do not check certificate/CRL validity against current time */
 # define X509_V_FLAG_NO_CHECK_TIME               0x200000
+
+/* Verify OCSP stapling response for server certificate */
+# define X509_V_FLAG_OCSP_RESP_CHECK 0x400000
+/* Verify OCSP stapling responses for whole chain */
+# define X509_V_FLAG_OCSP_RESP_CHECK_ALL 0x800000
 
 # define X509_VP_FLAG_DEFAULT                    0x1
 # define X509_VP_FLAG_OVERWRITE                  0x2
@@ -772,6 +787,9 @@ void X509_STORE_CTX_set_cert(X509_STORE_CTX *ctx, X509 *target);
 void X509_STORE_CTX_set0_rpk(X509_STORE_CTX *ctx, EVP_PKEY *target);
 void X509_STORE_CTX_set0_verified_chain(X509_STORE_CTX *c, STACK_OF(X509) *sk);
 void X509_STORE_CTX_set0_crls(X509_STORE_CTX *ctx, STACK_OF(X509_CRL) *sk);
+# ifndef OPENSSL_NO_OCSP
+void X509_STORE_CTX_set_ocsp_resp(X509_STORE_CTX *ctx, STACK_OF(OCSP_RESPONSE) *sk);
+# endif
 int X509_STORE_CTX_set_purpose(X509_STORE_CTX *ctx, int purpose);
 int X509_STORE_CTX_set_trust(X509_STORE_CTX *ctx, int trust);
 int X509_STORE_CTX_purpose_inherit(X509_STORE_CTX *ctx, int def_purpose,

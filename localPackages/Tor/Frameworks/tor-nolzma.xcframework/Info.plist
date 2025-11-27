@@ -8,7 +8,7 @@
 			<key>BinaryPath</key>
 			<string>tor-nolzma.framework/tor-nolzma</string>
 			<key>LibraryIdentifier</key>
-			<string>macos-arm64</string>
+			<string>ios-arm64</string>
 			<key>LibraryPath</key>
 			<string>tor-nolzma.framework</string>
 			<key>SupportedArchitectures</key>
@@ -16,7 +16,7 @@
 				<string>arm64</string>
 			</array>
 			<key>SupportedPlatform</key>
-			<string>macos</string>
+			<string>ios</string>
 		</dict>
 		<dict>
 			<key>BinaryPath</key>
@@ -36,9 +36,9 @@
 		</dict>
 		<dict>
 			<key>BinaryPath</key>
-			<string>tor-nolzma.framework/tor-nolzma</string>
+			<string>tor-nolzma.framework/Versions/A/tor-nolzma</string>
 			<key>LibraryIdentifier</key>
-			<string>ios-arm64</string>
+			<string>macos-arm64</string>
 			<key>LibraryPath</key>
 			<string>tor-nolzma.framework</string>
 			<key>SupportedArchitectures</key>
@@ -46,7 +46,7 @@
 				<string>arm64</string>
 			</array>
 			<key>SupportedPlatform</key>
-			<string>ios</string>
+			<string>macos</string>
 		</dict>
 	</array>
 	<key>CFBundlePackageType</key>

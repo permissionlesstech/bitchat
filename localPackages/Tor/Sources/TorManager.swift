@@ -348,17 +348,16 @@ public final class TorManager: ObservableObject {
     public func ensureRunningOnForeground() {
         // Respect global start policy
         if !allowAutoStart { return }
-        // iOS can suspend Tor harshly; the most reliable approach for
-        // embedding is to restart Tor every time we become active.
         Task.detached(priority: .userInitiated) { [weak self] in
             guard let self = self else { return }
-            // Claim the restart under MainActor to avoid races
+            // Claim the recovery attempt under MainActor to avoid races
             let claimed: Bool = await MainActor.run {
                 if self.isStarting || self.restarting { return false }
                 self.restarting = true
                 return true
             }
-            if !claimed { return }
+            guard claimed else { return }
+
             if await self.resumeTorIfPossible() {
                 await MainActor.run {
                     self.restarting = false
@@ -366,8 +365,40 @@ public final class TorManager: ObservableObject {
                 }
                 return
             }
-            await self.restartTor()
+
+            let torRunning = tor_host_is_running() != 0
+            if !torRunning {
+                SecureLogger.warning("TorManager: resume failed; Tor thread not running, starting fresh", category: .session)
+                await MainActor.run {
+                    self.didStart = false
+                    self.controlMonitorStarted = false
+                }
+                await MainActor.run { self.startIfNeeded() }
+            } else {
+                SecureLogger.warning("TorManager: resume failed but Tor thread still running; will monitor readiness", category: .session)
+                await MainActor.run {
+                    self.isStarting = false
+                    self.scheduleSocksProbeAfterResume()
+                }
+            }
+
             await MainActor.run { self.restarting = false }
+        }
+    }
+
+    private func scheduleSocksProbeAfterResume() {
+        Task.detached(priority: .utility) { [weak self] in
+            guard let self = self else { return }
+            let recovered = await self.waitForSocksReady(timeout: 20.0)
+            await MainActor.run {
+                self.isStarting = false
+                if recovered {
+                    self.socksReady = true
+                    SecureLogger.info("TorManager: SOCKS recovered after resume without restart", category: .session)
+                } else if !self.isReady {
+                    SecureLogger.warning("TorManager: SOCKS still unreachable after resume attempt", category: .session)
+                }
+            }
         }
     }
 
@@ -566,11 +597,10 @@ public final class TorManager: ObservableObject {
                 SecureLogger.info("TorManager: resumed Tor after extended wait", category: .session)
                 return true
             }
-        } else {
-            await MainActor.run { self.isStarting = false }
         }
 
-        SecureLogger.warning("TorManager: ACTIVE resume failed; will restart", category: .session)
+        await MainActor.run { self.isStarting = false }
+        SecureLogger.warning("TorManager: ACTIVE resume failed; Tor remains running", category: .session)
         return false
     }
 

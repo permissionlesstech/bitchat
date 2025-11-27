@@ -1,7 +1,7 @@
 /* Copyright (c) 2001 Matej Pfajfar.
  * Copyright (c) 2001-2004, Roger Dingledine.
  * Copyright (c) 2004-2006, Roger Dingledine, Nick Mathewson.
- * Copyright (c) 2007-2021, The Tor Project, Inc. */
+ * Copyright (c) 2007-2025, The Tor Project, Inc. */
 /* See LICENSE for licensing information */
 
 /**
@@ -38,5 +38,7 @@ int channelpadding_send_enable_command(channel_t *chan, uint16_t low_timeout,
 int channelpadding_get_circuits_available_timeout(void);
 unsigned int channelpadding_get_channel_idle_timeout(const channel_t *, int);
 void channelpadding_new_consensus_params(const networkstatus_t *ns);
+
+void channelpadding_log_heartbeat(void);
 
 #endif /* !defined(TOR_CHANNELPADDING_H) */

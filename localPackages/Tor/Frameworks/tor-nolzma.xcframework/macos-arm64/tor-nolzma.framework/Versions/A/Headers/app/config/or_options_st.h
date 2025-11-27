@@ -203,6 +203,10 @@ struct or_options_t {
   /** Above this value, consider ourselves low on RAM. */
   uint64_t MaxMemInQueues_low_threshold;
 
+  uint64_t MaxHSDirCacheBytes;/**< If we have more memory than this allocated
+                                * for the hidden service directory cache,
+                                * run the HS cache OOM handler */
+
   /** @name port booleans
    *
    * Derived booleans: For server ports and ControlPort, true iff there is a

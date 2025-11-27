@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2024 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 2019-2025 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -169,6 +169,7 @@
  * 'no-deprecated'.
  */
 
+# undef OPENSSL_NO_DEPRECATED_3_6
 # undef OPENSSL_NO_DEPRECATED_3_4
 # undef OPENSSL_NO_DEPRECATED_3_1
 # undef OPENSSL_NO_DEPRECATED_3_0
@@ -179,6 +180,17 @@
 # undef OPENSSL_NO_DEPRECATED_1_0_0
 # undef OPENSSL_NO_DEPRECATED_0_9_8
 
+# if OPENSSL_API_LEVEL >= 30600
+#  ifndef OPENSSL_NO_DEPRECATED
+#   define OSSL_DEPRECATEDIN_3_6                OSSL_DEPRECATED(3.6)
+#   define OSSL_DEPRECATEDIN_3_6_FOR(msg)       OSSL_DEPRECATED_FOR(3.6, msg)
+#  else
+#   define OPENSSL_NO_DEPRECATED_3_6
+#  endif
+# else
+#  define OSSL_DEPRECATEDIN_3_6
+#  define OSSL_DEPRECATEDIN_3_6_FOR(msg)
+# endif
 # if OPENSSL_API_LEVEL >= 30500
 #  ifndef OPENSSL_NO_DEPRECATED
 #   define OSSL_DEPRECATEDIN_3_5                OSSL_DEPRECATED(3.5)
