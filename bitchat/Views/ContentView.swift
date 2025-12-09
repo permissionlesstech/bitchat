@@ -1436,6 +1436,9 @@ struct ContentView: View {
                 LocationChannelManager.shared.endLiveRefresh()
             }
             .onChange(of: locationManager.availableChannels) { channels in
+                // Only auto-update notesGeohash if sheet is not already open
+                // (user may have selected a specific channel's geohash)
+                guard !showLocationNotes else { return }
                 if let current = channels.first(where: { $0.level == .building })?.geohash,
                     notesGeohash != current {
                     notesGeohash = current
