@@ -1282,14 +1282,12 @@ struct ContentView: View {
                         String(localized: "content.accessibility.open_unread_private_chat", comment: "Accessibility label for the unread private chat button")
                     )
                 }
-                // Notes icon (mesh only and when location is authorized), to the left of #mesh
-                if case .mesh = locationManager.selectedChannel, locationManager.permissionState == .authorized {
+                // Bookmark toggle and notes icon (geochats only): to the left of #geohash
+                // Notes post to Nostr (internet), so they belong in location channels, not #mesh
+                if case .location(let ch) = locationManager.selectedChannel {
+                    // Notes icon - posts permanent notes to Nostr for this location
                     Button(action: {
-                        // Kick a one-shot refresh and show the sheet immediately.
-                        LocationChannelManager.shared.enableLocationChannels()
-                        LocationChannelManager.shared.refreshChannels()
-                        // If we already have a block geohash, pass it; otherwise wait in the sheet.
-                        notesGeohash = LocationChannelManager.shared.availableChannels.first(where: { $0.level == .building })?.geohash
+                        notesGeohash = ch.geohash
                         showLocationNotes = true
                     }) {
                         HStack(alignment: .center, spacing: 4) {
@@ -1304,10 +1302,6 @@ struct ContentView: View {
                     .accessibilityLabel(
                         String(localized: "content.accessibility.location_notes", comment: "Accessibility label for location notes button")
                     )
-                }
-
-                // Bookmark toggle (geochats): to the left of #geohash
-                if case .location(let ch) = locationManager.selectedChannel {
                     Button(action: { GeohashBookmarksStore.shared.toggle(ch.geohash) }) {
                         Image(systemName: GeohashBookmarksStore.shared.isBookmarked(ch.geohash) ? "bookmark.fill" : "bookmark")
                             .font(.bitchatSystem(size: 12))
@@ -1442,6 +1436,9 @@ struct ContentView: View {
                 LocationChannelManager.shared.endLiveRefresh()
             }
             .onChange(of: locationManager.availableChannels) { channels in
+                // Only auto-update notesGeohash if sheet is not already open
+                // (user may have selected a specific channel's geohash)
+                guard !showLocationNotes else { return }
                 if let current = channels.first(where: { $0.level == .building })?.geohash,
                     notesGeohash != current {
                     notesGeohash = current
