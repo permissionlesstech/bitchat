@@ -411,7 +411,7 @@ struct LocationChannelsSheet: View {
                 Text(subtitleFull)
                     .font(.bitchatSystem(size: 12, design: .monospaced))
                     .foregroundColor(.secondary)
-                    .lineLimit(1)
+                    .lineLimit(2)
                     .truncationMode(.tail)
                 }
                 Spacer()

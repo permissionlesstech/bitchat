@@ -5,7 +5,7 @@ import Foundation
 /// Thread-safe deduplicator with LRU eviction and time-based expiry.
 /// Used for both message ID deduplication (network layer) and content key deduplication (UI layer).
 final class MessageDeduplicator {
-    private struct Entry {
+    private struct Entry: Equatable {
         let id: String
         let timestamp: Date
     }
@@ -31,18 +31,20 @@ final class MessageDeduplicator {
         self.maxCount = maxCount
     }
 
-    /// Check if message is duplicate and add if not
+    /// Check if message is duplicate and add if not.
+    /// - Parameter id: The message identifier to check.
+    /// - Returns: `true` if the message was already seen, `false` otherwise.
     func isDuplicate(_ id: String) -> Bool {
         lock.lock()
         defer { lock.unlock() }
 
-        cleanupOldEntries()
+        let now = Date()
+        cleanupOldEntries(before: now.addingTimeInterval(-maxAge))
 
         if lookup[id] != nil {
             return true
         }
 
-        let now = Date()
         entries.append(Entry(id: id, timestamp: now))
         lookup[id] = now
         trimIfNeeded()
@@ -89,18 +91,22 @@ final class MessageDeduplicator {
     }
 
     private func trimIfNeeded() {
-        // Soft-cap and advance head by a chunk to avoid O(n) shifting
-        if (entries.count - head) > maxCount {
-            let removeCount = min(100, entries.count - head)
-            for i in head..<(head + removeCount) {
-                lookup.removeValue(forKey: entries[i].id)
-            }
-            head += removeCount
-            // Periodically compact to reclaim memory
-            if head > entries.count / 2 {
-                entries.removeFirst(head)
-                head = 0
-            }
+        let activeCount = entries.count - head
+        guard activeCount > maxCount else { return }
+
+        // Remove down to 75% of maxCount for better amortization
+        let targetCount = (maxCount * 3) / 4
+        let removeCount = activeCount - targetCount
+
+        for i in head..<(head + removeCount) {
+            lookup.removeValue(forKey: entries[i].id)
+        }
+        head += removeCount
+
+        // Compact when head exceeds half the array to reclaim memory
+        if head > entries.count / 2 {
+            entries.removeFirst(head)
+            head = 0
         }
     }
 
@@ -114,24 +120,25 @@ final class MessageDeduplicator {
         lookup.removeAll()
     }
 
-    /// Periodic cleanup
+    /// Periodic cleanup of expired entries and memory optimization.
     func cleanup() {
         lock.lock()
         defer { lock.unlock() }
 
-        cleanupOldEntries()
+        cleanupOldEntries(before: Date().addingTimeInterval(-maxAge))
 
-        if entries.capacity > maxCount * 2 {
+        // Shrink capacity if significantly oversized
+        if entries.capacity > maxCount * 2 && entries.count < maxCount {
             entries.reserveCapacity(maxCount)
         }
     }
 
-    private func cleanupOldEntries() {
-        let cutoff = Date().addingTimeInterval(-maxAge)
+    private func cleanupOldEntries(before cutoff: Date) {
         while head < entries.count, entries[head].timestamp < cutoff {
             lookup.removeValue(forKey: entries[head].id)
             head += 1
         }
+        // Compact when head exceeds half the array
         if head > 0 && head > entries.count / 2 {
             entries.removeFirst(head)
             head = 0
