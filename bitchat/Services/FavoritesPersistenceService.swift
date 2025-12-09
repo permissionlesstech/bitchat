@@ -26,7 +26,7 @@ final class FavoritesPersistenceService: ObservableObject {
 
     private static let storageKey = "chat.bitchat.favorites"
     private static let keychainService = "chat.bitchat.favorites"
-    private let keychain: KeychainHelperProtocol
+    private let keychain: KeychainManagerProtocol
     
     @Published private(set) var favorites: [Data: FavoriteRelationship] = [:] // Noise pubkey -> relationship
     @Published private(set) var mutualFavorites: Set<Data> = []
@@ -35,8 +35,8 @@ final class FavoritesPersistenceService: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     
     static let shared = FavoritesPersistenceService()
-    
-    init(keychain: KeychainHelperProtocol = KeychainHelper()) {
+
+    init(keychain: KeychainManagerProtocol = KeychainManager()) {
         self.keychain = keychain
         loadFavorites()
         
