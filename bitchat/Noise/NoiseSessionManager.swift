@@ -15,25 +15,37 @@ final class NoiseSessionManager {
     private let localStaticKey: Curve25519.KeyAgreement.PrivateKey
     private let keychain: KeychainManagerProtocol
     private let managerQueue = DispatchQueue(label: "chat.bitchat.noise.manager", attributes: .concurrent)
-    
+    private let managerQueueKey = DispatchSpecificKey<Void>()
+
     // Callbacks
     var onSessionEstablished: ((PeerID, Curve25519.KeyAgreement.PublicKey) -> Void)?
     var onSessionFailed: ((PeerID, Error) -> Void)?
-    
+
     init(localStaticKey: Curve25519.KeyAgreement.PrivateKey, keychain: KeychainManagerProtocol) {
         self.localStaticKey = localStaticKey
         self.keychain = keychain
+        managerQueue.setSpecific(key: managerQueueKey, value: ())
+    }
+
+    /// Check if currently executing on the manager queue (for debugging re-entrancy issues)
+    private var isOnManagerQueue: Bool {
+        DispatchQueue.getSpecific(key: managerQueueKey) != nil
     }
     
     // MARK: - Session Management
-    
+
     func getSession(for peerID: PeerID) -> NoiseSession? {
+        // Re-entrancy check: if already on managerQueue, access directly to avoid deadlock
+        if isOnManagerQueue {
+            return sessions[peerID]
+        }
         return managerQueue.sync {
             return sessions[peerID]
         }
     }
-    
+
     func removeSession(for peerID: PeerID) {
+        assert(!isOnManagerQueue, "removeSession called from managerQueue - potential deadlock")
         managerQueue.sync(flags: .barrier) {
             if let session = sessions.removeValue(forKey: peerID) {
                 session.reset() // Clear sensitive data before removing
@@ -42,6 +54,7 @@ final class NoiseSessionManager {
     }
 
     func removeAllSessions() {
+        assert(!isOnManagerQueue, "removeAllSessions called from managerQueue - potential deadlock")
         managerQueue.sync(flags: .barrier) {
             for (_, session) in sessions {
                 session.reset()
@@ -51,8 +64,9 @@ final class NoiseSessionManager {
     }
     
     // MARK: - Handshake Helpers
-    
+
     func initiateHandshake(with peerID: PeerID) throws -> Data {
+        assert(!isOnManagerQueue, "initiateHandshake called from managerQueue - potential deadlock")
         return try managerQueue.sync(flags: .barrier) {
             // Check if we already have an established session
             if let existingSession = sessions[peerID], existingSession.isEstablished() {
@@ -87,6 +101,7 @@ final class NoiseSessionManager {
     }
     
     func handleIncomingHandshake(from peerID: PeerID, message: Data) throws -> Data? {
+        assert(!isOnManagerQueue, "handleIncomingHandshake called from managerQueue - potential deadlock")
         // Process everything within the synchronized block to prevent race conditions
         return try managerQueue.sync(flags: .barrier) {
             var shouldCreateNew = false
@@ -184,27 +199,34 @@ final class NoiseSessionManager {
     }
     
     // MARK: - Session Rekeying
-    
+
     func getSessionsNeedingRekey() -> [(peerID: PeerID, needsRekey: Bool)] {
+        // Re-entrancy check: if already on managerQueue, access directly to avoid deadlock
+        if isOnManagerQueue {
+            return computeSessionsNeedingRekey()
+        }
         return managerQueue.sync {
-            var needingRekey: [(peerID: PeerID, needsRekey: Bool)] = []
-            
-            for (peerID, session) in sessions {
-                if let secureSession = session as? SecureNoiseSession,
-                   secureSession.isEstablished(),
-                   secureSession.needsRenegotiation() {
-                    needingRekey.append((peerID: peerID, needsRekey: true))
-                }
-            }
-            
-            return needingRekey
+            return computeSessionsNeedingRekey()
         }
     }
-    
+
+    private func computeSessionsNeedingRekey() -> [(peerID: PeerID, needsRekey: Bool)] {
+        var needingRekey: [(peerID: PeerID, needsRekey: Bool)] = []
+        for (peerID, session) in sessions {
+            if let secureSession = session as? SecureNoiseSession,
+               secureSession.isEstablished(),
+               secureSession.needsRenegotiation() {
+                needingRekey.append((peerID: peerID, needsRekey: true))
+            }
+        }
+        return needingRekey
+    }
+
     func initiateRekey(for peerID: PeerID) throws {
+        assert(!isOnManagerQueue, "initiateRekey called from managerQueue - potential deadlock")
         // Remove old session
         removeSession(for: peerID)
-        
+
         // Initiate new handshake
         _ = try initiateHandshake(with: peerID)
     }

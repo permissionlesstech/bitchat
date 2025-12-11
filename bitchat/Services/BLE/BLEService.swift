@@ -2713,23 +2713,31 @@ extension BLEService {
     
     #if os(iOS)
     @objc private func appDidBecomeActive() {
-        isAppActive = true
-        // Restart scanning with allow duplicates when app becomes active
-        if centralManager?.state == .poweredOn {
-            centralManager?.stopScan()
-            startScanning()
+        // Dispatch to bleQueue for thread-safe access to isAppActive and BLE operations
+        bleQueue.async { [weak self] in
+            guard let self = self else { return }
+            self.isAppActive = true
+            // Restart scanning with allow duplicates when app becomes active
+            if self.centralManager?.state == .poweredOn {
+                self.centralManager?.stopScan()
+                self.startScanning()
+            }
         }
         logBluetoothStatus("became-active")
         scheduleBluetoothStatusSample(after: 5.0, context: "active-5s")
         // No Local Name; nothing to refresh for advertising policy
     }
-    
+
     @objc private func appDidEnterBackground() {
-        isAppActive = false
-        // Restart scanning without allow duplicates in background
-        if centralManager?.state == .poweredOn {
-            centralManager?.stopScan()
-            startScanning()
+        // Dispatch to bleQueue for thread-safe access to isAppActive and BLE operations
+        bleQueue.async { [weak self] in
+            guard let self = self else { return }
+            self.isAppActive = false
+            // Restart scanning without allow duplicates in background
+            if self.centralManager?.state == .poweredOn {
+                self.centralManager?.stopScan()
+                self.startScanning()
+            }
         }
         logBluetoothStatus("entered-background")
         scheduleBluetoothStatusSample(after: 15.0, context: "background-15s")
