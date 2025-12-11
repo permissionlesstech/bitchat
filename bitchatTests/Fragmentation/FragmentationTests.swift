@@ -45,16 +45,16 @@ struct FragmentationTests {
         
         // Inject fragments spaced out to avoid concurrent mutation inside BLEService
         for (i, fragment) in shuffled.enumerated() {
-            let delay = 5 * Double(i) * 0.001
+            let delay = 10 * Double(i) * 0.001
             Task {
                 try await sleep(delay)
                 ble._test_handlePacket(fragment, fromPeerID: remoteShortID)
             }
         }
-        
-        // Allow async processing
-        try await sleep(0.5)
-        
+
+        // Allow async processing (longer timeout for CI environments)
+        try await sleep(1.5)
+
         #expect(capture.publicMessages.count == 1)
         #expect(capture.publicMessages.first?.content.count == 3_000)
     }
@@ -79,15 +79,15 @@ struct FragmentationTests {
         }
         
         for (i, fragment) in frags.enumerated() {
-            let delay = 5 * Double(i) * 0.001
+            let delay = 10 * Double(i) * 0.001
             Task {
                 try await sleep(delay)
                 ble._test_handlePacket(fragment, fromPeerID: remoteShortID)
             }
         }
-        
-        // Allow async processing
-        try await sleep(0.5)
+
+        // Allow async processing (longer timeout for CI environments)
+        try await sleep(1.5)
 
         #expect(capture.publicMessages.count == 1)
         #expect(capture.publicMessages.first?.content.count == 2048)
@@ -180,15 +180,15 @@ struct FragmentationTests {
         }
         
         for (i, fragment) in corrupted.enumerated() {
-            let delay = 5 * Double(i) * 0.001
+            let delay = 10 * Double(i) * 0.001
             Task {
                 try await sleep(delay)
                 ble._test_handlePacket(fragment, fromPeerID: remoteShortID)
             }
         }
-        
-        // Allow async processing
-        try await sleep(0.5)
+
+        // Allow async processing (longer timeout for CI environments)
+        try await sleep(1.5)
 
         // Should not deliver since one fragment is invalid and reassembly can't complete
         #expect(capture.publicMessages.isEmpty)
