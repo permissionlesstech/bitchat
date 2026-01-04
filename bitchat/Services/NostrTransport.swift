@@ -149,8 +149,11 @@ final class NostrTransport: Transport, @unchecked Sendable {
 
     func sendReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {
         // Enqueue and process with throttling to avoid relay rate limits
-        readQueue.append(QueuedRead(receipt: receipt, peerID: peerID))
-        processReadQueueIfNeeded()
+        // Use barrier to synchronize access to readQueue
+        queue.async(flags: .barrier) { [weak self] in
+            self?.readQueue.append(QueuedRead(receipt: receipt, peerID: peerID))
+            self?.processReadQueueIfNeeded()
+        }
     }
 
     func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {
@@ -260,16 +263,17 @@ extension NostrTransport {
 // MARK: - Private Helpers
 
 extension NostrTransport {
+    /// Must be called within a barrier on `queue`
     private func processReadQueueIfNeeded() {
         guard !isSendingReadAcks else { return }
         guard !readQueue.isEmpty else { return }
         isSendingReadAcks = true
-        sendNextReadAck()
+        let item = readQueue.removeFirst()
+        sendReadAckItem(item)
     }
 
-    private func sendNextReadAck() {
-        guard !readQueue.isEmpty else { isSendingReadAcks = false; return }
-        let item = readQueue.removeFirst()
+    /// Sends a single read ack item (called after extraction from queue within barrier)
+    private func sendReadAckItem(_ item: QueuedRead) {
         Task { @MainActor in
             guard let recipientNpub = resolveRecipientNpub(for: item.peerID) else { scheduleNextReadAck(); return }
             guard let senderIdentity = try? idBridge.getCurrentNostrIdentity() else { scheduleNextReadAck(); return }
@@ -301,9 +305,10 @@ extension NostrTransport {
 
     private func scheduleNextReadAck() {
         DispatchQueue.main.asyncAfter(deadline: .now() + readAckInterval) { [weak self] in
-            guard let self = self else { return }
-            self.isSendingReadAcks = false
-            self.processReadQueueIfNeeded()
+            self?.queue.async(flags: .barrier) { [weak self] in
+                self?.isSendingReadAcks = false
+                self?.processReadQueueIfNeeded()
+            }
         }
     }
 
