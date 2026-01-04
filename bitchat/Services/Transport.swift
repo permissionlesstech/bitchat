@@ -45,11 +45,15 @@ protocol Transport: AnyObject {
 
     // Messaging
     func sendMessage(_ content: String, mentions: [String])
+    func sendMessage(_ content: String, mentions: [String], messageID: String, timestamp: Date)
     func sendPrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String)
     func sendReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID)
     func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool)
     func sendBroadcastAnnounce()
     func sendDeliveryAck(for messageID: String, to peerID: PeerID)
+    func sendFileBroadcast(_ packet: BitchatFilePacket, transferId: String)
+    func sendFilePrivate(_ packet: BitchatFilePacket, to peerID: PeerID, transferId: String)
+    func cancelTransfer(_ transferId: String)
 
     // QR verification (optional for transports)
     func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data)
@@ -59,6 +63,13 @@ protocol Transport: AnyObject {
 extension Transport {
     func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {}
     func sendVerifyResponse(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {}
+    func sendFileBroadcast(_ packet: BitchatFilePacket, transferId: String) {}
+    func sendFilePrivate(_ packet: BitchatFilePacket, to peerID: PeerID, transferId: String) {}
+    func cancelTransfer(_ transferId: String) {}
+
+    func sendMessage(_ content: String, mentions: [String], messageID: String, timestamp: Date) {
+        sendMessage(content, mentions: mentions)
+    }
 }
 
 protocol TransportPeerEventsDelegate: AnyObject {

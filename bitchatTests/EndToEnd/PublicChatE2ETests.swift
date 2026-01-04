@@ -388,7 +388,7 @@ struct PublicChatE2ETests {
 
             if let message = BitchatMessage(packet.payload) {
                 // Don't relay own messages
-                guard message.senderPeerID?.id != node.peerID else { return }
+                guard message.senderPeerID != node.peerID else { return }
                 
                 // Create relay message
                 let relayMessage = BitchatMessage(

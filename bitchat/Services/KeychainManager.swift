@@ -15,11 +15,19 @@ protocol KeychainManagerProtocol {
     func getIdentityKey(forKey key: String) -> Data?
     func deleteIdentityKey(forKey key: String) -> Bool
     func deleteAllKeychainData() -> Bool
-    
+
     func secureClear(_ data: inout Data)
     func secureClear(_ string: inout String)
-    
+
     func verifyIdentityKeyExists() -> Bool
+
+    // MARK: - Generic Data Storage (consolidated from KeychainHelper)
+    /// Save data with a custom service name
+    func save(key: String, data: Data, service: String, accessible: CFString?)
+    /// Load data from a custom service
+    func load(key: String, service: String) -> Data?
+    /// Delete data from a custom service
+    func delete(key: String, service: String)
 }
 
 final class KeychainManager: KeychainManagerProtocol {
@@ -309,9 +317,54 @@ final class KeychainManager: KeychainManagerProtocol {
     }
     
     // MARK: - Debug
-    
+
     func verifyIdentityKeyExists() -> Bool {
         let key = "identity_noiseStaticKey"
         return retrieveData(forKey: key) != nil
+    }
+
+    // MARK: - Generic Data Storage (consolidated from KeychainHelper)
+
+    /// Save data with a custom service name
+    func save(key: String, data: Data, service customService: String, accessible: CFString?) {
+        var query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: customService,
+            kSecAttrAccount as String: key,
+            kSecValueData as String: data
+        ]
+        if let accessible = accessible {
+            query[kSecAttrAccessible as String] = accessible
+        }
+
+        SecItemDelete(query as CFDictionary)
+        SecItemAdd(query as CFDictionary, nil)
+    }
+
+    /// Load data from a custom service
+    func load(key: String, service customService: String) -> Data? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: customService,
+            kSecAttrAccount as String: key,
+            kSecReturnData as String: true
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+        guard status == errSecSuccess else { return nil }
+        return result as? Data
+    }
+
+    /// Delete data from a custom service
+    func delete(key: String, service customService: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: customService,
+            kSecAttrAccount as String: key
+        ]
+
+        SecItemDelete(query as CFDictionary)
     }
 }

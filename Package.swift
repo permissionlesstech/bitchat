@@ -34,7 +34,8 @@ let package = Package(
                 "Assets.xcassets",
                 "bitchat.entitlements",
                 "bitchat-macOS.entitlements",
-                "LaunchScreen.storyboard"
+                "LaunchScreen.storyboard",
+                "ViewModels/Extensions/README.md"
             ],
             resources: [
                 .process("Localizable.xcstrings")
@@ -49,7 +50,8 @@ let package = Package(
                 "README.md"
             ],
             resources: [
-                .process("Localization")
+                .process("Localization"),
+                .process("Noise")
             ]
         )
     ]

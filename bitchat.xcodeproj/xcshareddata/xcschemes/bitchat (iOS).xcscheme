@@ -98,8 +98,8 @@
       </BuildableProductRunnable>
       <EnvironmentVariables>
          <EnvironmentVariable
-            key = "-DBITCHAT_DEV_ALLOW_CLEARNET"
-            value = ""
+            key = "BITCHAT_LOG_LEVEL"
+            value = "debug"
             isEnabled = "YES">
          </EnvironmentVariable>
       </EnvironmentVariables>

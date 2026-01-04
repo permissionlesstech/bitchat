@@ -54,6 +54,86 @@ struct BinaryProtocolTests {
         #expect(decodedPacket.signature != nil)
         #expect(decodedPacket.signature == TestConstants.testSignature)
     }
+
+    @Test func packetWithRouteRoundTrip() throws {
+        let route: [Data] = [
+            try #require(Data(hexString: "0102030405060708")),
+            try #require(Data(hexString: "1112131415161718")),
+            try #require(Data(hexString: "2122232425262728"))
+        ]
+
+        var packet = BitchatPacket(
+            type: 0x01,
+            senderID: route[0],
+            recipientID: route.last,
+            timestamp: 1_720_000_000_000,
+            payload: Data("route-test".utf8),
+            signature: nil,
+            ttl: 6
+        )
+        packet.route = route
+
+        let encoded = try #require(BinaryProtocol.encode(packet), "Failed to encode packet with route")
+        let flagsByte = encoded[BinaryProtocol.Offsets.flags]
+        #expect((flagsByte & BinaryProtocol.Flags.hasRoute) != 0)
+
+        let decoded = try #require(BinaryProtocol.decode(encoded), "Failed to decode packet with route")
+        let decodedRoute = try #require(decoded.route)
+        #expect(decodedRoute.count == route.count)
+        for (expected, actual) in zip(route, decodedRoute) {
+            #expect(actual == expected)
+        }
+    }
+
+    @Test func packetWithRoutePadsShortHop() throws {
+        let sender = try #require(Data(hexString: "0011223344556677"))
+        let destination = try #require(Data(hexString: "8899aabbccddeeff"))
+        let shortHop = Data([0xAA, 0xBB, 0xCC])
+
+        var packet = BitchatPacket(
+            type: 0x02,
+            senderID: sender,
+            recipientID: destination,
+            timestamp: 1_730_000_000_000,
+            payload: Data("pad-test".utf8),
+            signature: nil,
+            ttl: 5
+        )
+        packet.route = [shortHop, destination]
+
+        let encoded = try #require(BinaryProtocol.encode(packet), "Failed to encode packet with short hop route")
+        let decoded = try #require(BinaryProtocol.decode(encoded), "Failed to decode packet with short hop route")
+        let decodedRoute = try #require(decoded.route)
+        let firstHop = try #require(decodedRoute.first)
+        #expect(firstHop.count == BinaryProtocol.senderIDSize)
+        #expect(firstHop.prefix(shortHop.count) == shortHop)
+        let paddingBytes = firstHop.suffix(firstHop.count - shortHop.count)
+        #expect(paddingBytes.allSatisfy { $0 == 0 })
+    }
+
+    @Test func packetWithRouteAndCompressedPayload() throws {
+        let route: [Data] = [
+            try #require(Data(hexString: "0101010101010101")),
+            try #require(Data(hexString: "0202020202020202"))
+        ]
+        let repeatedString = String(repeating: "compress-me", count: 150)
+        var packet = BitchatPacket(
+            type: 0x03,
+            senderID: route[0],
+            recipientID: route.last,
+            timestamp: 1_740_000_000_000,
+            payload: Data(repeatedString.utf8),
+            signature: nil,
+            ttl: 7
+        )
+        packet.route = route
+
+        let encoded = try #require(BinaryProtocol.encode(packet), "Failed to encode packet with route and compression")
+        let decoded = try #require(BinaryProtocol.decode(encoded), "Failed to decode packet with route and compression")
+        #expect(decoded.payload == Data(repeatedString.utf8))
+        let decodedRoute = try #require(decoded.route)
+        #expect(decodedRoute == route)
+    }
     
     // MARK: - Compression Tests
     
@@ -68,8 +148,9 @@ struct BinaryProtocolTests {
         let encodedData = try #require(BinaryProtocol.encode(packet), "Failed to encode packet with large payload")
         
         // The encoded size should be smaller than uncompressed due to compression
-        let uncompressedSize = BinaryProtocol.headerSize + BinaryProtocol.senderIDSize + largePayload.count
-        #expect(encodedData.count < uncompressedSize)
+        let headerSize = try #require(BinaryProtocol.headerSize(for: packet.version), "Invalid packet version")
+        let uncompressedSize = headerSize + BinaryProtocol.senderIDSize + largePayload.count
+        #expect(encodedData.count < uncompressedSize, "Compressed packet should be smaller than uncompressed form")
         
         // Decode and verify
         let decodedPacket = try #require(BinaryProtocol.decode(encodedData), "Failed to decode compressed packet")

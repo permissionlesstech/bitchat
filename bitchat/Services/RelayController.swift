@@ -13,6 +13,7 @@ struct RelayController {
                        senderIsSelf: Bool,
                        isEncrypted: Bool,
                        isDirectedEncrypted: Bool,
+                       isFragment: Bool,
                        isDirectedFragment: Bool,
                        isHandshake: Bool,
                        isAnnounce: Bool,
@@ -33,6 +34,16 @@ struct RelayController {
             // Tighter for faster multi-hop handshakes and directed DMs
             let delayRange: ClosedRange<Int> = isHandshake ? 10...35 : 20...60
             let delayMs = Int.random(in: delayRange)
+            return RelayDecision(shouldRelay: true, newTTL: newTTL, delayMs: delayMs)
+        }
+
+        if isFragment {
+            let ttlLimit = min(ttlCap, TransportConfig.bleFragmentRelayTtlCap)
+            guard ttlLimit > 1 else {
+                return RelayDecision(shouldRelay: false, newTTL: ttlLimit, delayMs: 0)
+            }
+            let newTTL = ttlLimit &- 1
+            let delayMs = Int.random(in: TransportConfig.bleFragmentRelayMinDelayMs...TransportConfig.bleFragmentRelayMaxDelayMs)
             return RelayDecision(shouldRelay: true, newTTL: newTTL, delayMs: delayMs)
         }
 

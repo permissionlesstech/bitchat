@@ -5,16 +5,27 @@ import CryptoKit
 /// Implements HChaCha20 to derive a subkey and reduces the 24-byte nonce to a 12-byte nonce
 /// as per XChaCha20 construction.
 enum XChaCha20Poly1305Compat {
+
+    /// Errors that can occur during XChaCha20-Poly1305 operations
+    enum Error: Swift.Error {
+        case invalidKeyLength(expected: Int, got: Int)
+        case invalidNonceLength(expected: Int, got: Int)
+    }
+
     struct SealBox {
         let ciphertext: Data
         let tag: Data
     }
 
     static func seal(plaintext: Data, key: Data, nonce24: Data, aad: Data? = nil) throws -> SealBox {
-        precondition(key.count == 32, "XChaCha20 key must be 32 bytes")
-        precondition(nonce24.count == 24, "XChaCha20 nonce must be 24 bytes")
+        guard key.count == 32 else {
+            throw Error.invalidKeyLength(expected: 32, got: key.count)
+        }
+        guard nonce24.count == 24 else {
+            throw Error.invalidNonceLength(expected: 24, got: nonce24.count)
+        }
 
-        let subkey = hchacha20(key: key, nonce16: nonce24.prefix(16))
+        let subkey = try hchacha20(key: key, nonce16: Data(nonce24.prefix(16)))
         let nonce12 = derive12ByteNonce(from24: nonce24)
         let chachaKey = SymmetricKey(data: subkey)
         let nonce = try ChaChaPoly.Nonce(data: nonce12)
@@ -23,10 +34,14 @@ enum XChaCha20Poly1305Compat {
     }
 
     static func open(ciphertext: Data, tag: Data, key: Data, nonce24: Data, aad: Data? = nil) throws -> Data {
-        precondition(key.count == 32, "XChaCha20 key must be 32 bytes")
-        precondition(nonce24.count == 24, "XChaCha20 nonce must be 24 bytes")
+        guard key.count == 32 else {
+            throw Error.invalidKeyLength(expected: 32, got: key.count)
+        }
+        guard nonce24.count == 24 else {
+            throw Error.invalidNonceLength(expected: 24, got: nonce24.count)
+        }
 
-        let subkey = hchacha20(key: key, nonce16: nonce24.prefix(16))
+        let subkey = try hchacha20(key: key, nonce16: Data(nonce24.prefix(16)))
         let nonce12 = derive12ByteNonce(from24: nonce24)
         let chachaKey = SymmetricKey(data: subkey)
         let box = try ChaChaPoly.SealedBox(nonce: ChaChaPoly.Nonce(data: nonce12), ciphertext: ciphertext, tag: tag)
@@ -43,10 +58,14 @@ enum XChaCha20Poly1305Compat {
         return out
     }
 
-    private static func hchacha20(key: Data, nonce16: Data) -> Data {
+    private static func hchacha20(key: Data, nonce16: Data) throws -> Data {
         // HChaCha20 based on the original ChaCha20 core with a 16-byte nonce.
-        precondition(key.count == 32)
-        precondition(nonce16.count == 16)
+        guard key.count == 32 else {
+            throw Error.invalidKeyLength(expected: 32, got: key.count)
+        }
+        guard nonce16.count == 16 else {
+            throw Error.invalidNonceLength(expected: 16, got: nonce16.count)
+        }
 
         // Constants "expand 32-byte k"
         var state: [UInt32] = [

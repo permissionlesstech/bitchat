@@ -68,22 +68,6 @@ public final class SecureLogger {
         return formatter
     }()
     
-    // MARK: - Cached Regex Patterns
-    
-    private static let fingerprintPattern = #/[a-fA-F0-9]{64}/#
-    private static let base64Pattern = #/[A-Za-z0-9+/]{40,}={0,2}/#
-    private static let passwordPattern = #/password["\s:=]+["']?[^"'\s]+["']?/#
-    private static let peerIDPattern = #/peerID: ([a-zA-Z0-9]{8})[a-zA-Z0-9]+/#
-    
-    // MARK: - Sanitization Cache
-    
-    private static let sanitizationCache: NSCache<NSString, NSString> = {
-        let cache = NSCache<NSString, NSString>()
-        cache.countLimit = 100 // Keep last 100 sanitized strings
-        return cache
-    }()
-    private static let cacheQueue = DispatchQueue(label: "chat.bitchat.securelogger.cache", attributes: .concurrent)
-    
     // MARK: - Log Levels
     
     enum LogLevel {
@@ -161,8 +145,8 @@ public extension SecureLogger {
     static func error(_ error: Error, context: @autoclosure () -> String, category: OSLog = .noise,
                       file: String = #file, line: Int = #line, function: String = #function) {
         let location = formatLocation(file: file, line: line, function: function)
-        let sanitized = sanitize(context())
-        let errorDesc = sanitize(error.localizedDescription)
+        let sanitized = context().sanitized()
+        let errorDesc = error.localizedDescription.sanitized()
         
         #if DEBUG
         os_log("%{public}@ Error in %{public}@: %{public}@", log: category, type: .error, location, sanitized, errorDesc)
@@ -186,15 +170,15 @@ public extension SecureLogger {
         var message: String {
             switch self {
             case .handshakeStarted(let peerID):
-                return "Handshake started with peer: \(sanitize(peerID))"
+                return "Handshake started with peer: \(peerID.sanitized())"
             case .handshakeCompleted(let peerID):
-                return "Handshake completed with peer: \(sanitize(peerID))"
+                return "Handshake completed with peer: \(peerID.sanitized())"
             case .handshakeFailed(let peerID, let error):
-                return "Handshake failed with peer: \(sanitize(peerID)), error: \(error)"
+                return "Handshake failed with peer: \(peerID.sanitized()), error: \(error)"
             case .sessionExpired(let peerID):
-                return "Session expired for peer: \(sanitize(peerID))"
+                return "Session expired for peer: \(peerID.sanitized())"
             case .authenticationFailed(let peerID):
-                return "Authentication failed for peer: \(sanitize(peerID))"
+                return "Authentication failed for peer: \(peerID.sanitized())"
             }
         }
     }
@@ -249,7 +233,7 @@ private extension SecureLogger {
                     file: String, line: Int, function: String) {
         guard shouldLog(level) else { return }
         let location = formatLocation(file: file, line: line, function: function)
-        let sanitized = sanitize("\(location) \(message())")
+        let sanitized = "\(location) \(message())".sanitized()
         
         #if DEBUG
         os_log("%{public}@", log: category, type: level.osLogType, sanitized)
@@ -281,58 +265,6 @@ private extension SecureLogger {
         let fileName = (file as NSString).lastPathComponent
         let timestamp = timestampFormatter.string(from: Date())
         return "[\(timestamp)] [\(fileName):\(line) \(function)]"
-    }
-    
-    /// Sanitize strings to remove potentially sensitive data
-    static func sanitize(_ input: String) -> String {
-        let key = input as NSString
-        
-        // Check cache first
-        var cachedValue: String?
-        cacheQueue.sync {
-            cachedValue = sanitizationCache.object(forKey: key) as String?
-        }
-        
-        if let cached = cachedValue {
-            return cached
-        }
-        
-        // Perform sanitization
-        var sanitized = input
-        
-        // Remove full fingerprints (keep first 8 chars for debugging)
-        sanitized = sanitized.replacing(fingerprintPattern) { match in
-            let fingerprint = String(match.output)
-            return String(fingerprint.prefix(8)) + "..."
-        }
-        
-        // Remove base64 encoded data that might be keys
-        sanitized = sanitized.replacing(base64Pattern) { _ in
-            "<base64-data>"
-        }
-        
-        // Remove potential passwords (assuming they're in quotes or after "password:")
-        sanitized = sanitized.replacing(passwordPattern) { _ in
-            "password: <redacted>"
-        }
-        
-        // Truncate peer IDs to first 8 characters
-        sanitized = sanitized.replacing(peerIDPattern) { match in
-            "peerID: \(match.1)..."
-        }
-        
-        // Cache the result
-        cacheQueue.sync {
-            sanitizationCache.setObject(sanitized as NSString, forKey: key)
-        }
-        
-        return sanitized
-    }
-    
-    /// Sanitize individual values
-    static func sanitize<T>(_ value: T) -> String {
-        let stringValue = String(describing: value)
-        return sanitize(stringValue)
     }
 }
 

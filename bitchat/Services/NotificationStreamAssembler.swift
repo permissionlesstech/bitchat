@@ -6,10 +6,19 @@
 // For more information, see <https://unlicense.org>
 //
 
+import BitLogger
 import Foundation
 
 struct NotificationStreamAssembler {
     private var buffer = Data()
+    private var pendingFrameStartedAt: DispatchTime?
+    private var pendingFrameExpectedLength: Int = 0
+
+    private mutating func resetState() {
+        buffer.removeAll(keepingCapacity: false)
+        pendingFrameStartedAt = nil
+        pendingFrameExpectedLength = 0
+    }
 
     mutating func append(_ chunk: Data) -> (frames: [Data], droppedPrefixes: [UInt8], reset: Bool) {
         guard !chunk.isEmpty else { return ([], [], false) }
@@ -18,50 +27,97 @@ struct NotificationStreamAssembler {
 
         var frames: [Data] = []
         var dropped: [UInt8] = []
-        var reset = false
-        let maxFrameLength = TransportConfig.blePendingWriteBufferCapBytes
+        var didReset = false
+        let now = DispatchTime.now()
+        let maxFrameLength = TransportConfig.bleNotificationAssemblerHardCapBytes
+        let minimumFramePrefix = BinaryProtocol.v1HeaderSize + BinaryProtocol.senderIDSize
 
-        let minHeaderBytes = 14 // version + type + ttl + timestamp(8) + flags + length(2)
-        let minFramePrefix = minHeaderBytes + BinaryProtocol.senderIDSize
+        if buffer.count > TransportConfig.bleNotificationAssemblerHardCapBytes {
+            SecureLogger.error("❌ Notification assembler overflow (\(buffer.count) bytes); dropping partial frame", category: .session)
+            resetState()
+            return ([], [], true)
+        }
 
-        while buffer.count >= minFramePrefix {
-            guard let first = buffer.first else { break }
-            if first != 1 {
+        while buffer.count >= minimumFramePrefix {
+            guard let version = buffer.first else { break }
+            guard version == 1 || version == 2 else {
                 dropped.append(buffer.removeFirst())
+                pendingFrameStartedAt = nil
+                pendingFrameExpectedLength = 0
                 continue
             }
 
-            guard buffer.count >= minHeaderBytes else { break }
+            guard let headerSize = BinaryProtocol.headerSize(for: version) else {
+                dropped.append(buffer.removeFirst())
+                pendingFrameStartedAt = nil
+                pendingFrameExpectedLength = 0
+                continue
+            }
+            let framePrefix = headerSize + BinaryProtocol.senderIDSize
+            guard buffer.count >= framePrefix else { break }
 
-            let headerBytes = Array(buffer.prefix(minFramePrefix))
-            guard headerBytes.count == minFramePrefix else { break }
-
-            let flags = headerBytes[11]
+            let flagsIndex = buffer.startIndex + BinaryProtocol.Offsets.flags
+            guard flagsIndex < buffer.endIndex else { break }
+            let flags = buffer[flagsIndex]
             let hasRecipient = (flags & BinaryProtocol.Flags.hasRecipient) != 0
             let hasSignature = (flags & BinaryProtocol.Flags.hasSignature) != 0
-            let payloadLen = (Int(headerBytes[12]) << 8) | Int(headerBytes[13])
+            let isCompressed = (flags & BinaryProtocol.Flags.isCompressed) != 0
 
-            var frameLength = minFramePrefix + payloadLen
+            let lengthOffset = 12
+            let payloadLength: Int
+            if version == 2 {
+                let lengthIndex = buffer.startIndex + lengthOffset
+                payloadLength =
+                    (Int(buffer[lengthIndex]) << 24) |
+                    (Int(buffer[lengthIndex + 1]) << 16) |
+                    (Int(buffer[lengthIndex + 2]) << 8) |
+                    Int(buffer[lengthIndex + 3])
+            } else {
+                let lengthIndex = buffer.startIndex + lengthOffset
+                payloadLength = (Int(buffer[lengthIndex]) << 8) | Int(buffer[lengthIndex + 1])
+            }
+
+            var frameLength = framePrefix + payloadLength
             if hasRecipient { frameLength += BinaryProtocol.recipientIDSize }
             if hasSignature { frameLength += BinaryProtocol.signatureSize }
+            if isCompressed {
+                let rawLengthFieldBytes = (version == 2) ? 4 : 2
+                if payloadLength < rawLengthFieldBytes {
+                    SecureLogger.error("❌ Invalid compressed payload length (\(payloadLength))", category: .session)
+                    resetState()
+                    didReset = true
+                    break
+                }
+            }
 
             guard frameLength > 0, frameLength <= maxFrameLength else {
-                buffer.removeAll()
-                reset = true
+                SecureLogger.error("❌ Notification frame length \(frameLength) invalid (cap=\(maxFrameLength)); resetting stream", category: .session)
+                resetState()
+                didReset = true
                 break
             }
 
             if buffer.count < frameLength {
-                // Check if a new frame start exists within the incomplete buffer; if so, drop leading partial bytes.
-                if let nextStart = buffer.dropFirst().firstIndex(of: 1) {
-                    let dropCount = buffer.distance(from: buffer.startIndex, to: nextStart)
-                    if dropCount > 0 {
-                        buffer.removeFirst(dropCount)
-                        dropped.append(1) // treat as dropped partial start
+                let remaining = frameLength - buffer.count
+                if pendingFrameStartedAt == nil || frameLength != pendingFrameExpectedLength {
+                    pendingFrameStartedAt = now
+                    pendingFrameExpectedLength = frameLength
+                } else if let started = pendingFrameStartedAt {
+                    let elapsed = now.uptimeNanoseconds - started.uptimeNanoseconds
+                    let threshold = UInt64(TransportConfig.bleAssemblerStallResetMs) * 1_000_000
+                    if elapsed >= threshold {
+                        SecureLogger.debug("📉 Resetting notification assembler after waiting \(remaining)B for \(TransportConfig.bleAssemblerStallResetMs)ms", category: .session)
+                        resetState()
+                        didReset = true
+                    } else {
+                        SecureLogger.debug("⌛ Waiting for remaining \(remaining)B to complete BLE frame", category: .session)
                     }
                 }
                 break
             }
+
+            pendingFrameStartedAt = nil
+            pendingFrameExpectedLength = 0
 
             let frame = Data(buffer.prefix(frameLength))
             frames.append(frame)
@@ -69,13 +125,9 @@ struct NotificationStreamAssembler {
         }
 
         if !buffer.isEmpty, buffer.allSatisfy({ $0 == 0 }) {
-            buffer.removeAll(keepingCapacity: false)
+            resetState()
         }
 
-        return (frames, dropped, reset)
-    }
-
-    mutating func reset() {
-        buffer.removeAll(keepingCapacity: false)
+        return (frames, dropped, didReset)
     }
 }

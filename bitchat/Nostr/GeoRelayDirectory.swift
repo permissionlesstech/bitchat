@@ -1,6 +1,11 @@
 import BitLogger
 import Foundation
 import Tor
+#if os(iOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 /// Directory of online Nostr relays with approximate GPS locations, used for geohash routing.
 @MainActor
@@ -12,17 +17,30 @@ final class GeoRelayDirectory {
     }
 
     static let shared = GeoRelayDirectory()
+
     private(set) var entries: [Entry] = []
     private let cacheFileName = "georelays_cache.csv"
     private let lastFetchKey = "georelay.lastFetchAt"
     private let remoteURL = URL(string: "https://raw.githubusercontent.com/permissionlesstech/georelays/refs/heads/main/nostr_relays.csv")!
-    private let fetchInterval: TimeInterval = TransportConfig.geoRelayFetchIntervalSeconds // 24h
+    private let fetchInterval: TimeInterval = TransportConfig.geoRelayFetchIntervalSeconds
+
+    private var refreshTimer: Timer?
+    private var retryTask: Task<Void, Never>?
+    private var retryAttempt: Int = 0
+    private var isFetching: Bool = false
+    private var observers: [NSObjectProtocol] = []
 
     private init() {
-        // Load cached or bundled data synchronously
-        self.entries = self.loadLocalEntries()
-        // Fire-and-forget remote refresh if stale
+        entries = loadLocalEntries()
+        registerObservers()
+        startRefreshTimer()
         prefetchIfNeeded()
+    }
+
+    deinit {
+        observers.forEach { NotificationCenter.default.removeObserver($0) }
+        refreshTimer?.invalidate()
+        retryTask?.cancel()
     }
 
     /// Returns up to `count` relay URLs (wss://) closest to the geohash center.
@@ -62,40 +80,117 @@ final class GeoRelayDirectory {
     }
 
     // MARK: - Remote Fetch
-    func prefetchIfNeeded() {
+    func prefetchIfNeeded(force: Bool = false) {
+        guard !isFetching else { return }
+
         let now = Date()
         let last = UserDefaults.standard.object(forKey: lastFetchKey) as? Date ?? .distantPast
-        guard now.timeIntervalSince(last) >= fetchInterval else { return }
+
+        if !force {
+            guard now.timeIntervalSince(last) >= fetchInterval else { return }
+        } else if last != .distantPast,
+                  now.timeIntervalSince(last) < TransportConfig.geoRelayRetryInitialSeconds {
+            // Skip forced fetches if we just refreshed moments ago.
+            return
+        }
+
+        cancelRetry()
         fetchRemote()
     }
 
     private func fetchRemote() {
-        let req = URLRequest(url: remoteURL, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
-        // Ensure Tor readiness before fetching (fail-closed by default)
-        Task.detached {
+        guard !isFetching else { return }
+        isFetching = true
+
+        let request = URLRequest(
+            url: remoteURL,
+            cachePolicy: .reloadIgnoringLocalCacheData,
+            timeoutInterval: 15
+        )
+
+        Task.detached { [weak self] in
+            guard let self else { return }
+
             let ready = await TorManager.shared.awaitReady()
             if !ready {
-                SecureLogger.warning("GeoRelayDirectory: Tor not ready; skipping remote fetch (fail-closed)", category: .session)
+                await self.handleFetchFailure(.torNotReady)
                 return
             }
-            let task = TorURLSession.shared.session.dataTask(with: req) { [weak self] data, _, error in
-                guard let self = self else { return }
-                if let data = data, error == nil, let text = String(data: data, encoding: .utf8) {
-                    let parsed = GeoRelayDirectory.parseCSV(text)
-                    if !parsed.isEmpty {
-                        Task { @MainActor in
-                            self.entries = parsed
-                            self.persistCache(text)
-                            UserDefaults.standard.set(Date(), forKey: self.lastFetchKey)
-                            SecureLogger.info("GeoRelayDirectory: refreshed \(parsed.count) relays from remote", category: .session)
-                        }
-                        return
-                    }
+
+            do {
+                let (data, _) = try await TorURLSession.shared.session.data(for: request)
+                guard let text = String(data: data, encoding: .utf8) else {
+                    await self.handleFetchFailure(.invalidData)
+                    return
                 }
-                SecureLogger.warning("GeoRelayDirectory: remote fetch failed; keeping local entries", category: .session)
+
+                let parsed = GeoRelayDirectory.parseCSV(text)
+                guard !parsed.isEmpty else {
+                    await self.handleFetchFailure(.invalidData)
+                    return
+                }
+
+                await self.handleFetchSuccess(entries: parsed, csv: text)
+            } catch {
+                await self.handleFetchFailure(.network(error))
             }
-            task.resume()
         }
+    }
+
+    private enum FetchFailure {
+        case torNotReady
+        case invalidData
+        case network(Error)
+    }
+
+    @MainActor
+    private func handleFetchSuccess(entries parsed: [Entry], csv: String) {
+        entries = parsed
+        persistCache(csv)
+        UserDefaults.standard.set(Date(), forKey: lastFetchKey)
+        SecureLogger.info("GeoRelayDirectory: refreshed \(parsed.count) relays from remote", category: .session)
+        isFetching = false
+        retryAttempt = 0
+        cancelRetry()
+    }
+
+    @MainActor
+    private func handleFetchFailure(_ reason: FetchFailure) {
+        switch reason {
+        case .torNotReady:
+            SecureLogger.warning("GeoRelayDirectory: Tor not ready; scheduling retry", category: .session)
+        case .invalidData:
+            SecureLogger.warning("GeoRelayDirectory: remote fetch returned invalid data; scheduling retry", category: .session)
+        case .network(let error):
+            SecureLogger.warning("GeoRelayDirectory: remote fetch failed with error: \(error.localizedDescription)", category: .session)
+        }
+        isFetching = false
+        scheduleRetry()
+    }
+
+    @MainActor
+    private func scheduleRetry() {
+        retryAttempt = min(retryAttempt + 1, 10)
+        let base = TransportConfig.geoRelayRetryInitialSeconds
+        let maxDelay = TransportConfig.geoRelayRetryMaxSeconds
+        let multiplier = pow(2.0, Double(max(retryAttempt - 1, 0)))
+        let calculated = base * multiplier
+        let delay = min(maxDelay, max(base, calculated))
+
+        cancelRetry()
+        retryTask = Task { [weak self] in
+            let nanoseconds = UInt64(delay * 1_000_000_000)
+            try? await Task.sleep(nanoseconds: nanoseconds)
+            await MainActor.run {
+                self?.prefetchIfNeeded(force: true)
+            }
+        }
+    }
+
+    @MainActor
+    private func cancelRetry() {
+        retryTask?.cancel()
+        retryTask = nil
     }
 
     private func persistCache(_ text: String) {
@@ -110,30 +205,35 @@ final class GeoRelayDirectory {
     // MARK: - Loading
     private func loadLocalEntries() -> [Entry] {
         // Prefer cached file if present
-        if let cache = self.cacheURL(),
+        if let cache = cacheURL(),
            let data = try? Data(contentsOf: cache),
            let text = String(data: data, encoding: .utf8) {
             let arr = Self.parseCSV(text)
             if !arr.isEmpty { return arr }
         }
+
         // Try bundled resource(s)
         let bundleCandidates = [
             Bundle.main.url(forResource: "nostr_relays", withExtension: "csv"),
             Bundle.main.url(forResource: "online_relays_gps", withExtension: "csv"),
             Bundle.main.url(forResource: "online_relays_gps", withExtension: "csv", subdirectory: "relays")
         ].compactMap { $0 }
+
         for url in bundleCandidates {
-            if let data = try? Data(contentsOf: url), let text = String(data: data, encoding: .utf8) {
+            if let data = try? Data(contentsOf: url),
+               let text = String(data: data, encoding: .utf8) {
                 let arr = Self.parseCSV(text)
                 if !arr.isEmpty { return arr }
             }
         }
+
         // Try filesystem path (development/test)
         if let cwd = FileManager.default.currentDirectoryPath as String?,
            let data = try? Data(contentsOf: URL(fileURLWithPath: cwd).appendingPathComponent("relays/online_relays_gps.csv")),
            let text = String(data: data, encoding: .utf8) {
             return Self.parseCSV(text)
         }
+
         SecureLogger.warning("GeoRelayDirectory: no local CSV found; entries empty", category: .session)
         return []
     }
@@ -141,7 +241,6 @@ final class GeoRelayDirectory {
     nonisolated static func parseCSV(_ text: String) -> [Entry] {
         var result: Set<Entry> = []
         let lines = text.split(whereSeparator: { $0.isNewline })
-        // Skip header if present
         for (idx, raw) in lines.enumerated() {
             let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             if line.isEmpty { continue }
@@ -162,11 +261,76 @@ final class GeoRelayDirectory {
 
     private func cacheURL() -> URL? {
         do {
-            let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+            let base = try FileManager.default.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
             let dir = base.appendingPathComponent("bitchat", isDirectory: true)
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             return dir.appendingPathComponent(cacheFileName)
-        } catch { return nil }
+        } catch {
+            return nil
+        }
+    }
+
+    // MARK: - Observers & Timers
+    private func registerObservers() {
+        let center = NotificationCenter.default
+
+        let torReady = center.addObserver(
+            forName: .TorDidBecomeReady,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in
+                self.prefetchIfNeeded(force: true)
+            }
+        }
+        observers.append(torReady)
+
+#if os(iOS)
+        let didBecomeActive = center.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in
+                self.prefetchIfNeeded()
+            }
+        }
+        observers.append(didBecomeActive)
+#elseif os(macOS)
+        let didBecomeActive = center.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in
+                self.prefetchIfNeeded()
+            }
+        }
+        observers.append(didBecomeActive)
+#endif
+    }
+
+    private func startRefreshTimer() {
+        refreshTimer?.invalidate()
+        let interval = TransportConfig.geoRelayRefreshCheckIntervalSeconds
+        guard interval > 0 else { return }
+
+        let timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in
+                self.prefetchIfNeeded()
+            }
+        }
+        refreshTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
 }
 

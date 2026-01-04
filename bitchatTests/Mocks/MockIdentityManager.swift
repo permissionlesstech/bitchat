@@ -11,6 +11,8 @@ import Foundation
 
 final class MockIdentityManager: SecureIdentityStateManagerProtocol {
     private let keychain: KeychainManagerProtocol
+    private var blockedFingerprints: Set<String> = []
+    private var blockedNostrPubkeys: Set<String> = []
     
     init(_ keychain: KeychainManagerProtocol) {
         self.keychain = keychain
@@ -45,19 +47,31 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
     }
     
     func isBlocked(fingerprint: String) -> Bool {
-        false
+        blockedFingerprints.contains(fingerprint)
     }
     
-    func setBlocked(_ fingerprint: String, isBlocked: Bool) {}
+    func setBlocked(_ fingerprint: String, isBlocked: Bool) {
+        if isBlocked {
+            blockedFingerprints.insert(fingerprint)
+        } else {
+            blockedFingerprints.remove(fingerprint)
+        }
+    }
     
     func isNostrBlocked(pubkeyHexLowercased: String) -> Bool {
-        true
+        blockedNostrPubkeys.contains(pubkeyHexLowercased)
     }
     
-    func setNostrBlocked(_ pubkeyHexLowercased: String, isBlocked: Bool) {}
+    func setNostrBlocked(_ pubkeyHexLowercased: String, isBlocked: Bool) {
+        if isBlocked {
+            blockedNostrPubkeys.insert(pubkeyHexLowercased)
+        } else {
+            blockedNostrPubkeys.remove(pubkeyHexLowercased)
+        }
+    }
     
     func getBlockedNostrPubkeys() -> Set<String> {
-        Set()
+        blockedNostrPubkeys
     }
     
     func registerEphemeralSession(peerID: PeerID, handshakeState: HandshakeState) {}
