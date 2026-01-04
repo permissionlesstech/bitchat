@@ -12,9 +12,9 @@ final class NostrIdentityBridge {
     private var derivedIdentityCache: [String: NostrIdentity] = [:]
     private let cacheLock = NSLock()
 
-    private let keychain: KeychainHelperProtocol
+    private let keychain: KeychainManagerProtocol
 
-    init(keychain: KeychainHelperProtocol = KeychainHelper()) {
+    init(keychain: KeychainManagerProtocol = KeychainManager()) {
         self.keychain = keychain
     }
     
