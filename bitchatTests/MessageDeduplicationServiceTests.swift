@@ -12,6 +12,8 @@ import Foundation
 
 // MARK: - LRU Deduplication Cache Tests
 
+@Suite("LRU Deduplication Cache")
+@MainActor
 struct LRUDeduplicationCacheTests {
 
     // MARK: - Basic Operations
@@ -265,6 +267,8 @@ struct ContentNormalizerTests {
 
 // MARK: - Message Deduplication Service Tests
 
+@Suite("Message Deduplication Service")
+@MainActor
 struct MessageDeduplicationServiceTests {
 
     // MARK: - Content Deduplication
@@ -466,5 +470,135 @@ struct MessageDeduplicationServiceTests {
 
         #expect(service.contentTimestamp(for: "hello world") == now)
         #expect(service.contentTimestamp(for: "Hello World") == now)
+    }
+
+    // MARK: - Thread Safety Tests (via @MainActor enforcement)
+
+    @Test("Concurrent content recording is safe via MainActor")
+    func concurrentContentRecording() async {
+        let service = MessageDeduplicationService(contentCapacity: 1000, nostrEventCapacity: 1000)
+        let iterations = 100
+
+        // All operations run on MainActor due to @MainActor annotation
+        // This test verifies the pattern works correctly
+        await withTaskGroup(of: Void.self) { group in
+            for i in 0..<iterations {
+                group.addTask { @MainActor in
+                    service.recordContent("Message \(i)", timestamp: Date())
+                }
+            }
+        }
+
+        // Verify some entries were recorded
+        #expect(service.contentTimestamp(for: "Message 0") != nil)
+        #expect(service.contentTimestamp(for: "Message 99") != nil)
+    }
+
+    @Test("Concurrent Nostr event recording is safe via MainActor")
+    func concurrentNostrEventRecording() async {
+        let service = MessageDeduplicationService(contentCapacity: 1000, nostrEventCapacity: 1000)
+        let iterations = 100
+
+        await withTaskGroup(of: Void.self) { group in
+            for i in 0..<iterations {
+                group.addTask { @MainActor in
+                    service.recordNostrEvent("event_\(i)")
+                }
+            }
+        }
+
+        // Verify events were recorded
+        #expect(service.hasProcessedNostrEvent("event_0"))
+        #expect(service.hasProcessedNostrEvent("event_99"))
+    }
+
+    @Test("Mixed concurrent operations are safe via MainActor")
+    func concurrentMixedOperations() async {
+        let service = MessageDeduplicationService(contentCapacity: 1000, nostrEventCapacity: 1000)
+        let iterations = 50
+
+        await withTaskGroup(of: Void.self) { group in
+            // Content recording tasks
+            for i in 0..<iterations {
+                group.addTask { @MainActor in
+                    service.recordContent("Content \(i)", timestamp: Date())
+                }
+            }
+
+            // Event recording tasks
+            for i in 0..<iterations {
+                group.addTask { @MainActor in
+                    service.recordNostrEvent("event_\(i)")
+                }
+            }
+
+            // ACK recording tasks
+            for i in 0..<iterations {
+                group.addTask { @MainActor in
+                    service.recordNostrAck("ack_\(i)")
+                }
+            }
+
+            // Read tasks
+            for i in 0..<iterations {
+                group.addTask { @MainActor in
+                    _ = service.contentTimestamp(for: "Content \(i)")
+                    _ = service.hasProcessedNostrEvent("event_\(i)")
+                    _ = service.hasProcessedNostrAck("ack_\(i)")
+                }
+            }
+        }
+
+        // If we reach here without crashes, the test passes
+    }
+}
+
+// MARK: - LRU Cache Thread Safety Tests
+
+@Suite("LRU Cache Thread Safety")
+@MainActor
+struct LRUCacheThreadSafetyTests {
+
+    @Test("Concurrent cache access is safe via MainActor")
+    func concurrentCacheAccess() async {
+        let cache = LRUDeduplicationCache<Int>(capacity: 500)
+        let iterations = 100
+
+        await withTaskGroup(of: Void.self) { group in
+            // Write tasks
+            for i in 0..<iterations {
+                group.addTask { @MainActor in
+                    cache.record("key_\(i)", value: i)
+                }
+            }
+
+            // Read tasks
+            for i in 0..<iterations {
+                group.addTask { @MainActor in
+                    _ = cache.contains("key_\(i)")
+                    _ = cache.value(for: "key_\(i)")
+                }
+            }
+        }
+
+        // Verify cache is in consistent state
+        #expect(cache.count <= 500) // Respects capacity
+    }
+
+    @Test("Cache eviction under concurrent load is safe")
+    func cacheEvictionUnderLoad() async {
+        let cache = LRUDeduplicationCache<Int>(capacity: 10)
+        let iterations = 100
+
+        await withTaskGroup(of: Void.self) { group in
+            for i in 0..<iterations {
+                group.addTask { @MainActor in
+                    cache.record("key_\(i)", value: i)
+                }
+            }
+        }
+
+        // Cache should maintain its capacity constraint
+        #expect(cache.count == 10)
     }
 }

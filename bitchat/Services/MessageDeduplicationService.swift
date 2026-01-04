@@ -12,6 +12,8 @@ import Foundation
 
 /// Generic LRU (Least Recently Used) cache for deduplication.
 /// Uses an efficient O(1) lookup with periodic compaction.
+/// Thread-safe via @MainActor - all callers are already on main actor.
+@MainActor
 final class LRUDeduplicationCache<Value> {
     private var map: [String: Value] = [:]
     private var order: [String] = []
@@ -157,6 +159,8 @@ enum ContentNormalizer {
 
 /// Service that manages message deduplication using LRU caches.
 /// Provides separate caches for content-based dedup and Nostr event ID dedup.
+/// Thread-safe via @MainActor - all callers are already on main actor.
+@MainActor
 final class MessageDeduplicationService {
 
     /// Cache for content-based near-duplicate detection
