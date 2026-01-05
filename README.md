@@ -105,17 +105,28 @@ For detailed protocol documentation, see the [Technical Whitepaper](WHITEPAPER.m
    - Clone the local configs: `cp Configs/Local.xcconfig.example Configs/Local.xcconfig`
    - Add your Developer Team ID into the newly created `Configs/Local.xcconfig`
       - Bundle ID would be set to `chat.bitchat.<team_id>` (unless you set to something else)
-   - Entitlements need to be updated manually (TODO: Automate):
-      - Search and replace `group.chat.bitchat` with `group.<your_bundle_id>` (e.g. `group.chat.bitchat.ABC123`)
+   - Configure entitlements: `just setup-entitlements` (automatically updates group identifiers)
 
-### Option 2: Using `just`
+### Option 2: Using `just` (Recommended for macOS)
 
    ```bash
    brew install just
    ```
 
-Want to try this on macos: `just run` will set it up and run from source.
-Run `just clean` afterwards to restore things to original state for mobile app building and development.
+   Quick setup for macOS development:
+   ```bash
+   # Copy and configure your Team ID
+   cp Configs/Local.xcconfig.example Configs/Local.xcconfig
+   # Edit Local.xcconfig to add your DEVELOPMENT_TEAM ID
+   
+   # Automated setup (checks prerequisites + configures entitlements)
+   just setup
+   
+   # Build and run
+   just run
+   ```
+
+   Run `just clean` afterwards to restore things to original state for mobile app building and development.
 
 ## Localization
 
