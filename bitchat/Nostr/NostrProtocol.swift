@@ -243,6 +243,7 @@ struct NostrProtocol {
         }
         
         let seal = try NostrEvent(from: sealDict)
+        try seal.verify()
         // Unwrapped seal
         
         return seal
