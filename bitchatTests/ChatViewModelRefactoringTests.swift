@@ -92,7 +92,7 @@ struct ChatViewModelRefactoringTests {
     func routing_incomingPrivateMessage_addsToPrivateChats() async {
         let (viewModel, _, _) = makePinnedViewModel()
         let senderID = PeerID(str: "sender_1")
-        
+
         // Setup
         let message = BitchatMessage(
             id: "msg_1",
@@ -106,24 +106,25 @@ struct ChatViewModelRefactoringTests {
             senderPeerID: senderID,
             mentions: nil
         )
-        
+
         // Action: Simulate incoming private message
         viewModel.didReceiveMessage(message)
-        
-        // Wait for Task to process
-        try? await Task.sleep(nanoseconds: 200_000_000)
-        
+
+        // Wait for async processing with proper timeout
+        let found = await TestHelpers.waitUntil(
+            { viewModel.privateChats[senderID]?.first?.content == "Secret" },
+            timeout: TestConstants.defaultTimeout
+        )
+
         // Assert
-        let chat = viewModel.privateChats[senderID]
-        #expect(chat != nil)
-        #expect(chat?.first?.content == "Secret")
+        #expect(found)
     }
 
     @Test @MainActor
     func routing_incomingPublicMessage_addsToPublicTimeline() async {
         let (viewModel, _, _) = makePinnedViewModel()
         let senderID = PeerID(str: "sender_2")
-        
+
         // Setup
         let message = BitchatMessage(
             id: "msg_2",
@@ -137,14 +138,17 @@ struct ChatViewModelRefactoringTests {
             senderPeerID: senderID,
             mentions: nil
         )
-        
+
         // Action
         viewModel.didReceiveMessage(message)
-        
-        // Wait for Task to process
-        try? await Task.sleep(nanoseconds: 200_000_000)
-        
+
+        // Wait for async processing with proper timeout
+        let found = await TestHelpers.waitUntil(
+            { viewModel.messages.contains(where: { $0.content == "Public Hi" }) },
+            timeout: TestConstants.defaultTimeout
+        )
+
         // Assert
-        #expect(viewModel.messages.contains(where: { $0.content == "Public Hi" }))
+        #expect(found)
     }
 }
