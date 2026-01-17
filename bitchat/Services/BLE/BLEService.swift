@@ -195,6 +195,7 @@ final class BLEService: NSObject {
 
     // MARK: - Gossip Sync
     private var gossipSyncManager: GossipSyncManager?
+    private let requestSyncManager = RequestSyncManager()
     
     // MARK: - Maintenance Timer
     
@@ -327,6 +328,31 @@ final class BLEService: NSObject {
 
         // Initialize gossip sync manager
         restartGossipManager()
+    }
+    
+    private func restartGossipManager() {
+        // Stop existing
+        gossipSyncManager?.stop()
+        
+        let config = GossipSyncManager.Config(
+            seenCapacity: TransportConfig.syncSeenCapacity,
+            gcsMaxBytes: TransportConfig.syncGCSMaxBytes,
+            gcsTargetFpr: TransportConfig.syncGCSTargetFpr,
+            maxMessageAgeSeconds: TransportConfig.syncMaxMessageAgeSeconds,
+            maintenanceIntervalSeconds: TransportConfig.syncMaintenanceIntervalSeconds,
+            stalePeerCleanupIntervalSeconds: TransportConfig.syncStalePeerCleanupIntervalSeconds,
+            stalePeerTimeoutSeconds: TransportConfig.syncStalePeerTimeoutSeconds,
+            fragmentCapacity: TransportConfig.syncFragmentCapacity,
+            fileTransferCapacity: TransportConfig.syncFileTransferCapacity,
+            fragmentSyncIntervalSeconds: TransportConfig.syncFragmentIntervalSeconds,
+            fileTransferSyncIntervalSeconds: TransportConfig.syncFileTransferIntervalSeconds,
+            messageSyncIntervalSeconds: TransportConfig.syncMessageIntervalSeconds
+        )
+        
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: requestSyncManager)
+        manager.delegate = self
+        manager.start()
+        gossipSyncManager = manager
     }
 
     // No advertising policy to set; we never include Local Name in adverts.
@@ -783,6 +809,43 @@ final class BLEService: NSObject {
         }
     }
     
+    private func validatePacket(_ packet: BitchatPacket, from peerID: PeerID) -> Bool {
+        let currentTime = UInt64(Date().timeIntervalSince1970 * 1000)
+        let messageType = MessageType(rawValue: packet.type)
+        
+        // 1. Timestamp Validation (Skipped for valid RSR packets)
+        let isRSR = packet.isRSR
+        // Treat TTL=0 as legacy RSR if not REQUEST_SYNC
+        // (Legacy clients send responses with TTL=0 but no flag)
+        let isLegacyRSR = packet.ttl == 0 && messageType != .requestSync
+        var skipTimestampCheck = false
+        
+        if isRSR || isLegacyRSR {
+            // We check both explicit RSR flag AND legacy TTL=0 packets
+            if requestSyncManager.isValidResponse(from: peerID, isRSR: true) {
+                SecureLogger.debug("Valid RSR packet (legacy=\(isLegacyRSR)) from \(peerID.id.prefix(8))… - skipping timestamp check", category: .security)
+                skipTimestampCheck = true
+            } else {
+                SecureLogger.warning("Invalid or unsolicited RSR packet from \(peerID.id.prefix(8))… - rejecting", category: .security)
+                return false
+            }
+        }
+        
+        if !skipTimestampCheck {
+            // Enforce timestamp check for normal packets (2 minutes skew)
+            let maxSkew: UInt64 = 120_000 // 2 minutes in ms
+            let packetTime = packet.timestamp
+            let skew = (packetTime > currentTime) ? (packetTime - currentTime) : (currentTime - packetTime)
+            
+            if skew > maxSkew {
+                SecureLogger.warning("Packet timestamp skewed by \(skew)ms (max \(maxSkew)ms) from \(peerID.id.prefix(8))…", category: .security)
+                return false
+            }
+        }
+        
+        return true
+    }
+
     // MARK: - Packet Broadcasting
     
     private func broadcastPacket(_ packet: BitchatPacket, transferId: String? = nil) {
@@ -1530,6 +1593,12 @@ extension BLEService: GossipSyncManager.Delegate {
     func signPacketForBroadcast(_ packet: BitchatPacket) -> BitchatPacket {
         return noiseService.signPacket(packet) ?? packet
     }
+    
+    func getConnectedPeers() -> [PeerID] {
+        return collectionsQueue.sync {
+            peers.values.compactMap { $0.isConnected ? $0.peerID : nil }
+        }
+    }
 }
 
 // MARK: - CBCentralManagerDelegate
@@ -2065,6 +2134,11 @@ extension BLEService: CBPeripheralDelegate {
                 SecureLogger.error("❌ Failed to decode assembled notification frame (len=\(frame.count), prefix=\(prefix))", category: .session)
                 continue
             }
+            // Validate packet (Timestamp/RSR) before processing
+            let senderID = PeerID(hexData: packet.senderID)
+            if !validatePacket(packet, from: senderID) {
+                continue
+            }
             processNotificationPacket(packet, from: peripheral, peripheralUUID: peripheralUUID)
         }
     }
@@ -2427,6 +2501,12 @@ extension BLEService: CBPeripheralManagerDelegate {
                 // Clear buffer on success
                 pendingWriteBuffers.removeValue(forKey: centralUUID)
                 let senderID = PeerID(hexData: packet.senderID)
+                
+                // Validate packet (Timestamp/RSR)
+                if !validatePacket(packet, from: senderID) {
+                    continue
+                }
+                
                 if packet.type != MessageType.announce.rawValue {
                     SecureLogger.debug("📦 Decoded (combined) packet type: \(packet.type) from sender: \(senderID)", category: .session)
                 }
@@ -3184,7 +3264,8 @@ extension BLEService {
                 signature: nil,
                 ttl: packet.ttl,
                 version: fragmentVersion,
-                route: packet.route
+                route: packet.route,
+                isRSR: packet.isRSR
             )
 
             let workItem = DispatchWorkItem { [weak self] in
@@ -3375,9 +3456,16 @@ extension BLEService {
 
         // Decode the original packet bytes we reassembled, so flags/compression are preserved
         if var originalPacket = BinaryProtocol.decode(reassembled) {
-            SecureLogger.debug("✅ Reassembled packet id=\(String(format: "%016llx", fragU64)) type=\(originalPacket.type) bytes=\(reassembled.count)", category: .session)
-            originalPacket.ttl = 0
-            handleReceivedPacket(originalPacket, from: peerID)
+            
+            // Reassembled packet validation
+            let innerSender = PeerID(hexData: originalPacket.senderID)
+            if !validatePacket(originalPacket, from: innerSender) {
+                // Cleanup below
+            } else {
+                SecureLogger.debug("✅ Reassembled packet id=\(String(format: "%016llx", fragU64)) type=\(originalPacket.type) bytes=\(reassembled.count)", category: .session)
+                originalPacket.ttl = 0
+                handleReceivedPacket(originalPacket, from: peerID)
+            }
         } else {
             SecureLogger.error("❌ Failed to decode reassembled packet (type=\(originalType), total=\(total))", category: .session)
         }
