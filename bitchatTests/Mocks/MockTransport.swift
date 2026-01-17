@@ -184,6 +184,7 @@ final class MockTransport: Transport {
         }
         delegate?.didConnectToPeer(peerID)
         delegate?.didUpdatePeerList(Array(connectedPeers))
+        publishPeerSnapshots()
     }
 
     /// Simulates a peer disconnecting
@@ -192,6 +193,7 @@ final class MockTransport: Transport {
         peerNicknames.removeValue(forKey: peerID)
         delegate?.didDisconnectFromPeer(peerID)
         delegate?.didUpdatePeerList(Array(connectedPeers))
+        publishPeerSnapshots()
     }
 
     /// Simulates receiving a message
@@ -224,5 +226,22 @@ final class MockTransport: Transport {
     /// Updates the peer snapshot publisher
     func updatePeerSnapshots(_ snapshots: [TransportPeerSnapshot]) {
         peerSnapshotSubject.send(snapshots)
+        Task { @MainActor [weak self] in
+            self?.peerEventsDelegate?.didUpdatePeerSnapshots(snapshots)
+        }
+    }
+
+    private func publishPeerSnapshots() {
+        let now = Date()
+        let snapshots = connectedPeers.map { peerID in
+            TransportPeerSnapshot(
+                peerID: peerID,
+                nickname: peerNicknames[peerID] ?? "",
+                isConnected: true,
+                noisePublicKey: Data(hexString: peerID.bare),
+                lastSeen: now
+            )
+        }
+        updatePeerSnapshots(snapshots)
     }
 }

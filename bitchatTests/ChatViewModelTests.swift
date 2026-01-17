@@ -114,6 +114,44 @@ struct ChatViewModelSendingTests {
     }
 }
 
+// MARK: - Command Handling Tests
+
+struct ChatViewModelCommandTests {
+
+    @Test @MainActor
+    func sendMessage_commandsNotSentToTransport() async {
+        let (viewModel, transport) = makeTestableViewModel()
+        let commands = ["/nick bob", "/who", "/help", "/clear"]
+
+        for command in commands {
+            transport.resetRecordings()
+            viewModel.sendMessage(command)
+            try? await Task.sleep(nanoseconds: 100_000_000)
+
+            #expect(transport.sentMessages.isEmpty)
+            #expect(transport.sentPrivateMessages.isEmpty)
+        }
+    }
+}
+
+// MARK: - Timeline Cap Tests
+
+struct ChatViewModelTimelineCapTests {
+
+    @Test @MainActor
+    func sendMessage_trimsTimelineToCap() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let total = TransportConfig.meshTimelineCap + 5
+
+        for i in 0..<total {
+            viewModel.sendMessage("cap-msg-\(i)")
+        }
+
+        #expect(viewModel.messages.count == TransportConfig.meshTimelineCap)
+        #expect(viewModel.messages.last?.content == "cap-msg-\(total - 1)")
+    }
+}
+
 // MARK: - Message Receiving Tests
 
 struct ChatViewModelReceivingTests {
@@ -161,6 +199,40 @@ struct ChatViewModelReceivingTests {
         try? await Task.sleep(nanoseconds: 500_000_000)
 
         #expect(viewModel.messages.contains { $0.content == "Public hello from Bob" })
+    }
+}
+
+// MARK: - Rate Limiting Tests
+
+struct ChatViewModelRateLimitingTests {
+
+    @Test @MainActor
+    func handlePublicMessage_rateLimitsBurstBySender() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let senderID = PeerID(str: "1122334455667788")
+        let now = Date()
+
+        for i in 0..<6 {
+            let message = BitchatMessage(
+                id: "rate-\(i)",
+                sender: "Spammer",
+                content: "rate-msg-\(i)",
+                timestamp: now,
+                isRelay: false,
+                originalSender: nil,
+                isPrivate: false,
+                recipientNickname: nil,
+                senderPeerID: senderID,
+                mentions: nil
+            )
+            viewModel.handlePublicMessage(message)
+        }
+
+        viewModel.publicMessagePipeline.flushIfNeeded()
+
+        let burstMessages = viewModel.messages.filter { $0.content.hasPrefix("rate-msg-") }
+        #expect(burstMessages.count == 5)
+        #expect(!burstMessages.contains { $0.content == "rate-msg-5" })
     }
 }
 
@@ -258,6 +330,94 @@ struct ChatViewModelPrivateChatTests {
     }
 }
 
+// MARK: - Private Chat Selection Tests
+
+struct ChatViewModelPrivateChatSelectionTests {
+
+    @Test @MainActor
+    func openMostRelevantPrivateChat_prefersUnreadMostRecent() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let peerA = PeerID(str: "PEER_A")
+        let peerB = PeerID(str: "PEER_B")
+
+        let older = Date().addingTimeInterval(-120)
+        let newer = Date().addingTimeInterval(-30)
+
+        viewModel.privateChats = [
+            peerA: [
+                BitchatMessage(
+                    id: "a-1",
+                    sender: "A",
+                    content: "Old",
+                    timestamp: older,
+                    isRelay: false,
+                    isPrivate: true,
+                    recipientNickname: "Me",
+                    senderPeerID: peerA
+                )
+            ],
+            peerB: [
+                BitchatMessage(
+                    id: "b-1",
+                    sender: "B",
+                    content: "New",
+                    timestamp: newer,
+                    isRelay: false,
+                    isPrivate: true,
+                    recipientNickname: "Me",
+                    senderPeerID: peerB
+                )
+            ]
+        ]
+        viewModel.unreadPrivateMessages = [peerA, peerB]
+
+        viewModel.openMostRelevantPrivateChat()
+
+        #expect(viewModel.selectedPrivateChatPeer == peerB)
+    }
+
+    @Test @MainActor
+    func openMostRelevantPrivateChat_fallsBackToMostRecentChat() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let peerA = PeerID(str: "PEER_A")
+        let peerB = PeerID(str: "PEER_B")
+
+        let older = Date().addingTimeInterval(-200)
+        let newer = Date().addingTimeInterval(-20)
+
+        viewModel.privateChats = [
+            peerA: [
+                BitchatMessage(
+                    id: "a-1",
+                    sender: "A",
+                    content: "Old",
+                    timestamp: older,
+                    isRelay: false,
+                    isPrivate: true,
+                    recipientNickname: "Me",
+                    senderPeerID: peerA
+                )
+            ],
+            peerB: [
+                BitchatMessage(
+                    id: "b-1",
+                    sender: "B",
+                    content: "New",
+                    timestamp: newer,
+                    isRelay: false,
+                    isPrivate: true,
+                    recipientNickname: "Me",
+                    senderPeerID: peerB
+                )
+            ]
+        ]
+
+        viewModel.openMostRelevantPrivateChat()
+
+        #expect(viewModel.selectedPrivateChatPeer == peerB)
+    }
+}
+
 // MARK: - Bluetooth State Tests
 
 struct ChatViewModelBluetoothTests {
@@ -309,11 +469,37 @@ struct ChatViewModelPanicTests {
 
         // Set up some state
         transport.connectedPeers.insert(PeerID(str: "PEER1"))
+        viewModel.messages = [
+            BitchatMessage(
+                id: "panic-1",
+                sender: "Tester",
+                content: "Before",
+                timestamp: Date(),
+                isRelay: false
+            )
+        ]
+        viewModel.privateChats[PeerID(str: "PEER1")] = [
+            BitchatMessage(
+                id: "pm-1",
+                sender: "Peer",
+                content: "Secret",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "Me",
+                senderPeerID: PeerID(str: "PEER1")
+            )
+        ]
+        viewModel.unreadPrivateMessages.insert(PeerID(str: "PEER1"))
 
         viewModel.panicClearAllData()
 
         // After panic, emergency disconnect should be called
         #expect(transport.emergencyDisconnectCallCount == 1)
+        #expect(viewModel.messages.isEmpty)
+        #expect(viewModel.privateChats.isEmpty)
+        #expect(viewModel.unreadPrivateMessages.isEmpty)
+        #expect(viewModel.selectedPrivateChatPeer == nil)
     }
 }
 

@@ -93,6 +93,22 @@ final class TestHelpers {
             try await sleep(0.01)
         }
     }
+
+    @MainActor
+    static func waitUntil(
+        _ condition: @escaping () -> Bool,
+        timeout: TimeInterval = TestConstants.defaultTimeout,
+        pollInterval: TimeInterval = 0.01
+    ) async -> Bool {
+        let start = Date()
+        while !condition() {
+            if Date().timeIntervalSince(start) > timeout {
+                return condition()
+            }
+            try? await sleep(pollInterval)
+        }
+        return true
+    }
     
     static func expectAsync<T>(
         timeout: TimeInterval = TestConstants.defaultTimeout,
