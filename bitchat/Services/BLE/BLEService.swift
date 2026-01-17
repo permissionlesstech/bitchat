@@ -2803,10 +2803,9 @@ extension BLEService {
     
     private func sendNoisePayload(_ typedPayload: Data, to peerID: PeerID) {
         guard noiseService.hasSession(with: peerID) else {
-            // No session yet - queue the payload for delivery after handshake completes
-            // This prevents silent loss of ACKs, read receipts, and verification payloads
-            collectionsQueue.async(flags: .barrier) { [weak self] in
-                guard let self = self else { return }
+            // No session yet - queue the payload SYNCHRONOUSLY before initiating handshake
+            // to prevent race where fast handshake completion drains empty queue
+            collectionsQueue.sync(flags: .barrier) {
                 if self.pendingNoisePayloadsAfterHandshake[peerID] == nil {
                     self.pendingNoisePayloadsAfterHandshake[peerID] = []
                 }
