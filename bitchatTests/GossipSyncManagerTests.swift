@@ -7,7 +7,8 @@ struct GossipSyncManagerTests {
     private let myPeerID = PeerID(str: "0102030405060708")
     
     @Test func concurrentPacketIntakeAndSyncRequest() async throws {
-        let manager = GossipSyncManager(myPeerID: myPeerID)
+        let requestSyncManager = RequestSyncManager()
+        let manager = GossipSyncManager(myPeerID: myPeerID, requestSyncManager: requestSyncManager)
         let delegate = RecordingDelegate()
         manager.delegate = delegate
 
@@ -48,7 +49,8 @@ struct GossipSyncManagerTests {
         config.stalePeerCleanupIntervalSeconds = 0
         config.stalePeerTimeoutSeconds = 5
 
-        let manager = GossipSyncManager(myPeerID: myPeerID, config: config)
+        let requestSyncManager = RequestSyncManager()
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: requestSyncManager)
         let peerHex = "0011223344556677"
         let senderData = try #require(Data(hexString: peerHex))
         let initialTimestampMs = UInt64(Date().timeIntervalSince1970 * 1000)
@@ -93,7 +95,8 @@ struct GossipSyncManagerTests {
         config.stalePeerTimeoutSeconds = 5
         config.maxMessageAgeSeconds = 100
 
-        let manager = GossipSyncManager(myPeerID: myPeerID, config: config)
+        let requestSyncManager = RequestSyncManager()
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: requestSyncManager)
         let peerHex = "8899aabbccddeeff"
         let senderData = try #require(Data(hexString: peerHex))
         let staleTimestampMs = UInt64(Date().addingTimeInterval(-(config.stalePeerTimeoutSeconds + 1)).timeIntervalSince1970 * 1000)
@@ -137,7 +140,8 @@ struct GossipSyncManagerTests {
         config.fileTransferSyncIntervalSeconds = 1
         config.maintenanceIntervalSeconds = 0
 
-        let manager = GossipSyncManager(myPeerID: myPeerID, config: config)
+        let requestSyncManager = RequestSyncManager()
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: requestSyncManager)
         let delegate = RecordingDelegate()
         manager.delegate = delegate
 
@@ -207,7 +211,8 @@ struct GossipSyncManagerTests {
         config.fragmentSyncIntervalSeconds = 0
         config.fileTransferSyncIntervalSeconds = 0
 
-        let manager = GossipSyncManager(myPeerID: myPeerID, config: config)
+        let requestSyncManager = RequestSyncManager()
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: requestSyncManager)
         let delegate = RecordingDelegate()
         manager.delegate = delegate
 
@@ -268,5 +273,9 @@ private final class RecordingDelegate: GossipSyncManager.Delegate {
 
     func signPacketForBroadcast(_ packet: BitchatPacket) -> BitchatPacket {
         packet
+    }
+    
+    func getConnectedPeers() -> [PeerID] {
+        return []
     }
 }
