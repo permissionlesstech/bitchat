@@ -211,4 +211,18 @@ enum TransportConfig {
     static let uiShareExtensionDismissDelaySeconds: TimeInterval = 2.0
     static let uiShareAcceptWindowSeconds: TimeInterval = 30.0
     static let uiMigrationCutoffSeconds: TimeInterval = 24 * 60 * 60
+
+    // Gossip Sync Configuration
+    static let syncSeenCapacity: Int = 1000
+    static let syncGCSMaxBytes: Int = 400
+    static let syncGCSTargetFpr: Double = 0.01
+    static let syncMaxMessageAgeSeconds: TimeInterval = 900
+    static let syncMaintenanceIntervalSeconds: TimeInterval = 30.0
+    static let syncStalePeerCleanupIntervalSeconds: TimeInterval = 60.0
+    static let syncStalePeerTimeoutSeconds: TimeInterval = 60.0
+    static let syncFragmentCapacity: Int = 600
+    static let syncFileTransferCapacity: Int = 200
+    static let syncFragmentIntervalSeconds: TimeInterval = 30.0
+    static let syncFileTransferIntervalSeconds: TimeInterval = 60.0
+    static let syncMessageIntervalSeconds: TimeInterval = 15.0
 }

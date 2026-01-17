@@ -2755,13 +2755,7 @@ extension BLEService {
         meshTopology.reset()
     }
 
-    private func restartGossipManager() {
-        gossipSyncManager?.stop()
-        let sync = GossipSyncManager(myPeerID: myPeerID)
-        sync.delegate = self
-        sync.start()
-        gossipSyncManager = sync
-    }
+
     
     private func sendNoisePayload(_ typedPayload: Data, to peerID: PeerID) {
         guard noiseService.hasSession(with: peerID) else {
