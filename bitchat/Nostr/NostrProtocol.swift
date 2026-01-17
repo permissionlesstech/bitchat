@@ -550,6 +550,42 @@ struct NostrEvent: Codable {
         let data = try encoder.encode(self)
         return String(data: data, encoding: .utf8) ?? ""
     }
+
+    /// Verify the event ID and Schnorr signature
+    func verify() throws {
+        if kind == NostrProtocol.EventKind.dm.rawValue {// NIP17 Rumors  are unsigned and nested within Seals. skip verification for them 
+            return
+        }
+
+        guard let signatureHex = sig, !signatureHex.isEmpty else {
+            throw NostrError.invalidSignature
+        }
+        
+        let (calculatedId, calculatedIdHash) = try calculateEventId()
+        
+        guard id == calculatedId else {
+            throw NostrError.invalidEventId
+        }
+        
+        guard let pubkeyData = Data(hexString: pubkey), pubkeyData.count == 32 else {
+            throw NostrError.invalidPublicKey
+        }
+        
+        guard let signatureData = Data(hexString: signatureHex), signatureData.count == 64 else {
+            throw NostrError.invalidSignature
+        }
+        
+        // Verify Schnorr signature (BIP-340)
+        let schnorrPublicKey = try P256K.Schnorr.PublicKey(xOnly: [UInt8](pubkeyData))
+        let schnorrSignature = try P256K.Schnorr.Signature(dataRepresentation: signatureData)
+        
+        var messageBytes = [UInt8](calculatedIdHash)
+        let isValid = schnorrPublicKey.verify(message: &messageBytes, signature: schnorrSignature)
+        
+        if !isValid {
+            throw NostrError.invalidSignature
+        }
+    }
 }
 
 enum NostrError: Error {
@@ -559,6 +595,8 @@ enum NostrError: Error {
     case invalidCiphertext
     case signingFailed
     case encryptionFailed
+    case invalidSignature
+    case invalidEventId
 }
 
 // MARK: - NIP-44 v2 helpers (XChaCha20-Poly1305 + base64url)
