@@ -616,6 +616,17 @@ final class NoiseEncryptionService {
         }
         rateLimiter.resetAll()
     }
+
+    /// Clear session for a specific peer (e.g., on decryption failure to allow re-handshake)
+    func clearSession(for peerID: PeerID) {
+        sessionManager.removeSession(for: peerID)
+        serviceQueue.sync(flags: .barrier) {
+            if let fingerprint = peerFingerprints.removeValue(forKey: peerID) {
+                fingerprintToPeerID.removeValue(forKey: fingerprint)
+            }
+        }
+        SecureLogger.debug("🔓 Cleared Noise session for \(peerID)", category: .session)
+    }
     
     // MARK: - Private Helpers
     

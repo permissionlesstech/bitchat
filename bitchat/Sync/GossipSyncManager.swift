@@ -1,4 +1,5 @@
 import Foundation
+import BitLogger
 
 // Gossip-based sync manager using on-demand GCS filters
 final class GossipSyncManager {
@@ -6,6 +7,7 @@ final class GossipSyncManager {
         func sendPacket(_ packet: BitchatPacket)
         func sendPacket(to peerID: PeerID, packet: BitchatPacket)
         func signPacketForBroadcast(_ packet: BitchatPacket) -> BitchatPacket
+        func getConnectedPeers() -> [PeerID]
     }
 
     private struct PacketStore {
@@ -74,6 +76,7 @@ final class GossipSyncManager {
 
     private let myPeerID: PeerID
     private let config: Config
+    private let requestSyncManager: RequestSyncManager
     weak var delegate: Delegate?
 
     // Storage: broadcast packets by type, and latest announce per sender
@@ -88,9 +91,10 @@ final class GossipSyncManager {
     private var lastStalePeerCleanup: Date = .distantPast
     private var syncSchedules: [SyncSchedule] = []
 
-    init(myPeerID: PeerID, config: Config = Config()) {
+    init(myPeerID: PeerID, config: Config = Config(), requestSyncManager: RequestSyncManager) {
         self.myPeerID = myPeerID
         self.config = config
+        self.requestSyncManager = requestSyncManager
         var schedules: [SyncSchedule] = []
         if config.seenCapacity > 0 && config.messageSyncIntervalSeconds > 0 {
             schedules.append(SyncSchedule(types: .publicMessages, interval: config.messageSyncIntervalSeconds, lastSent: .distantPast))
@@ -202,6 +206,19 @@ final class GossipSyncManager {
         }
     }
 
+    private func sendPeriodicSync(for types: SyncTypeFlags) {
+        // Unicast sync to connected peers to allow RSR attribution
+        if let connectedPeers = delegate?.getConnectedPeers(), !connectedPeers.isEmpty {
+            SecureLogger.debug("Sending periodic sync to \(connectedPeers.count) connected peers", category: .sync)
+            for peerID in connectedPeers {
+                sendRequestSync(to: peerID, types: types)
+            }
+        } else {
+            // Fallback to broadcast (discovery phase)
+            sendRequestSync(for: types)
+        }
+    }
+
     private func sendRequestSync(for types: SyncTypeFlags) {
         let payload = buildGcsPayload(for: types)
         let pkt = BitchatPacket(
@@ -218,6 +235,9 @@ final class GossipSyncManager {
     }
 
     private func sendRequestSync(to peerID: PeerID, types: SyncTypeFlags) {
+        // Register the request for RSR validation
+        requestSyncManager.registerRequest(to: peerID)
+        
         let payload = buildGcsPayload(for: types)
         var recipient = Data()
         var temp = peerID.id
@@ -262,6 +282,7 @@ final class GossipSyncManager {
                 if !mightContain(idBytes) {
                     var toSend = pkt
                     toSend.ttl = 0
+                    toSend.isRSR = true // Mark as solicited response
                     delegate?.sendPacket(to: peerID, packet: toSend)
                 }
             }
@@ -274,6 +295,7 @@ final class GossipSyncManager {
                 if !mightContain(idBytes) {
                     var toSend = pkt
                     toSend.ttl = 0
+                    toSend.isRSR = true // Mark as solicited response
                     delegate?.sendPacket(to: peerID, packet: toSend)
                 }
             }
@@ -286,6 +308,7 @@ final class GossipSyncManager {
                 if !mightContain(idBytes) {
                     var toSend = pkt
                     toSend.ttl = 0
+                    toSend.isRSR = true // Mark as solicited response
                     delegate?.sendPacket(to: peerID, packet: toSend)
                 }
             }
@@ -298,6 +321,7 @@ final class GossipSyncManager {
                 if !mightContain(idBytes) {
                     var toSend = pkt
                     toSend.ttl = 0
+                    toSend.isRSR = true // Mark as solicited response
                     delegate?.sendPacket(to: peerID, packet: toSend)
                 }
             }
@@ -366,11 +390,13 @@ final class GossipSyncManager {
     private func performPeriodicMaintenance(now: Date = Date()) {
         cleanupExpiredMessages()
         cleanupStaleAnnouncementsIfNeeded(now: now)
+        requestSyncManager.cleanup() // Cleanup expired sync requests
+        
         for index in syncSchedules.indices {
             guard syncSchedules[index].interval > 0 else { continue }
             if syncSchedules[index].lastSent == .distantPast || now.timeIntervalSince(syncSchedules[index].lastSent) >= syncSchedules[index].interval {
                 syncSchedules[index].lastSent = now
-                sendRequestSync(for: syncSchedules[index].types)
+                sendPeriodicSync(for: syncSchedules[index].types)
             }
         }
     }

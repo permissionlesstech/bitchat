@@ -96,11 +96,12 @@ enum TransportConfig {
     // Keep scanning fully ON when we saw traffic very recently
     static let bleRecentTrafficForceScanSeconds: TimeInterval = 10.0
     static let bleThreadSleepWriteShortDelaySeconds: TimeInterval = 0.05
-    static let bleExpectedWritePerFragmentMs: Int = 8
-    static let bleExpectedWriteMaxMs: Int = 2000
-    // Faster fragment pacing; use slightly tighter spacing for directed trains
-    static let bleFragmentSpacingMs: Int = 5
-    static let bleFragmentSpacingDirectedMs: Int = 4
+    static let bleExpectedWritePerFragmentMs: Int = 20
+    static let bleExpectedWriteMaxMs: Int = 5000
+    // Fragment pacing: Conservative spacing to prevent BLE buffer overflow
+    // Aggressive pacing causes packet loss; needs 25-30ms between fragments for reliable delivery
+    static let bleFragmentSpacingMs: Int = 30
+    static let bleFragmentSpacingDirectedMs: Int = 25
     static let bleAnnounceIntervalSeconds: TimeInterval = 4.0
     static let bleDutyOnDurationDense: TimeInterval = 3.0
     static let bleDutyOffDurationDense: TimeInterval = 15.0
@@ -211,4 +212,18 @@ enum TransportConfig {
     static let uiShareExtensionDismissDelaySeconds: TimeInterval = 2.0
     static let uiShareAcceptWindowSeconds: TimeInterval = 30.0
     static let uiMigrationCutoffSeconds: TimeInterval = 24 * 60 * 60
+
+    // Gossip Sync Configuration
+    static let syncSeenCapacity: Int = 1000
+    static let syncGCSMaxBytes: Int = 400
+    static let syncGCSTargetFpr: Double = 0.01
+    static let syncMaxMessageAgeSeconds: TimeInterval = 900
+    static let syncMaintenanceIntervalSeconds: TimeInterval = 30.0
+    static let syncStalePeerCleanupIntervalSeconds: TimeInterval = 60.0
+    static let syncStalePeerTimeoutSeconds: TimeInterval = 60.0
+    static let syncFragmentCapacity: Int = 600
+    static let syncFileTransferCapacity: Int = 200
+    static let syncFragmentIntervalSeconds: TimeInterval = 30.0
+    static let syncFileTransferIntervalSeconds: TimeInterval = 60.0
+    static let syncMessageIntervalSeconds: TimeInterval = 15.0
 }

@@ -9,12 +9,16 @@ struct RequestSyncPacket {
     let m: UInt32
     let data: Data
     let types: SyncTypeFlags?
+    let sinceTimestamp: UInt64?
+    let fragmentIdFilter: String?
 
-    init(p: Int, m: UInt32, data: Data, types: SyncTypeFlags? = nil) {
+    init(p: Int, m: UInt32, data: Data, types: SyncTypeFlags? = nil, sinceTimestamp: UInt64? = nil, fragmentIdFilter: String? = nil) {
         self.p = p
         self.m = m
         self.data = data
         self.types = types
+        self.sinceTimestamp = sinceTimestamp
+        self.fragmentIdFilter = fragmentIdFilter
     }
 
     func encode() -> Data {
@@ -36,15 +40,24 @@ struct RequestSyncPacket {
         if let typesData = types?.toData() {
             putTLV(0x04, typesData)
         }
+        if let ts = sinceTimestamp {
+            var tsBE = ts.bigEndian
+            putTLV(0x05, withUnsafeBytes(of: &tsBE) { Data($0) })
+        }
+        if let fid = fragmentIdFilter, let fidData = fid.data(using: .utf8) {
+            putTLV(0x06, fidData)
+        }
         return out
     }
-
+    
     static func decode(from data: Data, maxAcceptBytes: Int = 1024) -> RequestSyncPacket? {
         var off = 0
         var p: Int? = nil
         var m: UInt32? = nil
         var payload: Data? = nil
         var types: SyncTypeFlags? = nil
+        var sinceTimestamp: UInt64? = nil
+        var fragmentIdFilter: String? = nil
 
         while off + 3 <= data.count {
             let t = Int(data[off]); off += 1
@@ -68,12 +81,22 @@ struct RequestSyncPacket {
                 if let decoded = SyncTypeFlags.decode(v) {
                     types = decoded
                 }
+            case 0x05:
+                if v.count == 8 {
+                    var ts: UInt64 = 0
+                    for b in v { ts = (ts << 8) | UInt64(b) }
+                    sinceTimestamp = ts
+                }
+            case 0x06:
+                if let fid = String(data: v, encoding: .utf8) {
+                    fragmentIdFilter = fid
+                }
             default:
                 break // forward compatible; ignore unknown TLVs
             }
         }
 
         guard let pp = p, let mm = m, let dd = payload, pp >= 1, mm > 0 else { return nil }
-        return RequestSyncPacket(p: pp, m: mm, data: dd, types: types)
+        return RequestSyncPacket(p: pp, m: mm, data: dd, types: types, sinceTimestamp: sinceTimestamp, fragmentIdFilter: fragmentIdFilter)
     }
 }
