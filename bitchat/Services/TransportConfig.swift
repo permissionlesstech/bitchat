@@ -96,11 +96,12 @@ enum TransportConfig {
     // Keep scanning fully ON when we saw traffic very recently
     static let bleRecentTrafficForceScanSeconds: TimeInterval = 10.0
     static let bleThreadSleepWriteShortDelaySeconds: TimeInterval = 0.05
-    static let bleExpectedWritePerFragmentMs: Int = 8
-    static let bleExpectedWriteMaxMs: Int = 2000
-    // Faster fragment pacing; use slightly tighter spacing for directed trains
-    static let bleFragmentSpacingMs: Int = 5
-    static let bleFragmentSpacingDirectedMs: Int = 4
+    static let bleExpectedWritePerFragmentMs: Int = 20
+    static let bleExpectedWriteMaxMs: Int = 5000
+    // Fragment pacing: Conservative spacing to prevent BLE buffer overflow
+    // Aggressive pacing causes packet loss; needs 25-30ms between fragments for reliable delivery
+    static let bleFragmentSpacingMs: Int = 30
+    static let bleFragmentSpacingDirectedMs: Int = 25
     static let bleAnnounceIntervalSeconds: TimeInterval = 4.0
     static let bleDutyOnDurationDense: TimeInterval = 3.0
     static let bleDutyOffDurationDense: TimeInterval = 15.0

@@ -11,6 +11,10 @@ final class MeshTopologyTracker {
     // Last time we received an update from a node
     private var lastSeen: [RoutingID: Date] = [:]
 
+    // Maximum age for topology claims to be considered fresh for routing
+    // Routes computed using stale topology can fail when the network has changed
+    private static let routeFreshnessThreshold: TimeInterval = 60 // 60 seconds
+
     func reset() {
         queue.sync(flags: .barrier) {
             self.claims.removeAll()
@@ -55,25 +59,33 @@ final class MeshTopologyTracker {
         if source == target { return [] } // Direct connection, no intermediate hops
 
         return queue.sync {
+            let now = Date()
+            let freshnessDeadline = now.addingTimeInterval(-Self.routeFreshnessThreshold)
+
             // BFS
             var visited: Set<RoutingID> = [source]
             // Queue stores paths: [Start, Hop1, Hop2, ..., Current]
             var queuePaths: [[RoutingID]] = [[source]]
-            
+
             while !queuePaths.isEmpty {
                 let path = queuePaths.removeFirst()
                 // Limit path length (path contains source + maxHops + target) -> maxHops intermediate
                 // If maxHops = 10, max edges = 11, max nodes = 12.
                 if path.count > maxHops + 1 { continue }
-                
+
                 guard let last = path.last else { continue }
-                
+
                 // Get neighbors that 'last' claims to see
                 guard let neighbors = claims[last] else { continue }
 
+                // Check if 'last' node's topology info is fresh
+                guard let lastSeenTime = lastSeen[last], lastSeenTime > freshnessDeadline else {
+                    continue // Skip stale nodes
+                }
+
                 for neighbor in neighbors {
                     if visited.contains(neighbor) { continue }
-                    
+
                     // CONFIRMED EDGE CHECK:
                     // 'last' claims 'neighbor' (checked above)
                     // Does 'neighbor' claim 'last'?
@@ -81,16 +93,21 @@ final class MeshTopologyTracker {
                           neighborClaims.contains(last) else {
                         continue
                     }
-                    
+
+                    // Check if 'neighbor' node's topology info is fresh
+                    guard let neighborSeenTime = lastSeen[neighbor], neighborSeenTime > freshnessDeadline else {
+                        continue // Skip edges to stale nodes
+                    }
+
                     var nextPath = path
                     nextPath.append(neighbor)
-                    
+
                     if neighbor == target {
                         // Return only intermediate hops
                         // Path: [Source, I1, I2, Target] -> [I1, I2]
                         return Array(nextPath.dropFirst().dropLast())
                     }
-                    
+
                     visited.insert(neighbor)
                     queuePaths.append(nextPath)
                 }
