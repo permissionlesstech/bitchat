@@ -96,7 +96,8 @@ final class NotificationService {
     func sendNetworkAvailableNotification(peerCount: Int) {
         let title = "👥 bitchatters nearby!"
         let body = peerCount == 1 ? "1 person around" : "\(peerCount) people around"
-        let identifier = "network-available-\(Date().timeIntervalSince1970)"
+        // Fixed identifier so iOS updates the existing notification instead of creating new ones
+        let identifier = "network-available"
 
         sendLocalNotification(
             title: title,
