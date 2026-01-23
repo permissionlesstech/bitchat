@@ -22,21 +22,6 @@ struct SyncTypeFlags: OptionSet {
         }
     }
 
-    private static func type(forBit index: Int) -> MessageType? {
-        switch index {
-        case 0: return .announce
-        case 1: return .message
-        case 2: return .leave
-        case 3: return .noiseHandshake
-        case 4: return .noiseEncrypted
-        case 5: return .fragment
-        case 6: return .requestSync
-        case 7: return .fileTransfer
-        default:
-            return nil
-        }
-    }
-
     static let publicMessages = SyncTypeFlags(messageTypes: [.announce, .message])
 
     init(messageTypes: [MessageType]) {
