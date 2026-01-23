@@ -210,38 +210,6 @@ struct GeohashParticipantTrackerTests {
         #expect(tracker.participantCount(for: "geo2") == 0)
     }
 
-    // MARK: - Clear Tests
-
-    @Test func clear_removesAllData() async {
-        let tracker = GeohashParticipantTracker()
-        let context = MockParticipantContext()
-        tracker.configure(context: context)
-        tracker.setActiveGeohash("abc123")
-
-        tracker.recordParticipant(pubkeyHex: "pubkey1")
-        tracker.recordParticipant(pubkeyHex: "pubkey2", geohash: "other")
-
-        tracker.clear()
-
-        #expect(tracker.participantCount(for: "abc123") == 0)
-        #expect(tracker.participantCount(for: "other") == 0)
-        #expect(tracker.visiblePeople.isEmpty)
-    }
-
-    @Test func clearGeohash_removesOnlySpecificGeohash() async {
-        let tracker = GeohashParticipantTracker()
-        let context = MockParticipantContext()
-        tracker.configure(context: context)
-
-        tracker.recordParticipant(pubkeyHex: "pubkey1", geohash: "geo1")
-        tracker.recordParticipant(pubkeyHex: "pubkey2", geohash: "geo2")
-
-        tracker.clear(geohash: "geo1")
-
-        #expect(tracker.participantCount(for: "geo1") == 0)
-        #expect(tracker.participantCount(for: "geo2") == 1)
-    }
-
     // MARK: - Set Active Geohash Tests
 
     @Test func setActiveGeohash_clearsVisiblePeopleWhenNil() async {

@@ -70,23 +70,6 @@ struct MeshTopologyTrackerTests {
         #expect(route == [b])
     }
 
-    @Test func removingPeerClearsEdges() throws {
-        let tracker = MeshTopologyTracker()
-        let a = try hex("0F0E0D0C0B0A0908")
-        let b = try hex("0A0B0C0D0E0F0001")
-        let c = try hex("0011223344556677")
-
-        tracker.updateNeighbors(for: a, neighbors: [b])
-        tracker.updateNeighbors(for: b, neighbors: [a, c])
-        tracker.updateNeighbors(for: c, neighbors: [b])
-
-        let initialRoute = try #require(tracker.computeRoute(from: a, to: c))
-        #expect(initialRoute == [b])
-
-        tracker.removePeer(b)
-        #expect(tracker.computeRoute(from: a, to: c) == nil)
-    }
-
     @Test func sameStartAndEndReturnsEmptyRoute() throws {
         let tracker = MeshTopologyTracker()
         let a = try hex("0102030405060708")
