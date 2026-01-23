@@ -48,18 +48,4 @@ final class TransferProgressManager {
             self.subject.send(.cancelled(id: id, sentFragments: state.sent, totalFragments: state.total))
         }
     }
-
-    func reset(id: String) {
-        queue.async(flags: .barrier) { [weak self] in
-            self?.states.removeValue(forKey: id)
-        }
-    }
-
-    func snapshot(id: String) -> (sent: Int, total: Int)? {
-        var result: (sent: Int, total: Int)?
-        queue.sync {
-            result = states[id]
-        }
-        return result
-    }
 }

@@ -34,14 +34,6 @@ final class MeshTopologyTracker {
         }
     }
 
-    func removePeer(_ data: Data?) {
-        guard let peer = sanitize(data) else { return }
-        queue.sync(flags: .barrier) {
-            self.claims.removeValue(forKey: peer)
-            self.lastSeen.removeValue(forKey: peer)
-        }
-    }
-    
     /// Prune nodes that haven't updated their topology in `age` seconds
     func prune(olderThan age: TimeInterval) {
         let deadline = Date().addingTimeInterval(-age)

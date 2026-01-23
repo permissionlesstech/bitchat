@@ -16,7 +16,6 @@ final class PrivateChatManager: ObservableObject {
     @Published var selectedPeer: PeerID? = nil
     @Published var unreadMessages: Set<PeerID> = []
 
-    private var selectedPeerFingerprint: String? = nil
     var sentReadReceipts: Set<String> = []  // Made accessible for ChatViewModel
 
     weak var meshService: Transport?
@@ -187,12 +186,7 @@ final class PrivateChatManager: ObservableObject {
     /// Start a private chat with a peer
     func startChat(with peerID: PeerID) {
         selectedPeer = peerID
-        
-        // Store fingerprint for persistence across reconnections
-        if let fingerprint = meshService?.getFingerprint(for: peerID) {
-            selectedPeerFingerprint = fingerprint
-        }
-        
+
         // Mark messages as read
         markAsRead(from: peerID)
         
@@ -205,7 +199,6 @@ final class PrivateChatManager: ObservableObject {
     /// End the current private chat
     func endChat() {
         selectedPeer = nil
-        selectedPeerFingerprint = nil
     }
 
     /// Remove duplicate messages by ID and keep chronological order

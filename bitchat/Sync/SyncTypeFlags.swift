@@ -37,11 +37,6 @@ struct SyncTypeFlags: OptionSet {
         }
     }
 
-    static let announce = SyncTypeFlags(messageTypes: [.announce])
-    static let message = SyncTypeFlags(messageTypes: [.message])
-    static let fragment = SyncTypeFlags(messageTypes: [.fragment])
-    static let fileTransfer = SyncTypeFlags(messageTypes: [.fileTransfer])
-
     static let publicMessages = SyncTypeFlags(messageTypes: [.announce, .message])
 
     init(messageTypes: [MessageType]) {
@@ -56,26 +51,6 @@ struct SyncTypeFlags: OptionSet {
     func contains(_ type: MessageType) -> Bool {
         guard let bit = SyncTypeFlags.bitIndex(for: type) else { return false }
         return contains(SyncTypeFlags(rawValue: 1 << UInt64(bit)))
-    }
-
-    func union(_ other: SyncTypeFlags) -> SyncTypeFlags {
-        SyncTypeFlags(rawValue: rawValue | other.rawValue)
-    }
-
-    func intersection(_ other: SyncTypeFlags) -> SyncTypeFlags {
-        SyncTypeFlags(rawValue: rawValue & other.rawValue)
-    }
-
-    func toMessageTypes() -> [MessageType] {
-        guard rawValue != 0 else { return [] }
-        var types: [MessageType] = []
-        for bit in 0..<64 {
-            guard (rawValue & (1 << UInt64(bit))) != 0 else { continue }
-            if let type = SyncTypeFlags.type(forBit: bit) {
-                types.append(type)
-            }
-        }
-        return types
     }
 
     func toData() -> Data? {

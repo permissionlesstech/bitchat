@@ -83,13 +83,6 @@ final class MinimalDistancePalette {
     }
 
     @MainActor
-    func reset() {
-        currentSeeds.removeAll()
-        entries.removeAll()
-        previousEntries.removeAll()
-    }
-
-    @MainActor
     private func rebuildEntries() {
         guard !currentSeeds.isEmpty else {
             entries.removeAll()

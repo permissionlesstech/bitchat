@@ -145,18 +145,4 @@ public final class GeohashParticipantTracker: ObservableObject {
         refreshTimer?.invalidate()
         refreshTimer = nil
     }
-
-    /// Clear all participant data
-    public func clear() {
-        participants.removeAll()
-        visiblePeople = []
-    }
-
-    /// Clear participant data for a specific geohash
-    public func clear(geohash: String) {
-        participants.removeValue(forKey: geohash)
-        if activeGeohash == geohash {
-            visiblePeople = []
-        }
-    }
 }
