@@ -23,6 +23,8 @@ struct SyncTypeFlags: OptionSet {
     }
 
     static let publicMessages = SyncTypeFlags(messageTypes: [.announce, .message])
+    static let fragment = SyncTypeFlags(messageTypes: [.fragment])
+    static let fileTransfer = SyncTypeFlags(messageTypes: [.fileTransfer])
 
     init(messageTypes: [MessageType]) {
         var raw: UInt64 = 0
