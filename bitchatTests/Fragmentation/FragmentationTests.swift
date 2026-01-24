@@ -197,7 +197,7 @@ struct FragmentationTests {
 extension FragmentationTests {
     /// Thread-safe delegate that supports awaiting message delivery
     private final class CaptureDelegate: BitchatDelegate, @unchecked Sendable {
-        private let lock = NSLock()
+        private let queue = DispatchQueue(label: "CaptureDelegate.queue")
         private var _publicMessages: [(peerID: PeerID, nickname: String, content: String)] = []
         private var _receivedMessages: [BitchatMessage] = []
         private var publicMessageContinuation: CheckedContinuation<Void, Never>?
@@ -206,72 +206,50 @@ extension FragmentationTests {
         private var expectedReceivedMessageCount: Int = 0
 
         var publicMessages: [(peerID: PeerID, nickname: String, content: String)] {
-            lock.lock()
-            defer { lock.unlock() }
-            return _publicMessages
+            queue.sync { _publicMessages }
         }
 
         var receivedMessages: [BitchatMessage] {
-            lock.lock()
-            defer { lock.unlock() }
-            return _receivedMessages
+            queue.sync { _receivedMessages }
         }
 
         func didReceiveMessage(_ message: BitchatMessage) {
-            lock.lock()
-            _receivedMessages.append(message)
-            let count = _receivedMessages.count
-            let expected = expectedReceivedMessageCount
-            let continuation = receivedMessageContinuation
-            lock.unlock()
+            let (count, expected, continuation) = queue.sync { () -> (Int, Int, CheckedContinuation<Void, Never>?) in
+                _receivedMessages.append(message)
+                return (_receivedMessages.count, expectedReceivedMessageCount, receivedMessageContinuation)
+            }
 
             if count >= expected, let cont = continuation {
-                lock.lock()
-                receivedMessageContinuation = nil
-                lock.unlock()
+                queue.sync { receivedMessageContinuation = nil }
                 cont.resume()
             }
         }
 
         func didReceivePublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date, messageID: String?) {
-            lock.lock()
-            _publicMessages.append((peerID, nickname, content))
-            let count = _publicMessages.count
-            let expected = expectedPublicMessageCount
-            let continuation = publicMessageContinuation
-            lock.unlock()
+            let (count, expected, continuation) = queue.sync { () -> (Int, Int, CheckedContinuation<Void, Never>?) in
+                _publicMessages.append((peerID, nickname, content))
+                return (_publicMessages.count, expectedPublicMessageCount, publicMessageContinuation)
+            }
 
             if count >= expected, let cont = continuation {
-                lock.lock()
-                publicMessageContinuation = nil
-                lock.unlock()
+                queue.sync { publicMessageContinuation = nil }
                 cont.resume()
             }
         }
 
         /// Waits for the specified number of public messages to be received
         func waitForPublicMessages(count: Int, timeout: Duration = .seconds(2)) async throws {
-            lock.lock()
-            if _publicMessages.count >= count {
-                lock.unlock()
-                return
-            }
-            expectedPublicMessageCount = count
-            lock.unlock()
+            if queue.sync({ _publicMessages.count >= count }) { return }
+            queue.sync { expectedPublicMessageCount = count }
 
             try await withThrowingTaskGroup(of: Void.self) { group in
                 group.addTask {
                     await withCheckedContinuation { continuation in
-                        self.lock.lock()
-                        // Recheck count after acquiring lock to avoid race condition
-                        // where message arrives between initial check and continuation install
-                        if self._publicMessages.count >= count {
-                            self.lock.unlock()
+                        if self.queue.sync({ self._publicMessages.count >= count }) {
                             continuation.resume()
                             return
                         }
-                        self.publicMessageContinuation = continuation
-                        self.lock.unlock()
+                        self.queue.sync { self.publicMessageContinuation = continuation }
                     }
                 }
                 group.addTask {
@@ -285,27 +263,17 @@ extension FragmentationTests {
 
         /// Waits for the specified number of received messages
         func waitForReceivedMessages(count: Int, timeout: Duration = .seconds(2)) async throws {
-            lock.lock()
-            if _receivedMessages.count >= count {
-                lock.unlock()
-                return
-            }
-            expectedReceivedMessageCount = count
-            lock.unlock()
+            if queue.sync({ _receivedMessages.count >= count }) { return }
+            queue.sync { expectedReceivedMessageCount = count }
 
             try await withThrowingTaskGroup(of: Void.self) { group in
                 group.addTask {
                     await withCheckedContinuation { continuation in
-                        self.lock.lock()
-                        // Recheck count after acquiring lock to avoid race condition
-                        // where message arrives between initial check and continuation install
-                        if self._receivedMessages.count >= count {
-                            self.lock.unlock()
+                        if self.queue.sync({ self._receivedMessages.count >= count }) {
                             continuation.resume()
                             return
                         }
-                        self.receivedMessageContinuation = continuation
-                        self.lock.unlock()
+                        self.queue.sync { self.receivedMessageContinuation = continuation }
                     }
                 }
                 group.addTask {
