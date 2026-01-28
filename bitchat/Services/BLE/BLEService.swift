@@ -827,7 +827,6 @@ final class BLEService: NSObject {
 
     private func validatePacket(_ packet: BitchatPacket, from peerID: PeerID, connectionSource: ConnectionSource = .unknown) -> Bool {
         let currentTime = UInt64(Date().timeIntervalSince1970 * 1000)
-        let messageType = MessageType(rawValue: packet.type)
 
         let isRSR = packet.isRSR
         var skipTimestampCheck = false
