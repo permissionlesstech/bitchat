@@ -2184,6 +2184,13 @@ extension BLEService: CBPeripheralDelegate {
         if result.reset {
             SecureLogger.error("❌ Invalid BLE frame length; reset notification stream", category: .session)
         }
+        
+        // Codex review identified TOCTOU in this patch.
+        // Enforce per-link sender binding immediately within the same notification batch.
+        // NOTE: `processNotificationPacket` may bind `peripherals[peripheralUUID].peerID` when an announce
+        // is processed, but `state` above is a snapshot. Track a local binding that we update as soon as
+        // we see a binding-eligible announce so subsequent frames can't spoof a different sender.
+        var boundPeerID: PeerID? = state.peerID
 
         for frame in result.frames {
             guard let packet = BinaryProtocol.decode(frame) else {
@@ -2195,7 +2202,7 @@ extension BLEService: CBPeripheralDelegate {
             let claimedSenderID = PeerID(hexData: packet.senderID)
 
             let trustedSenderID: PeerID?
-            if let knownPeerID = state.peerID {
+            if let knownPeerID = boundPeerID {
                 if knownPeerID != claimedSenderID {
                     SecureLogger.warning("🚫 SECURITY: Sender ID spoofing attempt detected! Peripheral \(peripheralUUID.prefix(8))… claimed to be \(claimedSenderID.id.prefix(8))… but is bound to \(knownPeerID.id.prefix(8))…", category: .security)
                     continue
@@ -2207,6 +2214,15 @@ extension BLEService: CBPeripheralDelegate {
 
             if !validatePacket(packet, from: trustedSenderID ?? claimedSenderID, connectionSource: .peripheral(peripheralUUID)) {
                 continue
+            }
+
+            // If this is a direct-link announce, bind immediately for the remainder of this batch.
+            if boundPeerID == nil,
+               packet.type == MessageType.announce.rawValue,
+               packet.ttl == messageTTL {
+                boundPeerID = claimedSenderID
+                state.peerID = claimedSenderID
+                peripherals[peripheralUUID] = state
             }
             processNotificationPacket(packet, from: peripheral, peripheralUUID: peripheralUUID)
         }
