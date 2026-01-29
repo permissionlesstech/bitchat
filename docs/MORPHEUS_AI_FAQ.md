@@ -61,7 +61,7 @@ MorpheusAI is a virtual bot peer that appears in BitChat's mesh network, allowin
 | **Private AI via DM** | Send `!ai <question>` in a DM to the bridge for encrypted responses |
 | **Mesh Routable** | Reachable from anywhere in the mesh (up to 7 hops) |
 | **Per-User Context** | Bot maintains conversation context per user |
-| **Country Restricted** | Available only in US, Bulgaria, and Iran (optional) |
+| **Global Access** | Available worldwide (no country restrictions) |
 
 ---
 
@@ -358,7 +358,6 @@ Default model: `glm-4.7:web`
 |------------|-------------|------------|
 | Single bot per bridge | Each bridge device hosts one bot | Deploy multiple bridges |
 | Bridge must stay online | Bot leaves when bridge disconnects | Use a dedicated device |
-| Bridge location matters | Country restriction based on bridge location | Bridge must be in allowed country |
 | No conversation memory across sessions | Bot doesn't remember previous chats | Include context in your messages |
 | 7-hop maximum | Same as all BitChat messages | Position bridge centrally in mesh |
 
@@ -412,17 +411,9 @@ To operate a MorpheusAI bridge, you need an API key from the Morpheus network:
 
 ---
 
-## Country Restrictions
+## Global Access
 
-MorpheusAI is currently available only in:
-
-| Country | Geohash Coverage |
-|---------|------------------|
-| **United States** | Latitude 24.5°-49.5°N, Longitude 125°-66.5°W |
-| **Bulgaria** | Latitude 41.2°-44.2°N, Longitude 22.3°-28.6°E |
-| **Iran** | Latitude 25°-40°N, Longitude 44°-63.5°E |
-
-**Note:** The bridge device's location determines access. Users in other countries can still chat with the bot if their mesh includes a bridge in an allowed country.
+MorpheusAI is available worldwide with no country restrictions. Anyone can use the bot regardless of location.
 
 ---
 
@@ -437,13 +428,6 @@ MorpheusAI is currently available only in:
 | Bridge has no API key | Bridge operator should run `/ai-key <key>` |
 | Bot not activated | Bridge operator should run `/ai-bridge on` |
 
-### "Getting 'Not available in your region'"
-
-| Possible Cause | Solution |
-|---------------|----------|
-| Bridge outside allowed country | Bridge must be in US, Bulgaria, or Iran |
-| Location services disabled | Enable location for accurate geohash |
-| Invalid geohash | Ensure proper location detection |
 
 ### "Slow responses from MorpheusAI"
 
@@ -536,7 +520,7 @@ The overall composition should clearly show that offline devices can reach AI th
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.1 | 2026-01-29 | Added private AI via DM (`!ai` prefix), updated default model to glm-4.7:web |
+| 1.1 | 2026-01-29 | Added private AI via DM (`!ai` prefix), updated default model to glm-4.7:web, removed country restrictions |
 | 1.0 | 2026-01-28 | Initial documentation |
 
 ---
