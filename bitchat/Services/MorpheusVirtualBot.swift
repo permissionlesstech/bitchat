@@ -49,8 +49,8 @@ final class MorpheusVirtualBot: ObservableObject {
 
     // MARK: - Conversation Context (per sender)
 
-    /// Recent messages by sender nickname for context
-    private var conversationContext: [String: [(role: String, content: String)]] = [:]
+    /// Recent messages by sender PeerID for context (keyed by PeerID to avoid nickname collisions)
+    private var conversationContext: [PeerID: [(role: String, content: String)]] = [:]
     private let maxContextMessages = 6
 
     // MARK: - References
@@ -164,27 +164,34 @@ final class MorpheusVirtualBot: ObservableObject {
         // Show thinking indicator
         addSystemMessage?("MorpheusAI is thinking...")
 
-        // Update conversation context
-        if conversationContext[senderNickname] == nil {
-            conversationContext[senderNickname] = []
-        }
-        conversationContext[senderNickname]?.append(("user", query))
+        // Update conversation context (keyed by PeerID to avoid nickname collisions)
+        if let peerID = senderPeerID {
+            if conversationContext[peerID] == nil {
+                conversationContext[peerID] = []
+            }
+            conversationContext[peerID]?.append(("user", query))
 
-        // Trim context if needed
-        if let count = conversationContext[senderNickname]?.count, count > maxContextMessages {
-            conversationContext[senderNickname]?.removeFirst(count - maxContextMessages)
+            // Trim context if needed
+            if let count = conversationContext[peerID]?.count, count > maxContextMessages {
+                conversationContext[peerID]?.removeFirst(count - maxContextMessages)
+            }
         }
 
         // Process query
         Task {
-            await processQuery(query, from: senderNickname, geohash: geohash)
+            await processQuery(query, from: senderPeerID, geohash: geohash)
         }
     }
 
     /// Process an AI query and respond
-    private func processQuery(_ query: String, from senderNickname: String, geohash: String) async {
+    private func processQuery(_ query: String, from senderPeerID: PeerID?, geohash: String) async {
         do {
-            let history = conversationContext[senderNickname] ?? []
+            let history: [(role: String, content: String)]
+            if let peerID = senderPeerID {
+                history = conversationContext[peerID] ?? []
+            } else {
+                history = []
+            }
             // Use history excluding the current query (which we just added)
             let contextHistory = Array(history.dropLast())
 
@@ -196,7 +203,9 @@ final class MorpheusVirtualBot: ObservableObject {
 
             // Update context with response
             await MainActor.run {
-                conversationContext[senderNickname]?.append(("assistant", response))
+                if let peerID = senderPeerID {
+                    conversationContext[peerID]?.append(("assistant", response))
+                }
                 queriesProcessed += 1
             }
 
@@ -264,27 +273,27 @@ final class MorpheusVirtualBot: ObservableObject {
         // Send thinking indicator privately
         sendPrivateResponse?("MorpheusAI is thinking...", senderPeerID, senderNickname)
 
-        // Update conversation context
-        if conversationContext[senderNickname] == nil {
-            conversationContext[senderNickname] = []
+        // Update conversation context (keyed by PeerID to avoid nickname collisions)
+        if conversationContext[senderPeerID] == nil {
+            conversationContext[senderPeerID] = []
         }
-        conversationContext[senderNickname]?.append(("user", query))
+        conversationContext[senderPeerID]?.append(("user", query))
 
         // Trim context if needed
-        if let count = conversationContext[senderNickname]?.count, count > maxContextMessages {
-            conversationContext[senderNickname]?.removeFirst(count - maxContextMessages)
+        if let count = conversationContext[senderPeerID]?.count, count > maxContextMessages {
+            conversationContext[senderPeerID]?.removeFirst(count - maxContextMessages)
         }
 
         // Process query
         Task {
-            await processPrivateQuery(query, from: senderNickname, to: senderPeerID, geohash: geohash)
+            await processPrivateQuery(query, from: senderPeerID, to: senderNickname, geohash: geohash)
         }
     }
 
     /// Process a private AI query and respond privately
-    private func processPrivateQuery(_ query: String, from senderNickname: String, to senderPeerID: PeerID, geohash: String) async {
+    private func processPrivateQuery(_ query: String, from senderPeerID: PeerID, to senderNickname: String, geohash: String) async {
         do {
-            let history = conversationContext[senderNickname] ?? []
+            let history = conversationContext[senderPeerID] ?? []
             let contextHistory = Array(history.dropLast())
 
             let response = try await MorpheusAIService.shared.sendMessageWithHistory(
@@ -295,7 +304,7 @@ final class MorpheusVirtualBot: ObservableObject {
 
             // Update context with response
             await MainActor.run {
-                conversationContext[senderNickname]?.append(("assistant", response))
+                conversationContext[senderPeerID]?.append(("assistant", response))
                 queriesProcessed += 1
             }
 
@@ -317,9 +326,9 @@ final class MorpheusVirtualBot: ObservableObject {
 
     // MARK: - Context Management
 
-    /// Clear conversation context for a user
-    func clearContext(for nickname: String) {
-        conversationContext.removeValue(forKey: nickname)
+    /// Clear conversation context for a user by PeerID
+    func clearContext(for peerID: PeerID) {
+        conversationContext.removeValue(forKey: peerID)
     }
 
     /// Clear all conversation context
