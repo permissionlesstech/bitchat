@@ -194,21 +194,10 @@ final class MorpheusAIService {
 
     /// Check if the user's location allows access to Morpheus AI
     /// - Parameter geohash: The user's current geohash
-    /// - Returns: true if the user is in an allowed country
+    /// - Returns: Always true (country restriction removed)
     func isLocationAllowed(geohash: String) -> Bool {
-        guard !geohash.isEmpty else { return false }
-
-        // Decode geohash to coordinates
-        let coords = Geohash.decodeCenter(geohash)
-
-        // Check against allowed countries
-        for country in AllowedCountry.allCases {
-            if country.contains(latitude: coords.lat, longitude: coords.lon) {
-                return true
-            }
-        }
-
-        return false
+        // Country restriction removed - all locations allowed
+        return true
     }
 
     /// Send a message to Morpheus AI and get a response
