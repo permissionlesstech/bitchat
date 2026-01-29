@@ -7,7 +7,6 @@ import CryptoKit
 import UIKit
 #endif
 
-
 /// BLEService — Bluetooth Mesh Transport
 /// - Emits events exclusively via `BitchatDelegate` for UI.
 /// - ChatViewModel must consume delegate callbacks (`didReceivePublicMessage`, `didReceiveNoisePayload`).
@@ -820,40 +819,39 @@ final class BLEService: NSObject {
         }
     }
     
-    private func validatePacket(_ packet: BitchatPacket, from peerID: PeerID) -> Bool {
+    private enum ConnectionSource {
+        case peripheral(String)
+        case central(String)
+        case unknown
+    }
+
+    private func validatePacket(_ packet: BitchatPacket, from peerID: PeerID, connectionSource: ConnectionSource = .unknown) -> Bool {
         let currentTime = UInt64(Date().timeIntervalSince1970 * 1000)
-        let messageType = MessageType(rawValue: packet.type)
-        
-        // 1. Timestamp Validation (Skipped for valid RSR packets)
+
         let isRSR = packet.isRSR
-        // Treat TTL=0 as legacy RSR if not REQUEST_SYNC
-        // (Legacy clients send responses with TTL=0 but no flag)
-        let isLegacyRSR = packet.ttl == 0 && messageType != .requestSync
         var skipTimestampCheck = false
-        
-        if isRSR || isLegacyRSR {
-            // We check both explicit RSR flag AND legacy TTL=0 packets
+
+        if isRSR {
             if requestSyncManager.isValidResponse(from: peerID, isRSR: true) {
-                SecureLogger.debug("Valid RSR packet (legacy=\(isLegacyRSR)) from \(peerID.id.prefix(8))… - skipping timestamp check", category: .security)
+                SecureLogger.debug("Valid RSR packet from \(peerID.id.prefix(8))… - skipping timestamp check", category: .security)
                 skipTimestampCheck = true
             } else {
                 SecureLogger.warning("Invalid or unsolicited RSR packet from \(peerID.id.prefix(8))… - rejecting", category: .security)
                 return false
             }
         }
-        
+
         if !skipTimestampCheck {
-            // Enforce timestamp check for normal packets (2 minutes skew)
-            let maxSkew: UInt64 = 120_000 // 2 minutes in ms
+            let maxSkew: UInt64 = 120_000
             let packetTime = packet.timestamp
             let skew = (packetTime > currentTime) ? (packetTime - currentTime) : (currentTime - packetTime)
-            
+
             if skew > maxSkew {
                 SecureLogger.warning("Packet timestamp skewed by \(skew)ms (max \(maxSkew)ms) from \(peerID.id.prefix(8))…", category: .security)
                 return false
             }
         }
-        
+
         return true
     }
 
@@ -1165,13 +1163,6 @@ final class BLEService: NSObject {
                     break
                 }
             }
-            if !accepted && packet.ttl == 0 {
-                accepted = true
-                senderNickname = "anon" + String(peerID.id.prefix(4))
-            }
-        } else if packet.ttl == 0 {
-            accepted = true
-            senderNickname = "anon" + String(peerID.id.prefix(4))
         }
 
         guard accepted else {
@@ -2192,6 +2183,13 @@ extension BLEService: CBPeripheralDelegate {
         if result.reset {
             SecureLogger.error("❌ Invalid BLE frame length; reset notification stream", category: .session)
         }
+        
+        // Codex review identified TOCTOU in this patch.
+        // Enforce per-link sender binding immediately within the same notification batch.
+        // NOTE: `processNotificationPacket` may bind `peripherals[peripheralUUID].peerID` when an announce
+        // is processed, but `state` above is a snapshot. Track a local binding that we update as soon as
+        // we see a binding-eligible announce so subsequent frames can't spoof a different sender.
+        var boundPeerID: PeerID? = state.peerID
 
         for frame in result.frames {
             guard let packet = BinaryProtocol.decode(frame) else {
@@ -2199,10 +2197,31 @@ extension BLEService: CBPeripheralDelegate {
                 SecureLogger.error("❌ Failed to decode assembled notification frame (len=\(frame.count), prefix=\(prefix))", category: .session)
                 continue
             }
-            // Validate packet (Timestamp/RSR) before processing
-            let senderID = PeerID(hexData: packet.senderID)
-            if !validatePacket(packet, from: senderID) {
+
+            let claimedSenderID = PeerID(hexData: packet.senderID)
+
+            let trustedSenderID: PeerID?
+            if let knownPeerID = boundPeerID {
+                if knownPeerID != claimedSenderID {
+                    SecureLogger.warning("🚫 SECURITY: Sender ID spoofing attempt detected! Peripheral \(peripheralUUID.prefix(8))… claimed to be \(claimedSenderID.id.prefix(8))… but is bound to \(knownPeerID.id.prefix(8))…", category: .security)
+                    continue
+                }
+                trustedSenderID = knownPeerID
+            } else {
+                trustedSenderID = nil
+            }
+
+            if !validatePacket(packet, from: trustedSenderID ?? claimedSenderID, connectionSource: .peripheral(peripheralUUID)) {
                 continue
+            }
+
+            // If this is a direct-link announce, bind immediately for the remainder of this batch.
+            if boundPeerID == nil,
+               packet.type == MessageType.announce.rawValue,
+               packet.ttl == messageTTL {
+                boundPeerID = claimedSenderID
+                state.peerID = claimedSenderID
+                peripherals[peripheralUUID] = state
             }
             processNotificationPacket(packet, from: peripheral, peripheralUUID: peripheralUUID)
         }
@@ -2618,22 +2637,33 @@ extension BLEService: CBPeripheralManagerDelegate {
             if let packet = BinaryProtocol.decode(combined) {
                 // Clear buffer on success
                 pendingWriteBuffers.removeValue(forKey: centralUUID)
-                let senderID = PeerID(hexData: packet.senderID)
-                
-                // Validate packet (Timestamp/RSR)
-                if !validatePacket(packet, from: senderID) {
+
+                let claimedSenderID = PeerID(hexData: packet.senderID)
+
+                let trustedSenderID: PeerID?
+                if let knownPeerID = centralToPeerID[centralUUID] {
+                    if knownPeerID != claimedSenderID {
+                        SecureLogger.warning("🚫 SECURITY: Sender ID spoofing attempt detected! Central \(centralUUID.prefix(8))… claimed to be \(claimedSenderID.id.prefix(8))… but is bound to \(knownPeerID.id.prefix(8))…", category: .security)
+                        continue
+                    }
+                    trustedSenderID = knownPeerID
+                } else {
+                    trustedSenderID = nil
+                }
+
+                if !validatePacket(packet, from: trustedSenderID ?? claimedSenderID, connectionSource: .central(centralUUID)) {
                     continue
                 }
-                
+
                 if packet.type != MessageType.announce.rawValue {
-                    SecureLogger.debug("📦 Decoded (combined) packet type: \(packet.type) from sender: \(senderID)", category: .session)
+                    SecureLogger.debug("📦 Decoded (combined) packet type: \(packet.type) from sender: \(claimedSenderID)", category: .session)
                 }
                 if !subscribedCentrals.contains(sorted[0].central) {
                     subscribedCentrals.append(sorted[0].central)
                 }
                 if packet.type == MessageType.announce.rawValue {
                     if packet.ttl == messageTTL {
-                        centralToPeerID[centralUUID] = senderID
+                        centralToPeerID[centralUUID] = claimedSenderID
                         refreshLocalTopology()
                     }
                     // Record ingress link for last-hop suppression then process
@@ -2641,14 +2671,14 @@ extension BLEService: CBPeripheralManagerDelegate {
                     collectionsQueue.async(flags: .barrier) { [weak self] in
                         self?.ingressByMessageID[msgID] = (.central(centralUUID), Date())
                     }
-                    handleReceivedPacket(packet, from: senderID)
+                    handleReceivedPacket(packet, from: claimedSenderID)
                 } else {
                     // Record ingress link for last-hop suppression then process
                     let msgID = makeMessageID(for: packet)
                     collectionsQueue.async(flags: .barrier) { [weak self] in
                         self?.ingressByMessageID[msgID] = (.central(centralUUID), Date())
                     }
-                    handleReceivedPacket(packet, from: senderID)
+                    handleReceivedPacket(packet, from: claimedSenderID)
                 }
             } else {
                 // If buffer grows suspiciously large, reset to avoid memory leak
@@ -4057,27 +4087,19 @@ extension BLEService {
                     }
                 }
             }
-            // If still not accepted and this is a sync-returned packet (TTL==0),
-            // accept with a generic nickname so history can be restored even for
-            // peers we haven't verified yet.
-            if !accepted && packet.ttl == 0 {
-                accepted = true
-                senderNickname = "anon" + String(peerID.id.prefix(4))
-            }
         }
 
-        // Track broadcast messages for sync (treat nil or 0xFF..0xFF as broadcast)
+        guard accepted else {
+            SecureLogger.warning("🚫 Dropping public message from unverified or unknown peer \(peerID.id.prefix(8))…", category: .security)
+            return
+        }
+
         let isBroadcastRecipient: Bool = {
             guard let r = packet.recipientID else { return true }
             return r.count == 8 && r.allSatisfy { $0 == 0xFF }
         }()
         if isBroadcastRecipient && packet.type == MessageType.message.rawValue {
             gossipSyncManager?.onPublicPacketSeen(packet)
-        }
-
-        guard accepted else {
-            SecureLogger.warning("🚫 Dropping public message from unverified or unknown peer \(peerID.id.prefix(8))…", category: .security)
-            return
         }
 
         guard let content = String(data: packet.payload, encoding: .utf8) else {
