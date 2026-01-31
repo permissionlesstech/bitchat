@@ -79,3 +79,6 @@ build.log
 
 # Local configs
 Local.xcconfig
+
+# Claude Code MCP config (contains API keys)
+.claude/.mcp.json
