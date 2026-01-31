@@ -75,7 +75,6 @@ struct SubscriptionRateLimitTests {
     @Test("Max attempts threshold prevents complete enumeration")
     func maxAttemptsThresholdPreventsEnumeration() {
         let maxAttempts = TransportConfig.bleSubscriptionRateLimitMaxAttempts
-        let minInterval = TransportConfig.bleSubscriptionRateLimitMinSeconds
 
         // After max attempts within window, announces are suppressed entirely
         // This means an attacker gets at most maxAttempts announces per window

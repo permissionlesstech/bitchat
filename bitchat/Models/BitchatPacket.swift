@@ -22,8 +22,9 @@ struct BitchatPacket: Codable {
     var signature: Data?
     var ttl: UInt8
     var route: [Data]?
+    var isRSR: Bool
     
-    init(type: UInt8, senderID: Data, recipientID: Data?, timestamp: UInt64, payload: Data, signature: Data?, ttl: UInt8, version: UInt8 = 1, route: [Data]? = nil) {
+    init(type: UInt8, senderID: Data, recipientID: Data?, timestamp: UInt64, payload: Data, signature: Data?, ttl: UInt8, version: UInt8 = 1, route: [Data]? = nil, isRSR: Bool = false) {
         self.version = version
         self.type = type
         self.senderID = senderID
@@ -33,10 +34,11 @@ struct BitchatPacket: Codable {
         self.signature = signature
         self.ttl = ttl
         self.route = route
+        self.isRSR = isRSR
     }
     
     // Convenience initializer for new binary format
-    init(type: UInt8, ttl: UInt8, senderID: PeerID, payload: Data) {
+    init(type: UInt8, ttl: UInt8, senderID: PeerID, payload: Data, isRSR: Bool = false) {
         self.version = 1
         self.type = type
         // Convert hex string peer ID to binary data (8 bytes)
@@ -56,6 +58,7 @@ struct BitchatPacket: Codable {
         self.signature = nil
         self.ttl = ttl
         self.route = nil
+        self.isRSR = isRSR
     }
     
     var data: Data? {
@@ -85,7 +88,8 @@ struct BitchatPacket: Codable {
             signature: nil, // Remove signature for signing
             ttl: 0, // Use fixed TTL=0 for signing to ensure relay compatibility
             version: version,
-            route: route
+            route: route,
+            isRSR: false // RSR flag is mutable and not part of the signature
         )
         return BinaryProtocol.encode(unsignedPacket)
     }

@@ -64,6 +64,22 @@ struct ChatViewModelPrivateChatExtensionTests {
         // MockTransport.sendPrivateMessage is what MessageRouter calls for connected peers
         // Check MockTransport implementation... it might need update or verification
     }
+
+    @Test @MainActor
+    func sendPrivateMessage_unreachable_setsFailedStatus() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let validHex = "0102030405060708090a0b0c0d0e0f100102030405060708090a0b0c0d0e0f10"
+        let peerID = PeerID(str: validHex)
+
+        viewModel.sendPrivateMessage("Hello", to: peerID)
+
+        #expect(viewModel.privateChats[peerID]?.count == 1)
+        let status = viewModel.privateChats[peerID]?.last?.deliveryStatus
+        #expect({
+            if case .failed = status { return true }
+            return false
+        }())
+    }
     
     @Test @MainActor
     func handlePrivateMessage_storesMessage() async {
@@ -250,10 +266,17 @@ struct ChatViewModelNostrExtensionTests {
     
     @Test @MainActor
     func subscribeNostrEvent_addsToTimeline_ifMatchesGeohash() async {
-        let (viewModel, _) = makeTestableViewModel()
         let geohash = "u4pruydq"
+        let channel = ChannelID.location(GeohashChannel(level: .city, geohash: geohash))
+
+        LocationChannelManager.shared.select(channel)
+        defer { LocationChannelManager.shared.select(.mesh) }
+
+        _ = await TestHelpers.waitUntil({ LocationChannelManager.shared.selectedChannel == channel })
+
+        let (viewModel, _) = makeTestableViewModel()
         
-        viewModel.switchLocationChannel(to: .location(GeohashChannel(level: .city, geohash: geohash)))
+        _ = await TestHelpers.waitUntil({ viewModel.activeChannel == channel })
         
         var event = NostrEvent(
             pubkey: "pub1",
@@ -267,19 +290,119 @@ struct ChatViewModelNostrExtensionTests {
         
         viewModel.handleNostrEvent(event)
         
-        // Allow async processing
+        let didAppend = await TestHelpers.waitUntil({
+            viewModel.publicMessagePipeline.flushIfNeeded()
+            return viewModel.messages.contains { $0.content == "Hello Geo" }
+        })
+        #expect(didAppend)
+    }
+
+    @Test @MainActor
+    func handleNostrEvent_ignoresRecentSelfEcho() async throws {
+        let (viewModel, _) = makeTestableViewModel()
+        let geohash = "u4pruydq"
+
+        viewModel.switchLocationChannel(to: .location(GeohashChannel(level: .city, geohash: geohash)))
+        let identity = try viewModel.idBridge.deriveIdentity(forGeohash: geohash)
+
+        var event = NostrEvent(
+            pubkey: identity.publicKeyHex,
+            createdAt: Date(),
+            kind: .ephemeralEvent,
+            tags: [["g", geohash]],
+            content: "Self echo"
+        )
+        event.id = "evt-self"
+
+        viewModel.handleNostrEvent(event)
+
         try? await Task.sleep(nanoseconds: 100_000_000)
-        
-        // Check timeline
-        // This depends on `handlePublicMessage` being called and updating `messages`
-        // Since `handlePublicMessage` delegates to `timelineStore` and updates `messages`...
-        // And we are in the correct channel...
-        
-        // However, `handleNostrEvent` in the extension now calls `handlePublicMessage`.
-        // Let's verify if the message appears.
-        // Note: `handleNostrEvent` logic was refactored.
-        // The new logic in `ChatViewModel+Nostr.swift` calls `handlePublicMessage`.
-        
-        // We need to ensure `deduplicationService` doesn't block it (new instance, so empty).
+        viewModel.publicMessagePipeline.flushIfNeeded()
+
+        #expect(!viewModel.messages.contains { $0.content == "Self echo" })
+    }
+
+    @Test @MainActor
+    func handleNostrEvent_skipsBlockedSender() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let geohash = "u4pruydq"
+        let blockedPubkey = "0000000000000000000000000000000000000000000000000000000000000001"
+
+        viewModel.switchLocationChannel(to: .location(GeohashChannel(level: .city, geohash: geohash)))
+        viewModel.identityManager.setNostrBlocked(blockedPubkey, isBlocked: true)
+
+        var event = NostrEvent(
+            pubkey: blockedPubkey,
+            createdAt: Date(),
+            kind: .ephemeralEvent,
+            tags: [["g", geohash]],
+            content: "Blocked"
+        )
+        event.id = "evt-blocked"
+
+        viewModel.handleNostrEvent(event)
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        viewModel.publicMessagePipeline.flushIfNeeded()
+
+        #expect(!viewModel.messages.contains { $0.content == "Blocked" })
+    }
+
+    @Test @MainActor
+    func switchLocationChannel_clearsNostrDedupCache() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let geohash = "u4pruydq"
+
+        viewModel.deduplicationService.recordNostrEvent("evt-cache")
+        #expect(viewModel.deduplicationService.hasProcessedNostrEvent("evt-cache"))
+
+        viewModel.switchLocationChannel(to: .location(GeohashChannel(level: .city, geohash: geohash)))
+
+        #expect(!viewModel.deduplicationService.hasProcessedNostrEvent("evt-cache"))
+    }
+}
+
+// MARK: - Geohash Queue Tests
+
+struct ChatViewModelGeohashQueueTests {
+
+    @Test @MainActor
+    func addGeohashOnlySystemMessage_queuesUntilLocationChannel() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let geohash = "u4pruydq"
+
+        viewModel.addGeohashOnlySystemMessage("Queued system")
+        #expect(!viewModel.messages.contains { $0.content == "Queued system" })
+
+        viewModel.switchLocationChannel(to: .location(GeohashChannel(level: .city, geohash: geohash)))
+
+        #expect(viewModel.messages.contains { $0.content == "Queued system" })
+    }
+}
+
+// MARK: - GeoDM Tests
+
+struct ChatViewModelGeoDMTests {
+
+    @Test @MainActor
+    func handlePrivateMessage_geohash_dedupsAndTracksAck() async throws {
+        let (viewModel, _) = makeTestableViewModel()
+        let geohash = "u4pruydq"
+        let senderPubkey = "0000000000000000000000000000000000000000000000000000000000000001"
+        let messageID = "pm-1"
+
+        viewModel.switchLocationChannel(to: .location(GeohashChannel(level: .city, geohash: geohash)))
+        let identity = try viewModel.idBridge.deriveIdentity(forGeohash: geohash)
+
+        let convKey = PeerID(nostr_: senderPubkey)
+        let packet = PrivateMessagePacket(messageID: messageID, content: "Hello")
+        let payloadData = try #require(packet.encode(), "Failed to encode private message")
+        let payload = NoisePayload(type: .privateMessage, data: payloadData)
+
+        viewModel.handlePrivateMessage(payload, senderPubkey: senderPubkey, convKey: convKey, id: identity, messageTimestamp: Date())
+        viewModel.handlePrivateMessage(payload, senderPubkey: senderPubkey, convKey: convKey, id: identity, messageTimestamp: Date())
+
+        #expect(viewModel.privateChats[convKey]?.count == 1)
+        #expect(viewModel.sentGeoDeliveryAcks.contains(messageID))
     }
 }

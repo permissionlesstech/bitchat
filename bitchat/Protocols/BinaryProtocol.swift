@@ -138,6 +138,7 @@ struct BinaryProtocol {
         static let hasSignature: UInt8 = 0x02
         static let isCompressed: UInt8 = 0x04
         static let hasRoute: UInt8 = 0x08
+        static let isRSR: UInt8 = 0x10
     }
     
     // Encode BitchatPacket to binary format
@@ -204,8 +205,9 @@ struct BinaryProtocol {
         if isCompressed { flags |= Flags.isCompressed }
         // HAS_ROUTE is only valid for v2+ packets
         if hasRoute && version >= 2 { flags |= Flags.hasRoute }
+        if packet.isRSR { flags |= Flags.isRSR }
         data.append(flags)
-
+        
         if version == 2 {
             let length = UInt32(payloadDataSize)
             for shift in stride(from: 24, through: 0, by: -8) {
@@ -329,7 +331,8 @@ struct BinaryProtocol {
             let isCompressed = (flags & Flags.isCompressed) != 0
             // HAS_ROUTE is only valid for v2+ packets; ignore the flag for v1
             let hasRoute = (version >= 2) && (flags & Flags.hasRoute) != 0
-
+            let isRSR = (flags & Flags.isRSR) != 0
+            
             let payloadLength: Int
             if version == 2 {
                 guard let len = read32() else { return nil }
@@ -410,7 +413,8 @@ struct BinaryProtocol {
                 signature: signature,
                 ttl: ttl,
                 version: version,
-                route: route
+                route: route,
+                isRSR: isRSR
             )
         }
     }
