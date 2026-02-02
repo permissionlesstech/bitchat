@@ -49,6 +49,40 @@ struct BLEServiceCoreTests {
         #expect(!didReceive)
         #expect(delegate.publicMessagesSnapshot().isEmpty)
     }
+
+    @Test
+    func announceSenderMismatch_isRejected() async throws {
+        let ble = makeService()
+
+        let signer = NoiseEncryptionService(keychain: MockKeychain())
+        let announcement = AnnouncementPacket(
+            nickname: "Spoof",
+            noisePublicKey: signer.getStaticPublicKeyData(),
+            signingPublicKey: signer.getSigningPublicKeyData(),
+            directNeighbors: nil
+        )
+        let payload = try #require(announcement.encode(), "Failed to encode announcement")
+
+        let derivedPeerID = PeerID(publicKey: announcement.noisePublicKey)
+        let wrongFirst = derivedPeerID.bare.first == "0" ? "1" : "0"
+        let wrongBare = String(wrongFirst) + String(derivedPeerID.bare.dropFirst())
+        let wrongPeerID = PeerID(str: wrongBare)
+        let packet = BitchatPacket(
+            type: MessageType.announce.rawValue,
+            senderID: Data(hexString: wrongPeerID.id) ?? Data(),
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: payload,
+            signature: nil,
+            ttl: 7
+        )
+        let signed = try #require(signer.signPacket(packet), "Failed to sign announce packet")
+
+        ble._test_handlePacket(signed, fromPeerID: wrongPeerID, preseedPeer: false)
+
+        _ = await TestHelpers.waitUntil({ !ble.currentPeerSnapshots().isEmpty }, timeout: 0.3)
+        #expect(ble.currentPeerSnapshots().isEmpty)
+    }
 }
 
 private func makeService() -> BLEService {

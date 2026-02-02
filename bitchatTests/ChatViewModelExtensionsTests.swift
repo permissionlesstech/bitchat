@@ -265,7 +265,7 @@ struct ChatViewModelNostrExtensionTests {
     }
     
     @Test @MainActor
-    func subscribeNostrEvent_addsToTimeline_ifMatchesGeohash() async {
+    func subscribeNostrEvent_addsToTimeline_ifMatchesGeohash() async throws {
         let geohash = "u4pruydq"
         let channel = ChannelID.location(GeohashChannel(level: .city, geohash: geohash))
 
@@ -278,17 +278,16 @@ struct ChatViewModelNostrExtensionTests {
         
         _ = await TestHelpers.waitUntil({ viewModel.activeChannel == channel })
         
-        var event = NostrEvent(
-            pubkey: "pub1",
+        let signer = try NostrIdentity.generate()
+        let event = NostrEvent(
+            pubkey: signer.publicKeyHex,
             createdAt: Date(),
             kind: .ephemeralEvent,
             tags: [["g", geohash]],
             content: "Hello Geo"
         )
-        event.id = "evt1"
-        event.sig = "sig"
-        
-        viewModel.handleNostrEvent(event)
+        let signed = try event.sign(with: signer.schnorrSigningKey())
+        viewModel.handleNostrEvent(signed)
         
         let didAppend = await TestHelpers.waitUntil({
             viewModel.publicMessagePipeline.flushIfNeeded()
@@ -305,16 +304,15 @@ struct ChatViewModelNostrExtensionTests {
         viewModel.switchLocationChannel(to: .location(GeohashChannel(level: .city, geohash: geohash)))
         let identity = try viewModel.idBridge.deriveIdentity(forGeohash: geohash)
 
-        var event = NostrEvent(
+        let event = NostrEvent(
             pubkey: identity.publicKeyHex,
             createdAt: Date(),
             kind: .ephemeralEvent,
             tags: [["g", geohash]],
             content: "Self echo"
         )
-        event.id = "evt-self"
-
-        viewModel.handleNostrEvent(event)
+        let signed = try event.sign(with: identity.schnorrSigningKey())
+        viewModel.handleNostrEvent(signed)
 
         try? await Task.sleep(nanoseconds: 100_000_000)
         viewModel.publicMessagePipeline.flushIfNeeded()
@@ -323,29 +321,75 @@ struct ChatViewModelNostrExtensionTests {
     }
 
     @Test @MainActor
-    func handleNostrEvent_skipsBlockedSender() async {
+    func handleNostrEvent_skipsBlockedSender() async throws {
         let (viewModel, _) = makeTestableViewModel()
         let geohash = "u4pruydq"
-        let blockedPubkey = "0000000000000000000000000000000000000000000000000000000000000001"
+        let blockedIdentity = try NostrIdentity.generate()
+        let blockedPubkey = blockedIdentity.publicKeyHex
 
         viewModel.switchLocationChannel(to: .location(GeohashChannel(level: .city, geohash: geohash)))
         viewModel.identityManager.setNostrBlocked(blockedPubkey, isBlocked: true)
 
-        var event = NostrEvent(
+        let event = NostrEvent(
             pubkey: blockedPubkey,
             createdAt: Date(),
             kind: .ephemeralEvent,
             tags: [["g", geohash]],
             content: "Blocked"
         )
-        event.id = "evt-blocked"
-
-        viewModel.handleNostrEvent(event)
+        let signed = try event.sign(with: blockedIdentity.schnorrSigningKey())
+        viewModel.handleNostrEvent(signed)
 
         try? await Task.sleep(nanoseconds: 100_000_000)
         viewModel.publicMessagePipeline.flushIfNeeded()
 
         #expect(!viewModel.messages.contains { $0.content == "Blocked" })
+    }
+
+    @Test @MainActor
+    func handleNostrEvent_rejectsInvalidSignature() async throws {
+        let (viewModel, _) = makeTestableViewModel()
+        let geohash = "u4pruydq"
+        let identity = try NostrIdentity.generate()
+
+        viewModel.switchLocationChannel(to: .location(GeohashChannel(level: .city, geohash: geohash)))
+
+        let event = NostrEvent(
+            pubkey: identity.publicKeyHex,
+            createdAt: Date(),
+            kind: .ephemeralEvent,
+            tags: [["g", geohash]],
+            content: "Valid"
+        )
+        var signed = try event.sign(with: identity.schnorrSigningKey())
+        signed.id = "deadbeef"
+
+        viewModel.handleNostrEvent(signed)
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        viewModel.publicMessagePipeline.flushIfNeeded()
+
+        #expect(!viewModel.messages.contains { $0.content == "Tampered" })
+    }
+
+    @Test @MainActor
+    func subscribeGiftWrap_rejectsOversizedEmbeddedPacket() async throws {
+        let (viewModel, _) = makeTestableViewModel()
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+
+        let oversized = Data(repeating: 0x41, count: FileTransferLimits.maxFramedFileBytes + 1)
+        let content = "bitchat1:" + base64URLEncode(oversized)
+        let giftWrap = try NostrProtocol.createPrivateMessage(
+            content: content,
+            recipientPubkey: recipient.publicKeyHex,
+            senderIdentity: sender
+        )
+
+        viewModel.subscribeGiftWrap(giftWrap, id: recipient)
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        #expect(viewModel.privateChats.isEmpty)
     }
 
     @Test @MainActor
@@ -405,4 +449,11 @@ struct ChatViewModelGeoDMTests {
         #expect(viewModel.privateChats[convKey]?.count == 1)
         #expect(viewModel.sentGeoDeliveryAcks.contains(messageID))
     }
+}
+
+private func base64URLEncode(_ data: Data) -> String {
+    data.base64EncodedString()
+        .replacingOccurrences(of: "+", with: "-")
+        .replacingOccurrences(of: "/", with: "_")
+        .replacingOccurrences(of: "=", with: "")
 }

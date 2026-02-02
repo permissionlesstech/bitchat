@@ -195,10 +195,12 @@ struct ChatViewModelReceivingTests {
             messageID: "pub-001"
         )
 
-        // Give time for async Task and pipeline processing
-        try? await Task.sleep(nanoseconds: 500_000_000)
+        let found = await TestHelpers.waitUntil({
+            viewModel.publicMessagePipeline.flushIfNeeded()
+            return viewModel.messages.contains { $0.content == "Public hello from Bob" }
+        }, timeout: TestConstants.defaultTimeout)
 
-        #expect(viewModel.messages.contains { $0.content == "Public hello from Bob" })
+        #expect(found)
     }
 }
 

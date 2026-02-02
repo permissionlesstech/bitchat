@@ -343,6 +343,7 @@ struct BinaryProtocol {
             }
 
             guard payloadLength >= 0 else { return nil }
+            guard payloadLength <= FileTransferLimits.maxFramedFileBytes else { return nil }
 
             guard let senderID = readData(senderIDSize) else { return nil }
 

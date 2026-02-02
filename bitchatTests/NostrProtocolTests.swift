@@ -213,6 +213,33 @@ struct NostrProtocolTests {
         }
     }
 
+    @Test func nostrEventSignatureVerification_roundTrip() throws {
+        let identity = try NostrIdentity.generate()
+        var event = NostrEvent(
+            pubkey: identity.publicKeyHex,
+            createdAt: Date(),
+            kind: .ephemeralEvent,
+            tags: [],
+            content: "Signed event"
+        )
+        let signed = try event.sign(with: identity.schnorrSigningKey())
+        #expect(signed.isValidSignature())
+    }
+
+    @Test func nostrEventSignatureVerification_detectsTamper() throws {
+        let identity = try NostrIdentity.generate()
+        var event = NostrEvent(
+            pubkey: identity.publicKeyHex,
+            createdAt: Date(),
+            kind: .ephemeralEvent,
+            tags: [],
+            content: "Original"
+        )
+        var signed = try event.sign(with: identity.schnorrSigningKey())
+        signed.id = "deadbeef"
+        #expect(!signed.isValidSignature())
+    }
+
     // MARK: - Helpers
     private static func base64URLDecode(_ s: String) -> Data? {
         var str = s.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")

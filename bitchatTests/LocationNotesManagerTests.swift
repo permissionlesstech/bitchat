@@ -48,7 +48,7 @@ struct LocationNotesManagerTests {
 //        XCTAssertNotEqual(manager.errorMessage, "location_notes.error.no_relays")
 //    }
 
-    @Test func subscribeUsesGeoRelaysAndAppendsNotes() {
+    @Test func subscribeUsesGeoRelaysAndAppendsNotes() throws {
         var relaysCaptured: [String] = []
         var storedHandler: ((NostrEvent) -> Void)?
         var storedEOSE: (() -> Void)?
@@ -71,15 +71,16 @@ struct LocationNotesManagerTests {
         #expect(relaysCaptured == ["wss://relay.one"])
         #expect(manager.state == .loading)
 
-        var event = NostrEvent(
-            pubkey: "pub",
+        let identity = try NostrIdentity.generate()
+        let event = NostrEvent(
+            pubkey: identity.publicKeyHex,
             createdAt: Date(),
             kind: .textNote,
             tags: [["g", "u4pruydq"]],
             content: "hi"
         )
-        event.id = "event1"
-        storedHandler?(event)
+        let signed = try event.sign(with: identity.schnorrSigningKey())
+        storedHandler?(signed)
         storedEOSE?()
 
         #expect(manager.state == .ready)
