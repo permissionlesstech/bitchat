@@ -18,10 +18,11 @@ struct TextMessageView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Precompute heavy token scans once per row
-            let cashuLinks = message.content.extractCashuLinks()
-            let lightningLinks = message.content.extractLightningLinks()
+            let cashuLinks = message.contentCashuLinks()
+            let lightningLinks = message.contentLightningLinks()
+            let maxTokenLength = message.contentMaxTokenLength()
             HStack(alignment: .top, spacing: 0) {
-                let isLong = (message.content.count > TransportConfig.uiLongMessageLengthThreshold || message.content.hasVeryLongToken(threshold: TransportConfig.uiVeryLongTokenThreshold)) && cashuLinks.isEmpty
+                let isLong = (message.content.count > TransportConfig.uiLongMessageLengthThreshold || maxTokenLength >= TransportConfig.uiVeryLongTokenThreshold) && cashuLinks.isEmpty
                 let isExpanded = expandedMessageIDs.contains(message.id)
                 Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
                     .fixedSize(horizontal: false, vertical: true)
@@ -37,7 +38,7 @@ struct TextMessageView: View {
             }
             
             // Expand/Collapse for very long messages
-            if (message.content.count > TransportConfig.uiLongMessageLengthThreshold || message.content.hasVeryLongToken(threshold: TransportConfig.uiVeryLongTokenThreshold)) && cashuLinks.isEmpty {
+            if (message.content.count > TransportConfig.uiLongMessageLengthThreshold || maxTokenLength >= TransportConfig.uiVeryLongTokenThreshold) && cashuLinks.isEmpty {
                 let isExpanded = expandedMessageIDs.contains(message.id)
                 let labelKey = isExpanded ? LocalizedStringKey("content.message.show_less") : LocalizedStringKey("content.message.show_more")
                 Button(labelKey) {
