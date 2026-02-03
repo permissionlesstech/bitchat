@@ -18,10 +18,10 @@ final class AutocompleteService {
         try! NSRegularExpression(pattern: "^/([a-z]*)$", options: [.caseInsensitive])
     }()
 
+    // Commands are lowercase - no need to call lowercased() when sorting
     private let commands = [
-        "/msg", "/who", "/clear",
-        "/hug", "/slap", "/fav", "/unfav",
-        "/block", "/unblock"
+        "/block", "/clear", "/fav", "/hug",
+        "/msg", "/slap", "/unfav", "/unblock", "/who"
     ]
 
     private let noArgCommands: Set<String>
@@ -98,9 +98,9 @@ final class AutocompleteService {
         let captureRange = match.range(at: 1)
         let prefix = nsText.substring(with: captureRange).lowercased()
 
+        // Commands are pre-sorted and lowercase
         let suggestions = commands
-            .filter { $0.lowercased().hasPrefix("/\(prefix)") }
-            .sorted { $0.lowercased() < $1.lowercased() }
+            .filter { $0.hasPrefix("/\(prefix)") }
             .prefix(5)
 
         return suggestions.isEmpty ? nil : (Array(suggestions), fullRange)
