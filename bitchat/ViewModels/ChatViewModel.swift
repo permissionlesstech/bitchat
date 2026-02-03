@@ -1820,7 +1820,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
     }
 
     @MainActor
-    private func invalidatePrivateChatMessagesCache(for peerID: PeerID? = nil) {
+    func invalidatePrivateChatMessagesCache(for peerID: PeerID? = nil) {
         if let peerID {
             privateChatMessagesCache.removeValue(forKey: peerID)
         } else {
