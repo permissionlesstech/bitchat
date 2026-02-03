@@ -90,6 +90,7 @@ extension ChatViewModel {
             // Optimistically mark as sent for both transports; delivery/read will update subsequently
             if let idx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
                 privateChats[peerID]?[idx].deliveryStatus = .sent
+                invalidatePrivateChatMessagesCache()
             }
         } else {
             // Update delivery status to failed
@@ -97,6 +98,7 @@ extension ChatViewModel {
                 privateChats[peerID]?[index].deliveryStatus = .failed(
                     reason: String(localized: "content.delivery.reason.unreachable", comment: "Failure reason when a peer is unreachable")
                 )
+                invalidatePrivateChatMessagesCache()
             }
             let name = recipientNickname ?? "user"
             addSystemMessage(
@@ -144,6 +146,7 @@ extension ChatViewModel {
                 privateChats[peerID]?[msgIdx].deliveryStatus = .failed(
                     reason: String(localized: "content.delivery.reason.unknown_recipient", comment: "Failure reason when the recipient is unknown")
                 )
+                invalidatePrivateChatMessagesCache()
             }
             return
         }
@@ -154,6 +157,7 @@ extension ChatViewModel {
                 privateChats[peerID]?[msgIdx].deliveryStatus = .failed(
                     reason: String(localized: "content.delivery.reason.blocked", comment: "Failure reason when the user is blocked")
                 )
+                invalidatePrivateChatMessagesCache()
             }
             addSystemMessage(
                 String(localized: "system.dm.blocked_generic", comment: "System message when sending fails because user is blocked")
@@ -170,6 +174,7 @@ extension ChatViewModel {
                 privateChats[peerID]?[idx].deliveryStatus = .failed(
                     reason: String(localized: "content.delivery.reason.self", comment: "Failure reason when attempting to message yourself")
                 )
+                invalidatePrivateChatMessagesCache()
             }
                 return
             }
@@ -179,12 +184,14 @@ extension ChatViewModel {
             nostrTransport.sendPrivateMessageGeohash(content: content, toRecipientHex: recipientHex, from: id, messageID: messageID)
             if let msgIdx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
                 privateChats[peerID]?[msgIdx].deliveryStatus = .sent
+                invalidatePrivateChatMessagesCache()
             }
         } catch {
             if let idx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
                 privateChats[peerID]?[idx].deliveryStatus = .failed(
                     reason: String(localized: "content.delivery.reason.send_error", comment: "Failure reason for a generic send error")
                 )
+                invalidatePrivateChatMessagesCache()
             }
         }
     }
@@ -266,6 +273,7 @@ extension ChatViewModel {
         
         if let idx = privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
             privateChats[convKey]?[idx].deliveryStatus = .delivered(to: displayNameForNostrPubkey(senderPubkey), at: Date())
+            invalidatePrivateChatMessagesCache()
             objectWillChange.send()
             SecureLogger.info("GeoDM: recv DELIVERED for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…", category: .session)
         } else {
@@ -278,6 +286,7 @@ extension ChatViewModel {
         
         if let idx = privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
             privateChats[convKey]?[idx].deliveryStatus = .read(by: displayNameForNostrPubkey(senderPubkey), at: Date())
+            invalidatePrivateChatMessagesCache()
             objectWillChange.send()
             SecureLogger.info("GeoDM: recv READ for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…", category: .session)
         } else {

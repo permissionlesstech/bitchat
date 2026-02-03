@@ -3109,6 +3109,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
                 if case .read = privateChats[foundPeerID]?[idx].deliveryStatus { return }
 
                 privateChats[foundPeerID]?[idx].deliveryStatus = .delivered(to: name, at: Date())
+                invalidatePrivateChatMessagesCache()
                 objectWillChange.send()
 
             case .readReceipt:
@@ -3120,6 +3121,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
                 if let messages = privateChats[foundPeerID], idx < messages.count {
                     messages[idx].deliveryStatus = .read(by: name, at: Date())
                     privateChats[foundPeerID] = messages
+                    invalidatePrivateChatMessagesCache()
                     privateChatManager.objectWillChange.send()
                     objectWillChange.send()
                 }
@@ -3619,6 +3621,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
         }
         
         // Update in private chats
+        var didUpdatePrivate = false
         for (peerID, chatMessages) in privateChats {
             guard let index = chatMessages.firstIndex(where: { $0.id == messageID }) else { continue }
             
@@ -3627,6 +3630,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
             
             // Update delivery status directly (BitchatMessage is a class/reference type)
             privateChats[peerID]?[index].deliveryStatus = status
+            didUpdatePrivate = true
+        }
+        if didUpdatePrivate {
+            invalidatePrivateChatMessagesCache()
         }
         
         // Trigger UI update for delivery status change
