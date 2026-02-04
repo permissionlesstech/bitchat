@@ -2038,26 +2038,28 @@ extension BLEService {
 #if DEBUG
 // Test-only helper to inject packets into the receive pipeline
 extension BLEService {
-    func _test_handlePacket(_ packet: BitchatPacket, fromPeerID: PeerID) {
-        // Ensure the synthetic peer is known and marked verified for public-message tests
-        let normalizedID = PeerID(hexData: packet.senderID)
-        collectionsQueue.sync(flags: .barrier) {
-            if peers[normalizedID] == nil {
-                peers[normalizedID] = PeerInfo(
-                    peerID: normalizedID,
-                    nickname: "TestPeer_\(fromPeerID.id.prefix(4))",
-                    isConnected: true,
-                    noisePublicKey: packet.senderID,
-                    signingPublicKey: nil,
-                    isVerifiedNickname: true,
-                    lastSeen: Date()
-                )
-            } else {
-                var p = peers[normalizedID]!
-                p.isConnected = true
-                p.isVerifiedNickname = true
-                p.lastSeen = Date()
-                peers[normalizedID] = p
+    func _test_handlePacket(_ packet: BitchatPacket, fromPeerID: PeerID, preseedPeer: Bool = true) {
+        if preseedPeer {
+            // Ensure the synthetic peer is known and marked verified for public-message tests
+            let normalizedID = PeerID(hexData: packet.senderID)
+            collectionsQueue.sync(flags: .barrier) {
+                if peers[normalizedID] == nil {
+                    peers[normalizedID] = PeerInfo(
+                        peerID: normalizedID,
+                        nickname: "TestPeer_\(fromPeerID.id.prefix(4))",
+                        isConnected: true,
+                        noisePublicKey: packet.senderID,
+                        signingPublicKey: nil,
+                        isVerifiedNickname: true,
+                        lastSeen: Date()
+                    )
+                } else {
+                    var p = peers[normalizedID]!
+                    p.isConnected = true
+                    p.isVerifiedNickname = true
+                    p.lastSeen = Date()
+                    peers[normalizedID] = p
+                }
             }
         }
         handleReceivedPacket(packet, from: fromPeerID)
@@ -3839,7 +3841,7 @@ extension BLEService {
         let derivedFromKey = PeerID(publicKey: announcement.noisePublicKey)
         if derivedFromKey != peerID {
             SecureLogger.warning("⚠️ Announce sender mismatch: derived \(derivedFromKey.id.prefix(8))… vs packet \(peerID.id.prefix(8))…", category: .security)
-
+            return
         }
         
         // Don't add ourselves as a peer
