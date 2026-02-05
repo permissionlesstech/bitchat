@@ -18,6 +18,7 @@ targets:
       - bitchat
     resources:
       - bitchat/Assets.xcassets
+      - bitchat/tr.lproj
     info:
       path: bitchat/Info.plist
       properties:
