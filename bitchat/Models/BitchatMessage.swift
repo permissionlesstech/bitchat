@@ -12,6 +12,8 @@ import Foundation
 /// Handles both broadcast messages and private encrypted messages,
 /// with support for mentions, replies, and delivery tracking.
 /// - Note: This is the primary data model for chat messages
+/// - Important: Mutable state (deliveryStatus, cached text) is isolated to MainActor for thread safety
+@MainActor
 final class BitchatMessage: Codable {
     let id: String
     let sender: String
@@ -23,26 +25,28 @@ final class BitchatMessage: Codable {
     let recipientNickname: String?
     let senderPeerID: PeerID?
     let mentions: [String]?  // Array of mentioned nicknames
-    var deliveryStatus: DeliveryStatus? // Delivery tracking
-    
-    // Cached formatted text (not included in Codable)
+    var deliveryStatus: DeliveryStatus? // Delivery tracking (MainActor-isolated)
+
+    // Cached formatted text (not included in Codable, MainActor-isolated)
     private var _cachedFormattedText: [String: AttributedString] = [:]
-    
+
     func getCachedFormattedText(isDark: Bool, isSelf: Bool) -> AttributedString? {
         return _cachedFormattedText["\(isDark)-\(isSelf)"]
     }
-    
+
     func setCachedFormattedText(_ text: AttributedString, isDark: Bool, isSelf: Bool) {
         _cachedFormattedText["\(isDark)-\(isSelf)"] = text
     }
     
     // Codable implementation
-    enum CodingKeys: String, CodingKey {
+    nonisolated enum CodingKeys: String, CodingKey {
         case id, sender, content, timestamp, isRelay, originalSender
         case isPrivate, recipientNickname, senderPeerID, mentions, deliveryStatus
     }
-    
-    init(
+
+    /// Creates a new message. This initializer is nonisolated to allow creation from any context
+    /// (e.g., BLE callbacks on background threads). Mutable state access remains MainActor-isolated.
+    nonisolated init(
         id: String? = nil,
         sender: String,
         content: String,
@@ -90,7 +94,8 @@ extension BitchatMessage: Equatable {
 // MARK: - Binary encoding
 
 extension BitchatMessage {
-    func toBinaryPayload() -> Data? {
+    /// Serializes the message to binary format. Nonisolated for use from any context.
+    nonisolated func toBinaryPayload() -> Data? {
         var data = Data()
         
         // Message format:
@@ -185,7 +190,8 @@ extension BitchatMessage {
         return data
     }
     
-    convenience init?(_ data: Data) {
+    /// Deserializes a message from binary data. Nonisolated for use from any context.
+    nonisolated convenience init?(_ data: Data) {
         // Create an immutable copy to prevent threading issues
         let dataCopy = Data(data)
         
