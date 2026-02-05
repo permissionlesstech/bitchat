@@ -133,7 +133,8 @@ struct ContentView: View {
                 }
             }
         } message: {
-            Text("Enter a password to protect \(passwordInputChannel ?? "channel"). Others will need this password to read messages.")
+            let channelName = passwordInputChannel ?? String(localized: "channel")
+            Text("Enter a password to protect \(channelName). Others will need this password to read messages.")
         }
         .alert("Enter Channel Password", isPresented: Binding(
             get: { viewModel.showPasswordPrompt },
@@ -964,7 +965,7 @@ struct ContentView: View {
                                 // Peer name
                                 if isMe {
                                     HStack {
-                                        Text(displayName + " (you)")
+                                        Text("\(displayName) (you)")
                                             .font(.system(size: 14, design: .monospaced))
                                             .foregroundColor(textColor)
                                         
