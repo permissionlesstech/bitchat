@@ -11,6 +11,8 @@ struct PublicTimelineStore {
     private var meshTimeline: [BitchatMessage] = []
     private var geohashTimelines: [String: [BitchatMessage]] = [:]
     private var pendingGeohashSystemMessages: [String] = []
+    private var meshMessageIDs: Set<String> = []
+    private var geohashMessageIDs: [String: Set<String>] = [:]
 
     private let meshCap: Int
     private let geohashCap: Int
@@ -23,7 +25,7 @@ struct PublicTimelineStore {
     mutating func append(_ message: BitchatMessage, to channel: ChannelID) {
         switch channel {
         case .mesh:
-            guard !meshTimeline.contains(where: { $0.id == message.id }) else { return }
+            guard meshMessageIDs.insert(message.id).inserted else { return }
             meshTimeline.append(message)
             trimMeshTimelineIfNeeded()
         case .location(let channel):
@@ -33,19 +35,23 @@ struct PublicTimelineStore {
 
     mutating func append(_ message: BitchatMessage, toGeohash geohash: String) {
         var timeline = geohashTimelines[geohash] ?? []
-        guard !timeline.contains(where: { $0.id == message.id }) else { return }
+        var idSet = geohashMessageIDs[geohash] ?? Set()
+        guard idSet.insert(message.id).inserted else { return }
         timeline.append(message)
-        trimGeohashTimelineIfNeeded(&timeline)
+        trimGeohashTimelineIfNeeded(&timeline, ids: &idSet)
         geohashTimelines[geohash] = timeline
+        geohashMessageIDs[geohash] = idSet
     }
 
     /// Append message if absent, returning true when stored.
     mutating func appendIfAbsent(_ message: BitchatMessage, toGeohash geohash: String) -> Bool {
         var timeline = geohashTimelines[geohash] ?? []
-        guard !timeline.contains(where: { $0.id == message.id }) else { return false }
+        var idSet = geohashMessageIDs[geohash] ?? Set()
+        guard idSet.insert(message.id).inserted else { return false }
         timeline.append(message)
-        trimGeohashTimelineIfNeeded(&timeline)
+        trimGeohashTimelineIfNeeded(&timeline, ids: &idSet)
         geohashTimelines[geohash] = timeline
+        geohashMessageIDs[geohash] = idSet
         return true
     }
 
@@ -56,6 +62,7 @@ struct PublicTimelineStore {
         case .location(let channel):
             let cleaned = geohashTimelines[channel.geohash]?.cleanedAndDeduped() ?? []
             geohashTimelines[channel.geohash] = cleaned
+            geohashMessageIDs[channel.geohash] = Set(cleaned.map { $0.id })
             return cleaned
         }
     }
@@ -64,22 +71,34 @@ struct PublicTimelineStore {
         switch channel {
         case .mesh:
             meshTimeline.removeAll()
+            meshMessageIDs.removeAll()
         case .location(let channel):
             geohashTimelines[channel.geohash] = []
+            geohashMessageIDs.removeValue(forKey: channel.geohash)
         }
     }
 
     @discardableResult
     mutating func removeMessage(withID id: String) -> BitchatMessage? {
         if let index = meshTimeline.firstIndex(where: { $0.id == id }) {
-            return meshTimeline.remove(at: index)
+            let removed = meshTimeline.remove(at: index)
+            meshMessageIDs.remove(id)
+            return removed
         }
 
         for key in Array(geohashTimelines.keys) {
             var timeline = geohashTimelines[key] ?? []
             if let index = timeline.firstIndex(where: { $0.id == id }) {
                 let removed = timeline.remove(at: index)
-                geohashTimelines[key] = timeline.isEmpty ? nil : timeline
+                if timeline.isEmpty {
+                    geohashTimelines[key] = nil
+                    geohashMessageIDs.removeValue(forKey: key)
+                } else {
+                    geohashTimelines[key] = timeline
+                    var idSet = geohashMessageIDs[key] ?? Set()
+                    idSet.remove(id)
+                    geohashMessageIDs[key] = idSet
+                }
                 return removed
             }
         }
@@ -90,13 +109,27 @@ struct PublicTimelineStore {
     mutating func removeMessages(in geohash: String, where predicate: (BitchatMessage) -> Bool) {
         var timeline = geohashTimelines[geohash] ?? []
         timeline.removeAll(where: predicate)
-        geohashTimelines[geohash] = timeline.isEmpty ? nil : timeline
+        if timeline.isEmpty {
+            geohashTimelines[geohash] = nil
+            geohashMessageIDs.removeValue(forKey: geohash)
+        } else {
+            geohashTimelines[geohash] = timeline
+            geohashMessageIDs[geohash] = Set(timeline.map { $0.id })
+        }
     }
 
     mutating func mutateGeohash(_ geohash: String, _ transform: (inout [BitchatMessage]) -> Void) {
         var timeline = geohashTimelines[geohash] ?? []
         transform(&timeline)
-        geohashTimelines[geohash] = timeline.isEmpty ? nil : timeline
+        if timeline.isEmpty {
+            geohashTimelines[geohash] = nil
+            geohashMessageIDs.removeValue(forKey: geohash)
+        } else {
+            var idSet = Set(timeline.map { $0.id })
+            trimGeohashTimelineIfNeeded(&timeline, ids: &idSet)
+            geohashTimelines[geohash] = timeline
+            geohashMessageIDs[geohash] = idSet
+        }
     }
 
     mutating func queueGeohashSystemMessage(_ content: String) {
@@ -114,11 +147,15 @@ struct PublicTimelineStore {
 
     private mutating func trimMeshTimelineIfNeeded() {
         guard meshTimeline.count > meshCap else { return }
-        meshTimeline = Array(meshTimeline.suffix(meshCap))
+        let trimmed = Array(meshTimeline.suffix(meshCap))
+        meshTimeline = trimmed
+        meshMessageIDs = Set(trimmed.map { $0.id })
     }
 
-    private func trimGeohashTimelineIfNeeded(_ timeline: inout [BitchatMessage]) {
+    private func trimGeohashTimelineIfNeeded(_ timeline: inout [BitchatMessage], ids: inout Set<String>) {
         guard timeline.count > geohashCap else { return }
-        timeline = Array(timeline.suffix(geohashCap))
+        let trimmed = Array(timeline.suffix(geohashCap))
+        timeline = trimmed
+        ids = Set(trimmed.map { $0.id })
     }
 }

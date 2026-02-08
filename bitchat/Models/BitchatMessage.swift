@@ -27,6 +27,14 @@ final class BitchatMessage: Codable {
     
     // Cached formatted text (not included in Codable)
     private var _cachedFormattedText: [String: AttributedString] = [:]
+
+    // Cached content analysis for UI parsing (not included in Codable)
+    private struct ContentAnalysis {
+        let maxTokenLength: Int
+        let cashuLinks: [String]
+        let lightningLinks: [String]
+    }
+    private var _contentAnalysis: ContentAnalysis? = nil
     
     func getCachedFormattedText(isDark: Bool, isSelf: Bool) -> AttributedString? {
         return _cachedFormattedText["\(isDark)-\(isSelf)"]
@@ -34,6 +42,29 @@ final class BitchatMessage: Codable {
     
     func setCachedFormattedText(_ text: AttributedString, isDark: Bool, isSelf: Bool) {
         _cachedFormattedText["\(isDark)-\(isSelf)"] = text
+    }
+
+    private func contentAnalysis() -> ContentAnalysis {
+        if let cached = _contentAnalysis { return cached }
+        let analysis = ContentAnalysis(
+            maxTokenLength: content.maxTokenLength(),
+            cashuLinks: content.extractCashuLinks(),
+            lightningLinks: content.extractLightningLinks()
+        )
+        _contentAnalysis = analysis
+        return analysis
+    }
+
+    func contentMaxTokenLength() -> Int {
+        contentAnalysis().maxTokenLength
+    }
+
+    func contentCashuLinks() -> [String] {
+        contentAnalysis().cashuLinks
+    }
+
+    func contentLightningLinks() -> [String] {
+        contentAnalysis().lightningLinks
     }
     
     // Codable implementation

@@ -164,6 +164,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
     let unifiedPeerService: UnifiedPeerService
     let autocompleteService: AutocompleteService
     let deduplicationService: MessageDeduplicationService  // internal for test access
+    private var privateChatMessagesCache: [PeerID: [BitchatMessage]] = [:]
     
     // Computed properties for compatibility
     @MainActor
@@ -453,6 +454,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
                 self?.objectWillChange.send()
             }
             .store(in: &cancellables)
+        privateChatManager.$privateChats
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.invalidatePrivateChatMessagesCache()
+            }
+            .store(in: &cancellables)
 
         // Subscribe to participantTracker changes to trigger UI updates
         participantTracker.objectWillChange
@@ -534,6 +541,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
                     }
                 }
                 self.peerIndex = uniquePeers
+                self.invalidatePrivateChatMessagesCache()
                 // Update private chat peer ID if needed when peers change
                 if self.selectedPrivateChatFingerprint != nil {
                     self.updatePrivateChatPeerIfNeeded()
@@ -1810,9 +1818,21 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
             }
         }
     }
+
+    @MainActor
+    func invalidatePrivateChatMessagesCache(for peerID: PeerID? = nil) {
+        if let peerID {
+            privateChatMessagesCache.removeValue(forKey: peerID)
+        } else {
+            privateChatMessagesCache.removeAll()
+        }
+    }
     
     @MainActor
     func getPrivateChatMessages(for peerID: PeerID) -> [BitchatMessage] {
+        if let cached = privateChatMessagesCache[peerID] {
+            return cached
+        }
         var combined: [BitchatMessage] = []
 
         // Gather messages under the ephemeral peer ID
@@ -1857,7 +1877,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
         }
 
         // Return chronologically sorted, de-duplicated list
-        return bestByID.values.sorted { $0.timestamp < $1.timestamp }
+        let sorted = bestByID.values.sorted { $0.timestamp < $1.timestamp }
+        privateChatMessagesCache[peerID] = sorted
+        return sorted
     }
     
     @MainActor
@@ -2169,11 +2191,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
             // Compute NSString-backed length for regex/nsrange correctness with multi-byte characters
             let nsContent = content as NSString
             let nsLen = nsContent.length
-            let containsCashuEarly: Bool = {
-                let rx = Patterns.quickCashuPresence
-                return rx.numberOfMatches(in: content, options: [], range: NSRange(location: 0, length: nsLen)) > 0
-            }()
-            if (content.count > 4000 || content.hasVeryLongToken(threshold: 1024)) && !containsCashuEarly {
+            let containsCashuEarly = !message.contentCashuLinks().isEmpty
+            let maxTokenLength = message.contentMaxTokenLength()
+            if (content.count > 4000 || maxTokenLength >= 1024) && !containsCashuEarly {
                 var plainStyle = AttributeContainer()
                 plainStyle.foregroundColor = baseColor
                 plainStyle.font = isSelf
@@ -3089,6 +3109,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
                 if case .read = privateChats[foundPeerID]?[idx].deliveryStatus { return }
 
                 privateChats[foundPeerID]?[idx].deliveryStatus = .delivered(to: name, at: Date())
+                invalidatePrivateChatMessagesCache()
                 objectWillChange.send()
 
             case .readReceipt:
@@ -3100,6 +3121,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
                 if let messages = privateChats[foundPeerID], idx < messages.count {
                     messages[idx].deliveryStatus = .read(by: name, at: Date())
                     privateChats[foundPeerID] = messages
+                    invalidatePrivateChatMessagesCache()
                     privateChatManager.objectWillChange.send()
                     objectWillChange.send()
                 }
@@ -3599,6 +3621,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
         }
         
         // Update in private chats
+        var didUpdatePrivate = false
         for (peerID, chatMessages) in privateChats {
             guard let index = chatMessages.firstIndex(where: { $0.id == messageID }) else { continue }
             
@@ -3607,6 +3630,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
             
             // Update delivery status directly (BitchatMessage is a class/reference type)
             privateChats[peerID]?[index].deliveryStatus = status
+            didUpdatePrivate = true
+        }
+        if didUpdatePrivate {
+            invalidatePrivateChatMessagesCache()
         }
         
         // Trigger UI update for delivery status change
