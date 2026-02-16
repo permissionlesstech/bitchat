@@ -492,6 +492,12 @@ struct NostrEvent: Codable {
         self.id = "" // Will be set during signing
     }
     
+    private static let maxContentLength = 65_535
+    private static let maxTags = 5000
+    private static let maxTagElements = 20
+    private static let maxTagElementLength = 1024
+    private static let maxTimestamp = 4_102_444_800 // 2100-01-01
+
     init(from dict: [String: Any]) throws {
         guard let pubkey = dict["pubkey"] as? String,
               let createdAt = dict["created_at"] as? Int,
@@ -500,14 +506,62 @@ struct NostrEvent: Codable {
               let content = dict["content"] as? String else {
             throw NostrError.invalidEvent
         }
-        
-        self.id = dict["id"] as? String ?? ""
+
+        guard pubkey.count == 64,
+              Data(hexString: pubkey) != nil else {
+            throw NostrError.invalidEvent
+        }
+
+        let id = dict["id"] as? String ?? ""
+        if !id.isEmpty {
+            guard id.count == 64,
+                  Data(hexString: id) != nil else {
+                throw NostrError.invalidEvent
+            }
+        }
+
+        if let sig = dict["sig"] as? String {
+            guard sig.count == 128,
+                  Data(hexString: sig) != nil else {
+                throw NostrError.invalidEvent
+            }
+            self.sig = sig
+        } else {
+            self.sig = nil
+        }
+
+        guard createdAt >= 0, createdAt <= NostrEvent.maxTimestamp else {
+            throw NostrError.invalidEvent
+        }
+
+        guard kind >= 0 else {
+            throw NostrError.invalidEvent
+        }
+
+        guard content.utf8.count <= NostrEvent.maxContentLength else {
+            throw NostrError.invalidEvent
+        }
+
+        guard tags.count <= NostrEvent.maxTags else {
+            throw NostrError.invalidEvent
+        }
+        for tag in tags {
+            guard tag.count <= NostrEvent.maxTagElements else {
+                throw NostrError.invalidEvent
+            }
+            for element in tag {
+                guard element.utf8.count <= NostrEvent.maxTagElementLength else {
+                    throw NostrError.invalidEvent
+                }
+            }
+        }
+
+        self.id = id
         self.pubkey = pubkey
         self.created_at = createdAt
         self.kind = kind
         self.tags = tags
         self.content = content
-        self.sig = dict["sig"] as? String
     }
     
     func sign(with key: P256K.Schnorr.PrivateKey) throws -> NostrEvent {
