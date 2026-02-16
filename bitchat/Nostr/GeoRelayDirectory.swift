@@ -248,10 +248,11 @@ final class GeoRelayDirectory {
             let parts = line.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }
             guard parts.count >= 3 else { continue }
             var host = parts[0]
+            // Only accept secure protocols - strip known prefixes
+            // Note: All relays are converted to wss:// in closestRelays methods
             host = host.replacingOccurrences(of: "https://", with: "")
             host = host.replacingOccurrences(of: "http://", with: "")
             host = host.replacingOccurrences(of: "wss://", with: "")
-            host = host.replacingOccurrences(of: "ws://", with: "")
             host = host.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
             guard let lat = Double(parts[1]), let lon = Double(parts[2]) else { continue }
             result.insert(Entry(host: host, lat: lat, lon: lon))
