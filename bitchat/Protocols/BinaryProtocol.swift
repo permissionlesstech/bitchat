@@ -9,6 +9,7 @@
 import Foundation
 
 extension Data {
+    /// Returns a prefix of the data up to (but not including) the first null byte.
     func trimmingNullBytes() -> Data {
         // Find the first null byte
         if let nullIndex = self.firstIndex(of: 0) {
@@ -18,34 +19,50 @@ extension Data {
     }
 }
 
-// Binary Protocol Format:
-// Header (Fixed 13 bytes):
-// - Version: 1 byte
-// - Type: 1 byte  
-// - TTL: 1 byte
-// - Timestamp: 8 bytes (UInt64)
-// - Flags: 1 byte (bit 0: hasRecipient, bit 1: hasSignature)
-// - PayloadLength: 2 bytes (UInt16)
-//
-// Variable sections:
-// - SenderID: 8 bytes (fixed)
-// - RecipientID: 8 bytes (if hasRecipient flag set)
-// - Payload: Variable length
-// - Signature: 64 bytes (if hasSignature flag set)
-
+/// Codec for the bitchat binary wire format.
+///
+/// ## Wire Layout
+/// **Header** (fixed 13 bytes):
+/// | Offset | Size | Field |
+/// |--------|------|-------|
+/// | 0 | 1 | Version |
+/// | 1 | 1 | Type (``MessageType`` raw value) |
+/// | 2 | 1 | TTL |
+/// | 3 | 8 | Timestamp (big-endian `UInt64`, ms since epoch) |
+/// | 11 | 1 | Flags (bit 0: hasRecipient, bit 1: hasSignature, bit 2: isCompressed) |
+/// | 12 | 2 | Payload length (big-endian `UInt16`) |
+///
+/// **Variable sections** (in order):
+/// - SenderID: 8 bytes (zero-padded)
+/// - RecipientID: 8 bytes (present only if `hasRecipient` flag is set)
+/// - Payload: variable length (prefixed with 2-byte original size if compressed)
+/// - Signature: 64 bytes (present only if `hasSignature` flag is set)
 struct BinaryProtocol {
+    /// Fixed header size in bytes.
     static let headerSize = 13
+    /// Fixed sender ID field size in bytes.
     static let senderIDSize = 8
+    /// Fixed recipient ID field size in bytes.
     static let recipientIDSize = 8
+    /// Fixed Ed25519 signature size in bytes.
     static let signatureSize = 64
-    
+
+    /// Bit flags carried in the header's flags byte.
     struct Flags {
+        /// Indicates the packet contains an 8-byte recipient ID after the sender ID.
         static let hasRecipient: UInt8 = 0x01
+        /// Indicates the packet contains a 64-byte signature after the payload.
         static let hasSignature: UInt8 = 0x02
+        /// Indicates the payload is LZ4-compressed (2-byte original size prepended).
         static let isCompressed: UInt8 = 0x04
     }
     
-    // Encode BitchatPacket to binary format
+    /// Serializes a ``BitchatPacket`` into the binary wire format.
+    ///
+    /// Automatically applies LZ4 compression if the payload exceeds the compression
+    /// threshold and compression yields a smaller result.
+    ///
+    /// - Returns: The encoded binary data, or `nil` on failure.
     static func encode(_ packet: BitchatPacket) -> Data? {
         var data = Data()
         
@@ -123,7 +140,12 @@ struct BinaryProtocol {
         return data
     }
     
-    // Decode binary data to BitchatPacket
+    /// Deserializes binary wire data into a ``BitchatPacket``.
+    ///
+    /// Validates the header, extracts all fields, and decompresses the payload
+    /// if the `isCompressed` flag is set.
+    ///
+    /// - Returns: The decoded packet, or `nil` if the data is malformed or too short.
     static func decode(_ data: Data) -> BitchatPacket? {
         guard data.count >= headerSize + senderIDSize else { return nil }
         
@@ -221,8 +243,12 @@ struct BinaryProtocol {
     }
 }
 
-// Binary encoding for BitchatMessage
+// MARK: - BitchatMessage Binary Payload
 extension BitchatMessage {
+    /// Serializes this message into a compact binary payload for embedding in a ``BitchatPacket``.
+    ///
+    /// The format uses a 1-byte flags field followed by timestamp, length-prefixed strings
+    /// for ID/sender/content, and optional fields gated by the corresponding flag bits.
     func toBinaryPayload() -> Data? {
         var data = Data()
         
@@ -332,6 +358,9 @@ extension BitchatMessage {
         return data
     }
     
+    /// Deserializes a ``BitchatMessage`` from the binary payload format produced by ``toBinaryPayload()``.
+    ///
+    /// - Returns: The decoded message, or `nil` if the data is too short or malformed.
     static func fromBinaryPayload(_ data: Data) -> BitchatMessage? {
         // Create an immutable copy to prevent threading issues
         let dataCopy = Data(data)

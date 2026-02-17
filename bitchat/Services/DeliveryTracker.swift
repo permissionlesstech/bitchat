@@ -9,32 +9,37 @@
 import Foundation
 import Combine
 
+/// Singleton that tracks outgoing message delivery lifecycle — from send through
+/// acknowledgment, timeout, and retry.
+///
+/// Publishes ``DeliveryStatus`` updates via ``deliveryStatusUpdated`` so the UI can
+/// show real-time delivery indicators (sending → sent → delivered → read / failed).
+///
+/// Thread-safe: all mutable state is protected by `pendingLock`.
 class DeliveryTracker {
+    /// Shared singleton instance.
     static let shared = DeliveryTracker()
-    
-    // Track pending deliveries
+
     private var pendingDeliveries: [String: PendingDelivery] = [:]
     private let pendingLock = NSLock()
-    
-    // Track received ACKs to prevent duplicates
+
     private var receivedAckIDs = Set<String>()
     private var sentAckIDs = Set<String>()
-    
-    // Timeout configuration
-    private let privateMessageTimeout: TimeInterval = 30  // 30 seconds
-    private let roomMessageTimeout: TimeInterval = 60     // 1 minute
-    private let favoriteTimeout: TimeInterval = 300       // 5 minutes for favorites
-    
-    // Retry configuration
+
+    private let privateMessageTimeout: TimeInterval = 30
+    private let roomMessageTimeout: TimeInterval = 60
+    private let favoriteTimeout: TimeInterval = 300
+
     private let maxRetries = 3
-    private let retryDelay: TimeInterval = 5  // Base retry delay
-    
-    // Publishers for UI updates
+    private let retryDelay: TimeInterval = 5
+
+    /// Combine publisher that emits `(messageID, status)` tuples whenever a message's
+    /// delivery status changes. Subscribe from the UI layer to update indicators.
     let deliveryStatusUpdated = PassthroughSubject<(messageID: String, status: DeliveryStatus), Never>()
-    
-    // Cleanup timer
+
     private var cleanupTimer: Timer?
-    
+
+    /// In-flight delivery metadata for a single outgoing message.
     struct PendingDelivery {
         let messageID: String
         let sentAt: Date
@@ -43,8 +48,10 @@ class DeliveryTracker {
         let retryCount: Int
         let isRoomMessage: Bool
         let isFavorite: Bool
-        var ackedBy: Set<String> = []  // For tracking partial room delivery
-        let expectedRecipients: Int  // For room messages
+        /// Set of peer IDs that have acknowledged receipt (used for room partial delivery).
+        var ackedBy: Set<String> = []
+        /// Total number of expected recipients (for room messages).
+        let expectedRecipients: Int
         var timeoutTimer: Timer?
         
         var isTimedOut: Bool {
@@ -67,6 +74,17 @@ class DeliveryTracker {
     
     // MARK: - Public Methods
     
+    /// Begins tracking delivery for an outgoing message.
+    ///
+    /// Only private and room messages are tracked; broadcasts are ignored.
+    /// The status transitions to `.sent` after a short delay and a timeout is scheduled.
+    ///
+    /// - Parameters:
+    ///   - message: The outgoing ``BitchatMessage``.
+    ///   - recipientID: Target peer ID (or representative ID for room messages).
+    ///   - recipientNickname: Display name of the recipient.
+    ///   - isFavorite: If `true`, uses a longer timeout (5 min) and enables retries.
+    ///   - expectedRecipients: For room messages, the total number of members expected to ACK.
     func trackMessage(_ message: BitchatMessage, recipientID: String, recipientNickname: String, isFavorite: Bool = false, expectedRecipients: Int = 1) {
         // Don't track broadcasts or certain message types
         guard message.isPrivate || message.room != nil else { return }
@@ -98,6 +116,11 @@ class DeliveryTracker {
         scheduleTimeout(for: message.id)
     }
     
+    /// Processes an incoming ``DeliveryAck``, updating the message's delivery status.
+    ///
+    /// For direct messages the status moves to `.delivered`. For room messages,
+    /// partial delivery is tracked until at least half the expected recipients ACK.
+    /// Duplicate ACK IDs are silently ignored.
     func processDeliveryAck(_ ack: DeliveryAck) {
         pendingLock.lock()
         defer { pendingLock.unlock() }
@@ -141,6 +164,9 @@ class DeliveryTracker {
         }
     }
     
+    /// Creates a ``DeliveryAck`` for an incoming message if appropriate.
+    ///
+    /// Returns `nil` if the message is from ourselves, is a broadcast, or has already been ACKed.
     func generateAck(for message: BitchatMessage, myPeerID: String, myNickname: String, hopCount: UInt8) -> DeliveryAck? {
         // Don't ACK our own messages
         guard message.senderPeerID != myPeerID else { return nil }
@@ -161,6 +187,7 @@ class DeliveryTracker {
         )
     }
     
+    /// Cancels tracking for a message, invalidating its timeout timer and removing it from the pending map.
     func clearDeliveryStatus(for messageID: String) {
         pendingLock.lock()
         defer { pendingLock.unlock() }

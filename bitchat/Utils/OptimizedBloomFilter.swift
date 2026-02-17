@@ -18,6 +18,11 @@ struct OptimizedBloomFilter {
     // Statistics
     private(set) var insertCount: Int = 0
     
+    /// Creates a Bloom filter sized for the given expected item count and false-positive rate.
+    ///
+    /// - Parameters:
+    ///   - expectedItems: Anticipated number of items to insert (default 1 000).
+    ///   - falsePositiveRate: Target false-positive probability (default 1 %).
     init(expectedItems: Int = 1000, falsePositiveRate: Double = 0.01) {
         // Calculate optimal bit count and hash count
         let m = Double(expectedItems) * abs(log(falsePositiveRate)) / (log(2) * log(2))
@@ -31,6 +36,7 @@ struct OptimizedBloomFilter {
         self.bitArray = Array(repeating: 0, count: arraySize)
     }
     
+    /// Inserts `item` into the filter by setting the corresponding bits.
     mutating func insert(_ item: String) {
         let hashes = generateHashes(item)
         
@@ -45,6 +51,9 @@ struct OptimizedBloomFilter {
         insertCount += 1
     }
     
+    /// Tests whether `item` is **possibly** in the filter.
+    ///
+    /// A `true` result may be a false positive; a `false` result is always correct.
     func contains(_ item: String) -> Bool {
         let hashes = generateHashes(item)
         
@@ -61,6 +70,7 @@ struct OptimizedBloomFilter {
         return true
     }
     
+    /// Clears all bits and resets the insert count to zero.
     mutating func reset() {
         for i in 0..<bitArray.count {
             bitArray[i] = 0
@@ -68,7 +78,7 @@ struct OptimizedBloomFilter {
         insertCount = 0
     }
     
-    // Generate multiple hash values using double hashing technique
+    /// Derives `hashCount` independent bit positions from `item` using SHA-256 double hashing.
     private func generateHashes(_ item: String) -> [Int] {
         guard let data = item.data(using: .utf8) else {
             return Array(repeating: 0, count: hashCount)
@@ -93,7 +103,7 @@ struct OptimizedBloomFilter {
         return hashes
     }
     
-    // Calculate current false positive probability
+    /// Estimated false-positive probability given the current number of inserted items.
     var estimatedFalsePositiveRate: Double {
         guard insertCount > 0 else { return 0 }
         
@@ -108,14 +118,18 @@ struct OptimizedBloomFilter {
         return pow(1 - exp(-ratio), Double(hashCount))
     }
     
-    // Get memory usage in bytes
+    /// Memory consumed by the underlying bit array, in bytes.
     var memorySizeBytes: Int {
         return bitArray.count * 8
     }
 }
 
-// Extension for adaptive Bloom filter that adjusts based on network size
+// MARK: - Adaptive Factory
 extension OptimizedBloomFilter {
+    /// Creates a Bloom filter with capacity and false-positive rate tuned for the estimated network size.
+    ///
+    /// Larger networks use higher capacity and accept a slightly higher false-positive rate
+    /// to keep memory usage practical.
     static func adaptive(for networkSize: Int) -> OptimizedBloomFilter {
         // Adjust parameters based on network size
         let expectedItems: Int

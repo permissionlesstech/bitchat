@@ -27,8 +27,20 @@ extension Data {
     }
 }
 
+/// Core BLE mesh networking service that handles peer discovery, connection management,
+/// message routing, and packet relay over Bluetooth Low Energy.
+///
+/// Acts as both a BLE **central** (scanning for and connecting to peers) and a BLE
+/// **peripheral** (advertising and accepting connections). Messages are flooded through
+/// the mesh with TTL-based hop limiting and probabilistic relay to balance delivery
+/// reliability against bandwidth.
+///
+/// Privacy features include randomized transmission delays, cover traffic generation,
+/// and generic BLE advertisement data with no identifying app name.
 class BluetoothMeshService: NSObject {
+    /// BLE service UUID used for discovery and advertisement filtering.
     static let serviceUUID = CBUUID(string: "F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5C")
+    /// BLE characteristic UUID used for reading and writing mesh packets.
     static let characteristicUUID = CBUUID(string: "A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D")
     
     private var centralManager: CBCentralManager?
@@ -354,6 +366,8 @@ class BluetoothMeshService: NSObject {
         peerLastSeenTimestamps.removeAll()
     }
     
+    /// Initializes BLE central and peripheral managers, begins scanning and advertising,
+    /// sends the initial presence announcement, and starts battery optimization and cover traffic.
     func startServices() {
         // Starting services
         // Start both central and peripheral services
@@ -377,6 +391,9 @@ class BluetoothMeshService: NSObject {
         startCoverTraffic()
     }
     
+    /// Broadcasts a presence announcement carrying this peer's nickname.
+    ///
+    /// The announcement is sent multiple times with jittered delays for reliability.
     func sendBroadcastAnnounce() {
         guard let vm = delegate as? ChatViewModel else { return }
         
@@ -404,6 +421,10 @@ class BluetoothMeshService: NSObject {
         }
     }
     
+    /// Starts BLE peripheral advertising with the mesh service UUID.
+    ///
+    /// Advertisement data is intentionally generic (no app-identifying prefix) to protect
+    /// user privacy in sensitive environments.
     func startAdvertising() {
         guard peripheralManager?.state == .poweredOn else { 
             return 
@@ -423,6 +444,10 @@ class BluetoothMeshService: NSObject {
         peripheralManager?.startAdvertising(advertisementData)
     }
     
+    /// Starts BLE central scanning for peers advertising the mesh service UUID.
+    ///
+    /// Scanning uses duty cycling (active scan then pause) to conserve battery,
+    /// with parameters adjusted dynamically based on the current battery level.
     func startScanning() {
         guard centralManager?.state == .poweredOn else { 
             return 
@@ -489,6 +514,16 @@ class BluetoothMeshService: NSObject {
         self.characteristic = characteristic
     }
     
+    /// Sends a broadcast (unencrypted, signed) message to all peers in the mesh.
+    ///
+    /// The message is signed with this session's ephemeral key and broadcast with an
+    /// adaptive TTL. A single retry is sent after a short jittered delay for reliability.
+    ///
+    /// - Parameters:
+    ///   - content: Plaintext message body.
+    ///   - mentions: Nicknames mentioned in the message (optional).
+    ///   - room: Room hashtag to scope the message to (optional).
+    ///   - recipientID: Unused for broadcasts; pass `nil`.
     func sendMessage(_ content: String, mentions: [String] = [], room: String? = nil, to recipientID: String? = nil) {
         messageQueue.async { [weak self] in
             guard let self = self else { return }
@@ -558,6 +593,17 @@ class BluetoothMeshService: NSObject {
     }
     
     
+    /// Sends an end-to-end encrypted private message to a specific peer.
+    ///
+    /// The payload is padded to a standard block size, encrypted with AES-256-GCM using
+    /// the shared secret for `recipientPeerID`, and signed. Delivery is tracked via
+    /// ``DeliveryTracker`` when enabled.
+    ///
+    /// - Parameters:
+    ///   - content: Plaintext message body.
+    ///   - recipientPeerID: The target peer's identifier.
+    ///   - recipientNickname: Display name of the recipient.
+    ///   - messageID: Optional pre-generated message ID (a UUID is created if `nil`).
     func sendPrivateMessage(_ content: String, to recipientPeerID: String, recipientNickname: String, messageID: String? = nil) {
         messageQueue.async { [weak self] in
             guard let self = self else { return }
@@ -653,6 +699,7 @@ class BluetoothMeshService: NSObject {
         }
     }
     
+    /// Broadcasts a leave notification for the given room hashtag so other peers can update their UI.
     func sendRoomLeaveNotification(_ room: String) {
         messageQueue.async { [weak self] in
             guard let self = self else { return }
@@ -672,6 +719,10 @@ class BluetoothMeshService: NSObject {
         }
     }
     
+    /// Sends an encrypted ``DeliveryAck`` back to the original message sender.
+    ///
+    /// The acknowledgment is encrypted for the recipient and sent with a short TTL.
+    /// Delivery acks are dispatched immediately (no random delay) to minimize latency.
     func sendDeliveryAck(_ ack: DeliveryAck, to recipientID: String) {
         messageQueue.async { [weak self] in
             guard let self = self else { return }
@@ -705,6 +756,7 @@ class BluetoothMeshService: NSObject {
         }
     }
     
+    /// Sends an encrypted ``ReadReceipt`` back to the original message sender.
     func sendReadReceipt(_ receipt: ReadReceipt, to recipientID: String) {
         messageQueue.async { [weak self] in
             guard let self = self else { return }
@@ -738,6 +790,15 @@ class BluetoothMeshService: NSObject {
         }
     }
     
+    /// Broadcasts a room protection announcement so peers know a room requires a password.
+    ///
+    /// The payload is pipe-delimited: `room|isProtected|creatorID|keyCommitment`.
+    ///
+    /// - Parameters:
+    ///   - room: Room hashtag (e.g., `"#secret"`).
+    ///   - isProtected: `true` to mark the room as password-protected, `false` to unprotect.
+    ///   - creatorID: Peer ID of the room creator (defaults to this peer).
+    ///   - keyCommitment: Optional cryptographic commitment to the room key.
     func announcePasswordProtectedRoom(_ room: String, isProtected: Bool = true, creatorID: String? = nil, keyCommitment: String? = nil) {
         messageQueue.async { [weak self] in
             guard let self = self else { return }
@@ -762,6 +823,11 @@ class BluetoothMeshService: NSObject {
         }
     }
     
+    /// Broadcasts a room retention policy announcement.
+    ///
+    /// - Parameters:
+    ///   - room: Room hashtag.
+    ///   - enabled: `true` to enable message retention for the room, `false` to disable.
     func sendRoomRetentionAnnouncement(_ room: String, enabled: Bool) {
         messageQueue.async { [weak self] in
             guard let self = self else { return }
@@ -784,6 +850,16 @@ class BluetoothMeshService: NSObject {
         }
     }
     
+    /// Sends an AES-256-GCM encrypted message to a password-protected room.
+    ///
+    /// The message content is encrypted with the shared `roomKey` before being broadcast.
+    /// The packet is also signed with this session's ephemeral key.
+    ///
+    /// - Parameters:
+    ///   - content: Plaintext message body.
+    ///   - mentions: Nicknames mentioned in the message.
+    ///   - room: Room hashtag (e.g., `"#secret"`).
+    ///   - roomKey: Symmetric key derived from the room password.
     func sendEncryptedRoomMessage(_ content: String, mentions: [String], room: String, roomKey: SymmetricKey) {
         messageQueue.async { [weak self] in
             guard let self = self else { return }
@@ -888,6 +964,7 @@ class BluetoothMeshService: NSObject {
     }
     
     
+    /// Returns a thread-safe snapshot of all known peer ID → nickname mappings.
     func getPeerNicknames() -> [String: String] {
         peerNicknamesLock.lock()
         let copy = peerNicknames
@@ -895,6 +972,7 @@ class BluetoothMeshService: NSObject {
         return copy
     }
     
+    /// Returns RSSI values for all known peers, with a default of `-100` for peers with no reading.
     func getPeerRSSI() -> [String: NSNumber] {
         // Create a copy with default values for connected peers without RSSI
         var rssiWithDefaults = peerRSSI
@@ -910,7 +988,11 @@ class BluetoothMeshService: NSObject {
         return rssiWithDefaults
     }
     
-    // Emergency disconnect for panic situations
+    /// Immediately tears down all BLE connections, stops advertising and scanning,
+    /// clears the persistent identity key, and wipes all in-memory peer/message state.
+    ///
+    /// Intended for panic / emergency situations where the user needs to erase
+    /// all traces of the app's network activity as quickly as possible.
     func emergencyDisconnectAll() {
         // Stop advertising immediately
         if peripheralManager?.isAdvertising == true {

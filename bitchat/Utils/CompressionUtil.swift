@@ -9,11 +9,18 @@
 import Foundation
 import Compression
 
+/// LZ4 compression utilities for reducing BLE packet payload sizes.
+///
+/// Used by ``BinaryProtocol`` to transparently compress payloads that exceed
+/// ``compressionThreshold`` bytes and have low enough entropy to benefit.
 struct CompressionUtil {
-    // Compression threshold - don't compress if data is smaller than this
-    static let compressionThreshold = 100 // bytes
-    
-    // Compress data using LZ4 algorithm (fast compression/decompression)
+    /// Minimum payload size (in bytes) below which compression is skipped.
+    static let compressionThreshold = 100
+
+    /// Compresses `data` using LZ4.
+    ///
+    /// Returns `nil` if the data is smaller than ``compressionThreshold`` or
+    /// if the compressed output is not smaller than the original.
     static func compress(_ data: Data) -> Data? {
         // Skip compression for small data
         guard data.count >= compressionThreshold else { return nil }
@@ -35,7 +42,12 @@ struct CompressionUtil {
         return Data(bytes: destinationBuffer, count: compressedSize)
     }
     
-    // Decompress LZ4 compressed data
+    /// Decompresses LZ4-compressed data back to its original form.
+    ///
+    /// - Parameters:
+    ///   - compressedData: The LZ4-compressed bytes.
+    ///   - originalSize: The expected decompressed size (stored alongside the compressed data in the wire format).
+    /// - Returns: The decompressed data, or `nil` on failure.
     static func decompress(_ compressedData: Data, originalSize: Int) -> Data? {
         let destinationBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: originalSize)
         defer { destinationBuffer.deallocate() }
@@ -54,7 +66,10 @@ struct CompressionUtil {
         return Data(bytes: destinationBuffer, count: decompressedSize)
     }
     
-    // Helper to check if compression is worth it
+    /// Heuristic check for whether `data` is likely to benefit from LZ4 compression.
+    ///
+    /// Returns `false` for data below ``compressionThreshold`` or data with very high
+    /// byte diversity (≥ 90 % unique bytes), which suggests it is already compressed or encrypted.
     static func shouldCompress(_ data: Data) -> Bool {
         // Don't compress if:
         // 1. Data is too small

@@ -9,26 +9,34 @@
 import Foundation
 import CryptoKit
 
+/// End-to-end encryption service built on Curve25519 (X25519 key agreement + Ed25519 signing).
+///
+/// Each session generates **ephemeral** key-agreement and signing key pairs.
+/// A **persistent** Ed25519 identity key is stored across sessions for the favorites system.
+///
+/// Thread-safe: all mutable key storage is protected by a concurrent dispatch queue
+/// with barrier writes.
 class EncryptionService {
-    // Key agreement keys for encryption
+    /// Ephemeral Curve25519 key-agreement private key (regenerated each session).
     private var privateKey: Curve25519.KeyAgreement.PrivateKey
+    /// Ephemeral Curve25519 key-agreement public key shared with peers.
     public let publicKey: Curve25519.KeyAgreement.PublicKey
-    
-    // Signing keys for authentication
+
+    /// Ephemeral Ed25519 signing private key (regenerated each session).
     private var signingPrivateKey: Curve25519.Signing.PrivateKey
+    /// Ephemeral Ed25519 signing public key shared with peers.
     public let signingPublicKey: Curve25519.Signing.PublicKey
-    
-    // Storage for peer keys
+
     private var peerPublicKeys: [String: Curve25519.KeyAgreement.PublicKey] = [:]
     private var peerSigningKeys: [String: Curve25519.Signing.PublicKey] = [:]
     private var peerIdentityKeys: [String: Curve25519.Signing.PublicKey] = [:]
     private var sharedSecrets: [String: SymmetricKey] = [:]
-    
-    // Persistent identity for favorites (separate from ephemeral keys)
+
+    /// Persistent Ed25519 identity key, persisted in `UserDefaults` and used for the favorites system.
     private let identityKey: Curve25519.Signing.PrivateKey
+    /// Public half of the persistent identity key.
     public let identityPublicKey: Curve25519.Signing.PublicKey
-    
-    // Thread safety
+
     private let cryptoQueue = DispatchQueue(label: "chat.bitchat.crypto", attributes: .concurrent)
     
     init() {
@@ -51,7 +59,11 @@ class EncryptionService {
         self.identityPublicKey = identityKey.publicKey
     }
     
-    // Create combined public key data for exchange
+    /// Returns a 96-byte blob containing three 32-byte Curve25519 public keys concatenated in order:
+    /// ephemeral key-agreement key, ephemeral signing key, persistent identity key.
+    ///
+    /// This blob is transmitted during the key-exchange handshake so the remote peer
+    /// can set up encryption, signature verification, and identity tracking in one round-trip.
     func getCombinedPublicKeyData() -> Data {
         var data = Data()
         data.append(publicKey.rawRepresentation)  // 32 bytes - ephemeral encryption key
@@ -60,7 +72,15 @@ class EncryptionService {
         return data  // Total: 96 bytes
     }
     
-    // Add peer's combined public keys
+    /// Registers a peer's 96-byte combined public key blob and derives a shared AES-256 secret.
+    ///
+    /// The blob layout must match ``getCombinedPublicKeyData()``:
+    /// bytes 0–31 key-agreement, 32–63 signing, 64–95 identity.
+    ///
+    /// - Parameters:
+    ///   - peerID: The remote peer's identifier string.
+    ///   - publicKeyData: Exactly 96 bytes of concatenated public keys.
+    /// - Throws: ``EncryptionError/invalidPublicKey`` if the data is not 96 bytes, or a CryptoKit error.
     func addPeerPublicKey(_ peerID: String, publicKeyData: Data) throws {
         try cryptoQueue.sync(flags: .barrier) {
             // Convert to array for safe access
@@ -101,19 +121,23 @@ class EncryptionService {
         }
     }
     
-    // Get peer's persistent identity key for favorites
+    /// Returns the raw 32-byte representation of a peer's persistent identity public key, or `nil` if unknown.
     func getPeerIdentityKey(_ peerID: String) -> Data? {
         return cryptoQueue.sync {
             return peerIdentityKeys[peerID]?.rawRepresentation
         }
     }
     
-    // Clear persistent identity (for panic mode)
+    /// Erases the persistent identity key from `UserDefaults` (panic / emergency wipe mode).
     func clearPersistentIdentity() {
         UserDefaults.standard.removeObject(forKey: "bitchat.identityKey")
         // print("[CRYPTO] Cleared persistent identity key")
     }
     
+    /// Encrypts `data` for a specific peer using AES-256-GCM with the previously derived shared secret.
+    ///
+    /// - Throws: ``EncryptionError/noSharedSecret`` if no key exchange has occurred with `peerID`.
+    /// - Returns: The combined AES-GCM ciphertext (nonce + ciphertext + tag).
     func encrypt(_ data: Data, for peerID: String) throws -> Data {
         let symmetricKey = try cryptoQueue.sync {
             guard let key = sharedSecrets[peerID] else {
@@ -126,6 +150,9 @@ class EncryptionService {
         return sealedBox.combined ?? Data()
     }
     
+    /// Decrypts AES-256-GCM ciphertext received from a specific peer.
+    ///
+    /// - Throws: ``EncryptionError/noSharedSecret`` if no key exchange has occurred, or a CryptoKit error on authentication failure.
     func decrypt(_ data: Data, from peerID: String) throws -> Data {
         let symmetricKey = try cryptoQueue.sync {
             guard let key = sharedSecrets[peerID] else {
@@ -138,12 +165,17 @@ class EncryptionService {
         return try AES.GCM.open(sealedBox, using: symmetricKey)
     }
     
+    /// Produces an Ed25519 signature over `data` using this session's ephemeral signing key.
     func sign(_ data: Data) throws -> Data {
         // Create a local copy of the key to avoid concurrent access
         let key = signingPrivateKey
         return try key.signature(for: data)
     }
     
+    /// Verifies an Ed25519 `signature` over `data` against the peer's ephemeral signing public key.
+    ///
+    /// - Throws: ``EncryptionError/noSharedSecret`` if the peer's signing key is not registered.
+    /// - Returns: `true` if the signature is valid.
     func verify(_ signature: Data, for data: Data, from peerID: String) throws -> Bool {
         let verifyingKey = try cryptoQueue.sync {
             guard let key = peerSigningKeys[peerID] else {
@@ -157,9 +189,14 @@ class EncryptionService {
     
 }
 
+/// Errors thrown by ``EncryptionService`` operations.
 enum EncryptionError: Error {
+    /// No shared secret has been derived for the requested peer (key exchange not yet performed).
     case noSharedSecret
+    /// The provided public key data is malformed or not the expected 96 bytes.
     case invalidPublicKey
+    /// AES-GCM encryption failed.
     case encryptionFailed
+    /// AES-GCM decryption or authentication failed.
     case decryptionFailed
 }
