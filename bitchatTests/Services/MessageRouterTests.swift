@@ -57,9 +57,16 @@ struct MessageRouterTests {
 
         #expect(transport.sentPrivateMessages.count == 1)
 
-        // Flushing again should not re-send (message was removed from outbox)
+        // Flushing again should not re-send (within resend cooldown)
         router.flushOutbox(for: peerID)
         #expect(transport.sentPrivateMessages.count == 1)
+
+        // Message stays in outbox until delivery is confirmed
+        #expect(router.pendingPeerIDs.count == 1)
+
+        // Confirm delivery removes from outbox
+        router.confirmDelivery(messageID: "m3")
+        #expect(router.pendingPeerIDs.isEmpty)
     }
 
     @Test @MainActor
@@ -99,9 +106,10 @@ struct MessageRouterTests {
 
         #expect(router.pendingPeerIDs.count == 2)
 
-        // Connect peer1 and flush — only peer2 should remain pending
+        // Connect peer1, flush, then confirm delivery
         transport.connectedPeers.insert(peer1)
         router.flushOutbox(for: peer1)
+        router.confirmDelivery(messageID: "m1")
 
         #expect(router.pendingPeerIDs.count == 1)
         #expect(router.pendingPeerIDs.first == peer2)
@@ -127,7 +135,37 @@ struct MessageRouterTests {
         router.flushAllOutbox()
 
         #expect(transport.sentPrivateMessages.count == 2)
+
+        // Messages stay in outbox until confirmed
+        #expect(router.pendingPeerIDs.count == 2)
+        router.confirmDelivery(messageID: "m1")
+        router.confirmDelivery(messageID: "m2")
         #expect(router.pendingPeerIDs.isEmpty)
+    }
+
+    @Test @MainActor
+    func resetSendState_allowsResendOnReconnect() async {
+        let peerID = PeerID(str: "000000000000000b")
+        let transport = MockTransport()
+
+        let router = MessageRouter(transports: [transport])
+
+        // Queue and flush while connected
+        transport.connectedPeers.insert(peerID)
+        router.sendPrivate("Hello", to: peerID, recipientNickname: "Peer", messageID: "m1")
+        #expect(transport.sentPrivateMessages.count == 1)
+
+        // Immediate re-flush should NOT resend (within cooldown)
+        router.flushOutbox(for: peerID)
+        #expect(transport.sentPrivateMessages.count == 1)
+
+        // Simulate reconnect: reset send state then flush
+        router.resetSendState(for: peerID)
+        router.flushOutbox(for: peerID)
+
+        // Message should be resent
+        #expect(transport.sentPrivateMessages.count == 2)
+        #expect(transport.sentPrivateMessages[1].content == "Hello")
     }
 
     @Test @MainActor

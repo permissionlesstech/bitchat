@@ -12,6 +12,10 @@ final class MessageRouter {
         let nickname: String
         let messageID: String
         let timestamp: Date
+        // Tracks when this message was last handed to a transport.
+        // nil = never sent (peer was offline). Messages stay in the outbox
+        // until a delivery ack confirms receipt.
+        var sentAt: Date?
     }
 
     private var outbox: [PeerID: [QueuedMessage]] = [:]
@@ -19,6 +23,8 @@ final class MessageRouter {
     // Outbox limits to prevent unbounded memory growth
     private static let maxMessagesPerPeer = 100
     private static let messageTTLSeconds: TimeInterval = 24 * 60 * 60 // 24 hours
+    // Don't resend a message that was handed to transport less than this many seconds ago
+    private static let resendCooldownSeconds: TimeInterval = 30
 
     init(transports: [Transport]) {
         self.transports = transports
@@ -64,11 +70,12 @@ final class MessageRouter {
         let normalizedPeerID = peerID.toShort()
 
         // Always-queue-first: append to outbox, then flush immediately.
+        // Messages stay in the outbox until a delivery ack confirms receipt.
         // When peer is connected, the message is queued and instantly flushed (sent).
         // When offline, it stays in the outbox until the peer reconnects.
         if outbox[normalizedPeerID] == nil { outbox[normalizedPeerID] = [] }
 
-        let message = QueuedMessage(content: content, nickname: recipientNickname, messageID: messageID, timestamp: Date())
+        let message = QueuedMessage(content: content, nickname: recipientNickname, messageID: messageID, timestamp: Date(), sentAt: nil)
         outbox[normalizedPeerID]?.append(message)
 
         // Enforce per-peer size limit with FIFO eviction
@@ -121,40 +128,45 @@ final class MessageRouter {
     func flushOutbox(for peerID: PeerID) {
         // Normalize to short ID for consistent outbox lookup (handles both 16-hex and 64-hex formats)
         let normalizedPeerID = peerID.toShort()
-        guard let queued = outbox[normalizedPeerID], !queued.isEmpty else {
+        guard var queued = outbox[normalizedPeerID], !queued.isEmpty else {
             return
         }
 
         let transport = connectedTransport(for: normalizedPeerID)
-        SecureLogger.debug("Flushing outbox for \(normalizedPeerID.id.prefix(8))… count=\(queued.count) transport=\(transport.map { String(describing: type(of: $0)) } ?? "none")", category: .session)
-
         let now = Date()
-        var remaining: [QueuedMessage] = []
         var sentCount = 0
 
-        for message in queued {
-            // Skip expired messages (TTL exceeded)
-            if now.timeIntervalSince(message.timestamp) > Self.messageTTLSeconds {
-                SecureLogger.debug("Expired queued message for \(normalizedPeerID.id.prefix(8))… id=\(message.messageID.prefix(8))…", category: .session)
+        // Remove expired messages first (reverse to preserve indices)
+        for i in queued.indices.reversed() {
+            if now.timeIntervalSince(queued[i].timestamp) > Self.messageTTLSeconds {
+                queued.remove(at: i)
+            }
+        }
+
+        // Send in order (oldest first) to preserve message ordering
+        for i in queued.indices {
+            // Skip messages recently sent (waiting for delivery ack)
+            if let sentAt = queued[i].sentAt, now.timeIntervalSince(sentAt) < Self.resendCooldownSeconds {
                 continue
             }
 
-            // Use connectedTransport to ensure the peer has an active link
+            // Send if transport is available
             if let transport = transport {
-                transport.sendPrivateMessage(message.content, to: normalizedPeerID, recipientNickname: message.nickname, messageID: message.messageID)
+                transport.sendPrivateMessage(queued[i].content, to: normalizedPeerID, recipientNickname: queued[i].nickname, messageID: queued[i].messageID)
+                queued[i].sentAt = now
                 sentCount += 1
-            } else {
-                remaining.append(message)
             }
         }
 
-        if remaining.isEmpty {
+        if queued.isEmpty {
             outbox.removeValue(forKey: normalizedPeerID)
         } else {
-            outbox[normalizedPeerID] = remaining
+            outbox[normalizedPeerID] = queued
         }
 
-        SecureLogger.debug("Flush result for \(normalizedPeerID.id.prefix(8))…: sent=\(sentCount) remaining=\(remaining.count)", category: .session)
+        if sentCount > 0 {
+            SecureLogger.debug("Flush for \(normalizedPeerID.id.prefix(8))…: sent=\(sentCount) remaining=\(queued.count)", category: .session)
+        }
     }
 
     func flushAllOutbox() {
@@ -162,6 +174,30 @@ final class MessageRouter {
         guard !pending.isEmpty else { return }
         SecureLogger.debug("Flushing all outboxes: \(pending.count) peers pending", category: .session)
         for key in pending { flushOutbox(for: key) }
+    }
+
+    /// Remove a message from the outbox after delivery is confirmed via ack.
+    func confirmDelivery(messageID: String) {
+        for peerID in Array(outbox.keys) {
+            if let idx = outbox[peerID]?.firstIndex(where: { $0.messageID == messageID }) {
+                outbox[peerID]?.remove(at: idx)
+                if outbox[peerID]?.isEmpty == true {
+                    outbox.removeValue(forKey: peerID)
+                }
+                return
+            }
+        }
+    }
+
+    /// Clear sentAt timestamps for a peer so queued messages are resent on reconnect.
+    func resetSendState(for peerID: PeerID) {
+        let normalizedPeerID = peerID.toShort()
+        guard var queued = outbox[normalizedPeerID], !queued.isEmpty else { return }
+        for i in queued.indices {
+            queued[i].sentAt = nil
+        }
+        outbox[normalizedPeerID] = queued
+        SecureLogger.debug("Reset send state for \(normalizedPeerID.id.prefix(8))…: \(queued.count) messages will be resent", category: .session)
     }
 
     /// Periodically clean up expired messages from all outboxes
