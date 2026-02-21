@@ -3237,18 +3237,26 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
     // MARK: - Peer Connection Events
 
     func didConnectToPeer(_ peerID: PeerID) {
-        SecureLogger.debug("🤝 Peer connected: \(peerID)", category: .session)
-        
+        SecureLogger.debug("Peer connected: \(peerID) (short: \(peerID.toShort()))", category: .session)
+
         // Handle all main actor work async
         Task { @MainActor in
             isConnected = true
-            
+
+            // Flush queued messages as early as possible after marking connected
+            messageRouter.flushOutbox(for: peerID)
+
+            let pendingAfterFlush = messageRouter.pendingPeerIDs
+            if !pendingAfterFlush.isEmpty {
+                SecureLogger.debug("Post-flush outbox still has \(pendingAfterFlush.count) peers pending", category: .session)
+            }
+
             // Register ephemeral session with identity manager
             identityManager.registerEphemeralSession(peerID: peerID, handshakeState: .none)
-            
+
             // Intentionally do not resend favorites on reconnect.
             // We only send our npub when a favorite is toggled on, or if our npub changes.
-            
+
             // Force UI refresh
             objectWillChange.send()
 
@@ -3257,15 +3265,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
                 let noiseKeyHex = PeerID(hexData: peer.noisePublicKey)
                 shortIDToNoiseKey[peerID] = noiseKeyHex
             }
-
-            // Flush any queued messages for this peer via router
-            messageRouter.flushOutbox(for: peerID)
         }
     }
     
     func didDisconnectFromPeer(_ peerID: PeerID) {
         SecureLogger.debug("👋 Peer disconnected: \(peerID)", category: .session)
-        
+
         // Remove ephemeral session from identity manager
         identityManager.removeEphemeralSession(peerID: peerID)
 
@@ -3392,6 +3397,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
             
             // Don't end private chat when peer temporarily disconnects
             // The fingerprint tracking will allow us to reconnect when they come back
+
+            // Redundant flush: didConnectToPeer can be suppressed (e.g. signature
+            // verification failure on reconnect). didUpdatePeerList fires on every
+            // announce, so flushing here ensures queued messages are delivered even
+            // when didConnectToPeer never fires. The connectedTransport check inside
+            // flushOutbox ensures we only send when the peer is truly connected.
+            self.messageRouter.flushAllOutbox()
         }
     }
     
@@ -3609,11 +3621,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
             privateChats[peerID]?[index].deliveryStatus = status
         }
         
+
         // Trigger UI update for delivery status change
         DispatchQueue.main.async { [weak self] in
             self?.objectWillChange.send()
         }
-        
+
     }
     
     // MARK: - Helper for System Messages
