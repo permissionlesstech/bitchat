@@ -88,9 +88,6 @@ final class MessageRouter {
             SecureLogger.warning("Outbox overflow for \(normalizedPeerID.id.prefix(8))… - evicted oldest message: \(evicted?.messageID.prefix(8) ?? "?")…", category: .session)
         }
 
-        let isConnected = connectedTransport(for: normalizedPeerID) != nil
-        SecureLogger.debug("OUTBOX-DIAG sendPrivate: peer=\(normalizedPeerID.id) id=\(messageID.prefix(8))… queue=\(outbox[normalizedPeerID]?.count ?? 0) connected=\(isConnected)", category: .session)
-
         // Try immediate delivery
         flushOutbox(for: normalizedPeerID)
     }
@@ -173,15 +170,14 @@ final class MessageRouter {
             outbox[normalizedPeerID] = queued
         }
 
-        let unsent = queued.filter { $0.sentAt == nil }.count
-        let cooldownBlocked = queued.filter { if let s = $0.sentAt { return now.timeIntervalSince(s) < Self.resendCooldownSeconds } else { return false } }.count
-        SecureLogger.debug("OUTBOX-DIAG flush peer=\(normalizedPeerID.id): transport=\(transport != nil) sent=\(sentCount) unsent=\(unsent) cooldown=\(cooldownBlocked) total=\(queued.count)", category: .session)
+        if sentCount > 0 {
+            SecureLogger.debug("Flushed \(sentCount) message(s) for \(normalizedPeerID.id.prefix(8))…", category: .session)
+        }
     }
 
     func flushAllOutbox() {
         let pending = Array(outbox.keys)
         guard !pending.isEmpty else { return }
-        SecureLogger.debug("OUTBOX-DIAG flushAll: \(pending.count) peers pending, keys=\(pending.map { $0.id })", category: .session)
         for key in pending { flushOutbox(for: key) }
     }
 

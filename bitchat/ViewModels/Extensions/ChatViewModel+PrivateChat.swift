@@ -84,28 +84,14 @@ extension ChatViewModel {
         // Trigger UI update for sent message
         objectWillChange.send()
         
-        // Send via appropriate transport (BLE if connected/reachable, else Nostr when possible)
-        if isConnected || isReachable || (isMutualFavorite && hasNostrKey) {
-            messageRouter.sendPrivate(content, to: peerID, recipientNickname: recipientNickname ?? "user", messageID: messageID)
-            // Optimistically mark as sent for both transports; delivery/read will update subsequently
-            if let idx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
-                privateChats[peerID]?[idx].deliveryStatus = .sent
-            }
-        } else {
-            // Update delivery status to failed
-            if let index = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
-                privateChats[peerID]?[index].deliveryStatus = .failed(
-                    reason: String(localized: "content.delivery.reason.unreachable", comment: "Failure reason when a peer is unreachable")
-                )
-            }
-            let name = recipientNickname ?? "user"
-            addSystemMessage(
-                String(
-                    format: String(localized: "system.dm.unreachable", comment: "System message when a recipient is unreachable"),
-                    locale: .current,
-                    name
-                )
-            )
+        // Always delegate to MessageRouter - it handles queuing when peer is unreachable
+        // This enables offline message delivery when peer connects later (e.g., airplane mode)
+        messageRouter.sendPrivate(content, to: peerID, recipientNickname: recipientNickname ?? "user", messageID: messageID)
+        
+        // Update status: .sent if deliverable now, .sending if queued for later
+        let isDeliverableNow = isConnected || isReachable || (isMutualFavorite && hasNostrKey)
+        if let idx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
+            privateChats[peerID]?[idx].deliveryStatus = isDeliverableNow ? .sent : .sending
         }
     }
     

@@ -632,24 +632,13 @@ final class BLEService: NSObject {
         return collectionsQueue.sync {
             // Must be mesh-attached: at least one live direct link to the mesh
             let meshAttached = peers.values.contains { $0.isConnected }
-            guard let info = peers[shortID] else {
-                SecureLogger.debug("🔍 isPeerReachable(\(shortID.id.prefix(8))…): NOT FOUND in peers dict, keys: \(peers.keys.map { $0.id.prefix(8).description })", category: .session)
-                return false
-            }
-            if info.isConnected {
-                SecureLogger.debug("🔍 isPeerReachable(\(shortID.id.prefix(8))…): CONNECTED", category: .session)
-                return true
-            }
-            guard meshAttached else {
-                SecureLogger.debug("🔍 isPeerReachable(\(shortID.id.prefix(8))…): NOT mesh-attached", category: .session)
-                return false
-            }
+            guard let info = peers[shortID] else { return false }
+            if info.isConnected { return true }
+            guard meshAttached else { return false }
             // Apply reachability retention window
             let isVerified = info.isVerifiedNickname
             let retention: TimeInterval = isVerified ? TransportConfig.bleReachabilityRetentionVerifiedSeconds : TransportConfig.bleReachabilityRetentionUnverifiedSeconds
-            let withinRetention = Date().timeIntervalSince(info.lastSeen) <= retention
-            SecureLogger.debug("🔍 isPeerReachable(\(shortID.id.prefix(8))…): retention check, within=\(withinRetention)", category: .session)
-            return withinRetention
+            return Date().timeIntervalSince(info.lastSeen) <= retention
         }
     }
 
@@ -2907,6 +2896,12 @@ extension BLEService {
             self?.messageQueue.async { [weak self] in
                 self?.sendAnnounce(forceSend: true)
             }
+            // Notify delegate so MessageRouter can flush its outbox now that
+            // the Noise session is established and sendPrivateMessage will
+            // return true (actually transmit instead of internally queueing).
+            self?.notifyUI { [weak self] in
+                self?.delegate?.didEstablishEncryptedSession(with: peerID)
+            }
         }
     }
 
@@ -3178,11 +3173,8 @@ extension BLEService {
     /// Returns `true` when the message was encrypted and broadcast (Noise session exists),
     /// `false` when it was queued internally pending handshake completion.
     private func sendPrivateMessage(_ content: String, to recipientID: PeerID, messageID: String) -> Bool {
-        let hasSession = noiseService.hasEstablishedSession(with: recipientID)
-        SecureLogger.debug("OUTBOX-DIAG BLE sendPM to \(recipientID.id) id=\(messageID.prefix(8))… hasNoiseSession=\(hasSession)", category: .session)
-
         // Check if we have an established Noise session
-        if hasSession {
+        if noiseService.hasEstablishedSession(with: recipientID) {
             // Encrypt and send
             do {
                 // Create TLV-encoded private message

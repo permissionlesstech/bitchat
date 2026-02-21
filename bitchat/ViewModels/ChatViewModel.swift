@@ -3239,7 +3239,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
     // MARK: - Peer Connection Events
 
     func didConnectToPeer(_ peerID: PeerID) {
-        SecureLogger.debug("Peer connected: \(peerID) (short: \(peerID.toShort()))", category: .session)
+        SecureLogger.debug("Peer connected: \(peerID)", category: .session)
 
         // Handle all main actor work async
         Task { @MainActor in
@@ -3249,11 +3249,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
             // are resent immediately on this new connection
             messageRouter.resetSendState(for: peerID)
             messageRouter.flushOutbox(for: peerID)
-
-            let pendingAfterFlush = messageRouter.pendingPeerIDs
-            if !pendingAfterFlush.isEmpty {
-                SecureLogger.debug("Post-flush outbox still has \(pendingAfterFlush.count) peers pending", category: .session)
-            }
 
             // Register ephemeral session with identity manager
             identityManager.registerEphemeralSession(peerID: peerID, handshakeState: .none)
@@ -3272,6 +3267,16 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
         }
     }
     
+    func didEstablishEncryptedSession(with peerID: PeerID) {
+        Task { @MainActor in
+            // Noise session is now fully established — flush the outbox.
+            // Earlier flushes (from didConnectToPeer / didUpdatePeerList) likely
+            // returned false because the handshake wasn't complete yet.
+            messageRouter.resetSendState(for: peerID)
+            messageRouter.flushOutbox(for: peerID)
+        }
+    }
+
     func didDisconnectFromPeer(_ peerID: PeerID) {
         SecureLogger.debug("👋 Peer disconnected: \(peerID)", category: .session)
 
@@ -3402,11 +3407,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
             // Don't end private chat when peer temporarily disconnects
             // The fingerprint tracking will allow us to reconnect when they come back
 
-            // Redundant flush: didConnectToPeer can be suppressed (e.g. signature
-            // verification failure on reconnect). didUpdatePeerList fires on every
-            // announce, so flushing here ensures queued messages are delivered even
-            // when didConnectToPeer never fires. The connectedTransport check inside
-            // flushOutbox ensures we only send when the peer is truly connected.
+            // Best-effort flush: works when a Noise session is already established
+            // from a prior connection. The primary flush path is
+            // didEstablishEncryptedSession, which fires after handshake completion.
             self.messageRouter.flushAllOutbox()
         }
     }
