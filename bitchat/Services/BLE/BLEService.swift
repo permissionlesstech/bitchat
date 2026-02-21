@@ -632,13 +632,24 @@ final class BLEService: NSObject {
         return collectionsQueue.sync {
             // Must be mesh-attached: at least one live direct link to the mesh
             let meshAttached = peers.values.contains { $0.isConnected }
-            guard let info = peers[shortID] else { return false }
-            if info.isConnected { return true }
-            guard meshAttached else { return false }
+            guard let info = peers[shortID] else {
+                SecureLogger.debug("🔍 isPeerReachable(\(shortID.id.prefix(8))…): NOT FOUND in peers dict, keys: \(peers.keys.map { $0.id.prefix(8).description })", category: .session)
+                return false
+            }
+            if info.isConnected {
+                SecureLogger.debug("🔍 isPeerReachable(\(shortID.id.prefix(8))…): CONNECTED", category: .session)
+                return true
+            }
+            guard meshAttached else {
+                SecureLogger.debug("🔍 isPeerReachable(\(shortID.id.prefix(8))…): NOT mesh-attached", category: .session)
+                return false
+            }
             // Apply reachability retention window
             let isVerified = info.isVerifiedNickname
             let retention: TimeInterval = isVerified ? TransportConfig.bleReachabilityRetentionVerifiedSeconds : TransportConfig.bleReachabilityRetentionUnverifiedSeconds
-            return Date().timeIntervalSince(info.lastSeen) <= retention
+            let withinRetention = Date().timeIntervalSince(info.lastSeen) <= retention
+            SecureLogger.debug("🔍 isPeerReachable(\(shortID.id.prefix(8))…): retention check, within=\(withinRetention)", category: .session)
+            return withinRetention
         }
     }
 
@@ -717,8 +728,9 @@ final class BLEService: NSObject {
         sendMessage(content, mentions: mentions, to: nil, messageID: messageID, timestamp: timestamp)
     }
     
-    func sendPrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) {
-        sendPrivateMessage(content, to: peerID, messageID: messageID)
+    @discardableResult
+    func sendPrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) -> Bool {
+        return sendPrivateMessage(content, to: peerID, messageID: messageID)
     }
 
     func sendFileBroadcast(_ filePacket: BitchatFilePacket, transferId: String) {
@@ -3163,26 +3175,29 @@ extension BLEService {
     
     // MARK: Private Message Handling
     
-    private func sendPrivateMessage(_ content: String, to recipientID: PeerID, messageID: String) {
-        SecureLogger.debug("📨 Sending PM to \(recipientID): \(content.prefix(30))...", category: .session)
-        
+    /// Returns `true` when the message was encrypted and broadcast (Noise session exists),
+    /// `false` when it was queued internally pending handshake completion.
+    private func sendPrivateMessage(_ content: String, to recipientID: PeerID, messageID: String) -> Bool {
+        let hasSession = noiseService.hasEstablishedSession(with: recipientID)
+        SecureLogger.debug("OUTBOX-DIAG BLE sendPM to \(recipientID.id) id=\(messageID.prefix(8))… hasNoiseSession=\(hasSession)", category: .session)
+
         // Check if we have an established Noise session
-        if noiseService.hasEstablishedSession(with: recipientID) {
+        if hasSession {
             // Encrypt and send
             do {
                 // Create TLV-encoded private message
                 let privateMessage = PrivateMessagePacket(messageID: messageID, content: content)
                 guard let tlvData = privateMessage.encode() else {
                     SecureLogger.error("Failed to encode private message with TLV")
-                    return
+                    return false
                 }
-                
+
                 // Create message payload with TLV: [type byte] + [TLV data]
                 var messagePayload = Data([NoisePayloadType.privateMessage.rawValue])
                 messagePayload.append(tlvData)
-                
+
                 let encrypted = try noiseService.encrypt(messagePayload, for: recipientID)
-                
+
                 // Convert recipientID to Data (assuming it's a hex string)
                 var recipientData = Data()
                 var tempID = recipientID.id
@@ -3208,34 +3223,41 @@ extension BLEService {
                     signature: nil,
                     ttl: messageTTL
                 )
-                
+
                 broadcastPacket(packet)
-                
+
                 // Notify delegate that message was sent
                 notifyUI { [weak self] in
                     self?.delegate?.didUpdateMessageDeliveryStatus(messageID, status: .sent)
                 }
+                return true
             } catch {
                 SecureLogger.error("Failed to encrypt message: \(error)")
+                return false
             }
         } else {
             // Queue message for sending after handshake completes
             SecureLogger.debug("🤝 No session with \(recipientID), initiating handshake and queueing message", category: .session)
-            
-            // Queue the message (especially important for favorite notifications)
+
+            // Queue the message (deduplicate by messageID to prevent repeated flush attempts
+            // from adding duplicates while waiting for handshake completion)
             collectionsQueue.sync(flags: .barrier) {
                 if pendingMessagesAfterHandshake[recipientID] == nil {
                     pendingMessagesAfterHandshake[recipientID] = []
                 }
-                pendingMessagesAfterHandshake[recipientID]?.append((content, messageID))
+                let alreadyQueued = pendingMessagesAfterHandshake[recipientID]?.contains { $0.messageID == messageID } ?? false
+                if !alreadyQueued {
+                    pendingMessagesAfterHandshake[recipientID]?.append((content, messageID))
+                }
             }
-            
+
             initiateNoiseHandshake(with: recipientID)
-            
+
             // Notify delegate that message is pending
             notifyUI { [weak self] in
                 self?.delegate?.didUpdateMessageDeliveryStatus(messageID, status: .sending)
             }
+            return false
         }
     }
     

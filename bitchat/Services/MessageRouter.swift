@@ -69,6 +69,10 @@ final class MessageRouter {
         // Normalize to short ID for consistent outbox keying (handles both 16-hex and 64-hex formats)
         let normalizedPeerID = peerID.toShort()
 
+        // When the user actively sends a new message, clear cooldown on any
+        // queued messages so they are retried in the same flush pass.
+        resetSendState(for: normalizedPeerID)
+
         // Always-queue-first: append to outbox, then flush immediately.
         // Messages stay in the outbox until a delivery ack confirms receipt.
         // When peer is connected, the message is queued and instantly flushed (sent).
@@ -85,7 +89,7 @@ final class MessageRouter {
         }
 
         let isConnected = connectedTransport(for: normalizedPeerID) != nil
-        SecureLogger.debug("Queued PM for \(normalizedPeerID.id.prefix(8))… id=\(messageID.prefix(8))… queue=\(outbox[normalizedPeerID]?.count ?? 0) connected=\(isConnected)", category: .session)
+        SecureLogger.debug("OUTBOX-DIAG sendPrivate: peer=\(normalizedPeerID.id) id=\(messageID.prefix(8))… queue=\(outbox[normalizedPeerID]?.count ?? 0) connected=\(isConnected)", category: .session)
 
         // Try immediate delivery
         flushOutbox(for: normalizedPeerID)
@@ -152,9 +156,14 @@ final class MessageRouter {
 
             // Send if transport is available
             if let transport = transport {
-                transport.sendPrivateMessage(queued[i].content, to: normalizedPeerID, recipientNickname: queued[i].nickname, messageID: queued[i].messageID)
-                queued[i].sentAt = now
-                sentCount += 1
+                // Only mark sentAt when the transport actually encrypted and transmitted
+                // the message. If BLE queued it internally (no Noise session), sentAt
+                // stays nil so the next flush will retry.
+                let wasSent = transport.sendPrivateMessage(queued[i].content, to: normalizedPeerID, recipientNickname: queued[i].nickname, messageID: queued[i].messageID)
+                if wasSent {
+                    queued[i].sentAt = now
+                    sentCount += 1
+                }
             }
         }
 
@@ -164,15 +173,15 @@ final class MessageRouter {
             outbox[normalizedPeerID] = queued
         }
 
-        if sentCount > 0 {
-            SecureLogger.debug("Flush for \(normalizedPeerID.id.prefix(8))…: sent=\(sentCount) remaining=\(queued.count)", category: .session)
-        }
+        let unsent = queued.filter { $0.sentAt == nil }.count
+        let cooldownBlocked = queued.filter { if let s = $0.sentAt { return now.timeIntervalSince(s) < Self.resendCooldownSeconds } else { return false } }.count
+        SecureLogger.debug("OUTBOX-DIAG flush peer=\(normalizedPeerID.id): transport=\(transport != nil) sent=\(sentCount) unsent=\(unsent) cooldown=\(cooldownBlocked) total=\(queued.count)", category: .session)
     }
 
     func flushAllOutbox() {
         let pending = Array(outbox.keys)
         guard !pending.isEmpty else { return }
-        SecureLogger.debug("Flushing all outboxes: \(pending.count) peers pending", category: .session)
+        SecureLogger.debug("OUTBOX-DIAG flushAll: \(pending.count) peers pending, keys=\(pending.map { $0.id })", category: .session)
         for key in pending { flushOutbox(for: key) }
     }
 
