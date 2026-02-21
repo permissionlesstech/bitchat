@@ -66,7 +66,7 @@ struct ChatViewModelPrivateChatExtensionTests {
     }
 
     @Test @MainActor
-    func sendPrivateMessage_unreachable_setsFailedStatus() async {
+    func sendPrivateMessage_unreachable_setsSendingStatus() async {
         let (viewModel, _) = makeTestableViewModel()
         let validHex = "0102030405060708090a0b0c0d0e0f100102030405060708090a0b0c0d0e0f10"
         let peerID = PeerID(str: validHex)
@@ -75,8 +75,10 @@ struct ChatViewModelPrivateChatExtensionTests {
 
         #expect(viewModel.privateChats[peerID]?.count == 1)
         let status = viewModel.privateChats[peerID]?.last?.deliveryStatus
+        // With offline queuing fix, unreachable peers get .sending (queued for later delivery)
+        // instead of .failed - this enables airplane mode messaging
         #expect({
-            if case .failed = status { return true }
+            if case .sending = status { return true }
             return false
         }())
     }

@@ -200,7 +200,7 @@ struct MessageRouterTests {
     }
 
     @Test @MainActor
-    func sendPrivate_resetsCoooldownForQueuedMessages() async {
+    func sendPrivate_resetsCooldownForQueuedMessages() async {
         let peerID = PeerID(str: "000000000000000d")
         let transport = MockTransport()
         transport.connectedPeers.insert(peerID)
@@ -222,6 +222,49 @@ struct MessageRouterTests {
         #expect(transport.sentPrivateMessages.count == 3, "Both M1 and M2 should be sent")
         #expect(transport.sentPrivateMessages[1].content == "M1", "M1 resent first")
         #expect(transport.sentPrivateMessages[2].content == "M2", "M2 sent second")
+    }
+
+    @Test @MainActor
+    func flushAfterNoiseSession_sendsAllQueuedMessages() async {
+        let peerID = PeerID(str: "000000000000000e")
+        let transport = MockTransport()
+        transport.connectedPeers.insert(peerID)
+        // Simulate BLE before Noise handshake — transport queues internally
+        transport.sendPrivateMessageResult = false
+
+        let router = MessageRouter(transports: [transport])
+
+        // Queue 3 messages while peer is connected but Noise isn't ready.
+        // Each sendPrivate call triggers an internal flushOutbox which retries
+        // all pending messages (sentAt stays nil because transport returns false).
+        router.sendPrivate("M1", to: peerID, recipientNickname: "Peer", messageID: "m1")
+        router.sendPrivate("M2", to: peerID, recipientNickname: "Peer", messageID: "m2")
+        router.sendPrivate("M3", to: peerID, recipientNickname: "Peer", messageID: "m3")
+
+        // All still pending (transport returned false every time)
+        #expect(router.pendingPeerIDs.count == 1, "All still pending")
+        let callsBeforeHandshake = transport.sentPrivateMessages.count
+
+        // Simulate Noise handshake completing (didEstablishEncryptedSession path)
+        transport.sendPrivateMessageResult = true
+        router.resetSendState(for: peerID)
+        router.flushOutbox(for: peerID)
+
+        // All 3 messages should now be sent successfully
+        let newCalls = transport.sentPrivateMessages.count - callsBeforeHandshake
+        #expect(newCalls == 3, "All 3 sent after session established")
+
+        // Verify order and content of the successful sends
+        let successfulSends = transport.sentPrivateMessages.suffix(3)
+        #expect(successfulSends[successfulSends.startIndex].content == "M1")
+        #expect(successfulSends[successfulSends.startIndex + 1].content == "M2")
+        #expect(successfulSends[successfulSends.startIndex + 2].content == "M3")
+
+        // Confirm all deliveries
+        router.confirmDelivery(messageID: "m1")
+        router.confirmDelivery(messageID: "m2")
+        router.confirmDelivery(messageID: "m3")
+        #expect(router.pendingPeerIDs.isEmpty)
     }
 
     @Test @MainActor
