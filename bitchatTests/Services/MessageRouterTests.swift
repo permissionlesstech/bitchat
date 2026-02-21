@@ -169,6 +169,62 @@ struct MessageRouterTests {
     }
 
     @Test @MainActor
+    func flushOutbox_doesNotSetSentAtWhenTransportReturnsFalse() async {
+        let peerID = PeerID(str: "000000000000000c")
+        let transport = MockTransport()
+        transport.connectedPeers.insert(peerID)
+        transport.reachablePeers.insert(peerID)
+        // Simulate BLE with no Noise session — transport queues internally
+        transport.sendPrivateMessageResult = false
+
+        let router = MessageRouter(transports: [transport])
+
+        // Queue and flush — transport returns false
+        router.sendPrivate("Hello", to: peerID, recipientNickname: "Peer", messageID: "m1")
+        #expect(transport.sentPrivateMessages.count == 1, "Transport was called")
+        #expect(router.pendingPeerIDs.count == 1, "Message stays in outbox")
+
+        // Flush again — since sentAt was NOT set (transport returned false),
+        // the message should be retried immediately (no cooldown)
+        router.flushOutbox(for: peerID)
+        #expect(transport.sentPrivateMessages.count == 2, "Message retried because sentAt was not set")
+
+        // Now simulate Noise session established — transport returns true
+        transport.sendPrivateMessageResult = true
+        router.flushOutbox(for: peerID)
+        #expect(transport.sentPrivateMessages.count == 3, "Message sent again")
+
+        // Now message has sentAt set — cooldown should block immediate retry
+        router.flushOutbox(for: peerID)
+        #expect(transport.sentPrivateMessages.count == 3, "Cooldown blocks retry")
+    }
+
+    @Test @MainActor
+    func sendPrivate_resetsCoooldownForQueuedMessages() async {
+        let peerID = PeerID(str: "000000000000000d")
+        let transport = MockTransport()
+        transport.connectedPeers.insert(peerID)
+        transport.reachablePeers.insert(peerID)
+
+        let router = MessageRouter(transports: [transport])
+
+        // Send first message — sentAt is set (transport returns true by default)
+        router.sendPrivate("M1", to: peerID, recipientNickname: "Peer", messageID: "m1")
+        #expect(transport.sentPrivateMessages.count == 1)
+
+        // Flushing again is blocked by cooldown
+        router.flushOutbox(for: peerID)
+        #expect(transport.sentPrivateMessages.count == 1)
+
+        // User sends a second message — this should reset cooldown for M1
+        // so both messages are sent in the same flush
+        router.sendPrivate("M2", to: peerID, recipientNickname: "Peer", messageID: "m2")
+        #expect(transport.sentPrivateMessages.count == 3, "Both M1 and M2 should be sent")
+        #expect(transport.sentPrivateMessages[1].content == "M1", "M1 resent first")
+        #expect(transport.sentPrivateMessages[2].content == "M2", "M2 sent second")
+    }
+
+    @Test @MainActor
     func sendReadReceipt_usesReachableTransport() async {
         let peerID = PeerID(str: "0000000000000004")
         let transport = MockTransport()

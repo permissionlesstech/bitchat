@@ -46,7 +46,8 @@ protocol Transport: AnyObject {
     // Messaging
     func sendMessage(_ content: String, mentions: [String])
     func sendMessage(_ content: String, mentions: [String], messageID: String, timestamp: Date)
-    func sendPrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String)
+    @discardableResult
+    func sendPrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) -> Bool
     func sendReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID)
     func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool)
     func sendBroadcastAnnounce()
