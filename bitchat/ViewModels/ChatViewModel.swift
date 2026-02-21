@@ -3089,6 +3089,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
                 if case .read = privateChats[foundPeerID]?[idx].deliveryStatus { return }
 
                 privateChats[foundPeerID]?[idx].deliveryStatus = .delivered(to: name, at: Date())
+                messageRouter.confirmDelivery(messageID: messageID)
                 objectWillChange.send()
 
             case .readReceipt:
@@ -3100,6 +3101,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
                 if let messages = privateChats[foundPeerID], idx < messages.count {
                     messages[idx].deliveryStatus = .read(by: name, at: Date())
                     privateChats[foundPeerID] = messages
+                    messageRouter.confirmDelivery(messageID: messageID)
                     privateChatManager.objectWillChange.send()
                     objectWillChange.send()
                 }
@@ -3243,7 +3245,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
         Task { @MainActor in
             isConnected = true
 
-            // Flush queued messages as early as possible after marking connected
+            // Reset send timestamps so previously-sent-but-unacknowledged messages
+            // are resent immediately on this new connection
+            messageRouter.resetSendState(for: peerID)
             messageRouter.flushOutbox(for: peerID)
 
             let pendingAfterFlush = messageRouter.pendingPeerIDs
