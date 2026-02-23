@@ -184,21 +184,21 @@ struct ContentView: View {
             )
         ) {
             peopleSheetView
+              .sheet(isPresented: Binding(
+                get: { viewModel.showingFingerprintFor != nil },
+                set: { _ in viewModel.showingFingerprintFor = nil }
+              )) {
+                if let peerID = viewModel.showingFingerprintFor {
+                  FingerprintView(viewModel: viewModel, peerID: peerID)
+                    .environmentObject(viewModel)
+                }
+              }
         }
         .sheet(isPresented: $showAppInfo) {
             AppInfoView()
                 .environmentObject(viewModel)
                 .onAppear { viewModel.isAppInfoPresented = true }
                 .onDisappear { viewModel.isAppInfoPresented = false }
-        }
-        .sheet(isPresented: Binding(
-            get: { viewModel.showingFingerprintFor != nil },
-            set: { _ in viewModel.showingFingerprintFor = nil }
-        )) {
-            if let peerID = viewModel.showingFingerprintFor {
-                FingerprintView(viewModel: viewModel, peerID: peerID)
-                    .environmentObject(viewModel)
-            }
         }
 #if os(iOS)
         // Only present image picker from main view when NOT in a sheet
