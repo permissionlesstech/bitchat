@@ -114,20 +114,19 @@ struct PrivateMessagePacket {
     }
 
     func encode() -> Data? {
-        var data = Data()
-        data.reserveCapacity(2 + min(messageID.count, 255) + 2 + min(content.count, 255))
-
-        // TLV for messageID
         guard let messageIDData = messageID.data(using: .utf8), messageIDData.count <= 255 else { return nil }
+        guard let contentData = content.data(using: .utf8), contentData.count <= 65535 else { return nil }
+
+        var data = Data()
+        let estimatedMessageLength = 1 + 1 + messageIDData.count
+    let estimatedContentLength = contentData.count >= 255 ? 1 + 3 + contentData.count : 1 + 2 + contentData.count
+        data.reserveCapacity(estimatedMessageLength + estimatedContentLength)
+
         data.append(TLVType.messageID.rawValue)
         data.append(UInt8(messageIDData.count))
         data.append(messageIDData)
 
-        // TLV for content
-        guard let contentData = content.data(using: .utf8), contentData.count <= 255 else { return nil }
-        data.append(TLVType.content.rawValue)
-        data.append(UInt8(contentData.count))
-        data.append(contentData)
+        appendContentTLV(value: contentData, into: &data)
 
         return data
     }
@@ -141,22 +140,54 @@ struct PrivateMessagePacket {
             guard let type = TLVType(rawValue: data[offset]) else { return nil }
             offset += 1
 
-            let length = Int(data[offset])
-            offset += 1
-
-            guard offset + length <= data.count else { return nil }
-            let value = data[offset..<offset + length]
-            offset += length
-
             switch type {
             case .messageID:
+                guard offset < data.count else { return nil }
+                let length = Int(data[offset])
+                offset += 1
+                guard offset + length <= data.count else { return nil }
+                let value = data[offset..<offset + length]
+                offset += length
                 messageID = String(data: value, encoding: .utf8)
             case .content:
+                guard let length = readContentLength(from: data, offset: &offset) else { return nil }
+                guard offset + length <= data.count else { return nil }
+                let value = data[offset..<offset + length]
+                offset += length
                 content = String(data: value, encoding: .utf8)
             }
         }
 
         guard let messageID = messageID, let content = content else { return nil }
         return PrivateMessagePacket(messageID: messageID, content: content)
+    }
+
+    private func appendContentTLV(value: Data, into buffer: inout Data) {
+        buffer.append(TLVType.content.rawValue)
+        if value.count < 255 {
+            buffer.append(UInt8(value.count))
+        } else {
+            buffer.append(0xFF)
+            buffer.appendUInt16(UInt16(value.count))
+        }
+        buffer.append(value)
+    }
+
+    private static func readContentLength(from data: Data, offset: inout Int) -> Int? {
+        guard offset < data.count else { return nil }
+        let firstByte = Int(data[offset])
+        offset += 1
+
+        if firstByte < 255 {
+            return firstByte
+        }
+
+        guard offset + 2 <= data.count else { return nil }
+        let high = Int(data[offset])
+        let low = Int(data[offset + 1])
+        offset += 2
+
+        let length = (high << 8) | low
+        return length <= 65535 ? length : nil
     }
 }
