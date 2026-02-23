@@ -765,7 +765,8 @@ private enum ParsedInbound {
                let subId = array[1] as? String,
                let eventDict = array[2] as? [String: Any],
                let event = try? NostrEvent(from: eventDict),
-               event.isValidSignature() {
+               event.isValidSignature(),
+               event.hasValidTimestamp() {
                 self = .event(subId: subId, event: event)
                 return
             }
