@@ -27,6 +27,22 @@ private struct MessageDisplayItem: Identifiable {
     let message: BitchatMessage
 }
 
+/// On macOS 14+, disables the default system focus ring on TextFields.
+/// On earlier macOS versions and on iOS this is a no-op.
+private struct FocusEffectDisabledModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        #if os(macOS)
+        if #available(macOS 14.0, *) {
+            content.focusEffectDisabled()
+        } else {
+            content
+        }
+        #else
+        content
+        #endif
+    }
+}
+
 // MARK: - Main Content View
 
 struct ContentView: View {
@@ -645,6 +661,7 @@ struct ContentView: View {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(colorScheme == .dark ? Color.black.opacity(0.35) : Color.white.opacity(0.7))
                 )
+                .modifier(FocusEffectDisabledModifier())
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .onChange(of: messageText) { newValue in
                     autocompleteDebounceTimer?.invalidate()
@@ -1243,6 +1260,7 @@ struct ContentView: View {
                     #if os(iOS)
                     .textInputAutocapitalization(.never)
                     #endif
+                    .modifier(FocusEffectDisabledModifier())
                     .onChange(of: isNicknameFieldFocused) { isFocused in
                         if !isFocused {
                             // Only validate when losing focus
