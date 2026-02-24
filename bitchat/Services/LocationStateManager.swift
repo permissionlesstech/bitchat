@@ -460,12 +460,12 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
             geocoder.reverseGeocodeLocation(loc) { [weak self] placemarks, _ in
                 guard self != nil else { return }
                 if let pm = placemarks?.first {
-                    if let admin = pm.administrativeArea, !admin.isEmpty, !seenAdmins.contains(admin) {
-                        seenAdmins.insert(admin)
-                        uniqueAdmins.append(admin)
-                    } else if let country = pm.country, !country.isEmpty, !seenAdmins.contains(country) {
+                    if let country = pm.country, !country.isEmpty, !seenAdmins.contains(country) {
                         seenAdmins.insert(country)
                         uniqueAdmins.append(country)
+                    } else if let admin = pm.administrativeArea, !admin.isEmpty, !seenAdmins.contains(admin) {
+                        seenAdmins.insert(admin)
+                        uniqueAdmins.append(admin)
                     }
                 }
                 step()
@@ -477,7 +477,7 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
     private static func nameForGeohashLength(_ len: Int, from pm: CLPlacemark) -> String? {
         switch len {
         case 0...2:
-            return pm.administrativeArea ?? pm.country
+            return pm.country ?? pm.administrativeArea
         case 3...4:
             return pm.administrativeArea ?? pm.subAdministrativeArea ?? pm.country
         case 5:
