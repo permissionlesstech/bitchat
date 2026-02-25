@@ -460,9 +460,11 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
             geocoder.reverseGeocodeLocation(loc) { [weak self] placemarks, _ in
                 guard self != nil else { return }
                 if let pm = placemarks?.first {
-                    if let country = pm.country, !country.isEmpty, !seenAdmins.contains(country) {
-                        seenAdmins.insert(country)
-                        uniqueAdmins.append(country)
+                    if let country = pm.country, !country.isEmpty {
+                        if !seenAdmins.contains(country) {
+                            seenAdmins.insert(country)
+                            uniqueAdmins.append(country)
+                        }
                     } else if let admin = pm.administrativeArea, !admin.isEmpty, !seenAdmins.contains(admin) {
                         seenAdmins.insert(admin)
                         uniqueAdmins.append(admin)
