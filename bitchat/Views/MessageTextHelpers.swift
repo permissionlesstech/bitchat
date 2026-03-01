@@ -6,19 +6,26 @@
 import Foundation
 
 extension String {
-    // Detect if there is an extremely long token (no whitespace/newlines) that could break layout
-    func hasVeryLongToken(threshold: Int) -> Bool {
+    // Returns the maximum contiguous token length (no whitespace/newlines)
+    func maxTokenLength() -> Int {
         var current = 0
+        var maxLen = 0
         for ch in self {
             if ch.isWhitespace || ch.isNewline {
-                if current >= threshold { return true }
+                if current > maxLen { maxLen = current }
                 current = 0
             } else {
                 current += 1
-                if current >= threshold { return true }
+                if current > maxLen { maxLen = current }
             }
         }
-        return current >= threshold
+        if current > maxLen { maxLen = current }
+        return maxLen
+    }
+
+    // Detect if there is an extremely long token (no whitespace/newlines) that could break layout
+    func hasVeryLongToken(threshold: Int) -> Bool {
+        maxTokenLength() >= threshold
     }
 
     // Extract up to `max` Cashu tokens (cashuA/cashuB). Allow dot '.' and shorter lengths.
