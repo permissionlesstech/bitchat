@@ -118,8 +118,14 @@ final class MockTransport: Transport {
         sentMessages.append((content, mentions, messageID, timestamp))
     }
 
-    func sendPrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) {
+    /// Controls the return value of sendPrivateMessage. Set to `false` to simulate
+    /// a transport that internally queues (e.g., BLE waiting for Noise handshake).
+    var sendPrivateMessageResult = true
+
+    @discardableResult
+    func sendPrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) -> Bool {
         sentPrivateMessages.append((content, peerID, recipientNickname, messageID))
+        return sendPrivateMessageResult
     }
 
     func sendReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {

@@ -173,6 +173,9 @@ protocol BitchatDelegate: AnyObject {
 
     func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus)
 
+    // Fired after a Noise encrypted session is fully established with a peer
+    func didEstablishEncryptedSession(with peerID: PeerID)
+
     // Low-level events for better separation of concerns
     func didReceiveNoisePayload(from peerID: PeerID, type: NoisePayloadType, payload: Data, timestamp: Date)
 
@@ -188,6 +191,10 @@ extension BitchatDelegate {
     }
     
     func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {
+        // Default empty implementation
+    }
+
+    func didEstablishEncryptedSession(with peerID: PeerID) {
         // Default empty implementation
     }
 
