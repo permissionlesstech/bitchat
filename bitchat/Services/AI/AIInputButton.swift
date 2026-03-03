@@ -8,10 +8,19 @@ struct AIInputButton: View {
 
     var body: some View {
         Button {
+            // FIX: Capture the draft but do not clear it yet. If the AI
+            // request fails (no provider, download needed, inference error),
+            // the user keeps their prompt and can retry or edit it. The draft
+            // is only cleared after a successful response.
             let prompt = viewModel.draftMessage
-            viewModel.draftMessage = ""
             Task {
-                await viewModel.askAI(prompt)
+                let result = await viewModel.askAI(prompt)
+                if result.consentNeeded == nil && result.error == nil {
+                    // Success -- safe to clear.
+                    viewModel.draftMessage = ""
+                }
+                // On consent needed: draft stays so it can be resent after approval.
+                // On error: draft stays so the user can retry.
             }
         } label: {
             Group {

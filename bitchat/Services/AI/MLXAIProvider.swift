@@ -73,6 +73,32 @@ final class MLXAIProvider: ObservableObject, AIProvider {
             temperature: config.localTemperature
         )
         self.selectedModel = Self.selectBestModel(from: config.localModels)
+
+        // FIX: Hydrate model-ready state from disk so the UI reflects reality
+        // after an app restart with a previously downloaded model. Without this,
+        // isModelReady stays false until the next download or respond() call,
+        // causing the settings UI to show "Download" instead of "Ready/Delete".
+        if let model = selectedModel {
+            self.isModelReady = Self.isModelOnDisk(model)
+        }
+    }
+
+    /// Synchronous check used only at init to hydrate published state.
+    /// Mirrors the artifact-validation logic in MLXModelManager.isModelDownloaded
+    /// without crossing the actor boundary.
+    private static func isModelOnDisk(_ config: AIModelConfig) -> Bool {
+        guard let docs = try? FileManager.default.url(
+            for: .documentDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: false
+        ) else { return false }
+        // Check for the actual model file, not just the directory.
+        // An empty directory from a failed download must not pass this check.
+        let modelFile = docs
+            .appendingPathComponent("ai-models/\(config.id)", isDirectory: true)
+            .appendingPathComponent("model.safetensors")
+        return FileManager.default.fileExists(atPath: modelFile.path)
     }
 
     // MARK: - Model Selection
@@ -254,6 +280,9 @@ actor MLXModelManager {
 
         guard let httpResponse = response as? HTTPURLResponse,
               (200...299).contains(httpResponse.statusCode) else {
+            // FIX: Clean up the empty directory so isModelDownloaded does not
+            // return true after a failed download.
+            try? FileManager.default.removeItem(at: destinationDir)
             throw AIProviderError.downloadFailed(
                 underlying: NSError(
                     domain: "MLXModelManager",
@@ -268,7 +297,14 @@ actor MLXModelManager {
         if FileManager.default.fileExists(atPath: targetFile.path) {
             try FileManager.default.removeItem(at: targetFile)
         }
-        try FileManager.default.moveItem(at: tempURL, to: targetFile)
+
+        do {
+            try FileManager.default.moveItem(at: tempURL, to: targetFile)
+        } catch {
+            // FIX: Move failed -- clean up so the directory does not persist empty.
+            try? FileManager.default.removeItem(at: destinationDir)
+            throw error
+        }
 
         progress(1.0)
     }
@@ -321,7 +357,9 @@ actor MLXModelManager {
 
     private func loadModel(_ config: AIModelConfig) async throws {
         let dir = try modelDirectory(for: config)
-        guard FileManager.default.fileExists(atPath: dir.path) else {
+        // FIX: Check for the actual model file, not just the directory.
+        let modelFile = dir.appendingPathComponent("model.safetensors")
+        guard FileManager.default.fileExists(atPath: modelFile.path) else {
             throw AIProviderError.modelNotLoaded
         }
 
@@ -371,8 +409,13 @@ actor MLXModelManager {
     // MARK: - File Management
 
     func isModelDownloaded(_ config: AIModelConfig) -> Bool {
+        // FIX: Check for the actual model artifact, not just the directory.
+        // An empty directory from a failed or interrupted download must not
+        // pass this check, otherwise the router treats the provider as ready
+        // and routes prompts to it without a real model payload.
         guard let dir = try? modelDirectory(for: config) else { return false }
-        return FileManager.default.fileExists(atPath: dir.path)
+        let modelFile = dir.appendingPathComponent("model.safetensors")
+        return FileManager.default.fileExists(atPath: modelFile.path)
     }
 
     func deleteModel(_ config: AIModelConfig) throws {
