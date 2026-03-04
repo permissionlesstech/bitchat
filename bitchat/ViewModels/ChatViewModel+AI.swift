@@ -7,22 +7,11 @@
 //
 
 import Foundation
-import SwiftUI
-
-// MARK: - AI Consent Dialog Model
-
-struct AIConsentPrompt: Identifiable {
-    let id = UUID()
-    let privacyLevel: AIPrivacyLevel
-    let title: String
-    let message: String
-    let pendingPrompt: String
-}
 
 // MARK: - ChatViewModel AI Extension
-// Adds AI capabilities to the existing ChatViewModel without modifying its
-// core init or breaking any existing functionality. The AI router is a static
-// singleton so we avoid changing the ViewModel's initializer signature.
+// Exposes a shared AIState instance through a lightweight extension.
+// No stored properties are added to ChatViewModel — the AI layer
+// owns its own state via AIState, keeping the two fully decoupled.
 
 extension ChatViewModel {
 
@@ -55,62 +44,16 @@ extension ChatViewModel {
         ]
     )
 
-    // MARK: - Shared Router
+    // MARK: - Shared AI State
 
-    private static let _sharedRouter: AIProviderRouter = {
+    private static let _sharedAIState: AIState = {
         let localProvider = MLXAIProvider(config: aiConfig)
         let bridgeProvider = NostrBridgeAIProvider(relayURLs: aiConfig.bridgeRelays)
-        return AIProviderRouter(providers: [bridgeProvider, localProvider])
+        let router = AIProviderRouter(providers: [bridgeProvider, localProvider])
+        return AIState(router: router, localProvider: localProvider)
     }()
 
-    var aiRouter: AIProviderRouter {
-        Self._sharedRouter
-    }
-
-    // MARK: - Ask AI
-
-    @MainActor
-    func askAI(_ prompt: String) async -> (consentNeeded: AIConsentPrompt?, error: String?) {
-        guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return (nil, nil)
-        }
-
-        do {
-            let response = try await aiRouter.respond(to: prompt)
-
-            let aiMessage = BitchatMessage(
-                sender: response.providerDisplayName,
-                content: response.text,
-                timestamp: Date(),
-                isRelay: false,
-                isPrivate: false
-            )
-
-            messages.append(aiMessage)
-            return (nil, nil)
-
-        } catch AIProviderError.consentRequired(let level) {
-            let consent = AIConsentPrompt(
-                privacyLevel: level,
-                title: "Send message off-device?",
-                message: "No local AI model is available. Your message can be sent through the Nostr network to a remote AI service. No account or personal information is required, but the content of your message will leave this device.\n\nYou can download a local model in Settings to keep everything on-device.",
-                pendingPrompt: prompt
-            )
-            return (consent, nil)
-
-        } catch {
-            return (nil, error.localizedDescription)
-        }
-    }
-
-    // MARK: - Consent Response
-
-    @MainActor
-    func handleAIConsentResponse(granted: Bool, pendingPrompt: String) async -> (consentNeeded: AIConsentPrompt?, error: String?) {
-        if granted {
-            aiRouter.setUserConsent(for: .bridged, granted: true)
-            return await askAI(pendingPrompt)
-        }
-        return (nil, nil)
+    var aiState: AIState {
+        Self._sharedAIState
     }
 }

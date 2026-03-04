@@ -21,7 +21,7 @@ struct AISettingsView: View {
                             .font(.caption)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 2)
-                            .background(Color(.systemGray5))
+                            .background(Color.gray.opacity(0.2))
                             .cornerRadius(4)
                     }
                     Text("Size: \(model.formattedDiskSize)")

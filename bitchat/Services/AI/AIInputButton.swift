@@ -1,30 +1,35 @@
+//
+// AIInputButton.swift
+// bitchat
+//
+// This is free and unencumbered software released into the public domain.
+// For more information, see <https://unlicense.org>
+//
+
 import SwiftUI
 
 // MARK: - AIInputButton
 // Sits alongside the existing send button in the message input bar.
+// Takes a binding to the message text and a callback for successful responses.
+// No dependency on ChatViewModel — only AIState.
 
 struct AIInputButton: View {
-    @ObservedObject var viewModel: ChatViewModel
+    @ObservedObject var aiState: AIState
+    @Binding var messageText: String
+    var onMessage: (BitchatMessage) -> Void
 
     var body: some View {
         Button {
-            // FIX: Capture the draft but do not clear it yet. If the AI
-            // request fails (no provider, download needed, inference error),
-            // the user keeps their prompt and can retry or edit it. The draft
-            // is only cleared after a successful response.
-            let prompt = viewModel.draftMessage
+            let prompt = messageText
             Task {
-                let result = await viewModel.askAI(prompt)
-                if result.consentNeeded == nil && result.error == nil {
-                    // Success -- safe to clear.
-                    viewModel.draftMessage = ""
+                if let message = await aiState.askAI(prompt) {
+                    messageText = ""
+                    onMessage(message)
                 }
-                // On consent needed: draft stays so it can be resent after approval.
-                // On error: draft stays so the user can retry.
             }
         } label: {
             Group {
-                if viewModel.isAIResponding {
+                if aiState.isAIResponding {
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle())
                         .scaleEffect(0.8)
@@ -36,56 +41,57 @@ struct AIInputButton: View {
             .frame(width: 36, height: 36)
         }
         .disabled(
-            viewModel.draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || viewModel.isAIResponding
+            messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || aiState.isAIResponding
         )
         .accessibilityLabel("Ask AI")
     }
 }
 
 // MARK: - AIConsentAlertModifier
-// Presents the consent dialog when the router needs off-device permission.
-// Uses plain language because bitchat users should never have to guess
-// what is happening with their data.
 
 struct AIConsentAlertModifier: ViewModifier {
-    @ObservedObject var viewModel: ChatViewModel
+    @ObservedObject var aiState: AIState
+    var onMessage: (BitchatMessage) -> Void
 
     func body(content: Content) -> some View {
         content
             .alert(
-                viewModel.consentPrompt?.title ?? "",
+                aiState.consentPrompt?.title ?? "",
                 isPresented: Binding(
-                    get: { viewModel.consentPrompt != nil },
-                    set: { if !$0 { viewModel.consentPrompt = nil } }
+                    get: { aiState.consentPrompt != nil },
+                    set: { if !$0 { aiState.consentPrompt = nil } }
                 )
             ) {
                 Button("Keep on device", role: .cancel) {
-                    Task { await viewModel.handleConsentResponse(granted: false) }
+                    Task { _ = await aiState.handleConsentResponse(granted: false) }
                 }
                 Button("Send") {
-                    Task { await viewModel.handleConsentResponse(granted: true) }
+                    Task {
+                        if let message = await aiState.handleConsentResponse(granted: true) {
+                            onMessage(message)
+                        }
+                    }
                 }
             } message: {
-                Text(viewModel.consentPrompt?.message ?? "")
+                Text(aiState.consentPrompt?.message ?? "")
             }
     }
 }
 
 extension View {
-    func aiConsentAlert(viewModel: ChatViewModel) -> some View {
-        modifier(AIConsentAlertModifier(viewModel: viewModel))
+    func aiConsentAlert(aiState: AIState, onMessage: @escaping (BitchatMessage) -> Void) -> some View {
+        modifier(AIConsentAlertModifier(aiState: aiState, onMessage: onMessage))
     }
 }
 
 // MARK: - AIErrorBanner
-// Shows a dismissible banner when an AI operation fails.
 
 struct AIErrorBanner: View {
-    @ObservedObject var viewModel: ChatViewModel
+    @ObservedObject var aiState: AIState
 
     var body: some View {
-        if let error = viewModel.aiError {
+        if let error = aiState.aiError {
             HStack {
                 Image(systemName: "exclamationmark.triangle")
                     .foregroundColor(.orange)
@@ -94,7 +100,7 @@ struct AIErrorBanner: View {
                     .foregroundColor(.secondary)
                 Spacer()
                 Button {
-                    viewModel.aiError = nil
+                    aiState.aiError = nil
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundColor(.secondary)
@@ -102,7 +108,7 @@ struct AIErrorBanner: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Color(.systemGray6))
+            .background(Color.gray.opacity(0.15))
             .cornerRadius(8)
             .padding(.horizontal)
         }
@@ -110,8 +116,6 @@ struct AIErrorBanner: View {
 }
 
 // MARK: - AIMessageBubble
-// Renders AI responses with provider attribution and a privacy indicator.
-// The lock icon means local-only; the arrow icon means data left the device.
 
 struct AIMessageBubble: View {
     let message: BitchatMessage

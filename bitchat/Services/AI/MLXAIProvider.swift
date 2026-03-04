@@ -38,7 +38,7 @@ final class MLXAIProvider: ObservableObject, AIProvider {
     var requiresSetup: Bool {
         // Setup is needed if we have a viable model but it hasn't been downloaded.
         guard let model = selectedModel else { return false }
-        return !modelManager.isModelDownloaded(model)
+        return !Self.isModelOnDisk(model)
     }
 
     var setupDescription: String {
@@ -108,7 +108,12 @@ final class MLXAIProvider: ObservableObject, AIProvider {
     // available to this process before the system would start killing apps.
 
     private static func selectBestModel(from models: [AIModelConfig]) -> AIModelConfig? {
+        #if os(iOS)
         let availableRAM = Int64(os_proc_available_memory())
+        #else
+        // os_proc_available_memory() is iOS-only. On macOS, use physical memory.
+        let availableRAM = Int64(ProcessInfo.processInfo.physicalMemory)
+        #endif
         for model in models {
             if model.minimumRAMBytes <= availableRAM {
                 return model
@@ -167,7 +172,7 @@ final class MLXAIProvider: ObservableObject, AIProvider {
         guard let model = selectedModel else {
             throw AIProviderError.noProviderAvailable
         }
-        guard modelManager.isModelDownloaded(model) else {
+        guard Self.isModelOnDisk(model) else {
             throw AIProviderError.providerRequiresSetup(providerName: displayName)
         }
 
@@ -190,7 +195,28 @@ final class MLXAIProvider: ObservableObject, AIProvider {
 
     var modelDiskUsage: Int64? {
         guard let model = selectedModel else { return nil }
-        return modelManager.diskUsage(for: model)
+        return Self.diskUsageOnDisk(model)
+    }
+
+    /// Synchronous disk usage check that does not cross the actor boundary.
+    private static func diskUsageOnDisk(_ config: AIModelConfig) -> Int64 {
+        guard let docs = try? FileManager.default.url(
+            for: .documentDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: false
+        ) else { return 0 }
+        let dir = docs.appendingPathComponent("ai-models/\(config.id)", isDirectory: true)
+        guard let enumerator = FileManager.default.enumerator(
+            at: dir,
+            includingPropertiesForKeys: [.fileSizeKey]
+        ) else { return 0 }
+        var total: Int64 = 0
+        for case let fileURL as URL in enumerator {
+            let values = try? fileURL.resourceValues(forKeys: [.fileSizeKey])
+            total += Int64(values?.fileSize ?? 0)
+        }
+        return total
     }
 }
 

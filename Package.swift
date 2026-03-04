@@ -51,7 +51,7 @@ let package = Package(
             ],
             resources: [
                 .process("Localization"),
-                .process("Noise")
+                .process("Noise/NoiseTestVectors.json")
             ]
         )
     ]
