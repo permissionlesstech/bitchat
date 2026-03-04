@@ -114,7 +114,7 @@ struct AIErrorBanner: View {
 // The lock icon means local-only; the arrow icon means data left the device.
 
 struct AIMessageBubble: View {
-    let message: ChatMessage
+    let message: BitchatMessage
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -122,19 +122,13 @@ struct AIMessageBubble: View {
                 Image(systemName: "brain")
                     .font(.caption2)
                     .foregroundColor(.purple)
-                Text(message.senderName)
+                Text(message.sender)
                     .font(.caption2)
                     .fontWeight(.medium)
                     .foregroundColor(.purple)
-
-                if let level = message.privacyLevel {
-                    Image(systemName: level == .local ? "lock.fill" : "arrow.up.right")
-                        .font(.caption2)
-                        .foregroundColor(level == .local ? .green : .orange)
-                }
             }
 
-            Text(message.text)
+            Text(message.content)
                 .font(.body)
                 .textSelection(.enabled)
         }
