@@ -251,6 +251,240 @@ struct CashuTokenPacket {
     }
 }
 
+// MARK: - DVMQueryPacket
+
+/// A NIP-90 Data Vending Machine job request routed over the Bluetooth mesh.
+///
+/// ## The mesh AI bridge concept
+/// Gateway nodes — devices with both Bluetooth mesh connectivity and internet access —
+/// receive these packets and forward them to Nostr DVMs (AI service providers).
+/// Results return through the mesh as `DVMResultPacket`. This enables nodes without
+/// internet (deep rural, disaster zones, offline islands) to query AI services via
+/// neighbours who happen to have connectivity.
+///
+/// ## Use cases
+/// - Crop disease diagnosis for farmers in areas without reliable internet
+/// - Medical triage information for rural health workers
+/// - Bitcoin/Lightning education in local languages
+/// - Legal rights information for migrants and displaced persons
+///
+/// ## Wire format
+/// Carried inside a `NoisePayloadType.dvmQuery` Noise payload.
+/// Length fields are big-endian UInt16 (same pattern as LightningPaymentRequestPacket).
+///
+/// ```
+/// [type: UInt8][length: UInt16 BE][value: …]  …repeating…
+/// ```
+struct DVMQueryPacket {
+    /// Stable UUID for this query (for deduplication, routing, and result matching).
+    let requestID: String
+    /// NIP-90 job kind (5000-5999). Examples: 5100 = summarize, 5202 = classify.
+    let kind: UInt16
+    /// The query input text (the question / content to process).
+    let input: String
+    /// Maximum satoshis the requester is willing to pay for this job.
+    let maxSatoshi: UInt64
+    /// Optional BCP-47 language tag for the preferred response language (e.g. "sw", "pt-BR").
+    let preferredLanguage: String?
+
+    private enum TLVType: UInt8 {
+        case requestID        = 0x00
+        case kind             = 0x01
+        case input            = 0x02
+        case maxSatoshi       = 0x03
+        case preferredLanguage = 0x04
+    }
+
+    func encode() -> Data? {
+        var out = Data()
+
+        func appendUInt16BE(_ v: UInt16, into d: inout Data) {
+            d.append(UInt8(v >> 8))
+            d.append(UInt8(v & 0xFF))
+        }
+
+        func appendTLV(_ type: TLVType, utf8 string: String, into d: inout Data) -> Bool {
+            guard let bytes = string.data(using: .utf8), bytes.count <= Int(UInt16.max) else { return false }
+            d.append(type.rawValue)
+            appendUInt16BE(UInt16(bytes.count), into: &d)
+            d.append(bytes)
+            return true
+        }
+
+        func appendTLV(_ type: TLVType, uint16 value: UInt16, into d: inout Data) {
+            d.append(type.rawValue)
+            appendUInt16BE(2, into: &d)
+            appendUInt16BE(value, into: &d)
+        }
+
+        func appendTLV(_ type: TLVType, uint64 value: UInt64, into d: inout Data) {
+            d.append(type.rawValue)
+            appendUInt16BE(8, into: &d)
+            var big = value.bigEndian
+            withUnsafeBytes(of: &big) { out.append(contentsOf: $0) }
+        }
+
+        guard appendTLV(.requestID, utf8: requestID, into: &out) else { return nil }
+        appendTLV(.kind, uint16: kind, into: &out)
+        guard appendTLV(.input, utf8: input, into: &out) else { return nil }
+        appendTLV(.maxSatoshi, uint64: maxSatoshi, into: &out)
+        if let lang = preferredLanguage, !lang.isEmpty {
+            guard appendTLV(.preferredLanguage, utf8: lang, into: &out) else { return nil }
+        }
+
+        return out
+    }
+
+    static func decode(from data: Data) -> DVMQueryPacket? {
+        var cursor = data.startIndex
+        let end    = data.endIndex
+
+        var requestID: String?
+        var kind: UInt16?
+        var input: String?
+        var maxSatoshi: UInt64 = 0
+        var preferredLanguage: String?
+
+        while cursor < end {
+            guard data.distance(from: cursor, to: end) >= 3 else { return nil }
+            let typeRaw = data[cursor]; cursor = data.index(after: cursor)
+            let lenHi   = data[cursor]; cursor = data.index(after: cursor)
+            let lenLo   = data[cursor]; cursor = data.index(after: cursor)
+            let length  = Int(lenHi) << 8 | Int(lenLo)
+
+            guard data.distance(from: cursor, to: end) >= length else { return nil }
+            let valueEnd = data.index(cursor, offsetBy: length)
+            let value    = data[cursor..<valueEnd]
+            cursor = valueEnd
+
+            guard let type = TLVType(rawValue: typeRaw) else { continue }
+            switch type {
+            case .requestID:        requestID = String(data: Data(value), encoding: .utf8)
+            case .input:            input = String(data: Data(value), encoding: .utf8)
+            case .preferredLanguage: preferredLanguage = String(data: Data(value), encoding: .utf8)
+            case .kind:
+                if length == 2 {
+                    kind = UInt16(value[value.startIndex]) << 8 | UInt16(value[value.index(after: value.startIndex)])
+                }
+            case .maxSatoshi:
+                if length == 8 {
+                    var v: UInt64 = 0
+                    for byte in value { v = (v << 8) | UInt64(byte) }
+                    maxSatoshi = v
+                }
+            }
+        }
+
+        guard let rid = requestID, let k = kind, let inp = input else { return nil }
+        return DVMQueryPacket(
+            requestID: rid,
+            kind: k,
+            input: inp,
+            maxSatoshi: maxSatoshi,
+            preferredLanguage: preferredLanguage
+        )
+    }
+}
+
+// MARK: - DVMResultPacket
+
+/// A NIP-90 DVM job result returned through the Bluetooth mesh.
+/// Sent by gateway nodes in response to a `DVMQueryPacket`.
+struct DVMResultPacket {
+    /// Matches the `requestID` of the originating `DVMQueryPacket`.
+    let requestID: String
+    /// The job result content (AI response text).
+    let result: String
+    /// Satoshis paid to the Nostr DVM for this result.
+    let satsPaid: UInt64
+    /// Optional: the DVM's Nostr pubkey (hex), for reputation purposes.
+    let dvmPubkey: String?
+
+    private enum TLVType: UInt8 {
+        case requestID  = 0x00
+        case result     = 0x01
+        case satsPaid   = 0x02
+        case dvmPubkey  = 0x03
+    }
+
+    func encode() -> Data? {
+        var out = Data()
+
+        func appendUInt16BE(_ v: UInt16, into d: inout Data) {
+            d.append(UInt8(v >> 8))
+            d.append(UInt8(v & 0xFF))
+        }
+
+        func appendTLV(_ type: TLVType, utf8 string: String, into d: inout Data) -> Bool {
+            guard let bytes = string.data(using: .utf8), bytes.count <= Int(UInt16.max) else { return false }
+            d.append(type.rawValue)
+            appendUInt16BE(UInt16(bytes.count), into: &d)
+            d.append(bytes)
+            return true
+        }
+
+        func appendTLV(_ type: TLVType, uint64 value: UInt64, into d: inout Data) {
+            d.append(type.rawValue)
+            appendUInt16BE(8, into: &d)
+            var big = value.bigEndian
+            withUnsafeBytes(of: &big) { out.append(contentsOf: $0) }
+        }
+
+        guard appendTLV(.requestID, utf8: requestID, into: &out) else { return nil }
+        guard appendTLV(.result,    utf8: result,    into: &out) else { return nil }
+        appendTLV(.satsPaid, uint64: satsPaid, into: &out)
+        if let pub = dvmPubkey, !pub.isEmpty {
+            guard appendTLV(.dvmPubkey, utf8: pub, into: &out) else { return nil }
+        }
+
+        return out
+    }
+
+    static func decode(from data: Data) -> DVMResultPacket? {
+        var cursor = data.startIndex
+        let end    = data.endIndex
+
+        var requestID: String?
+        var result:    String?
+        var satsPaid:  UInt64 = 0
+        var dvmPubkey: String?
+
+        while cursor < end {
+            guard data.distance(from: cursor, to: end) >= 3 else { return nil }
+            let typeRaw = data[cursor]; cursor = data.index(after: cursor)
+            let lenHi   = data[cursor]; cursor = data.index(after: cursor)
+            let lenLo   = data[cursor]; cursor = data.index(after: cursor)
+            let length  = Int(lenHi) << 8 | Int(lenLo)
+
+            guard data.distance(from: cursor, to: end) >= length else { return nil }
+            let valueEnd = data.index(cursor, offsetBy: length)
+            let value    = data[cursor..<valueEnd]
+            cursor = valueEnd
+
+            guard let type = TLVType(rawValue: typeRaw) else { continue }
+            switch type {
+            case .requestID: requestID = String(data: Data(value), encoding: .utf8)
+            case .result:    result    = String(data: Data(value), encoding: .utf8)
+            case .dvmPubkey: dvmPubkey = String(data: Data(value), encoding: .utf8)
+            case .satsPaid:
+                if length == 8 {
+                    var v: UInt64 = 0
+                    for byte in value { v = (v << 8) | UInt64(byte) }
+                    satsPaid = v
+                }
+            }
+        }
+
+        guard let rid = requestID, let res = result else { return nil }
+        return DVMResultPacket(
+            requestID: rid,
+            result:    res,
+            satsPaid:  satsPaid,
+            dvmPubkey: dvmPubkey
+        )
+    }
+}
+
 struct AnnouncementPacket {
     let nickname: String
     let noisePublicKey: Data            // Noise static public key (Curve25519.KeyAgreement)
