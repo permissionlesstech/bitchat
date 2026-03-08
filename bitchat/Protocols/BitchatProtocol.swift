@@ -108,7 +108,10 @@ enum NoisePayloadType: UInt8 {
     // Verification (QR-based OOB binding)
     case verifyChallenge = 0x10     // Verification challenge
     case verifyResponse  = 0x11     // Verification response
-    
+    // Bitcoin payments (structured packets — not raw text)
+    case lightningPaymentRequest = 0x20  // BOLT11 invoice request
+    case cashuToken = 0x21               // Cashu eCash bearer token (offline-redeemable)
+
     var description: String {
         switch self {
         case .privateMessage: return "privateMessage"
@@ -116,7 +119,26 @@ enum NoisePayloadType: UInt8 {
         case .delivered: return "delivered"
         case .verifyChallenge: return "verifyChallenge"
         case .verifyResponse: return "verifyResponse"
+        case .lightningPaymentRequest: return "lightningPaymentRequest"
+        case .cashuToken: return "cashuToken"
         }
+    }
+}
+
+// MARK: - Bitcoin Payment Delegate Extensions
+
+extension BitchatDelegate {
+    /// Called when a peer sends a Lightning payment request over the Bluetooth mesh.
+    /// The invoice should be presented as a tappable payment action in the chat UI.
+    func didReceiveLightningPaymentRequest(_ request: LightningPaymentRequestPacket, from peerID: PeerID, timestamp: Date) {
+        // Default empty implementation — override to handle payment requests
+    }
+
+    /// Called when a peer sends a Cashu eCash bearer token over the Bluetooth mesh.
+    /// The token can be redeemed at the mint whenever the device has internet access.
+    /// This enables true offline Bitcoin transfers — no internet required at send time.
+    func didReceiveCashuToken(_ token: CashuTokenPacket, from peerID: PeerID, timestamp: Date) {
+        // Default empty implementation — override to handle eCash tokens
     }
 }
 
