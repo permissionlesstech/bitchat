@@ -54,6 +54,19 @@ private final class NotificationCenterRequestDelivererAdapter: NotificationReque
     }
 }
 
+private struct NoopNotificationAuthorizer: NotificationAuthorizing {
+    func requestAuthorization(
+        options: UNAuthorizationOptions,
+        completionHandler: @escaping (Bool, Error?) -> Void
+    ) {
+        completionHandler(false, nil)
+    }
+}
+
+private struct NoopNotificationRequestDeliverer: NotificationRequestDelivering {
+    func add(_ request: UNNotificationRequest) {}
+}
+
 final class NotificationService {
     static let shared = NotificationService()
 
@@ -75,9 +88,14 @@ final class NotificationService {
                    env["GITHUB_ACTIONS"] != nil ||
                    env["CI"] != nil
         }
-        let center = UNUserNotificationCenter.current()
-        self.authorizer = NotificationCenterAuthorizerAdapter(center: center)
-        self.requestDeliverer = NotificationCenterRequestDelivererAdapter(center: center)
+        if isRunningTestsProvider() {
+            self.authorizer = NoopNotificationAuthorizer()
+            self.requestDeliverer = NoopNotificationRequestDeliverer()
+        } else {
+            let center = UNUserNotificationCenter.current()
+            self.authorizer = NotificationCenterAuthorizerAdapter(center: center)
+            self.requestDeliverer = NotificationCenterRequestDelivererAdapter(center: center)
+        }
     }
 
     internal init(

@@ -43,7 +43,7 @@ final class LocationStateManagerTests: XCTestCase {
     }
 
     func test_enableLocationChannels_requestsOneShotLocationWhenAuthorized() async {
-        let locationManager = MockLocationManager(authorizationStatus: .authorizedWhenInUse)
+        let locationManager = MockLocationManager(authorizationStatus: .authorizedAlways)
         let manager = LocationStateManager(
             storage: makeStorage(),
             locationManager: locationManager,
