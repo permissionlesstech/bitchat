@@ -192,7 +192,7 @@ struct ContentView: View {
                 .onDisappear { viewModel.isAppInfoPresented = false }
         }
         .sheet(isPresented: Binding(
-            get: { viewModel.showingFingerprintFor != nil },
+            get: { viewModel.showingFingerprintFor != nil && !showSidebar && viewModel.selectedPrivateChatPeer == nil },
             set: { _ in viewModel.showingFingerprintFor = nil }
         )) {
             if let peerID = viewModel.showingFingerprintFor {
@@ -791,11 +791,26 @@ struct ContentView: View {
     // MARK: - Sheet Content
     
     private var peopleSheetView: some View {
-        Group {
-            if viewModel.selectedPrivateChatPeer != nil {
-                privateChatSheetView
-            } else {
-                peopleListSheetView
+        NavigationStack {
+            Group {
+                if viewModel.selectedPrivateChatPeer != nil {
+                    privateChatSheetView
+                } else {
+                    peopleListSheetView
+                }
+            }
+            .navigationDestination(isPresented: Binding(
+                get: { viewModel.showingFingerprintFor != nil && (showSidebar || viewModel.selectedPrivateChatPeer != nil) },
+                set: { isPresented in
+                    if !isPresented {
+                        viewModel.showingFingerprintFor = nil
+                    }
+                }
+            )) {
+                if let peerID = viewModel.showingFingerprintFor {
+                    FingerprintView(viewModel: viewModel, peerID: peerID)
+                        .environmentObject(viewModel)
+                }
             }
         }
         .background(backgroundColor)
