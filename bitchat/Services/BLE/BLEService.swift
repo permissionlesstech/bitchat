@@ -2890,7 +2890,14 @@ extension BLEService {
         service.onPeerAuthenticated = { [weak self] peerID, fingerprint in
             SecureLogger.debug("🔐 Noise session authenticated with \(peerID), fingerprint: \(fingerprint.prefix(16))...")
             self?.messageQueue.async { [weak self] in
-                self?.sendPendingMessagesAfterHandshake(for: peerID)
+                // Clear BLE's internal pending queue — the MessageRouter outbox
+                // is the single source of truth for queued private messages.
+                // The didEstablishEncryptedSession delegate call below will
+                // trigger messageRouter.flushOutbox(), which re-sends via
+                // sendPrivateMessage() now that the Noise session is established.
+                self?.collectionsQueue.sync(flags: .barrier) {
+                    self?.pendingMessagesAfterHandshake.removeValue(forKey: peerID)
+                }
                 self?.sendPendingNoisePayloadsAfterHandshake(for: peerID)
             }
             self?.messageQueue.async { [weak self] in
