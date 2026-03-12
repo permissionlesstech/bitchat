@@ -27,16 +27,29 @@ struct MessageRouterTests {
     }
 
     @Test @MainActor
-    func sendPrivate_queuesWhenNotConnected() async {
+    func sendPrivate_fallsBackToReachableTransport() async {
         let peerID = PeerID(str: "0000000000000002")
         let transport = MockTransport()
-        // Peer is reachable (retention window) but NOT connected
+        // Peer is reachable (e.g. Nostr) but NOT connected (no BLE)
         transport.reachablePeers.insert(peerID)
 
         let router = MessageRouter(transports: [transport])
         router.sendPrivate("Queued", to: peerID, recipientNickname: "Peer", messageID: "m2")
 
-        // Should NOT send — peer is only reachable, not connected
+        // Should send via reachable transport (Nostr fallback)
+        #expect(transport.sentPrivateMessages.count == 1)
+    }
+
+    @Test @MainActor
+    func sendPrivate_queuesWhenNeitherConnectedNorReachable() async {
+        let peerID = PeerID(str: "0000000000000002")
+        let transport = MockTransport()
+        // Peer is neither connected nor reachable
+
+        let router = MessageRouter(transports: [transport])
+        router.sendPrivate("Queued", to: peerID, recipientNickname: "Peer", messageID: "m2")
+
+        // Should NOT send — no transport available
         #expect(transport.sentPrivateMessages.isEmpty)
     }
 

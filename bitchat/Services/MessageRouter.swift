@@ -65,7 +65,10 @@ final class MessageRouter {
 
     // MARK: - Message Sending
 
-    func sendPrivate(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) {
+    /// Queues and attempts immediate delivery of a private message.
+    /// - Returns: `true` if the message was handed to a transport, `false` if queued for later.
+    @discardableResult
+    func sendPrivate(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) -> Bool {
         // Normalize to short ID for consistent outbox keying (handles both 16-hex and 64-hex formats)
         let normalizedPeerID = peerID.toShort()
 
@@ -90,6 +93,9 @@ final class MessageRouter {
 
         // Try immediate delivery
         flushOutbox(for: normalizedPeerID)
+
+        // Check if the message was sent (sentAt was set by flushOutbox)
+        return outbox[normalizedPeerID]?.first(where: { $0.messageID == messageID })?.sentAt != nil
     }
 
     func sendReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {
@@ -133,7 +139,8 @@ final class MessageRouter {
             return
         }
 
-        let transport = connectedTransport(for: normalizedPeerID)
+        // Prefer a connected transport (BLE), fall back to reachable (Nostr)
+        let transport = connectedTransport(for: normalizedPeerID) ?? reachableTransport(for: normalizedPeerID)
         let now = Date()
         var sentCount = 0
 

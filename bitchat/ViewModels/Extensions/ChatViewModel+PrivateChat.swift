@@ -86,12 +86,11 @@ extension ChatViewModel {
         
         // Always delegate to MessageRouter - it handles queuing when peer is unreachable
         // This enables offline message delivery when peer connects later (e.g., airplane mode)
-        messageRouter.sendPrivate(content, to: peerID, recipientNickname: recipientNickname ?? "user", messageID: messageID)
-        
-        // Update status: .sent if deliverable now, .sending if queued for later
-        let isDeliverableNow = isConnected || isReachable || (isMutualFavorite && hasNostrKey)
+        let wasSent = messageRouter.sendPrivate(content, to: peerID, recipientNickname: recipientNickname ?? "user", messageID: messageID)
+
+        // Update status based on actual transport result, not reachability prediction
         if let idx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
-            privateChats[peerID]?[idx].deliveryStatus = isDeliverableNow ? .sent : .sending
+            privateChats[peerID]?[idx].deliveryStatus = wasSent ? .sent : .sending
         }
     }
     
@@ -252,6 +251,7 @@ extension ChatViewModel {
         
         if let idx = privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
             privateChats[convKey]?[idx].deliveryStatus = .delivered(to: displayNameForNostrPubkey(senderPubkey), at: Date())
+            messageRouter.confirmDelivery(messageID: messageID)
             objectWillChange.send()
             SecureLogger.info("GeoDM: recv DELIVERED for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…", category: .session)
         } else {
@@ -264,6 +264,7 @@ extension ChatViewModel {
         
         if let idx = privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
             privateChats[convKey]?[idx].deliveryStatus = .read(by: displayNameForNostrPubkey(senderPubkey), at: Date())
+            messageRouter.confirmDelivery(messageID: messageID)
             objectWillChange.send()
             SecureLogger.info("GeoDM: recv READ for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…", category: .session)
         } else {
