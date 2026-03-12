@@ -77,9 +77,13 @@ final class NostrRelayManager: ObservableObject {
     private let maxBackoffInterval: TimeInterval = TransportConfig.nostrRelayMaxBackoffSeconds
     private let backoffMultiplier: Double = TransportConfig.nostrRelayBackoffMultiplier
     private let maxReconnectAttempts = TransportConfig.nostrRelayMaxReconnectAttempts
-    
+
     // Bump generation to invalidate scheduled reconnects when we reset/disconnect
     private var connectionGeneration: Int = 0
+
+    // Periodic heartbeat to detect dead connections
+    private var heartbeatTimers: [String: Timer] = [:]
+    private let heartbeatInterval: TimeInterval = 30.0
     
     init() {
         hasMutualFavorites = !FavoritesPersistenceService.shared.mutualFavorites.isEmpty
@@ -137,6 +141,11 @@ final class NostrRelayManager: ObservableObject {
     /// Disconnect from all relays
     func disconnect() {
         connectionGeneration &+= 1
+        // Stop all heartbeat timers
+        for (_, timer) in heartbeatTimers {
+            timer.invalidate()
+        }
+        heartbeatTimers.removeAll()
         for (_, task) in connections {
             task.cancel(with: .goingAway, reason: nil)
         }
@@ -464,6 +473,8 @@ final class NostrRelayManager: ObservableObject {
                     self?.updateRelayStatus(urlString, isConnected: true)
                     // Flush any pending subscriptions for this relay
                     self?.flushPendingSubscriptions(for: urlString)
+                    // Start periodic heartbeat to detect dead connections
+                    self?.startHeartbeat(for: urlString)
                 } else {
                     SecureLogger.error("❌ Failed to connect to Nostr relay \(urlString): \(error?.localizedDescription ?? "Unknown error")", category: .session)
                     self?.updateRelayStatus(urlString, isConnected: false, error: error)
@@ -494,7 +505,43 @@ final class NostrRelayManager: ObservableObject {
         }
         pendingSubscriptions[relayUrl] = nil
     }
-    
+
+    /// Start periodic heartbeat pings to detect dead connections
+    private func startHeartbeat(for relayUrl: String) {
+        // Stop any existing timer for this relay
+        stopHeartbeat(for: relayUrl)
+
+        heartbeatTimers[relayUrl] = Timer.scheduledTimer(withTimeInterval: heartbeatInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.sendHeartbeatPing(to: relayUrl)
+            }
+        }
+    }
+
+    /// Stop heartbeat for a specific relay
+    private func stopHeartbeat(for relayUrl: String) {
+        heartbeatTimers[relayUrl]?.invalidate()
+        heartbeatTimers.removeValue(forKey: relayUrl)
+    }
+
+    /// Send a heartbeat ping to verify connection is alive
+    private func sendHeartbeatPing(to relayUrl: String) {
+        guard let connection = connections[relayUrl] else {
+            stopHeartbeat(for: relayUrl)
+            return
+        }
+
+        connection.sendPing { [weak self] error in
+            Task { @MainActor in
+                guard let self = self else { return }
+                if let error = error {
+                    SecureLogger.warning("Heartbeat failed for \(relayUrl): \(error.localizedDescription)", category: .session)
+                    self.handleDisconnection(relayUrl: relayUrl, error: error)
+                }
+            }
+        }
+    }
+
     private func receiveMessage(from task: URLSessionWebSocketTask, relayUrl: String) {
         task.receive { [weak self] result in
             guard let self = self else { return }
@@ -620,6 +667,8 @@ final class NostrRelayManager: ObservableObject {
     }
     
     private func handleDisconnection(relayUrl: String, error: Error) {
+        // Stop heartbeat timer for this relay
+        stopHeartbeat(for: relayUrl)
         // If networking is disallowed, do not schedule reconnection
         if !networkService.activationAllowed {
             connections.removeValue(forKey: relayUrl)
