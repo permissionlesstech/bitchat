@@ -251,7 +251,8 @@ final class BLEService: NSObject {
     init(
         keychain: KeychainManagerProtocol,
         idBridge: NostrIdentityBridge,
-        identityManager: SecureIdentityStateManagerProtocol
+        identityManager: SecureIdentityStateManagerProtocol,
+        initializeBluetoothManagers: Bool = true
     ) {
         self.keychain = keychain
         self.idBridge = idBridge
@@ -294,22 +295,23 @@ final class BLEService: NSObject {
         // Tag BLE queue for re-entrancy detection
         bleQueue.setSpecific(key: bleQueueKey, value: ())
 
-        // Initialize BLE on background queue to prevent main thread blocking
-        // This prevents app freezes during BLE operations
-        #if os(iOS)
-        let centralOptions: [String: Any] = [
-            CBCentralManagerOptionRestoreIdentifierKey: BLEService.centralRestorationID
-        ]
-        centralManager = CBCentralManager(delegate: self, queue: bleQueue, options: centralOptions)
+        if initializeBluetoothManagers {
+            // Initialize BLE on background queue to prevent main thread blocking.
+            #if os(iOS)
+            let centralOptions: [String: Any] = [
+                CBCentralManagerOptionRestoreIdentifierKey: BLEService.centralRestorationID
+            ]
+            centralManager = CBCentralManager(delegate: self, queue: bleQueue, options: centralOptions)
 
-        let peripheralOptions: [String: Any] = [
-            CBPeripheralManagerOptionRestoreIdentifierKey: BLEService.peripheralRestorationID
-        ]
-        peripheralManager = CBPeripheralManager(delegate: self, queue: bleQueue, options: peripheralOptions)
-        #else
-        centralManager = CBCentralManager(delegate: self, queue: bleQueue)
-        peripheralManager = CBPeripheralManager(delegate: self, queue: bleQueue)
-        #endif
+            let peripheralOptions: [String: Any] = [
+                CBPeripheralManagerOptionRestoreIdentifierKey: BLEService.peripheralRestorationID
+            ]
+            peripheralManager = CBPeripheralManager(delegate: self, queue: bleQueue, options: peripheralOptions)
+            #else
+            centralManager = CBCentralManager(delegate: self, queue: bleQueue)
+            peripheralManager = CBPeripheralManager(delegate: self, queue: bleQueue)
+            #endif
+        }
         
         // Single maintenance timer for all periodic tasks (dispatch-based for determinism)
         let timer = DispatchSource.makeTimerSource(queue: bleQueue)

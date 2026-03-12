@@ -14,24 +14,103 @@ import UIKit
 import AppKit
 #endif
 
+protocol NotificationAuthorizing {
+    func requestAuthorization(
+        options: UNAuthorizationOptions,
+        completionHandler: @escaping (Bool, Error?) -> Void
+    )
+}
+
+protocol NotificationRequestDelivering {
+    func add(_ request: UNNotificationRequest)
+}
+
+private final class NotificationCenterAuthorizerAdapter: NotificationAuthorizing {
+    private let center: UNUserNotificationCenter
+
+    init(center: UNUserNotificationCenter) {
+        self.center = center
+    }
+
+    func requestAuthorization(
+        options: UNAuthorizationOptions,
+        completionHandler: @escaping (Bool, Error?) -> Void
+    ) {
+        center.requestAuthorization(options: options, completionHandler: completionHandler)
+    }
+}
+
+private final class NotificationCenterRequestDelivererAdapter: NotificationRequestDelivering {
+    private let center: UNUserNotificationCenter
+
+    init(center: UNUserNotificationCenter) {
+        self.center = center
+    }
+
+    func add(_ request: UNNotificationRequest) {
+        Task {
+            try? await center.add(request)
+        }
+    }
+}
+
+private struct NoopNotificationAuthorizer: NotificationAuthorizing {
+    func requestAuthorization(
+        options: UNAuthorizationOptions,
+        completionHandler: @escaping (Bool, Error?) -> Void
+    ) {
+        completionHandler(false, nil)
+    }
+}
+
+private struct NoopNotificationRequestDeliverer: NotificationRequestDelivering {
+    func add(_ request: UNNotificationRequest) {}
+}
+
 final class NotificationService {
     static let shared = NotificationService()
 
+    private let isRunningTestsProvider: () -> Bool
+    private let authorizer: NotificationAuthorizing
+    private let requestDeliverer: NotificationRequestDelivering
+
     /// Returns true if running in test environment (XCTest, Swift Testing, or CI)
     private var isRunningTests: Bool {
-        let env = ProcessInfo.processInfo.environment
-        return NSClassFromString("XCTestCase") != nil ||
-               env["XCTestConfigurationFilePath"] != nil ||
-               env["XCTestBundlePath"] != nil ||
-               env["GITHUB_ACTIONS"] != nil ||
-               env["CI"] != nil
+        isRunningTestsProvider()
     }
 
-    private init() {}
+    private init() {
+        self.isRunningTestsProvider = {
+            let env = ProcessInfo.processInfo.environment
+            return NSClassFromString("XCTestCase") != nil ||
+                   env["XCTestConfigurationFilePath"] != nil ||
+                   env["XCTestBundlePath"] != nil ||
+                   env["GITHUB_ACTIONS"] != nil ||
+                   env["CI"] != nil
+        }
+        if isRunningTestsProvider() {
+            self.authorizer = NoopNotificationAuthorizer()
+            self.requestDeliverer = NoopNotificationRequestDeliverer()
+        } else {
+            let center = UNUserNotificationCenter.current()
+            self.authorizer = NotificationCenterAuthorizerAdapter(center: center)
+            self.requestDeliverer = NotificationCenterRequestDelivererAdapter(center: center)
+        }
+    }
+
+    internal init(
+        isRunningTestsProvider: @escaping () -> Bool,
+        authorizer: NotificationAuthorizing,
+        requestDeliverer: NotificationRequestDelivering
+    ) {
+        self.isRunningTestsProvider = isRunningTestsProvider
+        self.authorizer = authorizer
+        self.requestDeliverer = requestDeliverer
+    }
 
     func requestAuthorization() {
         guard !isRunningTests else { return }
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+        authorizer.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if granted {
                 // Permission granted
             } else {
@@ -64,7 +143,7 @@ final class NotificationService {
             trigger: nil // Deliver immediately
         )
 
-        UNUserNotificationCenter.current().add(request)
+        requestDeliverer.add(request)
     }
     
     func sendMentionNotification(from sender: String, message: String) {

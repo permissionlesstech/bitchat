@@ -4,6 +4,100 @@ import Network
 import Combine
 import Tor
 
+protocol NostrRelayConnectionProtocol: AnyObject {
+    func resume()
+    func cancel(with closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?)
+    func send(_ message: URLSessionWebSocketTask.Message, completionHandler: @escaping (Error?) -> Void)
+    func receive(completionHandler: @escaping (Result<URLSessionWebSocketTask.Message, Error>) -> Void)
+    func sendPing(pongReceiveHandler: @escaping (Error?) -> Void)
+}
+
+protocol NostrRelaySessionProtocol {
+    func webSocketTask(with url: URL) -> NostrRelayConnectionProtocol
+}
+
+private final class URLSessionWebSocketTaskAdapter: NostrRelayConnectionProtocol {
+    private let base: URLSessionWebSocketTask
+
+    init(base: URLSessionWebSocketTask) {
+        self.base = base
+    }
+
+    func resume() {
+        base.resume()
+    }
+
+    func cancel(with closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
+        base.cancel(with: closeCode, reason: reason)
+    }
+
+    func send(_ message: URLSessionWebSocketTask.Message, completionHandler: @escaping (Error?) -> Void) {
+        base.send(message, completionHandler: completionHandler)
+    }
+
+    func receive(completionHandler: @escaping (Result<URLSessionWebSocketTask.Message, Error>) -> Void) {
+        base.receive(completionHandler: completionHandler)
+    }
+
+    func sendPing(pongReceiveHandler: @escaping (Error?) -> Void) {
+        base.sendPing(pongReceiveHandler: pongReceiveHandler)
+    }
+}
+
+private struct URLSessionAdapter: NostrRelaySessionProtocol {
+    let base: URLSession
+
+    func webSocketTask(with url: URL) -> NostrRelayConnectionProtocol {
+        URLSessionWebSocketTaskAdapter(base: base.webSocketTask(with: url))
+    }
+}
+
+struct NostrRelayManagerDependencies {
+    var activationAllowed: () -> Bool
+    var userTorEnabled: () -> Bool
+    var hasMutualFavorites: () -> Bool
+    var hasLocationPermission: () -> Bool
+    var mutualFavoritesPublisher: AnyPublisher<Set<Data>, Never>
+    var locationPermissionPublisher: AnyPublisher<LocationChannelManager.PermissionState, Never>
+    var torEnforced: () -> Bool
+    var torIsReady: () -> Bool
+    var torIsForeground: () -> Bool
+    var awaitTorReady: (@escaping (Bool) -> Void) -> Void
+    var makeSession: () -> NostrRelaySessionProtocol
+    var scheduleAfter: (TimeInterval, @escaping () -> Void) -> Void
+    var now: () -> Date
+}
+
+private extension NostrRelayManagerDependencies {
+    @MainActor
+    static func live() -> Self {
+        Self(
+            activationAllowed: { NetworkActivationService.shared.activationAllowed },
+            userTorEnabled: { NetworkActivationService.shared.userTorEnabled },
+            hasMutualFavorites: { !FavoritesPersistenceService.shared.mutualFavorites.isEmpty },
+            hasLocationPermission: { LocationChannelManager.shared.permissionState == .authorized },
+            mutualFavoritesPublisher: FavoritesPersistenceService.shared.$mutualFavorites.eraseToAnyPublisher(),
+            locationPermissionPublisher: LocationChannelManager.shared.$permissionState.eraseToAnyPublisher(),
+            torEnforced: { TorManager.shared.torEnforced },
+            torIsReady: { TorManager.shared.isReady },
+            torIsForeground: { TorManager.shared.isForeground() },
+            awaitTorReady: { completion in
+                Task.detached {
+                    let ready = await TorManager.shared.awaitReady()
+                    await MainActor.run {
+                        completion(ready)
+                    }
+                }
+            },
+            makeSession: { URLSessionAdapter(base: TorURLSession.shared.session) },
+            scheduleAfter: { delay, action in
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: action)
+            },
+            now: Date.init
+        )
+    }
+}
+
 /// Manages WebSocket connections to Nostr relays
 @MainActor
 final class NostrRelayManager: ObservableObject {
@@ -41,10 +135,11 @@ final class NostrRelayManager: ObservableObject {
     @Published private(set) var relays: [Relay] = []
     @Published private(set) var isConnected = false
     
+    private let dependencies: NostrRelayManagerDependencies
     private var allowDefaultRelays: Bool = false
     private var hasMutualFavorites: Bool = false
     private var hasLocationPermission: Bool = false
-    private var connections: [String: URLSessionWebSocketTask] = [:]
+    private var connections: [String: NostrRelayConnectionProtocol] = [:]
     private var subscriptions: [String: Set<String>] = [:] // relay URL -> active subscription IDs
     private var pendingSubscriptions: [String: [String: String]] = [:] // relay URL -> (subscription id -> encoded REQ JSON)
     private var messageHandlers: [String: (NostrEvent) -> Void] = [:]
@@ -69,8 +164,7 @@ final class NostrRelayManager: ObservableObject {
     private var messageQueue: [PendingSend] = []
     private let messageQueueLock = NSLock()
     private let encoder = JSONEncoder()
-    private var networkService: NetworkActivationService { NetworkActivationService.shared }
-    private var shouldUseTor: Bool { networkService.userTorEnabled }
+    private var shouldUseTor: Bool { dependencies.userTorEnabled() }
     
     // Exponential backoff configuration
     private let initialBackoffInterval: TimeInterval = TransportConfig.nostrRelayInitialBackoffSeconds
@@ -82,12 +176,13 @@ final class NostrRelayManager: ObservableObject {
     private var connectionGeneration: Int = 0
     
     init() {
-        hasMutualFavorites = !FavoritesPersistenceService.shared.mutualFavorites.isEmpty
-        hasLocationPermission = LocationChannelManager.shared.permissionState == .authorized
+        self.dependencies = .live()
+        hasMutualFavorites = dependencies.hasMutualFavorites()
+        hasLocationPermission = dependencies.hasLocationPermission()
         applyDefaultRelayPolicy(force: true)
         // Deterministic JSON shape for outbound requests
         self.encoder.outputFormatting = .sortedKeys
-        FavoritesPersistenceService.shared.$mutualFavorites
+        dependencies.mutualFavoritesPublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] favorites in
                 guard let self = self else { return }
@@ -95,7 +190,34 @@ final class NostrRelayManager: ObservableObject {
                 self.applyDefaultRelayPolicy()
             }
             .store(in: &cancellables)
-        LocationChannelManager.shared.$permissionState
+        dependencies.locationPermissionPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] state in
+                guard let self = self else { return }
+                let authorized = (state == .authorized)
+                if authorized == self.hasLocationPermission { return }
+                self.hasLocationPermission = authorized
+                self.applyDefaultRelayPolicy()
+            }
+            .store(in: &cancellables)
+    }
+
+    internal init(dependencies: NostrRelayManagerDependencies) {
+        self.dependencies = dependencies
+        hasMutualFavorites = dependencies.hasMutualFavorites()
+        hasLocationPermission = dependencies.hasLocationPermission()
+        applyDefaultRelayPolicy(force: true)
+        // Deterministic JSON shape for outbound requests
+        self.encoder.outputFormatting = .sortedKeys
+        dependencies.mutualFavoritesPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] favorites in
+                guard let self = self else { return }
+                self.hasMutualFavorites = !favorites.isEmpty
+                self.applyDefaultRelayPolicy()
+            }
+            .store(in: &cancellables)
+        dependencies.locationPermissionPublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
                 guard let self = self else { return }
@@ -110,20 +232,18 @@ final class NostrRelayManager: ObservableObject {
     /// Connect to all configured relays
     func connect() {
         // Global network policy gate
-        guard networkService.activationAllowed else { return }
+        guard dependencies.activationAllowed() else { return }
         if shouldUseTor {
             // Ensure Tor is started early and wait for readiness off-main; then hop back to connect.
-            Task.detached {
-                let ready = await TorManager.shared.awaitReady()
-                await MainActor.run {
-                    if !ready {
-                        SecureLogger.error("❌ Tor not ready; aborting relay connections (fail-closed)", category: .session)
-                        return
-                    }
-                    SecureLogger.debug("🌐 Connecting to \(self.relays.count) Nostr relays (via Tor)", category: .session)
-                    for relay in self.relays {
-                        self.connectToRelay(relay.url)
-                    }
+            dependencies.awaitTorReady { [weak self] ready in
+                guard let self = self else { return }
+                if !ready {
+                    SecureLogger.error("❌ Tor not ready; aborting relay connections (fail-closed)", category: .session)
+                    return
+                }
+                SecureLogger.debug("🌐 Connecting to \(self.relays.count) Nostr relays (via Tor)", category: .session)
+                for relay in self.relays {
+                    self.connectToRelay(relay.url)
                 }
             }
         } else {
@@ -150,15 +270,14 @@ final class NostrRelayManager: ObservableObject {
     /// Ensure connections exist to the given relay URLs (idempotent).
     func ensureConnections(to relayUrls: [String]) {
         // Global network policy gate
-        guard networkService.activationAllowed else { return }
+        guard dependencies.activationAllowed() else { return }
         let targets = allowedRelayList(from: relayUrls)
         guard !targets.isEmpty else { return }
-        if shouldUseTor && TorManager.shared.torEnforced && !TorManager.shared.isReady {
+        if shouldUseTor && dependencies.torEnforced() && !dependencies.torIsReady() {
             // Defer until Tor is fully ready; avoid queuing connection attempts early
-            Task.detached { [weak self] in
+            dependencies.awaitTorReady { [weak self] ready in
                 guard let self = self else { return }
-                let ready = await TorManager.shared.awaitReady()
-                await MainActor.run { if ready { self.ensureConnections(to: relayUrls) } }
+                if ready { self.ensureConnections(to: relayUrls) }
             }
             return
         }
@@ -175,13 +294,12 @@ final class NostrRelayManager: ObservableObject {
     /// Send an event to specified relays (or all if none specified)
     func sendEvent(_ event: NostrEvent, to relayUrls: [String]? = nil) {
         // Global network policy gate
-        guard networkService.activationAllowed else { return }
-        if shouldUseTor && TorManager.shared.torEnforced && !TorManager.shared.isReady {
+        guard dependencies.activationAllowed() else { return }
+        if shouldUseTor && dependencies.torEnforced() && !dependencies.torIsReady() {
             // Defer sends until Tor is ready to avoid premature queueing
-            Task.detached { [weak self] in
+            dependencies.awaitTorReady { [weak self] ready in
                 guard let self = self else { return }
-                let ready = await TorManager.shared.awaitReady()
-                await MainActor.run { if ready { self.sendEvent(event, to: relayUrls) } }
+                if ready { self.sendEvent(event, to: relayUrls) }
             }
             return
         }
@@ -253,24 +371,21 @@ final class NostrRelayManager: ObservableObject {
         onEOSE: (() -> Void)? = nil
     ) {
         // Global network policy gate
-        guard networkService.activationAllowed else { return }
+        guard dependencies.activationAllowed() else { return }
         // Coalesce rapid duplicate subscribe requests only if a handler already exists
-        let now = Date()
+        let now = dependencies.now()
         if messageHandlers[id] != nil {
             if let last = subscribeCoalesce[id], now.timeIntervalSince(last) < 1.0 {
                 return
             }
         }
         subscribeCoalesce[id] = now
-        if shouldUseTor && TorManager.shared.torEnforced && !TorManager.shared.isReady {
+        if shouldUseTor && dependencies.torEnforced() && !dependencies.torIsReady() {
             // Defer subscription setup until Tor is ready; avoid queuing subs early
-            Task.detached { [weak self] in
+            dependencies.awaitTorReady { [weak self] ready in
                 guard let self = self else { return }
-                let ready = await TorManager.shared.awaitReady()
-                await MainActor.run {
-                    if ready {
-                        self.subscribe(filter: filter, id: id, relayUrls: relayUrls, handler: handler)
-                    }
+                if ready {
+                    self.subscribe(filter: filter, id: id, relayUrls: relayUrls, handler: handler, onEOSE: onEOSE)
                 }
             }
             return
@@ -346,7 +461,7 @@ final class NostrRelayManager: ObservableObject {
                 relays.append(Relay(url: url))
                 existing.insert(url)
             }
-            if networkService.activationAllowed {
+            if dependencies.activationAllowed() {
                 ensureConnections(to: Self.defaultRelays)
             }
         } else {
@@ -400,10 +515,9 @@ final class NostrRelayManager: ObservableObject {
         // Send unsubscribe to all relays
         for (relayUrl, connection) in connections {
             if subscriptions[relayUrl]?.contains(id) == true {
+                subscriptions[relayUrl]?.remove(id)
                 connection.send(.string(messageString)) { _ in
-                    Task { @MainActor in
-                        self.subscriptions[relayUrl]?.remove(id)
-                    }
+                    // Local state is cleared before sending so callers can re-subscribe immediately.
                 }
             }
         }
@@ -413,14 +527,14 @@ final class NostrRelayManager: ObservableObject {
     
     private func connectToRelay(_ urlString: String) {
         // Global network policy gate
-        guard networkService.activationAllowed else { return }
+        guard dependencies.activationAllowed() else { return }
         guard let url = URL(string: urlString) else { 
             SecureLogger.warning("Invalid relay URL: \(urlString)", category: .session)
             return 
         }
 
         // Avoid initiating connections while app is backgrounded; we'll reconnect on foreground
-        if shouldUseTor && TorManager.shared.torEnforced && !TorManager.shared.isForeground() {
+        if shouldUseTor && dependencies.torEnforced() && !dependencies.torIsForeground() {
             return
         }
         
@@ -435,19 +549,16 @@ final class NostrRelayManager: ObservableObject {
         // Attempting to connect to Nostr relay via the proxied session
         
         // If Tor is enforced but not ready, delay connection until it is.
-        if shouldUseTor && TorManager.shared.torEnforced && !TorManager.shared.isReady {
-            Task.detached { [weak self] in
+        if shouldUseTor && dependencies.torEnforced() && !dependencies.torIsReady() {
+            dependencies.awaitTorReady { [weak self] ready in
                 guard let self = self else { return }
-                let ready = await TorManager.shared.awaitReady()
-                await MainActor.run {
-                    if ready { self.connectToRelay(urlString) }
-                    else { SecureLogger.error("❌ Tor not ready; skipping connection to \(urlString)", category: .session) }
-                }
+                if ready { self.connectToRelay(urlString) }
+                else { SecureLogger.error("❌ Tor not ready; skipping connection to \(urlString)", category: .session) }
             }
             return
         }
         
-        let session = TorURLSession.shared.session
+        let session = dependencies.makeSession()
         let task = session.webSocketTask(with: url)
         
         connections[urlString] = task
@@ -495,7 +606,7 @@ final class NostrRelayManager: ObservableObject {
         pendingSubscriptions[relayUrl] = nil
     }
     
-    private func receiveMessage(from task: URLSessionWebSocketTask, relayUrl: String) {
+    private func receiveMessage(from task: NostrRelayConnectionProtocol, relayUrl: String) {
         task.receive { [weak self] result in
             guard let self = self else { return }
             
@@ -505,7 +616,7 @@ final class NostrRelayManager: ObservableObject {
                 Task.detached(priority: .utility) {
                     guard let parsed = ParsedInbound(message) else { return }
                     await MainActor.run {
-                        NostrRelayManager.shared.handleParsedMessage(parsed, from: relayUrl)
+                        self.handleParsedMessage(parsed, from: relayUrl)
                     }
                 }
                 
@@ -569,7 +680,7 @@ final class NostrRelayManager: ObservableObject {
         }
     }
     
-    private func sendToRelay(event: NostrEvent, connection: URLSessionWebSocketTask, relayUrl: String) {
+    private func sendToRelay(event: NostrEvent, connection: NostrRelayConnectionProtocol, relayUrl: String) {
         let req = NostrRequest.event(event)
         
         do {
@@ -601,11 +712,11 @@ final class NostrRelayManager: ObservableObject {
             relays[index].isConnected = isConnected
             relays[index].lastError = error
             if isConnected {
-                relays[index].lastConnectedAt = Date()
+                relays[index].lastConnectedAt = dependencies.now()
                 relays[index].reconnectAttempts = 0  // Reset on successful connection
                 relays[index].nextReconnectTime = nil
             } else {
-                relays[index].lastDisconnectedAt = Date()
+                relays[index].lastDisconnectedAt = dependencies.now()
             }
         }
         updateConnectionStatus()
@@ -621,7 +732,7 @@ final class NostrRelayManager: ObservableObject {
     
     private func handleDisconnection(relayUrl: String, error: Error) {
         // If networking is disallowed, do not schedule reconnection
-        if !networkService.activationAllowed {
+        if !dependencies.activationAllowed() {
             connections.removeValue(forKey: relayUrl)
             subscriptions.removeValue(forKey: relayUrl)
             updateRelayStatus(relayUrl, isConnected: false, error: error)
@@ -666,13 +777,13 @@ final class NostrRelayManager: ObservableObject {
             maxBackoffInterval
         )
         
-        let nextReconnectTime = Date().addingTimeInterval(backoffInterval)
+        let nextReconnectTime = dependencies.now().addingTimeInterval(backoffInterval)
         relays[index].nextReconnectTime = nextReconnectTime
         
         
         // Schedule reconnection with exponential backoff
         let gen = connectionGeneration
-        DispatchQueue.main.asyncAfter(deadline: .now() + backoffInterval) { [weak self] in
+        dependencies.scheduleAfter(backoffInterval) { [weak self] in
             guard let self = self else { return }
             // Ignore stale scheduled reconnects from a previous generation
             guard gen == self.connectionGeneration else { return }
