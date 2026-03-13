@@ -288,18 +288,22 @@ struct NostrTransportTests {
         transport.sendReadReceipt(first, to: fullPeerID)
         transport.sendReadReceipt(second, to: fullPeerID)
 
-        let sentFirst = await TestHelpers.waitUntil({ probe.sentEvents.count == 1 }, timeout: 0.5)
-        #expect(sentFirst)
-        #expect(probe.scheduledActionCount == 1)
-        let firstPayload = try decodeEmbeddedPayload(from: probe.sentEvents[0], recipient: recipient).payload
+        let sentFirst = await TestHelpers.waitUntil(
+            { probe.sentEvents.count == 1 && probe.scheduledActionCount == 1 },
+            timeout: 0.5
+        )
+        try #require(sentFirst, "Expected first read receipt and throttle action to be queued")
+        let firstEvent = try #require(probe.sentEvents.first, "Expected first queued read receipt event")
+        let firstPayload = try decodeEmbeddedPayload(from: firstEvent, recipient: recipient).payload
         #expect(firstPayload.type == .readReceipt)
         #expect(String(data: firstPayload.data, encoding: .utf8) == "read-1")
 
-        probe.runNextScheduledAction()
+        try #require(probe.runNextScheduledAction(), "Expected queued throttle action after first read receipt")
 
         let sentSecond = await TestHelpers.waitUntil({ probe.sentEvents.count == 2 }, timeout: 0.5)
-        #expect(sentSecond)
-        let secondPayload = try decodeEmbeddedPayload(from: probe.sentEvents[1], recipient: recipient).payload
+        try #require(sentSecond, "Expected second read receipt after running throttle action")
+        let secondEvent = try #require(probe.sentEvents.last, "Expected second queued read receipt event")
+        let secondPayload = try decodeEmbeddedPayload(from: secondEvent, recipient: recipient).payload
         #expect(secondPayload.type == .readReceipt)
         #expect(String(data: secondPayload.data, encoding: .utf8) == "read-2")
     }
@@ -478,11 +482,14 @@ private final class NostrTransportProbe: @unchecked Sendable {
         lock.unlock()
     }
 
-    func runNextScheduledAction() {
+    @discardableResult
+    func runNextScheduledAction() -> Bool {
         let action: (@Sendable () -> Void)?
         lock.lock()
         action = scheduledActionsStorage.isEmpty ? nil : scheduledActionsStorage.removeFirst()
         lock.unlock()
-        action?()
+        guard let action else { return false }
+        action()
+        return true
     }
 }
