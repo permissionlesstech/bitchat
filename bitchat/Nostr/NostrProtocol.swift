@@ -528,6 +528,26 @@ struct NostrEvent: Codable {
         signed.sig = signatureHex
         return signed
     }
+
+    /// Validate that the event ID and Schnorr signature match the content and pubkey.
+    /// Returns false when the signature is missing, malformed, or does not verify.
+    func isValidSignature() -> Bool {
+        guard let sig = sig,
+              let sigData = Data(hexString: sig),
+              let pubData = Data(hexString: pubkey),
+              sigData.count == 64,
+              pubData.count == 32,
+              let signature = try? P256K.Schnorr.SchnorrSignature(dataRepresentation: sigData),
+              let (expectedId, eventHash) = try? calculateEventId(),
+              expectedId == id
+        else {
+            return false
+        }
+
+        var messageBytes = [UInt8](eventHash)
+        let xonly = P256K.Schnorr.XonlyKey(dataRepresentation: pubData)
+        return xonly.isValid(signature, for: &messageBytes)
+    }
     
     private func calculateEventId() throws -> (String, Data) {
         let serialized = [
