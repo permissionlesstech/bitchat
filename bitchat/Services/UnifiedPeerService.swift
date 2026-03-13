@@ -305,12 +305,13 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         // Log the final nickname being saved
         SecureLogger.debug("⭐️ Toggled favorite for '\(finalNickname)' (peerID: \(peerID), was: \(wasFavorite), now: \(!wasFavorite))", category: .session)
         
-        // Send favorite notification to the peer via router (mesh or Nostr)
+        // Send favorite notification to the peer via router (mesh or Nostr).
+        // Always route through MessageRouter so the message goes through the
+        // outbox and survives Noise handshake / offline queuing.
         if let router = messageRouter {
             router.sendFavoriteNotification(to: peerID, isFavorite: !wasFavorite)
         } else {
-            // Fallback to mesh-only if router not yet wired
-            meshService.sendFavoriteNotification(to: peerID, isFavorite: !wasFavorite)
+            SecureLogger.warning("⚠️ MessageRouter not wired — favorite notification to \(peerID) dropped", category: .session)
         }
         
         // Force update of peers to reflect the change
