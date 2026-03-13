@@ -294,7 +294,7 @@ struct MessageRouterTests {
     }
 
     @Test @MainActor
-    func sendFavoriteNotification_usesConnectedOrReachable() async {
+    func sendFavoriteNotification_routesThroughOutbox() async {
         let peerID = PeerID(str: "0000000000000005")
         let transport = MockTransport()
         transport.reachablePeers.insert(peerID)
@@ -302,6 +302,31 @@ struct MessageRouterTests {
         let router = MessageRouter(transports: [transport])
         router.sendFavoriteNotification(to: peerID, isFavorite: true)
 
-        #expect(transport.sentFavoriteNotifications.count == 1)
+        // Favorites now route through sendPrivate → outbox → sendPrivateMessage
+        #expect(transport.sentPrivateMessages.count == 1)
+        let sent = transport.sentPrivateMessages[0]
+        #expect(sent.0.hasPrefix("[FAVORITED]"))
+    }
+
+    @Test @MainActor
+    func sendFavoriteNotification_queuesWhenOffline() async {
+        let peerID = PeerID(str: "0000000000000006")
+        let transport = MockTransport()
+        // Peer is NOT connected or reachable
+
+        let router = MessageRouter(transports: [transport])
+        router.sendFavoriteNotification(to: peerID, isFavorite: false)
+
+        // Message should be queued in outbox, not sent yet
+        #expect(transport.sentPrivateMessages.isEmpty)
+        #expect(router.pendingPeerIDs.contains(peerID.toShort()))
+
+        // Simulate peer coming online — flush should deliver
+        transport.connectedPeers.insert(peerID.toShort())
+        router.flushOutbox(for: peerID)
+
+        #expect(transport.sentPrivateMessages.count == 1)
+        let sent = transport.sentPrivateMessages[0]
+        #expect(sent.0.hasPrefix("[UNFAVORITED]"))
     }
 }

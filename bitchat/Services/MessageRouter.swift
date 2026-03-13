@@ -5,6 +5,7 @@ import Foundation
 @MainActor
 final class MessageRouter {
     private let transports: [Transport]
+    private let idBridge: NostrIdentityBridge?
 
     // Outbox entry with timestamp for TTL-based eviction
     private struct QueuedMessage {
@@ -26,8 +27,9 @@ final class MessageRouter {
     // Don't resend a message that was handed to transport less than this many seconds ago
     private static let resendCooldownSeconds: TimeInterval = 30
 
-    init(transports: [Transport]) {
+    init(transports: [Transport], idBridge: NostrIdentityBridge? = nil) {
         self.transports = transports
+        self.idBridge = idBridge
 
         // Observe favorites changes to learn Nostr mapping and flush queued messages
         NotificationCenter.default.addObserver(
@@ -118,11 +120,13 @@ final class MessageRouter {
 
     func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {
         let normalizedPeerID = peerID.toShort()
-        if let transport = connectedTransport(for: normalizedPeerID) {
-            transport.sendFavoriteNotification(to: normalizedPeerID, isFavorite: isFavorite)
-        } else if let transport = reachableTransport(for: normalizedPeerID) {
-            transport.sendFavoriteNotification(to: normalizedPeerID, isFavorite: isFavorite)
+        // Build the favorite payload (same format BLEService/NostrTransport used to build internally)
+        var content = isFavorite ? "[FAVORITED]" : "[UNFAVORITED]"
+        if let npub = try? idBridge?.getCurrentNostrIdentity()?.npub {
+            content += ":" + npub
         }
+        // Route through the outbox so favorites survive Noise handshake and offline queuing
+        sendPrivate(content, to: normalizedPeerID, recipientNickname: "", messageID: UUID().uuidString)
     }
 
     // MARK: - Outbox Management

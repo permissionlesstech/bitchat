@@ -433,7 +433,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
         self.unifiedPeerService = UnifiedPeerService(meshService: meshService, idBridge: idBridge, identityManager: identityManager)
         let nostrTransport = NostrTransport(keychain: keychain, idBridge: idBridge)
         nostrTransport.senderPeerID = meshService.myPeerID
-        self.messageRouter = MessageRouter(transports: [meshService, nostrTransport])
+        self.messageRouter = MessageRouter(transports: [meshService, nostrTransport], idBridge: idBridge)
         // Route receipts from PrivateChatManager through MessageRouter
         self.privateChatManager.messageRouter = self.messageRouter
         // Allow PrivateChatManager to look up peer info for message consolidation
