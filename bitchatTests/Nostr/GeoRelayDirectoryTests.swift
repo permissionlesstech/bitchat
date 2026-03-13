@@ -146,12 +146,16 @@ final class GeoRelayDirectoryTests: XCTestCase {
     }
 
     func test_prefetchIfNeeded_runsRemoteFetchOffMainThread() async {
+        var factoryThreadFlags: [Bool] = []
         let threadRecorder = MainThreadRecorder()
         let harness = makeHarness(
             fetchCSV: """
             relay url,lat,lon
             background.example,8,9
             """,
+            fetchFactoryObserver: {
+                factoryThreadFlags.append(isExecutingOnMainThread())
+            },
             fetchObserver: {
                 await threadRecorder.record(isExecutingOnMainThread())
             }
@@ -164,6 +168,7 @@ final class GeoRelayDirectoryTests: XCTestCase {
             directory.entries == [GeoRelayDirectory.Entry(host: "background.example", lat: 8, lon: 9)]
         }
         XCTAssertTrue(refreshed)
+        XCTAssertEqual(factoryThreadFlags, [true])
         let recordedValues = await threadRecorder.recordedValues()
         XCTAssertEqual(recordedValues, [false])
     }
@@ -238,6 +243,7 @@ final class GeoRelayDirectoryTests: XCTestCase {
         workingDirectoryCSV: String? = nil,
         fetchCSV: String? = nil,
         fetchResults: [Result<Data, Error>] = [],
+        fetchFactoryObserver: (@MainActor @Sendable () -> Void)? = nil,
         fetchObserver: (@Sendable () async -> Void)? = nil,
         autoStart: Bool = false,
         activeNotificationName: Notification.Name? = nil
@@ -278,9 +284,12 @@ final class GeoRelayDirectoryTests: XCTestCase {
             retryInitialSeconds: 5,
             retryMaxSeconds: 40,
             awaitTorReady: { true },
-            fetchData: { request in
-                await fetchObserver?()
-                return try await fetcher.fetch(request)
+            makeFetchData: {
+                fetchFactoryObserver?()
+                return { request in
+                    await fetchObserver?()
+                    return try await fetcher.fetch(request)
+                }
             },
             readData: { url in
                 fileStore.dataByURL[url]

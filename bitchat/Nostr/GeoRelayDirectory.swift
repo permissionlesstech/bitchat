@@ -18,7 +18,7 @@ struct GeoRelayDirectoryDependencies {
     var retryInitialSeconds: TimeInterval
     var retryMaxSeconds: TimeInterval
     var awaitTorReady: @Sendable () async -> Bool
-    var fetchData: @Sendable (URLRequest) async throws -> Data
+    var makeFetchData: @MainActor @Sendable () -> (@Sendable (URLRequest) async throws -> Data)
     var readData: (URL) -> Data?
     var writeData: (Data, URL) throws -> Void
     var cacheURL: () -> URL?
@@ -50,9 +50,12 @@ private extension GeoRelayDirectoryDependencies {
             retryInitialSeconds: TransportConfig.geoRelayRetryInitialSeconds,
             retryMaxSeconds: TransportConfig.geoRelayRetryMaxSeconds,
             awaitTorReady: { await TorManager.shared.awaitReady() },
-            fetchData: { request in
-                let (data, _) = try await TorURLSession.shared.session.data(for: request)
-                return data
+            makeFetchData: {
+                let session = TorURLSession.shared.session
+                return { request in
+                    let (data, _) = try await session.data(for: request)
+                    return data
+                }
             },
             readData: { try? Data(contentsOf: $0) },
             writeData: { data, url in
@@ -220,7 +223,7 @@ final class GeoRelayDirectory {
             timeoutInterval: 15
         )
         let awaitTorReady = dependencies.awaitTorReady
-        let fetchData = dependencies.fetchData
+        let fetchData = dependencies.makeFetchData()
 
         Task { [weak self] in
             guard let self else { return }
