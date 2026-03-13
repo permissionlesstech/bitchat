@@ -23,10 +23,18 @@ struct BLEServiceCoreTests {
         let packet = makePublicPacket(content: "Hello", sender: sender, timestamp: timestamp)
 
         ble._test_handlePacket(packet, fromPeerID: sender)
-        ble._test_handlePacket(packet, fromPeerID: sender)
+        let receivedFirst = await TestHelpers.waitUntil(
+            { delegate.publicMessagesSnapshot().count == 1 },
+            timeout: TestConstants.defaultTimeout
+        )
+        #expect(receivedFirst)
 
-        _ = await TestHelpers.waitUntil({ delegate.publicMessagesSnapshot().count == 1 },
-                                        timeout: TestConstants.shortTimeout)
+        ble._test_handlePacket(packet, fromPeerID: sender)
+        let receivedDuplicate = await TestHelpers.waitUntil(
+            { delegate.publicMessagesSnapshot().count > 1 },
+            timeout: TestConstants.shortTimeout
+        )
+        #expect(!receivedDuplicate)
 
         let messages = delegate.publicMessagesSnapshot()
         #expect(messages.count == 1)
