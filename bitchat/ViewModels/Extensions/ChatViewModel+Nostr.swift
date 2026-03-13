@@ -56,6 +56,7 @@ extension ChatViewModel {
     }
     
     func subscribeNostrEvent(_ event: NostrEvent) {
+        guard event.isValidSignature() else { return }
         guard (event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue || 
                event.kind == NostrProtocol.EventKind.geohashPresence.rawValue),
               !deduplicationService.hasProcessedNostrEvent(event.id)
@@ -146,13 +147,12 @@ extension ChatViewModel {
     }
 
     func subscribeGiftWrap(_ giftWrap: NostrEvent, id: NostrIdentity) {
+        guard giftWrap.isValidSignature() else { return }
         guard !deduplicationService.hasProcessedNostrEvent(giftWrap.id) else { return }
         deduplicationService.recordNostrEvent(giftWrap.id)
         
         guard let (content, senderPubkey, rumorTs) = try? NostrProtocol.decryptPrivateMessage(giftWrap: giftWrap, recipientIdentity: id),
-              content.hasPrefix("bitchat1:"),
-              let packetData = Self.base64URLDecode(String(content.dropFirst("bitchat1:".count))),
-              let packet = BitchatPacket.from(packetData),
+              let packet = Self.decodeEmbeddedBitChatPacket(from: content),
               packet.type == MessageType.noiseEncrypted.rawValue,
               let noisePayload = NoisePayload.decode(packet.payload)
         else {
@@ -254,6 +254,7 @@ extension ChatViewModel {
     }
     
     func handleNostrEvent(_ event: NostrEvent) {
+        guard event.isValidSignature() else { return }
         // Only handle ephemeral kind 20000 or presence kind 20001 with matching tag
         guard (event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue ||
                event.kind == NostrProtocol.EventKind.geohashPresence.rawValue) else { return }
@@ -367,6 +368,7 @@ extension ChatViewModel {
     }
     
     func handleGiftWrap(_ giftWrap: NostrEvent, id: NostrIdentity) {
+        guard giftWrap.isValidSignature() else { return }
         if deduplicationService.hasProcessedNostrEvent(giftWrap.id) {
             return
         }
@@ -380,9 +382,7 @@ extension ChatViewModel {
         
         SecureLogger.debug("GeoDM: decrypted gift-wrap id=\(giftWrap.id.prefix(16))... from=\(senderPubkey.prefix(8))...", category: .session)
         
-        guard content.hasPrefix("bitchat1:"),
-              let packetData = Self.base64URLDecode(String(content.dropFirst("bitchat1:".count))),
-              let packet = BitchatPacket.from(packetData),
+        guard let packet = Self.decodeEmbeddedBitChatPacket(from: content),
               packet.type == MessageType.noiseEncrypted.rawValue,
               let payload = NoisePayload.decode(packet.payload)
         else {
@@ -485,6 +485,7 @@ extension ChatViewModel {
     }
     
     func subscribeNostrEvent(_ event: NostrEvent, gh: String) {
+        guard event.isValidSignature() else { return }
         guard (event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue ||
                event.kind == NostrProtocol.EventKind.geohashPresence.rawValue) else { return }
 
@@ -602,6 +603,7 @@ extension ChatViewModel {
     }
     
     func processNostrMessage(_ giftWrap: NostrEvent) async {
+        guard giftWrap.isValidSignature() else { return }
         guard let currentIdentity = try? idBridge.getCurrentNostrIdentity() else { return }
         
         do {
@@ -619,8 +621,7 @@ extension ChatViewModel {
             
             // Check if it's a BitChat packet embedded in the content (bitchat1:...)
             if content.hasPrefix("bitchat1:") {
-                guard let packetData = Self.base64URLDecode(String(content.dropFirst("bitchat1:".count))),
-                      let packet = BitchatPacket.from(packetData) else {
+                guard let packet = Self.decodeEmbeddedBitChatPacket(from: content) else {
                     SecureLogger.error("Failed to decode embedded BitChat packet from Nostr DM", category: .session)
                     return
                 }
@@ -631,24 +632,23 @@ extension ChatViewModel {
                 // Stable target ID if we know Noise key; otherwise temporary Nostr-based peer
                 let targetPeerID = PeerID(str: actualSenderNoiseKey?.hexEncodedString()) ?? PeerID(nostr_: senderPubkey)
                 
-                if packet.type == MessageType.noiseEncrypted.rawValue {
-                    if let payload = NoisePayload.decode(packet.payload) {
-                        let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTimestamp))
-                        // Store Nostr mapping
-                        await MainActor.run {
-                            nostrKeyMapping[targetPeerID] = senderPubkey
-                            
-                            // Handle packet types
-                            switch payload.type {
-                            case .privateMessage:
-                                handlePrivateMessage(payload, senderPubkey: senderPubkey, convKey: targetPeerID, id: currentIdentity, messageTimestamp: messageTimestamp)
-                            case .delivered:
-                                handleDelivered(payload, senderPubkey: senderPubkey, convKey: targetPeerID)
-                            case .readReceipt:
-                                handleReadReceipt(payload, senderPubkey: senderPubkey, convKey: targetPeerID)
-                            case .verifyChallenge, .verifyResponse:
-                                break
-                            }
+                if packet.type == MessageType.noiseEncrypted.rawValue,
+                   let payload = NoisePayload.decode(packet.payload) {
+                    let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTimestamp))
+                    // Store Nostr mapping
+                    await MainActor.run {
+                        nostrKeyMapping[targetPeerID] = senderPubkey
+                        
+                        // Handle packet types
+                        switch payload.type {
+                        case .privateMessage:
+                            handlePrivateMessage(payload, senderPubkey: senderPubkey, convKey: targetPeerID, id: currentIdentity, messageTimestamp: messageTimestamp)
+                        case .delivered:
+                            handleDelivered(payload, senderPubkey: senderPubkey, convKey: targetPeerID)
+                        case .readReceipt:
+                            handleReadReceipt(payload, senderPubkey: senderPubkey, convKey: targetPeerID)
+                        case .verifyChallenge, .verifyResponse:
+                            break
                         }
                     }
                 }
@@ -799,6 +799,19 @@ extension ChatViewModel {
         
         // Route via message router
         messageRouter.sendFavoriteNotification(to: peerID, isFavorite: isFavorite)
+    }
+
+    private static func decodeEmbeddedBitChatPacket(from content: String) -> BitchatPacket? {
+        guard content.hasPrefix("bitchat1:") else { return nil }
+        let encoded = String(content.dropFirst("bitchat1:".count))
+        let maxBytes = FileTransferLimits.maxFramedFileBytes
+        // Base64url length upper bound for maxBytes (padded length; unpadded is <= this).
+        let maxEncoded = ((maxBytes + 2) / 3) * 4
+        guard encoded.count <= maxEncoded else { return nil }
+        guard let packetData = Self.base64URLDecode(encoded),
+              packetData.count <= maxBytes
+        else { return nil }
+        return BitchatPacket.from(packetData)
     }
 
     // MARK: - Geohash Nickname Resolution (for /block in geohash)

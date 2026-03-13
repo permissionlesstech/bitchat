@@ -3348,18 +3348,25 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
                 self.scheduleNetworkEmptyTimer()
             } else {
                 self.invalidateNetworkEmptyTimer()
-                // Trim out peers we no longer observe before comparing for new arrivals
-                self.recentlySeenPeers.formIntersection(meshPeerSet)
+                // Don't trim recentlySeenPeers here - let timers handle cleanup.
+                // Trimming immediately causes peers to be treated as "new" when they
+                // briefly drop and reconnect, triggering notification floods.
                 let newPeers = meshPeerSet.subtracting(self.recentlySeenPeers)
-                
+
                 if !newPeers.isEmpty {
-                    self.lastNetworkNotificationTime = Date()
-                    self.recentlySeenPeers.formUnion(newPeers)
-                    NotificationService.shared.sendNetworkAvailableNotification(peerCount: meshPeers.count)
-                    SecureLogger.info(
-                        "👥 Sent bitchatters nearby notification for \(meshPeers.count) mesh peers (new: \(newPeers.count))",
-                        category: .session
-                    )
+                    // Rate limit: max one notification per 5 minutes
+                    let cooldown = TransportConfig.networkNotificationCooldownSeconds
+                    if Date().timeIntervalSince(self.lastNetworkNotificationTime) >= cooldown {
+                        // Only mark peers as seen when we actually notify about them
+                        // This ensures peers arriving during cooldown will be included in the next notification
+                        self.recentlySeenPeers.formUnion(newPeers)
+                        self.lastNetworkNotificationTime = Date()
+                        NotificationService.shared.sendNetworkAvailableNotification(peerCount: meshPeers.count)
+                        SecureLogger.info(
+                            "👥 Sent bitchatters nearby notification for \(meshPeers.count) mesh peers (new: \(newPeers.count))",
+                            category: .session
+                        )
+                    }
                     self.scheduleNetworkResetTimer()
                 }
             }

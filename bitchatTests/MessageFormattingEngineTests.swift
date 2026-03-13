@@ -12,6 +12,108 @@ import SwiftUI
 @testable import bitchat
 
 struct MessageFormattingEngineTests {
+    // MARK: - Formatting Behavior Tests
+
+    @MainActor
+    @Test func formatMessage_regularMessageFormatsHeaderContentAndTimestamp() {
+        let senderPeerID = PeerID(str: "abcdef1234567890")
+        let context = MockMessageFormattingContext(
+            nickname: "carol",
+            peerURLs: [senderPeerID: URL(string: "https://example.com/peers/alice")!]
+        )
+        let message = BitchatMessage(
+            id: "message-1",
+            sender: "alice#a1b2",
+            content: "hello #mesh https://example.com",
+            timestamp: Date(timeIntervalSince1970: 1_700_000_000),
+            isRelay: false,
+            senderPeerID: senderPeerID
+        )
+
+        let formatted = MessageFormattingEngine.formatMessage(message, context: context, colorScheme: .light)
+
+        #expect(String(formatted.characters) == "<@alice#a1b2> hello #mesh https://example.com [\(message.formattedTimestamp)]")
+        #expect(message.getCachedFormattedText(isDark: false, isSelf: false) != nil)
+    }
+
+    @MainActor
+    @Test func formatMessage_systemMessageUsesSystemLayout() {
+        let context = MockMessageFormattingContext(nickname: "carol")
+        let message = BitchatMessage(
+            id: "system-1",
+            sender: "system",
+            content: "connected",
+            timestamp: Date(timeIntervalSince1970: 1_700_000_123),
+            isRelay: false
+        )
+
+        let formatted = MessageFormattingEngine.formatMessage(message, context: context, colorScheme: .dark)
+
+        #expect(String(formatted.characters) == "* connected * [\(message.formattedTimestamp)]")
+        #expect(message.getCachedFormattedText(isDark: true, isSelf: false) != nil)
+    }
+
+    @MainActor
+    @Test func formatMessage_longSelfMessageFallsBackToPlainContentPath() {
+        let context = MockMessageFormattingContext(
+            nickname: "me",
+            selfMessageIDs: ["self-1"]
+        )
+        let longContent = String(repeating: "a", count: 4_500)
+        let message = BitchatMessage(
+            id: "self-1",
+            sender: "me#cafe",
+            content: longContent,
+            timestamp: Date(timeIntervalSince1970: 1_700_000_456),
+            isRelay: false
+        )
+
+        let formatted = MessageFormattingEngine.formatMessage(message, context: context, colorScheme: .light)
+
+        #expect(String(formatted.characters) == "<@me#cafe> \(longContent) [\(message.formattedTimestamp)]")
+        #expect(message.getCachedFormattedText(isDark: false, isSelf: true) != nil)
+    }
+
+    @MainActor
+    @Test func formatMessage_mentionsAreRenderedThroughMentionFormatter() {
+        let context = MockMessageFormattingContext(nickname: "carol")
+        let message = BitchatMessage(
+            id: "message-mention",
+            sender: "alice",
+            content: "hi @bob#a1b2",
+            timestamp: Date(timeIntervalSince1970: 1_700_000_789),
+            isRelay: false
+        )
+
+        let formatted = MessageFormattingEngine.formatMessage(message, context: context, colorScheme: .light)
+
+        #expect(String(formatted.characters) == "<@alice> hi bob#a1b2 [\(message.formattedTimestamp)]")
+    }
+
+    @MainActor
+    @Test func formatHeader_formatsNormalAndSystemSenders() {
+        let context = MockMessageFormattingContext(nickname: "carol")
+        let normalMessage = BitchatMessage(
+            id: "header-1",
+            sender: "alice#a1b2",
+            content: "hello",
+            timestamp: Date(timeIntervalSince1970: 1_700_001_000),
+            isRelay: false
+        )
+        let systemMessage = BitchatMessage(
+            id: "header-2",
+            sender: "system",
+            content: "notice",
+            timestamp: Date(timeIntervalSince1970: 1_700_001_111),
+            isRelay: false
+        )
+
+        let normalHeader = MessageFormattingEngine.formatHeader(normalMessage, context: context, colorScheme: .light)
+        let systemHeader = MessageFormattingEngine.formatHeader(systemMessage, context: context, colorScheme: .dark)
+
+        #expect(String(normalHeader.characters) == "<@alice#a1b2> ")
+        #expect(String(systemHeader.characters) == "system")
+    }
 
     // MARK: - Mention Extraction Tests
 
@@ -219,5 +321,34 @@ struct MessageFormattingEngineTests {
         let content = "Token: \(exactToken)"
         // Exactly at threshold DOES trigger (uses >= comparison)
         #expect(content.hasVeryLongToken(threshold: 50))
+    }
+}
+
+@MainActor
+private final class MockMessageFormattingContext: MessageFormattingContext {
+    let nickname: String
+    private let selfMessageIDs: Set<String>
+    private let peerURLs: [PeerID: URL]
+
+    init(
+        nickname: String,
+        selfMessageIDs: Set<String> = [],
+        peerURLs: [PeerID: URL] = [:]
+    ) {
+        self.nickname = nickname
+        self.selfMessageIDs = selfMessageIDs
+        self.peerURLs = peerURLs
+    }
+
+    func isSelfMessage(_ message: BitchatMessage) -> Bool {
+        selfMessageIDs.contains(message.id)
+    }
+
+    func senderColor(for message: BitchatMessage, isDark: Bool) -> Color {
+        .red
+    }
+
+    func peerURL(for peerID: PeerID) -> URL? {
+        peerURLs[peerID]
     }
 }

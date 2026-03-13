@@ -108,6 +108,11 @@ final class MockBLEService: NSObject {
     func getPeers() -> [PeerID: String] {
         return getPeerNicknames()
     }
+
+    /// Keep local echo synchronous so Swift Testing confirmations observe it deterministically.
+    private func deliverLocalEcho(_ message: BitchatMessage) {
+        delegate?.didReceiveMessage(message)
+    }
     
     func sendMessage(_ content: String, mentions: [String] = [], to recipientID: String? = nil, messageID: String? = nil, timestamp: Date? = nil) {
         let message = BitchatMessage(
@@ -137,10 +142,7 @@ final class MockBLEService: NSObject {
             sentMessages.append((message, packet))
             sentPackets.append(packet)
             
-            // Simulate local echo
-            DispatchQueue.main.async { [weak self] in
-                self?.delegate?.didReceiveMessage(message)
-            }
+            deliverLocalEcho(message)
             
             // Surface raw packet to tests that intercept/relay/encrypt
             packetDeliveryHandler?(packet)
@@ -190,10 +192,7 @@ final class MockBLEService: NSObject {
             sentMessages.append((message, packet))
             sentPackets.append(packet)
             
-            // Simulate local echo
-            DispatchQueue.main.async { [weak self] in
-                self?.delegate?.didReceiveMessage(message)
-            }
+            deliverLocalEcho(message)
             
             // Surface raw packet to tests that intercept/relay/encrypt
             packetDeliveryHandler?(packet)

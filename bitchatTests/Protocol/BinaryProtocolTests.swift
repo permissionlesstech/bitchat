@@ -315,6 +315,34 @@ struct BinaryProtocolTests {
         let decodedPacket = try #require(BinaryProtocol.decode(encodedData), "Failed to decode small packet")
         #expect(decodedPacket.payload == smallPayload)
     }
+
+    @Test("Reject payloads larger than the framed file cap")
+    func oversizedPayloadIsRejected() throws {
+        let targetSize = FileTransferLimits.maxFramedFileBytes + 1
+        var oversized = Data()
+        oversized.reserveCapacity(targetSize)
+        let byteRun = Data((0...255).map { UInt8($0) })
+        while oversized.count < targetSize {
+            let remaining = targetSize - oversized.count
+            if remaining >= byteRun.count {
+                oversized.append(byteRun)
+            } else {
+                oversized.append(byteRun.prefix(remaining))
+            }
+        }
+        let packet = BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: Data(hexString: "0011223344556677") ?? Data(),
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: oversized,
+            signature: nil,
+            ttl: 1,
+            version: 2
+        )
+        let encoded = try #require(BinaryProtocol.encode(packet), "Failed to encode oversized packet")
+        #expect(BinaryProtocol.decode(encoded) == nil)
+    }
     
     // MARK: - Message Padding Tests
     
