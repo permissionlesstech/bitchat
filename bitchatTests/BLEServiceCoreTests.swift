@@ -89,7 +89,12 @@ private func makeService() -> BLEService {
     let keychain = MockKeychain()
     let identityManager = MockIdentityManager(keychain)
     let idBridge = NostrIdentityBridge(keychain: MockKeychainHelper())
-    return BLEService(keychain: keychain, idBridge: idBridge, identityManager: identityManager)
+    return BLEService(
+        keychain: keychain,
+        idBridge: idBridge,
+        identityManager: identityManager,
+        initializeBluetoothManagers: false
+    )
 }
 
 private func makePublicPacket(content: String, sender: PeerID, timestamp: UInt64) -> BitchatPacket {
