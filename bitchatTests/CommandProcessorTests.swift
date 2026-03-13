@@ -104,7 +104,7 @@ struct CommandProcessorTests {
         let processor = CommandProcessor(contextProvider: context, meshService: MockTransport(), identityManager: identityManager)
         let channel = ChannelID.location(GeohashChannel(level: .city, geohash: geohash))
 
-        let result = try await withSelectedChannel(channel) {
+        let result = await withSelectedChannel(channel) {
             processor.process("/who")
         }
 

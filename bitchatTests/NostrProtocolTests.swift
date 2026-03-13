@@ -215,7 +215,7 @@ struct NostrProtocolTests {
 
     @Test func nostrEventSignatureVerification_roundTrip() throws {
         let identity = try NostrIdentity.generate()
-        var event = NostrEvent(
+        let event = NostrEvent(
             pubkey: identity.publicKeyHex,
             createdAt: Date(),
             kind: .ephemeralEvent,
@@ -228,7 +228,7 @@ struct NostrProtocolTests {
 
     @Test func nostrEventSignatureVerification_detectsTamper() throws {
         let identity = try NostrIdentity.generate()
-        var event = NostrEvent(
+        let event = NostrEvent(
             pubkey: identity.publicKeyHex,
             createdAt: Date(),
             kind: .ephemeralEvent,
@@ -238,6 +238,18 @@ struct NostrProtocolTests {
         var signed = try event.sign(with: identity.schnorrSigningKey())
         signed.id = "deadbeef"
         #expect(!signed.isValidSignature())
+    }
+
+    @Test func geohashNotesSingleFilter_encodesExpectedTagShape() throws {
+        let since = Date(timeIntervalSince1970: 1_234_567)
+        let filter = NostrFilter.geohashNotes("u4pruyd", since: since, limit: 42)
+        let data = try JSONEncoder().encode(filter)
+        let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        #expect(object["kinds"] as? [Int] == [1])
+        #expect(object["#g"] as? [String] == ["u4pruyd"])
+        #expect(object["since"] as? Int == 1_234_567)
+        #expect(object["limit"] as? Int == 42)
     }
 
     // MARK: - Helpers

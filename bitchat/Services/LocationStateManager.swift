@@ -43,10 +43,7 @@ private final class CLLocationManagerAdapter: NSObject, LocationStateManaging {
     }
 
     var authorizationStatus: CLAuthorizationStatus {
-        if #available(iOS 14.0, macOS 11.0, *) {
-            return base.authorizationStatus
-        }
-        return CLLocationManager.authorizationStatus()
+        base.authorizationStatus
     }
 
     func requestWhenInUseAuthorization() {

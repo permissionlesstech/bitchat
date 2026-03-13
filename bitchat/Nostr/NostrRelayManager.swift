@@ -64,7 +64,7 @@ struct NostrRelayManagerDependencies {
     var torIsForeground: () -> Bool
     var awaitTorReady: (@escaping (Bool) -> Void) -> Void
     var makeSession: () -> NostrRelaySessionProtocol
-    var scheduleAfter: (TimeInterval, @escaping () -> Void) -> Void
+    var scheduleAfter: @Sendable (TimeInterval, @escaping @Sendable () -> Void) -> Void
     var now: () -> Date
 }
 
@@ -412,7 +412,7 @@ final class NostrRelayManager: ObservableObject {
             for url in urls where !existingSet.contains(url) {
                 relays.append(Relay(url: url))
             }
-            for url in candidateUrls {
+            for url in urls {
                 var map = self.pendingSubscriptions[url] ?? [:]
                 map[id] = messageString
                 self.pendingSubscriptions[url] = map
@@ -471,6 +471,7 @@ final class NostrRelayManager: ObservableObject {
                 }
                 connections.removeValue(forKey: url)
                 subscriptions.removeValue(forKey: url)
+                pendingSubscriptions.removeValue(forKey: url)
             }
             messageQueueLock.lock()
             for index in (0..<messageQueue.count).reversed() {
@@ -784,12 +785,14 @@ final class NostrRelayManager: ObservableObject {
         // Schedule reconnection with exponential backoff
         let gen = connectionGeneration
         dependencies.scheduleAfter(backoffInterval) { [weak self] in
-            guard let self = self else { return }
-            // Ignore stale scheduled reconnects from a previous generation
-            guard gen == self.connectionGeneration else { return }
-            // Check if we should still reconnect (relay might have been removed)
-            if self.relays.contains(where: { $0.url == relayUrl }) {
-                self.connectToRelay(relayUrl)
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                // Ignore stale scheduled reconnects from a previous generation
+                guard gen == self.connectionGeneration else { return }
+                // Check if we should still reconnect (relay might have been removed)
+                if self.relays.contains(where: { $0.url == relayUrl }) {
+                    self.connectToRelay(relayUrl)
+                }
             }
         }
     }
@@ -803,6 +806,7 @@ final class NostrRelayManager: ObservableObject {
         // Reset reconnection attempts
         relays[index].reconnectAttempts = 0
         relays[index].nextReconnectTime = nil
+        relays[index].lastError = nil
         
         // Disconnect if connected
         if let connection = connections[relayUrl] {
@@ -822,6 +826,20 @@ final class NostrRelayManager: ObservableObject {
              reconnectAttempts: relay.reconnectAttempts,
              nextReconnectTime: relay.nextReconnectTime)
         }
+    }
+
+    var debugPendingMessageQueueCount: Int {
+        messageQueueLock.lock()
+        defer { messageQueueLock.unlock() }
+        return messageQueue.count
+    }
+
+    func debugPendingSubscriptionCount(for relayUrl: String) -> Int {
+        pendingSubscriptions[relayUrl]?.count ?? 0
+    }
+
+    func debugFlushMessageQueue() {
+        flushMessageQueue(for: nil)
     }
     
     /// Reset all relay connections
