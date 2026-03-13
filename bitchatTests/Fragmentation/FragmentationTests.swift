@@ -28,7 +28,8 @@ struct FragmentationTests {
         let ble = BLEService(
             keychain: mockKeychain,
             idBridge: idBridge,
-            identityManager: mockIdentityManager
+            identityManager: mockIdentityManager,
+            initializeBluetoothManagers: false
         )
         let capture = CaptureDelegate()
         ble.delegate = capture
@@ -63,7 +64,8 @@ struct FragmentationTests {
         let ble = BLEService(
             keychain: mockKeychain,
             idBridge: idBridge,
-            identityManager: mockIdentityManager
+            identityManager: mockIdentityManager,
+            initializeBluetoothManagers: false
         )
         let capture = CaptureDelegate()
         ble.delegate = capture
@@ -97,7 +99,8 @@ struct FragmentationTests {
         let ble = BLEService(
             keychain: mockKeychain,
             idBridge: idBridge,
-            identityManager: mockIdentityManager
+            identityManager: mockIdentityManager,
+            initializeBluetoothManagers: false
         )
         let capture = CaptureDelegate()
         ble.delegate = capture
@@ -153,7 +156,8 @@ struct FragmentationTests {
         let ble = BLEService(
             keychain: mockKeychain,
             idBridge: idBridge,
-            identityManager: mockIdentityManager
+            identityManager: mockIdentityManager,
+            initializeBluetoothManagers: false
         )
         let capture = CaptureDelegate()
         ble.delegate = capture

@@ -3,6 +3,27 @@ import BitLogger
 import Combine
 import Tor
 
+@MainActor
+protocol NetworkActivationTorControlling: AnyObject {
+    func setAutoStartAllowed(_ allowed: Bool)
+    func startIfNeeded()
+    func shutdownCompletely()
+}
+
+@MainActor
+protocol NetworkActivationRelayControlling: AnyObject {
+    func connect()
+    func disconnect()
+}
+
+protocol NetworkActivationProxyControlling: AnyObject {
+    func setProxyMode(useTor: Bool)
+}
+
+extension TorManager: NetworkActivationTorControlling {}
+extension NostrRelayManager: NetworkActivationRelayControlling {}
+extension TorURLSession: NetworkActivationProxyControlling {}
+
 /// Coordinates when the app is allowed to start Tor and connect to Nostr relays.
 /// Policy: permit start when either location permissions are authorized OR
 /// there exists at least one mutual favorite. Otherwise, do not start.
@@ -17,14 +38,55 @@ final class NetworkActivationService: ObservableObject {
     private var started = false
     private let torPreferenceKey = "networkActivationService.userTorEnabled"
     private var torAutoStartDesired: Bool = false
+    private let storage: UserDefaults
+    private let locationPermissionPublisher: AnyPublisher<LocationChannelManager.PermissionState, Never>
+    private let mutualFavoritesPublisher: AnyPublisher<Set<Data>, Never>
+    private let permissionProvider: () -> LocationChannelManager.PermissionState
+    private let mutualFavoritesProvider: () -> Set<Data>
+    private let torController: NetworkActivationTorControlling
+    private let relayController: NetworkActivationRelayControlling
+    private let proxyController: NetworkActivationProxyControlling
+    private let notificationCenter: NotificationCenter
 
-    private init() {}
+    private init() {
+        storage = .standard
+        locationPermissionPublisher = LocationChannelManager.shared.$permissionState.eraseToAnyPublisher()
+        mutualFavoritesPublisher = FavoritesPersistenceService.shared.$mutualFavorites.eraseToAnyPublisher()
+        permissionProvider = { LocationChannelManager.shared.permissionState }
+        mutualFavoritesProvider = { FavoritesPersistenceService.shared.mutualFavorites }
+        torController = TorManager.shared
+        relayController = NostrRelayManager.shared
+        proxyController = TorURLSession.shared
+        notificationCenter = .default
+    }
+
+    internal init(
+        storage: UserDefaults,
+        locationPermissionPublisher: AnyPublisher<LocationChannelManager.PermissionState, Never>,
+        mutualFavoritesPublisher: AnyPublisher<Set<Data>, Never>,
+        permissionProvider: @escaping () -> LocationChannelManager.PermissionState,
+        mutualFavoritesProvider: @escaping () -> Set<Data>,
+        torController: NetworkActivationTorControlling,
+        relayController: NetworkActivationRelayControlling,
+        proxyController: NetworkActivationProxyControlling,
+        notificationCenter: NotificationCenter = .default
+    ) {
+        self.storage = storage
+        self.locationPermissionPublisher = locationPermissionPublisher
+        self.mutualFavoritesPublisher = mutualFavoritesPublisher
+        self.permissionProvider = permissionProvider
+        self.mutualFavoritesProvider = mutualFavoritesProvider
+        self.torController = torController
+        self.relayController = relayController
+        self.proxyController = proxyController
+        self.notificationCenter = notificationCenter
+    }
 
     func start() {
         guard !started else { return }
         started = true
 
-        if let stored = UserDefaults.standard.object(forKey: torPreferenceKey) as? Bool {
+        if let stored = storage.object(forKey: torPreferenceKey) as? Bool {
             userTorEnabled = stored
         } else {
             userTorEnabled = true
@@ -34,16 +96,16 @@ final class NetworkActivationService: ObservableObject {
         let allowed = basePolicyAllowed()
         activationAllowed = allowed
         torAutoStartDesired = allowed && userTorEnabled
-        TorManager.shared.setAutoStartAllowed(torAutoStartDesired)
+        torController.setAutoStartAllowed(torAutoStartDesired)
         applyTorState(torDesired: torAutoStartDesired)
         if allowed {
-            NostrRelayManager.shared.connect()
+            relayController.connect()
         } else {
-            NostrRelayManager.shared.disconnect()
+            relayController.disconnect()
         }
 
         // React to location permission changes
-        LocationChannelManager.shared.$permissionState
+        locationPermissionPublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.reevaluate()
@@ -51,7 +113,7 @@ final class NetworkActivationService: ObservableObject {
             .store(in: &cancellables)
 
         // React to mutual favorites changes
-        FavoritesPersistenceService.shared.$mutualFavorites
+        mutualFavoritesPublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.reevaluate()
@@ -62,8 +124,8 @@ final class NetworkActivationService: ObservableObject {
     func setUserTorEnabled(_ enabled: Bool) {
         guard enabled != userTorEnabled else { return }
         userTorEnabled = enabled
-        UserDefaults.standard.set(enabled, forKey: torPreferenceKey)
-        NotificationCenter.default.post(
+        storage.set(enabled, forKey: torPreferenceKey)
+        notificationCenter.post(
             name: .TorUserPreferenceChanged,
             object: nil,
             userInfo: ["enabled": enabled]
@@ -82,33 +144,33 @@ final class NetworkActivationService: ObservableObject {
         }
         if statusChanged || torChanged {
             torAutoStartDesired = torDesired
-            TorManager.shared.setAutoStartAllowed(torDesired)
+            torController.setAutoStartAllowed(torDesired)
             applyTorState(torDesired: torDesired)
         }
 
         if allowed {
             if torChanged {
                 // Reset relay sockets when switching transport path (Tor ↔︎ direct)
-                NostrRelayManager.shared.disconnect()
+                relayController.disconnect()
             }
-            NostrRelayManager.shared.connect()
+            relayController.connect()
         } else if statusChanged {
-            NostrRelayManager.shared.disconnect()
+            relayController.disconnect()
         }
     }
 
     private func basePolicyAllowed() -> Bool {
-        let permOK = LocationChannelManager.shared.permissionState == .authorized
-        let hasMutual = !FavoritesPersistenceService.shared.mutualFavorites.isEmpty
+        let permOK = permissionProvider() == .authorized
+        let hasMutual = !mutualFavoritesProvider().isEmpty
         return permOK || hasMutual
     }
 
     private func applyTorState(torDesired: Bool) {
-        TorURLSession.shared.setProxyMode(useTor: torDesired)
+        proxyController.setProxyMode(useTor: torDesired)
         if torDesired {
-            TorManager.shared.startIfNeeded()
+            torController.startIfNeeded()
         } else {
-            TorManager.shared.shutdownCompletely()
+            torController.shutdownCompletely()
         }
     }
 }
