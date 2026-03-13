@@ -69,4 +69,25 @@ final class BinaryEncodingUtilsTests: XCTestCase {
         XCTAssertNil(shortData.readFixedBytes(at: &offset, count: 2))
         XCTAssertEqual(offset, 0)
     }
+
+    func test_sha256Hex_andExtendedLengthStringRoundTrip() throws {
+        XCTAssertEqual(
+            Data("abc".utf8).sha256Hex(),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        )
+
+        var data = Data()
+        data.appendString("hello", maxLength: 300)
+
+        var offset = 0
+        XCTAssertEqual(data.readString(at: &offset, maxLength: 300), "hello")
+    }
+
+    func test_readString_returnsNilForInvalidUTF8ExtendedPayload() {
+        let invalidUTF8 = Data([0x00, 0x02, 0xFF, 0xFF])
+        var offset = 0
+
+        XCTAssertNil(invalidUTF8.readString(at: &offset, maxLength: 300))
+        XCTAssertEqual(offset, invalidUTF8.count)
+    }
 }

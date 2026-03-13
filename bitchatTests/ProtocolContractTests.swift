@@ -68,6 +68,7 @@ struct ProtocolContractTests {
         #expect(MessageType.requestSync.description == "requestSync")
         #expect(NoisePayloadType.verifyResponse.description == "verifyResponse")
         #expect(DeliveryStatus.sending.displayText == "Sending...")
+        #expect(DeliveryStatus.sent.displayText == "Sent")
         #expect(DeliveryStatus.delivered(to: "Alice", at: Date()).displayText == "Delivered to Alice")
         #expect(DeliveryStatus.read(by: "Bob", at: Date()).displayText == "Read by Bob")
         #expect(DeliveryStatus.failed(reason: "oops").displayText == "Failed: oops")

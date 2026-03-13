@@ -31,6 +31,11 @@ struct BinaryProtocolTests {
         let decodedSenderID = decodedPacket.senderID.trimmingNullBytes()
         #expect(decodedSenderID == originalSenderID)
     }
+
+    @Test func trimmingNullBytesReturnsOriginalDataWhenNoNullsPresent() {
+        let raw = Data([0x41, 0x42, 0x43])
+        #expect(raw.trimmingNullBytes() == raw)
+    }
     
     @Test func packetWithRecipient() throws {
         let recipientID = PeerID(str: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789")
@@ -682,6 +687,33 @@ struct BinaryProtocolTests {
         
         let result = BinaryProtocol.decode(malformedData)
         #expect(result == nil, "Compressed packet with invalid original size should return nil, not crash")
+    }
+
+    @Test("Test compressed packet with suspicious compression ratio")
+    func compressedPacketWithSuspiciousCompressionRatio() {
+        var malformedData = Data()
+
+        malformedData.append(1)     // version
+        malformedData.append(1)     // type
+        malformedData.append(10)    // ttl
+
+        for _ in 0..<8 {
+            malformedData.append(0)
+        }
+
+        malformedData.append(0x04)  // isCompressed
+        malformedData.append(0x00)
+        malformedData.append(0x03)  // payloadLength = 3 (2 original-size bytes + 1 compressed byte)
+
+        for _ in 0..<8 {
+            malformedData.append(0x01)
+        }
+
+        malformedData.append(0xFF)
+        malformedData.append(0xFF)  // originalSize = 65535
+        malformedData.append(0x99)  // compressed payload length = 1 => ratio > 50_000
+
+        #expect(BinaryProtocol.decode(malformedData) == nil)
     }
     
     @Test("Test packet designed to cause integer overflow")
