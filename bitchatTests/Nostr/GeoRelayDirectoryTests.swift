@@ -145,6 +145,29 @@ final class GeoRelayDirectoryTests: XCTestCase {
         XCTAssertEqual(forcedRequestCount, 1)
     }
 
+    func test_prefetchIfNeeded_runsRemoteFetchOffMainThread() async {
+        let threadRecorder = MainThreadRecorder()
+        let harness = makeHarness(
+            fetchCSV: """
+            relay url,lat,lon
+            background.example,8,9
+            """,
+            fetchObserver: {
+                await threadRecorder.record(isExecutingOnMainThread())
+            }
+        )
+        let directory = GeoRelayDirectory(dependencies: harness.dependencies)
+
+        directory.prefetchIfNeeded()
+
+        let refreshed = await waitUntil {
+            directory.entries == [GeoRelayDirectory.Entry(host: "background.example", lat: 8, lon: 9)]
+        }
+        XCTAssertTrue(refreshed)
+        let recordedValues = await threadRecorder.recordedValues()
+        XCTAssertEqual(recordedValues, [false])
+    }
+
     func test_prefetchIfNeeded_failureSchedulesRetryAndRecoversOnNextFetch() async {
         let csv = """
         relay url,lat,lon
@@ -215,6 +238,7 @@ final class GeoRelayDirectoryTests: XCTestCase {
         workingDirectoryCSV: String? = nil,
         fetchCSV: String? = nil,
         fetchResults: [Result<Data, Error>] = [],
+        fetchObserver: (@Sendable () async -> Void)? = nil,
         autoStart: Bool = false,
         activeNotificationName: Notification.Name? = nil
     ) -> GeoRelayHarness {
@@ -255,7 +279,8 @@ final class GeoRelayDirectoryTests: XCTestCase {
             retryMaxSeconds: 40,
             awaitTorReady: { true },
             fetchData: { request in
-                try await fetcher.fetch(request)
+                await fetchObserver?()
+                return try await fetcher.fetch(request)
             },
             readData: { url in
                 fileStore.dataByURL[url]
@@ -359,6 +384,22 @@ private actor RetryDelayRecorder {
     }
 }
 
+private actor MainThreadRecorder {
+    private var values: [Bool] = []
+
+    func record(_ value: Bool) {
+        values.append(value)
+    }
+
+    func recordedValues() -> [Bool] {
+        values
+    }
+}
+
 private enum GeoRelayTestError: Error {
     case network
+}
+
+private func isExecutingOnMainThread() -> Bool {
+    Thread.isMainThread
 }

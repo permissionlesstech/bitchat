@@ -17,8 +17,8 @@ struct GeoRelayDirectoryDependencies {
     var refreshCheckInterval: TimeInterval
     var retryInitialSeconds: TimeInterval
     var retryMaxSeconds: TimeInterval
-    var awaitTorReady: () async -> Bool
-    var fetchData: (URLRequest) async throws -> Data
+    var awaitTorReady: @Sendable () async -> Bool
+    var fetchData: @Sendable (URLRequest) async throws -> Data
     var readData: (URL) -> Data?
     var writeData: (Data, URL) throws -> Void
     var cacheURL: () -> URL?
@@ -110,10 +110,17 @@ final class GeoRelayDirectory {
         }
     }
 
-    struct Entry: Hashable {
+    struct Entry: Hashable, Sendable {
         let host: String
         let lat: Double
         let lon: Double
+    }
+
+    private enum DetachedFetchOutcome: Sendable {
+        case success(entries: [Entry], csv: String)
+        case torNotReady
+        case invalidData
+        case network(String)
     }
 
     static let shared = GeoRelayDirectory()
@@ -212,40 +219,62 @@ final class GeoRelayDirectory {
             cachePolicy: .reloadIgnoringLocalCacheData,
             timeoutInterval: 15
         )
+        let awaitTorReady = dependencies.awaitTorReady
+        let fetchData = dependencies.fetchData
 
         Task { [weak self] in
             guard let self else { return }
 
-            let ready = await self.dependencies.awaitTorReady()
-            if !ready {
+            let outcome = await Self.fetchRemoteOutcome(
+                request: request,
+                awaitTorReady: awaitTorReady,
+                fetchData: fetchData
+            )
+
+            switch outcome {
+            case .success(let parsed, let csv):
+                self.handleFetchSuccess(entries: parsed, csv: csv)
+            case .torNotReady:
                 self.handleFetchFailure(.torNotReady)
-                return
-            }
-
-            do {
-                let data = try await self.dependencies.fetchData(request)
-                guard let text = String(data: data, encoding: .utf8) else {
-                    self.handleFetchFailure(.invalidData)
-                    return
-                }
-
-                let parsed = GeoRelayDirectory.parseCSV(text)
-                guard !parsed.isEmpty else {
-                    self.handleFetchFailure(.invalidData)
-                    return
-                }
-
-                self.handleFetchSuccess(entries: parsed, csv: text)
-            } catch {
-                self.handleFetchFailure(.network(error))
+            case .invalidData:
+                self.handleFetchFailure(.invalidData)
+            case .network(let description):
+                self.handleFetchFailure(.network(description))
             }
         }
+    }
+
+    nonisolated private static func fetchRemoteOutcome(
+        request: URLRequest,
+        awaitTorReady: @escaping @Sendable () async -> Bool,
+        fetchData: @escaping @Sendable (URLRequest) async throws -> Data
+    ) async -> DetachedFetchOutcome {
+        await Task.detached(priority: .utility) {
+            let ready = await awaitTorReady()
+            guard ready else { return .torNotReady }
+
+            do {
+                let data = try await fetchData(request)
+                guard let text = String(data: data, encoding: .utf8) else {
+                    return .invalidData
+                }
+
+                let parsed = Self.parseCSV(text)
+                guard !parsed.isEmpty else {
+                    return .invalidData
+                }
+
+                return .success(entries: parsed, csv: text)
+            } catch {
+                return .network(error.localizedDescription)
+            }
+        }.value
     }
 
     private enum FetchFailure {
         case torNotReady
         case invalidData
-        case network(Error)
+        case network(String)
     }
 
     @MainActor
@@ -266,8 +295,8 @@ final class GeoRelayDirectory {
             SecureLogger.warning("GeoRelayDirectory: Tor not ready; scheduling retry", category: .session)
         case .invalidData:
             SecureLogger.warning("GeoRelayDirectory: remote fetch returned invalid data; scheduling retry", category: .session)
-        case .network(let error):
-            SecureLogger.warning("GeoRelayDirectory: remote fetch failed with error: \(error.localizedDescription)", category: .session)
+        case .network(let errorDescription):
+            SecureLogger.warning("GeoRelayDirectory: remote fetch failed with error: \(errorDescription)", category: .session)
         }
         isFetching = false
         scheduleRetry()
