@@ -35,6 +35,9 @@ final class MockTransport: Transport {
     private(set) var sentReadReceipts: [(receipt: ReadReceipt, peerID: PeerID)] = []
     private(set) var sentDeliveryAcks: [(messageID: String, peerID: PeerID)] = []
     private(set) var sentFavoriteNotifications: [(peerID: PeerID, isFavorite: Bool)] = []
+    private(set) var sentBroadcastFiles: [(packet: BitchatFilePacket, transferID: String)] = []
+    private(set) var sentPrivateFiles: [(packet: BitchatFilePacket, peerID: PeerID, transferID: String)] = []
+    private(set) var cancelledTransfers: [String] = []
     private(set) var sentVerifyChallenges: [(peerID: PeerID, noiseKeyHex: String, nonceA: Data)] = []
     private(set) var sentVerifyResponses: [(peerID: PeerID, noiseKeyHex: String, nonceA: Data)] = []
     private(set) var startServicesCallCount = 0
@@ -139,15 +142,15 @@ final class MockTransport: Transport {
     }
 
     func sendFileBroadcast(_ packet: BitchatFilePacket, transferId: String) {
-        // Not tracked for current tests
+        sentBroadcastFiles.append((packet, transferId))
     }
 
     func sendFilePrivate(_ packet: BitchatFilePacket, to peerID: PeerID, transferId: String) {
-        // Not tracked for current tests
+        sentPrivateFiles.append((packet, peerID, transferId))
     }
 
     func cancelTransfer(_ transferId: String) {
-        // Not tracked for current tests
+        cancelledTransfers.append(transferId)
     }
 
     func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {
@@ -167,6 +170,9 @@ final class MockTransport: Transport {
         sentReadReceipts.removeAll()
         sentDeliveryAcks.removeAll()
         sentFavoriteNotifications.removeAll()
+        sentBroadcastFiles.removeAll()
+        sentPrivateFiles.removeAll()
+        cancelledTransfers.removeAll()
         sentVerifyChallenges.removeAll()
         sentVerifyResponses.removeAll()
         startServicesCallCount = 0

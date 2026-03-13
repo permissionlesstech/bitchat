@@ -12,11 +12,15 @@ struct LocationNotesView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var draft: String = ""
 
-    init(geohash: String, onNotesCountChanged: ((Int) -> Void)? = nil) {
+    init(
+        geohash: String,
+        onNotesCountChanged: ((Int) -> Void)? = nil,
+        manager: LocationNotesManager? = nil
+    ) {
         let gh = geohash.lowercased()
         self.geohash = gh
         self.onNotesCountChanged = onNotesCountChanged
-        _manager = StateObject(wrappedValue: LocationNotesManager(geohash: gh))
+        _manager = StateObject(wrappedValue: manager ?? LocationNotesManager(geohash: gh))
     }
 
     private var backgroundColor: Color { colorScheme == .dark ? .black : .white }
