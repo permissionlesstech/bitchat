@@ -1330,15 +1330,15 @@ final class BLEService: NSObject {
         // Send on main thread
         notifyUI { [weak self] in
             guard let self = self else { return }
-            
+
             // Get current peer list (after removal)
             let currentPeerIDs = self.collectionsQueue.sync { Array(self.peers.keys) }
-            
+
             self.delegate?.didDisconnectFromPeer(peerID)
             self.delegate?.didUpdatePeerList(currentPeerIDs)
         }
     }
-    
+
     // MARK: - Helper Functions
 
     private func applicationFilesDirectory() throws -> URL {
@@ -3787,7 +3787,7 @@ extension BLEService {
             
         case .leave:
             handleLeave(packet, from: senderID)
-            
+
         case .none:
             SecureLogger.warning("⚠️ Unknown message type: \(packet.type)", category: .session)
             break
@@ -4167,12 +4167,12 @@ extension BLEService {
     
     private func handleNoiseEncrypted(_ packet: BitchatPacket, from peerID: PeerID) {
         SecureLogger.debug("🔐 handleNoiseEncrypted called for packet from \(peerID)")
-        
+
         guard let recipientID = PeerID(hexData: packet.recipientID) else {
             SecureLogger.warning("⚠️ Encrypted message has no recipient ID", category: .session)
             return
         }
-        
+
         if recipientID != myPeerID {
             SecureLogger.debug("🔐 Encrypted message not for me (for \(recipientID), I am \(myPeerID))", category: .session)
             return

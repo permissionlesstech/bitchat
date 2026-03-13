@@ -461,7 +461,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
             }
             .store(in: &cancellables)
         self.commandProcessor.meshService = meshService
-        
+
         loadNickname()
         loadVerifiedFingerprints()
         meshService.delegate = self
@@ -729,8 +729,47 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
             object: nil
         )
         #endif
+
+        // Set up MorpheusAI bot callbacks for @mention handling
+        setupMorpheusVirtualBot()
     }
-    
+
+    // MARK: - MorpheusAI Bot Setup
+
+    /// Configure MorpheusVirtualBot callbacks for @mention handling in public chat
+    @MainActor
+    private func setupMorpheusVirtualBot() {
+        let bot = MorpheusVirtualBot.shared
+
+        // Wire up BLE service reference for potential future use
+        if let bleService = meshService as? BLEService {
+            bot.bleService = bleService
+        }
+
+        // Wire up callback to broadcast bot responses over the mesh network
+        bot.addSystemMessage = { [weak self] content in
+            guard let self = self else { return }
+            // Broadcast the message to all peers over the mesh
+            self.meshService.sendMessage(content, mentions: [])
+            // Also add to local timeline so bridge operator can see it
+            Task { @MainActor in
+                self.addPublicSystemMessage(content)
+            }
+        }
+
+        // Wire up callback to get current geohash for location verification
+        bot.getCurrentGeohash = { [weak self] in
+            self?.getCurrentGeohash()
+        }
+
+        // Wire up callback to send private AI responses back to the requesting peer
+        bot.sendPrivateResponse = { [weak self] content, peerID, senderNickname in
+            guard let self = self else { return }
+            // Send the AI response as a private message back to the peer
+            self.messageRouter.sendPrivate(content, to: peerID, recipientNickname: senderNickname, messageID: UUID().uuidString)
+        }
+    }
+
     // MARK: - Deinitialization
     
     deinit {
@@ -1165,6 +1204,22 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
     func getVisibleGeoParticipants() -> [CommandGeoParticipant] {
         visibleGeohashPeople().map { CommandGeoParticipant(id: $0.id, displayName: $0.displayName) }
     }
+
+    /// CommandContextProvider conformance - returns current geohash for location-based features
+    func getCurrentGeohash() -> String? {
+        // First check if we have a current geohash from location services
+        if let geohash = currentGeohash, !geohash.isEmpty {
+            return geohash
+        }
+        // Fallback: check if we're in a location channel
+        switch activeChannel {
+        case .location(let channel):
+            return channel.geohash
+        case .mesh:
+            return nil
+        }
+    }
+
     /// Returns the current participant count for a specific geohash, using the 5-minute activity window.
     @MainActor
     func geohashParticipantCount(for geohash: String) -> Int {
@@ -2993,6 +3048,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
         case .handled:
             // Command was handled, no message needed
             break
+        case .asyncPending:
+            // Command is being processed asynchronously, no immediate message
+            break
         }
     }
     
@@ -3079,6 +3137,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
                 handlePrivateMessage(msg)
                 // Send delivery ACK back over BLE
                 meshService.sendDeliveryAck(for: pm.messageID, to: peerID)
+
+                // Check if this is a private AI query (!ai prefix) and handle it
+                MorpheusVirtualBot.shared.handlePrivateMessage(
+                    content: pm.content,
+                    senderNickname: senderName,
+                    senderPeerID: peerID
+                )
 
             case .delivered:
                 guard let messageID = String(data: payload, encoding: .utf8) else { return }
@@ -3192,6 +3257,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
             handlePublicMessage(msg)
             checkForMentions(msg)
             sendHapticFeedback(for: msg)
+
+            // Check for @MorpheusAI mentions and route to virtual bot
+            MorpheusVirtualBot.shared.handlePublicMessage(
+                content: normalized,
+                senderNickname: nickname,
+                senderPeerID: peerID
+            )
         }
     }
 

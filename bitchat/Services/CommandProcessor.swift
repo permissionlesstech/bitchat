@@ -13,6 +13,7 @@ enum CommandResult {
     case success(message: String?)
     case error(message: String)
     case handled  // Command handled, no message needed
+    case asyncPending  // Command is being processed asynchronously
 }
 
 /// Simple struct for geo participant info used by CommandProcessor
@@ -50,6 +51,9 @@ protocol CommandContextProvider: AnyObject {
     // MARK: - Favorites
     func toggleFavorite(peerID: PeerID)
     func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool)
+
+    // MARK: - Morpheus AI
+    func getCurrentGeohash() -> String?
 }
 
 /// Processes chat commands in a focused, efficient way
@@ -102,6 +106,18 @@ final class CommandProcessor {
         case "/unfav":
             if inGeoPublic || inGeoDM { return .error(message: "favorites are only for mesh peers in #mesh") }
             return handleFavorite(args, add: false)
+        case "/ai":
+            return handleAI(args)
+        case "/ai-clear":
+            return handleAIClear()
+        case "/ai-model":
+            return handleAIModel(args)
+        case "/ai-key":
+            return handleAIKey(args)
+        case "/ai-bridge":
+            return handleAIBridge(args)
+        case "/ai-help":
+            return handleAIHelp()
         default:
             return .error(message: "unknown command: \(cmd)")
         }
@@ -344,5 +360,126 @@ final class CommandProcessor {
             return .success(message: "removed \(nickname) from favorites")
         }
     }
-    
+
+    // MARK: - Morpheus AI Commands
+
+    private func handleAI(_ args: String) -> CommandResult {
+        let message = args.trimmingCharacters(in: .whitespaces)
+        guard !message.isEmpty else {
+            return .error(message: "usage: /ai <message> - chat with MorpheusAI (or use /msg @MorpheusAI)")
+        }
+
+        // Check location restriction
+        guard let geohash = contextProvider?.getCurrentGeohash(), !geohash.isEmpty else {
+            return .error(message: "location required for MorpheusChat - enable location services")
+        }
+
+        guard MorpheusAIService.shared.isLocationAllowed(geohash: geohash) else {
+            return .error(message: "MorpheusChat is not available in your region")
+        }
+
+        // Check API key (direct command requires local API key)
+        guard MorpheusAIService.shared.hasAPIKey else {
+            return .error(message: "API key not configured. Use /ai-key <key> or /msg @MorpheusAI to use a bridge")
+        }
+
+        // Show thinking indicator
+        contextProvider?.addPublicSystemMessage("MorpheusAI is thinking...")
+
+        // Process async - direct API call
+        Task { @MainActor in
+            do {
+                let response = try await MorpheusAIService.shared.sendMessage(message, geohash: geohash)
+                let formattedResponse = "MorpheusAI: \(response)"
+                contextProvider?.addPublicSystemMessage(formattedResponse)
+            } catch let error as MorpheusAIError {
+                contextProvider?.addPublicSystemMessage("MorpheusAI error: \(error.localizedDescription)")
+            } catch {
+                contextProvider?.addPublicSystemMessage("MorpheusAI error: \(error.localizedDescription)")
+            }
+        }
+
+        return .asyncPending
+    }
+
+    private func handleAIClear() -> CommandResult {
+        MorpheusAIService.shared.clearHistory()
+        return .success(message: "MorpheusAI conversation history cleared")
+    }
+
+    private func handleAIModel(_ args: String) -> CommandResult {
+        let model = args.trimmingCharacters(in: .whitespaces)
+
+        if model.isEmpty {
+            // Show current model
+            return .success(message: "current MorpheusAI model: \(MorpheusAIConfig.defaultModel)")
+        }
+
+        // Set new model
+        MorpheusAIService.shared.setModel(model)
+        return .success(message: "MorpheusAI model set to: \(model)")
+    }
+
+    private func handleAIKey(_ args: String) -> CommandResult {
+        let key = args.trimmingCharacters(in: .whitespaces)
+
+        if key.isEmpty {
+            // Show status (not the actual key for security)
+            let status = MorpheusAIService.shared.hasAPIKey ? "configured" : "not configured"
+            return .success(message: "MorpheusAI API key: \(status). Get your key at app.mor.org")
+        }
+
+        // Set new API key
+        MorpheusAIService.shared.setAPIKey(key)
+        return .success(message: "MorpheusAI API key saved securely")
+    }
+
+    private func handleAIBridge(_ args: String) -> CommandResult {
+        let arg = args.trimmingCharacters(in: .whitespaces).lowercased()
+
+        if arg.isEmpty {
+            // Show bot status
+            return .success(message: MorpheusVirtualBot.shared.statusInfo)
+        }
+
+        switch arg {
+        case "on", "enable":
+            // Activate the virtual bot
+            let result = MorpheusVirtualBot.shared.activate()
+            switch result {
+            case .success(let message):
+                return .success(message: "\(message)")
+            case .failure(let error):
+                return .error(message: error.localizedDescription)
+            }
+        case "off", "disable":
+            MorpheusVirtualBot.shared.deactivate()
+            return .success(message: "MorpheusAI bot deactivated")
+        default:
+            return .error(message: "usage: /ai-bridge [on|off] - activate/deactivate MorpheusAI bot")
+        }
+    }
+
+    private func handleAIHelp() -> CommandResult {
+        let help = """
+            MorpheusAI Commands:
+
+            FOR ALL USERS (no setup needed):
+            /msg @MorpheusAI <message> - chat with AI via mesh bridge
+            /who - check if MorpheusAI is online
+
+            FOR BRIDGE OPERATORS (requires API key):
+            /ai-key <key> - set API key (get one at https://app.mor.org)
+            /ai-bridge on - activate MorpheusAI bot for mesh
+            /ai-bridge off - deactivate bot
+            /ai-model [name] - view/set AI model (default: llama-3.3-70b)
+            /ai <message> - direct AI query (requires local API key)
+            /ai-clear - clear conversation history
+            /ai-help - show this help
+
+            Available in: US, Bulgaria, Iran
+            """
+        return .success(message: help)
+    }
+
 }
