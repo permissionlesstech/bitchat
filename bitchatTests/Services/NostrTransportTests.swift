@@ -6,6 +6,7 @@
 // For more information, see <https://unlicense.org>
 //
 
+import Combine
 import Foundation
 import Testing
 @testable import bitchat
@@ -54,14 +55,14 @@ struct NostrTransportTests {
         let recipient = try NostrIdentity.generate()
         let noiseKey = Data((32..<64).map(UInt8.init))
         let peerID = PeerID(hexData: noiseKey).toShort()
-        let notificationCenter = NotificationCenter()
+        let favoriteChanges = PassthroughSubject<Void, Never>()
         var favorites: [Data: FavoriteRelationship] = [:]
 
         let transport = NostrTransport(
             keychain: keychain,
             idBridge: idBridge,
             dependencies: makeDependencies(
-                notificationCenter: notificationCenter,
+                favoriteStatusPublisher: favoriteChanges.eraseToAnyPublisher(),
                 loadFavorites: { favorites },
                 favoriteStatusForNoiseKey: { favorites[$0] },
                 favoriteStatusForPeerID: { _ in favorites.values.first },
@@ -76,7 +77,7 @@ struct NostrTransportTests {
             peerNostrPublicKey: recipient.npub,
             peerNickname: "Bob"
         )
-        notificationCenter.post(name: .favoriteStatusChanged, object: nil)
+        favoriteChanges.send(())
 
         let didRefresh = await TestHelpers.waitUntil({ transport.isPeerReachable(peerID) }, timeout: 0.5)
         #expect(didRefresh)
@@ -354,7 +355,7 @@ struct NostrTransportTests {
 
     @MainActor
     private func makeDependencies(
-        notificationCenter: NotificationCenter = NotificationCenter(),
+        favoriteStatusPublisher: AnyPublisher<Void, Never> = Empty<Void, Never>().eraseToAnyPublisher(),
         loadFavorites: @escaping @MainActor () -> [Data: FavoriteRelationship] = { [:] },
         favoriteStatusForNoiseKey: @escaping @MainActor (Data) -> FavoriteRelationship? = { _ in nil },
         favoriteStatusForPeerID: @escaping @MainActor (PeerID) -> FavoriteRelationship? = { _ in nil },
@@ -364,7 +365,7 @@ struct NostrTransportTests {
         scheduleAfter: @escaping @Sendable (TimeInterval, @escaping @Sendable () -> Void) -> Void = { _, _ in }
     ) -> NostrTransport.Dependencies {
         NostrTransport.Dependencies(
-            notificationCenter: notificationCenter,
+            favoriteStatusPublisher: favoriteStatusPublisher,
             loadFavorites: loadFavorites,
             favoriteStatusForNoiseKey: favoriteStatusForNoiseKey,
             favoriteStatusForPeerID: favoriteStatusForPeerID,

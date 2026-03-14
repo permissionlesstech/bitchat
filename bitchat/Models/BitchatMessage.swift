@@ -8,11 +8,46 @@
 
 import Foundation
 
-/// Represents a user-visible message in the BitChat system.
-/// Handles both broadcast messages and private encrypted messages,
-/// with support for mentions, replies, and delivery tracking.
-/// - Note: This is the primary data model for chat messages
-final class BitchatMessage: Codable {
+final class CachedAttributedStringBox: NSObject {
+    let value: AttributedString
+
+    init(_ value: AttributedString) {
+        self.value = value
+    }
+}
+
+actor MessagePresentationCache {
+    static let shared = MessagePresentationCache()
+
+    nonisolated(unsafe) private let cache = NSCache<NSString, CachedAttributedStringBox>()
+
+    nonisolated func cachedFormattedText(
+        messageID: String,
+        isDark: Bool,
+        isSelf: Bool
+    ) -> AttributedString? {
+        cache.object(forKey: cacheKey(messageID: messageID, isDark: isDark, isSelf: isSelf))?.value
+    }
+
+    nonisolated func cacheFormattedText(
+        _ text: AttributedString,
+        messageID: String,
+        isDark: Bool,
+        isSelf: Bool
+    ) {
+        cache.setObject(
+            CachedAttributedStringBox(text),
+            forKey: cacheKey(messageID: messageID, isDark: isDark, isSelf: isSelf)
+        )
+    }
+
+    nonisolated private func cacheKey(messageID: String, isDark: Bool, isSelf: Bool) -> NSString {
+        "\(messageID)|\(isDark)|\(isSelf)" as NSString
+    }
+}
+
+/// Immutable user-visible chat message model.
+struct ChatMessage: Codable, Equatable {
     let id: String
     let sender: String
     let content: String
@@ -22,26 +57,14 @@ final class BitchatMessage: Codable {
     let isPrivate: Bool
     let recipientNickname: String?
     let senderPeerID: PeerID?
-    let mentions: [String]?  // Array of mentioned nicknames
-    var deliveryStatus: DeliveryStatus? // Delivery tracking
-    
-    // Cached formatted text (not included in Codable)
-    private var _cachedFormattedText: [String: AttributedString] = [:]
-    
-    func getCachedFormattedText(isDark: Bool, isSelf: Bool) -> AttributedString? {
-        return _cachedFormattedText["\(isDark)-\(isSelf)"]
-    }
-    
-    func setCachedFormattedText(_ text: AttributedString, isDark: Bool, isSelf: Bool) {
-        _cachedFormattedText["\(isDark)-\(isSelf)"] = text
-    }
-    
-    // Codable implementation
+    let mentions: [String]?
+    let deliveryStatus: DeliveryStatus?
+
     enum CodingKeys: String, CodingKey {
         case id, sender, content, timestamp, isRelay, originalSender
         case isPrivate, recipientNickname, senderPeerID, mentions, deliveryStatus
     }
-    
+
     init(
         id: String? = nil,
         sender: String,
@@ -67,110 +90,142 @@ final class BitchatMessage: Codable {
         self.mentions = mentions
         self.deliveryStatus = deliveryStatus ?? (isPrivate ? .sending : nil)
     }
-}
 
-// MARK: - Equatable Conformance
+    func withDeliveryStatus(_ deliveryStatus: DeliveryStatus?) -> ChatMessage {
+        ChatMessage(
+            id: id,
+            sender: sender,
+            content: content,
+            timestamp: timestamp,
+            isRelay: isRelay,
+            originalSender: originalSender,
+            isPrivate: isPrivate,
+            recipientNickname: recipientNickname,
+            senderPeerID: senderPeerID,
+            mentions: mentions,
+            deliveryStatus: deliveryStatus
+        )
+    }
 
-extension BitchatMessage: Equatable {
-    static func == (lhs: BitchatMessage, rhs: BitchatMessage) -> Bool {
-        return lhs.id == rhs.id &&
-               lhs.sender == rhs.sender &&
-               lhs.content == rhs.content &&
-               lhs.timestamp == rhs.timestamp &&
-               lhs.isRelay == rhs.isRelay &&
-               lhs.originalSender == rhs.originalSender &&
-               lhs.isPrivate == rhs.isPrivate &&
-               lhs.recipientNickname == rhs.recipientNickname &&
-               lhs.senderPeerID == rhs.senderPeerID &&
-               lhs.mentions == rhs.mentions &&
-               lhs.deliveryStatus == rhs.deliveryStatus
+    func withSenderPeerID(_ senderPeerID: PeerID?) -> ChatMessage {
+        ChatMessage(
+            id: id,
+            sender: sender,
+            content: content,
+            timestamp: timestamp,
+            isRelay: isRelay,
+            originalSender: originalSender,
+            isPrivate: isPrivate,
+            recipientNickname: recipientNickname,
+            senderPeerID: senderPeerID,
+            mentions: mentions,
+            deliveryStatus: deliveryStatus
+        )
+    }
+
+    func with(
+        sender: String? = nil,
+        content: String? = nil,
+        recipientNickname: String? = nil,
+        senderPeerID: PeerID? = nil,
+        deliveryStatus: DeliveryStatus?? = nil
+    ) -> ChatMessage {
+        ChatMessage(
+            id: id,
+            sender: sender ?? self.sender,
+            content: content ?? self.content,
+            timestamp: timestamp,
+            isRelay: isRelay,
+            originalSender: originalSender,
+            isPrivate: isPrivate,
+            recipientNickname: recipientNickname ?? self.recipientNickname,
+            senderPeerID: senderPeerID ?? self.senderPeerID,
+            mentions: mentions,
+            deliveryStatus: deliveryStatus ?? self.deliveryStatus
+        )
+    }
+
+    func getCachedFormattedText(isDark: Bool, isSelf: Bool) -> AttributedString? {
+        MessagePresentationCache.shared.cachedFormattedText(
+            messageID: id,
+            isDark: isDark,
+            isSelf: isSelf
+        )
+    }
+
+    func setCachedFormattedText(_ text: AttributedString, isDark: Bool, isSelf: Bool) {
+        MessagePresentationCache.shared.cacheFormattedText(
+            text,
+            messageID: id,
+            isDark: isDark,
+            isSelf: isSelf
+        )
     }
 }
 
+typealias BitchatMessage = ChatMessage
+
 // MARK: - Binary encoding
 
-extension BitchatMessage {
+extension ChatMessage {
     func toBinaryPayload() -> Data? {
         var data = Data()
-        
-        // Message format:
-        // - Flags: 1 byte (bit 0: isRelay, bit 1: isPrivate, bit 2: hasOriginalSender, bit 3: hasRecipientNickname, bit 4: hasSenderPeerID, bit 5: hasMentions)
-        // - Timestamp: 8 bytes (seconds since epoch)
-        // - ID length: 1 byte
-        // - ID: variable
-        // - Sender length: 1 byte
-        // - Sender: variable
-        // - Content length: 2 bytes
-        // - Content: variable
-        // Optional fields based on flags:
-        // - Original sender length + data
-        // - Recipient nickname length + data
-        // - Sender peer ID length + data
-        // - Mentions array
-        
+
         var flags: UInt8 = 0
         if isRelay { flags |= 0x01 }
         if isPrivate { flags |= 0x02 }
         if originalSender != nil { flags |= 0x04 }
         if recipientNickname != nil { flags |= 0x08 }
         if senderPeerID != nil { flags |= 0x10 }
-        if mentions != nil && !mentions!.isEmpty { flags |= 0x20 }
-        
+        if mentions != nil && !(mentions?.isEmpty ?? true) { flags |= 0x20 }
+
         data.append(flags)
-        
-        // Timestamp (in milliseconds)
+
         let timestampMillis = UInt64(timestamp.timeIntervalSince1970 * 1000)
-        // Encode as 8 bytes, big-endian
         for i in (0..<8).reversed() {
             data.append(UInt8((timestampMillis >> (i * 8)) & 0xFF))
         }
-        
-        // ID
+
         if let idData = id.data(using: .utf8) {
             data.append(UInt8(min(idData.count, 255)))
             data.append(idData.prefix(255))
         } else {
             data.append(0)
         }
-        
-        // Sender
+
         if let senderData = sender.data(using: .utf8) {
             data.append(UInt8(min(senderData.count, 255)))
             data.append(senderData.prefix(255))
         } else {
             data.append(0)
         }
-        
-        // Content
+
         if let contentData = content.data(using: .utf8) {
             let length = UInt16(min(contentData.count, 65535))
-            // Encode length as 2 bytes, big-endian
             data.append(UInt8((length >> 8) & 0xFF))
             data.append(UInt8(length & 0xFF))
             data.append(contentData.prefix(Int(length)))
         } else {
             data.append(contentsOf: [0, 0])
         }
-        
-        // Optional fields
-        if let originalSender = originalSender, let origData = originalSender.data(using: .utf8) {
+
+        if let originalSender, let origData = originalSender.data(using: .utf8) {
             data.append(UInt8(min(origData.count, 255)))
             data.append(origData.prefix(255))
         }
-        
-        if let recipientNickname = recipientNickname, let recipData = recipientNickname.data(using: .utf8) {
+
+        if let recipientNickname, let recipData = recipientNickname.data(using: .utf8) {
             data.append(UInt8(min(recipData.count, 255)))
             data.append(recipData.prefix(255))
         }
-        
+
         if let peerData = senderPeerID?.id.data(using: .utf8) {
             data.append(UInt8(min(peerData.count, 255)))
             data.append(peerData.prefix(255))
         }
-        
-        // Mentions array
-        if let mentions = mentions {
-            data.append(UInt8(min(mentions.count, 255))) // Number of mentions
+
+        if let mentions {
+            data.append(UInt8(min(mentions.count, 255)))
             for mention in mentions.prefix(255) {
                 if let mentionData = mention.data(using: .utf8) {
                     data.append(UInt8(min(mentionData.count, 255)))
@@ -180,35 +235,32 @@ extension BitchatMessage {
                 }
             }
         }
-        
-        
+
         return data
     }
-    
-    convenience init?(_ data: Data) {
-        // Create an immutable copy to prevent threading issues
+
+    init?(_ data: Data) {
         let dataCopy = Data(data)
-        
-        
+
         guard dataCopy.count >= 13 else {
             return nil
         }
-        
+
         var offset = 0
-        
-        // Flags
+
         guard offset < dataCopy.count else {
             return nil
         }
-        let flags = dataCopy[offset]; offset += 1
+        let flags = dataCopy[offset]
+        offset += 1
+
         let isRelay = (flags & 0x01) != 0
         let isPrivate = (flags & 0x02) != 0
         let hasOriginalSender = (flags & 0x04) != 0
         let hasRecipientNickname = (flags & 0x08) != 0
         let hasSenderPeerID = (flags & 0x10) != 0
         let hasMentions = (flags & 0x20) != 0
-        
-        // Timestamp
+
         guard offset + 8 <= dataCopy.count else {
             return nil
         }
@@ -218,30 +270,29 @@ extension BitchatMessage {
         }
         offset += 8
         let timestamp = Date(timeIntervalSince1970: TimeInterval(timestampMillis) / 1000.0)
-        
-        // ID
+
         guard offset < dataCopy.count else {
             return nil
         }
-        let idLength = Int(dataCopy[offset]); offset += 1
+        let idLength = Int(dataCopy[offset])
+        offset += 1
         guard offset + idLength <= dataCopy.count else {
             return nil
         }
         let id = String(data: dataCopy[offset..<offset+idLength], encoding: .utf8) ?? UUID().uuidString
         offset += idLength
-        
-        // Sender
+
         guard offset < dataCopy.count else {
             return nil
         }
-        let senderLength = Int(dataCopy[offset]); offset += 1
+        let senderLength = Int(dataCopy[offset])
+        offset += 1
         guard offset + senderLength <= dataCopy.count else {
             return nil
         }
         let sender = String(data: dataCopy[offset..<offset+senderLength], encoding: .utf8) ?? "unknown"
         offset += senderLength
-        
-        // Content
+
         guard offset + 2 <= dataCopy.count else {
             return nil
         }
@@ -253,47 +304,50 @@ extension BitchatMessage {
         guard offset + contentLength <= dataCopy.count else {
             return nil
         }
-        
+
         let content = String(data: dataCopy[offset..<offset+contentLength], encoding: .utf8) ?? ""
         offset += contentLength
-        
-        // Optional fields
+
         var originalSender: String?
         if hasOriginalSender && offset < dataCopy.count {
-            let length = Int(dataCopy[offset]); offset += 1
+            let length = Int(dataCopy[offset])
+            offset += 1
             if offset + length <= dataCopy.count {
                 originalSender = String(data: dataCopy[offset..<offset+length], encoding: .utf8)
                 offset += length
             }
         }
-        
+
         var recipientNickname: String?
         if hasRecipientNickname && offset < dataCopy.count {
-            let length = Int(dataCopy[offset]); offset += 1
+            let length = Int(dataCopy[offset])
+            offset += 1
             if offset + length <= dataCopy.count {
                 recipientNickname = String(data: dataCopy[offset..<offset+length], encoding: .utf8)
                 offset += length
             }
         }
-        
+
         var senderPeerID: PeerID?
         if hasSenderPeerID && offset < dataCopy.count {
-            let length = Int(dataCopy[offset]); offset += 1
+            let length = Int(dataCopy[offset])
+            offset += 1
             if offset + length <= dataCopy.count {
                 senderPeerID = PeerID(data: dataCopy[offset..<offset+length])
                 offset += length
             }
         }
-        
-        // Mentions array
+
         var mentions: [String]?
         if hasMentions && offset < dataCopy.count {
-            let mentionCount = Int(dataCopy[offset]); offset += 1
+            let mentionCount = Int(dataCopy[offset])
+            offset += 1
             if mentionCount > 0 {
                 mentions = []
                 for _ in 0..<mentionCount {
                     if offset < dataCopy.count {
-                        let length = Int(dataCopy[offset]); offset += 1
+                        let length = Int(dataCopy[offset])
+                        offset += 1
                         if offset + length <= dataCopy.count {
                             if let mention = String(data: dataCopy[offset..<offset+length], encoding: .utf8) {
                                 mentions?.append(mention)
@@ -304,7 +358,7 @@ extension BitchatMessage {
                 }
             }
         }
-        
+
         self.init(
             id: id,
             sender: sender,
@@ -322,21 +376,19 @@ extension BitchatMessage {
 
 // MARK: - Helpers
 
-extension BitchatMessage {
-    
+extension ChatMessage {
     private static let timestampFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm:ss"
         return formatter
     }()
-    
+
     var formattedTimestamp: String {
         Self.timestampFormatter.string(from: timestamp)
     }
 }
 
 extension Array where Element == BitchatMessage {
-    /// Filters out empty ones and deduplicate by ID while preserving order (from oldest to newest)
     func cleanedAndDeduped() -> [Element] {
         let arr = filter { $0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false }
         guard arr.count > 1 else {
@@ -344,12 +396,19 @@ extension Array where Element == BitchatMessage {
         }
         var seen = Set<String>()
         var dedup: [BitchatMessage] = []
-        for m in arr.sorted(by: { $0.timestamp < $1.timestamp }) {
-            if !seen.contains(m.id) {
-                dedup.append(m)
-                seen.insert(m.id)
+        for message in arr.sorted(by: { $0.timestamp < $1.timestamp }) {
+            if !seen.contains(message.id) {
+                dedup.append(message)
+                seen.insert(message.id)
             }
         }
         return dedup
+    }
+
+    func replacingMessage(id: String, transform: (Element) -> Element) -> [Element] {
+        guard let index = firstIndex(where: { $0.id == id }) else { return self }
+        var updated = self
+        updated[index] = transform(updated[index])
+        return updated
     }
 }

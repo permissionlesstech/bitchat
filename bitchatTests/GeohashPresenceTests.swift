@@ -129,6 +129,7 @@ struct NostrFilterPresenceTests {
 // MARK: - ChatViewModel Presence Handling Tests
 
 @MainActor
+@Suite(.serialized)
 struct ChatViewModelPresenceHandlingTests {
 
     @Test func handleNostrEvent_presenceUpdatesParticipantTracker() async throws {
@@ -281,6 +282,7 @@ struct ChatViewModelPresenceHandlingTests {
     // MARK: - Test Helper
 
     private func makeTestableViewModel() -> (viewModel: ChatViewModel, transport: MockTransport) {
+        TestHelpers.resetSharedApplicationState()
         let keychain = MockKeychain()
         let keychainHelper = MockKeychainHelper()
         let idBridge = NostrIdentityBridge(keychain: keychainHelper)
