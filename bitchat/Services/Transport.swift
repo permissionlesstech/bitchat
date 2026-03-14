@@ -30,6 +30,7 @@ protocol Transport: AnyObject {
     func startServices()
     func stopServices()
     func emergencyDisconnectAll()
+    func setApplicationActive(_ isActive: Bool)
 
     // Connectivity and peers
     func isPeerConnected(_ peerID: PeerID) -> Bool
@@ -65,6 +66,7 @@ protocol Transport: AnyObject {
 }
 
 extension Transport {
+    func setApplicationActive(_ isActive: Bool) {}
     func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {}
     func sendVerifyResponse(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {}
     func sendFileBroadcast(_ packet: BitchatFilePacket, transferId: String) {}

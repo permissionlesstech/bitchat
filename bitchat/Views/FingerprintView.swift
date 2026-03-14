@@ -9,7 +9,7 @@
 import SwiftUI
 
 struct FingerprintView: View {
-    @ObservedObject var viewModel: ChatViewModel
+    @EnvironmentObject var peerPresentationStore: PeerPresentationStore
     let peerID: PeerID
     @Environment(\.dismiss) var dismiss
     @Environment(\.colorScheme) var colorScheme
@@ -46,6 +46,8 @@ struct FingerprintView: View {
     }
     
     var body: some View {
+        let details = peerPresentationStore.fingerprintDetails(for: peerID)
+
         VStack(spacing: 20) {
             // Header
             HStack {
@@ -64,38 +66,19 @@ struct FingerprintView: View {
             .padding()
             
             VStack(alignment: .leading, spacing: 16) {
-                // Prefer short mesh ID for session/encryption status
-                let statusPeerID = viewModel.getShortIDForNoiseKey(peerID)
-                // Resolve a friendly name
-                let peerNickname: String = {
-                    if let p = viewModel.getPeer(byID: statusPeerID) { return p.displayName }
-                    if let name = viewModel.meshService.peerNickname(peerID: statusPeerID) { return name }
-                    if let data = peerID.noiseKey {
-                        if let fav = FavoritesPersistenceService.shared.getFavoriteStatus(for: data), !fav.peerNickname.isEmpty { return fav.peerNickname }
-                        let fp = data.sha256Fingerprint()
-                        if let social = viewModel.identityManager.getSocialIdentity(for: fp) {
-                            if let pet = social.localPetname, !pet.isEmpty { return pet }
-                            if !social.claimedNickname.isEmpty { return social.claimedNickname }
-                        }
-                    }
-                    return Strings.unknownPeer()
-                }()
-                // Accurate encryption state based on short ID session
-                let encryptionStatus = viewModel.getEncryptionStatus(for: statusPeerID)
-                
                 HStack {
-                    if let icon = encryptionStatus.icon {
+                    if let icon = details.encryptionStatus.icon {
                         Image(systemName: icon)
                             .font(.bitchatSystem(size: 20))
-                            .foregroundColor(encryptionStatus == .noiseVerified ? Color.green : textColor)
+                            .foregroundColor(details.encryptionStatus == .noiseVerified ? Color.green : textColor)
                     }
                     
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(peerNickname)
+                        Text(details.displayName.isEmpty ? Strings.unknownPeer() : details.displayName)
                             .font(.bitchatSystem(size: 18, weight: .semibold, design: .monospaced))
                             .foregroundColor(textColor)
                         
-                        Text(encryptionStatus.description)
+                        Text(details.encryptionStatus.description)
                             .font(.bitchatSystem(size: 12, design: .monospaced))
                             .foregroundColor(textColor.opacity(0.7))
                     }
@@ -112,7 +95,7 @@ struct FingerprintView: View {
                         .font(.bitchatSystem(size: 12, weight: .bold, design: .monospaced))
                         .foregroundColor(textColor.opacity(0.7))
                     
-                    if let fingerprint = viewModel.getFingerprint(for: statusPeerID) {
+                    if let fingerprint = details.theirFingerprint {
                         Text(formatFingerprint(fingerprint))
                             .font(.bitchatSystem(size: 14, design: .monospaced))
                             .foregroundColor(textColor)
@@ -147,8 +130,7 @@ struct FingerprintView: View {
                         .font(.bitchatSystem(size: 12, weight: .bold, design: .monospaced))
                         .foregroundColor(textColor.opacity(0.7))
                     
-                    let myFingerprint = viewModel.getMyFingerprint()
-                    Text(formatFingerprint(myFingerprint))
+                    Text(formatFingerprint(details.myFingerprint))
                         .font(.bitchatSystem(size: 14, design: .monospaced))
                         .foregroundColor(textColor)
                         .multilineTextAlignment(.leading)
@@ -157,22 +139,22 @@ struct FingerprintView: View {
                         .padding()
                         .frame(maxWidth: .infinity)
                         .background(Color.gray.opacity(0.1))
-                        .cornerRadius(8)
-                        .contextMenu {
-                            Button(Strings.copy) {
-                                #if os(iOS)
-                                UIPasteboard.general.string = myFingerprint
-                                #else
-                                NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString(myFingerprint, forType: .string)
-                                #endif
+                            .cornerRadius(8)
+                            .contextMenu {
+                                Button(Strings.copy) {
+                                    #if os(iOS)
+                                    UIPasteboard.general.string = details.myFingerprint
+                                    #else
+                                    NSPasteboard.general.clearContents()
+                                    NSPasteboard.general.setString(details.myFingerprint, forType: .string)
+                                    #endif
+                                }
                             }
-                        }
                 }
                 
                 // Verification status
-                if encryptionStatus == .noiseSecured || encryptionStatus == .noiseVerified {
-                    let isVerified = encryptionStatus == .noiseVerified
+                if details.encryptionStatus == .noiseSecured || details.encryptionStatus == .noiseVerified {
+                    let isVerified = details.encryptionStatus == .noiseVerified
                     
                     VStack(spacing: 12) {
                         Text(isVerified ? Strings.verifiedBadge : Strings.notVerifiedBadge)
@@ -184,7 +166,7 @@ struct FingerprintView: View {
                             if isVerified {
                                 Text(Strings.verifiedMessage)
                             } else {
-                                Text(Strings.verifyHint(peerNickname))
+                                Text(Strings.verifyHint(details.displayName))
                             }
                         }
                             .font(.bitchatSystem(size: 12, design: .monospaced))
@@ -196,7 +178,7 @@ struct FingerprintView: View {
                         
                         if !isVerified {
                             Button(action: {
-                                viewModel.verifyFingerprint(for: peerID)
+                                peerPresentationStore.verifyFingerprint(for: details.statusPeerID)
                                 dismiss()
                             }) {
                                 Text(Strings.markVerified)
@@ -210,7 +192,7 @@ struct FingerprintView: View {
                             .buttonStyle(PlainButtonStyle())
                         } else {
                             Button(action: {
-                                viewModel.unverifyFingerprint(for: peerID)
+                                peerPresentationStore.unverifyFingerprint(for: details.statusPeerID)
                                 dismiss()
                             }) {
                                 Text(Strings.removeVerification)

@@ -29,7 +29,7 @@ extension TorURLSession: NetworkActivationProxyControlling {}
 /// there exists at least one mutual favorite. Otherwise, do not start.
 @MainActor
 final class NetworkActivationService: ObservableObject {
-    static let shared = NetworkActivationService()
+    static var shared: NetworkActivationService { LiveRuntimeServices.networkActivationService }
 
     @Published private(set) var activationAllowed: Bool = false
     @Published private(set) var userTorEnabled: Bool = true
@@ -47,18 +47,6 @@ final class NetworkActivationService: ObservableObject {
     private let relayController: NetworkActivationRelayControlling
     private let proxyController: NetworkActivationProxyControlling
     private let notificationCenter: NotificationCenter
-
-    private init() {
-        storage = .standard
-        locationPermissionPublisher = LocationChannelManager.shared.$permissionState.eraseToAnyPublisher()
-        mutualFavoritesPublisher = FavoritesPersistenceService.shared.$mutualFavorites.eraseToAnyPublisher()
-        permissionProvider = { LocationChannelManager.shared.permissionState }
-        mutualFavoritesProvider = { FavoritesPersistenceService.shared.mutualFavorites }
-        torController = TorManager.shared
-        relayController = NostrRelayManager.shared
-        proxyController = TorURLSession.shared
-        notificationCenter = .default
-    }
 
     internal init(
         storage: UserDefaults,
@@ -80,6 +68,30 @@ final class NetworkActivationService: ObservableObject {
         self.relayController = relayController
         self.proxyController = proxyController
         self.notificationCenter = notificationCenter
+    }
+
+    static func live(
+        storage: UserDefaults = .standard,
+        locationManager: LocationChannelManager,
+        favoritesService: FavoritesPersistenceService,
+        relayController: NetworkActivationRelayControlling,
+        torController: NetworkActivationTorControlling? = nil,
+        proxyController: NetworkActivationProxyControlling? = nil,
+        notificationCenter: NotificationCenter = .default
+    ) -> NetworkActivationService {
+        let torController = torController ?? TorManager.shared
+        let proxyController = proxyController ?? TorURLSession.shared
+        return NetworkActivationService(
+            storage: storage,
+            locationPermissionPublisher: locationManager.$permissionState.eraseToAnyPublisher(),
+            mutualFavoritesPublisher: favoritesService.$mutualFavorites.eraseToAnyPublisher(),
+            permissionProvider: { locationManager.permissionState },
+            mutualFavoritesProvider: { favoritesService.mutualFavorites },
+            torController: torController,
+            relayController: relayController,
+            proxyController: proxyController,
+            notificationCenter: notificationCenter
+        )
     }
 
     func start() {

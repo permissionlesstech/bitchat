@@ -191,6 +191,31 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
         initializePermissionState()
     }
 
+    @MainActor
+    func resetForTesting() {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
+        cl.stopUpdatingLocation()
+        geocoder.cancelGeocode()
+
+        permissionState = .notDetermined
+        availableChannels = []
+        selectedChannel = .mesh
+        teleported = false
+        locationNames = [:]
+        bookmarks = []
+        bookmarkNames = [:]
+
+        teleportedSet.removeAll()
+        bookmarkMembership.removeAll()
+        resolvingNames.removeAll()
+
+        storage.removeObject(forKey: selectedChannelKey)
+        storage.removeObject(forKey: teleportedStoreKey)
+        storage.removeObject(forKey: bookmarksKey)
+        storage.removeObject(forKey: bookmarkNamesKey)
+    }
+
     private func loadPersistedState() {
         // Load selected channel
         if let data = storage.data(forKey: selectedChannelKey),

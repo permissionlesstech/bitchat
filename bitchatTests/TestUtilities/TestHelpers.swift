@@ -81,6 +81,13 @@ final class TestHelpers {
     static func generateTestPeerID() -> String {
         return "PEER" + UUID().uuidString.prefix(8)
     }
+
+    @MainActor
+    static func resetSharedApplicationState() {
+        LocationChannelManager.shared.resetForTesting()
+        FavoritesPersistenceService.shared.clearAllFavorites()
+        UserDefaults.standard.removeObject(forKey: "bitchat.nickname")
+    }
     
     // MARK: - Async Helpers
     
