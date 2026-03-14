@@ -3,7 +3,7 @@ import Foundation
 
 @MainActor
 final class TransportRuntimeController: PublicMessagePipelineDelegate {
-    private unowned let viewModel: ChatViewModel
+    private weak var viewModel: ChatViewModel?
     private let sessionStore: SessionStore
     private let publicTimelineStore: PublicTimelineStore
     private let privateConversationsStore: PrivateConversationsStore
@@ -33,7 +33,13 @@ final class TransportRuntimeController: PublicMessagePipelineDelegate {
         self.transportEventBridge = transportEventBridge
     }
 
+    deinit {
+        networkResetTimer?.invalidate()
+        networkEmptyTimer?.invalidate()
+    }
+
     func bind() {
+        guard let viewModel else { return }
         viewModel.meshService.delegate = transportEventBridge
         viewModel.meshService.peerEventsDelegate = transportEventBridge
         viewModel.publicMessagePipeline.delegate = self
@@ -77,22 +83,27 @@ final class TransportRuntimeController: PublicMessagePipelineDelegate {
     }
 
     func pipeline(_ pipeline: PublicMessagePipeline, normalizeContent content: String) -> String {
-        viewModel.deduplicationService.normalizedContentKey(content)
+        guard let viewModel else { return content }
+        return viewModel.deduplicationService.normalizedContentKey(content)
     }
 
     func pipeline(_ pipeline: PublicMessagePipeline, contentTimestampForKey key: String) -> Date? {
-        viewModel.deduplicationService.contentTimestamp(forKey: key)
+        guard let viewModel else { return nil }
+        return viewModel.deduplicationService.contentTimestamp(forKey: key)
     }
 
     func pipeline(_ pipeline: PublicMessagePipeline, recordContentKey key: String, timestamp: Date) {
+        guard let viewModel else { return }
         viewModel.deduplicationService.recordContentKey(key, timestamp: timestamp)
     }
 
     func pipelineTrimMessages(_ pipeline: PublicMessagePipeline) {
+        guard let viewModel else { return }
         viewModel.trimMessagesIfNeeded()
     }
 
     func pipelinePrewarmMessage(_ pipeline: PublicMessagePipeline, message: BitchatMessage) {
+        guard let viewModel else { return }
         _ = viewModel.formatMessageAsText(message, colorScheme: viewModel.currentColorScheme)
     }
 
@@ -103,6 +114,7 @@ final class TransportRuntimeController: PublicMessagePipelineDelegate {
 
 private extension TransportRuntimeController {
     func handleIncomingMessage(_ message: BitchatMessage) {
+        guard let viewModel else { return }
         guard !viewModel.isMessageBlocked(message) else { return }
         guard !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || message.isPrivate else { return }
 
@@ -123,6 +135,7 @@ private extension TransportRuntimeController {
         timestamp: Date,
         messageID: String?
     ) {
+        guard let viewModel else { return }
         let normalized = content.trimmingCharacters(in: .whitespacesAndNewlines)
         let mentions = viewModel.parseMentions(from: normalized)
         let message = BitchatMessage(
@@ -143,6 +156,7 @@ private extension TransportRuntimeController {
     }
 
     func handleNoisePayload(from peerID: PeerID, type: NoisePayloadType, payload: Data, timestamp: Date) {
+        guard let viewModel else { return }
         switch type {
         case .privateMessage:
             guard let privateMessage = PrivateMessagePacket.decode(from: payload) else { return }
@@ -205,6 +219,7 @@ private extension TransportRuntimeController {
     }
 
     func handlePeerListUpdated(_ peers: [PeerID]) {
+        guard let viewModel else { return }
         sessionStore.setConnected(!peers.isEmpty)
 
         let removedUnreadCount = privateConversationsStore.cleanupStaleUnreadPeerIDs(currentPeerIDs: Set(peers))
@@ -257,6 +272,7 @@ private extension TransportRuntimeController {
     }
 
     func handleConnected(_ peerID: PeerID) {
+        guard let viewModel else { return }
         sessionStore.setConnected(true)
         viewModel.identityManager.registerEphemeralSession(peerID: peerID, handshakeState: .none)
         peerPresentationStore.cacheNoiseKeyMapping(for: peerID)
@@ -264,6 +280,7 @@ private extension TransportRuntimeController {
     }
 
     func handleDisconnected(_ peerID: PeerID) {
+        guard let viewModel else { return }
         viewModel.identityManager.removeEphemeralSession(peerID: peerID)
         peerPresentationStore.clearEncryptionStatus(for: peerID)
 
@@ -296,6 +313,7 @@ private extension TransportRuntimeController {
     }
 
     func peerDisplayName(for peerID: PeerID) -> String {
+        guard let viewModel else { return peerPresentationStore.displayName(for: peerID) }
         if let nickname = viewModel.unifiedPeerService.getPeer(by: peerID)?.nickname, !nickname.isEmpty {
             return nickname
         }
@@ -315,16 +333,18 @@ private extension TransportRuntimeController {
 
     func scheduleNetworkResetTimer() {
         networkResetTimer?.invalidate()
-        networkResetTimer = Timer.scheduledTimer(
-            timeInterval: TransportConfig.networkResetGraceSeconds,
-            target: self,
-            selector: #selector(onNetworkResetTimerFired(_:)),
-            userInfo: nil,
-            repeats: false
-        )
+        networkResetTimer = Timer.scheduledTimer(withTimeInterval: TransportConfig.networkResetGraceSeconds, repeats: false) { [weak self] timer in
+            Task { @MainActor [weak self] in
+                self?.onNetworkResetTimerFired(timer)
+            }
+        }
     }
 
-    @objc func onNetworkResetTimerFired(_ timer: Timer) {
+    func onNetworkResetTimerFired(_ timer: Timer) {
+        guard let viewModel else {
+            networkResetTimer = nil
+            return
+        }
         let activeMeshPeers = viewModel.meshService
             .currentPeerSnapshots()
             .filter { snapshot in
@@ -341,13 +361,11 @@ private extension TransportRuntimeController {
 
     func scheduleNetworkEmptyTimer() {
         guard networkEmptyTimer == nil else { return }
-        networkEmptyTimer = Timer.scheduledTimer(
-            timeInterval: TransportConfig.uiMeshEmptyConfirmationSeconds,
-            target: self,
-            selector: #selector(onNetworkEmptyTimerFired(_:)),
-            userInfo: nil,
-            repeats: false
-        )
+        networkEmptyTimer = Timer.scheduledTimer(withTimeInterval: TransportConfig.uiMeshEmptyConfirmationSeconds, repeats: false) { [weak self] timer in
+            Task { @MainActor [weak self] in
+                self?.onNetworkEmptyTimerFired(timer)
+            }
+        }
         SecureLogger.debug("⏳ Mesh empty — waiting before resetting notification state", category: .session)
     }
 
@@ -357,7 +375,11 @@ private extension TransportRuntimeController {
         networkEmptyTimer = nil
     }
 
-    @objc func onNetworkEmptyTimerFired(_ timer: Timer) {
+    func onNetworkEmptyTimerFired(_ timer: Timer) {
+        guard let viewModel else {
+            networkEmptyTimer = nil
+            return
+        }
         let activeMeshPeers = viewModel.meshService
             .currentPeerSnapshots()
             .filter { snapshot in
