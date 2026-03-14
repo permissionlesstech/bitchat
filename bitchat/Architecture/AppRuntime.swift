@@ -1,7 +1,6 @@
 import Foundation
 import SwiftUI
 import Tor
-import UserNotifications
 
 @MainActor
 final class AppRuntime: ObservableObject {
@@ -33,17 +32,23 @@ final class AppRuntime: ObservableObject {
     private var started = false
     private var transportEventsTask: Task<Void, Never>?
 
-    init() {
+    init(transport: Transport? = nil) {
         let keychain = KeychainManager()
         let idBridge = NostrIdentityBridge()
         let identityManager = SecureIdentityStateManager(keychain)
         let locationManager = LocationChannelManager.shared
         let networkActivationService = NetworkActivationService.shared
         let nostrRelayManager = NostrRelayManager.shared
+        let meshTransport = transport ?? BLEService(
+            keychain: keychain,
+            idBridge: idBridge,
+            identityManager: identityManager
+        )
         let chatViewModel = ChatViewModel(
             keychain: keychain,
             idBridge: idBridge,
             identityManager: identityManager,
+            transport: meshTransport,
             locationManager: locationManager,
             nostrRelayManager: nostrRelayManager
         )
@@ -87,7 +92,6 @@ final class AppRuntime: ObservableObject {
 
         transportController.bind()
         bindTransportEvents()
-        UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
         GeoRelayDirectory.shared.prefetchIfNeeded()
     }
 

@@ -8,7 +8,7 @@ struct AppRuntimeTests {
 
     private func makeRuntime() -> AppRuntime {
         TestHelpers.resetSharedApplicationState()
-        return AppRuntime()
+        return AppRuntime(transport: MockTransport())
     }
 
     @Test

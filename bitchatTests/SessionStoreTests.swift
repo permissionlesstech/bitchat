@@ -4,10 +4,14 @@ import CoreBluetooth
 
 @MainActor
 struct SessionStoreTests {
+    private func makeRuntime() -> AppRuntime {
+        TestHelpers.resetSharedApplicationState()
+        return AppRuntime(transport: MockTransport())
+    }
 
     @Test
     func storeReflectsViewModelSessionUpdates() {
-        let runtime = AppRuntime()
+        let runtime = makeRuntime()
 
         runtime.chatViewModel.showBluetoothAlert = true
         runtime.chatViewModel.bluetoothAlertMessage = "Bluetooth required"
@@ -20,7 +24,7 @@ struct SessionStoreTests {
 
     @Test
     func storeWritesFlowBackToChatViewModel() {
-        let runtime = AppRuntime()
+        let runtime = makeRuntime()
 
         runtime.sessionStore.nickname = "alice"
         runtime.sessionStore.isAppInfoPresented = true
@@ -31,7 +35,7 @@ struct SessionStoreTests {
 
     @Test
     func transportStateUpdatesFlowBackToChatViewModel() {
-        let runtime = AppRuntime()
+        let runtime = makeRuntime()
 
         runtime.sessionStore.setConnected(true)
         runtime.sessionStore.setBluetoothState(.unsupported)

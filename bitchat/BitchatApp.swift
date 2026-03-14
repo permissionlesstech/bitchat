@@ -40,6 +40,7 @@ struct BitchatApp: App {
                 .environmentObject(runtime.verificationStore)
                 .onAppear {
                     runtime.attach()
+                    UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
                     appDelegate.runtime = runtime
                     runtime.start()
                     runtime.checkForSharedContent()
