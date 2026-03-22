@@ -163,6 +163,27 @@ struct CommandProcessorTests {
     }
 
     @MainActor
+    @Test func safeInPublicChatSendsPublicRawAndEcho() async {
+        let identityManager = MockIdentityManager(MockKeychain())
+        let context = MockCommandContextProvider(nickname: "me")
+        let processor = CommandProcessor(contextProvider: context, meshService: nil, identityManager: identityManager)
+
+        let result = await withSelectedChannel(.mesh) {
+            processor.process("/safe")
+        }
+
+        switch result {
+        case .handled:
+            break
+        default:
+            Issue.record("Expected handled result")
+        }
+        // macOS tests will not have battery info, so it defaults to empty string
+        #expect(context.sentPublicRawMessages == ["✅ me is safe."])
+        #expect(context.publicSystemMessages == ["✅ you marked yourself as safe"])
+    }
+
+    @MainActor
     @Test func hugInPrivateChatSendsPersonalizedMessageAndLocalEcho() async {
         let identityManager = MockIdentityManager(MockKeychain())
         let context = MockCommandContextProvider(nickname: "me")

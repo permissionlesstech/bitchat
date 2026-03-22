@@ -7,6 +7,9 @@
 //
 
 import Foundation
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// Result of command processing
 enum CommandResult {
@@ -88,6 +91,8 @@ final class CommandProcessor {
             return handleWho()
         case "/clear":
             return handleClear()
+        case "/safe":
+            return handleSafe()
         case "/hug":
             return handleEmote(args, command: "hug", action: "hugs", emoji: "🫂")
         case "/slap":
@@ -343,6 +348,40 @@ final class CommandProcessor {
             
             return .success(message: "removed \(nickname) from favorites")
         }
+    }
+    
+    private func handleSafe() -> CommandResult {
+        guard let myNickname = contextProvider?.nickname else {
+            return .error(message: "cannot send safe status")
+        }
+        
+        var batteryInfo = ""
+        #if canImport(UIKit) && os(iOS)
+        UIDevice.current.isBatteryMonitoringEnabled = true
+        let level = UIDevice.current.batteryLevel
+        if level >= 0 {
+            let percentage = Int(level * 100)
+            batteryInfo = " (Battery: \(percentage)%)"
+        }
+        #endif
+        
+        let safeContent = "✅ \(myNickname) is safe.\(batteryInfo)"
+        
+        if let targetPeerID = contextProvider?.selectedPrivateChatPeer {
+            // In private chat
+            if let peerNickname = meshService?.peerNickname(peerID: targetPeerID) {
+                meshService?.sendPrivateMessage(safeContent, to: targetPeerID,
+                                               recipientNickname: peerNickname,
+                                               messageID: UUID().uuidString)
+                contextProvider?.addLocalPrivateSystemMessage("✅ you marked yourself as safe to \(peerNickname)", to: targetPeerID)
+            }
+        } else {
+            // In public chat
+            contextProvider?.sendPublicRaw(safeContent)
+            contextProvider?.addPublicSystemMessage("✅ you marked yourself as safe\(batteryInfo)")
+        }
+        
+        return .handled
     }
     
 }

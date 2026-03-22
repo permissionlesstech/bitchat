@@ -54,6 +54,7 @@
 /// - `/msg <user> <message>`: Send private message
 /// - `/who`: List connected peers
 /// - `/slap <user>`: Fun interaction
+/// - `/safe`: Broadcast safe status
 /// - `/clear`: Clear message history
 /// - `/help`: Show available commands
 ///
