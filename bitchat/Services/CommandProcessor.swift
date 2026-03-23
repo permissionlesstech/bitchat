@@ -349,6 +349,7 @@ final class CommandProcessor {
             let percentage = Int(level * 100)
             batteryInfo = " (Battery: \(percentage)%)"
         }
+        UIDevice.current.isBatteryMonitoringEnabled = false
         #endif
         
         let safeContent = "✅ \(myNickname) is safe.\(batteryInfo)"
