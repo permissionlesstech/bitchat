@@ -13,6 +13,7 @@ import Foundation
 
 @MainActor
 private func makeTestableViewModel() -> (viewModel: ChatViewModel, transport: MockTransport) {
+    TestHelpers.resetSharedApplicationState()
     let keychain = MockKeychain()
     let keychainHelper = MockKeychainHelper()
     let idBridge = NostrIdentityBridge(keychain: keychainHelper)
@@ -31,6 +32,7 @@ private func makeTestableViewModel() -> (viewModel: ChatViewModel, transport: Mo
 
 // MARK: - Tor Notification Handler Tests
 
+@Suite(.serialized)
 struct ChatViewModelTorTests {
 
     // MARK: - handleTorWillStart Tests

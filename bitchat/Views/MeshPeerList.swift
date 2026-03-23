@@ -1,12 +1,13 @@
 import SwiftUI
 
 struct MeshPeerList: View {
-    @ObservedObject var viewModel: ChatViewModel
+    @ObservedObject var sessionStore: SessionStore
+    @ObservedObject var peerPresentationStore: PeerPresentationStore
+    @ObservedObject var peerStore: UnifiedPeerService
+    @ObservedObject var privateConversationsStore: PrivateConversationsStore
     let textColor: Color
     let secondaryTextColor: Color
     let onTapPeer: (PeerID) -> Void
-    let onToggleFavorite: (PeerID) -> Void
-    let onShowFingerprint: (PeerID) -> Void
     @Environment(\.colorScheme) var colorScheme
 
     @State private var orderedIDs: [String] = []
@@ -18,11 +19,11 @@ struct MeshPeerList: View {
     }
 
     var body: some View {
-        let myPeerID = viewModel.meshService.myPeerID
-        let mapped: [(peer: BitchatPeer, isMe: Bool, hasUnread: Bool, enc: EncryptionStatus)] = viewModel.allPeers.map { peer in
+        let myPeerID = peerPresentationStore.myPeerID
+        let mapped: [(peer: BitchatPeer, isMe: Bool, hasUnread: Bool, enc: EncryptionStatus)] = peerStore.peers.map { peer in
             let isMe = peer.peerID == myPeerID
-            let hasUnread = viewModel.hasUnreadMessages(for: peer.peerID)
-            let enc = viewModel.getEncryptionStatus(for: peer.peerID)
+            let hasUnread = privateConversationsStore.hasUnreadMessages(for: peer.peerID)
+            let enc = peerPresentationStore.encryptionStatus(for: peer.peerID)
             return (peer, isMe, hasUnread, enc)
         }
         // Stable visual order without mutating state here
@@ -32,7 +33,7 @@ struct MeshPeerList: View {
             mapped.first(where: { $0.peer.peerID.id == id })
         }
         
-        if viewModel.allPeers.isEmpty {
+        if peerStore.peers.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 Text(Strings.noneNearby)
                     .font(.bitchatSystem(size: 14, design: .monospaced))
@@ -47,7 +48,7 @@ struct MeshPeerList: View {
                     let peer = item.peer
                     let isMe = item.isMe
                     HStack(spacing: 4) {
-                        let assigned = viewModel.colorForMeshPeer(id: peer.peerID, isDark: colorScheme == .dark)
+                        let assigned = peerPresentationStore.color(forMeshPeer: peer.peerID, isDark: colorScheme == .dark)
                         let baseColor = isMe ? Color.orange : assigned
                         if isMe {
                             Image(systemName: "person.fill")
@@ -75,7 +76,7 @@ struct MeshPeerList: View {
                                 .foregroundColor(secondaryTextColor)
                         }
 
-                        let displayName = isMe ? viewModel.nickname : peer.nickname
+                        let displayName = isMe ? sessionStore.nickname : peer.nickname
                         let (base, suffix) = displayName.splitSuffix()
                         HStack(spacing: 0) {
                             Text(base)
@@ -86,10 +87,10 @@ struct MeshPeerList: View {
                                 Text(suffix)
                                     .font(.bitchatSystem(size: 14, design: .monospaced))
                                     .foregroundColor(suffixColor)
-                            }
+                                }
                         }
 
-                        if !isMe, viewModel.isPeerBlocked(peer.peerID) {
+                        if !isMe, peerPresentationStore.isBlocked(peer.peerID) {
                             Image(systemName: "nosign")
                                 .font(.bitchatSystem(size: 10))
                                 .foregroundColor(.red)
@@ -104,9 +105,7 @@ struct MeshPeerList: View {
                                         .foregroundColor(baseColor)
                                 }
                             } else {
-                                // Offline: prefer showing verified badge from persisted fingerprints
-                                if let fp = viewModel.getFingerprint(for: peer.peerID),
-                                   viewModel.verifiedFingerprints.contains(fp) {
+                                if peerPresentationStore.isVerified(peerID: peer.peerID) {
                                     Image(systemName: "checkmark.seal.fill")
                                         .font(.bitchatSystem(size: 10))
                                         .foregroundColor(baseColor)
@@ -130,7 +129,7 @@ struct MeshPeerList: View {
                         }
 
                         if !isMe {
-                            Button(action: { onToggleFavorite(peer.peerID) }) {
+                            Button(action: { peerPresentationStore.toggleFavorite(peerID: peer.peerID) }) {
                                 Image(systemName: (peer.favoriteStatus?.isFavorite ?? false) ? "star.fill" : "star")
                                     .font(.bitchatSystem(size: 12))
                                     .foregroundColor((peer.favoriteStatus?.isFavorite ?? false) ? .yellow : secondaryTextColor)
@@ -143,7 +142,7 @@ struct MeshPeerList: View {
                     .padding(.top, idx == 0 ? 10 : 0)
                     .contentShape(Rectangle())
                     .onTapGesture { if !isMe { onTapPeer(peer.peerID) } }
-                    .onTapGesture(count: 2) { if !isMe { onShowFingerprint(peer.peerID) } }
+                    .onTapGesture(count: 2) { if !isMe { peerPresentationStore.showFingerprint(for: peer.peerID) } }
                 }
             }
             // Seed and update order outside result builder

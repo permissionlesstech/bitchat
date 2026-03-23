@@ -1,26 +1,28 @@
 import SwiftUI
 
 struct LocationNotesView: View {
-    @EnvironmentObject var viewModel: ChatViewModel
+    @EnvironmentObject var sessionStore: SessionStore
     @StateObject private var manager: LocationNotesManager
     let geohash: String
     let onNotesCountChanged: ((Int) -> Void)?
 
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @ObservedObject private var locationManager = LocationChannelManager.shared
+    @ObservedObject private var locationManager: LocationChannelManager
     @Environment(\.dismiss) private var dismiss
     @State private var draft: String = ""
 
     init(
         geohash: String,
         onNotesCountChanged: ((Int) -> Void)? = nil,
-        manager: LocationNotesManager? = nil
+        manager: LocationNotesManager? = nil,
+        locationManager: LocationChannelManager = .shared
     ) {
         let gh = geohash.lowercased()
         self.geohash = gh
         self.onNotesCountChanged = onNotesCountChanged
         _manager = StateObject(wrappedValue: manager ?? LocationNotesManager(geohash: gh))
+        _locationManager = ObservedObject(wrappedValue: locationManager)
     }
 
     private var backgroundColor: Color { colorScheme == .dark ? .black : .white }
@@ -266,7 +268,7 @@ struct LocationNotesView: View {
     private func send() {
         let content = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty else { return }
-        manager.send(content: content, nickname: viewModel.nickname)
+        manager.send(content: content, nickname: sessionStore.nickname)
         draft = ""
     }
 
