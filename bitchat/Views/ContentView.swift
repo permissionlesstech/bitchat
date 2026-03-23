@@ -200,6 +200,7 @@ struct ContentView: View {
             )
         ) {
             peopleSheetView
+                .environmentObject(viewModel)
         }
         .sheet(isPresented: $showAppInfo) {
             AppInfoView()
