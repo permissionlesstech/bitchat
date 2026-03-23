@@ -185,24 +185,10 @@ final class CommandProcessor {
         
         let emoteContent = "* \(emoji) \(myNickname) \(action) \(nickname)\(suffix) *"
         
-        if contextProvider?.selectedPrivateChatPeer != nil {
-            // In private chat
-            if let peerNickname = meshService?.peerNickname(peerID: targetPeerID) {
-                let personalMessage = "* \(emoji) \(myNickname) \(action) you\(suffix) *"
-                meshService?.sendPrivateMessage(personalMessage, to: targetPeerID,
-                                               recipientNickname: peerNickname,
-                                               messageID: UUID().uuidString)
-                // Also add a local system message so the sender sees a natural-language confirmation
-                let pastAction: String = {
-                    switch action {
-                    case "hugs": return "hugged"
-                    case "slaps": return "slapped"
-                    default: return action.hasSuffix("e") ? action + "d" : action + "ed"
-                    }
-                }()
-                let localText = "\(emoji) you \(pastAction) \(nickname)\(suffix)"
-                contextProvider?.addLocalPrivateSystemMessage(localText, to: targetPeerID)
-            }
+        if let targetPeerID = contextProvider?.selectedPrivateChatPeer {
+            // In private chat: Route through context provider to handle GeoDM and Nostr fallbacks
+            let personalMessage = "* \(emoji) \(myNickname) \(action) you\(suffix) *"
+            contextProvider?.sendPrivateMessage(personalMessage, to: targetPeerID)
         } else {
             // In public chat: send to active public channel (mesh or geohash)
             contextProvider?.sendPublicRaw(emoteContent)
@@ -368,13 +354,8 @@ final class CommandProcessor {
         let safeContent = "✅ \(myNickname) is safe.\(batteryInfo)"
         
         if let targetPeerID = contextProvider?.selectedPrivateChatPeer {
-            // In private chat
-            if let peerNickname = meshService?.peerNickname(peerID: targetPeerID) {
-                meshService?.sendPrivateMessage(safeContent, to: targetPeerID,
-                                               recipientNickname: peerNickname,
-                                               messageID: UUID().uuidString)
-                contextProvider?.addLocalPrivateSystemMessage("✅ you marked yourself as safe to \(peerNickname)", to: targetPeerID)
-            }
+            // In private chat: Route through context provider to handle GeoDM and Nostr fallbacks
+            contextProvider?.sendPrivateMessage(safeContent, to: targetPeerID)
         } else {
             // In public chat
             contextProvider?.sendPublicRaw(safeContent)

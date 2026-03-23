@@ -184,7 +184,7 @@ struct CommandProcessorTests {
     }
 
     @MainActor
-    @Test func hugInPrivateChatSendsPersonalizedMessageAndLocalEcho() async {
+    @Test func hugInPrivateChatSendsPersonalizedMessage() async {
         let identityManager = MockIdentityManager(MockKeychain())
         let context = MockCommandContextProvider(nickname: "me")
         let transport = MockTransport()
@@ -204,10 +204,9 @@ struct CommandProcessorTests {
         default:
             Issue.record("Expected handled result")
         }
-        #expect(transport.sentPrivateMessages.count == 1)
-        #expect(transport.sentPrivateMessages.first?.content == "* 🫂 me hugs you *")
-        #expect(context.localPrivateSystemMessages.first?.content == "🫂 you hugged bob")
-        #expect(context.localPrivateSystemMessages.first?.peerID == peerID)
+        #expect(context.sentPrivateMessages.count == 1)
+        #expect(context.sentPrivateMessages.first?.content == "* 🫂 me hugs you *")
+        #expect(context.sentPrivateMessages.first?.peerID == peerID)
     }
 
     @MainActor
