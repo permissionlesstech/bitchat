@@ -7,6 +7,9 @@
 //
 
 import Foundation
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// Result of command processing
 enum CommandResult {
@@ -88,6 +91,8 @@ final class CommandProcessor {
             return handleWho()
         case "/clear":
             return handleClear()
+        case "/safe":
+            return handleSafe()
         case "/hug":
             return handleEmote(args, command: "hug", action: "hugs", emoji: "🫂")
         case "/slap":
@@ -180,24 +185,10 @@ final class CommandProcessor {
         
         let emoteContent = "* \(emoji) \(myNickname) \(action) \(nickname)\(suffix) *"
         
-        if contextProvider?.selectedPrivateChatPeer != nil {
-            // In private chat
-            if let peerNickname = meshService?.peerNickname(peerID: targetPeerID) {
-                let personalMessage = "* \(emoji) \(myNickname) \(action) you\(suffix) *"
-                meshService?.sendPrivateMessage(personalMessage, to: targetPeerID,
-                                               recipientNickname: peerNickname,
-                                               messageID: UUID().uuidString)
-                // Also add a local system message so the sender sees a natural-language confirmation
-                let pastAction: String = {
-                    switch action {
-                    case "hugs": return "hugged"
-                    case "slaps": return "slapped"
-                    default: return action.hasSuffix("e") ? action + "d" : action + "ed"
-                    }
-                }()
-                let localText = "\(emoji) you \(pastAction) \(nickname)\(suffix)"
-                contextProvider?.addLocalPrivateSystemMessage(localText, to: targetPeerID)
-            }
+        if let targetPeerID = contextProvider?.selectedPrivateChatPeer {
+            // In private chat: Route through context provider to handle GeoDM and Nostr fallbacks
+            let personalMessage = "* \(emoji) \(myNickname) \(action) you\(suffix) *"
+            contextProvider?.sendPrivateMessage(personalMessage, to: targetPeerID)
         } else {
             // In public chat: send to active public channel (mesh or geohash)
             contextProvider?.sendPublicRaw(emoteContent)
@@ -343,6 +334,36 @@ final class CommandProcessor {
             
             return .success(message: "removed \(nickname) from favorites")
         }
+    }
+    
+    private func handleSafe() -> CommandResult {
+        guard let myNickname = contextProvider?.nickname else {
+            return .error(message: "cannot send safe status")
+        }
+        
+        var batteryInfo = ""
+        #if canImport(UIKit) && os(iOS)
+        UIDevice.current.isBatteryMonitoringEnabled = true
+        let level = UIDevice.current.batteryLevel
+        if level >= 0 {
+            let percentage = Int(level * 100)
+            batteryInfo = " (Battery: \(percentage)%)"
+        }
+        UIDevice.current.isBatteryMonitoringEnabled = false
+        #endif
+        
+        let safeContent = "✅ \(myNickname) is safe.\(batteryInfo)"
+        
+        if let targetPeerID = contextProvider?.selectedPrivateChatPeer {
+            // In private chat: Route through context provider to handle GeoDM and Nostr fallbacks
+            contextProvider?.sendPrivateMessage(safeContent, to: targetPeerID)
+        } else {
+            // In public chat
+            contextProvider?.sendPublicRaw(safeContent)
+            contextProvider?.addPublicSystemMessage("✅ you marked yourself as safe\(batteryInfo)")
+        }
+        
+        return .handled
     }
     
 }
