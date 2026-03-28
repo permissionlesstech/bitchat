@@ -364,6 +364,36 @@ extension ChatViewModel {
         }
     }
 
+    #if os(iOS)
+    func processThenSendImage(_ image: UIImage?) {
+        guard let image else { return }
+        Task.detached {
+            do {
+                let processedURL = try ImageUtils.processImage(image)
+                await MainActor.run {
+                    self.sendImage(from: processedURL)
+                }
+            } catch {
+                SecureLogger.error("Image processing failed: \(error)", category: .session)
+            }
+        }
+    }
+    #elseif os(macOS)
+    func processThenSendImage(from url: URL?) {
+        guard let url else { return }
+        Task.detached {
+            do {
+                let processedURL = try ImageUtils.processImage(at: url)
+                await MainActor.run {
+                    self.sendImage(from: processedURL)
+                }
+            } catch {
+                SecureLogger.error("Image processing failed: \(error)", category: .session)
+            }
+        }
+    }
+    #endif
+
     @MainActor
     func sendImage(from sourceURL: URL, cleanup: (() -> Void)? = nil) {
         guard canSendMediaInCurrentContext else {

@@ -228,18 +228,7 @@ struct ContentView: View {
         )) {
             ImagePickerView(sourceType: imagePickerSourceType) { image in
                 showImagePicker = false
-                if let image = image {
-                    Task {
-                        do {
-                            let processedURL = try ImageUtils.processImage(image)
-                            await MainActor.run {
-                                viewModel.sendImage(from: processedURL)
-                            }
-                        } catch {
-                            SecureLogger.error("Image processing failed: \(error)", category: .session)
-                        }
-                    }
-                }
+                viewModel.processThenSendImage(image)
             }
             .environmentObject(viewModel)
             .ignoresSafeArea()
@@ -257,18 +246,7 @@ struct ContentView: View {
         )) {
             MacImagePickerView { url in
                 showMacImagePicker = false
-                if let url = url {
-                    Task {
-                        do {
-                            let processedURL = try ImageUtils.processImage(at: url)
-                            await MainActor.run {
-                                viewModel.sendImage(from: processedURL)
-                            }
-                        } catch {
-                            SecureLogger.error("Image processing failed: \(error)", category: .session)
-                        }
-                    }
-                }
+                viewModel.processThenSendImage(from: url)
             }
             .environmentObject(viewModel)
         }
@@ -847,18 +825,7 @@ struct ContentView: View {
         )) {
             ImagePickerView(sourceType: imagePickerSourceType) { image in
                 showImagePicker = false
-                if let image = image {
-                    Task {
-                        do {
-                            let processedURL = try ImageUtils.processImage(image)
-                            await MainActor.run {
-                                viewModel.sendImage(from: processedURL)
-                            }
-                        } catch {
-                            SecureLogger.error("Image processing failed: \(error)", category: .session)
-                        }
-                    }
-                }
+                viewModel.processThenSendImage(image)
             }
             .environmentObject(viewModel)
             .ignoresSafeArea()
@@ -868,18 +835,7 @@ struct ContentView: View {
         .sheet(isPresented: $showMacImagePicker) {
             MacImagePickerView { url in
                 showMacImagePicker = false
-                if let url = url {
-                    Task {
-                        do {
-                            let processedURL = try ImageUtils.processImage(at: url)
-                            await MainActor.run {
-                                viewModel.sendImage(from: processedURL)
-                            }
-                        } catch {
-                            SecureLogger.error("Image processing failed: \(error)", category: .session)
-                        }
-                    }
-                }
+                viewModel.processThenSendImage(from: url)
             }
             .environmentObject(viewModel)
         }
@@ -1967,204 +1923,3 @@ private extension ContentView {
         }
     }
 }
-
-//
-
-struct ImagePreviewView: View {
-    let url: URL
-
-    @Environment(\.dismiss) private var dismiss
-    #if os(iOS)
-    @State private var showExporter = false
-    @State private var platformImage: UIImage?
-    #else
-    @State private var platformImage: NSImage?
-    #endif
-
-    var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            VStack {
-                Spacer()
-                if let image = platformImage {
-                    #if os(iOS)
-                    Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .padding()
-                    #else
-                    Image(nsImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .padding()
-                    #endif
-                } else {
-                    ProgressView()
-                        .progressViewStyle(.circular)
-                        .tint(.white)
-                }
-                Spacer()
-                HStack {
-                    Button(action: { dismiss() }) {
-                        Text("close", comment: "Button to dismiss fullscreen media viewer")
-                            .font(.bitchatSystem(size: 15, weight: .semibold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.5), lineWidth: 1))
-                    }
-                    Spacer()
-                    Button(action: saveCopy) {
-                        Text("save", comment: "Button to save media to device")
-                            .font(.bitchatSystem(size: 15, weight: .semibold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(RoundedRectangle(cornerRadius: 12).fill(Color.blue.opacity(0.6)))
-                    }
-                }
-                .padding([.horizontal, .bottom], 24)
-            }
-        }
-        .onAppear(perform: loadImage)
-        #if os(iOS)
-        .sheet(isPresented: $showExporter) {
-            FileExportWrapper(url: url)
-        }
-        #endif
-    }
-
-    private func loadImage() {
-        DispatchQueue.global(qos: .userInitiated).async {
-            #if os(iOS)
-            guard let image = UIImage(contentsOfFile: url.path) else { return }
-            #else
-            guard let image = NSImage(contentsOf: url) else { return }
-            #endif
-            DispatchQueue.main.async {
-                self.platformImage = image
-            }
-        }
-    }
-
-    private func saveCopy() {
-        #if os(iOS)
-        showExporter = true
-        #else
-        Task { @MainActor in
-            let panel = NSSavePanel()
-            panel.canCreateDirectories = true
-            panel.nameFieldStringValue = url.lastPathComponent
-            panel.prompt = "save"
-            if panel.runModal() == .OK, let destination = panel.url {
-                do {
-                    if FileManager.default.fileExists(atPath: destination.path) {
-                        try FileManager.default.removeItem(at: destination)
-                    }
-                    try FileManager.default.copyItem(at: url, to: destination)
-                } catch {
-                    SecureLogger.error("Failed to save image preview copy: \(error)", category: .session)
-                }
-            }
-        }
-        #endif
-    }
-
-    #if os(iOS)
-    private struct FileExportWrapper: UIViewControllerRepresentable {
-        let url: URL
-
-        func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-            let controller = UIDocumentPickerViewController(forExporting: [url])
-            controller.shouldShowFileExtensions = true
-            return controller
-        }
-
-        func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
-    }
-#endif
-}
-
-#if os(iOS)
-// MARK: - Image Picker (Camera or Photo Library)
-struct ImagePickerView: UIViewControllerRepresentable {
-    let sourceType: UIImagePickerController.SourceType
-    let completion: (UIImage?) -> Void
-
-    func makeUIViewController(context: Context) -> UIImagePickerController {
-        let picker = UIImagePickerController()
-        picker.sourceType = sourceType
-        picker.delegate = context.coordinator
-        picker.allowsEditing = false
-
-        // Use standard full screen - iOS handles safe areas automatically
-        picker.modalPresentationStyle = .fullScreen
-
-        // Force dark mode to make safe area bars black instead of white
-        picker.overrideUserInterfaceStyle = .dark
-
-        return picker
-    }
-
-    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(completion: completion)
-    }
-
-    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        let completion: (UIImage?) -> Void
-
-        init(completion: @escaping (UIImage?) -> Void) {
-            self.completion = completion
-        }
-
-        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
-            let image = info[.originalImage] as? UIImage
-            completion(image)
-        }
-
-        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            completion(nil)
-        }
-    }
-}
-#endif
-
-#if os(macOS)
-// MARK: - macOS Image Picker
-struct MacImagePickerView: View {
-    let completion: (URL?) -> Void
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack(spacing: 16) {
-            Text("Choose an image")
-                .font(.headline)
-
-            Button("Select Image") {
-                let panel = NSOpenPanel()
-                panel.allowsMultipleSelection = false
-                panel.canChooseDirectories = false
-                panel.canChooseFiles = true
-                panel.allowedContentTypes = [.image, .png, .jpeg, .heic]
-                panel.message = "Choose an image to send"
-
-                if panel.runModal() == .OK {
-                    completion(panel.url)
-                } else {
-                    dismiss()
-                }
-            }
-            .buttonStyle(.borderedProminent)
-
-            Button("Cancel") {
-                completion(nil)
-            }
-            .buttonStyle(.bordered)
-        }
-        .padding(40)
-        .frame(minWidth: 300, minHeight: 150)
-    }
-}
-#endif
