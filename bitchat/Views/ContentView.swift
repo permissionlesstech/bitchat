@@ -228,18 +228,7 @@ struct ContentView: View {
         )) {
             ImagePickerView(sourceType: imagePickerSourceType) { image in
                 showImagePicker = false
-                if let image = image {
-                    Task {
-                        do {
-                            let processedURL = try ImageUtils.processImage(image)
-                            await MainActor.run {
-                                viewModel.sendImage(from: processedURL)
-                            }
-                        } catch {
-                            SecureLogger.error("Image processing failed: \(error)", category: .session)
-                        }
-                    }
-                }
+                viewModel.processThenSendImage(image)
             }
             .environmentObject(viewModel)
             .ignoresSafeArea()
@@ -257,18 +246,7 @@ struct ContentView: View {
         )) {
             MacImagePickerView { url in
                 showMacImagePicker = false
-                if let url = url {
-                    Task {
-                        do {
-                            let processedURL = try ImageUtils.processImage(at: url)
-                            await MainActor.run {
-                                viewModel.sendImage(from: processedURL)
-                            }
-                        } catch {
-                            SecureLogger.error("Image processing failed: \(error)", category: .session)
-                        }
-                    }
-                }
+                viewModel.processThenSendImage(from: url)
             }
             .environmentObject(viewModel)
         }
@@ -847,18 +825,7 @@ struct ContentView: View {
         )) {
             ImagePickerView(sourceType: imagePickerSourceType) { image in
                 showImagePicker = false
-                if let image = image {
-                    Task {
-                        do {
-                            let processedURL = try ImageUtils.processImage(image)
-                            await MainActor.run {
-                                viewModel.sendImage(from: processedURL)
-                            }
-                        } catch {
-                            SecureLogger.error("Image processing failed: \(error)", category: .session)
-                        }
-                    }
-                }
+                viewModel.processThenSendImage(image)
             }
             .environmentObject(viewModel)
             .ignoresSafeArea()
@@ -868,18 +835,7 @@ struct ContentView: View {
         .sheet(isPresented: $showMacImagePicker) {
             MacImagePickerView { url in
                 showMacImagePicker = false
-                if let url = url {
-                    Task {
-                        do {
-                            let processedURL = try ImageUtils.processImage(at: url)
-                            await MainActor.run {
-                                viewModel.sendImage(from: processedURL)
-                            }
-                        } catch {
-                            SecureLogger.error("Image processing failed: \(error)", category: .session)
-                        }
-                    }
-                }
+                viewModel.processThenSendImage(from: url)
             }
             .environmentObject(viewModel)
         }
@@ -1967,87 +1923,3 @@ private extension ContentView {
         }
     }
 }
-
-#if os(iOS)
-// MARK: - Image Picker (Camera or Photo Library)
-struct ImagePickerView: UIViewControllerRepresentable {
-    let sourceType: UIImagePickerController.SourceType
-    let completion: (UIImage?) -> Void
-
-    func makeUIViewController(context: Context) -> UIImagePickerController {
-        let picker = UIImagePickerController()
-        picker.sourceType = sourceType
-        picker.delegate = context.coordinator
-        picker.allowsEditing = false
-
-        // Use standard full screen - iOS handles safe areas automatically
-        picker.modalPresentationStyle = .fullScreen
-
-        // Force dark mode to make safe area bars black instead of white
-        picker.overrideUserInterfaceStyle = .dark
-
-        return picker
-    }
-
-    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(completion: completion)
-    }
-
-    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        let completion: (UIImage?) -> Void
-
-        init(completion: @escaping (UIImage?) -> Void) {
-            self.completion = completion
-        }
-
-        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
-            let image = info[.originalImage] as? UIImage
-            completion(image)
-        }
-
-        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            completion(nil)
-        }
-    }
-}
-#endif
-
-#if os(macOS)
-// MARK: - macOS Image Picker
-struct MacImagePickerView: View {
-    let completion: (URL?) -> Void
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack(spacing: 16) {
-            Text("Choose an image")
-                .font(.headline)
-
-            Button("Select Image") {
-                let panel = NSOpenPanel()
-                panel.allowsMultipleSelection = false
-                panel.canChooseDirectories = false
-                panel.canChooseFiles = true
-                panel.allowedContentTypes = [.image, .png, .jpeg, .heic]
-                panel.message = "Choose an image to send"
-
-                if panel.runModal() == .OK {
-                    completion(panel.url)
-                } else {
-                    dismiss()
-                }
-            }
-            .buttonStyle(.borderedProminent)
-
-            Button("Cancel") {
-                completion(nil)
-            }
-            .buttonStyle(.bordered)
-        }
-        .padding(40)
-        .frame(minWidth: 300, minHeight: 150)
-    }
-}
-#endif
