@@ -49,6 +49,7 @@ struct ContentView: View {
     // MARK: - Properties
     
     @EnvironmentObject var viewModel: ChatViewModel
+    @StateObject private var voiceRecordingVM = VoiceRecordingViewModel()
     @ObservedObject private var locationManager = LocationChannelManager.shared
     @ObservedObject private var bookmarks = GeohashBookmarksStore.shared
     @State private var messageText = ""
@@ -73,13 +74,6 @@ struct ContentView: View {
     @State private var showLocationNotes = false
     @State private var notesGeohash: String? = nil
     @State private var imagePreviewURL: URL? = nil
-    @State private var recordingAlertMessage: String = ""
-    @State private var showRecordingAlert = false
-    @State private var isRecordingVoiceNote = false
-    @State private var isPreparingVoiceNote = false
-    @State private var recordingDuration: TimeInterval = 0
-    @State private var recordingTimer: Timer?
-    @State private var recordingStartDate: Date?
 #if os(iOS)
     @State private var showImagePicker = false
     @State private var imagePickerSourceType: UIImagePickerController.SourceType = .camera
@@ -282,10 +276,18 @@ struct ContentView: View {
                     .environmentObject(viewModel)
             }
         }
-        .alert("Recording Error", isPresented: $showRecordingAlert, actions: {
-            Button("OK", role: .cancel) {}
+        .alert("Recording Error", isPresented: $voiceRecordingVM.showAlert, actions: {
+            Button("common.ok", role: .cancel) {
+                voiceRecordingVM.isPermissionError = false
+            }
+            if voiceRecordingVM.isPermissionError {
+                Button("location_channels.action.open_settings") {
+                    voiceRecordingVM.isPermissionError = false
+                    SystemSettings.microphone.open()
+                }
+            }
         }, message: {
-            Text(recordingAlertMessage)
+            Text(voiceRecordingVM.alertMessage)
         })
         .confirmationDialog(
             selectedMessageSender.map { "@\($0)" } ?? String(localized: "content.actions.title", comment: "Fallback title for the message action sheet"),
@@ -342,11 +344,7 @@ struct ContentView: View {
         }
         .alert("content.alert.bluetooth_required.title", isPresented: $viewModel.showBluetoothAlert) {
             Button("content.alert.bluetooth_required.settings") {
-                #if os(iOS)
-                if let url = URL(string: UIApplication.openSettingsURLString) {
-                    UIApplication.shared.open(url)
-                }
-                #endif
+                SystemSettings.bluetooth.open()
             }
             Button("common.ok", role: .cancel) {}
         } message: {
@@ -629,8 +627,7 @@ struct ContentView: View {
                 secondaryTextColor: secondaryTextColor
             )
 
-            // Recording indicator
-            if isPreparingVoiceNote || isRecordingVoiceNote {
+            if voiceRecordingVM.isActive {
                 recordingIndicator
             }
 
@@ -1687,11 +1684,11 @@ private extension ContentView {
             Image(systemName: "waveform.circle.fill")
                 .foregroundColor(.red)
                 .font(.bitchatSystem(size: 20))
-            Text("recording \(formattedRecordingDuration())", comment: "Voice note recording duration indicator")
+            Text("recording \(voiceRecordingVM.formattedDuration)", comment: "Voice note recording duration indicator")
                 .font(.bitchatSystem(size: 13, design: .monospaced))
                 .foregroundColor(.red)
             Spacer()
-            Button(action: cancelVoiceRecording) {
+            Button(action: voiceRecordingVM.cancel) {
                 Label("Cancel", systemImage: "xmark.circle")
                     .labelStyle(.iconOnly)
                     .font(.bitchatSystem(size: 18))
@@ -1788,11 +1785,9 @@ private extension ContentView {
     }
 
     private var micButtonView: some View {
-        let tint = (isRecordingVoiceNote || isPreparingVoiceNote) ? Color.red : composerAccentColor
-
-        return Image(systemName: "mic.circle.fill")
+        Image(systemName: "mic.circle.fill")
             .font(.bitchatSystem(size: 24))
-            .foregroundColor(tint)
+            .foregroundColor(voiceRecordingVM.isActive ? Color.red : composerAccentColor)
             .frame(width: 36, height: 36)
             .contentShape(Circle())
             .overlay(
@@ -1800,8 +1795,8 @@ private extension ContentView {
                     .contentShape(Circle())
                     .gesture(
                         DragGesture(minimumDistance: 0)
-                            .onChanged { _ in startVoiceRecording() }
-                            .onEnded { _ in finishVoiceRecording(send: true) }
+                            .onChanged { _ in voiceRecordingVM.start(shouldShow: shouldShowVoiceControl) }
+                            .onEnded { _ in voiceRecordingVM.finishAndSend(using: viewModel.sendVoiceNote) }
                     )
             )
             .accessibilityLabel("Hold to record a voice note")
@@ -1825,102 +1820,6 @@ private extension ContentView {
             ? String(localized: "content.accessibility.send_hint_ready", comment: "Hint prompting the user to send the message")
             : String(localized: "content.accessibility.send_hint_empty", comment: "Hint prompting the user to enter a message")
         )
-    }
-
-    func formattedRecordingDuration() -> String {
-        let clamped = max(0, recordingDuration)
-        let totalMilliseconds = Int((clamped * 1000).rounded())
-        let minutes = totalMilliseconds / 60_000
-        let seconds = (totalMilliseconds % 60_000) / 1_000
-        let centiseconds = (totalMilliseconds % 1_000) / 10
-        return String(format: "%02d:%02d.%02d", minutes, seconds, centiseconds)
-    }
-
-    func startVoiceRecording() {
-        guard shouldShowVoiceControl else { return }
-        guard !isRecordingVoiceNote && !isPreparingVoiceNote else { return }
-        isPreparingVoiceNote = true
-        Task { @MainActor in
-            let granted = await VoiceRecorder.shared.requestPermission()
-            guard granted else {
-                isPreparingVoiceNote = false
-                recordingAlertMessage = "Microphone access is required to record voice notes."
-                showRecordingAlert = true
-                return
-            }
-            do {
-                _ = try VoiceRecorder.shared.startRecording()
-                recordingDuration = 0
-                recordingStartDate = Date()
-                recordingTimer?.invalidate()
-                recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { _ in
-                    if let start = recordingStartDate {
-                        recordingDuration = Date().timeIntervalSince(start)
-                    }
-                }
-                if let timer = recordingTimer {
-                    RunLoop.main.add(timer, forMode: .common)
-                }
-                isPreparingVoiceNote = false
-                isRecordingVoiceNote = true
-            } catch {
-                SecureLogger.error("Voice recording failed to start: \(error)", category: .session)
-                recordingAlertMessage = "Could not start recording."
-                showRecordingAlert = true
-                VoiceRecorder.shared.cancelRecording()
-                isPreparingVoiceNote = false
-                isRecordingVoiceNote = false
-                recordingStartDate = nil
-            }
-        }
-    }
-
-    func finishVoiceRecording(send: Bool) {
-        if isPreparingVoiceNote {
-            isPreparingVoiceNote = false
-            VoiceRecorder.shared.cancelRecording()
-            return
-        }
-        guard isRecordingVoiceNote else { return }
-        isRecordingVoiceNote = false
-        recordingTimer?.invalidate()
-        recordingTimer = nil
-        if let start = recordingStartDate {
-            recordingDuration = Date().timeIntervalSince(start)
-        }
-        recordingStartDate = nil
-        if send {
-            let minimumDuration: TimeInterval = 1.0
-            VoiceRecorder.shared.stopRecording { url in
-                DispatchQueue.main.async {
-                    guard
-                        let url = url,
-                        let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
-                        let fileSize = attributes[.size] as? NSNumber,
-                        fileSize.intValue > 0,
-                        recordingDuration >= minimumDuration
-                    else {
-                        if let url = url {
-                            try? FileManager.default.removeItem(at: url)
-                        }
-                        recordingAlertMessage = recordingDuration < minimumDuration
-                            ? "Recording is too short."
-                            : "Recording failed to save."
-                        showRecordingAlert = true
-                        return
-                    }
-                    viewModel.sendVoiceNote(at: url)
-                }
-            }
-        } else {
-            VoiceRecorder.shared.cancelRecording()
-        }
-    }
-
-    func cancelVoiceRecording() {
-        if isPreparingVoiceNote || isRecordingVoiceNote {
-            finishVoiceRecording(send: false)
-        }
     }
 
     func handleImportResult(_ result: Result<[URL], Error>, handler: @escaping (URL) async -> Void) {

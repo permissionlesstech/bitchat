@@ -125,7 +125,7 @@ struct LocationChannelsSheet: View {
                             Text(Strings.permissionDenied)
                                 .font(.bitchatSystem(size: 12, design: .monospaced))
                                 .foregroundColor(.secondary)
-                            Button(Strings.openSettings) { openSystemLocationSettings() }
+                            Button(Strings.openSettings, action: SystemSettings.location.open)
                             .buttonStyle(.plain)
                         }
                     case LocationChannelManager.PermissionState.authorized:
@@ -246,9 +246,7 @@ struct LocationChannelsSheet: View {
                     sectionDivider
                     torToggleSection
                         .padding(.top, 12)
-                    Button(action: {
-                        openSystemLocationSettings()
-                    }) {
+                    Button(action: SystemSettings.location.open) {
                         Text(Strings.removeAccess)
                             .font(.bitchatSystem(size: 12, design: .monospaced))
                             .foregroundColor(Color(red: 0.75, green: 0.1, blue: 0.1))
@@ -621,19 +619,4 @@ extension LocationChannelsSheet {
             return "~"
         }
     }
-}
-
-// MARK: - Open Settings helper
-private func openSystemLocationSettings() {
-    #if os(iOS)
-    if let url = URL(string: UIApplication.openSettingsURLString) {
-        UIApplication.shared.open(url)
-    }
-    #else
-    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices") {
-        NSWorkspace.shared.open(url)
-    } else if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security") {
-        NSWorkspace.shared.open(url)
-    }
-    #endif
 }
