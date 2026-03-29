@@ -36,7 +36,7 @@ final class VoiceRecordingViewModel: ObservableObject {
 
     func start(shouldShow: Bool) {
         guard shouldShow && !isRecording && !isPreparing && !showAlert else { return }
-        Task { @MainActor in
+        Task {
             let granted = await VoiceRecorder.shared.requestPermission()
             guard granted else {
                 isPreparing = false
@@ -46,7 +46,7 @@ final class VoiceRecordingViewModel: ObservableObject {
             }
             isPreparing = true
             do {
-                _ = try VoiceRecorder.shared.startRecording()
+                try await VoiceRecorder.shared.startRecording()
                 duration = 0
                 startDate = Date()
                 timer?.invalidate()
@@ -67,7 +67,7 @@ final class VoiceRecordingViewModel: ObservableObject {
                 SecureLogger.error("Voice recording failed to start: \(error)", category: .session)
                 alertMessage = "Could not start recording."
                 showAlert = true
-                VoiceRecorder.shared.cancelRecording()
+                await VoiceRecorder.shared.cancelRecording()
                 isPreparing = false
                 isRecording = false
                 startDate = nil
@@ -77,27 +77,12 @@ final class VoiceRecordingViewModel: ObservableObject {
 
     func finishAndSend(using closure: @escaping (URL) -> Void) {
         stop()
-        let capturedDuration = duration
-        VoiceRecorder.shared.stopRecording { [weak self] url in
-            DispatchQueue.main.async {
-                guard let self else { return }
-                guard
-                    let url,
-                    let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
-                    let fileSize = attributes[.size] as? NSNumber,
-                    fileSize.intValue > 0,
-                    capturedDuration >= self.minimumDuration
-                else {
-                    if let url {
-                        try? FileManager.default.removeItem(at: url)
-                    }
-                    self.alertMessage = capturedDuration < self.minimumDuration
-                        ? "Recording is too short."
-                        : "Recording failed to save."
-                    self.showAlert = true
-                    return
-                }
+        Task {
+            if let url = await VoiceRecorder.shared.stopRecording(), isValidRecording(at: url) {
                 closure(url)
+            } else {
+                alertMessage = duration < minimumDuration ? "Recording is too short." : "Recording failed to save."
+                showAlert = true
             }
         }
     }
@@ -105,14 +90,14 @@ final class VoiceRecordingViewModel: ObservableObject {
     func cancel() {
         if isActive {
             stop()
-            VoiceRecorder.shared.cancelRecording()
+            Task { await VoiceRecorder.shared.cancelRecording() }
         }
     }
 
     private func stop() {
         if isPreparing {
             isPreparing = false
-            VoiceRecorder.shared.cancelRecording()
+            Task { await VoiceRecorder.shared.cancelRecording() }
             return
         }
         guard isRecording else { return }
@@ -123,5 +108,16 @@ final class VoiceRecordingViewModel: ObservableObject {
             duration = Date().timeIntervalSince(startDate)
         }
         startDate = nil
+    }
+
+    private func isValidRecording(at url: URL) -> Bool {
+        if let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+           let fileSize = attributes[.size] as? NSNumber,
+           fileSize.intValue > 0,
+           duration >= minimumDuration {
+            return true
+        }
+        try? FileManager.default.removeItem(at: url)
+        return false
     }
 }
