@@ -13,6 +13,7 @@ import Foundation
 final class VoiceRecordingViewModel: ObservableObject {
     @Published var alertMessage = ""
     @Published var showAlert = false
+    @Published var isPermissionError = false
     @Published var isRecording = false
     @Published var isPreparing = false
     @Published var duration: TimeInterval = 0
@@ -41,6 +42,7 @@ final class VoiceRecordingViewModel: ObservableObject {
             guard granted else {
                 isPreparing = false
                 alertMessage = "Microphone access is required to record voice notes."
+                isPermissionError = true
                 showAlert = true
                 return
             }

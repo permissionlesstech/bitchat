@@ -277,7 +277,15 @@ struct ContentView: View {
             }
         }
         .alert("Recording Error", isPresented: $voiceRecordingVM.showAlert, actions: {
-            Button("OK", role: .cancel) {}
+            Button("common.ok", role: .cancel) {
+                voiceRecordingVM.isPermissionError = false
+            }
+            if voiceRecordingVM.isPermissionError {
+                Button("location_channels.action.open_settings") {
+                    voiceRecordingVM.isPermissionError = false
+                    SystemSettings.microphone.open()
+                }
+            }
         }, message: {
             Text(voiceRecordingVM.alertMessage)
         })
@@ -336,11 +344,7 @@ struct ContentView: View {
         }
         .alert("content.alert.bluetooth_required.title", isPresented: $viewModel.showBluetoothAlert) {
             Button("content.alert.bluetooth_required.settings") {
-                #if os(iOS)
-                if let url = URL(string: UIApplication.openSettingsURLString) {
-                    UIApplication.shared.open(url)
-                }
-                #endif
+                SystemSettings.bluetooth.open()
             }
             Button("common.ok", role: .cancel) {}
         } message: {
