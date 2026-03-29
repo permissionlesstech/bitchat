@@ -277,17 +277,14 @@ struct ContentView: View {
             }
         }
         .alert("Recording Error", isPresented: $voiceRecordingVM.showAlert, actions: {
-            Button("common.ok", role: .cancel) {
-                voiceRecordingVM.isPermissionError = false
-            }
-            if voiceRecordingVM.isPermissionError {
+            Button("common.ok", role: .cancel) {}
+            if voiceRecordingVM.state == .permissionRequired {
                 Button("location_channels.action.open_settings") {
-                    voiceRecordingVM.isPermissionError = false
                     SystemSettings.microphone.open()
                 }
             }
         }, message: {
-            Text(voiceRecordingVM.alertMessage)
+            Text(voiceRecordingVM.state.alertMessage)
         })
         .confirmationDialog(
             selectedMessageSender.map { "@\($0)" } ?? String(localized: "content.actions.title", comment: "Fallback title for the message action sheet"),
@@ -627,7 +624,7 @@ struct ContentView: View {
                 secondaryTextColor: secondaryTextColor
             )
 
-            if voiceRecordingVM.isActive {
+            if voiceRecordingVM.state.isActive {
                 recordingIndicator
             }
 
@@ -1787,7 +1784,7 @@ private extension ContentView {
     private var micButtonView: some View {
         Image(systemName: "mic.circle.fill")
             .font(.bitchatSystem(size: 24))
-            .foregroundColor(voiceRecordingVM.isActive ? Color.red : composerAccentColor)
+            .foregroundColor(voiceRecordingVM.state.isActive ? Color.red : composerAccentColor)
             .frame(width: 36, height: 36)
             .contentShape(Circle())
             .overlay(
@@ -1796,7 +1793,7 @@ private extension ContentView {
                     .gesture(
                         DragGesture(minimumDistance: 0)
                             .onChanged { _ in voiceRecordingVM.start(shouldShow: shouldShowVoiceControl) }
-                            .onEnded { _ in voiceRecordingVM.finishAndSend(using: viewModel.sendVoiceNote) }
+                            .onEnded { _ in voiceRecordingVM.finish(completion: viewModel.sendVoiceNote) }
                     )
             )
             .accessibilityLabel("Hold to record a voice note")

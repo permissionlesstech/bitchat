@@ -13,6 +13,7 @@ actor VoiceRecorder {
 
     private let paddingInterval: TimeInterval = 0.5
     private let maxRecordingDuration: TimeInterval = 120
+    static let minRecordingDuration: TimeInterval = 1
 
     private var recorder: AVAudioRecorder?
     private var currentURL: URL?

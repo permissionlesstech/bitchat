@@ -11,23 +11,54 @@ import Foundation
 
 @MainActor
 final class VoiceRecordingViewModel: ObservableObject {
-    @Published var alertMessage = ""
-    @Published var showAlert = false
-    @Published var isPermissionError = false
-    @Published var isRecording = false
-    @Published var isPreparing = false
-    @Published var duration: TimeInterval = 0
+    enum State: Equatable {
+        case idle
+        case preparing
+        case recording(startDate: Date)
+        case error(message: String)
+        case permissionRequired
 
-    private var timer: Timer?
-    private var startDate: Date?
-    private let minimumDuration: TimeInterval = 1
+        var isActive: Bool {
+            switch self {
+            case .preparing, .recording: true
+            case .idle, .error, .permissionRequired: false
+            }
+        }
 
-    var isActive: Bool {
-        isPreparing || isRecording
+        var alertMessage: String {
+            switch self {
+            case .error(let message): message
+            case .permissionRequired: "Microphone access is required to record voice notes."
+            case .idle, .preparing, .recording: ""
+            }
+        }
+
+        fileprivate var duration: TimeInterval {
+            switch self {
+            case .idle, .error, .preparing, .permissionRequired: 0
+            case .recording(let startDate): Date().timeIntervalSince(startDate)
+            }
+        }
     }
 
+    var showAlert: Bool {
+        get {
+            switch state {
+            case .error, .permissionRequired:   true
+            case .idle, .preparing, .recording: false
+            }
+        }
+        set {
+            if !newValue { state = .idle }
+        }
+    }
+
+    @Published private(set) var state = State.idle
+
+    private var timer: Timer?
+
     var formattedDuration: String {
-        let clamped = max(0, duration)
+        let clamped = max(0, state.duration)
         let totalMilliseconds = Int((clamped * 1000).rounded())
         let minutes = totalMilliseconds / 60_000
         let seconds = (totalMilliseconds % 60_000) / 1_000
@@ -36,87 +67,76 @@ final class VoiceRecordingViewModel: ObservableObject {
     }
 
     func start(shouldShow: Bool) {
-        guard shouldShow && !isRecording && !isPreparing && !showAlert else { return }
+        guard shouldShow, state == .idle else { return }
         Task {
             let granted = await VoiceRecorder.shared.requestPermission()
             guard granted else {
-                isPreparing = false
-                alertMessage = "Microphone access is required to record voice notes."
-                isPermissionError = true
-                showAlert = true
+                state = .permissionRequired
                 return
             }
-            isPreparing = true
+            state = .preparing
             do {
                 try await VoiceRecorder.shared.startRecording()
-                duration = 0
-                startDate = Date()
+                guard state == .preparing else { return }
                 timer?.invalidate()
                 timer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
-                    guard let self else { return }
                     Task { @MainActor in
-                        if let start = self.startDate {
-                            self.duration = Date().timeIntervalSince(start)
-                        }
+                        self?.objectWillChange.send()
                     }
                 }
                 if let timer {
                     RunLoop.main.add(timer, forMode: .common)
                 }
-                isPreparing = false
-                isRecording = true
+                state = .recording(startDate: Date())
             } catch {
                 SecureLogger.error("Voice recording failed to start: \(error)", category: .session)
-                alertMessage = "Could not start recording."
-                showAlert = true
                 await VoiceRecorder.shared.cancelRecording()
-                isPreparing = false
-                isRecording = false
-                startDate = nil
+                guard state == .preparing else { return }
+                state = .error(message: "Could not start recording.")
             }
         }
     }
 
-    func finishAndSend(using closure: @escaping (URL) -> Void) {
-        stop()
-        Task {
-            if let url = await VoiceRecorder.shared.stopRecording(), isValidRecording(at: url) {
-                closure(url)
-            } else {
-                alertMessage = duration < minimumDuration ? "Recording is too short." : "Recording failed to save."
-                showAlert = true
+    func finish(completion: ((URL) -> Void)?) {
+        switch state {
+        case .idle, .error, .permissionRequired:
+            return
+        case .preparing:
+            state = .idle
+            Task { await VoiceRecorder.shared.cancelRecording() }
+        case .recording(let startDate):
+            state = .idle
+            timer?.invalidate()
+            timer = nil
+
+            guard let completion else { return }
+
+            Task {
+                let finalDuration = Date().timeIntervalSince(startDate)
+                if let url = await VoiceRecorder.shared.stopRecording(),
+                   isValidRecording(at: url, duration: finalDuration) {
+                    completion(url)
+                } else {
+                    guard state == .idle else { return }
+                    state = .error(
+                        message: finalDuration < VoiceRecorder.minRecordingDuration
+                        ? "Recording is too short."
+                        : "Recording failed to save."
+                    )
+                }
             }
         }
     }
 
     func cancel() {
-        if isActive {
-            stop()
-            Task { await VoiceRecorder.shared.cancelRecording() }
-        }
+        finish(completion: nil)
     }
 
-    private func stop() {
-        if isPreparing {
-            isPreparing = false
-            Task { await VoiceRecorder.shared.cancelRecording() }
-            return
-        }
-        guard isRecording else { return }
-        isRecording = false
-        timer?.invalidate()
-        timer = nil
-        if let startDate {
-            duration = Date().timeIntervalSince(startDate)
-        }
-        startDate = nil
-    }
-
-    private func isValidRecording(at url: URL) -> Bool {
+    private func isValidRecording(at url: URL, duration: TimeInterval) -> Bool {
         if let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
            let fileSize = attributes[.size] as? NSNumber,
            fileSize.intValue > 0,
-           duration >= minimumDuration {
+           duration >= VoiceRecorder.minRecordingDuration {
             return true
         }
         try? FileManager.default.removeItem(at: url)
