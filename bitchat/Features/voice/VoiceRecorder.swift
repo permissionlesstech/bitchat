@@ -140,15 +140,6 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
         }
     }
 
-    // MARK: - Metering
-
-    func currentAveragePower() -> Float {
-        queue.sync {
-            recorder?.updateMeters()
-            return recorder?.averagePower(forChannel: 0) ?? -160
-        }
-    }
-
     // MARK: - Helpers
 
     private func makeOutputURL() throws -> URL {
