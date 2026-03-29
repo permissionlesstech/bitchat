@@ -278,7 +278,7 @@ struct ContentView: View {
         }
         .alert("Recording Error", isPresented: $voiceRecordingVM.showAlert, actions: {
             Button("common.ok", role: .cancel) {}
-            if voiceRecordingVM.state == .permissionRequired {
+            if voiceRecordingVM.state == .permissionDenied {
                 Button("location_channels.action.open_settings") {
                     SystemSettings.microphone.open()
                 }

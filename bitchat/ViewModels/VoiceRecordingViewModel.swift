@@ -13,29 +13,30 @@ import Foundation
 final class VoiceRecordingViewModel: ObservableObject {
     enum State: Equatable {
         case idle
+        case requestingPermission
+        case permissionDenied
         case preparing
         case recording(startDate: Date)
         case error(message: String)
-        case permissionRequired
 
         var isActive: Bool {
             switch self {
             case .preparing, .recording: true
-            case .idle, .error, .permissionRequired: false
+            case .idle, .requestingPermission, .permissionDenied, .error: false
             }
         }
 
         var alertMessage: String {
             switch self {
             case .error(let message): message
-            case .permissionRequired: "Microphone access is required to record voice notes."
-            case .idle, .preparing, .recording: ""
+            case .permissionDenied: "Microphone access is required to record voice notes."
+            case .idle, .requestingPermission, .preparing, .recording: ""
             }
         }
 
         fileprivate func duration(for date: Date) -> TimeInterval {
             switch self {
-            case .idle, .error, .preparing, .permissionRequired: 0
+            case .idle, .requestingPermission, .preparing, .permissionDenied, .error: 0
             case .recording(let startDate): date.timeIntervalSince(startDate)
             }
         }
@@ -44,8 +45,8 @@ final class VoiceRecordingViewModel: ObservableObject {
     var showAlert: Bool {
         get {
             switch state {
-            case .error, .permissionRequired:   true
-            case .idle, .preparing, .recording: false
+            case .permissionDenied, .error:   true
+            case .idle, .requestingPermission, .preparing, .recording: false
             }
         }
         set {
@@ -66,12 +67,14 @@ final class VoiceRecordingViewModel: ObservableObject {
 
     func start(shouldShow: Bool) {
         guard shouldShow, state == .idle else { return }
+        state = .requestingPermission
         Task {
             let granted = await VoiceRecorder.shared.requestPermission()
             guard granted else {
-                state = .permissionRequired
+                state = .permissionDenied
                 return
             }
+            guard state == .requestingPermission else { return }
             state = .preparing
             do {
                 try await VoiceRecorder.shared.startRecording()
@@ -88,29 +91,32 @@ final class VoiceRecordingViewModel: ObservableObject {
 
     func finish(completion: ((URL) -> Void)?) {
         switch state {
-        case .idle, .error, .permissionRequired:
+        case .idle, .permissionDenied, .error:
             return
-        case .preparing:
-            state = .idle
+        case .requestingPermission, .preparing, .recording:
+            break
+        }
+
+        let previousState = state
+        state = .idle
+
+        guard case .recording(let startDate) = previousState, let completion else {
             Task { await VoiceRecorder.shared.cancelRecording() }
-        case .recording(let startDate):
-            state = .idle
+            return
+        }
 
-            guard let completion else { return }
-
-            Task {
-                let finalDuration = Date().timeIntervalSince(startDate)
-                if let url = await VoiceRecorder.shared.stopRecording(),
-                   isValidRecording(at: url, duration: finalDuration) {
-                    completion(url)
-                } else {
-                    guard state == .idle else { return }
-                    state = .error(
-                        message: finalDuration < VoiceRecorder.minRecordingDuration
-                        ? "Recording is too short."
-                        : "Recording failed to save."
-                    )
-                }
+        Task {
+            let finalDuration = Date().timeIntervalSince(startDate)
+            if let url = await VoiceRecorder.shared.stopRecording(),
+               isValidRecording(at: url, duration: finalDuration) {
+                completion(url)
+            } else {
+                guard state == .idle else { return }
+                state = .error(
+                    message: finalDuration < VoiceRecorder.minRecordingDuration
+                    ? "Recording is too short."
+                    : "Recording failed to save."
+                )
             }
         }
     }
