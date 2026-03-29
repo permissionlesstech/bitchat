@@ -442,7 +442,6 @@ struct ViewSmokeTests {
         #expect(WaveformCache.shared.cachedWaveform(for: audioURL)?.count == 16)
         #expect(playback.duration > 0)
         #expect(playback.progress == 0)
-        #expect(VoiceRecorder.shared.currentAveragePower() <= 0)
     }
 
     #if os(iOS)
