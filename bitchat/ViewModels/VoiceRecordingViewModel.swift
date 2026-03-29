@@ -86,20 +86,22 @@ final class VoiceRecordingViewModel: ObservableObject {
             } catch {
                 SecureLogger.error("Voice recording failed to start: \(error)", category: .session)
                 await VoiceRecorder.shared.cancelRecording()
+                guard state == .preparing else { return }
                 state = .error(message: "Could not start recording.")
             }
         }
     }
 
     func finish(completion: ((URL) -> Void)?) {
-        switch state {
-        case .idle, .permissionDenied, .error:
+        let previousState = state
+
+        switch previousState {
+        case .permissionDenied, .error:
             return
-        case .requestingPermission, .preparing, .recording:
+        case .idle, .requestingPermission, .preparing, .recording:
             break
         }
 
-        let previousState = state
         state = .idle
 
         guard case .recording(let startDate) = previousState, let completion else {
