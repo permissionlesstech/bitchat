@@ -97,14 +97,20 @@ actor VoiceRecorder {
             return currentURL
         }
 
+        let sessionURL = currentURL
+
         try? await Task.sleep(nanoseconds: UInt64(paddingInterval * 1_000_000_000))
 
         recorder.stop()
-        cleanupSession()
-        let url = currentURL
-        self.recorder = nil
-        currentURL = nil
-        return url
+
+        // A new session may have started during the sleep — don't touch its state
+        if self.recorder === recorder {
+            cleanupSession()
+            self.recorder = nil
+            currentURL = nil
+        }
+
+        return sessionURL
     }
 
     func cancelRecording() {
