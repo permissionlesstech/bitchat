@@ -35,8 +35,7 @@ final class VoiceRecordingViewModel: ObservableObject {
     }
 
     func start(shouldShow: Bool) {
-        guard shouldShow && !isRecording && !isPreparing else { return }
-        isPreparing = true
+        guard shouldShow && !isRecording && !isPreparing && !showAlert else { return }
         Task { @MainActor in
             let granted = await VoiceRecorder.shared.requestPermission()
             guard granted else {
@@ -45,6 +44,7 @@ final class VoiceRecordingViewModel: ObservableObject {
                 showAlert = true
                 return
             }
+            isPreparing = true
             do {
                 _ = try VoiceRecorder.shared.startRecording()
                 duration = 0
