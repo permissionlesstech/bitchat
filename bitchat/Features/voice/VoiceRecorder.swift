@@ -3,7 +3,7 @@ import AVFoundation
 
 /// Manages audio capture for mesh voice notes with predictable encoding settings.
 /// Recording runs on an internal serial queue to avoid AVAudioSession contention.
-final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
+final class VoiceRecorder {
     enum RecorderError: Error {
         case microphoneAccessDenied
         case recorderInitializationFailed
@@ -19,10 +19,6 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
     private var recorder: AVAudioRecorder?
     private var currentURL: URL?
     private var stopWorkItem: DispatchWorkItem?
-
-    private override init() {
-        super.init()
-    }
 
     // MARK: - Permissions
 
@@ -89,7 +85,6 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
             ]
 
             let audioRecorder = try AVAudioRecorder(url: outputURL, settings: settings)
-            audioRecorder.delegate = self
             audioRecorder.isMeteringEnabled = true
             audioRecorder.prepareToRecord()
             audioRecorder.record(forDuration: maxRecordingDuration)
