@@ -70,20 +70,22 @@ final class VoiceRecordingViewModel: ObservableObject {
         state = .requestingPermission
         Task {
             let granted = await VoiceRecorder.shared.requestPermission()
+            guard state == .requestingPermission else { return }
             guard granted else {
                 state = .permissionDenied
                 return
             }
-            guard state == .requestingPermission else { return }
             state = .preparing
             do {
                 try await VoiceRecorder.shared.startRecording()
-                guard state == .preparing else { return }
+                guard state == .preparing else {
+                    cancel()
+                    return
+                }
                 state = .recording(startDate: Date())
             } catch {
                 SecureLogger.error("Voice recording failed to start: \(error)", category: .session)
                 await VoiceRecorder.shared.cancelRecording()
-                guard state == .preparing else { return }
                 state = .error(message: "Could not start recording.")
             }
         }
