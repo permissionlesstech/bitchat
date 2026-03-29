@@ -1681,9 +1681,14 @@ private extension ContentView {
             Image(systemName: "waveform.circle.fill")
                 .foregroundColor(.red)
                 .font(.bitchatSystem(size: 20))
-            Text("recording \(voiceRecordingVM.formattedDuration)", comment: "Voice note recording duration indicator")
+            TimelineView(.periodic(from: .now, by: 0.05)) { context in
+                Text(
+                    "recording \(voiceRecordingVM.formattedDuration(for: context.date))",
+                    comment: "Voice note recording duration indicator"
+                )
                 .font(.bitchatSystem(size: 13, design: .monospaced))
                 .foregroundColor(.red)
+            }
             Spacer()
             Button(action: voiceRecordingVM.cancel) {
                 Label("Cancel", systemImage: "xmark.circle")

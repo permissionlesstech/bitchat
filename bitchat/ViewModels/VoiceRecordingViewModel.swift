@@ -33,10 +33,10 @@ final class VoiceRecordingViewModel: ObservableObject {
             }
         }
 
-        fileprivate var duration: TimeInterval {
+        fileprivate func duration(for date: Date) -> TimeInterval {
             switch self {
             case .idle, .error, .preparing, .permissionRequired: 0
-            case .recording(let startDate): Date().timeIntervalSince(startDate)
+            case .recording(let startDate): date.timeIntervalSince(startDate)
             }
         }
     }
@@ -55,11 +55,9 @@ final class VoiceRecordingViewModel: ObservableObject {
 
     @Published private(set) var state = State.idle
 
-    private var timer: Timer?
-
-    var formattedDuration: String {
-        let clamped = max(0, state.duration)
-        let totalMilliseconds = Int((clamped * 1000).rounded())
+    func formattedDuration(for date: Date) -> String {
+        let clamped = max(0, state.duration(for: date))
+        let totalMilliseconds = Int(clamped * 1000)
         let minutes = totalMilliseconds / 60_000
         let seconds = (totalMilliseconds % 60_000) / 1_000
         let centiseconds = (totalMilliseconds % 1_000) / 10
@@ -78,15 +76,6 @@ final class VoiceRecordingViewModel: ObservableObject {
             do {
                 try await VoiceRecorder.shared.startRecording()
                 guard state == .preparing else { return }
-                timer?.invalidate()
-                timer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
-                    Task { @MainActor in
-                        self?.objectWillChange.send()
-                    }
-                }
-                if let timer {
-                    RunLoop.main.add(timer, forMode: .common)
-                }
                 state = .recording(startDate: Date())
             } catch {
                 SecureLogger.error("Voice recording failed to start: \(error)", category: .session)
@@ -106,8 +95,6 @@ final class VoiceRecordingViewModel: ObservableObject {
             Task { await VoiceRecorder.shared.cancelRecording() }
         case .recording(let startDate):
             state = .idle
-            timer?.invalidate()
-            timer = nil
 
             guard let completion else { return }
 
