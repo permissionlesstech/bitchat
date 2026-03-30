@@ -1456,85 +1456,13 @@ struct ContentView: View {
 
 // MARK: - Helper Views
 
-// Rounded payment chip button
-//
-
-private enum MessageMedia {
-    case voice(URL)
-    case image(URL)
-
-    var url: URL {
-        switch self {
-        case .voice(let url), .image(let url):
-            return url
-        }
-    }
-}
-
 private extension ContentView {
-    func mediaAttachment(for message: BitchatMessage) -> MessageMedia? {
-        guard let baseDirectory = applicationFilesDirectory() else { return nil }
-
-        // Extract filename from message content
-        func url(from prefix: String, subdirectory: String) -> URL? {
-            guard message.content.hasPrefix(prefix) else { return nil }
-            let filename = String(message.content.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !filename.isEmpty else { return nil }
-
-            // Construct URL directly without fileExists check (avoids blocking disk I/O in view body)
-            // Files are checked during playback/display, so missing files fail gracefully
-            let directory = baseDirectory.appendingPathComponent(subdirectory, isDirectory: true)
-            return directory.appendingPathComponent(filename)
-        }
-
-        // Try outgoing first (most common for sent media), fall back to incoming
-        if message.content.hasPrefix("[voice] ") {
-            let filename = String(message.content.dropFirst("[voice] ".count)).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !filename.isEmpty else { return nil }
-            // Check outgoing first for sent messages, incoming for received
-            let subdir = message.sender == viewModel.nickname ? "voicenotes/outgoing" : "voicenotes/incoming"
-            let url = baseDirectory.appendingPathComponent(subdir, isDirectory: true).appendingPathComponent(filename)
-            return .voice(url)
-        }
-        if message.content.hasPrefix("[image] ") {
-            let filename = String(message.content.dropFirst("[image] ".count)).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !filename.isEmpty else { return nil }
-            let subdir = message.sender == viewModel.nickname ? "images/outgoing" : "images/incoming"
-            let url = baseDirectory.appendingPathComponent(subdir, isDirectory: true).appendingPathComponent(filename)
-            return .image(url)
-        }
-        return nil
-    }
-
-    func mediaSendState(for message: BitchatMessage, mediaURL: URL) -> (isSending: Bool, progress: Double?, canCancel: Bool) {
-        var isSending = false
-        var progress: Double?
-        if let status = message.deliveryStatus {
-            switch status {
-            case .sending:
-                isSending = true
-                progress = 0
-            case .partiallyDelivered(let reached, let total):
-                if total > 0 {
-                    isSending = true
-                    progress = Double(reached) / Double(total)
-                }
-            case .sent, .read, .delivered, .failed:
-                break
-            }
-        }
-        let isOutgoing = mediaURL.path.contains("/outgoing/")
-        let canCancel = isSending && isOutgoing
-        let clamped = progress.map { max(0, min(1, $0)) }
-        return (isSending, isSending ? clamped : nil, canCancel)
-    }
-
     @ViewBuilder
     private func messageRow(for message: BitchatMessage) -> some View {
         if message.sender == "system" {
             systemMessageRow(message)
-        } else if let media = mediaAttachment(for: message) {
-            mediaMessageRow(message: message, media: media)
+        } else if let media = message.mediaAttachment(for: viewModel.nickname) {
+            MediaMessageView(message: message, media: media, imagePreviewURL: $imagePreviewURL)
         } else {
             TextMessageView(message: message, expandedMessageIDs: $expandedMessageIDs)
         }
@@ -1545,59 +1473,6 @@ private extension ContentView {
         Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    @ViewBuilder
-    private func mediaMessageRow(message: BitchatMessage, media: MessageMedia) -> some View {
-        let mediaURL = media.url
-        let state = mediaSendState(for: message, mediaURL: mediaURL)
-        let isOutgoing = mediaURL.path.contains("/outgoing/")
-        let isAuthoredByUs = isOutgoing || (message.senderPeerID == viewModel.meshService.myPeerID)
-        let shouldBlurImage = !isAuthoredByUs
-        let cancelAction: (() -> Void)? = state.canCancel ? { viewModel.cancelMediaSend(messageID: message.id) } : nil
-
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(alignment: .center, spacing: 4) {
-                Text(viewModel.formatMessageHeader(message, colorScheme: colorScheme))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                if message.isPrivate && message.sender == viewModel.nickname,
-                   let status = message.deliveryStatus {
-                    DeliveryStatusView(status: status)
-                        .padding(.leading, 4)
-                }
-            }
-
-            Group {
-                switch media {
-                case .voice(let url):
-                    VoiceNoteView(
-                        url: url,
-                        isSending: state.isSending,
-                        sendProgress: state.progress,
-                        onCancel: cancelAction
-                    )
-                case .image(let url):
-                    BlockRevealImageView(
-                        url: url,
-                        revealProgress: state.progress,
-                        isSending: state.isSending,
-                        onCancel: cancelAction,
-                        initiallyBlurred: shouldBlurImage,
-                        onOpen: {
-                            if !state.isSending {
-                                imagePreviewURL = url
-                            }
-                        },
-                        onDelete: shouldBlurImage ? {
-                            viewModel.deleteMediaMessage(messageID: message.id)
-                        } : nil
-                    )
-                    .frame(maxWidth: 280)
-                }
-            }
-        }
-        .padding(.vertical, 4)
     }
 
     private func expandWindow(ifNeededFor message: BitchatMessage,
@@ -1779,30 +1654,5 @@ private extension ContentView {
             ? String(localized: "content.accessibility.send_hint_ready", comment: "Hint prompting the user to send the message")
             : String(localized: "content.accessibility.send_hint_empty", comment: "Hint prompting the user to enter a message")
         )
-    }
-
-    func applicationFilesDirectory() -> URL? {
-        // Cache the directory lookup to avoid repeated FileManager calls during view rendering
-        struct Cache {
-            static var cachedURL: URL?
-            static var didAttempt = false
-        }
-
-        if Cache.didAttempt {
-            return Cache.cachedURL
-        }
-
-        do {
-            let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-            let filesDir = base.appendingPathComponent("files", isDirectory: true)
-            try FileManager.default.createDirectory(at: filesDir, withIntermediateDirectories: true, attributes: nil)
-            Cache.cachedURL = filesDir
-            Cache.didAttempt = true
-            return filesDir
-        } catch {
-            SecureLogger.error("Failed to resolve application files directory: \(error)", category: .session)
-            Cache.didAttempt = true
-            return nil
-        }
     }
 }
