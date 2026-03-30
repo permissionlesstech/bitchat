@@ -9,3 +9,4 @@ DEVELOPMENT_TEAM = L3N5LHJD5Y
 CODE_SIGN_STYLE = Automatic
 
 PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat
+APP_GROUP_ID = group.chat.bitchat
