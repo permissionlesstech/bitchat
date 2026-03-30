@@ -41,13 +41,13 @@ extension BitchatMessage {
     func mediaAttachment(for nickname: String) -> Media? {
         guard let baseDirectory = Cache.shared.filesDir else { return nil }
 
-        func url(prefix: String, mediaDir: String) -> URL? {
-            guard content.hasPrefix(prefix) else { return nil }
-            let filename = String(content.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+        func url(for category: MimeType.Category) -> URL? {
+            guard content.hasPrefix(category.messagePrefix) else { return nil }
+            let filename = String(content.dropFirst(category.messagePrefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !filename.isEmpty else { return nil }
 
             // Check outgoing first for sent messages, incoming for received
-            let subdir = sender == nickname ? "\(mediaDir)/outgoing" : "\(mediaDir)/incoming"
+            let subdir = sender == nickname ? "\(category.mediaDir)/outgoing" : "\(category.mediaDir)/incoming"
 
             // Construct URL directly without fileExists check (avoids blocking disk I/O in view body)
             // Files are checked during playback/display, so missing files fail gracefully
@@ -55,10 +55,10 @@ extension BitchatMessage {
             return directory.appendingPathComponent(filename)
         }
 
-        if content.hasPrefix("[voice] "), let url = url(prefix: "[voice] ", mediaDir: "voicenotes") {
+        if let url = url(for: .audio) {
             return .voice(url)
         }
-        if content.hasPrefix("[image] "), let url = url(prefix: "[image] ", mediaDir: "images") {
+        if let url = url(for: .image) {
             return .image(url)
         }
         return nil

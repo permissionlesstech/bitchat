@@ -1222,36 +1222,14 @@ final class BLEService: NSObject {
         // BCH-01-002: Enforce storage quota before saving
         enforceIncomingFilesQuota(reservingBytes: filePacket.content.count)
 
-        let fallbackExt = mime.defaultExtension
-        let subdirectory: String
-        switch mime.category {
-        case .audio:
-            subdirectory = "voicenotes/incoming"
-        case .image:
-            subdirectory = "images/incoming"
-        case .file:
-            subdirectory = "files/incoming"
-        }
-
         guard let destination = saveIncomingFile(
             data: filePacket.content,
             preferredName: filePacket.fileName,
-            subdirectory: subdirectory,
-            fallbackExtension: fallbackExt,
+            subdirectory: "\(mime.category.mediaDir)/incoming",
+            fallbackExtension: mime.defaultExtension,
             defaultPrefix: mime.category.rawValue
         ) else {
             return
-        }
-
-        let marker: String
-        let fileName = destination.lastPathComponent
-        switch mime.category {
-        case .audio:
-            marker = "[voice] \(fileName)"
-        case .image:
-            marker = "[image] \(fileName)"
-        case .file:
-            marker = "[file] \(fileName)"
         }
 
         let isPrivateMessage = PeerID(hexData: packet.recipientID) == myPeerID
@@ -1263,7 +1241,7 @@ final class BLEService: NSObject {
         let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
         let message = BitchatMessage(
             sender: senderNickname,
-            content: marker,
+            content: "\(mime.category.messagePrefix)\(destination.lastPathComponent)",
             timestamp: ts,
             isRelay: false,
             originalSender: nil,

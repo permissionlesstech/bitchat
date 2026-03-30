@@ -319,7 +319,7 @@ extension ChatViewModel {
         }
 
         let targetPeer = selectedPrivateChatPeer
-        let message = enqueueMediaMessage(content: "[voice] \(url.lastPathComponent)", targetPeer: targetPeer)
+        let message = enqueueMediaMessage(content: "\(MimeType.Category.audio.messagePrefix)\(url.lastPathComponent)", targetPeer: targetPeer)
         let messageID = message.id
         let transferId = makeTransferID(messageID: messageID)
 
@@ -428,7 +428,7 @@ extension ChatViewModel {
                 )
                 guard packet.encode() != nil else { throw MediaSendError.encodingFailed }
                 await MainActor.run {
-                    let message = self.enqueueMediaMessage(content: "[image] \(outputURL.lastPathComponent)", targetPeer: targetPeer)
+                    let message = self.enqueueMediaMessage(content: "\(MimeType.Category.image.messagePrefix)\(outputURL.lastPathComponent)", targetPeer: targetPeer)
                     let messageID = message.id
                     let transferId = self.makeTransferID(messageID: messageID)
                     self.registerTransfer(transferId: transferId, messageID: messageID)
@@ -547,13 +547,9 @@ extension ChatViewModel {
 
     func cleanupLocalFile(forMessage message: BitchatMessage) {
         // Check both outgoing and incoming directories for thorough cleanup
-        let prefixes = ["[voice] ", "[image] ", "[file] "]
-        let subdirs = ["voicenotes/outgoing", "voicenotes/incoming",
-                       "images/outgoing", "images/incoming",
-                       "files/outgoing", "files/incoming"]
-
-        guard let prefix = prefixes.first(where: { message.content.hasPrefix($0) }) else { return }
-        let rawFilename = String(message.content.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+        let categories: [MimeType.Category] = [.audio, .image, .file]
+        guard let category = categories.first(where: { message.content.hasPrefix($0.messagePrefix) }) else { return }
+        let rawFilename = String(message.content.dropFirst(category.messagePrefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !rawFilename.isEmpty, let base = try? applicationFilesDirectory() else { return }
 
         // Security: Extract only the last path component to prevent directory traversal
@@ -561,6 +557,7 @@ extension ChatViewModel {
         guard !safeFilename.isEmpty && safeFilename != "." && safeFilename != ".." else { return }
 
         // Try all possible locations (outgoing and incoming)
+        let subdirs = categories.flatMap { ["\($0.mediaDir)/outgoing", "\($0.mediaDir)/incoming"] }
         for subdir in subdirs {
             let target = base.appendingPathComponent(subdir, isDirectory: true).appendingPathComponent(safeFilename)
 
