@@ -15065,6 +15065,23 @@
         }
       }
     },
+    "content.commands.safe" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Broadcast safe status"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "安否情報を送信する"
+          }
+        }
+      }
+    },
     "content.commands.who" : {
       "extractionState" : "manual",
       "localizations" : {

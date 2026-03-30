@@ -163,7 +163,28 @@ struct CommandProcessorTests {
     }
 
     @MainActor
-    @Test func hugInPrivateChatSendsPersonalizedMessageAndLocalEcho() async {
+    @Test func safeInPublicChatSendsPublicRawAndEcho() async {
+        let identityManager = MockIdentityManager(MockKeychain())
+        let context = MockCommandContextProvider(nickname: "me")
+        let processor = CommandProcessor(contextProvider: context, meshService: nil, identityManager: identityManager)
+
+        let result = await withSelectedChannel(.mesh) {
+            processor.process("/safe")
+        }
+
+        switch result {
+        case .handled:
+            break
+        default:
+            Issue.record("Expected handled result")
+        }
+        // macOS tests will not have battery info, so it defaults to empty string
+        #expect(context.sentPublicRawMessages == ["✅ me is safe."])
+        #expect(context.publicSystemMessages == ["✅ you marked yourself as safe"])
+    }
+
+    @MainActor
+    @Test func hugInPrivateChatSendsPersonalizedMessage() async {
         let identityManager = MockIdentityManager(MockKeychain())
         let context = MockCommandContextProvider(nickname: "me")
         let transport = MockTransport()
@@ -183,10 +204,9 @@ struct CommandProcessorTests {
         default:
             Issue.record("Expected handled result")
         }
-        #expect(transport.sentPrivateMessages.count == 1)
-        #expect(transport.sentPrivateMessages.first?.content == "* 🫂 me hugs you *")
-        #expect(context.localPrivateSystemMessages.first?.content == "🫂 you hugged bob")
-        #expect(context.localPrivateSystemMessages.first?.peerID == peerID)
+        #expect(context.sentPrivateMessages.count == 1)
+        #expect(context.sentPrivateMessages.first?.content == "* 🫂 me hugs you *")
+        #expect(context.sentPrivateMessages.first?.peerID == peerID)
     }
 
     @MainActor
