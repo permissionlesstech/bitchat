@@ -1923,25 +1923,6 @@ private extension ContentView {
         }
     }
 
-    func handleImportResult(_ result: Result<[URL], Error>, handler: @escaping (URL) async -> Void) {
-        switch result {
-        case .success(let urls):
-            guard let url = urls.first else { return }
-            let needsStop = url.startAccessingSecurityScopedResource()
-            Task {
-                defer {
-                    if needsStop {
-                        url.stopAccessingSecurityScopedResource()
-                    }
-                }
-                await handler(url)
-            }
-        case .failure(let error):
-            SecureLogger.error("Media import failed: \(error)", category: .session)
-        }
-    }
-
-
     func applicationFilesDirectory() -> URL? {
         // Cache the directory lookup to avoid repeated FileManager calls during view rendering
         struct Cache {
