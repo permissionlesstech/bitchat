@@ -9,6 +9,18 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
     @Published private(set) var duration: TimeInterval = 0
     @Published private(set) var progress: Double = 0
 
+    /// rounded so 4.9s shows "00:05"
+    var roundedDuration: Int {
+        guard duration.isFinite else { return 0 }
+        return Int(duration.rounded())
+    }
+
+    /// ceil so "00:01" stays visible until playback ends, capped to rounded duration
+    var remainingSeconds: Int {
+        let remaining = max(0, duration - currentTime)
+        return min(roundedDuration, Int(ceil(remaining)))
+    }
+
     private var player: AVAudioPlayer?
     private var timer: Timer?
     private var url: URL

@@ -34,17 +34,10 @@ struct VoiceNoteView: View {
         colorScheme == .dark ? Color.green.opacity(0.3) : Color.green.opacity(0.2)
     }
 
-    private func formatTime(_ time: TimeInterval) -> String {
-        guard time.isFinite else { return "--:--" }
-        let minutes = Int(ceil(time)) / 60
-        let seconds = Int(ceil(time)) % 60
-        return String(format: "%02d:%02d", minutes, seconds)
-    }
-
     private var playbackLabel: String {
-        playback.isPlaying
-            ? formatTime(max(0, playback.duration - playback.currentTime))
-            : formatTime(playback.duration)
+        guard playback.duration.isFinite else { return "--:--" }
+        let seconds = playback.isPlaying ? playback.remainingSeconds : playback.roundedDuration
+        return String(format: "%02d:%02d", seconds / 60, seconds % 60)
     }
 
     var body: some View {
