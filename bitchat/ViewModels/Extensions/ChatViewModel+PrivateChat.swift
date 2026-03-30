@@ -548,13 +548,15 @@ extension ChatViewModel {
     func cleanupLocalFile(forMessage message: BitchatMessage) {
         // Check both outgoing and incoming directories for thorough cleanup
         let categories: [MimeType.Category] = [.audio, .image, .file]
-        guard let category = categories.first(where: { message.content.hasPrefix($0.messagePrefix) }) else { return }
-        let rawFilename = String(message.content.dropFirst(category.messagePrefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !rawFilename.isEmpty, let base = try? applicationFilesDirectory() else { return }
-
-        // Security: Extract only the last path component to prevent directory traversal
-        let safeFilename = (rawFilename as NSString).lastPathComponent
-        guard !safeFilename.isEmpty && safeFilename != "." && safeFilename != ".." else { return }
+        guard let category = categories.first(where: { message.content.hasPrefix($0.messagePrefix) }),
+              let rawFilename = String(message.content.dropFirst(category.messagePrefix.count)).trimmedOrNilIfEmpty,
+              let base = try? applicationFilesDirectory(),
+              // Security: Extract only the last path component to prevent directory traversal
+              let safeFilename = (rawFilename as NSString).lastPathComponent.nilIfEmpty,
+              safeFilename != "." && safeFilename != ".."
+        else {
+            return
+        }
 
         // Try all possible locations (outgoing and incoming)
         let subdirs = categories.flatMap { ["\($0.mediaDir)/outgoing", "\($0.mediaDir)/incoming"] }

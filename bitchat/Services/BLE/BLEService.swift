@@ -1354,7 +1354,7 @@ final class BLEService: NSObject {
         let invalid = CharacterSet(charactersIn: "<>:\"|?*\0").union(.controlCharacters)
         candidate = candidate.components(separatedBy: invalid).joined(separator: "_")
 
-        candidate = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+        candidate = candidate.trimmed
         if candidate.isEmpty { candidate = defaultName }
 
         // Security: Reject dotfiles (hidden file attacks)

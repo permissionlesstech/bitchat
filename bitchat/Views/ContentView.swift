@@ -361,8 +361,7 @@ struct ContentView: View {
         }()
 
         let messageItems: [MessageDisplayItem] = windowedMessages.compactMap { message in
-            let trimmed = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { return nil }
+            guard let trimmed = message.content.trimmedOrNilIfEmpty else { return nil }
             return MessageDisplayItem(id: "\(contextKey)|\(message.id)", message: message)
         }
 
@@ -766,8 +765,7 @@ struct ContentView: View {
     // MARK: - Actions
     
     private func sendMessage() {
-        let trimmed = trimmedMessageText
-        guard !trimmed.isEmpty else { return }
+        guard let trimmed = messageText.trimmedOrNilIfEmpty else { return }
 
         // Clear input immediately for instant feedback
         messageText = ""
@@ -1537,10 +1535,6 @@ private extension ContentView {
         )
     }
 
-    private var trimmedMessageText: String {
-        messageText.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
     private var shouldShowMediaControls: Bool {
         if let peer = viewModel.selectedPrivateChatPeer, !(peer.isGeoDM || peer.isGeoChat) {
             return true
@@ -1601,7 +1595,7 @@ private extension ContentView {
 
     @ViewBuilder
     var sendOrMicButton: some View {
-        let hasText = !trimmedMessageText.isEmpty
+        let hasText = !messageText.trimmed.isEmpty
         if shouldShowVoiceControl {
             ZStack {
                 micButtonView

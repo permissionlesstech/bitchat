@@ -28,7 +28,7 @@ extension Data {
     ///   Whitespace is trimmed. Must have even length after prefix removal.
     /// - Returns: nil if the string has odd length or contains invalid hex characters.
     init?(hexString: String) {
-        var hex = hexString.trimmingCharacters(in: .whitespaces)
+        var hex = hexString.trimmed
 
         // Remove optional 0x prefix
         if hex.hasPrefix("0x") || hex.hasPrefix("0X") {

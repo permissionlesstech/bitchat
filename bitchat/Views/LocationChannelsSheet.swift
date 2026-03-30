@@ -302,7 +302,7 @@ struct LocationChannelsSheet: View {
                         }
                     }
                 let normalized = customGeohash
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .trimmed
                     .lowercased()
                     .replacingOccurrences(of: "#", with: "")
                 let isValid = validateGeohash(normalized)
@@ -449,7 +449,7 @@ struct LocationChannelsSheet: View {
     // Split a title like "#mesh [3 people]" into base and suffix "[3 people]"
     private func splitTitleAndCount(_ s: String) -> (base: String, countSuffix: String?) {
         guard let idx = s.lastIndex(of: "[") else { return (s, nil) }
-        let prefix = String(s[..<idx]).trimmingCharacters(in: .whitespaces)
+        let prefix = String(s[..<idx]).trimmed
         let suffix = String(s[idx...])
         return (prefix, suffix)
     }

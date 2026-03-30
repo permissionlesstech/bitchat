@@ -597,7 +597,7 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
     private static func normalizeGeohash(_ s: String) -> String {
         let allowed = Set("0123456789bcdefghjkmnpqrstuvwxyz")
         return s
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmed
             .lowercased()
             .replacingOccurrences(of: "#", with: "")
             .filter { allowed.contains($0) }
