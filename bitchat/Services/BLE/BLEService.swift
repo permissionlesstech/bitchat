@@ -525,7 +525,7 @@ final class BLEService: NSObject {
     
     func stopServices() {
         // Send leave message synchronously to ensure delivery
-        let leavePacket = BitchatPacket(
+        var leavePacket = BitchatPacket(
             type: MessageType.leave.rawValue,
             senderID: myPeerIDData,
             recipientID: nil,
@@ -534,6 +534,10 @@ final class BLEService: NSObject {
             signature: nil,
             ttl: messageTTL
         )
+
+        if let signed = noiseService.signPacket(leavePacket) {
+            leavePacket = signed
+        }
 
         // Send immediately to all connected peers (synchronized access to BLE state)
         if let data = leavePacket.toBinaryData(padding: false) {
@@ -731,7 +735,7 @@ final class BLEService: NSObject {
                 return
             }
 
-            let packet = BitchatPacket(
+            var packet = BitchatPacket(
                 type: MessageType.fileTransfer.rawValue,
                 senderID: self.myPeerIDData,
                 recipientID: nil,
@@ -741,6 +745,13 @@ final class BLEService: NSObject {
                 ttl: self.messageTTL,
                 version: 2
             )
+
+            if let signed = self.noiseService.signPacket(packet) {
+                packet = signed
+            } else {
+                SecureLogger.error("❌ Failed to sign file broadcast packet", category: .security)
+                return
+            }
 
             let senderHex = packet.senderID.hexEncodedString()
             let dedupID = "\(senderHex)-\(packet.timestamp)-\(packet.type)"
