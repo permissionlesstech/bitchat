@@ -127,11 +127,11 @@ struct ImagePreviewView: View {
 }
 
 #Preview {
-    let remoteURL = URL(string: "https://picsum.photos/id/10/300")!
-    let key = remoteURL.absoluteString.replacingOccurrences(of: "/", with: "-")
-    let fileURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(key)
-    if !FileManager.default.fileExists(atPath: fileURL.path()) {
-        let _ = try? Data(contentsOf: remoteURL).write(to: fileURL)
+    let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("dummy.jpg")
+    if !FileManager.default.fileExists(atPath: tempURL.path()) {
+        let image = UIImage(resource: .dummy)
+        let data = image.jpegData(compressionQuality: 0.8)
+        let _ = try? data?.write(to: tempURL)
     }
-    ImagePreviewView(url: fileURL)
+    ImagePreviewView(url: tempURL)
 }
