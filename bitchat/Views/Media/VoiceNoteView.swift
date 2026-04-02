@@ -34,24 +34,10 @@ struct VoiceNoteView: View {
         colorScheme == .dark ? Color.green.opacity(0.3) : Color.green.opacity(0.2)
     }
 
-    private var durationText: String {
-        let duration = playback.duration
-        guard duration.isFinite, duration > 0 else { return "--:--" }
-        let minutes = Int(duration) / 60
-        let seconds = Int(duration) % 60
-        return String(format: "%02d:%02d", minutes, seconds)
-    }
-
-    private var currentText: String {
-        let current = playback.currentTime
-        guard current.isFinite, current > 0 else { return "00:00" }
-        let minutes = Int(current) / 60
-        let seconds = Int(current) % 60
-        return String(format: "%02d:%02d", minutes, seconds)
-    }
-
     private var playbackLabel: String {
-        playback.isPlaying ? currentText + "/" + durationText : durationText
+        guard playback.duration.isFinite else { return "--:--" }
+        let seconds = playback.isPlaying ? playback.remainingSeconds : playback.roundedDuration
+        return String(format: "%02d:%02d", seconds / 60, seconds % 60)
     }
 
     var body: some View {

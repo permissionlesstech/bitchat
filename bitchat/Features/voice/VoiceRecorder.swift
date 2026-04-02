@@ -2,8 +2,7 @@ import Foundation
 import AVFoundation
 
 /// Manages audio capture for mesh voice notes with predictable encoding settings.
-/// Recording runs on an internal serial queue to avoid AVAudioSession contention.
-final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
+actor VoiceRecorder {
     enum RecorderError: Error {
         case microphoneAccessDenied
         case recorderInitializationFailed
@@ -12,21 +11,16 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
 
     static let shared = VoiceRecorder()
 
-    private let queue = DispatchQueue(label: "com.bitchat.voice-recorder")
     private let paddingInterval: TimeInterval = 0.5
     private let maxRecordingDuration: TimeInterval = 120
+    static let minRecordingDuration: TimeInterval = 1
 
     private var recorder: AVAudioRecorder?
     private var currentURL: URL?
-    private var stopWorkItem: DispatchWorkItem?
-
-    private override init() {
-        super.init()
-    }
 
     // MARK: - Permissions
 
-    @discardableResult
+    nonisolated
     func requestPermission() async -> Bool {
         #if os(iOS)
         return await withCheckedContinuation { continuation in
@@ -47,106 +41,88 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
 
     // MARK: - Recording Lifecycle
 
+    @discardableResult
     func startRecording() throws -> URL {
-        try queue.sync {
-            if recorder?.isRecording == true {
-                throw RecorderError.recordingInProgress
-            }
-
-            #if os(iOS)
-            let session = AVAudioSession.sharedInstance()
-            guard session.recordPermission == .granted else {
-                throw RecorderError.microphoneAccessDenied
-            }
-            #if targetEnvironment(simulator)
-            // allowBluetoothHFP is not available on iOS Simulator
-            try session.setCategory(
-                .playAndRecord,
-                mode: .default,
-                options: [.defaultToSpeaker, .allowBluetoothA2DP]
-            )
-            #else
-            try session.setCategory(
-                .playAndRecord,
-                mode: .default,
-                options: [.defaultToSpeaker, .allowBluetoothA2DP, .allowBluetoothHFP]
-            )
-            #endif
-            try session.setActive(true, options: .notifyOthersOnDeactivation)
-            #endif
-            #if os(macOS)
-            guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else {
-                throw RecorderError.microphoneAccessDenied
-            }
-            #endif
-
-            let outputURL = try makeOutputURL()
-            let settings: [String: Any] = [
-                AVFormatIDKey: kAudioFormatMPEG4AAC,
-                AVSampleRateKey: 16_000,
-                AVNumberOfChannelsKey: 1,
-                AVEncoderBitRateKey: 16_000
-            ]
-
-            let audioRecorder = try AVAudioRecorder(url: outputURL, settings: settings)
-            audioRecorder.delegate = self
-            audioRecorder.isMeteringEnabled = true
-            audioRecorder.prepareToRecord()
-            audioRecorder.record(forDuration: maxRecordingDuration)
-
-            recorder = audioRecorder
-            currentURL = outputURL
-            stopWorkItem?.cancel()
-            stopWorkItem = nil
-            return outputURL
+        if recorder?.isRecording == true {
+            throw RecorderError.recordingInProgress
         }
+
+        #if os(iOS)
+        let session = AVAudioSession.sharedInstance()
+        guard session.recordPermission == .granted else {
+            throw RecorderError.microphoneAccessDenied
+        }
+        #if targetEnvironment(simulator)
+        // allowBluetoothHFP is not available on iOS Simulator
+        try session.setCategory(
+            .playAndRecord,
+            mode: .default,
+            options: [.defaultToSpeaker, .allowBluetoothA2DP]
+        )
+        #else
+        try session.setCategory(
+            .playAndRecord,
+            mode: .default,
+            options: [.defaultToSpeaker, .allowBluetoothA2DP, .allowBluetoothHFP]
+        )
+        #endif
+        try session.setActive(true, options: .notifyOthersOnDeactivation)
+        #endif
+        #if os(macOS)
+        guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else {
+            throw RecorderError.microphoneAccessDenied
+        }
+        #endif
+
+        let outputURL = try makeOutputURL()
+        let settings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVSampleRateKey: 16_000,
+            AVNumberOfChannelsKey: 1,
+            AVEncoderBitRateKey: 16_000
+        ]
+
+        let audioRecorder = try AVAudioRecorder(url: outputURL, settings: settings)
+        audioRecorder.isMeteringEnabled = true
+        audioRecorder.prepareToRecord()
+        audioRecorder.record(forDuration: maxRecordingDuration)
+
+        recorder = audioRecorder
+        currentURL = outputURL
+        return outputURL
     }
 
-    func stopRecording(completion: @escaping (URL?) -> Void) {
-        queue.async { [weak self] in
-            guard let self = self, let recorder = self.recorder, recorder.isRecording else {
-                completion(self?.currentURL)
-                return
-            }
-
-            let item = DispatchWorkItem { [weak self] in
-                guard let self = self else { return }
-                recorder.stop()
-                self.cleanupSession()
-                let url = self.currentURL
-                self.recorder = nil
-                self.currentURL = url
-                completion(url)
-            }
-            self.stopWorkItem = item
-            self.queue.asyncAfter(deadline: .now() + self.paddingInterval, execute: item)
+    func stopRecording() async -> URL? {
+        guard let recorder, recorder.isRecording else {
+            return currentURL
         }
+
+        let sessionURL = currentURL
+
+        try? await Task.sleep(nanoseconds: UInt64(paddingInterval * 1_000_000_000))
+
+        recorder.stop()
+
+        // A new session may have started during the sleep — don't touch its state
+        if self.recorder === recorder {
+            cleanupSession()
+            self.recorder = nil
+            currentURL = nil
+        }
+
+        return sessionURL
     }
 
     func cancelRecording() {
-        queue.async { [weak self] in
-            guard let self = self else { return }
-            self.stopWorkItem?.cancel()
-            self.stopWorkItem = nil
-            if let recorder = self.recorder, recorder.isRecording {
-                recorder.stop()
-            }
-            self.cleanupSession()
-            if let url = self.currentURL {
-                try? FileManager.default.removeItem(at: url)
-            }
-            self.recorder = nil
-            self.currentURL = nil
+        if let recorder, recorder.isRecording {
+            recorder.stop()
         }
-    }
-
-    // MARK: - Metering
-
-    func currentAveragePower() -> Float {
-        queue.sync {
-            recorder?.updateMeters()
-            return recorder?.averagePower(forChannel: 0) ?? -160
+        cleanupSession()
+        if let currentURL {
+            try? FileManager.default.removeItem(at: currentURL)
         }
+        recorder = nil
+        currentURL = nil
     }
 
     // MARK: - Helpers
