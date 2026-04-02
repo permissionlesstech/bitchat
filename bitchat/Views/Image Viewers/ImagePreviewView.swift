@@ -129,9 +129,18 @@ struct ImagePreviewView: View {
 #Preview {
     let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("dummy.jpg")
     if !FileManager.default.fileExists(atPath: tempURL.path(percentEncoded: false)) {
+        #if os(iOS)
         let image = UIImage(resource: .dummy)
         let data = image.jpegData(compressionQuality: 0.8)
         let _ = try? data?.write(to: tempURL)
+        #elseif os(macOS)
+        let image = NSImage(resource: .dummy)
+        var rect = NSRect(origin: .zero, size: image.size)
+        let cgImage = image.cgImage(forProposedRect: &rect, context: nil, hints: nil)!
+        let rep = NSBitmapImageRep(cgImage: cgImage)
+        let jpegData = rep.representation(using: .jpeg, properties: [.compressionFactor: 0.8])
+        let _ = try? jpegData?.write(to: tempURL)
+        #endif
     }
     ImagePreviewView(url: tempURL)
 }
