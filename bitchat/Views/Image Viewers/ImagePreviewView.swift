@@ -128,7 +128,7 @@ struct ImagePreviewView: View {
 
 #Preview {
     let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("dummy.jpg")
-    if !FileManager.default.fileExists(atPath: tempURL.path()) {
+    if !FileManager.default.fileExists(atPath: tempURL.path(percentEncoded: false)) {
         let image = UIImage(resource: .dummy)
         let data = image.jpegData(compressionQuality: 0.8)
         let _ = try? data?.write(to: tempURL)
