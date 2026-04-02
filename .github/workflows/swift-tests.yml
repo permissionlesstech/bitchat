@@ -20,6 +20,15 @@ jobs:
       - name: Set up Swift
         uses: swift-actions/setup-swift@v2
 
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: ${{ runner.os }}-build-${{ hashFiles('**/*.swift', '**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ hashFiles('**/Package.resolved') }}
+            ${{ runner.os }}-build-
+
       - name: Build the package
         run: swift build
 
