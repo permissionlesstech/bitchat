@@ -32,6 +32,7 @@ let package = Package(
             exclude: [
                 "Info.plist",
                 "Assets.xcassets",
+                "_PreviewHelpers/PreviewAssets.xcassets",
                 "bitchat.entitlements",
                 "bitchat-macOS.entitlements",
                 "LaunchScreen.storyboard",
