@@ -78,6 +78,7 @@
 ///
 
 import BitLogger
+import BitFoundation
 import Foundation
 import CryptoKit
 
@@ -532,7 +533,7 @@ final class NoiseSymmetricState {
 final class NoiseHandshakeState {
     private let role: NoiseRole
     private let pattern: NoisePattern
-    private let keychain: KeychainManagerProtocol
+    private let keychain: SecureMemoryCleaner
     private var symmetricState: NoiseSymmetricState
     
     // Keys
@@ -555,7 +556,7 @@ final class NoiseHandshakeState {
     init(
         role: NoiseRole,
         pattern: NoisePattern,
-        keychain: KeychainManagerProtocol,
+        keychain: SecureMemoryCleaner,
         localStaticKey: Curve25519.KeyAgreement.PrivateKey? = nil,
         remoteStaticKey: Curve25519.KeyAgreement.PublicKey? = nil,
         prologue: Data = Data(),
@@ -923,7 +924,7 @@ extension NoisePattern {
 
 // MARK: - Errors
 
-enum NoiseError: Error {
+public enum NoiseError: Error {
     case uninitializedCipher
     case invalidCiphertext
     case handshakeComplete

@@ -11,18 +11,18 @@ import CryptoKit
 import Foundation
 import BitFoundation
 
-final class NoiseSessionManager {
+public final class NoiseSessionManager {
     private var sessions: [PeerID: NoiseSession] = [:]
     private let localStaticKey: Curve25519.KeyAgreement.PrivateKey
-    private let keychain: KeychainManagerProtocol
+    private let keychain: SecureMemoryCleaner
     private let sessionFactory: (PeerID, NoiseRole) -> NoiseSession
     private let managerQueue = DispatchQueue(label: "chat.bitchat.noise.manager", attributes: .concurrent)
     
     // Callbacks
-    var onSessionEstablished: ((PeerID, Curve25519.KeyAgreement.PublicKey) -> Void)?
+    public var onSessionEstablished: ((PeerID, Curve25519.KeyAgreement.PublicKey) -> Void)?
     var onSessionFailed: ((PeerID, Error) -> Void)?
     
-    init(localStaticKey: Curve25519.KeyAgreement.PrivateKey, keychain: KeychainManagerProtocol) {
+    public init(localStaticKey: Curve25519.KeyAgreement.PrivateKey, keychain: SecureMemoryCleaner) {
         self.localStaticKey = localStaticKey
         self.keychain = keychain
         self.sessionFactory = { peerID, role in
@@ -38,7 +38,7 @@ final class NoiseSessionManager {
     #if DEBUG
     init(
         localStaticKey: Curve25519.KeyAgreement.PrivateKey,
-        keychain: KeychainManagerProtocol,
+        keychain: SecureMemoryCleaner,
         sessionFactory: @escaping (PeerID, NoiseRole) -> NoiseSession
     ) {
         self.localStaticKey = localStaticKey
@@ -49,13 +49,13 @@ final class NoiseSessionManager {
     
     // MARK: - Session Management
     
-    func getSession(for peerID: PeerID) -> NoiseSession? {
+    public func getSession(for peerID: PeerID) -> NoiseSession? {
         return managerQueue.sync {
             return sessions[peerID]
         }
     }
     
-    func removeSession(for peerID: PeerID) {
+    public func removeSession(for peerID: PeerID) {
         managerQueue.sync(flags: .barrier) {
             if let session = sessions.removeValue(forKey: peerID) {
                 session.reset() // Clear sensitive data before removing
@@ -63,7 +63,7 @@ final class NoiseSessionManager {
         }
     }
 
-    func removeAllSessions() {
+    public func removeAllSessions() {
         managerQueue.sync(flags: .barrier) {
             for (_, session) in sessions {
                 session.reset()
@@ -74,7 +74,7 @@ final class NoiseSessionManager {
     
     // MARK: - Handshake Helpers
     
-    func initiateHandshake(with peerID: PeerID) throws -> Data {
+    public func initiateHandshake(with peerID: PeerID) throws -> Data {
         return try managerQueue.sync(flags: .barrier) {
             // Check if we already have an established session
             if let existingSession = sessions[peerID], existingSession.isEstablished() {
@@ -103,7 +103,7 @@ final class NoiseSessionManager {
         }
     }
     
-    func handleIncomingHandshake(from peerID: PeerID, message: Data) throws -> Data? {
+    public func handleIncomingHandshake(from peerID: PeerID, message: Data) throws -> Data? {
         // Process everything within the synchronized block to prevent race conditions
         return try managerQueue.sync(flags: .barrier) {
             var shouldCreateNew = false
@@ -173,7 +173,7 @@ final class NoiseSessionManager {
     
     // MARK: - Encryption/Decryption
     
-    func encrypt(_ plaintext: Data, for peerID: PeerID) throws -> Data {
+    public func encrypt(_ plaintext: Data, for peerID: PeerID) throws -> Data {
         guard let session = getSession(for: peerID) else {
             throw NoiseSessionError.sessionNotFound
         }
@@ -181,7 +181,7 @@ final class NoiseSessionManager {
         return try session.encrypt(plaintext)
     }
     
-    func decrypt(_ ciphertext: Data, from peerID: PeerID) throws -> Data {
+    public func decrypt(_ ciphertext: Data, from peerID: PeerID) throws -> Data {
         guard let session = getSession(for: peerID) else {
             throw NoiseSessionError.sessionNotFound
         }
@@ -191,13 +191,13 @@ final class NoiseSessionManager {
     
     // MARK: - Key Management
     
-    func getRemoteStaticKey(for peerID: PeerID) -> Curve25519.KeyAgreement.PublicKey? {
+    public func getRemoteStaticKey(for peerID: PeerID) -> Curve25519.KeyAgreement.PublicKey? {
         return getSession(for: peerID)?.getRemoteStaticPublicKey()
     }
     
     // MARK: - Session Rekeying
     
-    func getSessionsNeedingRekey() -> [(peerID: PeerID, needsRekey: Bool)] {
+    public func getSessionsNeedingRekey() -> [(peerID: PeerID, needsRekey: Bool)] {
         return managerQueue.sync {
             var needingRekey: [(peerID: PeerID, needsRekey: Bool)] = []
             
@@ -213,7 +213,7 @@ final class NoiseSessionManager {
         }
     }
     
-    func initiateRekey(for peerID: PeerID) throws {
+    public func initiateRekey(for peerID: PeerID) throws {
         // Remove old session
         removeSession(for: peerID)
         
