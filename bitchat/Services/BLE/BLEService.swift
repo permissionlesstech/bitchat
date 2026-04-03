@@ -8,9 +8,9 @@ import UIKit
 #endif
 
 /// BLEService — Bluetooth Mesh Transport
-/// - Emits events exclusively via `BitchatDelegate` for UI.
-/// - ChatViewModel must consume delegate callbacks (`didReceivePublicMessage`, `didReceiveNoisePayload`).
-/// - A lightweight `peerSnapshotPublisher` is provided for non-UI services.
+/// - Emits transport events via `BitchatDelegate` / `TransportPeerEventsDelegate`.
+/// - AppRuntime owns the live delegate wiring and translates callbacks into typed transport events.
+/// - A lightweight `peerSnapshotPublisher` remains available for non-UI consumers.
 final class BLEService: NSObject {
     
     // MARK: - Constants
@@ -266,32 +266,6 @@ final class BLEService: NSObject {
         // Set queue key for identification
         messageQueue.setSpecific(key: messageQueueKey, value: ())
         
-        // Set up application state tracking (iOS only)
-        #if os(iOS)
-        // Check initial state on main thread
-        if Thread.isMainThread {
-            isAppActive = UIApplication.shared.applicationState == .active
-        } else {
-            DispatchQueue.main.sync {
-                isAppActive = UIApplication.shared.applicationState == .active
-            }
-        }
-        
-        // Observe application state changes
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(appDidBecomeActive),
-            name: UIApplication.didBecomeActiveNotification,
-            object: nil
-        )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(appDidEnterBackground),
-            name: UIApplication.didEnterBackgroundNotification,
-            object: nil
-        )
-        #endif
-        
         // Tag BLE queue for re-entrancy detection
         bleQueue.setSpecific(key: bleQueueKey, value: ())
 
@@ -364,9 +338,6 @@ final class BLEService: NSObject {
         scanDutyTimer = nil
         centralManager?.stopScan()
         peripheralManager?.stopAdvertising()
-        #if os(iOS)
-        NotificationCenter.default.removeObserver(self)
-        #endif
     }
 
     func resetIdentityForPanic(currentNickname: String) {
@@ -622,6 +593,14 @@ final class BLEService: NSObject {
             centralSubscriptionRateLimits.removeAll()
         }
         meshTopology.reset()
+    }
+
+    func setApplicationActive(_ isActive: Bool) {
+        #if os(iOS)
+        bleQueue.async { [weak self] in
+            self?.applyApplicationActiveState(isActive)
+        }
+        #endif
     }
     
     // MARK: Connectivity and peers
@@ -2747,14 +2726,13 @@ extension BLEService {
 
         #if os(iOS)
         var backgroundDescriptor = ""
-        var backgroundSeconds: TimeInterval = 0
-        DispatchQueue.main.sync {
-            backgroundSeconds = UIApplication.shared.backgroundTimeRemaining
-        }
-        if backgroundSeconds == .greatestFiniteMagnitude {
-            backgroundDescriptor = " bgRemaining=∞"
-        } else {
-            backgroundDescriptor = String(format: " bgRemaining=%.1fs", backgroundSeconds)
+        if Thread.isMainThread {
+            let backgroundSeconds = UIApplication.shared.backgroundTimeRemaining
+            if backgroundSeconds == .greatestFiniteMagnitude {
+                backgroundDescriptor = " bgRemaining=∞"
+            } else {
+                backgroundDescriptor = String(format: " bgRemaining=%.1fs", backgroundSeconds)
+            }
         }
         let appPhase = isAppActive ? "foreground" : "background"
         #else
@@ -3124,31 +3102,27 @@ extension BLEService {
         }
     }
 
-    // MARK: Application State Handlers (iOS)
+    // MARK: Application State
 
     #if os(iOS)
-    @objc private func appDidBecomeActive() {
-        isAppActive = true
-        // Restart scanning with allow duplicates when app becomes active
+    private func applyApplicationActiveState(_ isActive: Bool) {
+        let phaseChanged = isAppActive != isActive
+        isAppActive = isActive
+
+        guard phaseChanged else { return }
+
         if centralManager?.state == .poweredOn {
             centralManager?.stopScan()
             startScanning()
         }
-        logBluetoothStatus("became-active")
-        scheduleBluetoothStatusSample(after: 5.0, context: "active-5s")
-        // No Local Name; nothing to refresh for advertising policy
-    }
-    
-    @objc private func appDidEnterBackground() {
-        isAppActive = false
-        // Restart scanning without allow duplicates in background
-        if centralManager?.state == .poweredOn {
-            centralManager?.stopScan()
-            startScanning()
+
+        if isActive {
+            logBluetoothStatus("became-active")
+            scheduleBluetoothStatusSample(after: 5.0, context: "active-5s")
+        } else {
+            logBluetoothStatus("entered-background")
+            scheduleBluetoothStatusSample(after: 15.0, context: "background-15s")
         }
-        logBluetoothStatus("entered-background")
-        scheduleBluetoothStatusSample(after: 15.0, context: "background-15s")
-        // No Local Name; nothing to refresh for advertising policy
     }
     #endif
     

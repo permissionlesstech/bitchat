@@ -46,7 +46,7 @@ extension ChatViewModel {
         guard let noiseKey = Data(hexString: peerID.id) else { return }
         let isConnected = meshService.isPeerConnected(peerID)
         let isReachable = meshService.isPeerReachable(peerID)
-        let favoriteStatus = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey)
+        let favoriteStatus = favoritesService.getFavoriteStatus(for: noiseKey)
         let isMutualFavorite = favoriteStatus?.isMutual ?? false
         let hasNostrKey = favoriteStatus?.peerNostrPublicKey != nil
         
@@ -75,29 +75,18 @@ extension ChatViewModel {
             deliveryStatus: .sending
         )
         
-        // Add to local chat
-        if privateChats[peerID] == nil {
-            privateChats[peerID] = []
-        }
-        privateChats[peerID]?.append(message)
-        
-        // Trigger UI update for sent message
-        objectWillChange.send()
+        privateChatManager.upsertMessage(message, for: peerID)
         
         // Send via appropriate transport (BLE if connected/reachable, else Nostr when possible)
         if isConnected || isReachable || (isMutualFavorite && hasNostrKey) {
             messageRouter.sendPrivate(content, to: peerID, recipientNickname: recipientNickname ?? "user", messageID: messageID)
-            // Optimistically mark as sent for both transports; delivery/read will update subsequently
-            if let idx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
-                privateChats[peerID]?[idx].deliveryStatus = .sent
-            }
+            _ = privateChatManager.updateDeliveryStatus(.sent, forMessageID: messageID, in: peerID)
         } else {
-            // Update delivery status to failed
-            if let index = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
-                privateChats[peerID]?[index].deliveryStatus = .failed(
-                    reason: String(localized: "content.delivery.reason.unreachable", comment: "Failure reason when a peer is unreachable")
-                )
-            }
+            _ = privateChatManager.updateDeliveryStatus(
+                .failed(reason: String(localized: "content.delivery.reason.unreachable", comment: "Failure reason when a peer is unreachable")),
+                forMessageID: messageID,
+                in: peerID
+            )
             let name = recipientNickname ?? "user"
             addSystemMessage(
                 String(
@@ -131,30 +120,25 @@ extension ChatViewModel {
             deliveryStatus: .sending
         )
         
-        if privateChats[peerID] == nil {
-            privateChats[peerID] = []
-        }
-        
-        privateChats[peerID]?.append(message)
-        objectWillChange.send()
+        privateChatManager.upsertMessage(message, for: peerID)
 
         // Resolve recipient hex from mapping
-        guard let recipientHex = nostrKeyMapping[peerID] else {
-            if let msgIdx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
-                privateChats[peerID]?[msgIdx].deliveryStatus = .failed(
-                    reason: String(localized: "content.delivery.reason.unknown_recipient", comment: "Failure reason when the recipient is unknown")
-                )
-            }
+        guard let recipientHex = fullNostrHex(forSenderPeerID: peerID) else {
+            _ = privateChatManager.updateDeliveryStatus(
+                .failed(reason: String(localized: "content.delivery.reason.unknown_recipient", comment: "Failure reason when the recipient is unknown")),
+                forMessageID: messageID,
+                in: peerID
+            )
             return
         }
         
         // Respect geohash blocks
         if identityManager.isNostrBlocked(pubkeyHexLowercased: recipientHex) {
-            if let msgIdx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
-                privateChats[peerID]?[msgIdx].deliveryStatus = .failed(
-                    reason: String(localized: "content.delivery.reason.blocked", comment: "Failure reason when the user is blocked")
-                )
-            }
+            _ = privateChatManager.updateDeliveryStatus(
+                .failed(reason: String(localized: "content.delivery.reason.blocked", comment: "Failure reason when the user is blocked")),
+                forMessageID: messageID,
+                in: peerID
+            )
             addSystemMessage(
                 String(localized: "system.dm.blocked_generic", comment: "System message when sending fails because user is blocked")
             )
@@ -166,26 +150,24 @@ extension ChatViewModel {
             let id = try idBridge.deriveIdentity(forGeohash: ch.geohash)
             // Prevent messaging ourselves
             if recipientHex.lowercased() == id.publicKeyHex.lowercased() {
-                if let idx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
-                privateChats[peerID]?[idx].deliveryStatus = .failed(
-                    reason: String(localized: "content.delivery.reason.self", comment: "Failure reason when attempting to message yourself")
+                _ = privateChatManager.updateDeliveryStatus(
+                    .failed(reason: String(localized: "content.delivery.reason.self", comment: "Failure reason when attempting to message yourself")),
+                    forMessageID: messageID,
+                    in: peerID
                 )
-            }
                 return
             }
             SecureLogger.debug("GeoDM: local send mid=\(messageID.prefix(8))… to=\(recipientHex.prefix(8))… conv=\(peerID)", category: .session)
             let nostrTransport = NostrTransport(keychain: keychain, idBridge: idBridge)
             nostrTransport.senderPeerID = meshService.myPeerID
             nostrTransport.sendPrivateMessageGeohash(content: content, toRecipientHex: recipientHex, from: id, messageID: messageID)
-            if let msgIdx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
-                privateChats[peerID]?[msgIdx].deliveryStatus = .sent
-            }
+            _ = privateChatManager.updateDeliveryStatus(.sent, forMessageID: messageID, in: peerID)
         } catch {
-            if let idx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
-                privateChats[peerID]?[idx].deliveryStatus = .failed(
-                    reason: String(localized: "content.delivery.reason.send_error", comment: "Failure reason for a generic send error")
-                )
-            }
+            _ = privateChatManager.updateDeliveryStatus(
+                .failed(reason: String(localized: "content.delivery.reason.send_error", comment: "Failure reason for a generic send error")),
+                forMessageID: messageID,
+                in: peerID
+            )
         }
     }
 
@@ -211,12 +193,8 @@ extension ChatViewModel {
         }
 
         // Duplicate check
-        if privateChats[convKey]?.contains(where: { $0.id == messageId }) == true { return }
-        for (_, arr) in privateChats {
-            if arr.contains(where: { $0.id == messageId }) {
-                return
-            }
-        }
+        if privateChatManager.containsMessage(messageId, targetPeerID: convKey) { return }
+        if privateChatManager.containsMessage(messageId, targetPeerID: nil) { return }
         
         let senderName = displayNameForNostrPubkey(senderPubkey)
         let msg = BitchatMessage(
@@ -231,17 +209,14 @@ extension ChatViewModel {
             deliveryStatus: .delivered(to: nickname, at: Date())
         )
         
-        if privateChats[convKey] == nil {
-            privateChats[convKey] = []
-        }
-        privateChats[convKey]?.append(msg)
+        privateChatManager.upsertMessage(msg, for: convKey)
         
         let isViewing = selectedPrivateChatPeer == convKey
         let wasReadBefore = sentReadReceipts.contains(messageId)
         let isRecentMessage = Date().timeIntervalSince(messageTimestamp) < 30
         let shouldMarkUnread = !wasReadBefore && !isViewing && isRecentMessage
         if shouldMarkUnread {
-            unreadPrivateMessages.insert(convKey)
+            privateChatManager.markUnread(for: convKey)
         }
         
         // Send READ if viewing this conversation
@@ -258,15 +233,16 @@ extension ChatViewModel {
             )
         }
         
-        objectWillChange.send()
     }
     
     func handleDelivered(_ payload: NoisePayload, senderPubkey: String, convKey: PeerID) {
         guard let messageID = String(data: payload.data, encoding: .utf8) else { return }
         
-        if let idx = privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
-            privateChats[convKey]?[idx].deliveryStatus = .delivered(to: displayNameForNostrPubkey(senderPubkey), at: Date())
-            objectWillChange.send()
+        if privateChatManager.updateDeliveryStatus(
+            .delivered(to: displayNameForNostrPubkey(senderPubkey), at: Date()),
+            forMessageID: messageID,
+            in: convKey
+        ) {
             SecureLogger.info("GeoDM: recv DELIVERED for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…", category: .session)
         } else {
             SecureLogger.warning("GeoDM: delivered ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)", category: .session)
@@ -276,9 +252,11 @@ extension ChatViewModel {
     func handleReadReceipt(_ payload: NoisePayload, senderPubkey: String, convKey: PeerID) {
         guard let messageID = String(data: payload.data, encoding: .utf8) else { return }
         
-        if let idx = privateChats[convKey]?.firstIndex(where: { $0.id == messageID }) {
-            privateChats[convKey]?[idx].deliveryStatus = .read(by: displayNameForNostrPubkey(senderPubkey), at: Date())
-            objectWillChange.send()
+        if privateChatManager.updateDeliveryStatus(
+            .read(by: displayNameForNostrPubkey(senderPubkey), at: Date()),
+            forMessageID: messageID,
+            in: convKey
+        ) {
             SecureLogger.info("GeoDM: recv READ for mid=\(messageID.prefix(8))… from=\(senderPubkey.prefix(8))…", category: .session)
         } else {
             SecureLogger.warning("GeoDM: read ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)", category: .session)
@@ -467,9 +445,7 @@ extension ChatViewModel {
                 senderPeerID: meshService.myPeerID,
                 deliveryStatus: .sending
             )
-            var chats = privateChats
-            chats[peerID, default: []].append(message)
-            privateChats = chats
+            privateChatManager.upsertMessage(message, for: peerID)
             trimMessagesIfNeeded()
         } else {
             let (displayName, senderPeerID) = currentPublicSender()
@@ -485,13 +461,12 @@ extension ChatViewModel {
                 deliveryStatus: .sending
             )
             timelineStore.append(message, to: activeChannel)
-            messages = timelineStore.messages(for: activeChannel)
+            refreshVisibleMessages(from: activeChannel)
             trimMessagesIfNeeded()
         }
 
         let key = deduplicationService.normalizedContentKey(message.content)
         deduplicationService.recordContentKey(key, timestamp: timestamp)
-        objectWillChange.send()
         return message
     }
 
@@ -657,13 +632,6 @@ extension ChatViewModel {
         addMessageToPrivateChatsIfNeeded(message, targetPeerID: targetPeerID)
         mirrorToEphemeralIfNeeded(message, targetPeerID: targetPeerID, key: actualSenderNoiseKey)
 
-        // Using simplified internal helper in this file (or make the main one internal)
-        // sendDeliveryAckViaNostrEmbedded is in ChatViewModel+Nostr.swift and is internal.
-        // However, it was missing in ChatViewModel+Nostr.swift in previous step check?
-        // Wait, I added `sendDeliveryAckViaNostrEmbedded` to `ChatViewModel+Nostr.swift` in Step 19?
-        // Let's re-check `ChatViewModel+Nostr.swift` content in my mind.
-        // I see `sendDeliveryAckViaNostrEmbedded` in `ChatViewModel+Nostr.swift` in the output of step 33.
-        // So I can call it.
         sendDeliveryAckViaNostrEmbedded(
             message,
             wasReadBefore: wasReadBefore,
@@ -691,7 +659,6 @@ extension ChatViewModel {
             )
         }
 
-        objectWillChange.send()
     }
     
     /// Handle incoming private message (Mesh)
@@ -721,27 +688,11 @@ extension ChatViewModel {
                 let stableKeyHex = PeerID(hexData: peer.noisePublicKey)
                 
                 // If we have messages stored under the stable key, merge them
-                if stableKeyHex != peerID, let nostrMessages = privateChats[stableKeyHex], !nostrMessages.isEmpty {
-                    // Merge messages from stable key into ephemeral peer ID storage
-                    if privateChats[peerID] == nil {
-                        privateChats[peerID] = []
+                if stableKeyHex != peerID {
+                    let consolidatedCount = privateChatManager.mergeConversation(from: stableKeyHex, into: peerID)
+                    if consolidatedCount > 0 {
+                        SecureLogger.info("📥 Consolidated \(consolidatedCount) Nostr messages from stable key to ephemeral peer \(peerID)", category: .session)
                     }
-                    
-                    // Add any messages that aren't already in the ephemeral storage
-                    let existingMessageIds = Set(privateChats[peerID]?.map { $0.id } ?? [])
-                    for nostrMessage in nostrMessages {
-                        if !existingMessageIds.contains(nostrMessage.id) {
-                            privateChats[peerID]?.append(nostrMessage)
-                        }
-                    }
-                    
-                    // Sort by timestamp
-                    privateChats[peerID]?.sort { $0.timestamp < $1.timestamp }
-                    
-                    // Clean up the stable key storage to avoid duplication
-                    privateChats.removeValue(forKey: stableKeyHex)
-                    
-                    SecureLogger.info("📥 Consolidated \(nostrMessages.count) Nostr messages from stable key to ephemeral peer \(peerID)", category: .session)
                 }
             }
         }
@@ -775,7 +726,7 @@ extension ChatViewModel {
             sentReadReceipts.insert(message.id)
         } else {
             // Notify
-            unreadPrivateMessages.insert(peerID)
+            privateChatManager.markUnread(for: peerID)
             NotificationService.shared.sendPrivateMessageNotification(
                 from: message.sender,
                 message: message.content,
@@ -783,30 +734,15 @@ extension ChatViewModel {
             )
         }
         
-        objectWillChange.send()
     }
 
     func isDuplicateMessage(_ messageId: String, targetPeerID: PeerID) -> Bool {
-        if privateChats[targetPeerID]?.contains(where: { $0.id == messageId }) == true {
-            return true
-        }
-        for (_, messages) in privateChats where messages.contains(where: { $0.id == messageId }) {
-            return true
-        }
-        return false
+        privateChatManager.containsMessage(messageId, targetPeerID: targetPeerID) ||
+        privateChatManager.containsMessage(messageId, targetPeerID: nil)
     }
     
     func addMessageToPrivateChatsIfNeeded(_ message: BitchatMessage, targetPeerID: PeerID) {
-        if privateChats[targetPeerID] == nil {
-            privateChats[targetPeerID] = []
-        }
-        if let idx = privateChats[targetPeerID]?.firstIndex(where: { $0.id == message.id }) {
-            privateChats[targetPeerID]?[idx] = message
-        } else {
-            privateChats[targetPeerID]?.append(message)
-        }
-        // Sanitize to avoid duplicate IDs
-        privateChatManager.sanitizeChat(for: targetPeerID)
+        privateChatManager.upsertMessage(message, for: targetPeerID)
     }
     
     @MainActor
@@ -817,24 +753,16 @@ extension ChatViewModel {
         else {
             return
         }
-        
-        if privateChats[ephemeralPeerID] == nil {
-            privateChats[ephemeralPeerID] = []
-        }
-        if let idx = privateChats[ephemeralPeerID]?.firstIndex(where: { $0.id == message.id }) {
-            privateChats[ephemeralPeerID]?[idx] = message
-        } else {
-            privateChats[ephemeralPeerID]?.append(message)
-        }
-        privateChatManager.sanitizeChat(for: ephemeralPeerID)
+
+        privateChatManager.upsertMessage(message, for: ephemeralPeerID)
     }
     
     @MainActor
     func handleViewingThisChat(_ message: BitchatMessage, targetPeerID: PeerID, key: Data?, senderPubkey: String) {
-        unreadPrivateMessages.remove(targetPeerID)
+        privateChatManager.clearUnread(for: targetPeerID)
         if let key,
            let ephemeralPeerID = unifiedPeerService.peers.first(where: { $0.noisePublicKey == key })?.peerID {
-            unreadPrivateMessages.remove(ephemeralPeerID)
+            privateChatManager.clearUnread(for: ephemeralPeerID)
         }
         if !sentReadReceipts.contains(message.id) {
             if let key {
@@ -863,11 +791,11 @@ extension ChatViewModel {
     ) {
         guard shouldMarkAsUnread else { return }
         
-        unreadPrivateMessages.insert(targetPeerID)
+        privateChatManager.markUnread(for: targetPeerID)
         if let key,
            let ephemeralPeerID = unifiedPeerService.peers.first(where: { $0.noisePublicKey == key })?.peerID,
            ephemeralPeerID != targetPeerID {
-            unreadPrivateMessages.insert(ephemeralPeerID)
+            privateChatManager.markUnread(for: ephemeralPeerID)
         }
         if isRecentMessage {
             NotificationService.shared.sendPrivateMessageNotification(
@@ -899,10 +827,10 @@ extension ChatViewModel {
             return
         }
         // Determine prior state to avoid duplicate system messages on repeated notifications
-        let prior = FavoritesPersistenceService.shared.getFavoriteStatus(for: finalNoiseKey)?.theyFavoritedUs ?? false
+        let prior = favoritesService.getFavoriteStatus(for: finalNoiseKey)?.theyFavoritedUs ?? false
 
         // Update the favorite relationship (idempotent storage)
-        FavoritesPersistenceService.shared.updatePeerFavoritedUs(
+        favoritesService.updatePeerFavoritedUs(
             peerNoisePublicKey: finalNoiseKey,
             favorited: isFavorite,
             peerNickname: senderNickname,
@@ -950,7 +878,7 @@ extension ChatViewModel {
     func migratePrivateChatsIfNeeded(for peerID: PeerID, senderNickname: String) {
         let currentFingerprint = getFingerprint(for: peerID)
         
-        if privateChats[peerID] == nil || privateChats[peerID]?.isEmpty == true {
+        if !privateChatManager.hasMessages(for: peerID) {
             var migratedMessages: [BitchatMessage] = []
             var oldPeerIDsToRemove: [PeerID] = []
             
@@ -959,7 +887,7 @@ extension ChatViewModel {
             
             for (oldPeerID, messages) in privateChats {
                 if oldPeerID != peerID {
-                    let oldFingerprint = peerIDToPublicKeyFingerprint[oldPeerID]
+                    let oldFingerprint = getFingerprint(for: oldPeerID)
                     
                     // Filter messages to only recent ones
                     let recentMessages = messages.filter { $0.timestamp > cutoffTime }
@@ -1009,34 +937,21 @@ extension ChatViewModel {
                 let needsSelectedUpdate = oldPeerIDsToRemove.contains { selectedPrivateChatPeer == $0 }
                 
                 for oldID in oldPeerIDsToRemove {
-                    privateChats.removeValue(forKey: oldID)
-                    unreadPrivateMessages.remove(oldID)
-                    
-                    // Also clean up fingerprint mapping
-                    if peerIDToPublicKeyFingerprint[oldID] != nil {
-                        peerIDToPublicKeyFingerprint.removeValue(forKey: oldID)
-                    }
+                    privateChatManager.removeConversation(for: oldID)
+                    privateChatManager.clearUnread(for: oldID)
                 }
                 
                 if needsSelectedUpdate {
-                    selectedPrivateChatPeer = peerID
+                    privateChatManager.selectPeerForContinuity(peerID)
                 }
             }
             
             // Add migrated messages to new peer ID
             if !migratedMessages.isEmpty {
-                if privateChats[peerID] == nil {
-                    privateChats[peerID] = []
+                privateChatManager.ensureConversation(for: peerID)
+                for message in migratedMessages {
+                    privateChatManager.upsertMessage(message, for: peerID)
                 }
-                privateChats[peerID]?.append(contentsOf: migratedMessages)
-                
-                // Sort by timestamp
-                privateChats[peerID]?.sort { $0.timestamp < $1.timestamp }
-                
-                // De-duplicate just in case
-                privateChatManager.sanitizeChat(for: peerID)
-                
-                objectWillChange.send()
             }
         }
     }
@@ -1076,7 +991,7 @@ extension ChatViewModel {
             if isPeerBlocked(peerID) { return true }
             // Check geohash (Nostr) blocks using mapping to full pubkey
             if peerID.isGeoChat || peerID.isGeoDM {
-                if let full = nostrKeyMapping[peerID]?.lowercased() {
+                if let full = fullNostrHex(forSenderPeerID: peerID)?.lowercased() {
                     if identityManager.isNostrBlocked(pubkeyHexLowercased: full) { return true }
                 }
             }

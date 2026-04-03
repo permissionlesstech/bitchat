@@ -1,10 +1,12 @@
 import BitLogger
+import Combine
 import Foundation
 
 /// Routes messages using available transports (Mesh, Nostr, etc.)
 @MainActor
 final class MessageRouter {
     private let transports: [Transport]
+    private var cancellables = Set<AnyCancellable>()
 
     // Outbox entry with timestamp for TTL-based eviction
     private struct QueuedMessage {
@@ -20,31 +22,19 @@ final class MessageRouter {
     private static let maxMessagesPerPeer = 100
     private static let messageTTLSeconds: TimeInterval = 24 * 60 * 60 // 24 hours
 
-    init(transports: [Transport]) {
+    init(
+        transports: [Transport],
+        favoritesService: FavoritesPersistenceService? = nil
+    ) {
         self.transports = transports
+        let favoritesService = favoritesService ?? FavoritesPersistenceService.shared
 
-        // Observe favorites changes to learn Nostr mapping and flush queued messages
-        NotificationCenter.default.addObserver(
-            forName: .favoriteStatusChanged,
-            object: nil,
-            queue: .main
-        ) { [weak self] note in
-            guard let self = self else { return }
-            if let data = note.userInfo?["peerPublicKey"] as? Data {
-                let peerID = PeerID(publicKey: data)
-                Task { @MainActor in
-                    self.flushOutbox(for: peerID)
-                }
+        favoritesService.changes
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                self?.flushAllOutbox()
             }
-            // Handle key updates
-            if let newKey = note.userInfo?["peerPublicKey"] as? Data,
-               let _ = note.userInfo?["isKeyUpdate"] as? Bool {
-                let peerID = PeerID(publicKey: newKey)
-                Task { @MainActor in
-                    self.flushOutbox(for: peerID)
-                }
-            }
-        }
+            .store(in: &cancellables)
     }
 
     // MARK: - Transport Selection

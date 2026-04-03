@@ -211,30 +211,36 @@ final class GeoRelayDirectoryTests: XCTestCase {
             activeNotificationName: activeNotification
         )
         var directory: GeoRelayDirectory? = GeoRelayDirectory(dependencies: harness.dependencies)
-        let initialFetch = await waitUntil {
-            await harness.fetcher.recordedRequestCount() == 1
+        let initialFetch = await waitUntil(timeout: 3.0) {
+            await harness.fetcher.recordedRequestCount() == 1 &&
+            harness.userDefaults.object(forKey: "georelay.lastFetchAt") as? Date == harness.clock.now
         }
         XCTAssertTrue(initialFetch)
         XCTAssertEqual(directory?.debugObserverCount, 2)
 
         harness.clock.now = harness.clock.now.addingTimeInterval(6)
         harness.notificationCenter.post(name: .TorDidBecomeReady, object: nil)
-        let torTriggered = await waitUntil {
-            await harness.fetcher.recordedRequestCount() == 2
+        let torTriggered = await waitUntil(timeout: 3.0) {
+            await harness.fetcher.recordedRequestCount() == 2 &&
+            harness.userDefaults.object(forKey: "georelay.lastFetchAt") as? Date == harness.clock.now
         }
         XCTAssertTrue(torTriggered)
 
         harness.clock.now = harness.clock.now.addingTimeInterval(61)
         harness.notificationCenter.post(name: activeNotification, object: nil)
-        let activeTriggered = await waitUntil {
-            await harness.fetcher.recordedRequestCount() == 3
+        let activeTriggered = await waitUntil(timeout: 3.0) {
+            await harness.fetcher.recordedRequestCount() == 3 &&
+            harness.userDefaults.object(forKey: "georelay.lastFetchAt") as? Date == harness.clock.now
         }
         XCTAssertTrue(activeTriggered)
 
         weak var weakDirectory: GeoRelayDirectory?
         weakDirectory = directory
         directory = nil
-        XCTAssertNil(weakDirectory)
+        let released = await waitUntil(timeout: 1.0) {
+            weakDirectory == nil
+        }
+        XCTAssertTrue(released)
     }
 
     private func makeHarness(

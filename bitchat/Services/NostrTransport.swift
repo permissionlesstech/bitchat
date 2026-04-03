@@ -5,7 +5,7 @@ import Combine
 // Minimal Nostr transport conforming to Transport for offline sending
 final class NostrTransport: Transport, @unchecked Sendable {
     struct Dependencies {
-        let notificationCenter: NotificationCenter
+        let favoriteStatusPublisher: AnyPublisher<Void, Never>
         let loadFavorites: @MainActor () -> [Data: FavoritesPersistenceService.FavoriteRelationship]
         let favoriteStatusForNoiseKey: @MainActor (Data) -> FavoritesPersistenceService.FavoriteRelationship?
         let favoriteStatusForPeerID: @MainActor (PeerID) -> FavoritesPersistenceService.FavoriteRelationship?
@@ -14,9 +14,10 @@ final class NostrTransport: Transport, @unchecked Sendable {
         let sendEvent: @MainActor (NostrEvent) -> Void
         let scheduleAfter: @Sendable (TimeInterval, @escaping @Sendable () -> Void) -> Void
 
+        @MainActor
         static func live(idBridge: NostrIdentityBridge) -> Dependencies {
             Dependencies(
-                notificationCenter: .default,
+                favoriteStatusPublisher: FavoritesPersistenceService.shared.changes,
                 loadFavorites: { FavoritesPersistenceService.shared.favorites },
                 favoriteStatusForNoiseKey: { FavoritesPersistenceService.shared.getFavoriteStatus(for: $0) },
                 favoriteStatusForPeerID: { FavoritesPersistenceService.shared.getFavoriteStatus(forPeerID: $0) },
@@ -44,7 +45,7 @@ final class NostrTransport: Transport, @unchecked Sendable {
     private let keychain: KeychainManagerProtocol
     private let idBridge: NostrIdentityBridge
     private let dependencies: Dependencies
-    private var favoriteStatusObserver: NSObjectProtocol?
+    private var cancellables = Set<AnyCancellable>()
 
     // Reachability Cache (thread-safe)
     private var reachablePeers: Set<PeerID> = []
@@ -73,20 +74,12 @@ final class NostrTransport: Transport, @unchecked Sendable {
         }
     }
 
-    deinit {
-        if let favoriteStatusObserver {
-            dependencies.notificationCenter.removeObserver(favoriteStatusObserver)
-        }
-    }
-
     private func setupObservers() {
-        favoriteStatusObserver = dependencies.notificationCenter.addObserver(
-            forName: .favoriteStatusChanged,
-            object: nil,
-            queue: nil
-        ) { [weak self] _ in
-            self?.refreshReachablePeers()
-        }
+        dependencies.favoriteStatusPublisher
+            .sink { [weak self] in
+                self?.refreshReachablePeers()
+            }
+            .store(in: &cancellables)
     }
 
     private func refreshReachablePeers() {
