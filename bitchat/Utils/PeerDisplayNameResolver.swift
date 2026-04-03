@@ -26,4 +26,3 @@ struct PeerDisplayNameResolver {
         return result
     }
 }
-
