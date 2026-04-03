@@ -99,6 +99,27 @@ struct AppRuntimeTests {
     }
 
     @Test
+    func transportEventBridge_preservesDelegateCallbackOrdering() async {
+        let peerID = PeerID(str: "8899aabbccddeeff")
+
+        for _ in 0..<50 {
+            let transportCore = BLETransportCore()
+            let bridge = TransportEventBridge(transportCore: transportCore)
+            let stream = await transportCore.subscribe()
+            var iterator = stream.makeAsyncIterator()
+
+            bridge.didConnectToPeer(peerID)
+            bridge.didUpdatePeerList([peerID])
+
+            let first = await iterator.next()
+            let second = await iterator.next()
+
+            #expect(first == .connected(peerID))
+            #expect(second == .peerListUpdated([peerID]))
+        }
+    }
+
+    @Test
     func transportController_routesPeerSnapshotsThroughRuntimePeerStore() async {
         let runtime = makeRuntime()
         let peerID = PeerID(str: "0102030405060708")

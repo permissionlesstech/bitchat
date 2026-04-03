@@ -3,6 +3,8 @@ import Foundation
 
 final class TransportEventBridge: BitchatDelegate, TransportPeerEventsDelegate {
     private let transportCore: BLETransportCore
+    private let emissionLock = NSLock()
+    private var pendingEmission: Task<Void, Never>?
 
     init(transportCore: BLETransportCore) {
         self.transportCore = transportCore
@@ -56,8 +58,13 @@ final class TransportEventBridge: BitchatDelegate, TransportPeerEventsDelegate {
 
 private extension TransportEventBridge {
     func emit(_ event: TransportEvent) {
-        Task {
+        emissionLock.lock()
+        let previousEmission = pendingEmission
+        let nextEmission = Task { [transportCore] in
+            _ = await previousEmission?.value
             await transportCore.emit(event)
         }
+        pendingEmission = nextEmission
+        emissionLock.unlock()
     }
 }

@@ -530,6 +530,7 @@ final class PrivateConversationsStore: ObservableObject, PrivateConversationsSto
         selectedPeer = peerID
     }
 
+    @MainActor
     func migrateSelectedPeerOnDisconnect(from peerID: PeerID, to stableKeyHex: PeerID, myPeerID: PeerID) {
         guard selectedPeer == peerID else { return }
 
@@ -546,6 +547,7 @@ final class PrivateConversationsStore: ObservableObject, PrivateConversationsSto
         selectedPeer = stableKeyHex
     }
 
+    @MainActor
     func clearSentReadReceipts(from senderPeerID: PeerID) {
         guard let messages = privateChats[senderPeerID], !messages.isEmpty else { return }
         let peerMessageIDs = Set(
@@ -557,6 +559,7 @@ final class PrivateConversationsStore: ObservableObject, PrivateConversationsSto
         sentReadReceipts.subtract(peerMessageIDs)
     }
 
+    @MainActor
     @discardableResult
     func cleanupStaleUnreadPeerIDs(currentPeerIDs: Set<PeerID>) -> Int {
         let staleIDs = unreadMessages.subtracting(currentPeerIDs)

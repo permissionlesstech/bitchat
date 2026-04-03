@@ -96,7 +96,7 @@ final class VerificationStore: ObservableObject, VerificationStoreProtocol {
             handleVerifyChallenge(payload, from: peerID)
         case .verifyResponse:
             handleVerifyResponse(payload, from: peerID)
-        default:
+        case .privateMessage, .readReceipt, .delivered:
             return
         }
     }

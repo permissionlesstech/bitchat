@@ -178,18 +178,16 @@ final class AppRuntime: ObservableObject {
             userDefaults.removeObject(forKey: "sharedContentType")
             userDefaults.removeObject(forKey: "sharedContentDate")
 
-            DispatchQueue.main.async { [chatViewModel] in
-                if contentType == "url" {
-                    if let data = sharedContent.data(using: .utf8),
-                       let urlData = try? JSONSerialization.jsonObject(with: data) as? [String: String],
-                       let url = urlData["url"] {
-                        chatViewModel.sendMessage(url)
-                    } else {
-                        chatViewModel.sendMessage(sharedContent)
-                    }
+            if contentType == "url" {
+                if let data = sharedContent.data(using: .utf8),
+                   let urlData = try? JSONSerialization.jsonObject(with: data) as? [String: String],
+                   let url = urlData["url"] {
+                    chatViewModel.sendMessage(url)
                 } else {
                     chatViewModel.sendMessage(sharedContent)
                 }
+            } else {
+                chatViewModel.sendMessage(sharedContent)
             }
         }
     }

@@ -323,10 +323,15 @@ private extension TransportRuntimeController {
     func shouldSkipUpdate(currentStatus: DeliveryStatus?, newStatus: DeliveryStatus) -> Bool {
         guard let current = currentStatus else { return false }
 
-        switch (current, newStatus) {
-        case (.read, .delivered), (.read, .sent):
-            return true
-        default:
+        switch current {
+        case .read:
+            switch newStatus {
+            case .delivered, .sent:
+                return true
+            case .sending, .read, .failed, .partiallyDelivered:
+                return false
+            }
+        case .sending, .sent, .delivered, .failed, .partiallyDelivered:
             return false
         }
     }
