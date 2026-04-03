@@ -10,6 +10,7 @@ import Testing
 import CryptoKit
 import struct Foundation.UUID
 import BitFoundation
+import Noise
 @testable import bitchat
 
 struct PrivateChatE2ETests {
