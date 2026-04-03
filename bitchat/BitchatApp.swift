@@ -14,7 +14,7 @@ import UserNotifications
 struct BitchatApp: App {
     static let bundleID = Bundle.main.bundleIdentifier ?? "chat.bitchat"
     static let groupID = "group.\(bundleID)"
-    
+
     @StateObject private var chatViewModel: ChatViewModel
     #if os(iOS)
     @Environment(\.scenePhase) var scenePhase
@@ -25,9 +25,9 @@ struct BitchatApp: App {
     #elseif os(macOS)
     @NSApplicationDelegateAdaptor(MacAppDelegate.self) var appDelegate
     #endif
-    
+
     private let idBridge = NostrIdentityBridge()
-    
+
     init() {
         let keychain = KeychainManager()
         let idBridge = self.idBridge
@@ -38,12 +38,12 @@ struct BitchatApp: App {
                 identityManager: SecureIdentityStateManager(keychain)
             )
         )
-        
+
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
         // Warm up georelay directory and refresh if stale (once/day)
         GeoRelayDirectory.shared.prefetchIfNeeded()
     }
-    
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -63,7 +63,7 @@ struct BitchatApp: App {
 
                     // Initialize network activation policy; will start Tor/Nostr only when allowed
                     NetworkActivationService.shared.start()
-                    
+
                     // Start presence service (will wait for Tor readiness)
                     GeohashPresenceService.shared.start()
 
@@ -135,35 +135,35 @@ struct BitchatApp: App {
         .windowResizability(.contentSize)
         #endif
     }
-    
+
     private func handleURL(_ url: URL) {
         if url.scheme == "bitchat" && url.host == "share" {
             // Handle shared content
             checkForSharedContent()
         }
     }
-    
+
     private func checkForSharedContent() {
         // Check app group for shared content from extension
         guard let userDefaults = UserDefaults(suiteName: BitchatApp.groupID) else {
             return
         }
-        
+
         guard let sharedContent = userDefaults.string(forKey: "sharedContent"),
               let sharedDate = userDefaults.object(forKey: "sharedContentDate") as? Date else {
             return
         }
-        
+
         // Only process if shared within configured window
         if Date().timeIntervalSince(sharedDate) < TransportConfig.uiShareAcceptWindowSeconds {
             let contentType = userDefaults.string(forKey: "sharedContentType") ?? "text"
-            
+
             // Clear the shared content
             userDefaults.removeObject(forKey: "sharedContent")
             userDefaults.removeObject(forKey: "sharedContentType")
             userDefaults.removeObject(forKey: "sharedContentDate")
             // No need to force synchronize here
-            
+
             // Send the shared content immediately on the main queue
             DispatchQueue.main.async {
                 if contentType == "url" {
@@ -188,11 +188,11 @@ struct BitchatApp: App {
 #if os(iOS)
 final class AppDelegate: NSObject, UIApplicationDelegate {
     weak var chatViewModel: ChatViewModel?
-    
+
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         return true
     }
-    
+
     func applicationWillTerminate(_ application: UIApplication) {
         chatViewModel?.applicationWillTerminate()
     }
@@ -204,11 +204,11 @@ import AppKit
 
 final class MacAppDelegate: NSObject, NSApplicationDelegate {
     weak var chatViewModel: ChatViewModel?
-    
+
     func applicationWillTerminate(_ notification: Notification) {
         chatViewModel?.applicationWillTerminate()
     }
-    
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return true
     }
@@ -218,11 +218,11 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
 final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationDelegate()
     weak var chatViewModel: ChatViewModel?
-    
+
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         let identifier = response.notification.request.identifier
         let userInfo = response.notification.request.content.userInfo
-        
+
         // Check if this is a private message notification
         if identifier.hasPrefix("private-") {
             // Get peer ID from userInfo
@@ -240,14 +240,14 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
             DispatchQueue.main.async { NSWorkspace.shared.open(url) }
             #endif
         }
-        
+
         completionHandler()
     }
-    
+
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         let identifier = notification.request.identifier
         let userInfo = notification.request.content.userInfo
-        
+
         // Check if this is a private message notification
         if identifier.hasPrefix("private-") {
             // Get peer ID from userInfo
@@ -273,7 +273,7 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
                 return
             }
         }
-        
+
         // Show notification in all other cases
         completionHandler([.banner, .sound])
     }

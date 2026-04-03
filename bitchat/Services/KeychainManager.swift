@@ -81,21 +81,21 @@ final class KeychainManager: KeychainManagerProtocol {
     // Use consistent service name for all keychain items
     private let service = BitchatApp.bundleID
     private let appGroup = "group.\(BitchatApp.bundleID)"
-    
+
     // MARK: - Identity Keys
-    
+
     func saveIdentityKey(_ keyData: Data, forKey key: String) -> Bool {
         let fullKey = "identity_\(key)"
         let result = saveData(keyData, forKey: fullKey)
         SecureLogger.logKeyOperation(.save, keyType: key, success: result)
         return result
     }
-    
+
     func getIdentityKey(forKey key: String) -> Data? {
         let fullKey = "identity_\(key)"
         return retrieveData(forKey: fullKey)
     }
-    
+
     func deleteIdentityKey(forKey key: String) -> Bool {
         let result = delete(forKey: "identity_\(key)")
         SecureLogger.logKeyOperation(.delete, keyType: key, success: result)
@@ -277,16 +277,16 @@ final class KeychainManager: KeychainManagerProtocol {
     }
 
     // MARK: - Generic Operations
-    
+
     private func save(_ value: String, forKey key: String) -> Bool {
         guard let data = value.data(using: .utf8) else { return false }
         return saveData(data, forKey: key)
     }
-    
+
     private func saveData(_ data: Data, forKey key: String) -> Bool {
         // Delete any existing item first to ensure clean state
         _ = delete(forKey: key)
-        
+
         // Build base query
         var base: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -327,12 +327,12 @@ final class KeychainManager: KeychainManagerProtocol {
         }
         return false
     }
-    
+
     private func retrieve(forKey key: String) -> String? {
         guard let data = retrieveData(forKey: key) else { return nil }
         return String(data: data, encoding: .utf8)
     }
-    
+
     private func retrieveData(forKey key: String) -> Data? {
         // Base query
         let base: [String: Any] = [
@@ -363,7 +363,7 @@ final class KeychainManager: KeychainManagerProtocol {
         }
         return nil
     }
-    
+
     private func delete(forKey key: String) -> Bool {
         // Base delete query
         let base: [String: Any] = [
@@ -386,47 +386,47 @@ final class KeychainManager: KeychainManagerProtocol {
         #endif
         return status == errSecSuccess || status == errSecItemNotFound
     }
-    
+
     // MARK: - Cleanup
-    
+
     func deleteAllPasswords() -> Bool {
         var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword
         ]
-        
+
         // Add service if not empty
         if !service.isEmpty {
             query[kSecAttrService as String] = service
         }
-        
+
         let status = SecItemDelete(query as CFDictionary)
         return status == errSecSuccess || status == errSecItemNotFound
     }
-    
-    
+
+
     // Delete ALL keychain data for panic mode
     func deleteAllKeychainData() -> Bool {
         SecureLogger.warning("Panic mode - deleting all keychain data", category: .security)
-        
+
         var totalDeleted = 0
-        
+
         // Search without service restriction to catch all items
         let searchQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecMatchLimit as String: kSecMatchLimitAll,
             kSecReturnAttributes as String: true
         ]
-        
+
         var result: AnyObject?
         let searchStatus = SecItemCopyMatching(searchQuery as CFDictionary, &result)
-        
+
         if searchStatus == errSecSuccess, let items = result as? [[String: Any]] {
             for item in items {
                 var shouldDelete = false
                 let account = item[kSecAttrAccount as String] as? String ?? ""
                 let service = item[kSecAttrService as String] as? String ?? ""
                 let accessGroup = item[kSecAttrAccessGroup as String] as? String
-                
+
                 // More precise deletion criteria:
                 // 1. Check for our specific app group
                 // 2. OR check for our exact service name
@@ -446,26 +446,26 @@ final class KeychainManager: KeychainManagerProtocol {
                 ].contains(service) {
                     shouldDelete = true
                 }
-                
+
                 if shouldDelete {
                     // Build delete query with all available attributes for precise deletion
                     var deleteQuery: [String: Any] = [
                         kSecClass as String: kSecClassGenericPassword
                     ]
-                    
+
                     if !account.isEmpty {
                         deleteQuery[kSecAttrAccount as String] = account
                     }
                     if !service.isEmpty {
                         deleteQuery[kSecAttrService as String] = service
                     }
-                    
+
                     // Add access group if present
                     if let accessGroup = item[kSecAttrAccessGroup as String] as? String,
                        !accessGroup.isEmpty && accessGroup != "test" {
                         deleteQuery[kSecAttrAccessGroup as String] = accessGroup
                     }
-                    
+
                     let deleteStatus = SecItemDelete(deleteQuery as CFDictionary)
                     if deleteStatus == errSecSuccess {
                         totalDeleted += 1
@@ -474,13 +474,13 @@ final class KeychainManager: KeychainManagerProtocol {
                 }
             }
         }
-        
+
         // Also try to delete by known service names and app group
         // This catches any items that might have been missed above
         let knownServices = [
             self.service,  // Current service name
             "com.bitchat.passwords",
-            "com.bitchat.deviceidentity", 
+            "com.bitchat.deviceidentity",
             "com.bitchat.noise.identity",
             "chat.bitchat.passwords",
             "chat.bitchat.nostr",
@@ -488,37 +488,37 @@ final class KeychainManager: KeychainManagerProtocol {
             "bitchat",
             "com.bitchat"
         ]
-        
+
         for serviceName in knownServices {
             let query: [String: Any] = [
                 kSecClass as String: kSecClassGenericPassword,
                 kSecAttrService as String: serviceName
             ]
-            
+
             let status = SecItemDelete(query as CFDictionary)
             if status == errSecSuccess {
                 totalDeleted += 1
             }
         }
-        
+
         // Also delete by app group to ensure complete cleanup
         let groupQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccessGroup as String: appGroup
         ]
-        
+
         let groupStatus = SecItemDelete(groupQuery as CFDictionary)
         if groupStatus == errSecSuccess {
             totalDeleted += 1
         }
-        
+
         SecureLogger.warning("Panic mode cleanup completed. Total items deleted: \(totalDeleted)", category: .keychain)
-        
+
         return totalDeleted > 0
     }
-    
+
     // MARK: - Security Utilities
-    
+
     /// Securely clear sensitive data from memory
     func secureClear(_ data: inout Data) {
         _ = data.withUnsafeMutableBytes { bytes in
@@ -527,7 +527,7 @@ final class KeychainManager: KeychainManagerProtocol {
         }
         data = Data() // Clear the data object
     }
-    
+
     /// Securely clear sensitive string from memory
     func secureClear(_ string: inout String) {
         // Convert to mutable data and clear
@@ -536,7 +536,7 @@ final class KeychainManager: KeychainManagerProtocol {
         }
         string = "" // Clear the string object
     }
-    
+
     // MARK: - Debug
 
     func verifyIdentityKeyExists() -> Bool {

@@ -16,7 +16,7 @@ protocol Transport: AnyObject {
     var delegate: BitchatDelegate? { get set }
     // Peer events (preferred over publishers for UI)
     var peerEventsDelegate: TransportPeerEventsDelegate? { get set }
-    
+
     // Peer snapshots (for non-UI services)
     var peerSnapshotPublisher: AnyPublisher<[TransportPeerSnapshot], Never> { get }
     func currentPeerSnapshots() -> [TransportPeerSnapshot]
