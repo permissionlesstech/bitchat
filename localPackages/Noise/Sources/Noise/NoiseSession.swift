@@ -11,7 +11,7 @@ import Foundation
 import CryptoKit
 import BitFoundation
 
-class NoiseSession {
+public class NoiseSession {
     let peerID: PeerID
     let role: NoiseRole
     private let keychain: KeychainManagerProtocol
@@ -182,7 +182,7 @@ class NoiseSession {
         }
     }
     
-    func isEstablished() -> Bool {
+    public func isEstablished() -> Bool {
         return sessionQueue.sync {
             if case .established = state {
                 return true
@@ -217,8 +217,8 @@ class NoiseSession {
             sentHandshakeMessages.removeAll()
             
             // Clear handshake hash
-            if var hash = handshakeHash {
-                keychain.secureClear(&hash)
+            if handshakeHash != nil {
+                keychain.secureClear(&handshakeHash!)
             }
             handshakeHash = nil
             
