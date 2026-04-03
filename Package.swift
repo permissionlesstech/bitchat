@@ -17,6 +17,7 @@ let package = Package(
     ],
     dependencies:[
         .package(path: "localPackages/Arti"),
+        .package(path: "localPackages/Noise"),
         .package(path: "localPackages/BitFoundation"),
         .package(path: "localPackages/BitLogger"),
         .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1", exact: "0.21.1")
@@ -28,6 +29,7 @@ let package = Package(
                 .product(name: "P256K", package: "swift-secp256k1"),
                 .product(name: "BitFoundation", package: "BitFoundation"),
                 .product(name: "BitLogger", package: "BitLogger"),
+                .product(name: "Noise", package: "Noise"),
                 .product(name: "Tor", package: "Arti")
             ],
             path: "bitchat",
@@ -56,8 +58,7 @@ let package = Package(
                 "README.md"
             ],
             resources: [
-                .process("Localization"),
-                .process("Noise")
+                .process("Localization")
             ]
         )
     ]

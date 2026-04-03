@@ -8,7 +8,7 @@
 
 import Foundation
 
-enum NoiseSecurityError: Error {
+public enum NoiseSecurityError: Error {
     case sessionExpired
     case sessionExhausted
     case messageTooLarge
