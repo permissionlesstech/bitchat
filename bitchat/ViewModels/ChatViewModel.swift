@@ -144,9 +144,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
     private let networkResetGraceSeconds: TimeInterval = TransportConfig.networkResetGraceSeconds // avoid refiring on short drops/reconnects
     @Published var nickname: String = "" {
         didSet {
-            // Trim whitespace whenever nickname is set
-            if let trimmed = nickname.trimmedOrNilIfEmpty, trimmed != nickname {
+            // Trim whitespace whenever nickname is set; whitespace-only becomes ""
+            let trimmed = nickname.trimmedOrNilIfEmpty ?? ""
+            if trimmed != nickname {
                 nickname = trimmed
+                return
             }
             // Update mesh service nickname if it's initialized
             if !meshService.myPeerID.isEmpty {
