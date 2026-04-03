@@ -11,10 +11,10 @@ import SwiftUI
 struct TextMessageView: View {
     @Environment(\.colorScheme) private var colorScheme: ColorScheme
     @EnvironmentObject private var viewModel: ChatViewModel
-    
+
     let message: BitchatMessage
     @Binding var expandedMessageIDs: Set<String>
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Precompute heavy token scans once per row
@@ -27,7 +27,7 @@ struct TextMessageView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .lineLimit(isLong && !isExpanded ? TransportConfig.uiLongMessageLineLimit : nil)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                
+
                 // Delivery status indicator for private messages
                 if message.isPrivate && message.sender == viewModel.nickname,
                    let status = message.deliveryStatus {
@@ -35,7 +35,7 @@ struct TextMessageView: View {
                         .padding(.leading, 4)
                 }
             }
-            
+
             // Expand/Collapse for very long messages
             if (message.content.count > TransportConfig.uiLongMessageLengthThreshold || message.content.hasVeryLongToken(threshold: TransportConfig.uiVeryLongTokenThreshold)) && cashuLinks.isEmpty {
                 let isExpanded = expandedMessageIDs.contains(message.id)
@@ -70,7 +70,7 @@ struct TextMessageView: View {
 #Preview {
     @Previewable @State var ids: Set<String> = []
     let keychain = PreviewKeychainManager()
-    
+
     Group {
         List {
             TextMessageView(message: .preview, expandedMessageIDs: $ids)
@@ -79,7 +79,7 @@ struct TextMessageView: View {
                 .listRowBackground(EmptyView())
         }
         .environment(\.colorScheme, .light)
-        
+
         List {
             TextMessageView(message: .preview, expandedMessageIDs: $ids)
                 .listRowSeparator(.hidden)

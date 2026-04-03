@@ -30,7 +30,7 @@ struct CommandProcessorTests {
             Issue.record("Expected error result")
         }
     }
-    
+
     @MainActor
     @Test func slapUsageMessage() {
         let identityManager = MockIdentityManager(MockKeychain())

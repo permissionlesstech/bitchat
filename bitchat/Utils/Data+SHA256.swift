@@ -14,7 +14,7 @@ extension Data {
         // Implementation matches existing fingerprint generation in NoiseEncryptionService
         sha256Hash().hexEncodedString()
     }
-    
+
     /// Returns the SHA256 hash wrapped in Data
     func sha256Hash() -> Data {
         Data(SHA256.hash(data: self))

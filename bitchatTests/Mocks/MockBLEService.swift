@@ -27,48 +27,48 @@ import CoreBluetooth
 ///   relays when needed.
 final class MockBLEService: NSObject {
     private let bus: MockBLEBus
-    
+
     // MARK: - Properties matching BLEService
-    
+
     weak var delegate: BitchatDelegate?
     var myPeerID = PeerID(str: "MOCK1234")
     var myNickname: String = "MockUser"
-    
+
     private let mockKeychain = MockKeychain()
-    
+
     // Test-specific properties
     var sentMessages: [(message: BitchatMessage, packet: BitchatPacket)] = []
     var sentPackets: [BitchatPacket] = []
     var connectedPeers: Set<PeerID> = []
     var messageDeliveryHandler: ((BitchatMessage) -> Void)?
     var packetDeliveryHandler: ((BitchatPacket) -> Void)?
-    
+
     // Compatibility properties for old tests
     var mockNickname: String {
         get { return myNickname }
         set { myNickname = newValue }
     }
-    
+
     var nickname: String {
         return myNickname
     }
-    
+
     var peerID: PeerID {
         return myPeerID
     }
-    
+
     // MARK: - Initialization
-    
+
     init(bus: MockBLEBus) {
         self.bus = bus
     }
-    
+
     // MARK: - Methods matching BLEService
-    
+
     func setNickname(_ nickname: String) {
         self.myNickname = nickname
     }
-    
+
     // MARK: - In-memory test bus (for E2E/Integration)
 
     /// Registers this instance on first use.
@@ -84,11 +84,11 @@ final class MockBLEService: NSObject {
     func startServices() {
         // Mock implementation - do nothing
     }
-    
+
     func stopServices() {
         // Mock implementation - do nothing
     }
-    
+
     func isPeerConnected(_ peerID: PeerID) -> Bool {
         return connectedPeers.contains(peerID)
     }
@@ -104,7 +104,7 @@ final class MockBLEService: NSObject {
         }
         return nicknames
     }
-    
+
     func getPeers() -> [PeerID: String] {
         return getPeerNicknames()
     }
@@ -113,7 +113,7 @@ final class MockBLEService: NSObject {
     private func deliverLocalEcho(_ message: BitchatMessage) {
         delegate?.didReceiveMessage(message)
     }
-    
+
     func sendMessage(_ content: String, mentions: [String] = [], to recipientID: String? = nil, messageID: String? = nil, timestamp: Date? = nil) {
         let message = BitchatMessage(
             id: messageID ?? UUID().uuidString,
@@ -127,7 +127,7 @@ final class MockBLEService: NSObject {
             senderPeerID: myPeerID,
             mentions: mentions.isEmpty ? nil : mentions
         )
-        
+
         if let payload = message.toBinaryPayload() {
             let packet = BitchatPacket(
                 type: 0x01,
@@ -138,12 +138,12 @@ final class MockBLEService: NSObject {
                 signature: nil,
                 ttl: 3
             )
-            
+
             sentMessages.append((message, packet))
             sentPackets.append(packet)
-            
+
             deliverLocalEcho(message)
-            
+
             // Surface raw packet to tests that intercept/relay/encrypt
             packetDeliveryHandler?(packet)
 
@@ -177,7 +177,7 @@ final class MockBLEService: NSObject {
             senderPeerID: myPeerID,
             mentions: nil
         )
-        
+
         if let payload = message.toBinaryPayload() {
             let packet = BitchatPacket(
                 type: 0x01,
@@ -188,12 +188,12 @@ final class MockBLEService: NSObject {
                 signature: nil,
                 ttl: 3
             )
-            
+
             sentMessages.append((message, packet))
             sentPackets.append(packet)
-            
+
             deliverLocalEcho(message)
-            
+
             // Surface raw packet to tests that intercept/relay/encrypt
             packetDeliveryHandler?(packet)
 
@@ -209,46 +209,46 @@ final class MockBLEService: NSObject {
             }
         }
     }
-    
+
     func sendFavoriteNotification(to peerID: String, isFavorite: Bool) {
         // Mock implementation
     }
-    
+
     func sendReadReceipt(_ receipt: ReadReceipt, to peerID: String) {
         // Mock implementation
     }
-    
+
     func sendBroadcastAnnounce() {
         // Mock implementation
     }
-    
+
     func getPeerFingerprint(_ peerID: String) -> String? {
         return nil
     }
-    
+
     func getNoiseSessionState(for peerID: String) -> LazyHandshakeState {
         return .none
     }
-    
+
     func triggerHandshake(with peerID: String) {
         // Mock implementation
     }
-    
+
     func emergencyDisconnectAll() {
         connectedPeers.removeAll()
         delegate?.didUpdatePeerList([])
     }
-    
+
     func getNoiseService() -> NoiseEncryptionService {
         return NoiseEncryptionService(keychain: mockKeychain)
     }
-    
+
     func getFingerprint(for peerID: String) -> String? {
         return nil
     }
-    
+
     // MARK: - Test Helper Methods
-    
+
     func simulateConnectedPeer(_ peerID: PeerID) {
         registerIfNeeded()
         bus.connect(myPeerID, peerID)
@@ -256,20 +256,20 @@ final class MockBLEService: NSObject {
         delegate?.didConnectToPeer(peerID)
         delegate?.didUpdatePeerList(Array(connectedPeers))
     }
-    
+
     func simulateDisconnectedPeer(_ peerID: PeerID) {
         bus.disconnect(myPeerID, peerID)
         connectedPeers.remove(peerID)
         delegate?.didDisconnectFromPeer(peerID)
         delegate?.didUpdatePeerList(Array(connectedPeers))
     }
-    
+
     func simulateIncomingMessage(_ message: BitchatMessage) {
         delegate?.didReceiveMessage(message)
         // Also surface via test handler for E2E/Integration
         messageDeliveryHandler?(message)
     }
-    
+
     private var seenMessageIDs: Set<String> = []
     private let seenLock = NSLock()
 
@@ -307,13 +307,13 @@ final class MockBLEService: NSObject {
         }
         packetDeliveryHandler?(packet)
     }
-    
+
     func getConnectedPeers() -> [PeerID] {
         return Array(connectedPeers)
     }
-    
+
     // MARK: - Compatibility methods for old tests
-    
+
     func sendPrivateMessage(_ content: String, to recipientPeerID: PeerID, recipientNickname: String, messageID: String? = nil) {
         sendPrivateMessage(content, to: recipientPeerID, recipientNickname: recipientNickname, messageID: messageID ?? UUID().uuidString)
     }

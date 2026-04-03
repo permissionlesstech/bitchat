@@ -50,7 +50,7 @@ enum TransportConfig {
     static let uiLateInsertThresholdGeo: TimeInterval = 0.0
     static let uiProcessedNostrEventsCap: Int = 2000
     static let uiChannelInactivityThresholdSeconds: TimeInterval = 9 * 60
-    
+
     // UI rate limiters (token buckets)
     static let uiSenderRateBucketCapacity: Double = 5
     static let uiSenderRateBucketRefillPerSec: Double = 1.0
@@ -190,12 +190,12 @@ enum TransportConfig {
     static let uiVeryLongTokenThreshold: Int = 512
     static let uiLongMessageLineLimit: Int = 30
     static let uiFingerprintSampleCount: Int = 3
-    
+
     // UI swipe/gesture thresholds
     static let uiBackSwipeTranslationLarge: CGFloat = 50
     static let uiBackSwipeTranslationSmall: CGFloat = 30
     static let uiBackSwipeVelocityThreshold: CGFloat = 300
-    
+
     // UI color tuning
     static let uiColorHueAvoidanceDelta: Double = 0.05
     static let uiColorHueOffset: Double = 0.12

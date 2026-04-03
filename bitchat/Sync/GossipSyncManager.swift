@@ -237,7 +237,7 @@ final class GossipSyncManager {
     private func sendRequestSync(to peerID: PeerID, types: SyncTypeFlags) {
         // Register the request for RSR validation
         requestSyncManager.registerRequest(to: peerID)
-        
+
         let payload = buildGcsPayload(for: types)
         var recipient = Data()
         var temp = peerID.id
@@ -391,7 +391,7 @@ final class GossipSyncManager {
         cleanupExpiredMessages()
         cleanupStaleAnnouncementsIfNeeded(now: now)
         requestSyncManager.cleanup() // Cleanup expired sync requests
-        
+
         for index in syncSchedules.indices {
             guard syncSchedules[index].interval > 0 else { continue }
             if syncSchedules[index].lastSent == .distantPast || now.timeIntervalSince(syncSchedules[index].lastSent) >= syncSchedules[index].interval {
