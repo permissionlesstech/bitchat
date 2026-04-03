@@ -269,7 +269,7 @@ struct CameraScannerView: UIViewRepresentable {
     }
 
     final class PreviewView: UIView {
-        override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
+        override static var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
         var videoPreviewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
         override init(frame: CGRect) {
             super.init(frame: frame)

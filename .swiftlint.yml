@@ -1,0 +1,23 @@
+disabled_rules:
+  - line_length
+  - type_name
+  - identifier_name
+  - statement_position
+  - implicit_optional_initialization
+  - force_try
+  - vertical_whitespace
+  - for_where
+  - control_statement
+  - void_function_in_ternary
+  - redundant_discardable_let  # SwiftUI breaks without it
+  # To be enabled as we fix the issues
+  - trailing_whitespace
+  - cyclomatic_complexity
+  - function_body_length
+  - function_parameter_count
+  - type_body_length
+  - file_length
+  - large_tuple
+  - force_cast
+  - multiple_closures_with_trailing_closure
+  - nesting
