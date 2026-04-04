@@ -723,8 +723,9 @@ final class BLEService: NSObject {
         sendMessage(content, mentions: mentions, to: nil, messageID: messageID, timestamp: timestamp)
     }
     
-    func sendPrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) {
-        sendPrivateMessage(content, to: peerID, messageID: messageID)
+    @discardableResult
+    func sendPrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) -> Bool {
+        return sendPrivateMessage(content, to: peerID, messageID: messageID)
     }
 
     func sendFileBroadcast(_ filePacket: BitchatFilePacket, transferId: String) {
@@ -2880,11 +2881,24 @@ extension BLEService {
         service.onPeerAuthenticated = { [weak self] peerID, fingerprint in
             SecureLogger.debug("🔐 Noise session authenticated with \(peerID), fingerprint: \(fingerprint.prefix(16))...")
             self?.messageQueue.async { [weak self] in
-                self?.sendPendingMessagesAfterHandshake(for: peerID)
+                // Clear BLE's internal pending queue — the MessageRouter outbox
+                // is the single source of truth for queued private messages.
+                // The didEstablishEncryptedSession delegate call below will
+                // trigger messageRouter.flushOutbox(), which re-sends via
+                // sendPrivateMessage() now that the Noise session is established.
+                self?.collectionsQueue.sync(flags: .barrier) {
+                    self?.pendingMessagesAfterHandshake.removeValue(forKey: peerID)
+                }
                 self?.sendPendingNoisePayloadsAfterHandshake(for: peerID)
             }
             self?.messageQueue.async { [weak self] in
                 self?.sendAnnounce(forceSend: true)
+            }
+            // Notify delegate so MessageRouter can flush its outbox now that
+            // the Noise session is established and sendPrivateMessage will
+            // return true (actually transmit instead of internally queueing).
+            self?.notifyUI { [weak self] in
+                self?.delegate?.didEstablishEncryptedSession(with: peerID)
             }
         }
     }
@@ -3154,9 +3168,9 @@ extension BLEService {
     
     // MARK: Private Message Handling
     
-    private func sendPrivateMessage(_ content: String, to recipientID: PeerID, messageID: String) {
-        SecureLogger.debug("📨 Sending PM to \(recipientID): \(content.prefix(30))...", category: .session)
-        
+    /// Returns `true` when the message was encrypted and broadcast (Noise session exists),
+    /// `false` when it was queued internally pending handshake completion.
+    private func sendPrivateMessage(_ content: String, to recipientID: PeerID, messageID: String) -> Bool {
         // Check if we have an established Noise session
         if noiseService.hasEstablishedSession(with: recipientID) {
             // Encrypt and send
@@ -3165,15 +3179,15 @@ extension BLEService {
                 let privateMessage = PrivateMessagePacket(messageID: messageID, content: content)
                 guard let tlvData = privateMessage.encode() else {
                     SecureLogger.error("Failed to encode private message with TLV")
-                    return
+                    return false
                 }
-                
+
                 // Create message payload with TLV: [type byte] + [TLV data]
                 var messagePayload = Data([NoisePayloadType.privateMessage.rawValue])
                 messagePayload.append(tlvData)
-                
+
                 let encrypted = try noiseService.encrypt(messagePayload, for: recipientID)
-                
+
                 // Convert recipientID to Data (assuming it's a hex string)
                 var recipientData = Data()
                 var tempID = recipientID.id
@@ -3199,34 +3213,41 @@ extension BLEService {
                     signature: nil,
                     ttl: messageTTL
                 )
-                
+
                 broadcastPacket(packet)
-                
+
                 // Notify delegate that message was sent
                 notifyUI { [weak self] in
                     self?.delegate?.didUpdateMessageDeliveryStatus(messageID, status: .sent)
                 }
+                return true
             } catch {
                 SecureLogger.error("Failed to encrypt message: \(error)")
+                return false
             }
         } else {
             // Queue message for sending after handshake completes
             SecureLogger.debug("🤝 No session with \(recipientID), initiating handshake and queueing message", category: .session)
-            
-            // Queue the message (especially important for favorite notifications)
+
+            // Queue the message (deduplicate by messageID to prevent repeated flush attempts
+            // from adding duplicates while waiting for handshake completion)
             collectionsQueue.sync(flags: .barrier) {
                 if pendingMessagesAfterHandshake[recipientID] == nil {
                     pendingMessagesAfterHandshake[recipientID] = []
                 }
-                pendingMessagesAfterHandshake[recipientID]?.append((content, messageID))
+                let alreadyQueued = pendingMessagesAfterHandshake[recipientID]?.contains { $0.messageID == messageID } ?? false
+                if !alreadyQueued {
+                    pendingMessagesAfterHandshake[recipientID]?.append((content, messageID))
+                }
             }
-            
+
             initiateNoiseHandshake(with: recipientID)
-            
+
             // Notify delegate that message is pending
             notifyUI { [weak self] in
                 self?.delegate?.didUpdateMessageDeliveryStatus(messageID, status: .sending)
             }
+            return false
         }
     }
     
