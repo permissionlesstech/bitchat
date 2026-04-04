@@ -1,3 +1,4 @@
+import Nostr
 import Combine
 import XCTest
 @testable import bitchat
@@ -697,7 +698,7 @@ final class NostrRelayManagerTests: XCTestCase {
     }
 
     private func makeContext(
-        permission: LocationChannelManager.PermissionState,
+        permission: LocationPermissionState,
         favorites: Set<Data> = [],
         activationAllowed: Bool = true,
         userTorEnabled: Bool = false,
@@ -705,7 +706,7 @@ final class NostrRelayManagerTests: XCTestCase {
         torIsReady: Bool = true,
         torIsForeground: Bool = true
     ) -> RelayManagerTestContext {
-        let permissionSubject = CurrentValueSubject<LocationChannelManager.PermissionState, Never>(permission)
+        let permissionSubject = CurrentValueSubject<LocationPermissionState, Never>(permission)
         let favoritesSubject = CurrentValueSubject<Set<Data>, Never>(favorites)
         let sessionFactory = MockRelaySessionFactory()
         let scheduler = MockRelayScheduler()
@@ -782,7 +783,7 @@ final class NostrRelayManagerTests: XCTestCase {
 @MainActor
 private struct RelayManagerTestContext {
     let manager: NostrRelayManager
-    let permissionSubject: CurrentValueSubject<LocationChannelManager.PermissionState, Never>
+    let permissionSubject: CurrentValueSubject<LocationPermissionState, Never>
     let favoritesSubject: CurrentValueSubject<Set<Data>, Never>
     let sessionFactory: MockRelaySessionFactory
     let scheduler: MockRelayScheduler

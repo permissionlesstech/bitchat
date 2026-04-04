@@ -8,7 +8,7 @@
 
 import Testing
 import struct Foundation.Data
-@testable import bitchat
+@testable import Nostr
 
 struct XChaCha20Poly1305CompatTests {
 

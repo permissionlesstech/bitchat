@@ -6,7 +6,6 @@ import CryptoKit
 /// as per XChaCha20 construction.
 enum XChaCha20Poly1305Compat {
 
-    /// Errors that can occur during XChaCha20-Poly1305 operations
     enum Error: Swift.Error {
         case invalidKeyLength(expected: Int, got: Int)
         case invalidNonceLength(expected: Int, got: Int)
@@ -59,7 +58,6 @@ enum XChaCha20Poly1305Compat {
     }
 
     private static func hchacha20(key: Data, nonce16: Data) throws -> Data {
-        // HChaCha20 based on the original ChaCha20 core with a 16-byte nonce.
         guard key.count == 32 else {
             throw Error.invalidKeyLength(expected: 32, got: key.count)
         }
@@ -70,28 +68,22 @@ enum XChaCha20Poly1305Compat {
         // Constants "expand 32-byte k"
         var state: [UInt32] = [
             0x61707865, 0x3320646e, 0x79622d32, 0x6b206574,
-            // key (8 words)
             key.loadLEWord(0), key.loadLEWord(4), key.loadLEWord(8), key.loadLEWord(12),
             key.loadLEWord(16), key.loadLEWord(20), key.loadLEWord(24), key.loadLEWord(28),
-            // nonce (4 words)
             nonce16.loadLEWord(0), nonce16.loadLEWord(4), nonce16.loadLEWord(8), nonce16.loadLEWord(12)
         ]
 
-        // 20 rounds (10 double rounds)
         for _ in 0..<10 {
-            // Column rounds
             quarterRound(&state, 0, 4, 8, 12)
             quarterRound(&state, 1, 5, 9, 13)
             quarterRound(&state, 2, 6, 10, 14)
             quarterRound(&state, 3, 7, 11, 15)
-            // Diagonal rounds
             quarterRound(&state, 0, 5, 10, 15)
             quarterRound(&state, 1, 6, 11, 12)
             quarterRound(&state, 2, 7, 8, 13)
             quarterRound(&state, 3, 4, 9, 14)
         }
 
-        // Output subkey: state[0..3] and state[12..15]
         var out = Data(count: 32)
         out.storeLEWord(state[0], at: 0)
         out.storeLEWord(state[1], at: 4)
@@ -132,4 +124,3 @@ private extension Data {
         replaceSubrange(offset..<(offset+4), with: bytes)
     }
 }
-

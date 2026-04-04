@@ -23,6 +23,8 @@ jobs:
             path: localPackages/BitFoundation
           - name: Noise
             path: localPackages/Noise
+          - name: Nostr
+            path: localPackages/Nostr
 
     steps:
       - name: Checkout code
