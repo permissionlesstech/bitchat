@@ -12,7 +12,7 @@ jobs:
   lint:
     name: SwiftLint
     runs-on: ubuntu-latest
-    continue-on-error: true # Annotations appear on PR but never blocks merging
+    continue-on-error: true # Annotations appear on PR but never block merging
     container:
       image: ghcr.io/realm/swiftlint:latest
     steps:
@@ -40,7 +40,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-build-${{ hashFiles('**/Package.resolved') }}
             ${{ runner.os }}-build-
-
       - name: Build
         run: swift build
 

@@ -216,7 +216,6 @@
 			buildRules = (
 			);
 			dependencies = (
-				A6BCDFB02F8079E1001CF9B9 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				A6E32C972E762EA70032EA8A /* bitchat */,
@@ -296,7 +295,6 @@
 			buildRules = (
 			);
 			dependencies = (
-				A6BCDFAE2F806AD7001CF9B9 /* PBXTargetDependency */,
 				6EB655BA5DB11909C1DEC460 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
@@ -348,7 +346,6 @@
 				B8C407587481BBB190741C93 /* XCRemoteSwiftPackageReference "swift-secp256k1" */,
 				A6E3E56E2E77036A0032EA8A /* XCLocalSwiftPackageReference "localPackages/BitLogger" */,
 				A6E3EA7D2E7706720032EA8A /* XCLocalSwiftPackageReference "localPackages/Arti" */,
-				A6BCDFAB2F8069BF001CF9B9 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */,
 			);
 			preferredProjectObjectVersion = 90;
 			projectDirPath = "";
@@ -426,14 +423,6 @@
 			isa = PBXTargetDependency;
 			target = 57CA17A36A2532A6CFF367BB /* bitchatShareExtension */;
 			targetProxy = E35E7AF9854A2E72452DD34F /* PBXContainerItemProxy */;
-		};
-		A6BCDFAE2F806AD7001CF9B9 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			productRef = A6BCDFAD2F806AD7001CF9B9 /* SwiftLintBuildToolPlugin */;
-		};
-		A6BCDFB02F8079E1001CF9B9 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			productRef = A6BCDFAF2F8079E1001CF9B9 /* SwiftLintBuildToolPlugin */;
 		};
 		D8C09F21DB7DC06E8E672C21 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -933,14 +922,6 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		A6BCDFAB2F8069BF001CF9B9 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/SimplyDanny/SwiftLintPlugins";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 0.63.2;
-			};
-		};
 		B8C407587481BBB190741C93 /* XCRemoteSwiftPackageReference "swift-secp256k1" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/21-DOT-DEV/swift-secp256k1";
@@ -956,16 +937,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B8C407587481BBB190741C93 /* XCRemoteSwiftPackageReference "swift-secp256k1" */;
 			productName = P256K;
-		};
-		A6BCDFAD2F806AD7001CF9B9 /* SwiftLintBuildToolPlugin */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = A6BCDFAB2F8069BF001CF9B9 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */;
-			productName = "plugin:SwiftLintBuildToolPlugin";
-		};
-		A6BCDFAF2F8079E1001CF9B9 /* SwiftLintBuildToolPlugin */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = A6BCDFAB2F8069BF001CF9B9 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */;
-			productName = "plugin:SwiftLintBuildToolPlugin";
 		};
 		A6E3E56F2E77036A0032EA8A /* BitLogger */ = {
 			isa = XCSwiftPackageProductDependency;
