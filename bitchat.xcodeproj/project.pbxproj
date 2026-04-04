@@ -215,6 +215,8 @@
 			);
 			buildRules = (
 			);
+			dependencies = (
+			);
 			fileSystemSynchronizedGroups = (
 				A6E32C972E762EA70032EA8A /* bitchat */,
 			);

@@ -1,4 +1,4 @@
-name: Build & Test
+name: CI
 
 on:
   push:
@@ -9,8 +9,20 @@ on:
       - main
 
 jobs:
+  lint:
+    name: SwiftLint
+    runs-on: ubuntu-latest
+    continue-on-error: true # Annotations appear on PR but never block merging
+    container:
+      image: ghcr.io/realm/swiftlint:latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Lint
+        run: swiftlint lint --reporter github-actions-logging
+
   test:
-    name: Run Swift Tests
+    name: Build & Test
     runs-on: macos-latest
 
     steps:
@@ -28,9 +40,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-build-${{ hashFiles('**/Package.resolved') }}
             ${{ runner.os }}-build-
-
-      - name: Build the package
+      - name: Build
         run: swift build
 
-      - name: Run Tests
+      - name: Test
         run: swift test --parallel
