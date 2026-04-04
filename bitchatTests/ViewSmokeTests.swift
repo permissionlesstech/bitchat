@@ -358,10 +358,17 @@ struct ViewSmokeTests {
             secondaryTextColor: .gray,
             onTapPerson: {}
         )
-        var expandedMessageIDs: Set<String> = []
-        let longMessage = BitchatMessage(
+        let truncatableMessage = BitchatMessage(
             sender: viewModel.nickname,
-            content: String(repeating: "verylongtoken", count: 12) + " lightning:lnbc1test cashuA_test-token",
+            content: String(repeating: "verylongtoken ", count: 160),
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: false,
+            deliveryStatus: .sent
+        )
+        let paymentMessage = BitchatMessage(
+            sender: viewModel.nickname,
+            content: "lightning:lnbc1test cashuA_test-token",
             timestamp: Date(),
             isRelay: false,
             isPrivate: true,
@@ -371,18 +378,11 @@ struct ViewSmokeTests {
 
         _ = geohashPeopleList.body
         _ = mount(geohashPeopleList)
-        _ = mount(
-            TextMessageView(
-                message: longMessage,
-                expandedMessageIDs: Binding(
-                    get: { expandedMessageIDs },
-                    set: { expandedMessageIDs = $0 }
-                )
-            )
-            .environmentObject(viewModel)
-        )
+        _ = mount(TextMessageView(message: truncatableMessage).environmentObject(viewModel))
+        _ = mount(TextMessageView(message: paymentMessage).environmentObject(viewModel))
 
-        #expect(expandedMessageIDs.isEmpty)
+        #expect(truncatableMessage.content.count > TransportConfig.uiLongMessageLengthThreshold)
+        #expect(paymentMessage.content.contains("lightning:") && paymentMessage.content.contains("cashu"))
     }
 
     @Test

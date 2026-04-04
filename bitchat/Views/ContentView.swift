@@ -16,17 +16,6 @@ import AppKit
 import UniformTypeIdentifiers
 import BitLogger
 
-// MARK: - Supporting Types
-
-//
-
-//
-
-private struct MessageDisplayItem: Identifiable {
-    let id: String
-    let message: BitchatMessage
-}
-
 /// On macOS 14+, disables the default system focus ring on TextFields.
 /// On earlier macOS versions and on iOS this is a no-op.
 private struct FocusEffectDisabledModifier: ViewModifier {
@@ -59,18 +48,14 @@ struct ContentView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var showSidebar = false
     @State private var showAppInfo = false
-    @State private var showMessageActions = false
     @State private var selectedMessageSender: String?
     @State private var selectedMessageSenderID: PeerID?
     @FocusState private var isNicknameFieldFocused: Bool
     @State private var isAtBottomPublic: Bool = true
     @State private var isAtBottomPrivate: Bool = true
-    @State private var lastScrollTime: Date = .distantPast
-    @State private var scrollThrottleTimer: Timer?
     @State private var autocompleteDebounceTimer: Timer?
     @State private var showLocationChannelsSheet = false
     @State private var showVerifySheet = false
-    @State private var expandedMessageIDs: Set<String> = []
     @State private var showLocationNotes = false
     @State private var notesGeohash: String? = nil
     @State private var imagePreviewURL: URL? = nil
@@ -159,9 +144,20 @@ struct ContentView: View {
 
             GeometryReader { geometry in
                 VStack(spacing: 0) {
-                    messagesView(privatePeer: nil, isAtBottom: $isAtBottomPublic)
-                        .background(backgroundColor)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    MessageListView(
+                        privatePeer: nil,
+                        isAtBottom: $isAtBottomPublic,
+                        messageText: $messageText,
+                        selectedMessageSender: $selectedMessageSender,
+                        selectedMessageSenderID: $selectedMessageSenderID,
+                        imagePreviewURL: $imagePreviewURL,
+                        windowCountPublic: $windowCountPublic,
+                        windowCountPrivate: $windowCountPrivate,
+                        showSidebar: $showSidebar,
+                        isTextFieldFocused: $isTextFieldFocused,
+                    )
+                    .background(backgroundColor)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .frame(width: geometry.size.width, height: geometry.size.height)
             }
@@ -265,59 +261,6 @@ struct ContentView: View {
         }, message: {
             Text(voiceRecordingVM.state.alertMessage)
         })
-        .confirmationDialog(
-            selectedMessageSender.map { "@\($0)" } ?? String(localized: "content.actions.title", comment: "Fallback title for the message action sheet"),
-            isPresented: $showMessageActions,
-            titleVisibility: .visible
-        ) {
-            Button("content.actions.mention") {
-                if let sender = selectedMessageSender {
-                    // Pre-fill the input with an @mention and focus the field
-                    messageText = "@\(sender) "
-                    isTextFieldFocused = true
-                }
-            }
-
-            Button("content.actions.direct_message") {
-                if let peerID = selectedMessageSenderID {
-                    if peerID.isGeoChat {
-                        if let full = viewModel.fullNostrHex(forSenderPeerID: peerID) {
-                            viewModel.startGeohashDM(withPubkeyHex: full)
-                        }
-                    } else {
-                        viewModel.startPrivateChat(with: peerID)
-                    }
-                    withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
-                        showSidebar = true
-                    }
-                }
-            }
-
-            Button("content.actions.hug") {
-                if let sender = selectedMessageSender {
-                    viewModel.sendMessage("/hug @\(sender)")
-                }
-            }
-
-            Button("content.actions.slap") {
-                if let sender = selectedMessageSender {
-                    viewModel.sendMessage("/slap @\(sender)")
-                }
-            }
-
-            Button("content.actions.block", role: .destructive) {
-                // Prefer direct geohash block when we have a Nostr sender ID
-                if let peerID = selectedMessageSenderID, peerID.isGeoChat,
-                   let full = viewModel.fullNostrHex(forSenderPeerID: peerID),
-                   let sender = selectedMessageSender {
-                    viewModel.blockGeohashUser(pubkeyHexLowercased: full, displayName: sender)
-                } else if let sender = selectedMessageSender {
-                    viewModel.sendMessage("/block \(sender)")
-                }
-            }
-
-            Button("common.cancel", role: .cancel) {}
-        }
         .alert("content.alert.bluetooth_required.title", isPresented: $viewModel.showBluetoothAlert) {
             Button("content.alert.bluetooth_required.settings") {
                 SystemSettings.bluetooth.open()
@@ -327,237 +270,8 @@ struct ContentView: View {
             Text(viewModel.bluetoothAlertMessage)
         }
         .onDisappear {
-            // Clean up timers
-            scrollThrottleTimer?.invalidate()
             autocompleteDebounceTimer?.invalidate()
         }
-    }
-    
-    // MARK: - Message List View
-    
-    private func messagesView(privatePeer: PeerID?, isAtBottom: Binding<Bool>) -> some View {
-        let messages: [BitchatMessage] = {
-            if let peerID = privatePeer {
-                return viewModel.getPrivateChatMessages(for: peerID)
-            }
-            return viewModel.messages
-        }()
-
-        let currentWindowCount: Int = {
-            if let peer = privatePeer {
-                return windowCountPrivate[peer] ?? TransportConfig.uiWindowInitialCountPrivate
-            }
-            return windowCountPublic
-        }()
-
-        let windowedMessages: [BitchatMessage] = Array(messages.suffix(currentWindowCount))
-
-        let contextKey: String = {
-            if let peer = privatePeer { return "dm:\(peer)" }
-            switch locationManager.selectedChannel {
-            case .mesh: return "mesh"
-            case .location(let ch): return "geo:\(ch.geohash)"
-            }
-        }()
-
-        let messageItems: [MessageDisplayItem] = windowedMessages.compactMap { message in
-            guard let trimmed = message.content.trimmedOrNilIfEmpty else { return nil }
-            return MessageDisplayItem(id: "\(contextKey)|\(message.id)", message: message)
-        }
-
-        return ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(messageItems) { item in
-                        let message = item.message
-                        messageRow(for: message)
-                            .onAppear {
-                                if message.id == windowedMessages.last?.id {
-                                    isAtBottom.wrappedValue = true
-                                }
-                                if message.id == windowedMessages.first?.id,
-                                   messages.count > windowedMessages.count {
-                                    expandWindow(
-                                        ifNeededFor: message,
-                                        allMessages: messages,
-                                        privatePeer: privatePeer,
-                                        proxy: proxy
-                                    )
-                                }
-                            }
-                            .onDisappear {
-                                if message.id == windowedMessages.last?.id {
-                                    isAtBottom.wrappedValue = false
-                                }
-                            }
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                if message.sender != "system" {
-                                    messageText = "@\(message.sender) "
-                                    isTextFieldFocused = true
-                                }
-                            }
-                            .contextMenu {
-                                Button("content.message.copy") {
-                                    #if os(iOS)
-                                    UIPasteboard.general.string = message.content
-                                    #else
-                                    let pb = NSPasteboard.general
-                                    pb.clearContents()
-                                    pb.setString(message.content, forType: .string)
-                                    #endif
-                                }
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 1)
-                    }
-                }
-                .transaction { tx in if viewModel.isBatchingPublic { tx.disablesAnimations = true } }
-                .padding(.vertical, 2)
-            }
-            .background(backgroundColor)
-            .onOpenURL { handleOpenURL($0) }
-            .onTapGesture(count: 3) {
-                viewModel.sendMessage("/clear")
-            }
-            .onAppear {
-                scrollToBottom(on: proxy, privatePeer: privatePeer, isAtBottom: isAtBottom)
-            }
-            .onChange(of: privatePeer) { _ in
-                scrollToBottom(on: proxy, privatePeer: privatePeer, isAtBottom: isAtBottom)
-            }
-            .onChange(of: viewModel.messages.count) { _ in
-                if privatePeer == nil && !viewModel.messages.isEmpty {
-                    // If the newest message is from me, always scroll to bottom
-                    let lastMsg = viewModel.messages.last!
-                    let isFromSelf = (lastMsg.sender == viewModel.nickname) || lastMsg.sender.hasPrefix(viewModel.nickname + "#")
-                    if !isFromSelf {
-                        // Only autoscroll when user is at/near bottom
-                        guard isAtBottom.wrappedValue else { return }
-                    } else {
-                        // Ensure we consider ourselves at bottom for subsequent messages
-                        isAtBottom.wrappedValue = true
-                    }
-                    // Throttle scroll animations to prevent excessive UI updates
-                    let now = Date()
-                    if now.timeIntervalSince(lastScrollTime) > TransportConfig.uiScrollThrottleSeconds {
-                        // Immediate scroll if enough time has passed
-                        lastScrollTime = now
-                        let contextKey: String = {
-                            switch locationManager.selectedChannel {
-                            case .mesh: return "mesh"
-                            case .location(let ch): return "geo:\(ch.geohash)"
-                            }
-                        }()
-                        let count = windowCountPublic
-                        let target = viewModel.messages.suffix(count).last.map { "\(contextKey)|\($0.id)" }
-                        DispatchQueue.main.async {
-                            if let target = target { proxy.scrollTo(target, anchor: .bottom) }
-                        }
-                    } else {
-                        // Schedule a delayed scroll
-                        scrollThrottleTimer?.invalidate()
-                        scrollThrottleTimer = Timer.scheduledTimer(withTimeInterval: TransportConfig.uiScrollThrottleSeconds, repeats: false) { [weak viewModel] _ in
-                            Task { @MainActor in
-                                lastScrollTime = Date()
-                                let contextKey: String = {
-                                    switch locationManager.selectedChannel {
-                                    case .mesh: return "mesh"
-                                    case .location(let ch): return "geo:\(ch.geohash)"
-                                    }
-                                }()
-                                let count = windowCountPublic
-                                let target = viewModel?.messages.suffix(count).last.map { "\(contextKey)|\($0.id)" }
-                                if let target = target { proxy.scrollTo(target, anchor: .bottom) }
-                            }
-                        }
-                    }
-                }
-            }
-            .onChange(of: viewModel.privateChats) { _ in
-                if let peerID = privatePeer,
-                   let messages = viewModel.privateChats[peerID],
-                   !messages.isEmpty {
-                    // If the newest private message is from me, always scroll
-                    let lastMsg = messages.last!
-                    let isFromSelf = (lastMsg.sender == viewModel.nickname) || lastMsg.sender.hasPrefix(viewModel.nickname + "#")
-                    if !isFromSelf {
-                        // Only autoscroll when user is at/near bottom
-                        guard isAtBottom.wrappedValue else { return }
-                    } else {
-                        isAtBottom.wrappedValue = true
-                    }
-                    // Same throttling for private chats
-                    let now = Date()
-                    if now.timeIntervalSince(lastScrollTime) > TransportConfig.uiScrollThrottleSeconds {
-                        lastScrollTime = now
-                        let contextKey = "dm:\(peerID)"
-                        let count = windowCountPrivate[peerID] ?? 300
-                        let target = messages.suffix(count).last.map { "\(contextKey)|\($0.id)" }
-                        DispatchQueue.main.async {
-                            if let target = target { proxy.scrollTo(target, anchor: .bottom) }
-                        }
-                    } else {
-                        scrollThrottleTimer?.invalidate()
-                        scrollThrottleTimer = Timer.scheduledTimer(withTimeInterval: TransportConfig.uiScrollThrottleSeconds, repeats: false) { _ in
-                            lastScrollTime = Date()
-                            let contextKey = "dm:\(peerID)"
-                            let count = windowCountPrivate[peerID] ?? 300
-                            let target = messages.suffix(count).last.map { "\(contextKey)|\($0.id)" }
-                            DispatchQueue.main.async {
-                                if let target = target { proxy.scrollTo(target, anchor: .bottom) }
-                            }
-                        }
-                    }
-                }
-            }
-            .onChange(of: locationManager.selectedChannel) { newChannel in
-                // When switching to a new geohash channel, scroll to the bottom
-                guard privatePeer == nil else { return }
-                switch newChannel {
-                case .mesh:
-                    break
-                case .location(let ch):
-                    // Reset window size
-                    windowCountPublic = TransportConfig.uiWindowInitialCountPublic
-                    let contextKey = "geo:\(ch.geohash)"
-                    let last = viewModel.messages.suffix(windowCountPublic).last?.id
-                    let target = last.map { "\(contextKey)|\($0)" }
-                    isAtBottom.wrappedValue = true
-                    DispatchQueue.main.async {
-                        if let target = target { proxy.scrollTo(target, anchor: .bottom) }
-                    }
-                }
-            }
-            .onAppear {
-                // Also check when view appears
-                if let peerID = privatePeer {
-                    // Try multiple times to ensure read receipts are sent
-                    viewModel.markPrivateMessagesAsRead(from: peerID)
-                    
-                    DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiReadReceiptRetryShortSeconds) {
-                        viewModel.markPrivateMessagesAsRead(from: peerID)
-                    }
-                    
-                    DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiReadReceiptRetryLongSeconds) {
-                        viewModel.markPrivateMessagesAsRead(from: peerID)
-                    }
-                }
-            }
-        }
-        .environment(\.openURL, OpenURLAction { url in
-            // Intercept custom cashu: links created in attributed text
-            if let scheme = url.scheme?.lowercased(), scheme == "cashu" || scheme == "lightning" {
-                #if os(iOS)
-                UIApplication.shared.open(url)
-                return .handled
-                #else
-                // On non-iOS platforms, let the system handle or ignore
-                return .systemAction
-                #endif
-            }
-            return .systemAction
-        })
     }
     
     // MARK: - Input View
@@ -657,111 +371,7 @@ struct ContentView: View {
         .padding(.bottom, 8)
         .background(backgroundColor.opacity(0.95))
     }
-    
-    private func handleOpenURL(_ url: URL) {
-        guard url.scheme == "bitchat" else { return }
-        switch url.host {
-        case "user":
-            let id = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-            let peerID = PeerID(str: id.removingPercentEncoding ?? id)
-            selectedMessageSenderID = peerID
 
-            if peerID.isGeoDM || peerID.isGeoChat {
-                selectedMessageSender = viewModel.geohashDisplayName(for: peerID)
-            } else if let name = viewModel.meshService.peerNickname(peerID: peerID) {
-                selectedMessageSender = name
-            } else {
-                selectedMessageSender = viewModel.messages.last(where: { $0.senderPeerID == peerID && $0.sender != "system" })?.sender
-            }
-
-            if viewModel.isSelfSender(peerID: peerID, displayName: selectedMessageSender) {
-                selectedMessageSender = nil
-                selectedMessageSenderID = nil
-            } else {
-                showMessageActions = true
-            }
-
-        case "geohash":
-            let gh = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased()
-            let allowed = Set("0123456789bcdefghjkmnpqrstuvwxyz")
-            guard (2...12).contains(gh.count), gh.allSatisfy({ allowed.contains($0) }) else { return }
-
-            func levelForLength(_ len: Int) -> GeohashChannelLevel {
-                switch len {
-                case 0...2: return .region
-                case 3...4: return .province
-                case 5: return .city
-                case 6: return .neighborhood
-                case 7: return .block
-                default: return .block
-                }
-            }
-
-            let level = levelForLength(gh.count)
-            let channel = GeohashChannel(level: level, geohash: gh)
-
-            let inRegional = LocationChannelManager.shared.availableChannels.contains { $0.geohash == gh }
-            if !inRegional && !LocationChannelManager.shared.availableChannels.isEmpty {
-                LocationChannelManager.shared.markTeleported(for: gh, true)
-            }
-            LocationChannelManager.shared.select(ChannelID.location(channel))
-
-        default:
-            return
-        }
-    }
-
-    private func scrollToBottom(on proxy: ScrollViewProxy,
-                                privatePeer: PeerID?,
-                                isAtBottom: Binding<Bool>) {
-        let targetID: String? = {
-            if let peer = privatePeer,
-               let last = viewModel.getPrivateChatMessages(for: peer).suffix(300).last?.id {
-                return "dm:\(peer)|\(last)"
-            }
-            let contextKey: String = {
-                switch locationManager.selectedChannel {
-                case .mesh: return "mesh"
-                case .location(let ch): return "geo:\(ch.geohash)"
-                }
-            }()
-            if let last = viewModel.messages.suffix(300).last?.id {
-                return "\(contextKey)|\(last)"
-            }
-            return nil
-        }()
-
-        isAtBottom.wrappedValue = true
-
-        DispatchQueue.main.async {
-            if let targetID {
-                proxy.scrollTo(targetID, anchor: .bottom)
-            }
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            let secondTarget: String? = {
-                if let peer = privatePeer,
-                   let last = viewModel.getPrivateChatMessages(for: peer).suffix(300).last?.id {
-                    return "dm:\(peer)|\(last)"
-                }
-                let contextKey: String = {
-                    switch locationManager.selectedChannel {
-                    case .mesh: return "mesh"
-                    case .location(let ch): return "geo:\(ch.geohash)"
-                    }
-                }()
-                if let last = viewModel.messages.suffix(300).last?.id {
-                    return "\(contextKey)|\(last)"
-                }
-                return nil
-            }()
-
-            if let secondTarget {
-                proxy.scrollTo(secondTarget, anchor: .bottom)
-            }
-        }
-    }
     // MARK: - Actions
     
     private func sendMessage() {
@@ -1008,10 +618,23 @@ struct ContentView: View {
                 .background(backgroundColor)
             }
 
-            messagesView(privatePeer: viewModel.selectedPrivateChatPeer, isAtBottom: $isAtBottomPrivate)
-                .background(backgroundColor)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            MessageListView(
+                privatePeer: viewModel.selectedPrivateChatPeer,
+                isAtBottom: $isAtBottomPrivate,
+                messageText: $messageText,
+                selectedMessageSender: $selectedMessageSender,
+                selectedMessageSenderID: $selectedMessageSenderID,
+                imagePreviewURL: $imagePreviewURL,
+                windowCountPublic: $windowCountPublic,
+                windowCountPrivate: $windowCountPrivate,
+                showSidebar: $showSidebar,
+                isTextFieldFocused: $isTextFieldFocused,
+            )
+            .background(backgroundColor)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
             Divider()
+
             inputView
         }
         .background(backgroundColor)
@@ -1455,57 +1078,6 @@ struct ContentView: View {
 // MARK: - Helper Views
 
 private extension ContentView {
-    @ViewBuilder
-    private func messageRow(for message: BitchatMessage) -> some View {
-        if message.sender == "system" {
-            systemMessageRow(message)
-        } else if let media = message.mediaAttachment(for: viewModel.nickname) {
-            MediaMessageView(message: message, media: media, imagePreviewURL: $imagePreviewURL)
-        } else {
-            TextMessageView(message: message, expandedMessageIDs: $expandedMessageIDs)
-        }
-    }
-
-    @ViewBuilder
-    private func systemMessageRow(_ message: BitchatMessage) -> some View {
-        Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func expandWindow(ifNeededFor message: BitchatMessage,
-                              allMessages: [BitchatMessage],
-                              privatePeer: PeerID?,
-                              proxy: ScrollViewProxy) {
-        let step = TransportConfig.uiWindowStepCount
-        let contextKey: String = {
-            if let peer = privatePeer { return "dm:\(peer)" }
-            switch locationManager.selectedChannel {
-            case .mesh: return "mesh"
-            case .location(let ch): return "geo:\(ch.geohash)"
-            }
-        }()
-        let preserveID = "\(contextKey)|\(message.id)"
-
-        if let peer = privatePeer {
-            let current = windowCountPrivate[peer] ?? TransportConfig.uiWindowInitialCountPrivate
-            let newCount = min(allMessages.count, current + step)
-            guard newCount != current else { return }
-            windowCountPrivate[peer] = newCount
-            DispatchQueue.main.async {
-                proxy.scrollTo(preserveID, anchor: .top)
-            }
-        } else {
-            let current = windowCountPublic
-            let newCount = min(allMessages.count, current + step)
-            guard newCount != current else { return }
-            windowCountPublic = newCount
-            DispatchQueue.main.async {
-                proxy.scrollTo(preserveID, anchor: .top)
-            }
-        }
-    }
-
     var recordingIndicator: some View {
         HStack(spacing: 12) {
             Image(systemName: "waveform.circle.fill")
