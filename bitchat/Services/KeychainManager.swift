@@ -7,6 +7,7 @@
 //
 
 import BitLogger
+import protocol Nostr.NostrKeychainStoring
 import protocol Noise.SecureMemoryCleaner
 import Foundation
 import Security
@@ -52,7 +53,7 @@ enum KeychainSaveResult {
     }
 }
 
-protocol KeychainManagerProtocol: SecureMemoryCleaner {
+protocol KeychainManagerProtocol: SecureMemoryCleaner, NostrKeychainStoring {
     func saveIdentityKey(_ keyData: Data, forKey key: String) -> Bool
     func getIdentityKey(forKey key: String) -> Data?
     func deleteIdentityKey(forKey key: String) -> Bool

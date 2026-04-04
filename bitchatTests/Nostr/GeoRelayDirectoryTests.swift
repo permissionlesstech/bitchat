@@ -1,4 +1,5 @@
 import Foundation
+import Nostr
 import Tor
 import XCTest
 @testable import bitchat
@@ -303,6 +304,7 @@ final class GeoRelayDirectoryTests: XCTestCase {
             retrySleep: { delay in
                 await retryRecorder.record(delay)
             },
+            torReadyNotificationName: .TorDidBecomeReady,
             activeNotificationName: activeNotificationName,
             autoStart: autoStart
         )

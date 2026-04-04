@@ -6,6 +6,7 @@
 // For more information, see <https://unlicense.org>
 //
 
+import Nostr
 import SwiftUI
 
 struct TextMessageView: View {
@@ -91,7 +92,7 @@ struct TextMessageView: View {
     .environmentObject(
         ChatViewModel(
             keychain: keychain,
-            idBridge: NostrIdentityBridge(),
+            idBridge: NostrIdentityBridge(keychain: keychain),
             identityManager: SecureIdentityStateManager(keychain)
         )
     )
