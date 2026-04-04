@@ -111,7 +111,6 @@ enum XChaCha20Poly1305Compat {
         s[c] = s[c] &+ s[d]; s[b] ^= s[c]; s[b] = (s[b] << 7)  | (s[b] >> 25)
     }
 }
-
 private extension Data {
     func loadLEWord(_ offset: Int) -> UInt32 {
         let range = offset..<(offset+4)
@@ -132,4 +131,3 @@ private extension Data {
         replaceSubrange(offset..<(offset+4), with: bytes)
     }
 }
-

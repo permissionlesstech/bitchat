@@ -427,7 +427,7 @@ final class NoiseEncryptionService {
     private func canonicalAnnounceBytes(peerID: Data, noiseKey: Data, ed25519Key: Data, nickname: String, timestampMs: UInt64) -> Data {
         var out = Data()
         // context
-        let context = "bitchat-announce-v1".data(using: .utf8) ?? Data()
+        let context = Data("bitchat-announce-v1".utf8)
         out.append(UInt8(min(context.count, 255)))
         out.append(context.prefix(255))
         // peerID (expect 8 bytes; pad/truncate to 8 for canonicalization)

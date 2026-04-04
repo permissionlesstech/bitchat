@@ -999,7 +999,7 @@ final class BLEService: NSObject {
             minCentralWriteLen = minCentralWriteLen.map { min($0, m) } ?? m
         }
         var snapshotCentrals: [CBCentral] = []
-        if let _ = characteristic {
+        if characteristic != nil {
             let (centrals, _) = snapshotSubscribedCentrals()
             snapshotCentrals = centrals
         }
@@ -1020,7 +1020,7 @@ final class BLEService: NSObject {
         let connectedPeripheralIDs: [String] = states.filter { $0.isConnected }.map { $0.peripheral.identifier.uuidString }
         let subscribedCentrals: [CBCentral]
         var centralIDs: [String] = []
-        if let _ = characteristic {
+        if characteristic != nil {
             let (centrals, _) = snapshotSubscribedCentrals()
             subscribedCentrals = centrals
             centralIDs = centrals.map { $0.identifier.uuidString }
@@ -1615,7 +1615,7 @@ extension BLEService: GossipSyncManager.Delegate {
 
 extension BLEService: CBCentralManagerDelegate {
     #if os(iOS)
-    func centralManager(_ central: CBCentralManager, willRestoreState dict: [String : Any]) {
+    func centralManager(_ central: CBCentralManager, willRestoreState dict: [String: Any]) {
         let restoredPeripherals = (dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral]) ?? []
         let restoredServices = (dict[CBCentralManagerRestoredStateScanServicesKey] as? [CBUUID]) ?? []
         let restoredOptions = (dict[CBCentralManagerRestoredStateScanOptionsKey] as? [String: Any]) ?? [:]
@@ -2379,7 +2379,7 @@ extension BLEService: CBPeripheralManagerDelegate {
     }
     
     #if os(iOS)
-    func peripheralManager(_ peripheral: CBPeripheralManager, willRestoreState dict: [String : Any]) {
+    func peripheralManager(_ peripheral: CBPeripheralManager, willRestoreState dict: [String: Any]) {
         let restoredServices = (dict[CBPeripheralManagerRestoredStateServicesKey] as? [CBMutableService]) ?? []
         let restoredAdvertisement = (dict[CBPeripheralManagerRestoredStateAdvertisementDataKey] as? [String: Any]) ?? [:]
 
@@ -3790,7 +3790,6 @@ extension BLEService {
             
         case .none:
             SecureLogger.warning("⚠️ Unknown message type: \(packet.type)", category: .session)
-            break
         }
         
         if forwardAlongRouteIfNeeded(packet) {

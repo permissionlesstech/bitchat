@@ -698,7 +698,7 @@ extension ChatViewModel {
 
     func sendDeliveryAckViaNostrEmbedded(_ message: BitchatMessage, wasReadBefore: Bool, senderPubkey: String, key: Data?) {
         // If we have a Noise key, try to route securely if possible, otherwise fallback to direct
-        if let _ = key {
+        if key != nil {
              // Ideally we would use MessageRouter here, but for simplicity in this direct callback:
              // check if we have an identity
              if let id = try? idBridge.getCurrentNostrIdentity() {
@@ -716,7 +716,7 @@ extension ChatViewModel {
         
         // Same for READ receipt if viewing
         if !wasReadBefore && selectedPrivateChatPeer == message.senderPeerID {
-             if let _ = key {
+             if key != nil {
                  if let id = try? idBridge.getCurrentNostrIdentity() {
                      let nt = NostrTransport(keychain: keychain, idBridge: idBridge)
                      nt.senderPeerID = meshService.myPeerID

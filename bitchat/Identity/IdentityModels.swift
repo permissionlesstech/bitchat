@@ -126,10 +126,10 @@ struct SocialIdentity: Codable {
 }
 
 enum TrustLevel: String, Codable {
-    case unknown = "unknown"
-    case casual = "casual"
-    case trusted = "trusted"
-    case verified = "verified"
+    case unknown
+    case casual
+    case trusted
+    case verified
 }
 
 // MARK: - Identity Cache
