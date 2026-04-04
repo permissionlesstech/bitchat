@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import BitFoundation
 
 struct FingerprintView: View {
     @ObservedObject var viewModel: ChatViewModel

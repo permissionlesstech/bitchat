@@ -8,6 +8,7 @@
 import Testing
 import Foundation
 import CoreBluetooth
+import BitFoundation
 @testable import bitchat
 
 struct BLEServiceCoreTests {

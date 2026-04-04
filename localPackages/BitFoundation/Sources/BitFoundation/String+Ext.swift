@@ -1,12 +1,12 @@
 //
 // String+Ext.swift
-// bitchat
+// BitFoundation
 //
 // This is free and unencumbered software released into the public domain.
 // For more information, see <https://unlicense.org>
 //
 
-extension StringProtocol {
+public extension StringProtocol {
     var trimmed: String {
         trimmingCharacters(in: .whitespacesAndNewlines)
     }

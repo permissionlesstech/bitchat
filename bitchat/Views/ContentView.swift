@@ -15,6 +15,7 @@ import AppKit
 #endif
 import UniformTypeIdentifiers
 import BitLogger
+import BitFoundation
 
 // MARK: - Supporting Types
 

@@ -9,6 +9,7 @@
 import Testing
 import Foundation
 import SwiftUI
+import BitFoundation
 @testable import bitchat
 
 struct MessageFormattingEngineTests {
