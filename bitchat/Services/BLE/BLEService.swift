@@ -1,4 +1,5 @@
 import BitLogger
+import BitFoundation
 import Foundation
 import CoreBluetooth
 import Combine

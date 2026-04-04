@@ -1,5 +1,6 @@
 import XCTest
 import UserNotifications
+import BitFoundation
 @testable import bitchat
 
 final class NotificationServiceTests: XCTestCase {

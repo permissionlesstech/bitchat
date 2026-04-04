@@ -81,6 +81,7 @@
 ///
 
 import Foundation
+import BitFoundation
 
 // MARK: - Three-Layer Identity Model
 
