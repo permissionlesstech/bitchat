@@ -20,6 +20,7 @@ let package = Package(
         .package(path: "localPackages/Noise"),
         .package(path: "localPackages/BitFoundation"),
         .package(path: "localPackages/BitLogger"),
+        .package(path: "localPackages/Nostr"),
         .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1", exact: "0.21.1")
     ],
     targets: [
@@ -30,6 +31,7 @@ let package = Package(
                 .product(name: "BitFoundation", package: "BitFoundation"),
                 .product(name: "BitLogger", package: "BitLogger"),
                 .product(name: "Noise", package: "Noise"),
+                .product(name: "Nostr", package: "Nostr"),
                 .product(name: "Tor", package: "Arti")
             ],
             path: "bitchat",
@@ -50,7 +52,8 @@ let package = Package(
             name: "bitchatTests",
             dependencies: [
                 "bitchat",
-                .product(name: "BitFoundation", package: "BitFoundation")
+                .product(name: "BitFoundation", package: "BitFoundation"),
+                .product(name: "Nostr", package: "Nostr")
             ],
             path: "bitchatTests",
             exclude: [

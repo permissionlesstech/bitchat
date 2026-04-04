@@ -8,6 +8,7 @@
 
 import BitLogger
 import BitFoundation
+import Nostr
 import Foundation
 import Combine
 import SwiftUI

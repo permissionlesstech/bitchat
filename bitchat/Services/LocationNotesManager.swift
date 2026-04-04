@@ -1,4 +1,5 @@
 import BitLogger
+import Nostr
 import Foundation
 
 /// Dependencies for location notes, allowing tests to stub relay/identity behavior.
@@ -15,7 +16,7 @@ struct LocationNotesDependencies {
     var deriveIdentity: (_ geohash: String) throws -> NostrIdentity
     var now: () -> Date
     
-    private static let idBridge = NostrIdentityBridge()
+    private static let idBridge = NostrIdentityBridge(keychain: KeychainManager())
 
     static let live = LocationNotesDependencies(
         relayLookup: { geohash, count in

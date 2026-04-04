@@ -1,101 +1,72 @@
 import BitLogger
 import Foundation
-import Tor
-#if os(iOS)
-import UIKit
-#elseif os(macOS)
-import AppKit
-#endif
 
-/// Directory of online Nostr relays with approximate GPS locations, used for geohash routing.
-struct GeoRelayDirectoryDependencies {
-    var userDefaults: UserDefaults
-    var notificationCenter: NotificationCenter
-    var now: () -> Date
-    var remoteURL: URL
-    var fetchInterval: TimeInterval
-    var refreshCheckInterval: TimeInterval
-    var retryInitialSeconds: TimeInterval
-    var retryMaxSeconds: TimeInterval
-    var awaitTorReady: @Sendable () async -> Bool
-    var makeFetchData: @MainActor @Sendable () -> (@Sendable (URLRequest) async throws -> Data)
-    var readData: (URL) -> Data?
-    var writeData: (Data, URL) throws -> Void
-    var cacheURL: () -> URL?
-    var bundledCSVURLs: () -> [URL]
-    var currentDirectoryPath: () -> String?
-    var retrySleep: (TimeInterval) async -> Void
-    var activeNotificationName: Notification.Name?
-    var autoStart: Bool
-}
+public struct GeoRelayDirectoryDependencies {
+    public var userDefaults: UserDefaults
+    public var notificationCenter: NotificationCenter
+    public var now: () -> Date
+    public var remoteURL: URL
+    public var fetchInterval: TimeInterval
+    public var refreshCheckInterval: TimeInterval
+    public var retryInitialSeconds: TimeInterval
+    public var retryMaxSeconds: TimeInterval
+    public var awaitTorReady: @Sendable () async -> Bool
+    public var makeFetchData: @MainActor @Sendable () -> (@Sendable (URLRequest) async throws -> Data)
+    public var readData: (URL) -> Data?
+    public var writeData: (Data, URL) throws -> Void
+    public var cacheURL: () -> URL?
+    public var bundledCSVURLs: () -> [URL]
+    public var currentDirectoryPath: () -> String?
+    public var retrySleep: (TimeInterval) async -> Void
+    public var torReadyNotificationName: Notification.Name?
+    public var activeNotificationName: Notification.Name?
+    public var autoStart: Bool
 
-private extension GeoRelayDirectoryDependencies {
-    @MainActor
-    static func live() -> Self {
-#if os(iOS)
-        let activeNotificationName: Notification.Name? = UIApplication.didBecomeActiveNotification
-#elseif os(macOS)
-        let activeNotificationName: Notification.Name? = NSApplication.didBecomeActiveNotification
-#else
-        let activeNotificationName: Notification.Name? = nil
-#endif
-
-        return Self(
-            userDefaults: .standard,
-            notificationCenter: .default,
-            now: Date.init,
-            remoteURL: URL(string: "https://raw.githubusercontent.com/permissionlesstech/georelays/refs/heads/main/nostr_relays.csv")!,
-            fetchInterval: TransportConfig.geoRelayFetchIntervalSeconds,
-            refreshCheckInterval: TransportConfig.geoRelayRefreshCheckIntervalSeconds,
-            retryInitialSeconds: TransportConfig.geoRelayRetryInitialSeconds,
-            retryMaxSeconds: TransportConfig.geoRelayRetryMaxSeconds,
-            awaitTorReady: { await TorManager.shared.awaitReady() },
-            makeFetchData: {
-                let session = TorURLSession.shared.session
-                return { request in
-                    let (data, _) = try await session.data(for: request)
-                    return data
-                }
-            },
-            readData: { try? Data(contentsOf: $0) },
-            writeData: { data, url in
-                try data.write(to: url, options: .atomic)
-            },
-            cacheURL: {
-                do {
-                    let base = try FileManager.default.url(
-                        for: .applicationSupportDirectory,
-                        in: .userDomainMask,
-                        appropriateFor: nil,
-                        create: true
-                    )
-                    let dir = base.appendingPathComponent("bitchat", isDirectory: true)
-                    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-                    return dir.appendingPathComponent("georelays_cache.csv")
-                } catch {
-                    return nil
-                }
-            },
-            bundledCSVURLs: {
-                [
-                    Bundle.main.url(forResource: "nostr_relays", withExtension: "csv"),
-                    Bundle.main.url(forResource: "online_relays_gps", withExtension: "csv"),
-                    Bundle.main.url(forResource: "online_relays_gps", withExtension: "csv", subdirectory: "relays")
-                ].compactMap { $0 }
-            },
-            currentDirectoryPath: { FileManager.default.currentDirectoryPath },
-            retrySleep: { delay in
-                let nanoseconds = UInt64(delay * 1_000_000_000)
-                try? await Task.sleep(nanoseconds: nanoseconds)
-            },
-            activeNotificationName: activeNotificationName,
-            autoStart: true
-        )
+    public init(
+        userDefaults: UserDefaults,
+        notificationCenter: NotificationCenter,
+        now: @escaping () -> Date,
+        remoteURL: URL,
+        fetchInterval: TimeInterval,
+        refreshCheckInterval: TimeInterval,
+        retryInitialSeconds: TimeInterval,
+        retryMaxSeconds: TimeInterval,
+        awaitTorReady: @Sendable @escaping () async -> Bool,
+        makeFetchData: @MainActor @Sendable @escaping () -> (@Sendable (URLRequest) async throws -> Data),
+        readData: @escaping (URL) -> Data?,
+        writeData: @escaping (Data, URL) throws -> Void,
+        cacheURL: @escaping () -> URL?,
+        bundledCSVURLs: @escaping () -> [URL],
+        currentDirectoryPath: @escaping () -> String?,
+        retrySleep: @escaping (TimeInterval) async -> Void,
+        torReadyNotificationName: Notification.Name?,
+        activeNotificationName: Notification.Name?,
+        autoStart: Bool
+    ) {
+        self.userDefaults = userDefaults
+        self.notificationCenter = notificationCenter
+        self.now = now
+        self.remoteURL = remoteURL
+        self.fetchInterval = fetchInterval
+        self.refreshCheckInterval = refreshCheckInterval
+        self.retryInitialSeconds = retryInitialSeconds
+        self.retryMaxSeconds = retryMaxSeconds
+        self.awaitTorReady = awaitTorReady
+        self.makeFetchData = makeFetchData
+        self.readData = readData
+        self.writeData = writeData
+        self.cacheURL = cacheURL
+        self.bundledCSVURLs = bundledCSVURLs
+        self.currentDirectoryPath = currentDirectoryPath
+        self.retrySleep = retrySleep
+        self.torReadyNotificationName = torReadyNotificationName
+        self.activeNotificationName = activeNotificationName
+        self.autoStart = autoStart
     }
 }
 
 @MainActor
-final class GeoRelayDirectory {
+public final class GeoRelayDirectory {
     private final class CleanupState {
         let notificationCenter: NotificationCenter
         var observers: [NSObjectProtocol] = []
@@ -113,10 +84,16 @@ final class GeoRelayDirectory {
         }
     }
 
-    struct Entry: Hashable, Sendable {
-        let host: String
-        let lat: Double
-        let lon: Double
+    public struct Entry: Hashable, Sendable {
+        public let host: String
+        public let lat: Double
+        public let lon: Double
+
+        public init(host: String, lat: Double, lon: Double) {
+            self.host = host
+            self.lat = lat
+            self.lon = lon
+        }
     }
 
     private enum DetachedFetchOutcome: Sendable {
@@ -126,9 +103,13 @@ final class GeoRelayDirectory {
         case network(String)
     }
 
-    static let shared = GeoRelayDirectory()
+    nonisolated(unsafe) public static var shared: GeoRelayDirectory!
 
-    private(set) var entries: [Entry] = []
+    public static func setupShared(dependencies: GeoRelayDirectoryDependencies) {
+        shared = GeoRelayDirectory(dependencies: dependencies)
+    }
+
+    private(set) public var entries: [Entry] = []
     private let lastFetchKey = "georelay.lastFetchAt"
     private let dependencies: GeoRelayDirectoryDependencies
     private let cleanupState: CleanupState
@@ -136,18 +117,7 @@ final class GeoRelayDirectory {
     private var retryAttempt: Int = 0
     private var isFetching: Bool = false
 
-    private init() {
-        self.dependencies = .live()
-        self.cleanupState = CleanupState(notificationCenter: dependencies.notificationCenter)
-        entries = loadLocalEntries()
-        if dependencies.autoStart {
-            registerObservers()
-            startRefreshTimer()
-            prefetchIfNeeded()
-        }
-    }
-
-    internal init(dependencies: GeoRelayDirectoryDependencies) {
+    public init(dependencies: GeoRelayDirectoryDependencies) {
         self.dependencies = dependencies
         self.cleanupState = CleanupState(notificationCenter: dependencies.notificationCenter)
         entries = loadLocalEntries()
@@ -159,13 +129,13 @@ final class GeoRelayDirectory {
     }
 
     /// Returns up to `count` relay URLs (wss://) closest to the geohash center.
-    func closestRelays(toGeohash geohash: String, count: Int = 5) -> [String] {
-        let center = Geohash.decodeCenter(geohash)
+    public func closestRelays(toGeohash geohash: String, count: Int = 5) -> [String] {
+        let center = decodeGeohashCenter(geohash)
         return closestRelays(toLat: center.lat, lon: center.lon, count: count)
     }
 
     /// Returns up to `count` relay URLs (wss://) closest to the given coordinate.
-    func closestRelays(toLat lat: Double, lon: Double, count: Int = 5) -> [String] {
+    public func closestRelays(toLat lat: Double, lon: Double, count: Int = 5) -> [String] {
         guard !entries.isEmpty, count > 0 else { return [] }
 
         if entries.count <= count {
@@ -195,7 +165,7 @@ final class GeoRelayDirectory {
     }
 
     // MARK: - Remote Fetch
-    func prefetchIfNeeded(force: Bool = false) {
+    public func prefetchIfNeeded(force: Bool = false) {
         guard !isFetching else { return }
 
         let now = dependencies.now()
@@ -205,7 +175,6 @@ final class GeoRelayDirectory {
             guard now.timeIntervalSince(last) >= dependencies.fetchInterval else { return }
         } else if last != .distantPast,
                   now.timeIntervalSince(last) < dependencies.retryInitialSeconds {
-            // Skip forced fetches if we just refreshed moments ago.
             return
         }
 
@@ -343,7 +312,6 @@ final class GeoRelayDirectory {
 
     // MARK: - Loading
     private func loadLocalEntries() -> [Entry] {
-        // Prefer cached file if present
         if let cache = dependencies.cacheURL(),
            let data = dependencies.readData(cache),
            let text = String(data: data, encoding: .utf8) {
@@ -351,7 +319,6 @@ final class GeoRelayDirectory {
             if !arr.isEmpty { return arr }
         }
 
-        // Try bundled resource(s)
         let bundleCandidates = dependencies.bundledCSVURLs()
 
         for url in bundleCandidates {
@@ -362,7 +329,6 @@ final class GeoRelayDirectory {
             }
         }
 
-        // Try filesystem path (development/test)
         if let cwd = dependencies.currentDirectoryPath(),
            let data = dependencies.readData(URL(fileURLWithPath: cwd).appendingPathComponent("relays/online_relays_gps.csv")),
            let text = String(data: data, encoding: .utf8) {
@@ -373,7 +339,7 @@ final class GeoRelayDirectory {
         return []
     }
 
-    nonisolated static func parseCSV(_ text: String) -> [Entry] {
+    nonisolated public static func parseCSV(_ text: String) -> [Entry] {
         var result: Set<Entry> = []
         let lines = text.split(whereSeparator: { $0.isNewline })
         for (idx, raw) in lines.enumerated() {
@@ -397,17 +363,19 @@ final class GeoRelayDirectory {
     private func registerObservers() {
         let center = dependencies.notificationCenter
 
-        let torReady = center.addObserver(
-            forName: .TorDidBecomeReady,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            guard let self else { return }
-            Task { @MainActor in
-                self.prefetchIfNeeded(force: true)
+        if let torReadyName = dependencies.torReadyNotificationName {
+            let torReady = center.addObserver(
+                forName: torReadyName,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                guard let self else { return }
+                Task { @MainActor in
+                    self.prefetchIfNeeded(force: true)
+                }
             }
+            cleanupState.observers.append(torReady)
         }
-        cleanupState.observers.append(torReady)
 
         if let activeNotificationName = dependencies.activeNotificationName {
             let didBecomeActive = center.addObserver(
@@ -439,17 +407,49 @@ final class GeoRelayDirectory {
         RunLoop.main.add(timer, forMode: .common)
     }
 
-    var debugRetryAttempt: Int { retryAttempt }
-    var debugHasRetryTask: Bool { cleanupState.retryTask != nil }
-    var debugObserverCount: Int { cleanupState.observers.count }
+    public var debugRetryAttempt: Int { retryAttempt }
+    public var debugHasRetryTask: Bool { cleanupState.retryTask != nil }
+    public var debugObserverCount: Int { cleanupState.observers.count }
 }
 
 // MARK: - Distance
 private func haversineKm(_ lat1: Double, _ lon1: Double, _ lat2: Double, _ lon2: Double) -> Double {
-    let r = 6371.0 // Earth radius in km
+    let r = 6371.0
     let dLat = (lat2 - lat1) * .pi / 180
     let dLon = (lon2 - lon1) * .pi / 180
     let a = sin(dLat/2) * sin(dLat/2) + cos(lat1 * .pi/180) * cos(lat2 * .pi/180) * sin(dLon/2) * sin(dLon/2)
     let c = 2 * atan2(sqrt(a), sqrt(1 - a))
     return r * c
+}
+
+// MARK: - Geohash decode (inline to avoid external dependency)
+
+private let geohashBase32Map: [Character: Int] = {
+    let chars = Array("0123456789bcdefghjkmnpqrstuvwxyz")
+    var map: [Character: Int] = [:]
+    for (i, c) in chars.enumerated() { map[c] = i }
+    return map
+}()
+
+private func decodeGeohashCenter(_ geohash: String) -> (lat: Double, lon: Double) {
+    var latInterval: (Double, Double) = (-90.0, 90.0)
+    var lonInterval: (Double, Double) = (-180.0, 180.0)
+
+    var isEven = true
+    for ch in geohash.lowercased() {
+        guard let cd = geohashBase32Map[ch] else { continue }
+        for mask in [16, 8, 4, 2, 1] {
+            if isEven {
+                let mid = (lonInterval.0 + lonInterval.1) / 2
+                if (cd & mask) != 0 { lonInterval.0 = mid } else { lonInterval.1 = mid }
+            } else {
+                let mid = (latInterval.0 + latInterval.1) / 2
+                if (cd & mask) != 0 { latInterval.0 = mid } else { latInterval.1 = mid }
+            }
+            isEven.toggle()
+        }
+    }
+    let lat = (latInterval.0 + latInterval.1) / 2
+    let lon = (lonInterval.0 + lonInterval.1) / 2
+    return (lat, lon)
 }
