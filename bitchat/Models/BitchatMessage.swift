@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import BitFoundation
 
 /// Represents a user-visible message in the BitChat system.
 /// Handles both broadcast messages and private encrypted messages,

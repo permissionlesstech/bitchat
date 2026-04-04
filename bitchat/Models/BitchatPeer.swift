@@ -1,5 +1,6 @@
 import Foundation
 import CoreBluetooth
+import BitFoundation
 
 /// Represents a peer in the BitChat network with all associated metadata
 struct BitchatPeer: Equatable {

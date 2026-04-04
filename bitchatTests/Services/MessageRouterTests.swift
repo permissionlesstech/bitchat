@@ -7,6 +7,7 @@
 
 import Testing
 import Foundation
+import BitFoundation
 @testable import bitchat
 
 struct MessageRouterTests {

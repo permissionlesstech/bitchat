@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import BitFoundation
 
 /// The core packet structure for all BitChat protocol messages.
 /// Encapsulates all data needed for routing through the mesh network,
