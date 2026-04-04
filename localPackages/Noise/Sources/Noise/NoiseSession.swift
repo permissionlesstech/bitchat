@@ -11,10 +11,10 @@ import Foundation
 import CryptoKit
 import BitFoundation
 
-class NoiseSession {
+public class NoiseSession {
     let peerID: PeerID
     let role: NoiseRole
-    private let keychain: KeychainManagerProtocol
+    private let keychain: SecureMemoryCleaner
     private var state: NoiseSessionState = .uninitialized
     private var handshakeState: NoiseHandshakeState?
     private var sendCipher: NoiseCipherState?
@@ -34,7 +34,7 @@ class NoiseSession {
     init(
         peerID: PeerID,
         role: NoiseRole,
-        keychain: KeychainManagerProtocol,
+        keychain: SecureMemoryCleaner,
         localStaticKey: Curve25519.KeyAgreement.PrivateKey,
         remoteStaticKey: Curve25519.KeyAgreement.PublicKey? = nil
     ) {
@@ -182,7 +182,7 @@ class NoiseSession {
         }
     }
     
-    func isEstablished() -> Bool {
+    public func isEstablished() -> Bool {
         return sessionQueue.sync {
             if case .established = state {
                 return true
@@ -217,8 +217,8 @@ class NoiseSession {
             sentHandshakeMessages.removeAll()
             
             // Clear handshake hash
-            if var hash = handshakeHash {
-                keychain.secureClear(&hash)
+            if handshakeHash != nil {
+                keychain.secureClear(&handshakeHash!)
             }
             handshakeHash = nil
             

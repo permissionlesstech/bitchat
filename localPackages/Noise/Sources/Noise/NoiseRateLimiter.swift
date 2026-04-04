@@ -10,7 +10,7 @@ import BitLogger
 import BitFoundation
 import Foundation
 
-final class NoiseRateLimiter {
+public final class NoiseRateLimiter {
     private var handshakeTimestamps: [PeerID: [Date]] = [:]
     private var messageTimestamps: [PeerID: [Date]] = [:]
     
@@ -19,8 +19,10 @@ final class NoiseRateLimiter {
     private var globalMessageTimestamps: [Date] = []
     
     private let queue = DispatchQueue(label: "chat.bitchat.noise.ratelimit", attributes: .concurrent)
-    
-    func allowHandshake(from peerID: PeerID) -> Bool {
+
+    public init() {}
+
+    public func allowHandshake(from peerID: PeerID) -> Bool {
         return queue.sync(flags: .barrier) {
             let now = Date()
             let oneMinuteAgo = now.addingTimeInterval(-60)
@@ -49,7 +51,7 @@ final class NoiseRateLimiter {
         }
     }
     
-    func allowMessage(from peerID: PeerID) -> Bool {
+    public func allowMessage(from peerID: PeerID) -> Bool {
         return queue.sync(flags: .barrier) {
             let now = Date()
             let oneSecondAgo = now.addingTimeInterval(-1)
@@ -85,7 +87,7 @@ final class NoiseRateLimiter {
         }
     }
 
-    func resetAll() {
+    public func resetAll() {
         queue.async(flags: .barrier) {
             self.handshakeTimestamps.removeAll()
             self.messageTimestamps.removeAll()

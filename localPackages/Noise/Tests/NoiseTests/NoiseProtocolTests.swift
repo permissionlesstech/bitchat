@@ -10,7 +10,7 @@ import CryptoKit
 import Foundation
 import Testing
 import BitFoundation
-@testable import bitchat
+@testable import Noise
 
 // MARK: - Test Vector Support
 
@@ -613,9 +613,7 @@ struct NoiseProtocolTests {
     
     private func loadTestVectors() throws -> [NoiseTestVector] {
         // Try to load from test bundle
-        let testBundle = Bundle(for: MockKeychain.self)
-        guard let url = testBundle.url(forResource: "NoiseTestVectors", withExtension: "json")
-        else {
+        guard let url = Bundle.module.url(forResource: "NoiseTestVectors", withExtension: "json") else {
             throw NSError(
                 domain: "NoiseTests", code: 1,
                 userInfo: [
@@ -794,7 +792,7 @@ struct NoiseProtocolTests {
 
     @Test func secureClearCalledDuringHandshake() throws {
         // Use TrackingMockKeychain to verify secureClear is called
-        let trackingKeychain = TrackingMockKeychain()
+        let trackingKeychain = MockKeychain()
 
         let aliceKey = Curve25519.KeyAgreement.PrivateKey()
         let bobKey = Curve25519.KeyAgreement.PrivateKey()
@@ -843,7 +841,7 @@ struct NoiseProtocolTests {
 
     @Test func encryptionWorksAfterSecureClear() throws {
         // Verify that encryption/decryption still works correctly after adding secureClear
-        let trackingKeychain = TrackingMockKeychain()
+        let trackingKeychain = MockKeychain()
 
         let aliceKey = Curve25519.KeyAgreement.PrivateKey()
         let bobKey = Curve25519.KeyAgreement.PrivateKey()
@@ -900,8 +898,8 @@ struct NoiseProtocolTests {
         // Verify secureClear is called in both writeMessage and readMessage paths
         // We do this by checking the count increases at each step
 
-        let aliceKeychain = TrackingMockKeychain()
-        let bobKeychain = TrackingMockKeychain()
+        let aliceKeychain = MockKeychain()
+        let bobKeychain = MockKeychain()
 
         let aliceKey = Curve25519.KeyAgreement.PrivateKey()
         let bobKey = Curve25519.KeyAgreement.PrivateKey()
