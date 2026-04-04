@@ -109,7 +109,7 @@ struct NostrProtocol {
         teleported: Bool = false
     ) throws -> NostrEvent {
         var tags = [["g", geohash]]
-        if let nickname = nickname?.trimmingCharacters(in: .whitespacesAndNewlines), !nickname.isEmpty {
+        if let nickname = nickname?.trimmedOrNilIfEmpty {
             tags.append(["n", nickname])
         }
         if teleported {
@@ -152,7 +152,7 @@ struct NostrProtocol {
         nickname: String? = nil
     ) throws -> NostrEvent {
         var tags = [["g", geohash]]
-        if let nickname = nickname?.trimmingCharacters(in: .whitespacesAndNewlines), !nickname.isEmpty {
+        if let nickname = nickname?.trimmedOrNilIfEmpty {
             tags.append(["n", nickname])
         }
         let event = NostrEvent(

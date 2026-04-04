@@ -42,9 +42,11 @@ extension BitchatMessage {
         guard let baseDirectory = Cache.shared.filesDir else { return nil }
 
         func url(for category: MimeType.Category) -> URL? {
-            guard content.hasPrefix(category.messagePrefix) else { return nil }
-            let filename = String(content.dropFirst(category.messagePrefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !filename.isEmpty else { return nil }
+            guard content.hasPrefix(category.messagePrefix),
+                  let filename = String(content.dropFirst(category.messagePrefix.count)).trimmedOrNilIfEmpty
+            else {
+                return nil
+            }
 
             // Check outgoing first for sent messages, incoming for received
             let subdir = sender == nickname ? "\(category.mediaDir)/outgoing" : "\(category.mediaDir)/incoming"

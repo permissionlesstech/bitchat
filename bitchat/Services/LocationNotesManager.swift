@@ -63,7 +63,7 @@ final class LocationNotesManager: ObservableObject {
 
         var displayName: String {
             let suffix = String(pubkey.suffix(4))
-            if let nick = nickname, !nick.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if let nick = nickname?.trimmedOrNilIfEmpty {
                 return "\(nick)#\(suffix)"
             }
             return "anon#\(suffix)"
@@ -199,8 +199,7 @@ final class LocationNotesManager: ObservableObject {
 
     /// Send a location note for the current geohash using the per-geohash identity.
     func send(content: String, nickname: String) {
-        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard let trimmed = content.trimmedOrNilIfEmpty else { return }
         let relays = dependencies.relayLookup(geohash, TransportConfig.nostrGeoRelayCount)
         guard !relays.isEmpty else {
             state = .noRelays

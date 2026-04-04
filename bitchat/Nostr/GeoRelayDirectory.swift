@@ -377,10 +377,9 @@ final class GeoRelayDirectory {
         var result: Set<Entry> = []
         let lines = text.split(whereSeparator: { $0.isNewline })
         for (idx, raw) in lines.enumerated() {
-            let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            if line.isEmpty { continue }
+            guard let line = raw.trimmedOrNilIfEmpty else { continue }
             if idx == 0 && line.lowercased().contains("relay url") { continue }
-            let parts = line.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }
+            let parts = line.split(separator: ",").map { $0.trimmed }
             guard parts.count >= 3 else { continue }
             var host = parts[0]
             host = host.replacingOccurrences(of: "https://", with: "")

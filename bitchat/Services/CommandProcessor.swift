@@ -166,7 +166,7 @@ final class CommandProcessor {
     }
     
     private func handleEmote(_ args: String, command: String, action: String, emoji: String, suffix: String = "") -> CommandResult {
-        let targetName = args.trimmingCharacters(in: .whitespaces)
+        let targetName = args.trimmed
         guard !targetName.isEmpty else {
             return .error(message: "usage: /\(command) <nickname>")
         }
@@ -209,7 +209,7 @@ final class CommandProcessor {
     }
     
     private func handleBlock(_ args: String) -> CommandResult {
-        let targetName = args.trimmingCharacters(in: .whitespaces)
+        let targetName = args.trimmed
         
         if targetName.isEmpty {
             // List blocked users (mesh) and geohash (Nostr) blocks
@@ -284,7 +284,7 @@ final class CommandProcessor {
     }
     
     private func handleUnblock(_ args: String) -> CommandResult {
-        let targetName = args.trimmingCharacters(in: .whitespaces)
+        let targetName = args.trimmed
         guard !targetName.isEmpty else {
             return .error(message: "usage: /unblock <nickname>")
         }
@@ -311,7 +311,7 @@ final class CommandProcessor {
     }
     
     private func handleFavorite(_ args: String, add: Bool) -> CommandResult {
-        let targetName = args.trimmingCharacters(in: .whitespaces)
+        let targetName = args.trimmed
         guard !targetName.isEmpty else {
             return .error(message: "usage: /\(add ? "fav" : "unfav") <nickname>")
         }
