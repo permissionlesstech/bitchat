@@ -15,6 +15,7 @@ import AppKit
 #endif
 import UniformTypeIdentifiers
 import BitLogger
+import BitFoundation
 
 /// On macOS 14+, disables the default system focus ring on TextFields.
 /// On earlier macOS versions and on iOS this is a no-op.

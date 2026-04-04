@@ -8,6 +8,7 @@
 import Testing
 import CryptoKit
 import Foundation
+import BitFoundation
 @testable import bitchat
 
 struct NostrProtocolTests {

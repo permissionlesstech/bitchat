@@ -5,6 +5,7 @@
 //  Created by Islam on 30/03/2026.
 //
 
+import BitFoundation
 import SwiftUI
 
 private struct MessageDisplayItem: Identifiable {

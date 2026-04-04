@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import BitFoundation
 @testable import bitchat
 
 final class MockBLEBus {

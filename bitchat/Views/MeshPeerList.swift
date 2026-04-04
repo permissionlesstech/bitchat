@@ -1,4 +1,5 @@
 import SwiftUI
+import BitFoundation
 
 struct MeshPeerList: View {
     @ObservedObject var viewModel: ChatViewModel

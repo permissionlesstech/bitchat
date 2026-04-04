@@ -19,6 +19,8 @@ jobs:
             path: .
           - name: BitLogger
             path: localPackages/BitLogger
+          - name: BitFoundation
+            path: localPackages/BitFoundation
 
     steps:
       - name: Checkout code
