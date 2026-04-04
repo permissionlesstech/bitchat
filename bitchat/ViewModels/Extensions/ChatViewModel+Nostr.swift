@@ -44,7 +44,7 @@ extension ChatViewModel {
         if let dmSub = geoDmSubscriptionID {
             NostrRelayManager.shared.unsubscribe(id: dmSub); geoDmSubscriptionID = nil
         }
-        
+
         if let id = try? idBridge.deriveIdentity(forGeohash: ch.geohash) {
             let dmSub = "geo-dm-\(ch.geohash)"
             geoDmSubscriptionID = dmSub
@@ -54,10 +54,10 @@ extension ChatViewModel {
             }
         }
     }
-    
+
     func subscribeNostrEvent(_ event: NostrEvent) {
         guard event.isValidSignature() else { return }
-        guard (event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue || 
+        guard (event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue ||
                event.kind == NostrProtocol.EventKind.geohashPresence.rawValue),
               !deduplicationService.hasProcessedNostrEvent(event.id)
         else {
@@ -65,7 +65,7 @@ extension ChatViewModel {
         }
 
         deduplicationService.recordNostrEvent(event.id)
-        
+
         if let gh = currentGeohash,
            let myGeoIdentity = try? idBridge.deriveIdentity(forGeohash: gh),
            myGeoIdentity.publicKeyHex.lowercased() == event.pubkey.lowercased() {
@@ -75,29 +75,29 @@ extension ChatViewModel {
                 return
             }
         }
-        
+
         if let nickTag = event.tags.first(where: { $0.first == "n" }), nickTag.count >= 2 {
             let nick = nickTag[1].trimmed
             geoNicknames[event.pubkey.lowercased()] = nick
         }
-        
+
         // Store mapping for geohash sender IDs used in messages (ensures consistent colors)
         nostrKeyMapping[PeerID(nostr_: event.pubkey)] = event.pubkey
         nostrKeyMapping[PeerID(nostr: event.pubkey)] = event.pubkey
 
         // Update participants last-seen for this pubkey
         participantTracker.recordParticipant(pubkeyHex: event.pubkey)
-        
+
         // If presence heartbeat (Kind 20001), stop here - no content to display
         if event.kind == NostrProtocol.EventKind.geohashPresence.rawValue {
             return
         }
-        
+
         // Track teleported tag (only our format ["t","teleport"]) for icon state
         let hasTeleportTag = event.tags.contains(where: { tag in
             tag.count >= 2 && tag[0].lowercased() == "t" && tag[1].lowercased() == "teleport"
         })
-        
+
         if hasTeleportTag {
             let key = event.pubkey.lowercased()
             // Do not mark our own key from historical events; rely on manager.teleported for self
@@ -113,7 +113,7 @@ extension ChatViewModel {
                 }
             }
         }
-        
+
         let senderName = displayNameForNostrPubkey(event.pubkey)
         let content = event.content.trimmed
 
@@ -150,7 +150,7 @@ extension ChatViewModel {
         guard giftWrap.isValidSignature() else { return }
         guard !deduplicationService.hasProcessedNostrEvent(giftWrap.id) else { return }
         deduplicationService.recordNostrEvent(giftWrap.id)
-        
+
         guard let (content, senderPubkey, rumorTs) = try? NostrProtocol.decryptPrivateMessage(giftWrap: giftWrap, recipientIdentity: id),
               let packet = Self.decodeEmbeddedBitChatPacket(from: content),
               packet.type == MessageType.noiseEncrypted.rawValue,
@@ -158,11 +158,11 @@ extension ChatViewModel {
         else {
             return
         }
-        
+
         let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTs))
         let convKey = PeerID(nostr_: senderPubkey)
         nostrKeyMapping[convKey] = senderPubkey
-        
+
         switch noisePayload.type {
         case .privateMessage:
             handlePrivateMessage(noisePayload, senderPubkey: senderPubkey, convKey: convKey, id: id, messageTimestamp: messageTimestamp)
@@ -182,10 +182,10 @@ extension ChatViewModel {
     func switchLocationChannel(to channel: ChannelID) {
         // Reset pending public batches to avoid cross-channel bleed
         publicMessagePipeline.reset()
-        
+
         activeChannel = channel
         publicMessagePipeline.updateActiveChannel(channel)
-        
+
         // Reset deduplication set and optionally hydrate timeline for mesh
         deduplicationService.clearNostrCaches()
         switch channel {
@@ -225,7 +225,7 @@ extension ChatViewModel {
         guard case .location(let ch) = channel else { return }
         currentGeohash = ch.geohash
         participantTracker.setActiveGeohash(ch.geohash)
-        
+
         // Ensure self appears immediately in the people list; mark teleported state only when truly teleported
         if let id = try? idBridge.deriveIdentity(forGeohash: ch.geohash) {
             participantTracker.recordParticipant(pubkeyHex: id.publicKeyHex)
@@ -239,7 +239,7 @@ extension ChatViewModel {
                 teleportedGeo.remove(key)
             }
         }
-        
+
         let subID = "geo-\(ch.geohash)"
         geoSubscriptionID = subID
         participantTracker.startRefreshTimer()
@@ -252,31 +252,31 @@ extension ChatViewModel {
 
         subscribeToGeoChat(ch)
     }
-    
+
     func handleNostrEvent(_ event: NostrEvent) {
         guard event.isValidSignature() else { return }
         // Only handle ephemeral kind 20000 or presence kind 20001 with matching tag
         guard (event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue ||
                event.kind == NostrProtocol.EventKind.geohashPresence.rawValue) else { return }
-        
+
         // Deduplicate
         if deduplicationService.hasProcessedNostrEvent(event.id) { return }
         deduplicationService.recordNostrEvent(event.id)
-        
+
         // Log incoming tags for diagnostics
         let tagSummary = event.tags.map { "[" + $0.joined(separator: ",") + "]" }.joined(separator: ",")
         SecureLogger.debug("GeoTeleport: recv pub=\(event.pubkey.prefix(8))… tags=\(tagSummary)", category: .session)
-        
+
         // If this pubkey is blocked, skip mapping, participants, and timeline
         if identityManager.isNostrBlocked(pubkeyHexLowercased: event.pubkey) {
             return
         }
-        
+
         // Track teleport tag for participants – only our format ["t", "teleport"]
         let hasTeleportTag: Bool = event.tags.contains { tag in
             tag.count >= 2 && tag[0].lowercased() == "t" && tag[1].lowercased() == "teleport"
         }
-        
+
         let isSelf: Bool = {
             if let gh = currentGeohash, let my = try? idBridge.deriveIdentity(forGeohash: gh) {
                 return my.publicKeyHex.lowercased() == event.pubkey.lowercased()
@@ -294,7 +294,7 @@ extension ChatViewModel {
                 }
             }
         }
-        
+
         // Update participants last-seen for this pubkey
         participantTracker.recordParticipant(pubkeyHex: event.pubkey)
 
@@ -305,24 +305,24 @@ extension ChatViewModel {
                 return
             }
         }
-        
+
         // Cache nickname from tag if present
         if let nickTag = event.tags.first(where: { $0.first == "n" }), nickTag.count >= 2 {
             geoNicknames[event.pubkey.lowercased()] = nickTag[1].trimmed
         }
-        
+
         // Store mapping for geohash DM initiation
         nostrKeyMapping[PeerID(nostr_: event.pubkey)] = event.pubkey
         nostrKeyMapping[PeerID(nostr: event.pubkey)] = event.pubkey
-        
+
         // If presence heartbeat (Kind 20001), stop here - no content to display
         if event.kind == NostrProtocol.EventKind.geohashPresence.rawValue {
             return
         }
-        
+
         let senderName = displayNameForNostrPubkey(event.pubkey)
         let content = event.content
-        
+
         // If this is a teleport presence event (no content), don't add to timeline
         if let teleTag = event.tags.first(where: { $0.first == "t" }),
            teleTag.count >= 2,
@@ -330,7 +330,7 @@ extension ChatViewModel {
            content.trimmed.isEmpty {
             return
         }
-        
+
         // Clamp future timestamps
         let rawTs = Date(timeIntervalSince1970: TimeInterval(event.created_at))
         let mentions = parseMentions(from: content)
@@ -343,18 +343,18 @@ extension ChatViewModel {
             senderPeerID: PeerID(nostr: event.pubkey),
             mentions: mentions.isEmpty ? nil : mentions
         )
-        
+
         Task { @MainActor in
             handlePublicMessage(msg)
             checkForMentions(msg)
             sendHapticFeedback(for: msg)
         }
     }
-    
+
     @MainActor
     func subscribeToGeoChat(_ ch: GeohashChannel) {
         guard let id = try? idBridge.deriveIdentity(forGeohash: ch.geohash) else { return }
-        
+
         let dmSub = "geo-dm-\(ch.geohash)"
         geoDmSubscriptionID = dmSub
         // pared back logging: subscribe debug only
@@ -367,32 +367,32 @@ extension ChatViewModel {
             self?.handleGiftWrap(giftWrap, id: id)
         }
     }
-    
+
     func handleGiftWrap(_ giftWrap: NostrEvent, id: NostrIdentity) {
         guard giftWrap.isValidSignature() else { return }
         if deduplicationService.hasProcessedNostrEvent(giftWrap.id) {
             return
         }
         deduplicationService.recordNostrEvent(giftWrap.id)
-        
+
         // Decrypt with per-geohash identity
         guard let (content, senderPubkey, rumorTs) = try? NostrProtocol.decryptPrivateMessage(giftWrap: giftWrap, recipientIdentity: id) else {
             SecureLogger.warning("GeoDM: failed decrypt giftWrap id=\(giftWrap.id.prefix(8))…", category: .session)
             return
         }
-        
+
         SecureLogger.debug("GeoDM: decrypted gift-wrap id=\(giftWrap.id.prefix(16))... from=\(senderPubkey.prefix(8))...", category: .session)
-        
+
         guard let packet = Self.decodeEmbeddedBitChatPacket(from: content),
               packet.type == MessageType.noiseEncrypted.rawValue,
               let payload = NoisePayload.decode(packet.payload)
         else {
             return
         }
-        
+
         let convKey = PeerID(nostr_: senderPubkey)
         nostrKeyMapping[convKey] = senderPubkey
-        
+
         switch payload.type {
         case .privateMessage:
             let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTs))
@@ -401,7 +401,7 @@ extension ChatViewModel {
             handleDelivered(payload, senderPubkey: senderPubkey, convKey: convKey)
         case .readReceipt:
             handleReadReceipt(payload, senderPubkey: senderPubkey, convKey: convKey)
-        
+
         // Explicitly list other cases so we get compile-time check if a new case is added in the future
         case .verifyChallenge, .verifyResponse:
             break
@@ -469,7 +469,7 @@ extension ChatViewModel {
             subscribe(gh)
         }
     }
-    
+
     @MainActor
     func subscribe(_ gh: String) {
         let subID = "geo-sample-\(gh)"
@@ -484,7 +484,7 @@ extension ChatViewModel {
             self?.subscribeNostrEvent(event, gh: gh)
         }
     }
-    
+
     func subscribeNostrEvent(_ event: NostrEvent, gh: String) {
         guard event.isValidSignature() else { return }
         guard (event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue ||
@@ -495,23 +495,23 @@ extension ChatViewModel {
 
         // Update participants for this specific geohash
         participantTracker.recordParticipant(pubkeyHex: event.pubkey, geohash: gh)
-        
+
         // Notify only on rising-edge: previously zero people, now someone sends a chat
         guard let content = event.content.trimmedOrNilIfEmpty else { return }
 
         // Respect geohash blocks
         if identityManager.isNostrBlocked(pubkeyHexLowercased: event.pubkey.lowercased()) { return }
-        
+
         // Skip self identity for this geohash
         if let my = try? idBridge.deriveIdentity(forGeohash: gh), my.publicKeyHex.lowercased() == event.pubkey.lowercased() { return }
-        
+
         // Only trigger when there were zero participants in this geohash recently
         guard existingCount == 0 else { return }
-        
+
         // Avoid notifications for old sampled events when launching or (re)subscribing
         let eventTime = Date(timeIntervalSince1970: TimeInterval(event.created_at))
         if Date().timeIntervalSince(eventTime) > 30 { return }
-        
+
         // Foreground-only notifications: app must be active, and not already viewing this geohash
         #if os(iOS)
         guard UIApplication.shared.applicationState == .active else { return }
@@ -520,15 +520,15 @@ extension ChatViewModel {
         guard NSApplication.shared.isActive else { return }
         if case .location(let ch) = activeChannel, ch.geohash == gh { return }
         #endif
-        
+
         cooldownPerGeohash(gh, content: content, event: event)
     }
-    
+
     func cooldownPerGeohash(_ gh: String, content: String, event: NostrEvent) {
         let now = Date()
         let last = lastGeoNotificationAt[gh] ?? .distantPast
         if now.timeIntervalSince(last) < TransportConfig.uiGeoNotifyCooldownSeconds { return }
-        
+
         // Compose a short preview
         let preview: String = {
             let maxLen = TransportConfig.uiGeoNotifySnippetMaxLen
@@ -543,7 +543,7 @@ extension ChatViewModel {
             let senderSuffix = String(event.pubkey.suffix(4))
             let nick = geoNicknames[event.pubkey.lowercased()]
             let senderName = (nick?.isEmpty == false ? nick! : "anon") + "#" + senderSuffix
-            
+
             // Clamp future timestamps
             let rawTs = Date(timeIntervalSince1970: TimeInterval(event.created_at))
             let ts = min(rawTs, Date())
@@ -577,68 +577,68 @@ extension ChatViewModel {
             SecureLogger.warning("⚠️ No Nostr identity available for message handling", category: .session)
             return
         }
-        
+
         SecureLogger.debug("🔑 Setting up Nostr subscription for pubkey: \(currentIdentity.publicKeyHex.prefix(16))...", category: .session)
-        
+
         // Subscribe to Nostr messages
         let filter = NostrFilter.giftWrapsFor(
             pubkey: currentIdentity.publicKeyHex,
             since: Date().addingTimeInterval(-TransportConfig.nostrDMSubscribeLookbackSeconds)  // Last 24 hours
         )
-        
+
         nostrRelayManager?.subscribe(filter: filter, id: "chat-messages") { [weak self] event in
             self?.handleNostrMessage(event)
         }
     }
-    
+
     func handleNostrMessage(_ giftWrap: NostrEvent) {
         // Deduplicate messages by ID
         if deduplicationService.hasProcessedNostrEvent(giftWrap.id) { return }
         deduplicationService.recordNostrEvent(giftWrap.id)
-        
+
         // Ensure we're on a background queue for decryption
         Task.detached(priority: .userInitiated) { [weak self] in
             await self?.processNostrMessage(giftWrap)
         }
     }
-    
+
     func processNostrMessage(_ giftWrap: NostrEvent) async {
         guard giftWrap.isValidSignature() else { return }
         guard let currentIdentity = try? idBridge.getCurrentNostrIdentity() else { return }
-        
+
         do {
             let (content, senderPubkey, rumorTimestamp) = try NostrProtocol.decryptPrivateMessage(
                 giftWrap: giftWrap,
                 recipientIdentity: currentIdentity
             )
-            
+
             // Handle verification payloads first
             if content.hasPrefix("verify:") {
                 // Ignore verification payloads arriving via Nostr path for now
                 // Verification should ideally happen over mesh for security binding
                 return
             }
-            
+
             // Check if it's a BitChat packet embedded in the content (bitchat1:...)
             if content.hasPrefix("bitchat1:") {
                 guard let packet = Self.decodeEmbeddedBitChatPacket(from: content) else {
                     SecureLogger.error("Failed to decode embedded BitChat packet from Nostr DM", category: .session)
                     return
                 }
-                
+
                 // Map sender by Nostr pubkey to Noise key when possible
                 let actualSenderNoiseKey = findNoiseKey(for: senderPubkey)
-                
+
                 // Stable target ID if we know Noise key; otherwise temporary Nostr-based peer
                 let targetPeerID = PeerID(str: actualSenderNoiseKey?.hexEncodedString()) ?? PeerID(nostr_: senderPubkey)
-                
+
                 if packet.type == MessageType.noiseEncrypted.rawValue,
                    let payload = NoisePayload.decode(packet.payload) {
                     let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTimestamp))
                     // Store Nostr mapping
                     await MainActor.run {
                         nostrKeyMapping[targetPeerID] = senderPubkey
-                        
+
                         // Handle packet types
                         switch payload.type {
                         case .privateMessage:
@@ -664,7 +664,7 @@ extension ChatViewModel {
         // Check favorites for this Nostr key
         let favorites = FavoritesPersistenceService.shared.favorites.values
         var npubToMatch = nostrPubkey
-        
+
         // Convert hex to npub if needed for comparison
         if !nostrPubkey.hasPrefix("npub") {
             if let pubkeyData = Data(hexString: nostrPubkey),
@@ -674,7 +674,7 @@ extension ChatViewModel {
                 SecureLogger.warning("⚠️ Invalid hex public key format or encoding failed: \(nostrPubkey.prefix(16))...", category: .session)
             }
         }
-        
+
         for relationship in favorites {
             // Search through favorites for matching Nostr pubkey
             if let storedNostrKey = relationship.peerNostrPublicKey {
@@ -683,7 +683,7 @@ extension ChatViewModel {
                     // SecureLogger.debug("✅ Found Noise key for Nostr sender (npub match)", category: .session)
                     return relationship.peerNoisePublicKey
                 }
-                
+
                 // Also try comparing raw hex if stored key is hex
                 if !storedNostrKey.hasPrefix("npub") && storedNostrKey == nostrPubkey {
                     SecureLogger.debug("✅ Found Noise key for Nostr sender (hex match)", category: .session)
@@ -691,7 +691,7 @@ extension ChatViewModel {
                 }
             }
         }
-        
+
         SecureLogger.debug("⚠️ No matching Noise key found for Nostr pubkey: \(nostrPubkey.prefix(16))... (tried npub: \(npubToMatch.prefix(16))...)", category: .session)
         return nil
     }
@@ -713,7 +713,7 @@ extension ChatViewModel {
             nt.sendDeliveryAckGeohash(for: message.id, toRecipientHex: senderPubkey, from: id)
             SecureLogger.debug("Sent DELIVERED ack directly to Nostr pub=\(senderPubkey.prefix(8))… for mid=\(message.id.prefix(8))…", category: .session)
         }
-        
+
         // Same for READ receipt if viewing
         if !wasReadBefore && selectedPrivateChatPeer == message.senderPeerID {
              if key != nil {
@@ -734,10 +734,10 @@ extension ChatViewModel {
     func handleFavoriteNotification(content: String, from nostrPubkey: String) {
         // Try to find Noise key associated with this Nostr pubkey
         guard let senderNoiseKey = findNoiseKey(for: nostrPubkey) else { return }
-        
+
         let isFavorite = content.contains("FAVORITE:TRUE")
         let senderNickname = content.components(separatedBy: "|").last ?? "Unknown"
-        
+
         // Update favorite status
         if isFavorite {
             FavoritesPersistenceService.shared.addFavorite(
@@ -750,7 +750,7 @@ extension ChatViewModel {
             // Logic handled by persistence service usually, here we just update remote state
             // Actually for now we just process the notification
         }
-        
+
         // Extract Nostr public key if included
         var extractedNostrPubkey: String? = nil
         if let range = content.range(of: "NPUB:") {
@@ -766,9 +766,9 @@ extension ChatViewModel {
                  extractedNostrPubkey = String(parts[2])
              }
         }
-        
+
         SecureLogger.info("📝 Received favorite notification from \(senderNickname): \(isFavorite)", category: .session)
-        
+
         // If they favorited us and provided their Nostr key, ensure it's stored
         if isFavorite && extractedNostrPubkey != nil {
             SecureLogger.info("💾 Storing Nostr key association for \(senderNickname): \(extractedNostrPubkey!.prefix(16))...", category: .session)
@@ -778,7 +778,7 @@ extension ChatViewModel {
                 peerNickname: senderNickname
             )
         }
-        
+
         // Show notification
         NotificationService.shared.sendLocalNotification(
             title: isFavorite ? "New Favorite" : "Favorite Removed",
@@ -794,9 +794,9 @@ extension ChatViewModel {
             SecureLogger.warning("⚠️ Cannot send favorite notification - no Nostr key for peer", category: .session)
             return
         }
-        
+
         let peerID = PeerID(hexData: noisePublicKey)
-        
+
         // Route via message router
         messageRouter.sendFavoriteNotification(to: peerID, isFavorite: isFavorite)
     }
@@ -829,17 +829,17 @@ extension ChatViewModel {
         }
         return nil
     }
-    
+
     func startGeohashDM(withPubkeyHex hex: String) {
         let convKey = PeerID(nostr_: hex)
         nostrKeyMapping[convKey] = hex
         startPrivateChat(with: convKey)
     }
-    
+
     func fullNostrHex(forSenderPeerID senderID: PeerID) -> String? {
         return nostrKeyMapping[senderID]
     }
-    
+
     func geohashDisplayName(for convKey: PeerID) -> String {
         guard let full = nostrKeyMapping[convKey] else {
             return convKey.bare

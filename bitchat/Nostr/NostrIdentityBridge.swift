@@ -17,7 +17,7 @@ final class NostrIdentityBridge {
     init(keychain: KeychainManagerProtocol = KeychainManager()) {
         self.keychain = keychain
     }
-    
+
     /// Get or create the current Nostr identity
     func getCurrentNostrIdentity() throws -> NostrIdentity? {
         // Check if we already have a Nostr identity
@@ -25,17 +25,17 @@ final class NostrIdentityBridge {
            let identity = try? JSONDecoder().decode(NostrIdentity.self, from: existingData) {
             return identity
         }
-        
+
         // Generate new Nostr identity
         let nostrIdentity = try NostrIdentity.generate()
-        
+
         // Store it
         let data = try JSONEncoder().encode(nostrIdentity)
         keychain.save(key: currentIdentityKey, data: data, service: keychainService, accessible: nil)
-        
+
         return nostrIdentity
     }
-    
+
     /// Associate a Nostr identity with a Noise public key (for favorites)
     func associateNostrIdentity(_ nostrPubkey: String, with noisePublicKey: Data) {
         let key = "nostr-noise-\(noisePublicKey.base64EncodedString())"
@@ -43,7 +43,7 @@ final class NostrIdentityBridge {
             keychain.save(key: key, data: data, service: keychainService, accessible: nil)
         }
     }
-    
+
     /// Get Nostr public key associated with a Noise public key
     func getNostrPublicKey(for noisePublicKey: Data) -> String? {
         let key = "nostr-noise-\(noisePublicKey.base64EncodedString())"
@@ -53,7 +53,7 @@ final class NostrIdentityBridge {
         }
         return pubkey
     }
-    
+
     /// Clear all Nostr identity associations and current identity
     func clearAllAssociations() {
         let query: [String: Any] = [

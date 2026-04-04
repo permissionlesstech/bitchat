@@ -132,7 +132,7 @@ struct BinaryProtocol {
     private static func lengthFieldSize(for version: UInt8) -> Int {
         return version == 2 ? 4 : 2
     }
-    
+
     struct Flags {
         static let hasRecipient: UInt8 = 0x01
         static let hasSignature: UInt8 = 0x02
@@ -140,7 +140,7 @@ struct BinaryProtocol {
         static let hasRoute: UInt8 = 0x08
         static let isRSR: UInt8 = 0x10
     }
-    
+
     // Encode BitchatPacket to binary format
     static func encode(_ packet: BitchatPacket, padding: Bool = true) -> Data? {
         let version = packet.version
@@ -162,7 +162,7 @@ struct BinaryProtocol {
         }
 
         let lengthFieldBytes = lengthFieldSize(for: version)
-        
+
         // Route is only supported for v2+ packets (per SOURCE_ROUTING.md spec)
         let originalRoute = (version >= 2) ? (packet.route ?? []) : []
         if originalRoute.contains(where: { $0.isEmpty }) { return nil }
@@ -207,7 +207,7 @@ struct BinaryProtocol {
         if hasRoute && version >= 2 { flags |= Flags.hasRoute }
         if packet.isRSR { flags |= Flags.isRSR }
         data.append(flags)
-        
+
         if version == 2 {
             let length = UInt32(payloadDataSize)
             for shift in stride(from: 24, through: 0, by: -8) {
@@ -264,7 +264,7 @@ struct BinaryProtocol {
         }
         return data
     }
-    
+
     // Decode binary data to BitchatPacket
     static func decode(_ data: Data) -> BitchatPacket? {
         // Try decode as-is first (robust when padding wasn't applied)
@@ -332,7 +332,7 @@ struct BinaryProtocol {
             // HAS_ROUTE is only valid for v2+ packets; ignore the flag for v1
             let hasRoute = (version >= 2) && (flags & Flags.hasRoute) != 0
             let isRSR = (flags & Flags.isRSR) != 0
-            
+
             let payloadLength: Int
             if version == 2 {
                 guard let len = read32() else { return nil }
