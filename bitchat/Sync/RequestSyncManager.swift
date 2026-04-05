@@ -17,14 +17,21 @@ final class RequestSyncManager {
     
     private let queue = DispatchQueue(label: "request.sync.manager", attributes: .concurrent)
     private var pendingRequests: [PeerID: TimeInterval] = [:]
+    private let responseWindow: TimeInterval
+    private let now: () -> TimeInterval
     
-    // Allow responses for 30s after request
-    private let responseWindow: TimeInterval = 30.0
+    init(
+        responseWindow: TimeInterval = 30.0,
+        now: @escaping () -> TimeInterval = { Date().timeIntervalSince1970 }
+    ) {
+        self.responseWindow = responseWindow
+        self.now = now
+    }
     
     /// Register that we are sending a sync request to a peer.
     /// - Parameter peerID: The peer we are requesting sync from
     func registerRequest(to peerID: PeerID) {
-        let now = Date().timeIntervalSince1970
+        let now = self.now()
         queue.async(flags: .barrier) {
             SecureLogger.debug("Registering sync request to \(peerID.id.prefix(8))…", category: .sync)
             self.pendingRequests[peerID] = now
@@ -46,7 +53,7 @@ final class RequestSyncManager {
                 return false
             }
             
-            let now = Date().timeIntervalSince1970
+            let now = self.now()
             if now - requestTime > responseWindow {
                 SecureLogger.warning("Received RSR packet from \(peerID.id.prefix(8))… outside of response window", category: .security)
                 // We don't remove here because we might receive multiple packets for one request
@@ -59,7 +66,7 @@ final class RequestSyncManager {
     
     /// Periodic cleanup of expired requests
     func cleanup() {
-        let now = Date().timeIntervalSince1970
+        let now = self.now()
         queue.async(flags: .barrier) {
             let originalCount = self.pendingRequests.count
             self.pendingRequests = self.pendingRequests.filter { _, timestamp in
@@ -70,5 +77,9 @@ final class RequestSyncManager {
                 SecureLogger.debug("Cleaned up \(removed) expired sync requests", category: .sync)
             }
         }
+    }
+
+    var debugPendingRequestCount: Int {
+        queue.sync { pendingRequests.count }
     }
 }

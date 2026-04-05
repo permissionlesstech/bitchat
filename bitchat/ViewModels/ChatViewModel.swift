@@ -144,10 +144,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
     private let networkResetGraceSeconds: TimeInterval = TransportConfig.networkResetGraceSeconds // avoid refiring on short drops/reconnects
     @Published var nickname: String = "" {
         didSet {
-            // Trim whitespace whenever nickname is set
-            let trimmed = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
+            // Trim whitespace whenever nickname is set; whitespace-only becomes ""
+            let trimmed = nickname.trimmedOrNilIfEmpty ?? ""
             if trimmed != nickname {
                 nickname = trimmed
+                return
             }
             // Update mesh service nickname if it's initialized
             if !meshService.myPeerID.isEmpty {
@@ -747,8 +748,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
     
     private func loadNickname() {
         if let savedNickname = userDefaults.string(forKey: nicknameKey) {
-            // Trim whitespace when loading
-            nickname = savedNickname.trimmingCharacters(in: .whitespacesAndNewlines)
+            nickname = savedNickname.trimmed
         } else {
             nickname = "anon\(Int.random(in: 1000...9999))"
             saveNickname()
@@ -764,20 +764,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
     }
     
     func validateAndSaveNickname() {
-        // Trim whitespace from nickname
-        let trimmed = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        // Check if nickname is empty after trimming
-        if trimmed.isEmpty {
-            nickname = "anon\(Int.random(in: 1000...9999))"
-        } else {
-            nickname = trimmed
-        }
+        nickname = nickname.trimmedOrNilIfEmpty ?? "anon\(Int.random(in: 1000...9999))"
         saveNickname()
     }
-    
-    // MARK: - Favorites Management
-    
+
     // MARK: - Blocked Users Management (Delegated to PeerStateManager)
     
     
@@ -998,8 +988,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
     @MainActor
     func sendMessage(_ content: String) {
         // Ignore messages that are empty or whitespace-only to prevent blank lines
-        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard let trimmed = content.trimmedOrNilIfEmpty else { return }
 
         // Check for commands
         if content.hasPrefix("/") {
@@ -3002,7 +2991,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
         Task { @MainActor in
             // Early validation
             guard !isMessageBlocked(message) else { return }
-            guard !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || message.isPrivate else { return }
+            guard !message.content.trimmed.isEmpty || message.isPrivate else { return }
             
             // Route to appropriate handler
             if message.isPrivate {
@@ -3175,7 +3164,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
 
     func didReceivePublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date, messageID: String?) {
         Task { @MainActor in
-            let normalized = content.trimmingCharacters(in: .whitespacesAndNewlines)
+            let normalized = content.trimmed
             let publicMentions = parseMentions(from: normalized)
             let msg = BitchatMessage(
                 id: messageID,
@@ -3783,10 +3772,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
         // Removed background nudge notification for generic "new chats!"
 
         // Append via batching buffer (skip empty content) with simple dedup by ID
-        if !finalMessage.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            if !messages.contains(where: { $0.id == finalMessage.id }) {
-                publicMessagePipeline.enqueue(finalMessage)
-            }
+        if !finalMessage.content.trimmed.isEmpty, !messages.contains(where: { $0.id == finalMessage.id }) {
+            publicMessagePipeline.enqueue(finalMessage)
         }
     }
     

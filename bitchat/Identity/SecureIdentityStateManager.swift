@@ -331,16 +331,15 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     
     func updateSocialIdentity(_ identity: SocialIdentity) {
         queue.async(flags: .barrier) {
+            let previousClaimedNickname = self.cache.socialIdentities[identity.fingerprint]?.claimedNickname
             self.cache.socialIdentities[identity.fingerprint] = identity
             
             // Update nickname index
-            if let existingIdentity = self.cache.socialIdentities[identity.fingerprint] {
-                // Remove old nickname from index if changed
-                if existingIdentity.claimedNickname != identity.claimedNickname {
-                    self.cache.nicknameIndex[existingIdentity.claimedNickname]?.remove(identity.fingerprint)
-                    if self.cache.nicknameIndex[existingIdentity.claimedNickname]?.isEmpty == true {
-                        self.cache.nicknameIndex.removeValue(forKey: existingIdentity.claimedNickname)
-                    }
+            if let previousClaimedNickname,
+               previousClaimedNickname != identity.claimedNickname {
+                self.cache.nicknameIndex[previousClaimedNickname]?.remove(identity.fingerprint)
+                if self.cache.nicknameIndex[previousClaimedNickname]?.isEmpty == true {
+                    self.cache.nicknameIndex.removeValue(forKey: previousClaimedNickname)
                 }
             }
             
@@ -531,5 +530,17 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
         queue.sync {
             return cache.verifiedFingerprints
         }
+    }
+
+    var debugNicknameIndex: [String: Set<String>] {
+        queue.sync { cache.nicknameIndex }
+    }
+
+    func debugEphemeralSession(for peerID: PeerID) -> EphemeralIdentity? {
+        queue.sync { ephemeralSessions[peerID] }
+    }
+
+    func debugLastInteraction(for fingerprint: String) -> Date? {
+        queue.sync { cache.lastInteractions[fingerprint] }
     }
 }

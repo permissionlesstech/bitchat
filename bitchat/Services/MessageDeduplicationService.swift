@@ -145,7 +145,7 @@ enum ContentNormalizer {
         }
 
         // Trim and collapse whitespace
-        let trimmed = simplified.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = simplified.trimmed
         let collapsed = trimmed.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
 
         // Take prefix and hash

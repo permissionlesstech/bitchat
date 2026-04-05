@@ -251,7 +251,8 @@ final class BLEService: NSObject {
     init(
         keychain: KeychainManagerProtocol,
         idBridge: NostrIdentityBridge,
-        identityManager: SecureIdentityStateManagerProtocol
+        identityManager: SecureIdentityStateManagerProtocol,
+        initializeBluetoothManagers: Bool = true
     ) {
         self.keychain = keychain
         self.idBridge = idBridge
@@ -294,22 +295,23 @@ final class BLEService: NSObject {
         // Tag BLE queue for re-entrancy detection
         bleQueue.setSpecific(key: bleQueueKey, value: ())
 
-        // Initialize BLE on background queue to prevent main thread blocking
-        // This prevents app freezes during BLE operations
-        #if os(iOS)
-        let centralOptions: [String: Any] = [
-            CBCentralManagerOptionRestoreIdentifierKey: BLEService.centralRestorationID
-        ]
-        centralManager = CBCentralManager(delegate: self, queue: bleQueue, options: centralOptions)
+        if initializeBluetoothManagers {
+            // Initialize BLE on background queue to prevent main thread blocking.
+            #if os(iOS)
+            let centralOptions: [String: Any] = [
+                CBCentralManagerOptionRestoreIdentifierKey: BLEService.centralRestorationID
+            ]
+            centralManager = CBCentralManager(delegate: self, queue: bleQueue, options: centralOptions)
 
-        let peripheralOptions: [String: Any] = [
-            CBPeripheralManagerOptionRestoreIdentifierKey: BLEService.peripheralRestorationID
-        ]
-        peripheralManager = CBPeripheralManager(delegate: self, queue: bleQueue, options: peripheralOptions)
-        #else
-        centralManager = CBCentralManager(delegate: self, queue: bleQueue)
-        peripheralManager = CBPeripheralManager(delegate: self, queue: bleQueue)
-        #endif
+            let peripheralOptions: [String: Any] = [
+                CBPeripheralManagerOptionRestoreIdentifierKey: BLEService.peripheralRestorationID
+            ]
+            peripheralManager = CBPeripheralManager(delegate: self, queue: bleQueue, options: peripheralOptions)
+            #else
+            centralManager = CBCentralManager(delegate: self, queue: bleQueue)
+            peripheralManager = CBPeripheralManager(delegate: self, queue: bleQueue)
+            #endif
+        }
         
         // Single maintenance timer for all periodic tasks (dispatch-based for determinism)
         let timer = DispatchSource.makeTimerSource(queue: bleQueue)
@@ -523,7 +525,7 @@ final class BLEService: NSObject {
     
     func stopServices() {
         // Send leave message synchronously to ensure delivery
-        let leavePacket = BitchatPacket(
+        var leavePacket = BitchatPacket(
             type: MessageType.leave.rawValue,
             senderID: myPeerIDData,
             recipientID: nil,
@@ -532,6 +534,10 @@ final class BLEService: NSObject {
             signature: nil,
             ttl: messageTTL
         )
+
+        if let signed = noiseService.signPacket(leavePacket) {
+            leavePacket = signed
+        }
 
         // Send immediately to all connected peers (synchronized access to BLE state)
         if let data = leavePacket.toBinaryData(padding: false) {
@@ -729,7 +735,7 @@ final class BLEService: NSObject {
                 return
             }
 
-            let packet = BitchatPacket(
+            var packet = BitchatPacket(
                 type: MessageType.fileTransfer.rawValue,
                 senderID: self.myPeerIDData,
                 recipientID: nil,
@@ -739,6 +745,13 @@ final class BLEService: NSObject {
                 ttl: self.messageTTL,
                 version: 2
             )
+
+            if let signed = self.noiseService.signPacket(packet) {
+                packet = signed
+            } else {
+                SecureLogger.error("❌ Failed to sign file broadcast packet", category: .security)
+                return
+            }
 
             let senderHex = packet.senderID.hexEncodedString()
             let dedupID = "\(senderHex)-\(packet.timestamp)-\(packet.type)"
@@ -1209,36 +1222,14 @@ final class BLEService: NSObject {
         // BCH-01-002: Enforce storage quota before saving
         enforceIncomingFilesQuota(reservingBytes: filePacket.content.count)
 
-        let fallbackExt = mime.defaultExtension
-        let subdirectory: String
-        switch mime.category {
-        case .audio:
-            subdirectory = "voicenotes/incoming"
-        case .image:
-            subdirectory = "images/incoming"
-        case .file:
-            subdirectory = "files/incoming"
-        }
-
         guard let destination = saveIncomingFile(
             data: filePacket.content,
             preferredName: filePacket.fileName,
-            subdirectory: subdirectory,
-            fallbackExtension: fallbackExt,
+            subdirectory: "\(mime.category.mediaDir)/incoming",
+            fallbackExtension: mime.defaultExtension,
             defaultPrefix: mime.category.rawValue
         ) else {
             return
-        }
-
-        let marker: String
-        let fileName = destination.lastPathComponent
-        switch mime.category {
-        case .audio:
-            marker = "[voice] \(fileName)"
-        case .image:
-            marker = "[image] \(fileName)"
-        case .file:
-            marker = "[file] \(fileName)"
         }
 
         let isPrivateMessage = PeerID(hexData: packet.recipientID) == myPeerID
@@ -1250,7 +1241,7 @@ final class BLEService: NSObject {
         let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
         let message = BitchatMessage(
             sender: senderNickname,
-            content: marker,
+            content: "\(mime.category.messagePrefix)\(destination.lastPathComponent)",
             timestamp: ts,
             isRelay: false,
             originalSender: nil,
@@ -1363,7 +1354,7 @@ final class BLEService: NSObject {
         let invalid = CharacterSet(charactersIn: "<>:\"|?*\0").union(.controlCharacters)
         candidate = candidate.components(separatedBy: invalid).joined(separator: "_")
 
-        candidate = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+        candidate = candidate.trimmed
         if candidate.isEmpty { candidate = defaultName }
 
         // Security: Reject dotfiles (hidden file attacks)

@@ -28,7 +28,8 @@ struct FragmentationTests {
         let ble = BLEService(
             keychain: mockKeychain,
             idBridge: idBridge,
-            identityManager: mockIdentityManager
+            identityManager: mockIdentityManager,
+            initializeBluetoothManagers: false
         )
         let capture = CaptureDelegate()
         ble.delegate = capture
@@ -63,7 +64,8 @@ struct FragmentationTests {
         let ble = BLEService(
             keychain: mockKeychain,
             idBridge: idBridge,
-            identityManager: mockIdentityManager
+            identityManager: mockIdentityManager,
+            initializeBluetoothManagers: false
         )
         let capture = CaptureDelegate()
         ble.delegate = capture
@@ -97,7 +99,8 @@ struct FragmentationTests {
         let ble = BLEService(
             keychain: mockKeychain,
             idBridge: idBridge,
-            identityManager: mockIdentityManager
+            identityManager: mockIdentityManager,
+            initializeBluetoothManagers: false
         )
         let capture = CaptureDelegate()
         ble.delegate = capture
@@ -153,7 +156,8 @@ struct FragmentationTests {
         let ble = BLEService(
             keychain: mockKeychain,
             idBridge: idBridge,
-            identityManager: mockIdentityManager
+            identityManager: mockIdentityManager,
+            initializeBluetoothManagers: false
         )
         let capture = CaptureDelegate()
         ble.delegate = capture
@@ -205,16 +209,18 @@ extension FragmentationTests {
         private var expectedPublicMessageCount: Int = 0
         private var expectedReceivedMessageCount: Int = 0
 
-        var publicMessages: [(peerID: PeerID, nickname: String, content: String)] {
+        private func withLock<T>(_ body: () -> T) -> T {
             lock.lock()
             defer { lock.unlock() }
-            return _publicMessages
+            return body()
+        }
+
+        var publicMessages: [(peerID: PeerID, nickname: String, content: String)] {
+            withLock { _publicMessages }
         }
 
         var receivedMessages: [BitchatMessage] {
-            lock.lock()
-            defer { lock.unlock() }
-            return _receivedMessages
+            withLock { _receivedMessages }
         }
 
         func didReceiveMessage(_ message: BitchatMessage) {
@@ -251,27 +257,32 @@ extension FragmentationTests {
 
         /// Waits for the specified number of public messages to be received
         func waitForPublicMessages(count: Int, timeout: Duration = .seconds(2)) async throws {
-            lock.lock()
-            if _publicMessages.count >= count {
-                lock.unlock()
+            let isAlreadySatisfied = withLock { () -> Bool in
+                if _publicMessages.count >= count {
+                    return true
+                }
+                expectedPublicMessageCount = count
+                return false
+            }
+            if isAlreadySatisfied {
                 return
             }
-            expectedPublicMessageCount = count
-            lock.unlock()
 
             try await withThrowingTaskGroup(of: Void.self) { group in
                 group.addTask {
                     await withCheckedContinuation { continuation in
-                        self.lock.lock()
-                        // Recheck count after acquiring lock to avoid race condition
-                        // where message arrives between initial check and continuation install
-                        if self._publicMessages.count >= count {
-                            self.lock.unlock()
-                            continuation.resume()
-                            return
+                        let shouldResumeImmediately = self.withLock {
+                            // Recheck count after acquiring lock to avoid race condition
+                            // where message arrives between initial check and continuation install
+                            if self._publicMessages.count >= count {
+                                return true
+                            }
+                            self.publicMessageContinuation = continuation
+                            return false
                         }
-                        self.publicMessageContinuation = continuation
-                        self.lock.unlock()
+                        if shouldResumeImmediately {
+                            continuation.resume()
+                        }
                     }
                 }
                 group.addTask {
@@ -285,27 +296,32 @@ extension FragmentationTests {
 
         /// Waits for the specified number of received messages
         func waitForReceivedMessages(count: Int, timeout: Duration = .seconds(2)) async throws {
-            lock.lock()
-            if _receivedMessages.count >= count {
-                lock.unlock()
+            let isAlreadySatisfied = withLock { () -> Bool in
+                if _receivedMessages.count >= count {
+                    return true
+                }
+                expectedReceivedMessageCount = count
+                return false
+            }
+            if isAlreadySatisfied {
                 return
             }
-            expectedReceivedMessageCount = count
-            lock.unlock()
 
             try await withThrowingTaskGroup(of: Void.self) { group in
                 group.addTask {
                     await withCheckedContinuation { continuation in
-                        self.lock.lock()
-                        // Recheck count after acquiring lock to avoid race condition
-                        // where message arrives between initial check and continuation install
-                        if self._receivedMessages.count >= count {
-                            self.lock.unlock()
-                            continuation.resume()
-                            return
+                        let shouldResumeImmediately = self.withLock {
+                            // Recheck count after acquiring lock to avoid race condition
+                            // where message arrives between initial check and continuation install
+                            if self._receivedMessages.count >= count {
+                                return true
+                            }
+                            self.receivedMessageContinuation = continuation
+                            return false
                         }
-                        self.receivedMessageContinuation = continuation
-                        self.lock.unlock()
+                        if shouldResumeImmediately {
+                            continuation.resume()
+                        }
                     }
                 }
                 group.addTask {

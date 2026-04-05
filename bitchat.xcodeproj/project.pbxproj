@@ -548,6 +548,7 @@
 				CODE_SIGNING_REQUIRED = YES;
 				CODE_SIGN_ENTITLEMENTS = bitchat/bitchat.entitlements;
 				CODE_SIGN_STYLE = "$(CODE_SIGN_STYLE)";
+				DEVELOPMENT_ASSET_PATHS = bitchat/_PreviewHelpers;
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_PREVIEWS = NO;
 				INFOPLIST_FILE = bitchat/Info.plist;
@@ -608,6 +609,7 @@
 				CODE_SIGNING_REQUIRED = YES;
 				CODE_SIGN_ENTITLEMENTS = bitchat/bitchat.entitlements;
 				CODE_SIGN_STYLE = "$(CODE_SIGN_STYLE)";
+				DEVELOPMENT_ASSET_PATHS = bitchat/_PreviewHelpers;
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = bitchat/Info.plist;

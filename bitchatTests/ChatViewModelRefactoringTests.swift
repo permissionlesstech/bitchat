@@ -125,26 +125,20 @@ struct ChatViewModelRefactoringTests {
         let (viewModel, _, _) = makePinnedViewModel()
         let senderID = PeerID(str: "sender_2")
 
-        // Setup
-        let message = BitchatMessage(
-            id: "msg_2",
-            sender: "charlie",
+        // Action
+        viewModel.didReceivePublicMessage(
+            from: senderID,
+            nickname: "charlie",
             content: "Public Hi",
             timestamp: Date(),
-            isRelay: false,
-            originalSender: nil,
-            isPrivate: false,
-            recipientNickname: nil,
-            senderPeerID: senderID,
-            mentions: nil
+            messageID: "msg_2"
         )
-
-        // Action
-        viewModel.didReceiveMessage(message)
 
         // Wait for async processing with proper timeout
         let found = await TestHelpers.waitUntil(
-            { viewModel.messages.contains(where: { $0.content == "Public Hi" }) },
+            {
+                viewModel.timelineStore.messages(for: .mesh).contains(where: { $0.content == "Public Hi" })
+            },
             timeout: TestConstants.defaultTimeout
         )
 

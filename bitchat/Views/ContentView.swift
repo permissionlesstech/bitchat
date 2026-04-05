@@ -27,12 +27,29 @@ private struct MessageDisplayItem: Identifiable {
     let message: BitchatMessage
 }
 
+/// On macOS 14+, disables the default system focus ring on TextFields.
+/// On earlier macOS versions and on iOS this is a no-op.
+private struct FocusEffectDisabledModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        #if os(macOS)
+        if #available(macOS 14.0, *) {
+            content.focusEffectDisabled()
+        } else {
+            content
+        }
+        #else
+        content
+        #endif
+    }
+}
+
 // MARK: - Main Content View
 
 struct ContentView: View {
     // MARK: - Properties
     
     @EnvironmentObject var viewModel: ChatViewModel
+    @StateObject private var voiceRecordingVM = VoiceRecordingViewModel()
     @ObservedObject private var locationManager = LocationChannelManager.shared
     @ObservedObject private var bookmarks = GeohashBookmarksStore.shared
     @State private var messageText = ""
@@ -57,13 +74,6 @@ struct ContentView: View {
     @State private var showLocationNotes = false
     @State private var notesGeohash: String? = nil
     @State private var imagePreviewURL: URL? = nil
-    @State private var recordingAlertMessage: String = ""
-    @State private var showRecordingAlert = false
-    @State private var isRecordingVoiceNote = false
-    @State private var isPreparingVoiceNote = false
-    @State private var recordingDuration: TimeInterval = 0
-    @State private var recordingTimer: Timer?
-    @State private var recordingStartDate: Date?
 #if os(iOS)
     @State private var showImagePicker = false
     @State private var imagePickerSourceType: UIImagePickerController.SourceType = .camera
@@ -184,6 +194,7 @@ struct ContentView: View {
             )
         ) {
             peopleSheetView
+                .environmentObject(viewModel)
         }
         .sheet(isPresented: $showAppInfo) {
             AppInfoView()
@@ -192,7 +203,7 @@ struct ContentView: View {
                 .onDisappear { viewModel.isAppInfoPresented = false }
         }
         .sheet(isPresented: Binding(
-            get: { viewModel.showingFingerprintFor != nil },
+            get: { viewModel.showingFingerprintFor != nil && !showSidebar && viewModel.selectedPrivateChatPeer == nil },
             set: { _ in viewModel.showingFingerprintFor = nil }
         )) {
             if let peerID = viewModel.showingFingerprintFor {
@@ -212,18 +223,7 @@ struct ContentView: View {
         )) {
             ImagePickerView(sourceType: imagePickerSourceType) { image in
                 showImagePicker = false
-                if let image = image {
-                    Task {
-                        do {
-                            let processedURL = try ImageUtils.processImage(image)
-                            await MainActor.run {
-                                viewModel.sendImage(from: processedURL)
-                            }
-                        } catch {
-                            SecureLogger.error("Image processing failed: \(error)", category: .session)
-                        }
-                    }
-                }
+                viewModel.processThenSendImage(image)
             }
             .environmentObject(viewModel)
             .ignoresSafeArea()
@@ -241,18 +241,7 @@ struct ContentView: View {
         )) {
             MacImagePickerView { url in
                 showMacImagePicker = false
-                if let url = url {
-                    Task {
-                        do {
-                            let processedURL = try ImageUtils.processImage(at: url)
-                            await MainActor.run {
-                                viewModel.sendImage(from: processedURL)
-                            }
-                        } catch {
-                            SecureLogger.error("Image processing failed: \(error)", category: .session)
-                        }
-                    }
-                }
+                viewModel.processThenSendImage(from: url)
             }
             .environmentObject(viewModel)
         }
@@ -266,10 +255,15 @@ struct ContentView: View {
                     .environmentObject(viewModel)
             }
         }
-        .alert("Recording Error", isPresented: $showRecordingAlert, actions: {
-            Button("OK", role: .cancel) {}
+        .alert("Recording Error", isPresented: $voiceRecordingVM.showAlert, actions: {
+            Button("common.ok", role: .cancel) {}
+            if voiceRecordingVM.state == .permissionDenied {
+                Button("location_channels.action.open_settings") {
+                    SystemSettings.microphone.open()
+                }
+            }
         }, message: {
-            Text(recordingAlertMessage)
+            Text(voiceRecordingVM.state.alertMessage)
         })
         .confirmationDialog(
             selectedMessageSender.map { "@\($0)" } ?? String(localized: "content.actions.title", comment: "Fallback title for the message action sheet"),
@@ -326,11 +320,7 @@ struct ContentView: View {
         }
         .alert("content.alert.bluetooth_required.title", isPresented: $viewModel.showBluetoothAlert) {
             Button("content.alert.bluetooth_required.settings") {
-                #if os(iOS)
-                if let url = URL(string: UIApplication.openSettingsURLString) {
-                    UIApplication.shared.open(url)
-                }
-                #endif
+                SystemSettings.bluetooth.open()
             }
             Button("common.ok", role: .cancel) {}
         } message: {
@@ -371,8 +361,7 @@ struct ContentView: View {
         }()
 
         let messageItems: [MessageDisplayItem] = windowedMessages.compactMap { message in
-            let trimmed = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { return nil }
+            guard let trimmed = message.content.trimmedOrNilIfEmpty else { return nil }
             return MessageDisplayItem(id: "\(contextKey)|\(message.id)", message: message)
         }
 
@@ -613,8 +602,7 @@ struct ContentView: View {
                 secondaryTextColor: secondaryTextColor
             )
 
-            // Recording indicator
-            if isPreparingVoiceNote || isRecordingVoiceNote {
+            if voiceRecordingVM.state.isActive {
                 recordingIndicator
             }
 
@@ -643,6 +631,7 @@ struct ContentView: View {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(colorScheme == .dark ? Color.black.opacity(0.35) : Color.white.opacity(0.7))
                 )
+                .modifier(FocusEffectDisabledModifier())
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .onChange(of: messageText) { newValue in
                     autocompleteDebounceTimer?.invalidate()
@@ -776,8 +765,7 @@ struct ContentView: View {
     // MARK: - Actions
     
     private func sendMessage() {
-        let trimmed = trimmedMessageText
-        guard !trimmed.isEmpty else { return }
+        guard let trimmed = messageText.trimmedOrNilIfEmpty else { return }
 
         // Clear input immediately for instant feedback
         messageText = ""
@@ -791,11 +779,26 @@ struct ContentView: View {
     // MARK: - Sheet Content
     
     private var peopleSheetView: some View {
-        Group {
-            if viewModel.selectedPrivateChatPeer != nil {
-                privateChatSheetView
-            } else {
-                peopleListSheetView
+        NavigationStack {
+            Group {
+                if viewModel.selectedPrivateChatPeer != nil {
+                    privateChatSheetView
+                } else {
+                    peopleListSheetView
+                }
+            }
+            .navigationDestination(isPresented: Binding(
+                get: { viewModel.showingFingerprintFor != nil && (showSidebar || viewModel.selectedPrivateChatPeer != nil) },
+                set: { isPresented in
+                    if !isPresented {
+                        viewModel.showingFingerprintFor = nil
+                    }
+                }
+            )) {
+                if let peerID = viewModel.showingFingerprintFor {
+                    FingerprintView(viewModel: viewModel, peerID: peerID)
+                        .environmentObject(viewModel)
+                }
             }
         }
         .background(backgroundColor)
@@ -815,18 +818,7 @@ struct ContentView: View {
         )) {
             ImagePickerView(sourceType: imagePickerSourceType) { image in
                 showImagePicker = false
-                if let image = image {
-                    Task {
-                        do {
-                            let processedURL = try ImageUtils.processImage(image)
-                            await MainActor.run {
-                                viewModel.sendImage(from: processedURL)
-                            }
-                        } catch {
-                            SecureLogger.error("Image processing failed: \(error)", category: .session)
-                        }
-                    }
-                }
+                viewModel.processThenSendImage(image)
             }
             .environmentObject(viewModel)
             .ignoresSafeArea()
@@ -836,18 +828,7 @@ struct ContentView: View {
         .sheet(isPresented: $showMacImagePicker) {
             MacImagePickerView { url in
                 showMacImagePicker = false
-                if let url = url {
-                    Task {
-                        do {
-                            let processedURL = try ImageUtils.processImage(at: url)
-                            await MainActor.run {
-                                viewModel.sendImage(from: processedURL)
-                            }
-                        } catch {
-                            SecureLogger.error("Image processing failed: \(error)", category: .session)
-                        }
-                    }
-                }
+                viewModel.processThenSendImage(from: url)
             }
             .environmentObject(viewModel)
         }
@@ -1228,6 +1209,7 @@ struct ContentView: View {
                     #if os(iOS)
                     .textInputAutocapitalization(.never)
                     #endif
+                    .modifier(FocusEffectDisabledModifier())
                     .onChange(of: isNicknameFieldFocused) { isFocused in
                         if !isFocused {
                             // Only validate when losing focus
@@ -1472,85 +1454,13 @@ struct ContentView: View {
 
 // MARK: - Helper Views
 
-// Rounded payment chip button
-//
-
-private enum MessageMedia {
-    case voice(URL)
-    case image(URL)
-
-    var url: URL {
-        switch self {
-        case .voice(let url), .image(let url):
-            return url
-        }
-    }
-}
-
 private extension ContentView {
-    func mediaAttachment(for message: BitchatMessage) -> MessageMedia? {
-        guard let baseDirectory = applicationFilesDirectory() else { return nil }
-
-        // Extract filename from message content
-        func url(from prefix: String, subdirectory: String) -> URL? {
-            guard message.content.hasPrefix(prefix) else { return nil }
-            let filename = String(message.content.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !filename.isEmpty else { return nil }
-
-            // Construct URL directly without fileExists check (avoids blocking disk I/O in view body)
-            // Files are checked during playback/display, so missing files fail gracefully
-            let directory = baseDirectory.appendingPathComponent(subdirectory, isDirectory: true)
-            return directory.appendingPathComponent(filename)
-        }
-
-        // Try outgoing first (most common for sent media), fall back to incoming
-        if message.content.hasPrefix("[voice] ") {
-            let filename = String(message.content.dropFirst("[voice] ".count)).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !filename.isEmpty else { return nil }
-            // Check outgoing first for sent messages, incoming for received
-            let subdir = message.sender == viewModel.nickname ? "voicenotes/outgoing" : "voicenotes/incoming"
-            let url = baseDirectory.appendingPathComponent(subdir, isDirectory: true).appendingPathComponent(filename)
-            return .voice(url)
-        }
-        if message.content.hasPrefix("[image] ") {
-            let filename = String(message.content.dropFirst("[image] ".count)).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !filename.isEmpty else { return nil }
-            let subdir = message.sender == viewModel.nickname ? "images/outgoing" : "images/incoming"
-            let url = baseDirectory.appendingPathComponent(subdir, isDirectory: true).appendingPathComponent(filename)
-            return .image(url)
-        }
-        return nil
-    }
-
-    func mediaSendState(for message: BitchatMessage, mediaURL: URL) -> (isSending: Bool, progress: Double?, canCancel: Bool) {
-        var isSending = false
-        var progress: Double?
-        if let status = message.deliveryStatus {
-            switch status {
-            case .sending:
-                isSending = true
-                progress = 0
-            case .partiallyDelivered(let reached, let total):
-                if total > 0 {
-                    isSending = true
-                    progress = Double(reached) / Double(total)
-                }
-            case .sent, .read, .delivered, .failed:
-                break
-            }
-        }
-        let isOutgoing = mediaURL.path.contains("/outgoing/")
-        let canCancel = isSending && isOutgoing
-        let clamped = progress.map { max(0, min(1, $0)) }
-        return (isSending, isSending ? clamped : nil, canCancel)
-    }
-
     @ViewBuilder
     private func messageRow(for message: BitchatMessage) -> some View {
         if message.sender == "system" {
             systemMessageRow(message)
-        } else if let media = mediaAttachment(for: message) {
-            mediaMessageRow(message: message, media: media)
+        } else if let media = message.mediaAttachment(for: viewModel.nickname) {
+            MediaMessageView(message: message, media: media, imagePreviewURL: $imagePreviewURL)
         } else {
             TextMessageView(message: message, expandedMessageIDs: $expandedMessageIDs)
         }
@@ -1561,59 +1471,6 @@ private extension ContentView {
         Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    @ViewBuilder
-    private func mediaMessageRow(message: BitchatMessage, media: MessageMedia) -> some View {
-        let mediaURL = media.url
-        let state = mediaSendState(for: message, mediaURL: mediaURL)
-        let isOutgoing = mediaURL.path.contains("/outgoing/")
-        let isAuthoredByUs = isOutgoing || (message.senderPeerID == viewModel.meshService.myPeerID)
-        let shouldBlurImage = !isAuthoredByUs
-        let cancelAction: (() -> Void)? = state.canCancel ? { viewModel.cancelMediaSend(messageID: message.id) } : nil
-
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(alignment: .center, spacing: 4) {
-                Text(viewModel.formatMessageHeader(message, colorScheme: colorScheme))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                if message.isPrivate && message.sender == viewModel.nickname,
-                   let status = message.deliveryStatus {
-                    DeliveryStatusView(status: status)
-                        .padding(.leading, 4)
-                }
-            }
-
-            Group {
-                switch media {
-                case .voice(let url):
-                    VoiceNoteView(
-                        url: url,
-                        isSending: state.isSending,
-                        sendProgress: state.progress,
-                        onCancel: cancelAction
-                    )
-                case .image(let url):
-                    BlockRevealImageView(
-                        url: url,
-                        revealProgress: state.progress,
-                        isSending: state.isSending,
-                        onCancel: cancelAction,
-                        initiallyBlurred: shouldBlurImage,
-                        onOpen: {
-                            if !state.isSending {
-                                imagePreviewURL = url
-                            }
-                        },
-                        onDelete: shouldBlurImage ? {
-                            viewModel.deleteMediaMessage(messageID: message.id)
-                        } : nil
-                    )
-                    .frame(maxWidth: 280)
-                }
-            }
-        }
-        .padding(.vertical, 4)
     }
 
     private func expandWindow(ifNeededFor message: BitchatMessage,
@@ -1654,11 +1511,16 @@ private extension ContentView {
             Image(systemName: "waveform.circle.fill")
                 .foregroundColor(.red)
                 .font(.bitchatSystem(size: 20))
-            Text("recording \(formattedRecordingDuration())", comment: "Voice note recording duration indicator")
+            TimelineView(.periodic(from: .now, by: 0.05)) { context in
+                Text(
+                    "recording \(voiceRecordingVM.formattedDuration(for: context.date))",
+                    comment: "Voice note recording duration indicator"
+                )
                 .font(.bitchatSystem(size: 13, design: .monospaced))
                 .foregroundColor(.red)
+            }
             Spacer()
-            Button(action: cancelVoiceRecording) {
+            Button(action: voiceRecordingVM.cancel) {
                 Label("Cancel", systemImage: "xmark.circle")
                     .labelStyle(.iconOnly)
                     .font(.bitchatSystem(size: 18))
@@ -1671,10 +1533,6 @@ private extension ContentView {
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color.red.opacity(0.15))
         )
-    }
-
-    private var trimmedMessageText: String {
-        messageText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private var shouldShowMediaControls: Bool {
@@ -1737,7 +1595,7 @@ private extension ContentView {
 
     @ViewBuilder
     var sendOrMicButton: some View {
-        let hasText = !trimmedMessageText.isEmpty
+        let hasText = !messageText.trimmed.isEmpty
         if shouldShowVoiceControl {
             ZStack {
                 micButtonView
@@ -1755,11 +1613,9 @@ private extension ContentView {
     }
 
     private var micButtonView: some View {
-        let tint = (isRecordingVoiceNote || isPreparingVoiceNote) ? Color.red : composerAccentColor
-
-        return Image(systemName: "mic.circle.fill")
+        Image(systemName: "mic.circle.fill")
             .font(.bitchatSystem(size: 24))
-            .foregroundColor(tint)
+            .foregroundColor(voiceRecordingVM.state.isActive ? Color.red : composerAccentColor)
             .frame(width: 36, height: 36)
             .contentShape(Circle())
             .overlay(
@@ -1767,8 +1623,8 @@ private extension ContentView {
                     .contentShape(Circle())
                     .gesture(
                         DragGesture(minimumDistance: 0)
-                            .onChanged { _ in startVoiceRecording() }
-                            .onEnded { _ in finishVoiceRecording(send: true) }
+                            .onChanged { _ in voiceRecordingVM.start(shouldShow: shouldShowVoiceControl) }
+                            .onEnded { _ in voiceRecordingVM.finish(completion: viewModel.sendVoiceNote) }
                     )
             )
             .accessibilityLabel("Hold to record a voice note")
@@ -1793,345 +1649,4 @@ private extension ContentView {
             : String(localized: "content.accessibility.send_hint_empty", comment: "Hint prompting the user to enter a message")
         )
     }
-
-    func formattedRecordingDuration() -> String {
-        let clamped = max(0, recordingDuration)
-        let totalMilliseconds = Int((clamped * 1000).rounded())
-        let minutes = totalMilliseconds / 60_000
-        let seconds = (totalMilliseconds % 60_000) / 1_000
-        let centiseconds = (totalMilliseconds % 1_000) / 10
-        return String(format: "%02d:%02d.%02d", minutes, seconds, centiseconds)
-    }
-
-    func startVoiceRecording() {
-        guard shouldShowVoiceControl else { return }
-        guard !isRecordingVoiceNote && !isPreparingVoiceNote else { return }
-        isPreparingVoiceNote = true
-        Task { @MainActor in
-            let granted = await VoiceRecorder.shared.requestPermission()
-            guard granted else {
-                isPreparingVoiceNote = false
-                recordingAlertMessage = "Microphone access is required to record voice notes."
-                showRecordingAlert = true
-                return
-            }
-            do {
-                _ = try VoiceRecorder.shared.startRecording()
-                recordingDuration = 0
-                recordingStartDate = Date()
-                recordingTimer?.invalidate()
-                recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { _ in
-                    if let start = recordingStartDate {
-                        recordingDuration = Date().timeIntervalSince(start)
-                    }
-                }
-                if let timer = recordingTimer {
-                    RunLoop.main.add(timer, forMode: .common)
-                }
-                isPreparingVoiceNote = false
-                isRecordingVoiceNote = true
-            } catch {
-                SecureLogger.error("Voice recording failed to start: \(error)", category: .session)
-                recordingAlertMessage = "Could not start recording."
-                showRecordingAlert = true
-                VoiceRecorder.shared.cancelRecording()
-                isPreparingVoiceNote = false
-                isRecordingVoiceNote = false
-                recordingStartDate = nil
-            }
-        }
-    }
-
-    func finishVoiceRecording(send: Bool) {
-        if isPreparingVoiceNote {
-            isPreparingVoiceNote = false
-            VoiceRecorder.shared.cancelRecording()
-            return
-        }
-        guard isRecordingVoiceNote else { return }
-        isRecordingVoiceNote = false
-        recordingTimer?.invalidate()
-        recordingTimer = nil
-        if let start = recordingStartDate {
-            recordingDuration = Date().timeIntervalSince(start)
-        }
-        recordingStartDate = nil
-        if send {
-            let minimumDuration: TimeInterval = 1.0
-            VoiceRecorder.shared.stopRecording { url in
-                DispatchQueue.main.async {
-                    guard
-                        let url = url,
-                        let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
-                        let fileSize = attributes[.size] as? NSNumber,
-                        fileSize.intValue > 0,
-                        recordingDuration >= minimumDuration
-                    else {
-                        if let url = url {
-                            try? FileManager.default.removeItem(at: url)
-                        }
-                        recordingAlertMessage = recordingDuration < minimumDuration
-                            ? "Recording is too short."
-                            : "Recording failed to save."
-                        showRecordingAlert = true
-                        return
-                    }
-                    viewModel.sendVoiceNote(at: url)
-                }
-            }
-        } else {
-            VoiceRecorder.shared.cancelRecording()
-        }
-    }
-
-    func cancelVoiceRecording() {
-        if isPreparingVoiceNote || isRecordingVoiceNote {
-            finishVoiceRecording(send: false)
-        }
-    }
-
-    func handleImportResult(_ result: Result<[URL], Error>, handler: @escaping (URL) async -> Void) {
-        switch result {
-        case .success(let urls):
-            guard let url = urls.first else { return }
-            let needsStop = url.startAccessingSecurityScopedResource()
-            Task {
-                defer {
-                    if needsStop {
-                        url.stopAccessingSecurityScopedResource()
-                    }
-                }
-                await handler(url)
-            }
-        case .failure(let error):
-            SecureLogger.error("Media import failed: \(error)", category: .session)
-        }
-    }
-
-
-    func applicationFilesDirectory() -> URL? {
-        // Cache the directory lookup to avoid repeated FileManager calls during view rendering
-        struct Cache {
-            static var cachedURL: URL?
-            static var didAttempt = false
-        }
-
-        if Cache.didAttempt {
-            return Cache.cachedURL
-        }
-
-        do {
-            let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-            let filesDir = base.appendingPathComponent("files", isDirectory: true)
-            try FileManager.default.createDirectory(at: filesDir, withIntermediateDirectories: true, attributes: nil)
-            Cache.cachedURL = filesDir
-            Cache.didAttempt = true
-            return filesDir
-        } catch {
-            SecureLogger.error("Failed to resolve application files directory: \(error)", category: .session)
-            Cache.didAttempt = true
-            return nil
-        }
-    }
 }
-
-//
-
-struct ImagePreviewView: View {
-    let url: URL
-
-    @Environment(\.dismiss) private var dismiss
-    #if os(iOS)
-    @State private var showExporter = false
-    @State private var platformImage: UIImage?
-    #else
-    @State private var platformImage: NSImage?
-    #endif
-
-    var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            VStack {
-                Spacer()
-                if let image = platformImage {
-                    #if os(iOS)
-                    Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .padding()
-                    #else
-                    Image(nsImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .padding()
-                    #endif
-                } else {
-                    ProgressView()
-                        .progressViewStyle(.circular)
-                        .tint(.white)
-                }
-                Spacer()
-                HStack {
-                    Button(action: { dismiss() }) {
-                        Text("close", comment: "Button to dismiss fullscreen media viewer")
-                            .font(.bitchatSystem(size: 15, weight: .semibold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.5), lineWidth: 1))
-                    }
-                    Spacer()
-                    Button(action: saveCopy) {
-                        Text("save", comment: "Button to save media to device")
-                            .font(.bitchatSystem(size: 15, weight: .semibold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(RoundedRectangle(cornerRadius: 12).fill(Color.blue.opacity(0.6)))
-                    }
-                }
-                .padding([.horizontal, .bottom], 24)
-            }
-        }
-        .onAppear(perform: loadImage)
-        #if os(iOS)
-        .sheet(isPresented: $showExporter) {
-            FileExportWrapper(url: url)
-        }
-        #endif
-    }
-
-    private func loadImage() {
-        DispatchQueue.global(qos: .userInitiated).async {
-            #if os(iOS)
-            guard let image = UIImage(contentsOfFile: url.path) else { return }
-            #else
-            guard let image = NSImage(contentsOf: url) else { return }
-            #endif
-            DispatchQueue.main.async {
-                self.platformImage = image
-            }
-        }
-    }
-
-    private func saveCopy() {
-        #if os(iOS)
-        showExporter = true
-        #else
-        Task { @MainActor in
-            let panel = NSSavePanel()
-            panel.canCreateDirectories = true
-            panel.nameFieldStringValue = url.lastPathComponent
-            panel.prompt = "save"
-            if panel.runModal() == .OK, let destination = panel.url {
-                do {
-                    if FileManager.default.fileExists(atPath: destination.path) {
-                        try FileManager.default.removeItem(at: destination)
-                    }
-                    try FileManager.default.copyItem(at: url, to: destination)
-                } catch {
-                    SecureLogger.error("Failed to save image preview copy: \(error)", category: .session)
-                }
-            }
-        }
-        #endif
-    }
-
-    #if os(iOS)
-    private struct FileExportWrapper: UIViewControllerRepresentable {
-        let url: URL
-
-        func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-            let controller = UIDocumentPickerViewController(forExporting: [url])
-            controller.shouldShowFileExtensions = true
-            return controller
-        }
-
-        func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
-    }
-#endif
-}
-
-#if os(iOS)
-// MARK: - Image Picker (Camera or Photo Library)
-struct ImagePickerView: UIViewControllerRepresentable {
-    let sourceType: UIImagePickerController.SourceType
-    let completion: (UIImage?) -> Void
-
-    func makeUIViewController(context: Context) -> UIImagePickerController {
-        let picker = UIImagePickerController()
-        picker.sourceType = sourceType
-        picker.delegate = context.coordinator
-        picker.allowsEditing = false
-
-        // Use standard full screen - iOS handles safe areas automatically
-        picker.modalPresentationStyle = .fullScreen
-
-        // Force dark mode to make safe area bars black instead of white
-        picker.overrideUserInterfaceStyle = .dark
-
-        return picker
-    }
-
-    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(completion: completion)
-    }
-
-    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        let completion: (UIImage?) -> Void
-
-        init(completion: @escaping (UIImage?) -> Void) {
-            self.completion = completion
-        }
-
-        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
-            let image = info[.originalImage] as? UIImage
-            completion(image)
-        }
-
-        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            completion(nil)
-        }
-    }
-}
-#endif
-
-#if os(macOS)
-// MARK: - macOS Image Picker
-struct MacImagePickerView: View {
-    let completion: (URL?) -> Void
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack(spacing: 16) {
-            Text("Choose an image")
-                .font(.headline)
-
-            Button("Select Image") {
-                let panel = NSOpenPanel()
-                panel.allowsMultipleSelection = false
-                panel.canChooseDirectories = false
-                panel.canChooseFiles = true
-                panel.allowedContentTypes = [.image, .png, .jpeg, .heic]
-                panel.message = "Choose an image to send"
-
-                if panel.runModal() == .OK {
-                    completion(panel.url)
-                } else {
-                    dismiss()
-                }
-            }
-            .buttonStyle(.borderedProminent)
-
-            Button("Cancel") {
-                completion(nil)
-            }
-            .buttonStyle(.bordered)
-        }
-        .padding(40)
-        .frame(minWidth: 300, minHeight: 150)
-    }
-}
-#endif
