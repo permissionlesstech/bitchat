@@ -5,9 +5,11 @@
 // Private chat and media transfer logic for ChatViewModel
 //
 
+import Nostr
 import Foundation
 import Combine
 import BitLogger
+import BitFoundation
 import SwiftUI
 
 extension ChatViewModel {

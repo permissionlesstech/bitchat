@@ -6,8 +6,10 @@
 // For more information, see <https://unlicense.org>
 //
 
+import Nostr
 import Tor
 import SwiftUI
+import BitFoundation
 import UserNotifications
 
 @main
@@ -26,9 +28,11 @@ struct BitchatApp: App {
     @NSApplicationDelegateAdaptor(MacAppDelegate.self) var appDelegate
     #endif
     
-    private let idBridge = NostrIdentityBridge()
+    private let idBridge = NostrIdentityBridge(keychain: KeychainManager())
     
     init() {
+        GeoRelayDirectory.setupShared(dependencies: .live())
+        NostrRelayManager.setupShared(dependencies: .live())
         let keychain = KeychainManager()
         let idBridge = self.idBridge
         _chatViewModel = StateObject(

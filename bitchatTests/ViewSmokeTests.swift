@@ -1,4 +1,5 @@
 import Testing
+import Nostr
 import Foundation
 import SwiftUI
 import CoreGraphics
@@ -8,6 +9,7 @@ import UIKit
 #else
 import AppKit
 #endif
+import BitFoundation
 @testable import bitchat
 
 @MainActor

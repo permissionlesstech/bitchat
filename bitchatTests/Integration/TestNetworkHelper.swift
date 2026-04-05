@@ -8,6 +8,8 @@
 
 import Foundation
 import CryptoKit
+import BitFoundation
+import Noise
 @testable import bitchat
 
 final class TestNetworkHelper {

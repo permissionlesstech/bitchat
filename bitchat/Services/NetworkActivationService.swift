@@ -1,3 +1,4 @@
+import Nostr
 import Foundation
 import BitLogger
 import Combine

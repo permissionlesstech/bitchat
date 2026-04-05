@@ -1,4 +1,5 @@
 import Combine
+import Nostr
 import XCTest
 @testable import bitchat
 

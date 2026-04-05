@@ -6,7 +6,9 @@
 // This is free and unencumbered software released into the public domain.
 //
 
+import Nostr
 import Foundation
+import BitFoundation
 
 /// Result of command processing
 enum CommandResult {
