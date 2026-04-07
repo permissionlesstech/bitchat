@@ -2821,6 +2821,29 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
             return .noiseSecured
         }
     }
+
+    @MainActor
+    func hasVerifiedPublicIdentity(for peerID: PeerID) -> Bool {
+        let shortPeerID = peerID.toShort()
+
+        let noisePublicKey: Data
+        if let peer = unifiedPeerService.getPeer(by: shortPeerID) {
+            noisePublicKey = peer.noisePublicKey
+        } else if let key = peerID.noiseKey {
+            noisePublicKey = key
+        } else {
+            return false
+        }
+
+        let fingerprint = noisePublicKey.sha256Fingerprint()
+        guard identityManager.isVerified(fingerprint: fingerprint) else { return false }
+
+        return identityManager.getCryptoIdentitiesByPeerIDPrefix(PeerID(publicKey: noisePublicKey)).contains {
+            $0.fingerprint == fingerprint &&
+            $0.publicKey == noisePublicKey &&
+            $0.signingPublicKey != nil
+        }
+    }
     
     /// Helper to resolve nickname for a peer ID through various sources
     @MainActor

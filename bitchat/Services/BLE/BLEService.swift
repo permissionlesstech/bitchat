@@ -642,7 +642,7 @@ final class BLEService: NSObject {
             if info.isConnected { return true }
             guard meshAttached else { return false }
             // Apply reachability retention window
-            let isVerified = info.isVerifiedNickname
+            let isVerified = hasTrustedSigningIdentity(info)
             let retention: TimeInterval = isVerified ? TransportConfig.bleReachabilityRetentionVerifiedSeconds : TransportConfig.bleReachabilityRetentionUnverifiedSeconds
             return Date().timeIntervalSince(info.lastSeen) <= retention
         }
@@ -1234,6 +1234,15 @@ final class BLEService: NSObject {
         return nickname
     }
 
+    private func hasTrustedSigningIdentity(_ info: PeerInfo?) -> Bool {
+        guard let info,
+              info.isVerifiedNickname,
+              let noisePublicKey = info.noisePublicKey else {
+            return false
+        }
+        return identityManager.isVerified(fingerprint: noisePublicKey.sha256Fingerprint())
+    }
+
     private func authenticatedPublicSender(for packet: BitchatPacket, from peerID: PeerID, peersSnapshot: [PeerID: PeerInfo]) -> String? {
         if peerID == myPeerID {
             return myNickname
@@ -1244,7 +1253,7 @@ final class BLEService: NSObject {
         }
 
         if let info = peersSnapshot[peerID],
-           info.isVerifiedNickname,
+           hasTrustedSigningIdentity(info),
            let signingKey = info.signingPublicKey,
            noiseService.verifySignature(signature, for: packetData, publicKey: signingKey) {
             return collisionAdjustedNickname(for: peerID, nickname: info.nickname, peersSnapshot: peersSnapshot)
@@ -3885,7 +3894,7 @@ extension BLEService {
             identityManager.isVerified(fingerprint: $0.fingerprint)
         }
         let trustedSigningKey =
-            ((existingPeerForVerify?.isVerifiedNickname == true) ? existingPeerForVerify?.signingPublicKey : nil)
+            (hasTrustedSigningIdentity(existingPeerForVerify) ? existingPeerForVerify?.signingPublicKey : nil)
             ?? persistedTrustedIdentity?.signingPublicKey
         let hasTrustedIdentity = trustedSigningKey != nil
         var verifiedAnnounce = false
@@ -3896,7 +3905,7 @@ extension BLEService {
             }
         }
         if let existingKey = existingPeerForVerify?.noisePublicKey,
-           existingPeerForVerify?.isVerifiedNickname == true,
+           hasTrustedSigningIdentity(existingPeerForVerify),
            existingKey != announcement.noisePublicKey {
             SecureLogger.warning("⚠️ Announce key mismatch for \(peerID.id.prefix(8))… — keeping unverified", category: .security)
             verifiedAnnounce = false
@@ -4386,7 +4395,7 @@ extension BLEService {
         collectionsQueue.sync(flags: .barrier) {
             for (peerID, peer) in peers {
                 let age = now.timeIntervalSince(peer.lastSeen)
-                let retention: TimeInterval = peer.isVerifiedNickname ? TransportConfig.bleReachabilityRetentionVerifiedSeconds : TransportConfig.bleReachabilityRetentionUnverifiedSeconds
+                let retention: TimeInterval = hasTrustedSigningIdentity(peer) ? TransportConfig.bleReachabilityRetentionVerifiedSeconds : TransportConfig.bleReachabilityRetentionUnverifiedSeconds
                 if peer.isConnected && age > TransportConfig.blePeerInactivityTimeoutSeconds {
                     // Check if we still have an active BLE connection to this peer
                     let state = cachedLinkStates[peerID] ?? (hasPeripheral: false, hasCentral: false)

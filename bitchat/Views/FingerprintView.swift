@@ -30,7 +30,18 @@ struct FingerprintView: View {
         static let copy: LocalizedStringKey = "common.copy"
         static let verifiedBadge: LocalizedStringKey = "fingerprint.badge.verified"
         static let notVerifiedBadge: LocalizedStringKey = "fingerprint.badge.not_verified"
-        static let verifiedMessage: LocalizedStringKey = "fingerprint.message.verified"
+        static let verifiedFingerprintMessage = String(
+            localized: "fingerprint.message.fingerprint_verified",
+            defaultValue: "you have verified this peer's fingerprint."
+        )
+        static let verifiedPublicIdentityMessage = String(
+            localized: "fingerprint.message.public_identity_verified",
+            defaultValue: "signed public posts from this peer are authenticated."
+        )
+        static let publicIdentityPendingMessage = String(
+            localized: "fingerprint.message.public_identity_pending",
+            defaultValue: "signed public posts stay untrusted until QR verification confirms this peer's signing key."
+        )
         static func verifyHint(_ nickname: String) -> String {
             String(
                 format: String(localized: "fingerprint.message.verify_hint", comment: "Instruction to compare fingerprints with a named peer"),
@@ -38,8 +49,14 @@ struct FingerprintView: View {
                 nickname
             )
         }
-        static let markVerified: LocalizedStringKey = "fingerprint.action.mark_verified"
-        static let removeVerification: LocalizedStringKey = "fingerprint.action.remove_verification"
+        static let markVerified = String(
+            localized: "fingerprint.action.mark_fingerprint_verified",
+            defaultValue: "mark fingerprint verified"
+        )
+        static let removeVerification = String(
+            localized: "fingerprint.action.remove_fingerprint_verification",
+            defaultValue: "remove fingerprint verification"
+        )
         static func unknownPeer() -> String {
             String(localized: "common.unknown", comment: "Label for an unknown peer")
         }
@@ -173,6 +190,7 @@ struct FingerprintView: View {
                 // Verification status
                 if encryptionStatus == .noiseSecured || encryptionStatus == .noiseVerified {
                     let isVerified = encryptionStatus == .noiseVerified
+                    let hasVerifiedPublicIdentity = viewModel.hasVerifiedPublicIdentity(for: statusPeerID)
                     
                     VStack(spacing: 12) {
                         Text(isVerified ? Strings.verifiedBadge : Strings.notVerifiedBadge)
@@ -182,7 +200,10 @@ struct FingerprintView: View {
                         
                         Group {
                             if isVerified {
-                                Text(Strings.verifiedMessage)
+                                VStack(spacing: 6) {
+                                    Text(Strings.verifiedFingerprintMessage)
+                                    Text(hasVerifiedPublicIdentity ? Strings.verifiedPublicIdentityMessage : Strings.publicIdentityPendingMessage)
+                                }
                             } else {
                                 Text(Strings.verifyHint(peerNickname))
                             }

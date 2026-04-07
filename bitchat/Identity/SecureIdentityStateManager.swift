@@ -503,7 +503,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     func setVerified(fingerprint: String, verified: Bool) {
         SecureLogger.info("Fingerprint \(verified ? "verified" : "unverified"): \(fingerprint)", category: .security)
         
-        queue.async(flags: .barrier) {
+        queue.sync(flags: .barrier) {
             if verified {
                 self.cache.verifiedFingerprints.insert(fingerprint)
             } else {
