@@ -670,6 +670,12 @@ final class BLEService: NSObject {
             return peers[peerID]?.noisePublicKey?.sha256Fingerprint()
         }
     }
+
+    func getSigningPublicKey(for peerID: PeerID) -> Data? {
+        collectionsQueue.sync {
+            peers[peerID]?.signingPublicKey
+        }
+    }
     
     func getNoiseSessionState(for peerID: PeerID) -> LazyHandshakeState {
         if noiseService.hasEstablishedSession(with: peerID) {
@@ -3855,16 +3861,29 @@ extension BLEService {
 
         // Suppress announce logs to reduce noise
 
-        // Precompute signature verification outside barrier to reduce contention
+        // Precompute signature verification outside barrier to reduce contention.
+        // Announce signatures are only trusted once we already have a verified binding
+        // for this peer's signing key, either in memory or in persisted identity state.
         let existingPeerForVerify = collectionsQueue.sync { peers[peerID] }
+        let persistedTrustedIdentity = identityManager.getCryptoIdentitiesByPeerIDPrefix(peerID).first {
+            $0.publicKey == announcement.noisePublicKey &&
+            $0.signingPublicKey != nil &&
+            identityManager.isVerified(fingerprint: $0.fingerprint)
+        }
+        let trustedSigningKey =
+            ((existingPeerForVerify?.isVerifiedNickname == true) ? existingPeerForVerify?.signingPublicKey : nil)
+            ?? persistedTrustedIdentity?.signingPublicKey
+        let hasTrustedIdentity = trustedSigningKey != nil
         var verifiedAnnounce = false
-        if packet.signature != nil {
-            verifiedAnnounce = noiseService.verifyPacketSignature(packet, publicKey: announcement.signingPublicKey)
+        if let trustedSigningKey, packet.signature != nil {
+            verifiedAnnounce = noiseService.verifyPacketSignature(packet, publicKey: trustedSigningKey)
             if !verifiedAnnounce {
                 SecureLogger.warning("⚠️ Signature verification for announce failed \(peerID.id.prefix(8))", category: .security)
             }
         }
-        if let existingKey = existingPeerForVerify?.noisePublicKey, existingKey != announcement.noisePublicKey {
+        if let existingKey = existingPeerForVerify?.noisePublicKey,
+           existingPeerForVerify?.isVerifiedNickname == true,
+           existingKey != announcement.noisePublicKey {
             SecureLogger.warning("⚠️ Announce key mismatch for \(peerID.id.prefix(8))… — keeping unverified", category: .security)
             verifiedAnnounce = false
         }
@@ -3896,9 +3915,9 @@ extension BLEService {
             // Use precomputed verification result
             let verified = verifiedAnnounce
 
-            // Require verified announce; ignore otherwise (no backward compatibility)
-            if !verified {
-                SecureLogger.warning("❌ Ignoring unverified announce from \(peerID.id.prefix(8))…", category: .security)
+            // Never let an unauthenticated announce replace a previously trusted identity.
+            if hasTrustedIdentity && !verified {
+                SecureLogger.warning("❌ Ignoring unverified announce update from trusted peer \(peerID.id.prefix(8))…", category: .security)
                 // Reset flags to prevent post-barrier code from acting on unverified announces
                 isNewPeer = false
                 isReconnectedPeer = false
@@ -3913,8 +3932,10 @@ extension BLEService {
                     nickname: announcement.nickname,
                     isConnected: isDirectAnnounce || hasPeripheralConnection || hasCentralSubscription,
                     noisePublicKey: announcement.noisePublicKey,
+                    // Keep the observed signing key in memory for later user verification,
+                    // but only mark it trusted after an authenticated announce.
                     signingPublicKey: announcement.signingPublicKey,
-                    isVerifiedNickname: true,
+                    isVerifiedNickname: existing.isVerifiedNickname || verified,
                     lastSeen: Date()
                 )
             } else {
@@ -3924,8 +3945,9 @@ extension BLEService {
                     nickname: announcement.nickname,
                     isConnected: isDirectAnnounce || hasPeripheralConnection || hasCentralSubscription,
                     noisePublicKey: announcement.noisePublicKey,
+                    // First-contact announces remain discoverable but untrusted.
                     signingPublicKey: announcement.signingPublicKey,
-                    isVerifiedNickname: true,
+                    isVerifiedNickname: verified,
                     lastSeen: Date()
                 )
             }
@@ -3954,13 +3976,16 @@ extension BLEService {
             meshTopology.updateNeighbors(for: peerID.routingData, neighbors: neighbors)
         }
 
-        // Persist cryptographic identity and signing key for robust offline verification
-        identityManager.upsertCryptographicIdentity(
-            fingerprint: announcement.noisePublicKey.sha256Fingerprint(),
-            noisePublicKey: announcement.noisePublicKey,
-            signingPublicKey: announcement.signingPublicKey,
-            claimedNickname: announcement.nickname
-        )
+        if verifiedAnnounce {
+            // Persist cryptographic identity only after the announce was authenticated
+            // against an already trusted signing key.
+            identityManager.upsertCryptographicIdentity(
+                fingerprint: announcement.noisePublicKey.sha256Fingerprint(),
+                noisePublicKey: announcement.noisePublicKey,
+                signingPublicKey: announcement.signingPublicKey,
+                claimedNickname: announcement.nickname
+            )
+        }
 
         // Notify UI on main thread
         notifyUI { [weak self] in
