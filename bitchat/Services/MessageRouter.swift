@@ -5,6 +5,7 @@ import Foundation
 @MainActor
 final class MessageRouter {
     private let transports: [Transport]
+    private let idBridge: NostrIdentityBridge?
 
     // Outbox entry with timestamp for TTL-based eviction
     private struct QueuedMessage {
@@ -12,6 +13,10 @@ final class MessageRouter {
         let nickname: String
         let messageID: String
         let timestamp: Date
+        // Tracks when this message was last handed to a transport.
+        // nil = never sent (peer was offline). Messages stay in the outbox
+        // until a delivery ack confirms receipt.
+        var sentAt: Date?
     }
 
     private var outbox: [PeerID: [QueuedMessage]] = [:]
@@ -19,9 +24,12 @@ final class MessageRouter {
     // Outbox limits to prevent unbounded memory growth
     private static let maxMessagesPerPeer = 100
     private static let messageTTLSeconds: TimeInterval = 24 * 60 * 60 // 24 hours
+    // Don't resend a message that was handed to transport less than this many seconds ago
+    private static let resendCooldownSeconds: TimeInterval = 30
 
-    init(transports: [Transport]) {
+    init(transports: [Transport], idBridge: NostrIdentityBridge? = nil) {
         self.transports = transports
+        self.idBridge = idBridge
 
         // Observe favorites changes to learn Nostr mapping and flush queued messages
         NotificationCenter.default.addObserver(
@@ -49,94 +57,163 @@ final class MessageRouter {
 
     // MARK: - Transport Selection
 
-    private func reachableTransport(for peerID: PeerID) -> Transport? {
-        transports.first { $0.isPeerReachable(peerID) }
-    }
-
     private func connectedTransport(for peerID: PeerID) -> Transport? {
         transports.first { $0.isPeerConnected(peerID) }
     }
 
+    private func reachableTransport(for peerID: PeerID) -> Transport? {
+        transports.first { $0.isPeerReachable(peerID) }
+    }
+
     // MARK: - Message Sending
 
-    func sendPrivate(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) {
-        if let transport = reachableTransport(for: peerID) {
-            SecureLogger.debug("Routing PM via \(type(of: transport)) to \(peerID.id.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
-            transport.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname, messageID: messageID)
-        } else {
-            // Queue for later with timestamp for TTL tracking
-            if outbox[peerID] == nil { outbox[peerID] = [] }
+    /// Queues and attempts immediate delivery of a private message.
+    /// - Returns: `true` if the message was handed to a transport, `false` if queued for later.
+    @discardableResult
+    func sendPrivate(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) -> Bool {
+        // Normalize to short ID for consistent outbox keying (handles both 16-hex and 64-hex formats)
+        let normalizedPeerID = peerID.toShort()
 
-            let message = QueuedMessage(content: content, nickname: recipientNickname, messageID: messageID, timestamp: Date())
-            outbox[peerID]?.append(message)
+        // When the user actively sends a new message, clear cooldown on any
+        // queued messages so they are retried in the same flush pass.
+        resetSendState(for: normalizedPeerID)
 
-            // Enforce per-peer size limit with FIFO eviction
-            if let count = outbox[peerID]?.count, count > Self.maxMessagesPerPeer {
-                let evicted = outbox[peerID]?.removeFirst()
-                SecureLogger.warning("📤 Outbox overflow for \(peerID.id.prefix(8))… - evicted oldest message: \(evicted?.messageID.prefix(8) ?? "?")…", category: .session)
-            }
+        // Always-queue-first: append to outbox, then flush immediately.
+        // Messages stay in the outbox until a delivery ack confirms receipt.
+        // When peer is connected, the message is queued and instantly flushed (sent).
+        // When offline, it stays in the outbox until the peer reconnects.
+        if outbox[normalizedPeerID] == nil { outbox[normalizedPeerID] = [] }
 
-            SecureLogger.debug("Queued PM for \(peerID.id.prefix(8))… (no reachable transport) id=\(messageID.prefix(8))… queue=\(outbox[peerID]?.count ?? 0)", category: .session)
+        let message = QueuedMessage(content: content, nickname: recipientNickname, messageID: messageID, timestamp: Date(), sentAt: nil)
+        outbox[normalizedPeerID]?.append(message)
+
+        // Enforce per-peer size limit with FIFO eviction
+        if let count = outbox[normalizedPeerID]?.count, count > Self.maxMessagesPerPeer {
+            let evicted = outbox[normalizedPeerID]?.removeFirst()
+            SecureLogger.warning("Outbox overflow for \(normalizedPeerID.id.prefix(8))… - evicted oldest message: \(evicted?.messageID.prefix(8) ?? "?")…", category: .session)
         }
+
+        // Try immediate delivery
+        flushOutbox(for: normalizedPeerID)
+
+        // Check if the message was sent (sentAt was set by flushOutbox)
+        return outbox[normalizedPeerID]?.first(where: { $0.messageID == messageID })?.sentAt != nil
     }
 
     func sendReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {
-        if let transport = reachableTransport(for: peerID) {
-            SecureLogger.debug("Routing READ ack via \(type(of: transport)) to \(peerID.id.prefix(8))… id=\(receipt.originalMessageID.prefix(8))…", category: .session)
-            transport.sendReadReceipt(receipt, to: peerID)
+        let normalizedPeerID = peerID.toShort()
+        if let transport = reachableTransport(for: normalizedPeerID) {
+            SecureLogger.debug("Routing READ ack via \(type(of: transport)) to \(normalizedPeerID.id.prefix(8))… id=\(receipt.originalMessageID.prefix(8))…", category: .session)
+            transport.sendReadReceipt(receipt, to: normalizedPeerID)
         } else if !transports.isEmpty {
-            SecureLogger.debug("No reachable transport for READ ack to \(peerID.id.prefix(8))…", category: .session)
+            SecureLogger.debug("No reachable transport for READ ack to \(normalizedPeerID.id.prefix(8))…", category: .session)
         }
     }
 
     func sendDeliveryAck(_ messageID: String, to peerID: PeerID) {
-        if let transport = reachableTransport(for: peerID) {
-            SecureLogger.debug("Routing DELIVERED ack via \(type(of: transport)) to \(peerID.id.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
-            transport.sendDeliveryAck(for: messageID, to: peerID)
+        let normalizedPeerID = peerID.toShort()
+        if let transport = reachableTransport(for: normalizedPeerID) {
+            SecureLogger.debug("Routing DELIVERED ack via \(type(of: transport)) to \(normalizedPeerID.id.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
+            transport.sendDeliveryAck(for: messageID, to: normalizedPeerID)
         }
     }
 
     func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {
-        if let transport = connectedTransport(for: peerID) {
-            transport.sendFavoriteNotification(to: peerID, isFavorite: isFavorite)
-        } else if let transport = reachableTransport(for: peerID) {
-            transport.sendFavoriteNotification(to: peerID, isFavorite: isFavorite)
+        let normalizedPeerID = peerID.toShort()
+        // Build the favorite payload (same format BLEService/NostrTransport used to build internally)
+        var content = isFavorite ? "[FAVORITED]" : "[UNFAVORITED]"
+        if let npub = try? idBridge?.getCurrentNostrIdentity()?.npub {
+            content += ":" + npub
         }
+        // Route through the outbox so favorites survive Noise handshake and offline queuing
+        sendPrivate(content, to: normalizedPeerID, recipientNickname: "", messageID: UUID().uuidString)
     }
 
     // MARK: - Outbox Management
 
+    /// Peer IDs that currently have queued messages in the outbox (for diagnostics)
+    var pendingPeerIDs: [PeerID] {
+        Array(outbox.keys)
+    }
+
     func flushOutbox(for peerID: PeerID) {
-        guard let queued = outbox[peerID], !queued.isEmpty else { return }
-        SecureLogger.debug("Flushing outbox for \(peerID.id.prefix(8))… count=\(queued.count)", category: .session)
+        // Normalize to short ID for consistent outbox lookup (handles both 16-hex and 64-hex formats)
+        let normalizedPeerID = peerID.toShort()
+        guard var queued = outbox[normalizedPeerID], !queued.isEmpty else {
+            return
+        }
 
+        // Prefer a connected transport (BLE), fall back to reachable (Nostr)
+        let transport = connectedTransport(for: normalizedPeerID) ?? reachableTransport(for: normalizedPeerID)
         let now = Date()
-        var remaining: [QueuedMessage] = []
+        var sentCount = 0
 
-        for message in queued {
-            // Skip expired messages (TTL exceeded)
-            if now.timeIntervalSince(message.timestamp) > Self.messageTTLSeconds {
-                SecureLogger.debug("⏰ Expired queued message for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))… (age: \(Int(now.timeIntervalSince(message.timestamp)))s)", category: .session)
-                continue
-            }
-
-            if let transport = reachableTransport(for: peerID) {
-                SecureLogger.debug("Outbox -> \(type(of: transport)) for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))…", category: .session)
-                transport.sendPrivateMessage(message.content, to: peerID, recipientNickname: message.nickname, messageID: message.messageID)
-            } else {
-                remaining.append(message)
+        // Remove expired messages first (reverse to preserve indices)
+        for i in queued.indices.reversed() {
+            if now.timeIntervalSince(queued[i].timestamp) > Self.messageTTLSeconds {
+                queued.remove(at: i)
             }
         }
 
-        if remaining.isEmpty {
-            outbox.removeValue(forKey: peerID)
+        // Send in order (oldest first) to preserve message ordering
+        for i in queued.indices {
+            // Skip messages recently sent (waiting for delivery ack)
+            if let sentAt = queued[i].sentAt, now.timeIntervalSince(sentAt) < Self.resendCooldownSeconds {
+                continue
+            }
+
+            // Send if transport is available
+            if let transport = transport {
+                // Only mark sentAt when the transport actually encrypted and transmitted
+                // the message. If BLE queued it internally (no Noise session), sentAt
+                // stays nil so the next flush will retry.
+                let wasSent = transport.sendPrivateMessage(queued[i].content, to: normalizedPeerID, recipientNickname: queued[i].nickname, messageID: queued[i].messageID)
+                if wasSent {
+                    queued[i].sentAt = now
+                    sentCount += 1
+                }
+            }
+        }
+
+        if queued.isEmpty {
+            outbox.removeValue(forKey: normalizedPeerID)
         } else {
-            outbox[peerID] = remaining
+            outbox[normalizedPeerID] = queued
+        }
+
+        if sentCount > 0 {
+            SecureLogger.debug("Flushed \(sentCount) message(s) for \(normalizedPeerID.id.prefix(8))…", category: .session)
         }
     }
 
     func flushAllOutbox() {
-        for key in Array(outbox.keys) { flushOutbox(for: key) }
+        let pending = Array(outbox.keys)
+        guard !pending.isEmpty else { return }
+        for key in pending { flushOutbox(for: key) }
+    }
+
+    /// Remove a message from the outbox after delivery is confirmed via ack.
+    func confirmDelivery(messageID: String) {
+        for peerID in Array(outbox.keys) {
+            if let idx = outbox[peerID]?.firstIndex(where: { $0.messageID == messageID }) {
+                outbox[peerID]?.remove(at: idx)
+                if outbox[peerID]?.isEmpty == true {
+                    outbox.removeValue(forKey: peerID)
+                }
+                return
+            }
+        }
+    }
+
+    /// Clear sentAt timestamps for a peer so queued messages are resent on reconnect.
+    func resetSendState(for peerID: PeerID) {
+        let normalizedPeerID = peerID.toShort()
+        guard var queued = outbox[normalizedPeerID], !queued.isEmpty else { return }
+        for i in queued.indices {
+            queued[i].sentAt = nil
+        }
+        outbox[normalizedPeerID] = queued
+        SecureLogger.debug("Reset send state for \(normalizedPeerID.id.prefix(8))…: \(queued.count) messages will be resent", category: .session)
     }
 
     /// Periodically clean up expired messages from all outboxes
