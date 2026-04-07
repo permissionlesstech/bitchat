@@ -15,6 +15,12 @@ import Foundation
 /// Creates a ChatViewModel with mock dependencies for testing
 @MainActor
 private func makeTestableViewModel() -> (viewModel: ChatViewModel, transport: MockTransport) {
+    let (viewModel, transport, _) = makeTestableViewModelWithIdentityManager()
+    return (viewModel, transport)
+}
+
+@MainActor
+private func makeTestableViewModelWithIdentityManager() -> (viewModel: ChatViewModel, transport: MockTransport, identityManager: MockIdentityManager) {
     let keychain = MockKeychain()
     let keychainHelper = MockKeychainHelper()
     let idBridge = NostrIdentityBridge(keychain: keychainHelper)
@@ -28,7 +34,7 @@ private func makeTestableViewModel() -> (viewModel: ChatViewModel, transport: Mo
         transport: transport
     )
 
-    return (viewModel, transport)
+    return (viewModel, transport, identityManager)
 }
 
 // MARK: - Initialization Tests
@@ -273,6 +279,42 @@ struct ChatViewModelPeerTests {
         transport.connectedPeers.insert(peerID)
 
         #expect(transport.isPeerConnected(peerID))
+    }
+}
+
+struct ChatViewModelVerificationTests {
+
+    @Test @MainActor
+    func verifyFingerprint_persistsNoiseIdentityWithoutSigningKey() async {
+        let (viewModel, transport, identityManager) = makeTestableViewModelWithIdentityManager()
+        let signer = NoiseEncryptionService(keychain: MockKeychain())
+        let peerID = PeerID(publicKey: signer.getStaticPublicKeyData())
+        let fingerprint = signer.getStaticPublicKeyData().sha256Fingerprint()
+
+        transport.peerFingerprints[peerID] = fingerprint
+        transport.updatePeerSnapshots([
+            TransportPeerSnapshot(
+                peerID: peerID,
+                nickname: "Alice",
+                isConnected: true,
+                noisePublicKey: signer.getStaticPublicKeyData(),
+                lastSeen: Date()
+            )
+        ])
+
+        let hasPeer = await TestHelpers.waitUntil(
+            { viewModel.getPeer(byID: peerID) != nil },
+            timeout: TestConstants.defaultTimeout
+        )
+        #expect(hasPeer)
+
+        viewModel.verifyFingerprint(for: peerID)
+
+        let persisted = identityManager.lastUpsertedIdentity
+        #expect(persisted?.fingerprint == fingerprint)
+        #expect(persisted?.noisePublicKey == signer.getStaticPublicKeyData())
+        #expect(persisted?.signingPublicKey == nil)
+        #expect(persisted?.claimedNickname == "Alice")
     }
 }
 

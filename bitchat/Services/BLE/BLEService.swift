@@ -670,12 +670,6 @@ final class BLEService: NSObject {
             return peers[peerID]?.noisePublicKey?.sha256Fingerprint()
         }
     }
-
-    func getSigningPublicKey(for peerID: PeerID) -> Data? {
-        collectionsQueue.sync {
-            peers[peerID]?.signingPublicKey
-        }
-    }
     
     func getNoiseSessionState(for peerID: PeerID) -> LazyHandshakeState {
         if noiseService.hasEstablishedSession(with: peerID) {
@@ -1146,45 +1140,8 @@ final class BLEService: NSObject {
     private func handleFileTransfer(_ packet: BitchatPacket, from peerID: PeerID) {
         if peerID == myPeerID && packet.ttl != 0 { return }
 
-        var accepted = false
-        var senderNickname = ""
-
         let peersSnapshot = collectionsQueue.sync { peers }
-
-        if peerID == myPeerID {
-            accepted = true
-            senderNickname = myNickname
-        } else if let info = peersSnapshot[peerID], info.isVerifiedNickname {
-            accepted = true
-            senderNickname = info.nickname
-            let hasCollision = peersSnapshot.values.contains { $0.isConnected && $0.nickname == info.nickname && $0.peerID != peerID } || (myNickname == info.nickname)
-            if hasCollision {
-                senderNickname += "#" + String(peerID.id.prefix(4))
-            }
-        } else if let info = peersSnapshot[peerID], info.isConnected {
-            accepted = true
-            senderNickname = info.nickname.isEmpty ? "anon" + String(peerID.id.prefix(4)) : info.nickname
-            let hasCollision = peersSnapshot.values.contains { $0.isConnected && $0.nickname == info.nickname && $0.peerID != peerID } || (myNickname == info.nickname)
-            if hasCollision {
-                senderNickname += "#" + String(peerID.id.prefix(4))
-            }
-        } else if let signature = packet.signature, let packetData = packet.toBinaryDataForSigning() {
-            let candidates = identityManager.getCryptoIdentitiesByPeerIDPrefix(peerID)
-            for candidate in candidates {
-                if let signingKey = candidate.signingPublicKey,
-                   noiseService.verifySignature(signature, for: packetData, publicKey: signingKey) {
-                    accepted = true
-                    if let social = identityManager.getSocialIdentity(for: candidate.fingerprint) {
-                        senderNickname = social.localPetname ?? social.claimedNickname
-                    } else {
-                        senderNickname = "anon" + String(peerID.id.prefix(4))
-                    }
-                    break
-                }
-            }
-        }
-
-        guard accepted else {
+        guard let senderNickname = authenticatedPublicSender(for: packet, from: peerID, peersSnapshot: peersSnapshot) else {
             SecureLogger.warning("🚫 Dropping file transfer from unverified or unknown peer \(peerID.id.prefix(8))…", category: .security)
             return
         }
@@ -1261,6 +1218,63 @@ final class BLEService: NSObject {
         notifyUI { [weak self] in
             self?.delegate?.didReceiveMessage(message)
         }
+    }
+
+    private func collisionAdjustedNickname(for peerID: PeerID, nickname: String, peersSnapshot: [PeerID: PeerInfo]) -> String {
+        guard !nickname.isEmpty else {
+            return "anon" + String(peerID.id.prefix(4))
+        }
+
+        let hasCollision =
+            peersSnapshot.values.contains { $0.isConnected && $0.nickname == nickname && $0.peerID != peerID }
+            || (myNickname == nickname)
+        if hasCollision {
+            return nickname + "#" + String(peerID.id.prefix(4))
+        }
+        return nickname
+    }
+
+    private func authenticatedPublicSender(for packet: BitchatPacket, from peerID: PeerID, peersSnapshot: [PeerID: PeerInfo]) -> String? {
+        if peerID == myPeerID {
+            return myNickname
+        }
+
+        guard let signature = packet.signature, let packetData = packet.toBinaryDataForSigning() else {
+            return nil
+        }
+
+        if let info = peersSnapshot[peerID],
+           info.isVerifiedNickname,
+           let signingKey = info.signingPublicKey,
+           noiseService.verifySignature(signature, for: packetData, publicKey: signingKey) {
+            return collisionAdjustedNickname(for: peerID, nickname: info.nickname, peersSnapshot: peersSnapshot)
+        }
+
+        let expectedNoiseKey = peersSnapshot[peerID]?.noisePublicKey
+        let candidates = identityManager.getCryptoIdentitiesByPeerIDPrefix(peerID)
+        for candidate in candidates {
+            guard identityManager.isVerified(fingerprint: candidate.fingerprint),
+                  let signingKey = candidate.signingPublicKey else {
+                continue
+            }
+            if let expectedNoiseKey, candidate.publicKey != expectedNoiseKey {
+                continue
+            }
+            guard noiseService.verifySignature(signature, for: packetData, publicKey: signingKey) else {
+                continue
+            }
+
+            if let info = peersSnapshot[peerID], info.noisePublicKey == candidate.publicKey {
+                return collisionAdjustedNickname(for: peerID, nickname: info.nickname, peersSnapshot: peersSnapshot)
+            }
+
+            if let social = identityManager.getSocialIdentity(for: candidate.fingerprint) {
+                return social.localPetname ?? social.claimedNickname
+            }
+            return "anon" + String(peerID.id.prefix(4))
+        }
+
+        return nil
     }
     
     func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {
@@ -3932,9 +3946,7 @@ extension BLEService {
                     nickname: announcement.nickname,
                     isConnected: isDirectAnnounce || hasPeripheralConnection || hasCentralSubscription,
                     noisePublicKey: announcement.noisePublicKey,
-                    // Keep the observed signing key in memory for later user verification,
-                    // but only mark it trusted after an authenticated announce.
-                    signingPublicKey: announcement.signingPublicKey,
+                    signingPublicKey: verified ? announcement.signingPublicKey : existing.signingPublicKey,
                     isVerifiedNickname: existing.isVerifiedNickname || verified,
                     lastSeen: Date()
                 )
@@ -3945,8 +3957,7 @@ extension BLEService {
                     nickname: announcement.nickname,
                     isConnected: isDirectAnnounce || hasPeripheralConnection || hasCentralSubscription,
                     noisePublicKey: announcement.noisePublicKey,
-                    // First-contact announces remain discoverable but untrusted.
-                    signingPublicKey: announcement.signingPublicKey,
+                    signingPublicKey: verified ? announcement.signingPublicKey : nil,
                     isVerifiedNickname: verified,
                     lastSeen: Date()
                 )
@@ -4067,47 +4078,10 @@ extension BLEService {
             }
         }
 
-        var accepted = false
-        var senderNickname: String = ""
         // Snapshot peers to avoid concurrent mutation while iterating during nickname collision checks.
         let peersSnapshot = collectionsQueue.sync { peers }
 
-        // If the packet is from ourselves (e.g., recovered via sync TTL==0), accept immediately
-        if peerID == myPeerID {
-            accepted = true
-            senderNickname = myNickname
-        }
-        else if let info = peersSnapshot[peerID], info.isVerifiedNickname {
-            // Known verified peer path
-            accepted = true
-            senderNickname = info.nickname
-            // Handle nickname collisions
-            let hasCollision = peersSnapshot.values.contains { $0.isConnected && $0.nickname == info.nickname && $0.peerID != peerID } || (myNickname == info.nickname)
-            if hasCollision {
-                senderNickname += "#" + String(peerID.id.prefix(4))
-            }
-        } else {
-            // Fallback: verify signature using persisted signing key for this peerID's fingerprint prefix
-            if let signature = packet.signature, let packetData = packet.toBinaryDataForSigning() {
-                // Find candidate identities by peerID prefix (16 hex)
-                let candidates = identityManager.getCryptoIdentitiesByPeerIDPrefix(peerID)
-                for candidate in candidates {
-                    if let signingKey = candidate.signingPublicKey,
-                       noiseService.verifySignature(signature, for: packetData, publicKey: signingKey) {
-                        accepted = true
-                        // Prefer persisted social petname or claimed nickname
-                        if let social = identityManager.getSocialIdentity(for: candidate.fingerprint) {
-                            senderNickname = social.localPetname ?? social.claimedNickname
-                        } else {
-                            senderNickname = "anon" + String(peerID.id.prefix(4))
-                        }
-                        break
-                    }
-                }
-            }
-        }
-
-        guard accepted else {
+        guard let senderNickname = authenticatedPublicSender(for: packet, from: peerID, peersSnapshot: peersSnapshot) else {
             SecureLogger.warning("🚫 Dropping public message from unverified or unknown peer \(peerID.id.prefix(8))…", category: .security)
             return
         }

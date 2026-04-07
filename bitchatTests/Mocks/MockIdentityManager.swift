@@ -14,6 +14,7 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
     private var blockedFingerprints: Set<String> = []
     private var blockedNostrPubkeys: Set<String> = []
     private var socialIdentities: [String: SocialIdentity] = [:]
+    private(set) var lastUpsertedIdentity: (fingerprint: String, noisePublicKey: Data, signingPublicKey: Data?, claimedNickname: String?)?
     
     init(_ keychain: KeychainManagerProtocol) {
         self.keychain = keychain
@@ -29,7 +30,9 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
         socialIdentities[fingerprint]
     }
     
-    func upsertCryptographicIdentity(fingerprint: String, noisePublicKey: Data, signingPublicKey: Data?, claimedNickname: String?) {}
+    func upsertCryptographicIdentity(fingerprint: String, noisePublicKey: Data, signingPublicKey: Data?, claimedNickname: String?) {
+        lastUpsertedIdentity = (fingerprint, noisePublicKey, signingPublicKey, claimedNickname)
+    }
     
     func getCryptoIdentitiesByPeerIDPrefix(_ peerID: PeerID) -> [CryptographicIdentity] {
         []

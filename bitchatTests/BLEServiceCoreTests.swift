@@ -13,23 +13,30 @@ import CoreBluetooth
 struct BLEServiceCoreTests {
 
     @Test
-    func duplicatePacket_isDeduped() async {
-        let ble = makeService()
+    func duplicatePacket_isDeduped() async throws {
+        let signer = NoiseEncryptionService(keychain: MockKeychain())
+        let sender = PeerID(publicKey: signer.getStaticPublicKeyData())
+        let identityManager = TrackingIdentityManager()
+        identityManager.seedVerifiedIdentity(
+            noisePublicKey: signer.getStaticPublicKeyData(),
+            signingPublicKey: signer.getSigningPublicKeyData(),
+            claimedNickname: "HelloPeer"
+        )
+        let ble = makeService(identityManager: identityManager)
         let delegate = PublicCaptureDelegate()
         ble.delegate = delegate
 
-        let sender = PeerID(str: "1122334455667788")
         let timestamp = UInt64(Date().timeIntervalSince1970 * 1000)
-        let packet = makePublicPacket(content: "Hello", sender: sender, timestamp: timestamp)
+        let packet = try makeSignedPublicPacket(content: "Hello", sender: sender, signer: signer, timestamp: timestamp)
 
-        ble._test_handlePacket(packet, fromPeerID: sender)
+        ble._test_handlePacket(packet, fromPeerID: sender, preseedPeer: false)
         let receivedFirst = await TestHelpers.waitUntil(
             { delegate.publicMessagesSnapshot().count == 1 },
             timeout: TestConstants.defaultTimeout
         )
         #expect(receivedFirst)
 
-        ble._test_handlePacket(packet, fromPeerID: sender)
+        ble._test_handlePacket(packet, fromPeerID: sender, preseedPeer: false)
         let receivedDuplicate = await TestHelpers.waitUntil(
             { delegate.publicMessagesSnapshot().count > 1 },
             timeout: TestConstants.shortTimeout
@@ -150,18 +157,32 @@ struct BLEServiceCoreTests {
         #expect(acceptedAnnounce)
         #expect(identityManager.upsertedFingerprints == [signer.getStaticPublicKeyData().sha256Fingerprint()])
 
-        let publicPacket = makePublicPacket(
+        let unsignedPublicPacket = makePublicPacket(
             content: "trusted",
             sender: peerID,
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000)
         )
-        ble._test_handlePacket(publicPacket, fromPeerID: peerID, preseedPeer: false)
+        ble._test_handlePacket(unsignedPublicPacket, fromPeerID: peerID, preseedPeer: false)
 
         let acceptedUnsignedMessage = await TestHelpers.waitUntil(
             { delegate.publicMessagesSnapshot().contains(where: { $0.content == "trusted" && $0.senderPeerID == peerID }) },
+            timeout: TestConstants.shortTimeout
+        )
+        #expect(!acceptedUnsignedMessage)
+
+        let signedPublicPacket = try makeSignedPublicPacket(
+            content: "trusted",
+            sender: peerID,
+            signer: signer,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000)
+        )
+        ble._test_handlePacket(signedPublicPacket, fromPeerID: peerID, preseedPeer: false)
+
+        let acceptedSignedMessage = await TestHelpers.waitUntil(
+            { delegate.publicMessagesSnapshot().contains(where: { $0.content == "trusted" && $0.senderPeerID == peerID }) },
             timeout: TestConstants.defaultTimeout
         )
-        #expect(acceptedUnsignedMessage)
+        #expect(acceptedSignedMessage)
     }
 
     @Test
@@ -198,6 +219,49 @@ struct BLEServiceCoreTests {
         #expect(peer?.nickname == "Alice")
         #expect(identityManager.upsertedFingerprints == [trustedSigner.getStaticPublicKeyData().sha256Fingerprint()])
     }
+
+    @Test
+    func unverifiedConnectedPeer_fileTransferIsRejected() async throws {
+        let ble = makeService()
+        let delegate = PublicCaptureDelegate()
+        ble.delegate = delegate
+
+        let signer = NoiseEncryptionService(keychain: MockKeychain())
+        let announce = try makeSignedAnnouncementPacket(signer: signer, nickname: "Mallory")
+        ble._test_handlePacket(announce.packet, fromPeerID: announce.peerID, preseedPeer: false)
+
+        let sawPeer = await TestHelpers.waitUntil(
+            { ble.currentPeerSnapshots().contains(where: { $0.peerID == announce.peerID }) },
+            timeout: TestConstants.defaultTimeout
+        )
+        #expect(sawPeer)
+
+        let payload = try #require(
+            BitchatFilePacket(
+                fileName: "spam.bin",
+                fileSize: nil,
+                mimeType: MimeType.octetStream.mimeString,
+                content: Data([0x01, 0x02, 0x03, 0x04])
+            ).encode(),
+            "Failed to encode file payload"
+        )
+        let packet = BitchatPacket(
+            type: MessageType.fileTransfer.rawValue,
+            senderID: try #require(Data(hexString: announce.peerID.id), "Failed to encode sender ID"),
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: payload,
+            signature: nil,
+            ttl: TransportConfig.messageTTLDefault
+        )
+        ble._test_handlePacket(packet, fromPeerID: announce.peerID, preseedPeer: false)
+
+        let delivered = await TestHelpers.waitUntil(
+            { !delegate.receivedMessagesSnapshot().isEmpty },
+            timeout: TestConstants.shortTimeout
+        )
+        #expect(!delivered)
+    }
 }
 
 private func makeService(identityManager: SecureIdentityStateManagerProtocol? = nil) -> BLEService {
@@ -222,6 +286,16 @@ private func makePublicPacket(content: String, sender: PeerID, timestamp: UInt64
         signature: nil,
         ttl: 3
     )
+}
+
+private func makeSignedPublicPacket(
+    content: String,
+    sender: PeerID,
+    signer: NoiseEncryptionService,
+    timestamp: UInt64
+) throws -> BitchatPacket {
+    let packet = makePublicPacket(content: content, sender: sender, timestamp: timestamp)
+    return try #require(signer.signPacket(packet), "Failed to sign public packet")
 }
 
 private func makeSignedAnnouncementPacket(
@@ -257,6 +331,7 @@ private func makeSignedAnnouncementPacket(
 private final class PublicCaptureDelegate: BitchatDelegate {
     private let lock = NSLock()
     private(set) var publicMessages: [BitchatMessage] = []
+    private(set) var receivedMessages: [BitchatMessage] = []
 
     func didReceivePublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date, messageID: String?) {
         let message = BitchatMessage(
@@ -276,7 +351,11 @@ private final class PublicCaptureDelegate: BitchatDelegate {
         lock.unlock()
     }
 
-    func didReceiveMessage(_ message: BitchatMessage) {}
+    func didReceiveMessage(_ message: BitchatMessage) {
+        lock.lock()
+        receivedMessages.append(message)
+        lock.unlock()
+    }
     func didConnectToPeer(_ peerID: PeerID) {}
     func didDisconnectFromPeer(_ peerID: PeerID) {}
     func didUpdatePeerList(_ peers: [PeerID]) {}
@@ -286,6 +365,12 @@ private final class PublicCaptureDelegate: BitchatDelegate {
         lock.lock()
         defer { lock.unlock() }
         return publicMessages
+    }
+
+    func receivedMessagesSnapshot() -> [BitchatMessage] {
+        lock.lock()
+        defer { lock.unlock() }
+        return receivedMessages
     }
 }
 

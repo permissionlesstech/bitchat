@@ -2887,8 +2887,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
     @MainActor
     func verifyFingerprint(for peerID: PeerID) {
         guard let fingerprint = getFingerprint(for: peerID) else { return }
-        let signingPublicKey = (meshService as? BLEService)?.getSigningPublicKey(for: peerID)
-        persistVerifiedIdentity(for: peerID, signingPublicKey: signingPublicKey)
+        // Manual fingerprint verification only authenticates the Noise identity.
+        // The public-message signing key is only trusted when it is verified OOB,
+        // such as via the QR verification flow.
+        persistVerifiedIdentity(for: peerID, signingPublicKey: nil)
         
         // Update secure storage with verified status
         identityManager.setVerified(fingerprint: fingerprint, verified: true)
