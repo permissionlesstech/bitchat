@@ -6,6 +6,8 @@ default:
     @echo "BitChat macOS Build Commands:"
     @echo "  just run     - Build and run the macOS app"
     @echo "  just build   - Build the macOS app only"
+    @echo "  just intel13 - Build for Intel macOS 13 (x86_64)"
+    @echo "  just package-intel-macos13 - Build Intel macOS 13 and create zip in dist/"
     @echo "  just clean   - Clean build artifacts and restore original files"
     @echo "  just check   - Check prerequisites"
     @echo ""
@@ -48,6 +50,41 @@ patch-for-macos: backup
 build: #check generate
     @echo "Building BitChat for macOS..."
     @xcodebuild -project bitchat.xcodeproj -scheme "bitchat (macOS)" -configuration Debug CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGN_ENTITLEMENTS="" build
+
+# Build the local Arti dependency for Intel macOS and package it as xcframework
+prepare-arti-intel:
+    @echo "Preparing local Arti xcframework (x86_64 macOS slice)..."
+    @cd localPackages/Arti && rustup target add x86_64-apple-darwin >/dev/null 2>&1 || true
+    @cd localPackages/Arti && cargo build --release --target x86_64-apple-darwin -p arti-bitchat
+    @cd localPackages/Arti && rm -rf Frameworks/arti.xcframework
+    @cd localPackages/Arti && xcodebuild -create-xcframework \
+        -library target/x86_64-apple-darwin/release/libarti_bitchat.a \
+        -headers Frameworks/include \
+        -output Frameworks/arti.xcframework
+
+# Build specifically for Intel x86_64 on macOS 13
+build-intel-macos13: prepare-arti-intel
+    @echo "Building BitChat for Intel macOS 13 (x86_64)..."
+    @xcodebuild -project bitchat.xcodeproj -scheme "bitchat (macOS)" -configuration Release \
+        -derivedDataPath build/DerivedData-Intel \
+        -destination 'platform=macOS,arch=x86_64' \
+        ARCHS=x86_64 \
+        MACOSX_DEPLOYMENT_TARGET=13.0 \
+        CODE_SIGNING_ALLOWED=NO \
+        build
+
+# Friendly alias for one-command Intel build
+intel13: build-intel-macos13
+
+# Build Intel macOS 13 app and package as zip for transfer
+package-intel-macos13: build-intel-macos13
+    @echo "Packaging Intel macOS app..."
+    @test -f build/DerivedData-Intel/Build/Products/Release/bitchat.app/Contents/MacOS/bitchat
+    @lipo -archs build/DerivedData-Intel/Build/Products/Release/bitchat.app/Contents/MacOS/bitchat | grep -q "x86_64"
+    @mkdir -p dist
+    @rm -f dist/bitchat-macos13-intel.zip
+    @ditto -c -k --sequesterRsrc --keepParent build/DerivedData-Intel/Build/Products/Release/bitchat.app dist/bitchat-macos13-intel.zip
+    @echo "✅ Created dist/bitchat-macos13-intel.zip"
 
 # Run the macOS app
 run: build
