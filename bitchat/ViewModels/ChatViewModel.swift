@@ -2913,6 +2913,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
         // Manual fingerprint verification only authenticates the Noise identity.
         // The public-message signing key is only trusted when it is verified OOB,
         // such as via the QR verification flow.
+        identityManager.clearSigningPublicKey(for: fingerprint)
         persistVerifiedIdentity(for: peerID, signingPublicKey: nil)
         
         // Update secure storage with verified status

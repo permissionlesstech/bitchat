@@ -472,6 +472,12 @@ private final class TrackingIdentityManager: SecureIdentityStateManagerProtocol 
         upsertedFingerprints.append(fingerprint)
     }
 
+    func clearSigningPublicKey(for fingerprint: String) {
+        guard var identity = identities[fingerprint] else { return }
+        identity.signingPublicKey = nil
+        identities[fingerprint] = identity
+    }
+
     func getCryptoIdentitiesByPeerIDPrefix(_ peerID: PeerID) -> [CryptographicIdentity] {
         identities.values.filter { $0.fingerprint.hasPrefix(peerID.id) }
     }

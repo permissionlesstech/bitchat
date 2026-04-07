@@ -103,6 +103,7 @@ protocol SecureIdentityStateManagerProtocol {
     
     // MARK: Cryptographic Identities
     func upsertCryptographicIdentity(fingerprint: String, noisePublicKey: Data, signingPublicKey: Data?, claimedNickname: String?)
+    func clearSigningPublicKey(for fingerprint: String)
     func getCryptoIdentitiesByPeerIDPrefix(_ peerID: PeerID) -> [CryptographicIdentity]
     func updateSocialIdentity(_ identity: SocialIdentity)
     
@@ -316,6 +317,22 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
                 }
             }
 
+            self.saveIdentityCache()
+        }
+    }
+
+    func clearSigningPublicKey(for fingerprint: String) {
+        queue.sync(flags: .barrier) {
+            guard var identity = self.cryptographicIdentities[fingerprint] else { return }
+            guard identity.signingPublicKey != nil else { return }
+            identity = CryptographicIdentity(
+                fingerprint: identity.fingerprint,
+                publicKey: identity.publicKey,
+                signingPublicKey: nil,
+                firstSeen: identity.firstSeen,
+                lastHandshake: identity.lastHandshake
+            )
+            self.cryptographicIdentities[fingerprint] = identity
             self.saveIdentityCache()
         }
     }

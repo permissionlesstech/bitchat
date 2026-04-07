@@ -316,6 +316,43 @@ struct ChatViewModelVerificationTests {
         #expect(persisted?.signingPublicKey == nil)
         #expect(persisted?.claimedNickname == "Alice")
     }
+
+    @Test @MainActor
+    func verifyFingerprint_clearsPreviouslyStoredSigningKey() async {
+        let (viewModel, transport, identityManager) = makeTestableViewModelWithIdentityManager()
+        let signer = NoiseEncryptionService(keychain: MockKeychain())
+        let staleSigningKey = Data(repeating: 0xAA, count: 32)
+        let peerID = PeerID(publicKey: signer.getStaticPublicKeyData())
+        let fingerprint = signer.getStaticPublicKeyData().sha256Fingerprint()
+
+        identityManager.seedCryptographicIdentity(
+            fingerprint: fingerprint,
+            noisePublicKey: signer.getStaticPublicKeyData(),
+            signingPublicKey: staleSigningKey
+        )
+        transport.peerFingerprints[peerID] = fingerprint
+        transport.updatePeerSnapshots([
+            TransportPeerSnapshot(
+                peerID: peerID,
+                nickname: "Alice",
+                isConnected: true,
+                noisePublicKey: signer.getStaticPublicKeyData(),
+                lastSeen: Date()
+            )
+        ])
+
+        let hasPeer = await TestHelpers.waitUntil(
+            { viewModel.getPeer(byID: peerID) != nil },
+            timeout: TestConstants.defaultTimeout
+        )
+        #expect(hasPeer)
+
+        viewModel.verifyFingerprint(for: peerID)
+
+        #expect(identityManager.lastClearedSigningKeyFingerprint == fingerprint)
+        #expect(identityManager.signingPublicKey(for: fingerprint) == nil)
+        #expect(identityManager.lastUpsertedIdentity?.signingPublicKey == nil)
+    }
 }
 
 // MARK: - Deduplication Integration Tests
