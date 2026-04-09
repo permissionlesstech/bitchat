@@ -40,6 +40,7 @@ final class MockTransport: Transport {
     private(set) var cancelledTransfers: [String] = []
     private(set) var sentVerifyChallenges: [(peerID: PeerID, noiseKeyHex: String, nonceA: Data)] = []
     private(set) var sentVerifyResponses: [(peerID: PeerID, noiseKeyHex: String, nonceA: Data)] = []
+    private(set) var clearedTrustedPublicIdentities: [PeerID] = []
     private(set) var startServicesCallCount = 0
     private(set) var stopServicesCallCount = 0
     private(set) var emergencyDisconnectCallCount = 0
@@ -111,6 +112,10 @@ final class MockTransport: Transport {
         NoiseEncryptionService(keychain: mockKeychain)
     }
 
+    func clearTrustedPublicIdentity(for peerID: PeerID) {
+        clearedTrustedPublicIdentities.append(peerID)
+    }
+
     // MARK: - Messaging
 
     func sendMessage(_ content: String, mentions: [String]) {
@@ -175,6 +180,7 @@ final class MockTransport: Transport {
         cancelledTransfers.removeAll()
         sentVerifyChallenges.removeAll()
         sentVerifyResponses.removeAll()
+        clearedTrustedPublicIdentities.removeAll()
         startServicesCallCount = 0
         stopServicesCallCount = 0
         emergencyDisconnectCallCount = 0

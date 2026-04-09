@@ -2913,6 +2913,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
         // Manual fingerprint verification only authenticates the Noise identity.
         // The public-message signing key is only trusted when it is verified OOB,
         // such as via the QR verification flow.
+        meshService.clearTrustedPublicIdentity(for: peerID)
         identityManager.clearSigningPublicKey(for: fingerprint)
         persistVerifiedIdentity(for: peerID, signingPublicKey: nil)
         
@@ -2930,6 +2931,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
     @MainActor
     func unverifyFingerprint(for peerID: PeerID) {
         guard let fingerprint = getFingerprint(for: peerID) else { return }
+        meshService.clearTrustedPublicIdentity(for: peerID)
         identityManager.setVerified(fingerprint: fingerprint, verified: false)
         saveIdentityState()
         verifiedFingerprints.remove(fingerprint)

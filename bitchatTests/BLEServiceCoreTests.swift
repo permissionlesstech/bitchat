@@ -226,6 +226,49 @@ struct BLEServiceCoreTests {
     }
 
     @Test
+    func manualFingerprintVerification_clearsActiveSessionPublicIdentityTrust() async throws {
+        let signer = NoiseEncryptionService(keychain: MockKeychain())
+        let peerID = PeerID(publicKey: signer.getStaticPublicKeyData())
+        let fingerprint = signer.getStaticPublicKeyData().sha256Fingerprint()
+        let identityManager = TrackingIdentityManager()
+        identityManager.seedVerifiedIdentity(
+            noisePublicKey: signer.getStaticPublicKeyData(),
+            signingPublicKey: signer.getSigningPublicKeyData(),
+            claimedNickname: "Alice"
+        )
+
+        let ble = makeService(identityManager: identityManager)
+        let delegate = PublicCaptureDelegate()
+        ble.delegate = delegate
+
+        let announce = try makeSignedAnnouncementPacket(signer: signer, nickname: "Alice")
+        ble._test_handlePacket(announce.packet, fromPeerID: peerID, preseedPeer: false)
+        _ = await TestHelpers.waitUntil(
+            { ble.currentPeerSnapshots().contains(where: { $0.peerID == peerID && $0.nickname == "Alice" }) },
+            timeout: TestConstants.defaultTimeout
+        )
+
+        identityManager.setVerified(fingerprint: fingerprint, verified: false)
+        ble.clearTrustedPublicIdentity(for: peerID)
+        identityManager.clearSigningPublicKey(for: fingerprint)
+        identityManager.setVerified(fingerprint: fingerprint, verified: true)
+
+        let signedPublicPacket = try makeSignedPublicPacket(
+            content: "post-manual-verify",
+            sender: peerID,
+            signer: signer,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000)
+        )
+        ble._test_handlePacket(signedPublicPacket, fromPeerID: peerID, preseedPeer: false)
+
+        let acceptedAfterManualVerify = await TestHelpers.waitUntil(
+            { delegate.publicMessagesSnapshot().contains(where: { $0.content == "post-manual-verify" && $0.senderPeerID == peerID }) },
+            timeout: TestConstants.shortTimeout
+        )
+        #expect(!acceptedAfterManualVerify)
+    }
+
+    @Test
     func spoofedAnnounce_cannotOverwriteTrustedPeerIdentity() async throws {
         let trustedSigner = NoiseEncryptionService(keychain: MockKeychain())
         let trustedPeerID = PeerID(publicKey: trustedSigner.getStaticPublicKeyData())

@@ -352,6 +352,7 @@ struct ChatViewModelVerificationTests {
         #expect(identityManager.lastClearedSigningKeyFingerprint == fingerprint)
         #expect(identityManager.signingPublicKey(for: fingerprint) == nil)
         #expect(identityManager.lastUpsertedIdentity?.signingPublicKey == nil)
+        #expect(transport.clearedTrustedPublicIdentities == [peerID])
     }
 }
 

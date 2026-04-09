@@ -689,6 +689,16 @@ final class BLEService: NSObject {
         return noiseService
     }
 
+    func clearTrustedPublicIdentity(for peerID: PeerID) {
+        let shortID = peerID.toShort()
+        collectionsQueue.sync(flags: .barrier) {
+            guard var peer = peers[shortID] else { return }
+            peer.signingPublicKey = nil
+            peer.isVerifiedNickname = false
+            peers[shortID] = peer
+        }
+    }
+
     func getCurrentBluetoothState() -> CBManagerState {
         return centralManager?.state ?? .unknown
     }
@@ -1237,7 +1247,8 @@ final class BLEService: NSObject {
     private func hasTrustedSigningIdentity(_ info: PeerInfo?) -> Bool {
         guard let info,
               info.isVerifiedNickname,
-              let noisePublicKey = info.noisePublicKey else {
+              let noisePublicKey = info.noisePublicKey,
+              info.signingPublicKey != nil else {
             return false
         }
         return identityManager.isVerified(fingerprint: noisePublicKey.sha256Fingerprint())
