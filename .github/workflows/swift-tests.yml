@@ -41,3 +41,41 @@ jobs:
 
       - name: Run Tests
         run: swift test --parallel
+
+  xcode-build-macos:
+    name: Xcode Build (macOS)
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Build
+        run: |
+          xcodebuild \
+            -project bitchat.xcodeproj \
+            -scheme "bitchat (macOS)" \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            -skipPackagePluginValidation \
+            build
+
+  xcode-build-ios:
+    name: Xcode Build (iOS)
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Build
+        run: |
+          xcodebuild \
+            -project bitchat.xcodeproj \
+            -scheme "bitchat (iOS)" \
+            -configuration Debug \
+            -destination "generic/platform=iOS Simulator" \
+            ARCHS=arm64 \
+            CODE_SIGNING_ALLOWED=NO \
+            -skipPackagePluginValidation \
+            build
