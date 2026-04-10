@@ -56,18 +56,19 @@ Ristretto255 is used rather than raw Curve25519 to avoid cofactor-related correc
 
 ### Message Types
 
-Two new `MessageType` values and one announcement extension:
+One announcement extension and two new `NoisePayloadType` values:
 
 ```
 AnnouncementPacket TLV 0x05: swapFlags (1 byte bitmask)
   Bit 0: Swap mode active
   Bit 1: Swap marked urgent (critical needs — medical, water)
 
-swapInit     = 0x30   // Initiate swap session
-swapExchange = 0x31   // Blinded sets or double-blinded response
+NoisePayloadType:
+  swapInit     = 0x30   // Initiate swap session
+  swapExchange = 0x31   // Blinded sets or double-blinded response
 ```
 
-All swap messages use existing `BitchatPacket` framing and are sent as `noiseEncrypted` payloads over the existing Noise session. No new encryption layer.
+All swap messages are carried inside `MessageType.noiseEncrypted (0x11)` packets, using the existing `BitchatPacket` framing. The `0x30`/`0x31` values are payload types inside the decrypted Noise envelope — they never appear on the wire unencrypted. No new encryption layer or top-level message types are needed.
 
 ### Flow
 
@@ -76,16 +77,23 @@ All swap messages use existing `BitchatPacket` framing and are sent as `noiseEnc
 ```
 Phase 1: Discovery (unencrypted broadcast)
   Alice's ANNOUNCE includes swapFlags TLV (+3 bytes)
-  Bob's device sees swap-active peer, notifies Bob
+  Bob's device sees swap-active peer
 
-Phase 2: Swap Init (0x30, Noise-encrypted)
+Phase 2: Noise Handshake (0x10, if no session exists)
+  The party with the lexicographically lower BLE identifier initiates
+  a standard Noise XX handshake. If an established Noise session
+  already exists between the two peers, this phase is skipped.
+  After the handshake, both parties know each other's Noise static
+  public keys — these are used for the swap initiator tiebreaker.
+
+Phase 3: Swap Init (0x30, Noise-encrypted)
   The party with the lexicographically lower Noise static public key
   sends swapInit. Both parties can determine this independently,
   preventing duplicate exchanges.
   
   Initiator → Responder: { session_id, protocol_version, max_items }
 
-Phase 3: Swap Exchange Round 1 (0x31 step=1, Noise-encrypted)
+Phase 4: Swap Exchange Round 1 (0x31 step=1, Noise-encrypted)
   Both parties pick a random secret exponent and blind their items.
   Order doesn't matter — each sends independently once init is received/sent:
   
@@ -94,7 +102,7 @@ Phase 3: Swap Exchange Round 1 (0x31 step=1, Noise-encrypted)
     blinded_haves: [H(h)^a for h in HAVES] }
   Bob → Alice: (same structure, exponent b)
 
-Phase 4: Swap Exchange Round 2 (0x31 step=2, Noise-encrypted)
+Phase 5: Swap Exchange Round 2 (0x31 step=2, Noise-encrypted)
   Each party double-blinds only the other's WANTS and sends back.
   Each party computes the double-blinding of the other's HAVES locally.
 
@@ -106,15 +114,14 @@ Phase 4: Swap Exchange Round 2 (0x31 step=2, Noise-encrypted)
   Alice locally computes: [H_b^a for each of Bob's haves]
   Bob locally computes: [H_a^b for each of Alice's haves]
 
-Phase 5: Local Intersection (no network traffic)
+Phase 6: Local Intersection (no network traffic)
   Match condition: H(item)^(ab) appears in both sets.
   If Alice wants X and Bob has X: both compute H(X)^(ab) → match.
   Non-matching items produce unrelated group elements → no information leak.
 
-Phase 6: Chat (standard Noise, optional)
-  If matches exist, the swap initiator (same party from Phase 2)
-  initiates a standard Noise XX handshake (0x10) to open a private
-  chat, avoiding a simultaneous-open race.
+Phase 7: Chat (optional)
+  If matches exist, the swap initiator (same party from Phase 3)
+  opens a private chat over the existing Noise session.
   Sessions not completed within 30 seconds are silently discarded.
 ```
 
