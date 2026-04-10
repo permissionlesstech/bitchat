@@ -6,6 +6,7 @@
 // For more information, see <https://unlicense.org>
 //
 
+import BitFoundation
 import Foundation
 import UserNotifications
 #if os(iOS)

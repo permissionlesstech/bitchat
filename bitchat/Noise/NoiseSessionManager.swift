@@ -9,6 +9,7 @@
 import BitLogger
 import CryptoKit
 import Foundation
+import BitFoundation
 
 final class NoiseSessionManager {
     private var sessions: [PeerID: NoiseSession] = [:]

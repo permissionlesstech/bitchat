@@ -8,7 +8,7 @@
 
 import Testing
 import Foundation
-@testable import bitchat
+@testable import BitFoundation
 
 struct PeerIDTests {
     private let hex16 = "0011223344556677"
@@ -168,8 +168,8 @@ struct PeerIDTests {
     @Test func nostrUnderscore_pubKey() {
         let pubKey = hex64
         let peerID = PeerID(nostr_: pubKey)
-        #expect(peerID.id == "nostr_\(pubKey.prefix(TransportConfig.nostrConvKeyPrefixLength))")
-        #expect(peerID.bare == String(pubKey.prefix(TransportConfig.nostrConvKeyPrefixLength)))
+        #expect(peerID.id == "nostr_\(pubKey.prefix(PeerID.Constants.nostrConvKeyPrefixLength))")
+        #expect(peerID.bare == String(pubKey.prefix(PeerID.Constants.nostrConvKeyPrefixLength)))
         #expect(peerID.prefix == .geoDM)
     }
     
@@ -178,8 +178,8 @@ struct PeerIDTests {
     @Test func nostr_pubKey() {
         let pubKey = hex64
         let peerID = PeerID(nostr: pubKey)
-        #expect(peerID.id == "nostr:\(pubKey.prefix(TransportConfig.nostrShortKeyDisplayLength))")
-        #expect(peerID.bare == String(pubKey.prefix(TransportConfig.nostrShortKeyDisplayLength)))
+        #expect(peerID.id == "nostr:\(pubKey.prefix(PeerID.Constants.nostrShortKeyDisplayLength))")
+        #expect(peerID.bare == String(pubKey.prefix(PeerID.Constants.nostrShortKeyDisplayLength)))
         #expect(peerID.prefix == .geoChat)
     }
     

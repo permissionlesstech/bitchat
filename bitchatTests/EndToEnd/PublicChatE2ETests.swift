@@ -8,6 +8,7 @@
 
 import Testing
 import struct Foundation.UUID
+import BitFoundation
 @testable import bitchat
 
 struct PublicChatE2ETests {
