@@ -602,7 +602,7 @@ private extension NostrProtocol {
         let derivedKey = HKDF<CryptoKit.SHA256>.deriveKey(
             inputKeyMaterial: SymmetricKey(data: sharedSecretData),
             salt: Data(),
-            info: "nip44-v2".data(using: .utf8)!,
+            info: Data("nip44-v2".utf8),
             outputByteCount: 32
         )
         return derivedKey.withUnsafeBytes { Data($0) }

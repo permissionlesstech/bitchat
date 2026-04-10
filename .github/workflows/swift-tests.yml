@@ -1,4 +1,4 @@
-name: Build & Test
+name: CI
 
 on:
   push:
@@ -7,6 +7,18 @@ on:
   pull_request:
 
 jobs:
+  lint:
+    name: SwiftLint
+    runs-on: ubuntu-latest
+    continue-on-error: true # Annotations appear on PR but never block merging
+    container:
+      image: ghcr.io/realm/swiftlint:latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Lint
+        run: swiftlint lint --reporter github-actions-logging
+
   test:
     name: Run Swift Tests
     runs-on: macos-latest
@@ -27,8 +39,43 @@ jobs:
             ${{ runner.os }}-build-${{ hashFiles('**/Package.resolved') }}
             ${{ runner.os }}-build-
 
-      - name: Build the package
-        run: swift build
-
       - name: Run Tests
         run: swift test --parallel
+
+  xcode-build-macos:
+    name: Xcode Build (macOS)
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Build
+        run: |
+          xcodebuild \
+            -project bitchat.xcodeproj \
+            -scheme "bitchat (macOS)" \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            -skipPackagePluginValidation \
+            build
+
+  xcode-build-ios:
+    name: Xcode Build (iOS)
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Build
+        run: |
+          xcodebuild \
+            -project bitchat.xcodeproj \
+            -scheme "bitchat (iOS)" \
+            -configuration Debug \
+            -destination "generic/platform=iOS Simulator" \
+            ARCHS=arm64 \
+            CODE_SIGNING_ALLOWED=NO \
+            -skipPackagePluginValidation \
+            build
