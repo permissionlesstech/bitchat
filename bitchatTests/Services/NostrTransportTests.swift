@@ -7,7 +7,9 @@
 //
 
 import Foundation
+import Nostr
 import Testing
+import BitFoundation
 @testable import bitchat
 
 @Suite("NostrTransport Tests")

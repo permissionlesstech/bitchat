@@ -7,6 +7,7 @@
 //
 
 import Testing
+import Nostr
 import Foundation
 import Combine
 @testable import bitchat

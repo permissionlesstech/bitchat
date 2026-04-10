@@ -5,9 +5,11 @@
 // Tests for NIP-17 gift-wrapped private messages
 //
 
+import Nostr
 import Testing
 import CryptoKit
 import Foundation
+import BitFoundation
 @testable import bitchat
 
 struct NostrProtocolTests {

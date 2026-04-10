@@ -8,6 +8,7 @@
 // This is free and unencumbered software released into the public domain.
 //
 
+import Nostr
 import Foundation
 import Combine
 import BitLogger
@@ -74,7 +75,7 @@ final class GeohashPresenceService: ObservableObject {
     ]
 
     private init() {
-        let idBridge = NostrIdentityBridge()
+        let idBridge = NostrIdentityBridge(keychain: KeychainManager())
         self.availableChannelsProvider = { LocationStateManager.shared.availableChannels }
         self.locationChanges = LocationStateManager.shared.$availableChannels.eraseToAnyPublisher()
         self.torReadyPublisher = NotificationCenter.default.publisher(for: .TorDidBecomeReady)

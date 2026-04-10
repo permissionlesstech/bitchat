@@ -6,6 +6,7 @@
 //
 
 import Testing
+import Nostr
 import Foundation
 import Combine
 #if os(iOS)
@@ -13,6 +14,7 @@ import UIKit
 #else
 import AppKit
 #endif
+import BitFoundation
 @testable import bitchat
 
 // MARK: - Test Helpers

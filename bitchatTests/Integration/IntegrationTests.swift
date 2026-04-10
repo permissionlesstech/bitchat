@@ -9,6 +9,8 @@
 import Foundation
 import CryptoKit
 import Testing
+import BitFoundation
+import Noise
 @testable import bitchat
 
 struct IntegrationTests {

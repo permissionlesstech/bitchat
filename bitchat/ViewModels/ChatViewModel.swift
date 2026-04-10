@@ -78,6 +78,8 @@
 ///
 
 import BitLogger
+import BitFoundation
+import Nostr
 import Foundation
 import SwiftUI
 import Combine
@@ -1966,7 +1968,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
             try? await Task.sleep(nanoseconds: TransportConfig.uiAsyncShortSleepNs) // 0.1 seconds
             
             // Reinitialize Nostr relay manager with new identity
-            nostrRelayManager = NostrRelayManager()
+            nostrRelayManager = NostrRelayManager(dependencies: .live())
             setupNostrMessageHandling()
             nostrRelayManager?.connect()
         }

@@ -5,9 +5,11 @@
 // Geohash and Nostr logic for ChatViewModel
 //
 
+import Nostr
 import Foundation
 import Combine
 import BitLogger
+import BitFoundation
 import SwiftUI
 import Tor
 

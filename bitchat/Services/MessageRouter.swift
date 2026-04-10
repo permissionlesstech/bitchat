@@ -1,4 +1,5 @@
 import BitLogger
+import BitFoundation
 import Foundation
 
 /// Routes messages using available transports (Mesh, Nostr, etc.)

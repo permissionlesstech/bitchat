@@ -1,4 +1,5 @@
 import Testing
+import Nostr
 import Foundation
 @testable import bitchat
 
