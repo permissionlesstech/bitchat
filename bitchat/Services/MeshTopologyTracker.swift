@@ -27,7 +27,7 @@ final class MeshTopologyTracker {
         guard let source = sanitize(sourceData) else { return }
         // Sanitize neighbors and exclude self-loops
         let validNeighbors = Set(neighbors.compactMap { sanitize($0) }).subtracting([source])
-        
+
         queue.sync(flags: .barrier) {
             self.claims[source] = validNeighbors
             self.lastSeen[source] = Date()
@@ -41,7 +41,7 @@ final class MeshTopologyTracker {
             self.lastSeen.removeValue(forKey: peer)
         }
     }
-    
+
     /// Prune nodes that haven't updated their topology in `age` seconds
     func prune(olderThan age: TimeInterval) {
         let deadline = Date().addingTimeInterval(-age)

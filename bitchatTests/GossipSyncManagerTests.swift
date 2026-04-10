@@ -5,7 +5,7 @@ import Testing
 struct GossipSyncManagerTests {
 
     private let myPeerID = PeerID(str: "0102030405060708")
-    
+
     @Test func concurrentPacketIntakeAndSyncRequest() async throws {
         let requestSyncManager = RequestSyncManager()
         let manager = GossipSyncManager(myPeerID: myPeerID, requestSyncManager: requestSyncManager)
@@ -20,7 +20,7 @@ struct GossipSyncManagerTests {
 
             let iterations = 200
             let senderID = try #require(Data(hexString: "1122334455667788"))
-            
+
             for i in 0..<iterations {
                 let packet = BitchatPacket(
                     type: MessageType.message.rawValue,
@@ -82,7 +82,7 @@ struct GossipSyncManagerTests {
         manager._performMaintenanceSynchronously(now: Date())
         #expect(manager._hasAnnouncement(for: PeerID(str: peerHex)))
         #expect(manager._messageCount(for: PeerID(str: peerHex)) == 1)
-        
+
         // Run cleanup past the timeout
         let future = Date().addingTimeInterval(config.stalePeerTimeoutSeconds + 1)
         manager._performMaintenanceSynchronously(now: future)
@@ -274,7 +274,7 @@ private final class RecordingDelegate: GossipSyncManager.Delegate {
     func signPacketForBroadcast(_ packet: BitchatPacket) -> BitchatPacket {
         packet
     }
-    
+
     func getConnectedPeers() -> [PeerID] {
         return []
     }

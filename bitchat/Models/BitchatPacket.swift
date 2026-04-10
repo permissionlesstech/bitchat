@@ -23,7 +23,7 @@ struct BitchatPacket: Codable {
     var ttl: UInt8
     var route: [Data]?
     var isRSR: Bool
-    
+
     init(type: UInt8, senderID: Data, recipientID: Data?, timestamp: UInt64, payload: Data, signature: Data?, ttl: UInt8, version: UInt8 = 1, route: [Data]? = nil, isRSR: Bool = false) {
         self.version = version
         self.type = type
@@ -36,7 +36,7 @@ struct BitchatPacket: Codable {
         self.route = route
         self.isRSR = isRSR
     }
-    
+
     // Convenience initializer for new binary format
     init(type: UInt8, ttl: UInt8, senderID: PeerID, payload: Data, isRSR: Bool = false) {
         self.version = 1
@@ -60,11 +60,11 @@ struct BitchatPacket: Codable {
         self.route = nil
         self.isRSR = isRSR
     }
-    
+
     var data: Data? {
         BinaryProtocol.encode(self)
     }
-    
+
     func toBinaryData(padding: Bool = true) -> Data? {
         BinaryProtocol.encode(self, padding: padding)
     }
@@ -73,7 +73,7 @@ struct BitchatPacket: Codable {
     func toBinaryData() -> Data? {
         toBinaryData(padding: true)
     }
-    
+
     /// Create binary representation for signing (without signature and TTL fields)
     /// TTL is excluded because it changes during packet relay operations
     func toBinaryDataForSigning() -> Data? {
@@ -93,7 +93,7 @@ struct BitchatPacket: Codable {
         )
         return BinaryProtocol.encode(unsignedPacket)
     }
-    
+
     static func from(_ data: Data) -> BitchatPacket? {
         BinaryProtocol.decode(data)
     }

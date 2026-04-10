@@ -37,7 +37,7 @@ struct AnnouncementPacket {
         data.append(TLVType.signingPublicKey.rawValue)
         data.append(UInt8(signingPublicKey.count))
         data.append(signingPublicKey)
-        
+
         // TLV for direct neighbors (optional)
         if let neighbors = directNeighbors, !neighbors.isEmpty {
             let neighborsData = neighbors.prefix(10).reduce(Data()) { $0 + $1 }
