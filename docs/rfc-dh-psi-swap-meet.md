@@ -80,11 +80,12 @@ Phase 1: Discovery (unencrypted broadcast)
   Bob's device sees swap-active peer
 
 Phase 2: Noise Handshake (0x10, if no session exists)
-  The party with the lexicographically lower BLE identifier initiates
-  a standard Noise XX handshake. If an established Noise session
-  already exists between the two peers, this phase is skipped.
-  After the handshake, both parties know each other's Noise static
-  public keys — these are used for the swap initiator tiebreaker.
+  If no established Noise session exists, the party with the
+  lexicographically lower Noise static public key initiates a
+  standard Noise XX handshake. Both parties already know each
+  other's Noise static keys from the ANNOUNCE packet (TLV 0x02),
+  so both can compute the tiebreaker independently.
+  If a session already exists, this phase is skipped.
 
 Phase 3: Swap Init (0x30, Noise-encrypted)
   The party with the lexicographically lower Noise static public key
