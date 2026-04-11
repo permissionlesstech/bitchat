@@ -86,6 +86,10 @@ Phase 2: Noise Handshake (0x10, if no session exists)
   other's Noise static keys from the ANNOUNCE packet (TLV 0x02),
   so both can compute the tiebreaker independently.
   If a session already exists, this phase is skipped.
+  Session recovery: if a peer receives an encrypted swap message it
+  cannot decrypt (e.g., the other side's session was lost to a
+  restart), it initiates a fresh Noise handshake. The swap restarts
+  from Phase 3 after the new session is established.
 
 Phase 3: Swap Init (0x30, Noise-encrypted)
   The party with the lexicographically lower Noise static public key
@@ -106,15 +110,19 @@ Phase 4: Swap Exchange Round 1 (0x31 step=1, Noise-encrypted)
 
 Phase 5: Swap Exchange Round 2 (0x31 step=2, Noise-encrypted)
   Each party double-blinds the other's WANTS with their own HAVES
-  exponent and sends back. Each party locally double-blinds the
-  other's HAVES with their own WANTS exponent. This cross-role
-  pairing ensures only wants ∩ counterparty haves is computable.
+  exponent and sends back in the same positional order as round 1.
+  Each party locally double-blinds the other's HAVES with their own
+  WANTS exponent. This cross-role pairing ensures only
+  wants ∩ counterparty haves is computable.
 
   Alice → Bob: { session_id, step: 2,
     double_blinded_wants: [W_b^(a_h) for each of Bob's wants] }
   Bob → Alice: { session_id, step: 2,
     double_blinded_wants: [W_a^(b_h) for each of Alice's wants] }
   
+  Round 2 arrays MUST preserve the positional order from round 1
+  so the receiver can identify which specific items matched.
+
   Alice locally computes: [H_b^(a_w) for each of Bob's haves]
   Bob locally computes: [H_a^(b_w) for each of Alice's haves]
 
