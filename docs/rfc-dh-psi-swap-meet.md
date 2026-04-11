@@ -186,8 +186,6 @@ Initial catalog: ~100-200 items across categories relevant to crisis scenarios. 
 
 **Session isolation:** Each swap session uses fresh random exponents. Results from one session can't be correlated with another. Toggling swap mode off and back on generates fresh state.
 
-**Identity isolation:** Swap payloads contain no additional identity beyond what the bitchat transport already exposes. No nickname, Nostr npub, or swap-specific identifier is included. Note: the underlying `BitchatPacket` framing includes a senderID in cleartext headers, so a passive BLE observer can correlate which peers are exchanging swap messages — this is a pre-existing property of bitchat's transport, not introduced by this RFC. Post-match chat reuses the established Noise session from Phase 2, which already provides forward secrecy via ephemeral keys.
-
 **Observable behavior during the swap exchange is identical** whether there's a match or not. A subsequent private chat is observable but reveals only that a match occurred, not what matched.
 
 ### Adversarial Probing
