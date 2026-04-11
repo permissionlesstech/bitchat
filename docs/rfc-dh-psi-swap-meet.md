@@ -95,30 +95,33 @@ Phase 3: Swap Init (0x30, Noise-encrypted)
   Initiator → Responder: { session_id, protocol_version, max_items }
 
 Phase 4: Swap Exchange Round 1 (0x31 step=1, Noise-encrypted)
-  Both parties pick a random secret exponent and blind their items.
-  Order doesn't matter — each sends independently once init is received/sent:
+  Each party picks two independent random secret exponents — one for
+  wants (a_w, b_w) and one for haves (a_h, b_h) — and blinds their
+  items. Order doesn't matter — each sends once init is received/sent:
   
   Alice → Bob: { session_id, step: 1,
-    blinded_wants: [H(w)^a for w in WANTS],   // 32 bytes each
-    blinded_haves: [H(h)^a for h in HAVES] }
-  Bob → Alice: (same structure, exponent b)
+    blinded_wants: [H(w)^(a_w) for w in WANTS],   // 32 bytes each
+    blinded_haves: [H(h)^(a_h) for h in HAVES] }
+  Bob → Alice: (same structure, exponents b_w, b_h)
 
 Phase 5: Swap Exchange Round 2 (0x31 step=2, Noise-encrypted)
-  Each party double-blinds only the other's WANTS and sends back.
-  Each party computes the double-blinding of the other's HAVES locally.
+  Each party double-blinds the other's WANTS with their own HAVES
+  exponent and sends back. Each party locally double-blinds the
+  other's HAVES with their own WANTS exponent. This cross-role
+  pairing ensures only wants ∩ counterparty haves is computable.
 
   Alice → Bob: { session_id, step: 2,
-    double_blinded_wants: [W_b^a for each of Bob's wants] }
+    double_blinded_wants: [W_b^(a_h) for each of Bob's wants] }
   Bob → Alice: { session_id, step: 2,
-    double_blinded_wants: [W_a^b for each of Alice's wants] }
+    double_blinded_wants: [W_a^(b_h) for each of Alice's wants] }
   
-  Alice locally computes: [H_b^a for each of Bob's haves]
-  Bob locally computes: [H_a^b for each of Alice's haves]
+  Alice locally computes: [H_b^(a_w) for each of Bob's haves]
+  Bob locally computes: [H_a^(b_w) for each of Alice's haves]
 
 Phase 6: Local Intersection (no network traffic)
-  Match condition: H(item)^(ab) appears in both sets.
-  If Alice wants X and Bob has X: both compute H(X)^(ab) → match.
-  Non-matching items produce unrelated group elements → no information leak.
+  For Alice_WANTS ∩ Bob_HAVES: H(item)^(a_w · b_h) appears in both.
+  For Bob_WANTS ∩ Alice_HAVES: H(item)^(b_w · a_h) appears in both.
+  Non-matching items produce unrelated group elements → no leak.
 
 Phase 7: Chat (optional)
   If matches exist, the swap initiator (same party from Phase 3)
@@ -167,7 +170,9 @@ Initial catalog: ~100-200 items across categories relevant to crisis scenarios. 
 
 **Non-matching items hidden:** The blinded group element `H(X)^a` is computationally indistinguishable from random in Ristretto255.
 
-**Session isolation:** Each swap session uses a fresh random exponent. Results from one session can't be correlated with another. Toggling swap mode off and back on generates fresh state.
+**Role separation:** Each party uses independent exponents for wants and haves. A single shared exponent would allow either party to compute wants ∩ counterparty wants (mutual unmet demand), leaking sensitive need information even when no trade is possible. Separate exponents ensure only the intended cross-role intersections (wants ∩ counterparty haves) are computable.
+
+**Session isolation:** Each swap session uses fresh random exponents. Results from one session can't be correlated with another. Toggling swap mode off and back on generates fresh state.
 
 **Identity isolation:** Swap messages reveal no identity beyond what the Noise handshake already exchanged. No nickname, Nostr npub, or persistent identifier is included. Post-match chat reuses the established Noise session from Phase 2, which already provides forward secrecy via ephemeral keys.
 
