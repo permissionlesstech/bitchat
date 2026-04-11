@@ -97,6 +97,10 @@ Phase 3: Swap Init (0x30, Noise-encrypted)
   preventing duplicate exchanges.
   
   Initiator → Responder: { session_id, protocol_version, max_items }
+  
+  The effective item limit per set is min(local_max, peer_max).
+  If a round-1 message contains more items per set than the
+  receiver's effective limit, the receiver aborts the session.
 
 Phase 4: Swap Exchange Round 1 (0x31 step=1, Noise-encrypted)
   Each party picks two independent random secret exponents — one for
@@ -182,7 +186,7 @@ Initial catalog: ~100-200 items across categories relevant to crisis scenarios. 
 
 **Session isolation:** Each swap session uses fresh random exponents. Results from one session can't be correlated with another. Toggling swap mode off and back on generates fresh state.
 
-**Identity isolation:** Swap messages reveal no identity beyond what the Noise handshake already exchanged. No nickname, Nostr npub, or persistent identifier is included. Post-match chat reuses the established Noise session from Phase 2, which already provides forward secrecy via ephemeral keys.
+**Identity isolation:** Swap payloads contain no additional identity beyond what the bitchat transport already exposes. No nickname, Nostr npub, or swap-specific identifier is included. Note: the underlying `BitchatPacket` framing includes a senderID in cleartext headers, so a passive BLE observer can correlate which peers are exchanging swap messages — this is a pre-existing property of bitchat's transport, not introduced by this RFC. Post-match chat reuses the established Noise session from Phase 2, which already provides forward secrecy via ephemeral keys.
 
 **Observable behavior during the swap exchange is identical** whether there's a match or not. A subsequent private chat is observable but reveals only that a match occurred, not what matched.
 
