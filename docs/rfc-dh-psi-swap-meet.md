@@ -168,7 +168,7 @@ Initial catalog: ~100-200 items across categories relevant to crisis scenarios. 
 
 **Session isolation:** Each swap session uses a fresh random exponent. Results from one session can't be correlated with another. Toggling swap mode off and back on generates fresh state.
 
-**Identity isolation:** Swap messages reveal no identity beyond what the Noise handshake already exchanged. No nickname, Nostr npub, or persistent identifier is included. Post-match chat uses a standard Noise XX handshake with ephemeral keys, providing forward secrecy.
+**Identity isolation:** Swap messages reveal no identity beyond what the Noise handshake already exchanged. No nickname, Nostr npub, or persistent identifier is included. Post-match chat reuses the established Noise session from Phase 2, which already provides forward secrecy via ephemeral keys.
 
 **Observable behavior during the swap exchange is identical** whether there's a match or not. A subsequent private chat is observable but reveals only that a match occurred, not what matched.
 
