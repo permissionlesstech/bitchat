@@ -2818,6 +2818,29 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
             return .noiseSecured
         }
     }
+
+    @MainActor
+    func hasVerifiedPublicIdentity(for peerID: PeerID) -> Bool {
+        let shortPeerID = peerID.toShort()
+
+        let noisePublicKey: Data
+        if let peer = unifiedPeerService.getPeer(by: shortPeerID) {
+            noisePublicKey = peer.noisePublicKey
+        } else if let key = peerID.noiseKey {
+            noisePublicKey = key
+        } else {
+            return false
+        }
+
+        let fingerprint = noisePublicKey.sha256Fingerprint()
+        guard identityManager.isVerified(fingerprint: fingerprint) else { return false }
+
+        return identityManager.getCryptoIdentitiesByPeerIDPrefix(PeerID(publicKey: noisePublicKey)).contains {
+            $0.fingerprint == fingerprint &&
+            $0.publicKey == noisePublicKey &&
+            $0.signingPublicKey != nil
+        }
+    }
     
     /// Helper to resolve nickname for a peer ID through various sources
     @MainActor
@@ -2870,8 +2893,26 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
     }
     
     @MainActor
+    private func persistVerifiedIdentity(for peerID: PeerID, signingPublicKey: Data?) {
+        guard let peer = unifiedPeerService.getPeer(by: peerID) else { return }
+        let claimedNickname = peer.nickname.isEmpty ? nil : peer.nickname
+        identityManager.upsertCryptographicIdentity(
+            fingerprint: peer.noisePublicKey.sha256Fingerprint(),
+            noisePublicKey: peer.noisePublicKey,
+            signingPublicKey: signingPublicKey,
+            claimedNickname: claimedNickname
+        )
+    }
+
+    @MainActor
     func verifyFingerprint(for peerID: PeerID) {
         guard let fingerprint = getFingerprint(for: peerID) else { return }
+        // Manual fingerprint verification only authenticates the Noise identity.
+        // The public-message signing key is only trusted when it is verified OOB,
+        // such as via the QR verification flow.
+        meshService.clearTrustedPublicIdentity(for: peerID)
+        identityManager.clearSigningPublicKey(for: fingerprint)
+        persistVerifiedIdentity(for: peerID, signingPublicKey: nil)
         
         // Update secure storage with verified status
         identityManager.setVerified(fingerprint: fingerprint, verified: true)
@@ -2887,6 +2928,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
     @MainActor
     func unverifyFingerprint(for peerID: PeerID) {
         guard let fingerprint = getFingerprint(for: peerID) else { return }
+        meshService.clearTrustedPublicIdentity(for: peerID)
         identityManager.setVerified(fingerprint: fingerprint, verified: false)
         saveIdentityState()
         verifiedFingerprints.remove(fingerprint)
@@ -3141,6 +3183,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
                     if let fp = getFingerprint(for: peerID) {
                         let short = fp.prefix(8)
                         SecureLogger.info("🔐 Marking verified fingerprint: \(short)", category: .security)
+                        let signingPublicKey = Data(hexString: pending.signKeyHex)
+                        persistVerifiedIdentity(for: peerID, signingPublicKey: signingPublicKey)
                         identityManager.setVerified(fingerprint: fp, verified: true)
                         saveIdentityState()
                         verifiedFingerprints.insert(fp)

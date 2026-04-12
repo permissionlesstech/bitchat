@@ -139,23 +139,65 @@ enum TrustLevel: String, Codable {
 /// Storage is optional and controlled by user privacy settings.
 struct IdentityCache: Codable {
     // Fingerprint -> Social mapping
-    var socialIdentities: [String: SocialIdentity] = [:]
+    var socialIdentities: [String: SocialIdentity]
     
     // Nickname -> [Fingerprints] reverse index
     // Multiple fingerprints can claim same nickname
-    var nicknameIndex: [String: Set<String>] = [:]
+    var nicknameIndex: [String: Set<String>]
     
     // Verified fingerprints (cryptographic proof)
-    var verifiedFingerprints: Set<String> = []
+    var verifiedFingerprints: Set<String>
+
+    // Stable cryptographic identities, including trusted public signing keys.
+    var cryptographicIdentities: [String: CryptographicIdentity]
     
     // Last interaction timestamps (privacy: optional)
-    var lastInteractions: [String: Date] = [:] 
+    var lastInteractions: [String: Date]
     
     // Blocked Nostr pubkeys (lowercased hex) for geohash chats
-    var blockedNostrPubkeys: Set<String> = []
+    var blockedNostrPubkeys: Set<String>
     
     // Schema version for future migrations
-    var version: Int = 1
+    var version: Int
+
+    init(
+        socialIdentities: [String: SocialIdentity] = [:],
+        nicknameIndex: [String: Set<String>] = [:],
+        verifiedFingerprints: Set<String> = [],
+        cryptographicIdentities: [String: CryptographicIdentity] = [:],
+        lastInteractions: [String: Date] = [:],
+        blockedNostrPubkeys: Set<String> = [],
+        version: Int = 2
+    ) {
+        self.socialIdentities = socialIdentities
+        self.nicknameIndex = nicknameIndex
+        self.verifiedFingerprints = verifiedFingerprints
+        self.cryptographicIdentities = cryptographicIdentities
+        self.lastInteractions = lastInteractions
+        self.blockedNostrPubkeys = blockedNostrPubkeys
+        self.version = version
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case socialIdentities
+        case nicknameIndex
+        case verifiedFingerprints
+        case cryptographicIdentities
+        case lastInteractions
+        case blockedNostrPubkeys
+        case version
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.socialIdentities = try container.decodeIfPresent([String: SocialIdentity].self, forKey: .socialIdentities) ?? [:]
+        self.nicknameIndex = try container.decodeIfPresent([String: Set<String>].self, forKey: .nicknameIndex) ?? [:]
+        self.verifiedFingerprints = try container.decodeIfPresent(Set<String>.self, forKey: .verifiedFingerprints) ?? []
+        self.cryptographicIdentities = try container.decodeIfPresent([String: CryptographicIdentity].self, forKey: .cryptographicIdentities) ?? [:]
+        self.lastInteractions = try container.decodeIfPresent([String: Date].self, forKey: .lastInteractions) ?? [:]
+        self.blockedNostrPubkeys = try container.decodeIfPresent(Set<String>.self, forKey: .blockedNostrPubkeys) ?? []
+        self.version = try container.decodeIfPresent(Int.self, forKey: .version) ?? 1
+    }
 }
 
 //

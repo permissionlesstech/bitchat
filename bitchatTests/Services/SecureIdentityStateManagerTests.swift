@@ -128,6 +128,33 @@ final class SecureIdentityStateManagerTests: XCTestCase {
         XCTAssertTrue(reloaded.isFavorite(fingerprint: fingerprint))
     }
 
+    func test_forceSave_persistsCryptographicIdentityAcrossReinit() async {
+        let keychain = MockKeychain()
+        let manager = SecureIdentityStateManager(keychain)
+        let noisePublicKey = Data(repeating: 0x11, count: 32)
+        let signingPublicKey = Data(repeating: 0x22, count: 32)
+        let fingerprint = noisePublicKey.sha256Fingerprint()
+        let peerID = PeerID(publicKey: noisePublicKey)
+
+        manager.upsertCryptographicIdentity(
+            fingerprint: fingerprint,
+            noisePublicKey: noisePublicKey,
+            signingPublicKey: signingPublicKey,
+            claimedNickname: "Alice"
+        )
+        let inserted = await waitUntil {
+            manager.getCryptoIdentitiesByPeerIDPrefix(peerID).first?.signingPublicKey == signingPublicKey
+        }
+        XCTAssertTrue(inserted)
+        manager.forceSave()
+
+        let reloaded = SecureIdentityStateManager(keychain)
+        let reloadedIdentity = reloaded.getCryptoIdentitiesByPeerIDPrefix(peerID).first
+        XCTAssertEqual(reloadedIdentity?.fingerprint, fingerprint)
+        XCTAssertEqual(reloadedIdentity?.publicKey, noisePublicKey)
+        XCTAssertEqual(reloadedIdentity?.signingPublicKey, signingPublicKey)
+    }
+
     func test_updateSocialIdentity_reindexesClaimedNickname() async {
         let manager = SecureIdentityStateManager(MockKeychain())
         let fingerprint = String(repeating: "34", count: 32)

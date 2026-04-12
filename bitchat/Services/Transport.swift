@@ -42,6 +42,7 @@ protocol Transport: AnyObject {
     func getNoiseSessionState(for peerID: PeerID) -> LazyHandshakeState
     func triggerHandshake(with peerID: PeerID)
     func getNoiseService() -> NoiseEncryptionService
+    func clearTrustedPublicIdentity(for peerID: PeerID)
 
     // Messaging
     func sendMessage(_ content: String, mentions: [String])
@@ -70,6 +71,7 @@ extension Transport {
     func sendFileBroadcast(_ packet: BitchatFilePacket, transferId: String) {}
     func sendFilePrivate(_ packet: BitchatFilePacket, to peerID: PeerID, transferId: String) {}
     func cancelTransfer(_ transferId: String) {}
+    func clearTrustedPublicIdentity(for peerID: PeerID) {}
 
     func sendMessage(_ content: String, mentions: [String], messageID: String, timestamp: Date) {
         sendMessage(content, mentions: mentions)
