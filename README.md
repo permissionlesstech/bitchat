@@ -18,6 +18,7 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 - **Location-Based Channels**: Geographic chat rooms using geohash coordinates over global Nostr relays
 - **Intelligent Message Routing**: Automatically chooses best transport (Bluetooth → Nostr fallback)
 - **Decentralized Mesh Network**: Automatic peer discovery and multi-hop message relay over Bluetooth LE
+- **Open Source AI Integration**: Access to LLM inference via [Morpheus AI Gateway](https://apidocs.mor.org) - chat with AI even offline through mesh bridges
 - **Privacy First**: No accounts, no phone numbers, no persistent identifiers
 - **Private Message End-to-End Encryption**: [Noise Protocol](https://noiseprotocol.org) for mesh, NIP-17 for Nostr
 - **IRC-Style Commands**: Familiar `/slap`, `/msg`, `/who` style interface
@@ -86,6 +87,30 @@ Private messages use **intelligent transport selection**:
 3. **Smart Queuing** (when neither available)
    - Messages queued until transport becomes available
    - Automatic delivery when connection established
+
+### MorpheusAI Integration
+
+BitChat integrates with the [Morpheus decentralized AI network](https://apidocs.mor.org), bringing open-source LLM inference to the mesh:
+
+**How it works:**
+- A bridge device with internet runs the MorpheusAI bot
+- Users on the mesh (even offline) can query AI through public chat or encrypted DMs
+- Responses route back through the Bluetooth mesh network
+
+**Usage for regular users (no setup required):**
+
+| Method | Command | Privacy |
+|--------|---------|---------|
+| Public AI | `@MorpheusAI What is Bitcoin?` | Visible to all in mesh |
+| Private AI | `/msg @BridgeNick !ai What is Bitcoin?` | End-to-end encrypted |
+
+**Bridge operator setup:**
+```bash
+/ai-key YOUR_MORPHEUS_API_KEY    # Get key at https://app.mor.org
+/ai-bridge on                     # Activate the bot
+```
+
+For detailed documentation, see [MorpheusAI FAQ](docs/MORPHEUS_AI_FAQ.md).
 
 For detailed protocol documentation, see the [Technical Whitepaper](WHITEPAPER.md).
 

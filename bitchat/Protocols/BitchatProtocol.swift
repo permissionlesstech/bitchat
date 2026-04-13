@@ -69,18 +69,18 @@ import CoreBluetooth
 enum MessageType: UInt8 {
     // Public messages (unencrypted)
     case announce = 0x01        // "I'm here" with nickname
-    case message = 0x02         // Public chat message  
+    case message = 0x02         // Public chat message
     case leave = 0x03           // "I'm leaving"
     case requestSync = 0x21     // GCS filter-based sync request (local-only)
-    
+
     // Noise encryption
     case noiseHandshake = 0x10  // Handshake (init or response determined by payload)
     case noiseEncrypted = 0x11  // All encrypted payloads (messages, receipts, etc.)
-    
+
     // Fragmentation (simplified)
     case fragment = 0x20        // Single fragment type for large messages
     case fileTransfer = 0x22    // Binary file/audio/image payloads
-    
+
     var description: String {
         switch self {
         case .announce: return "announce"
@@ -108,7 +108,7 @@ enum NoisePayloadType: UInt8 {
     // Verification (QR-based OOB binding)
     case verifyChallenge = 0x10     // Verification challenge
     case verifyResponse  = 0x11     // Verification response
-    
+
     var description: String {
         switch self {
         case .privateMessage: return "privateMessage"
