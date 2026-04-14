@@ -1,3 +1,4 @@
+import Nostr
 import SwiftUI
 import CoreImage
 import CoreImage.CIFilterBuiltins

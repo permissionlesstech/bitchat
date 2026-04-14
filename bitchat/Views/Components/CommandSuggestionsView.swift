@@ -5,6 +5,7 @@
 //  Created by Islam on 29/10/2025.
 //
 
+import Nostr
 import SwiftUI
 
 struct CommandSuggestionsView: View {
@@ -76,7 +77,7 @@ struct CommandSuggestionsView: View {
     let keychain = KeychainManager()
     let viewModel = ChatViewModel(
         keychain: keychain,
-        idBridge: NostrIdentityBridge(),
+        idBridge: NostrIdentityBridge(keychain: keychain),
         identityManager: SecureIdentityStateManager(keychain)
     )
     

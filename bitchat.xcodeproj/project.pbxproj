@@ -10,6 +10,10 @@
 		17901751FD8010AFC8E750F2 /* bitchatShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 61F92EBA29C47C0FCC482F1F /* bitchatShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		3EE336D150427F736F32B56C /* P256K in Frameworks */ = {isa = PBXBuildFile; productRef = B1D9136AA0083366353BFA2F /* P256K */; };
 		885BBED78092484A5B069461 /* P256K in Frameworks */ = {isa = PBXBuildFile; productRef = 4EB6BA1B8464F1EA38F4E286 /* P256K */; };
+		A63163B62F80CB2500B8B128 /* Noise in Frameworks */ = {isa = PBXBuildFile; productRef = A63163B52F80CB2500B8B128 /* Noise */; };
+		A63163B82F80CB2D00B8B128 /* Noise in Frameworks */ = {isa = PBXBuildFile; productRef = A63163B72F80CB2D00B8B128 /* Noise */; };
+		A63180832F8103AB00B8B128 /* Nostr in Frameworks */ = {isa = PBXBuildFile; productRef = A63180822F8103AB00B8B128 /* Nostr */; };
+		A63180852F8103B600B8B128 /* Nostr in Frameworks */ = {isa = PBXBuildFile; productRef = A63180842F8103B600B8B128 /* Nostr */; };
 		A6BCF9482F80953E001CF9B9 /* BitFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = A6BCF9472F80953E001CF9B9 /* BitFoundation */; };
 		A6BCF94A2F809550001CF9B9 /* BitFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = A6BCF9492F809550001CF9B9 /* BitFoundation */; };
 		A6E3E5702E77036A0032EA8A /* BitLogger in Frameworks */ = {isa = PBXBuildFile; productRef = A6E3E56F2E77036A0032EA8A /* BitLogger */; };
@@ -156,7 +160,9 @@
 			isa = PBXFrameworksBuildPhase;
 			files = (
 				A6E3E5722E7703760032EA8A /* BitLogger in Frameworks */,
+				A63163B82F80CB2D00B8B128 /* Noise in Frameworks */,
 				3EE336D150427F736F32B56C /* P256K in Frameworks */,
+				A63180852F8103B600B8B128 /* Nostr in Frameworks */,
 				A6E3EA812E7706A80032EA8A /* Tor in Frameworks */,
 				A6BCF94A2F809550001CF9B9 /* BitFoundation in Frameworks */,
 			);
@@ -165,7 +171,9 @@
 			isa = PBXFrameworksBuildPhase;
 			files = (
 				A6E3E5702E77036A0032EA8A /* BitLogger in Frameworks */,
+				A63163B62F80CB2500B8B128 /* Noise in Frameworks */,
 				885BBED78092484A5B069461 /* P256K in Frameworks */,
+				A63180832F8103AB00B8B128 /* Nostr in Frameworks */,
 				A6E3EA7F2E7706720032EA8A /* Tor in Frameworks */,
 				A6BCF9482F80953E001CF9B9 /* BitFoundation in Frameworks */,
 			);
@@ -228,6 +236,8 @@
 				A6E3E5712E7703760032EA8A /* BitLogger */,
 				A6E3EA802E7706A80032EA8A /* Tor */,
 				A6BCF9492F809550001CF9B9 /* BitFoundation */,
+				A63163B72F80CB2D00B8B128 /* Noise */,
+				A63180842F8103B600B8B128 /* Nostr */,
 			);
 			productName = bitchat_macOS;
 			productReference = 8F3A7C058C2C8E1A06C8CF8B /* bitchat.app */;
@@ -309,6 +319,8 @@
 				A6E3E56F2E77036A0032EA8A /* BitLogger */,
 				A6E3EA7E2E7706720032EA8A /* Tor */,
 				A6BCF9472F80953E001CF9B9 /* BitFoundation */,
+				A63163B52F80CB2500B8B128 /* Noise */,
+				A63180822F8103AB00B8B128 /* Nostr */,
 			);
 			productName = bitchat_iOS;
 			productReference = 96D0D41CA19EE5A772AA8434 /* bitchat.app */;
@@ -351,6 +363,8 @@
 				A6E3E56E2E77036A0032EA8A /* XCLocalSwiftPackageReference "localPackages/BitLogger" */,
 				A6E3EA7D2E7706720032EA8A /* XCLocalSwiftPackageReference "localPackages/Arti" */,
 				A6BCF9462F80953E001CF9B9 /* XCLocalSwiftPackageReference "localPackages/BitFoundation" */,
+				A63163B42F80CB2500B8B128 /* XCLocalSwiftPackageReference "localPackages/Noise" */,
+				A63180812F8103AB00B8B128 /* XCLocalSwiftPackageReference "localPackages/Nostr" */,
 			);
 			preferredProjectObjectVersion = 90;
 			projectDirPath = "";
@@ -916,6 +930,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
+		A63163B42F80CB2500B8B128 /* XCLocalSwiftPackageReference "localPackages/Noise" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = localPackages/Noise;
+		};
+		A63180812F8103AB00B8B128 /* XCLocalSwiftPackageReference "localPackages/Nostr" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = localPackages/Nostr;
+		};
 		A6BCF9462F80953E001CF9B9 /* XCLocalSwiftPackageReference "localPackages/BitFoundation" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = localPackages/BitFoundation;
@@ -946,6 +968,24 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B8C407587481BBB190741C93 /* XCRemoteSwiftPackageReference "swift-secp256k1" */;
 			productName = P256K;
+		};
+		A63163B52F80CB2500B8B128 /* Noise */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Noise;
+		};
+		A63163B72F80CB2D00B8B128 /* Noise */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A63163B42F80CB2500B8B128 /* XCLocalSwiftPackageReference "localPackages/Noise" */;
+			productName = Noise;
+		};
+		A63180822F8103AB00B8B128 /* Nostr */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Nostr;
+		};
+		A63180842F8103B600B8B128 /* Nostr */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A63180812F8103AB00B8B128 /* XCLocalSwiftPackageReference "localPackages/Nostr" */;
+			productName = Nostr;
 		};
 		A6BCF9472F80953E001CF9B9 /* BitFoundation */ = {
 			isa = XCSwiftPackageProductDependency;
