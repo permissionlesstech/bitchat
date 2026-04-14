@@ -96,7 +96,11 @@ Phase 3: Swap Init (0x30, Noise-encrypted)
   sends swapInit. Both parties can determine this independently,
   preventing duplicate exchanges.
   
-  Initiator → Responder: { session_id, protocol_version }
+  Initiator → Responder: { session_id, protocol_version, catalog_version }
+  
+  If the responder does not support the advertised protocol_version,
+  it MUST abort the session. Catalog version mismatch is allowed —
+  see Catalog section for compatibility rules.
 
 Phase 4: Swap Exchange Round 1 (0x31 step=1, Noise-encrypted)
   Each party picks two independent random secret exponents — one for
@@ -173,6 +177,8 @@ Items are drawn from a versioned catalog distributed with the app:
 - Free-text matching ("bandages" vs "bandage" vs "first aid supplies") would fail silently
 - Catalog can be localized (translated item names map to canonical IDs)
 - Catalog updates can be distributed via mesh (small JSON, versioned)
+
+**Catalog compatibility:** Item IDs are immutable across versions. New catalog versions MAY add new items but MUST NOT rename or remove existing IDs. If an item becomes obsolete, leave the ID in place (UIs can hide deprecated items). This ensures forward and backward compatibility — peers with different catalog versions will match on their common subset.
 
 Initial catalog: ~100-200 items across categories relevant to crisis scenarios. For items not in the catalog, a free-text extension is supported where both parties must type the same string for a match. Both sides normalize free-text before hashing: NFC Unicode normalization, then locale-independent Unicode lowercase (ICU `toLower` with no locale). This preserves non-Latin scripts while ensuring cross-platform determinism.
 
