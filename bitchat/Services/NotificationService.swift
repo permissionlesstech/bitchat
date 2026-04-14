@@ -119,7 +119,7 @@ final class NotificationService {
             }
         }
     }
-    
+
     func sendLocalNotification(
         title: String,
         body: String,
@@ -146,24 +146,24 @@ final class NotificationService {
 
         requestDeliverer.add(request)
     }
-    
+
     func sendMentionNotification(from sender: String, message: String) {
         let title = "🫵 you were mentioned by \(sender)"
         let body = message
         let identifier = "mention-\(UUID().uuidString)"
-        
+
         sendLocalNotification(title: title, body: body, identifier: identifier)
     }
-    
+
     func sendPrivateMessageNotification(from sender: String, message: String, peerID: PeerID) {
         let title = "🔒 DM from \(sender)"
         let body = message
         let identifier = "private-\(UUID().uuidString)"
         let userInfo = ["peerID": peerID.id, "senderName": sender]
-        
+
         sendLocalNotification(title: title, body: body, identifier: identifier, userInfo: userInfo)
     }
-    
+
     // Geohash public chat notification with deep link to a specific geohash
     func sendGeohashActivityNotification(geohash: String, titlePrefix: String = "#", bodyPreview: String) {
         let title = "\(titlePrefix)\(geohash)"

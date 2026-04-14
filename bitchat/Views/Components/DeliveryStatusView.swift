@@ -14,11 +14,11 @@ struct DeliveryStatusView: View {
     let status: DeliveryStatus
 
     // MARK: - Computed Properties
-    
+
     private var textColor: Color {
         colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
     }
-    
+
     private var secondaryTextColor: Color {
         colorScheme == .dark ? Color.green.opacity(0.8) : Color(red: 0, green: 0.5, blue: 0).opacity(0.8)
     }
@@ -57,21 +57,21 @@ struct DeliveryStatusView: View {
             )
         }
     }
-    
+
     // MARK: - Body
-    
+
     var body: some View {
         switch status {
         case .sending:
             Image(systemName: "circle")
                 .font(.bitchatSystem(size: 10))
                 .foregroundColor(secondaryTextColor.opacity(0.6))
-            
+
         case .sent:
             Image(systemName: "checkmark")
                 .font(.bitchatSystem(size: 10))
                 .foregroundColor(secondaryTextColor.opacity(0.6))
-            
+
         case .delivered(let nickname, _):
             HStack(spacing: -2) {
                 Image(systemName: "checkmark")
@@ -81,7 +81,7 @@ struct DeliveryStatusView: View {
             }
             .foregroundColor(textColor.opacity(0.8))
             .help(Strings.delivered(to: nickname))
-            
+
         case .read(let nickname, _):
             HStack(spacing: -2) {
                 Image(systemName: "checkmark")
@@ -91,13 +91,13 @@ struct DeliveryStatusView: View {
             }
             .foregroundColor(Color(red: 0.0, green: 0.478, blue: 1.0))  // Bright blue
             .help(Strings.read(by: nickname))
-            
+
         case .failed(let reason):
             Image(systemName: "exclamationmark.triangle")
                 .font(.bitchatSystem(size: 10))
                 .foregroundColor(Color.red.opacity(0.8))
                 .help(Strings.failed(reason))
-            
+
         case .partiallyDelivered(let reached, let total):
             HStack(spacing: 1) {
                 Image(systemName: "checkmark")
@@ -120,7 +120,7 @@ struct DeliveryStatusView: View {
         .failed(reason: "Offline"),
         .partiallyDelivered(reached: 2, total: 5)
     ]
-    
+
     List {
         ForEach(statuses, id: \.self) { status in
             HStack {

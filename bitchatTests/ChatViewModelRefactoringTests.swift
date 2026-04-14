@@ -33,11 +33,11 @@ struct ChatViewModelRefactoringTests {
     }
 
     // MARK: - Command Processor Integration "Pinning"
-    
+
     @Test @MainActor
     func command_msg_routesToTransport() async throws {
         let (viewModel, transport, _) = makePinnedViewModel()
-        
+
         // Setup: Use simulateConnect so ChatViewModel and UnifiedPeerService are notified
         let peerID = PeerID(str: "0000000000000001")
         transport.simulateConnect(peerID, nickname: "alice")
@@ -45,18 +45,18 @@ struct ChatViewModelRefactoringTests {
         let didResolve = await TestHelpers.waitUntil({ viewModel.getPeerIDForNickname("alice") != nil },
                                                      timeout: TestConstants.shortTimeout)
         #expect(didResolve)
-        
+
         // Action: User types /msg command
         viewModel.sendMessage("/msg @alice Hello Private World")
 
         let didSend = await TestHelpers.waitUntil({ transport.sentPrivateMessages.count == 1 },
                                                   timeout: TestConstants.shortTimeout)
         #expect(didSend)
-        
+
         // Assert:
         // 1. Should NOT go to public transport
         #expect(transport.sentMessages.isEmpty, "Command should not be sent as public message")
-        
+
         // 2. Should go to private transport logic
         #expect(transport.sentPrivateMessages.count == 1)
         #expect(transport.sentPrivateMessages.first?.content == "Hello Private World")
@@ -66,7 +66,7 @@ struct ChatViewModelRefactoringTests {
     @Test @MainActor
     func command_block_updatesIdentity() async throws {
         let (viewModel, transport, identity) = makePinnedViewModel()
-        
+
         // Setup: Use simulateConnect
         let peerID = PeerID(str: "0000000000000002")
         // Mock the fingerprint so the block command finds it
@@ -76,10 +76,10 @@ struct ChatViewModelRefactoringTests {
         let didResolve = await TestHelpers.waitUntil({ viewModel.getPeerIDForNickname("troll") != nil },
                                                      timeout: TestConstants.shortTimeout)
         #expect(didResolve)
-        
+
         // Action
         viewModel.sendMessage("/block @troll")
-        
+
         // Assert
         // Verify identity manager was called to block "fingerprint_123"
         let didBlock = await TestHelpers.waitUntil({ identity.isBlocked(fingerprint: "fingerprint_123") },

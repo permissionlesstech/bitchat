@@ -116,14 +116,14 @@ enum ChannelID: Equatable, Codable {
         case .location(let ch): return ch.geohash
         }
     }
-    
+
     var isMesh: Bool {
         switch self {
         case .mesh:     true
         case .location: false
         }
     }
-    
+
     var isLocation: Bool {
         switch self {
         case .mesh:     false

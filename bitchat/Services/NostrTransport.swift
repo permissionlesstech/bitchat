@@ -60,15 +60,15 @@ final class NostrTransport: Transport, @unchecked Sendable {
         self.keychain = keychain
         self.idBridge = idBridge
         self.dependencies = dependencies ?? .live(idBridge: idBridge)
-        
+
         setupObservers()
-        
+
         // Synchronously warm the cache to avoid startup race
         let favorites = self.dependencies.loadFavorites()
         let reachable = favorites.values
             .filter { $0.peerNostrPublicKey != nil }
             .map { PeerID(publicKey: $0.peerNoisePublicKey) }
-            
+
         queue.sync(flags: .barrier) {
             self.reachablePeers = Set(reachable)
         }
@@ -96,7 +96,7 @@ final class NostrTransport: Transport, @unchecked Sendable {
             let reachable = favorites.values
                 .filter { $0.peerNostrPublicKey != nil }
                 .map { PeerID(publicKey: $0.peerNoisePublicKey) }
-            
+
             self.queue.async(flags: .barrier) { [weak self] in
                 self?.reachablePeers = Set(reachable)
             }
@@ -122,7 +122,7 @@ final class NostrTransport: Transport, @unchecked Sendable {
     func emergencyDisconnectAll() { /* no-op */ }
 
     func isPeerConnected(_ peerID: PeerID) -> Bool { false }
-    
+
     func isPeerReachable(_ peerID: PeerID) -> Bool {
         queue.sync {
             // Check if exact match
@@ -134,14 +134,14 @@ final class NostrTransport: Transport, @unchecked Sendable {
             return false
         }
     }
-    
+
     func peerNickname(peerID: PeerID) -> String? { nil }
     func getPeerNicknames() -> [PeerID: String] { [:] }
 
     func getFingerprint(for peerID: PeerID) -> String? { nil }
     func getNoiseSessionState(for peerID: PeerID) -> LazyHandshakeState { .none }
     func triggerHandshake(with peerID: PeerID) { /* no-op */ }
-    
+
     // Nostr does not use Noise sessions here; return a cached placeholder to avoid reallocation
     private static var cachedNoiseService: NoiseEncryptionService?
     func getNoiseService() -> NoiseEncryptionService {

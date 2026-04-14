@@ -83,7 +83,7 @@ public final class GeohashParticipantTracker: ObservableObject {
         var map = participants[geohash] ?? [:]
         map[key] = Date()
         participants[geohash] = map
-        
+
         // Always notify observers that state has changed so counts in UI update
         objectWillChange.send()
 

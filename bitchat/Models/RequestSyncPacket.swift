@@ -49,7 +49,7 @@ struct RequestSyncPacket {
         }
         return out
     }
-    
+
     static func decode(from data: Data, maxAcceptBytes: Int = 1024) -> RequestSyncPacket? {
         var off = 0
         var p: Int? = nil

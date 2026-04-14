@@ -75,7 +75,7 @@ enum NoisePayloadType: UInt8 {
     // Verification (QR-based OOB binding)
     case verifyChallenge = 0x10     // Verification challenge
     case verifyResponse  = 0x11     // Verification response
-    
+
     var description: String {
         switch self {
         case .privateMessage: return "privateMessage"
@@ -124,7 +124,7 @@ extension BitchatDelegate {
     func isFavorite(fingerprint: String) -> Bool {
         return false
     }
-    
+
     func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {
         // Default empty implementation
     }

@@ -11,7 +11,6 @@ disabled_rules:
   - void_function_in_ternary
   - redundant_discardable_let  # SwiftUI breaks without it
   # To be enabled as we fix the issues
-  - trailing_whitespace
   - cyclomatic_complexity
   - function_body_length
   - function_parameter_count
