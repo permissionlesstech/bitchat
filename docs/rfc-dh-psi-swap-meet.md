@@ -174,7 +174,7 @@ Items are drawn from a versioned catalog distributed with the app:
 - Catalog can be localized (translated item names map to canonical IDs)
 - Catalog updates can be distributed via mesh (small JSON, versioned)
 
-Initial catalog: ~100-200 items across categories relevant to crisis scenarios. For items not in the catalog, a free-text extension is supported where both parties must type the same string for a match. Both sides normalize free-text to lowercase ASCII with NFC Unicode normalization before hashing.
+Initial catalog: ~100-200 items across categories relevant to crisis scenarios. For items not in the catalog, a free-text extension is supported where both parties must type the same string for a match. Both sides normalize free-text before hashing: NFC Unicode normalization, then locale-independent Unicode lowercase (ICU `toLower` with no locale). This preserves non-Latin scripts while ensuring cross-platform determinism.
 
 ## Security
 
