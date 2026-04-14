@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import BitFoundation
 
 struct TextMessageView: View {
     @Environment(\.colorScheme) private var colorScheme: ColorScheme

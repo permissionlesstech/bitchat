@@ -5,6 +5,7 @@
 // Handles batching and deduplication of public chat messages before surfacing them to the UI.
 //
 
+import BitFoundation
 import Foundation
 
 @MainActor

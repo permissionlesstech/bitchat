@@ -8,8 +8,7 @@
 
 import Testing
 import Foundation
-import BitFoundation
-@testable import bitchat
+@testable import BitFoundation
 
 struct BinaryProtocolTests {
     
@@ -804,5 +803,15 @@ struct BinaryProtocolTests {
         _ = BinaryProtocol.decode(minData)
         // The important thing is no crash occurs - result might be nil or valid
         // We don't assert the result, just that no crash happens
+    }
+}
+
+private extension Data {
+    func trimmingNullBytes() -> Data {
+        // Find the first null byte
+        if let nullIndex = self.firstIndex(of: 0) {
+            return self.prefix(nullIndex)
+        }
+        return self
     }
 }

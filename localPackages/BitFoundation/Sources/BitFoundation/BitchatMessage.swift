@@ -6,34 +6,39 @@
 // For more information, see <https://unlicense.org>
 //
 
-import Foundation
-import BitFoundation
+import class Foundation.DateFormatter
+
+import struct Foundation.AttributedString
+import struct Foundation.Data
+import struct Foundation.Date
+import struct Foundation.TimeInterval
+import struct Foundation.UUID
 
 /// Represents a user-visible message in the BitChat system.
 /// Handles both broadcast messages and private encrypted messages,
 /// with support for mentions, replies, and delivery tracking.
 /// - Note: This is the primary data model for chat messages
-final class BitchatMessage: Codable {
-    let id: String
-    let sender: String
-    let content: String
-    let timestamp: Date
-    let isRelay: Bool
-    let originalSender: String?
-    let isPrivate: Bool
-    let recipientNickname: String?
-    let senderPeerID: PeerID?
-    let mentions: [String]?  // Array of mentioned nicknames
-    var deliveryStatus: DeliveryStatus? // Delivery tracking
-    
+public final class BitchatMessage: Codable {
+    public let id: String
+    public let sender: String
+    public let content: String
+    public let timestamp: Date
+    public let isRelay: Bool
+    public let originalSender: String?
+    public let isPrivate: Bool
+    public let recipientNickname: String?
+    public let senderPeerID: PeerID?
+    public let mentions: [String]?  // Array of mentioned nicknames
+    public var deliveryStatus: DeliveryStatus? // Delivery tracking
+
     // Cached formatted text (not included in Codable)
     private var _cachedFormattedText: [String: AttributedString] = [:]
     
-    func getCachedFormattedText(isDark: Bool, isSelf: Bool) -> AttributedString? {
+    public func getCachedFormattedText(isDark: Bool, isSelf: Bool) -> AttributedString? {
         return _cachedFormattedText["\(isDark)-\(isSelf)"]
     }
     
-    func setCachedFormattedText(_ text: AttributedString, isDark: Bool, isSelf: Bool) {
+    public func setCachedFormattedText(_ text: AttributedString, isDark: Bool, isSelf: Bool) {
         _cachedFormattedText["\(isDark)-\(isSelf)"] = text
     }
     
@@ -43,7 +48,7 @@ final class BitchatMessage: Codable {
         case isPrivate, recipientNickname, senderPeerID, mentions, deliveryStatus
     }
     
-    init(
+    public init(
         id: String? = nil,
         sender: String,
         content: String,
@@ -73,7 +78,7 @@ final class BitchatMessage: Codable {
 // MARK: - Equatable Conformance
 
 extension BitchatMessage: Equatable {
-    static func == (lhs: BitchatMessage, rhs: BitchatMessage) -> Bool {
+    public static func == (lhs: BitchatMessage, rhs: BitchatMessage) -> Bool {
         return lhs.id == rhs.id &&
                lhs.sender == rhs.sender &&
                lhs.content == rhs.content &&
@@ -331,14 +336,14 @@ extension BitchatMessage {
         return formatter
     }()
     
-    var formattedTimestamp: String {
+    public var formattedTimestamp: String {
         Self.timestampFormatter.string(from: timestamp)
     }
 }
 
 extension Array where Element == BitchatMessage {
     /// Filters out empty ones and deduplicate by ID while preserving order (from oldest to newest)
-    func cleanedAndDeduped() -> [Element] {
+    public func cleanedAndDeduped() -> [Element] {
         let arr = filter { $0.content.trimmed.isEmpty == false }
         guard arr.count > 1 else {
             return arr

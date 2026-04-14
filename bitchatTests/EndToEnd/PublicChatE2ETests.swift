@@ -8,7 +8,7 @@
 
 import Testing
 import struct Foundation.UUID
-import BitFoundation
+@testable import BitFoundation // to avoid unnecessary public's
 @testable import bitchat
 
 struct PublicChatE2ETests {

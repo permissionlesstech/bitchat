@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+@testable import BitFoundation // to avoid unnecessary public's
 @testable import bitchat
 
 final class BinaryEncodingUtilsTests: XCTestCase {

@@ -1,3 +1,4 @@
+import BitFoundation
 import Foundation
 
 /// Bitfield describing which message types are covered by a REQUEST_SYNC round.

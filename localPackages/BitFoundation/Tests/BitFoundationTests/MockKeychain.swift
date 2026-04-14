@@ -8,8 +8,8 @@
 
 import Foundation
 import BitFoundation
-@testable import bitchat
 
+// TODO: Create a module for test helpers
 final class MockKeychain: KeychainManagerProtocol {
     private var storage: [String: Data] = [:]
     private var serviceStorage: [String: [String: Data]] = [:]
