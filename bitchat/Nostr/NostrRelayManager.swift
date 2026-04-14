@@ -70,26 +70,34 @@ struct NostrRelayManagerDependencies {
 
 private extension NostrRelayManagerDependencies {
     @MainActor
-    static func live() -> Self {
-        Self(
-            activationAllowed: { NetworkActivationService.shared.activationAllowed },
-            userTorEnabled: { NetworkActivationService.shared.userTorEnabled },
-            hasMutualFavorites: { !FavoritesPersistenceService.shared.mutualFavorites.isEmpty },
-            hasLocationPermission: { LocationChannelManager.shared.permissionState == .authorized },
-            mutualFavoritesPublisher: FavoritesPersistenceService.shared.$mutualFavorites.eraseToAnyPublisher(),
-            locationPermissionPublisher: LocationChannelManager.shared.$permissionState.eraseToAnyPublisher(),
-            torEnforced: { TorManager.shared.torEnforced },
-            torIsReady: { TorManager.shared.isReady },
-            torIsForeground: { TorManager.shared.isForeground() },
+    static func live(
+        networkActivationService: NetworkActivationService,
+        locationManager: LocationChannelManager,
+        favoritesService: FavoritesPersistenceService,
+        torManager: TorManager? = nil,
+        torURLSession: TorURLSession? = nil
+    ) -> Self {
+        let torManager = torManager ?? TorManager.shared
+        let torURLSession = torURLSession ?? TorURLSession.shared
+        return Self(
+            activationAllowed: { networkActivationService.activationAllowed },
+            userTorEnabled: { networkActivationService.userTorEnabled },
+            hasMutualFavorites: { !favoritesService.mutualFavorites.isEmpty },
+            hasLocationPermission: { locationManager.permissionState == .authorized },
+            mutualFavoritesPublisher: favoritesService.$mutualFavorites.eraseToAnyPublisher(),
+            locationPermissionPublisher: locationManager.$permissionState.eraseToAnyPublisher(),
+            torEnforced: { torManager.torEnforced },
+            torIsReady: { torManager.isReady },
+            torIsForeground: { torManager.isForeground() },
             awaitTorReady: { completion in
                 Task.detached {
-                    let ready = await TorManager.shared.awaitReady()
+                    let ready = await torManager.awaitReady()
                     await MainActor.run {
                         completion(ready)
                     }
                 }
             },
-            makeSession: { URLSessionAdapter(base: TorURLSession.shared.session) },
+            makeSession: { URLSessionAdapter(base: torURLSession.session) },
             scheduleAfter: { delay, action in
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: action)
             },
@@ -101,7 +109,7 @@ private extension NostrRelayManagerDependencies {
 /// Manages WebSocket connections to Nostr relays
 @MainActor
 final class NostrRelayManager: ObservableObject {
-    static let shared = NostrRelayManager()
+    static var shared: NostrRelayManager { LiveRuntimeServices.nostrRelayManager }
     // Track gift-wraps (kind 1059) we initiated so we can log OK acks at info
     private(set) static var pendingGiftWrapIDs = Set<String>()
     static func registerPendingGiftWrap(id: String) {
@@ -175,31 +183,24 @@ final class NostrRelayManager: ObservableObject {
     // Bump generation to invalidate scheduled reconnects when we reset/disconnect
     private var connectionGeneration: Int = 0
     
-    init() {
-        self.dependencies = .live()
-        hasMutualFavorites = dependencies.hasMutualFavorites()
-        hasLocationPermission = dependencies.hasLocationPermission()
-        applyDefaultRelayPolicy(force: true)
-        // Deterministic JSON shape for outbound requests
-        self.encoder.outputFormatting = .sortedKeys
-        dependencies.mutualFavoritesPublisher
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] favorites in
-                guard let self = self else { return }
-                self.hasMutualFavorites = !favorites.isEmpty
-                self.applyDefaultRelayPolicy()
-            }
-            .store(in: &cancellables)
-        dependencies.locationPermissionPublisher
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] state in
-                guard let self = self else { return }
-                let authorized = (state == .authorized)
-                if authorized == self.hasLocationPermission { return }
-                self.hasLocationPermission = authorized
-                self.applyDefaultRelayPolicy()
-            }
-            .store(in: &cancellables)
+    static func live(
+        networkActivationService: NetworkActivationService,
+        locationManager: LocationChannelManager,
+        favoritesService: FavoritesPersistenceService,
+        torManager: TorManager? = nil,
+        torURLSession: TorURLSession? = nil
+    ) -> NostrRelayManager {
+        let torManager = torManager ?? TorManager.shared
+        let torURLSession = torURLSession ?? TorURLSession.shared
+        return NostrRelayManager(
+            dependencies: .live(
+                networkActivationService: networkActivationService,
+                locationManager: locationManager,
+                favoritesService: favoritesService,
+                torManager: torManager,
+                torURLSession: torURLSession
+            )
+        )
     }
 
     internal init(dependencies: NostrRelayManagerDependencies) {
@@ -857,6 +858,20 @@ final class NostrRelayManager: ObservableObject {
         
         // Reconnect
         connect()
+    }
+
+    func resetForIdentityChange() {
+        for tracker in eoseTrackers.values {
+            tracker.timer?.invalidate()
+        }
+        eoseTrackers.removeAll()
+        disconnect()
+        messageHandlers.removeAll()
+        subscribeCoalesce.removeAll()
+
+        messageQueueLock.lock()
+        messageQueue.removeAll()
+        messageQueueLock.unlock()
     }
 
     // MARK: - Failure classification

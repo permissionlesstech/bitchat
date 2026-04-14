@@ -1,12 +1,33 @@
 import SwiftUI
 
 struct GeohashPeopleList: View {
-    @ObservedObject var viewModel: ChatViewModel
+    let geohashPeopleStore: GeohashPeopleStore
+    @ObservedObject private var locationManager: LocationChannelManager
+    @ObservedObject var sessionStore: SessionStore
+    @ObservedObject var participantStore: GeohashParticipantTracker
     let textColor: Color
     let secondaryTextColor: Color
     let onTapPerson: () -> Void
     @Environment(\.colorScheme) var colorScheme
     @State private var orderedIDs: [String] = []
+
+    init(
+        geohashPeopleStore: GeohashPeopleStore,
+        locationManager: LocationChannelManager = .shared,
+        sessionStore: SessionStore,
+        participantStore: GeohashParticipantTracker,
+        textColor: Color,
+        secondaryTextColor: Color,
+        onTapPerson: @escaping () -> Void
+    ) {
+        self.geohashPeopleStore = geohashPeopleStore
+        _locationManager = ObservedObject(wrappedValue: locationManager)
+        _sessionStore = ObservedObject(wrappedValue: sessionStore)
+        _participantStore = ObservedObject(wrappedValue: participantStore)
+        self.textColor = textColor
+        self.secondaryTextColor = secondaryTextColor
+        self.onTapPerson = onTapPerson
+    }
 
     private enum Strings {
         static let noneNearby: LocalizedStringKey = "geohash_people.none_nearby"
@@ -17,7 +38,9 @@ struct GeohashPeopleList: View {
     }
 
     var body: some View {
-        if viewModel.visibleGeohashPeople().isEmpty {
+        let people = participantStore.visiblePeople
+
+        if people.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 Text(Strings.noneNearby)
                     .font(.bitchatSystem(size: 14, design: .monospaced))
@@ -26,20 +49,13 @@ struct GeohashPeopleList: View {
                     .padding(.top, 12)
             }
         } else {
-            let myHex: String? = {
-                if case .location(let ch) = LocationChannelManager.shared.selectedChannel,
-                   let id = try? viewModel.idBridge.deriveIdentity(forGeohash: ch.geohash) {
-                    return id.publicKeyHex.lowercased()
-                }
-                return nil
-            }()
-            let people = viewModel.visibleGeohashPeople()
+            let myHex = geohashPeopleStore.currentIdentityHex()
             let currentIDs = people.map { $0.id }
 
-            let teleportedSet = Set(viewModel.teleportedGeo.map { $0.lowercased() })
+            let teleportedSet = Set(sessionStore.teleportedGeo.map { $0.lowercased() })
             let isTeleportedID: (String) -> Bool = { id in
                 if teleportedSet.contains(id.lowercased()) { return true }
-                if let me = myHex, id == me, LocationChannelManager.shared.teleported { return true }
+                if let me = myHex, id == me, locationManager.teleported { return true }
                 return false
             }
 
@@ -55,9 +71,9 @@ struct GeohashPeopleList: View {
                     let person = personByID[pid]!
                     HStack(spacing: 4) {
                         let isMe = (person.id == myHex)
-                        let teleported = viewModel.teleportedGeo.contains(person.id.lowercased()) || (isMe && LocationChannelManager.shared.teleported)
+                        let teleported = sessionStore.teleportedGeo.contains(person.id.lowercased()) || (isMe && locationManager.teleported)
                         let icon = teleported ? "face.dashed" : "mappin.and.ellipse"
-                        let assignedColor = viewModel.colorForNostrPubkey(person.id, isDark: colorScheme == .dark)
+                        let assignedColor = geohashPeopleStore.color(for: person.id, isDark: colorScheme == .dark)
                         let rowColor: Color = isMe ? .orange : assignedColor
                         Image(systemName: icon).font(.bitchatSystem(size: 12)).foregroundColor(rowColor)
 
@@ -80,7 +96,7 @@ struct GeohashPeopleList: View {
                             }
                         }
                         if let me = myHex, person.id != me {
-                            if viewModel.isGeohashUserBlocked(pubkeyHexLowercased: person.id) {
+                            if geohashPeopleStore.isBlocked(person.id) {
                                 Image(systemName: "nosign")
                                     .font(.bitchatSystem(size: 10))
                                     .foregroundColor(.red)
@@ -95,7 +111,7 @@ struct GeohashPeopleList: View {
                     .contentShape(Rectangle())
                     .onTapGesture {
                         if person.id != myHex {
-                            viewModel.startGeohashDM(withPubkeyHex: person.id)
+                            geohashPeopleStore.startDirectMessage(withPubkeyHex: person.id)
                             onTapPerson()
                         }
                     }
@@ -103,11 +119,11 @@ struct GeohashPeopleList: View {
                         if let me = myHex, person.id == me {
                             EmptyView()
                         } else {
-                            let blocked = viewModel.isGeohashUserBlocked(pubkeyHexLowercased: person.id)
+                            let blocked = geohashPeopleStore.isBlocked(person.id)
                             if blocked {
-                                Button(Strings.unblock) { viewModel.unblockGeohashUser(pubkeyHexLowercased: person.id, displayName: person.displayName) }
+                                Button(Strings.unblock) { geohashPeopleStore.unblock(pubkeyHexLowercased: person.id, displayName: person.displayName) }
                             } else {
-                                Button(Strings.block) { viewModel.blockGeohashUser(pubkeyHexLowercased: person.id, displayName: person.displayName) }
+                                Button(Strings.block) { geohashPeopleStore.block(pubkeyHexLowercased: person.id, displayName: person.displayName) }
                             }
                         }
                     }

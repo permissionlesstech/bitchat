@@ -11,11 +11,13 @@ import Foundation
 import BitFoundation
 @testable import bitchat
 
+@Suite(.serialized)
 struct ChatViewModelRefactoringTests {
 
     // Helper to setup the environment
     @MainActor
     private func makePinnedViewModel() -> (viewModel: ChatViewModel, transport: MockTransport, identity: MockIdentityManager) {
+        TestHelpers.resetSharedApplicationState()
         let keychain = MockKeychain()
         let keychainHelper = MockKeychainHelper()
         let idBridge = NostrIdentityBridge(keychain: keychainHelper)

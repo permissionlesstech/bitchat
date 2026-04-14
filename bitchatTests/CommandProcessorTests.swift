@@ -53,9 +53,7 @@ struct CommandProcessorTests {
         context.nicknameToPeerID["alice"] = peerID
         let processor = CommandProcessor(contextProvider: context, meshService: nil, identityManager: identityManager)
 
-        let result = await withSelectedChannel(.mesh) {
-            processor.process("/msg @alice hello there")
-        }
+        let result = processor.process("/msg @alice hello there")
 
         switch result {
         case .success(let message):
@@ -79,9 +77,7 @@ struct CommandProcessorTests {
         ]
         let processor = CommandProcessor(contextProvider: MockCommandContextProvider(), meshService: transport, identityManager: identityManager)
 
-        let result = await withSelectedChannel(.mesh) {
-            processor.process("/who")
-        }
+        let result = processor.process("/who")
 
         switch result {
         case .success(let message):
@@ -104,10 +100,9 @@ struct CommandProcessorTests {
         ]
         let processor = CommandProcessor(contextProvider: context, meshService: MockTransport(), identityManager: identityManager)
         let channel = ChannelID.location(GeohashChannel(level: .city, geohash: geohash))
+        context.activeChannel = channel
 
-        let result = await withSelectedChannel(channel) {
-            processor.process("/who")
-        }
+        let result = processor.process("/who")
 
         switch result {
         case .success(let message):
@@ -130,9 +125,7 @@ struct CommandProcessorTests {
         ]
         let processor = CommandProcessor(contextProvider: context, meshService: nil, identityManager: identityManager)
 
-        let result = await withSelectedChannel(.mesh) {
-            processor.process("/clear")
-        }
+        let result = processor.process("/clear")
 
         switch result {
         case .handled:
@@ -150,9 +143,7 @@ struct CommandProcessorTests {
         let context = MockCommandContextProvider()
         let processor = CommandProcessor(contextProvider: context, meshService: nil, identityManager: identityManager)
 
-        let result = await withSelectedChannel(.mesh) {
-            processor.process("/clear")
-        }
+        let result = processor.process("/clear")
 
         switch result {
         case .handled:
@@ -174,9 +165,7 @@ struct CommandProcessorTests {
         transport.peerNicknames[peerID] = "Bob"
         let processor = CommandProcessor(contextProvider: context, meshService: transport, identityManager: identityManager)
 
-        let result = await withSelectedChannel(.mesh) {
-            processor.process("/hug @bob")
-        }
+        let result = processor.process("/hug @bob")
 
         switch result {
         case .handled:
@@ -198,9 +187,7 @@ struct CommandProcessorTests {
         context.nicknameToPeerID["bob"] = peerID
         let processor = CommandProcessor(contextProvider: context, meshService: MockTransport(), identityManager: identityManager)
 
-        let result = await withSelectedChannel(.mesh) {
-            processor.process("/slap @bob")
-        }
+        let result = processor.process("/slap @bob")
 
         switch result {
         case .handled:
@@ -227,9 +214,7 @@ struct CommandProcessorTests {
         identityManager.setNostrBlocked(String(repeating: "c", count: 64), isBlocked: true)
         let processor = CommandProcessor(contextProvider: context, meshService: transport, identityManager: identityManager)
 
-        let result = await withSelectedChannel(.mesh) {
-            processor.process("/block")
-        }
+        let result = processor.process("/block")
 
         switch result {
         case .success(let message):
@@ -249,9 +234,7 @@ struct CommandProcessorTests {
         context.nicknameToPeerID["bob"] = peerID
         let processor = CommandProcessor(contextProvider: context, meshService: transport, identityManager: identityManager)
 
-        let blockResult = await withSelectedChannel(.mesh) {
-            processor.process("/block @bob")
-        }
+        let blockResult = processor.process("/block @bob")
         switch blockResult {
         case .success(let message):
             #expect(message == "blocked bob. you will no longer receive messages from them")
@@ -260,9 +243,7 @@ struct CommandProcessorTests {
         }
         #expect(identityManager.isBlocked(fingerprint: "fp-bob"))
 
-        let unblockResult = await withSelectedChannel(.mesh) {
-            processor.process("/unblock bob")
-        }
+        let unblockResult = processor.process("/unblock bob")
         switch unblockResult {
         case .success(let message):
             #expect(message == "unblocked bob")
@@ -279,9 +260,7 @@ struct CommandProcessorTests {
         context.displayNameToNostrPubkey["carol"] = String(repeating: "d", count: 64)
         let processor = CommandProcessor(contextProvider: context, meshService: MockTransport(), identityManager: identityManager)
 
-        let blockResult = await withSelectedChannel(.mesh) {
-            processor.process("/block carol")
-        }
+        let blockResult = processor.process("/block carol")
         switch blockResult {
         case .success(let message):
             #expect(message == "blocked carol in geohash chats")
@@ -290,9 +269,7 @@ struct CommandProcessorTests {
         }
         #expect(identityManager.isNostrBlocked(pubkeyHexLowercased: String(repeating: "d", count: 64)))
 
-        let unblockResult = await withSelectedChannel(.mesh) {
-            processor.process("/unblock @carol")
-        }
+        let unblockResult = processor.process("/unblock @carol")
         switch unblockResult {
         case .success(let message):
             #expect(message == "unblocked carol in geohash chats")
@@ -305,16 +282,16 @@ struct CommandProcessorTests {
     @MainActor
     @Test func favoriteCommandIsRejectedOutsideMesh() async {
         let identityManager = MockIdentityManager(MockKeychain())
+        let context = MockCommandContextProvider()
         let processor = CommandProcessor(
-            contextProvider: MockCommandContextProvider(),
+            contextProvider: context,
             meshService: MockTransport(),
             identityManager: identityManager
         )
         let channel = ChannelID.location(GeohashChannel(level: .city, geohash: "u4pruy"))
+        context.activeChannel = channel
 
-        let result = await withSelectedChannel(channel) {
-            processor.process("/fav alice")
-        }
+        let result = processor.process("/fav alice")
 
         switch result {
         case .error(let message):
@@ -325,29 +302,31 @@ struct CommandProcessorTests {
     }
 
     @MainActor
-    private func withSelectedChannel<T>(_ channel: ChannelID, perform work: @escaping () throws -> T) async rethrows -> T {
-        let originalChannel = LocationChannelManager.shared.selectedChannel
-        await setSelectedChannel(channel)
-        do {
-            let result = try work()
-            await setSelectedChannel(originalChannel)
-            return result
-        } catch {
-            await setSelectedChannel(originalChannel)
-            throw error
-        }
-    }
+    @Test func favoriteCommandUsesInjectedFavoriteStore() {
+        let identityManager = MockIdentityManager(MockKeychain())
+        let context = MockCommandContextProvider()
+        let favoritesStore = MockCommandFavoriteStore()
+        let peerID = PeerID(str: "abcd1234abcd1234")
+        context.nicknameToPeerID["alice"] = peerID
+        let processor = CommandProcessor(
+            contextProvider: context,
+            meshService: MockTransport(),
+            identityManager: identityManager,
+            favoritesStore: favoritesStore
+        )
 
-    @MainActor
-    private func setSelectedChannel(_ channel: ChannelID) async {
-        LocationChannelManager.shared.select(channel)
-        for _ in 0..<40 {
-            if LocationChannelManager.shared.selectedChannel == channel {
-                return
-            }
-            await Task.yield()
-            try? await Task.sleep(nanoseconds: 5_000_000)
+        let result = processor.process("/fav alice")
+
+        switch result {
+        case .success(let message):
+            #expect(message == "added alice to favorites")
+        default:
+            Issue.record("Expected success result")
         }
+        #expect(favoritesStore.addedFavorites.map(\.peerNickname) == ["alice"])
+        #expect(context.toggledFavorites == [peerID])
+        #expect(context.favoriteNotifications.map(\.peerID) == [peerID])
+        #expect(context.favoriteNotifications.map(\.isFavorite) == [true])
     }
 
     private func makeMessage(sender: String, content: String) -> BitchatMessage {
@@ -363,6 +342,7 @@ struct CommandProcessorTests {
 @MainActor
 private final class MockCommandContextProvider: CommandContextProvider {
     var nickname: String
+    var activeChannel: ChannelID = .mesh
     var selectedPrivateChatPeer: PeerID?
     var blockedUsers: Set<String> = []
     var privateChats: [PeerID: [BitchatMessage]] = [:]
@@ -428,5 +408,24 @@ private final class MockCommandContextProvider: CommandContextProvider {
 
     func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {
         favoriteNotifications.append((peerID, isFavorite))
+    }
+}
+
+@MainActor
+private final class MockCommandFavoriteStore: CommandFavoriteStoring {
+    private(set) var favoriteStatuses: [Data: FavoritesPersistenceService.FavoriteRelationship] = [:]
+    private(set) var addedFavorites: [(peerNoisePublicKey: Data, peerNostrPublicKey: String?, peerNickname: String)] = []
+    private(set) var removedFavorites: [Data] = []
+
+    func getFavoriteStatus(for peerNoisePublicKey: Data) -> FavoritesPersistenceService.FavoriteRelationship? {
+        favoriteStatuses[peerNoisePublicKey]
+    }
+
+    func addFavorite(peerNoisePublicKey: Data, peerNostrPublicKey: String?, peerNickname: String) {
+        addedFavorites.append((peerNoisePublicKey, peerNostrPublicKey, peerNickname))
+    }
+
+    func removeFavorite(peerNoisePublicKey: Data) {
+        removedFavorites.append(peerNoisePublicKey)
     }
 }

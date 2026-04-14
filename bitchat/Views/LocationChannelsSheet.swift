@@ -1,3 +1,4 @@
+import BitFoundation
 import SwiftUI
 import CoreLocation
 #if os(iOS)
@@ -7,13 +8,30 @@ import AppKit
 #endif
 struct LocationChannelsSheet: View {
     @Binding var isPresented: Bool
-    @ObservedObject private var manager = LocationChannelManager.shared
+    @ObservedObject var participantStore: GeohashParticipantTracker
+    @ObservedObject var peerStore: UnifiedPeerService
+    @ObservedObject private var manager: LocationChannelManager
     @ObservedObject private var bookmarks = GeohashBookmarksStore.shared
-    @ObservedObject private var network = NetworkActivationService.shared
-    @EnvironmentObject var viewModel: ChatViewModel
+    @ObservedObject private var network: NetworkActivationService
+    @EnvironmentObject private var peerPresentationStore: PeerPresentationStore
     @Environment(\.colorScheme) var colorScheme
     @State private var customGeohash: String = ""
     @State private var customError: String? = nil
+
+    @MainActor
+    init(
+        isPresented: Binding<Bool>,
+        participantStore: GeohashParticipantTracker,
+        peerStore: UnifiedPeerService,
+        manager: LocationChannelManager = .shared,
+        network: NetworkActivationService? = nil
+    ) {
+        _isPresented = isPresented
+        _participantStore = ObservedObject(wrappedValue: participantStore)
+        _peerStore = ObservedObject(wrappedValue: peerStore)
+        _manager = ObservedObject(wrappedValue: manager)
+        _network = ObservedObject(wrappedValue: network ?? .shared)
+    }
 
     private var backgroundColor: Color { colorScheme == .dark ? .black : .white }
 
@@ -196,7 +214,7 @@ struct LocationChannelsSheet: View {
                         let coverage = coverageString(forPrecision: channel.geohash.count)
                         let nameBase = locationName(for: channel.level)
                         let namePart = nameBase.map { formattedNamePrefix(for: channel.level) + $0 }
-                        let participantCount = viewModel.geohashParticipantCount(for: channel.geohash)
+                        let participantCount = participantStore.participantCount(for: channel.geohash)
                         let subtitlePrefix = Strings.subtitlePrefix(geohash: channel.geohash, coverage: coverage)
                         let highlight = participantCount > 0
                         channelRow(
@@ -351,7 +369,7 @@ struct LocationChannelsSheet: View {
                     let coverage = coverageString(forPrecision: gh.count)
                     let subtitle = Strings.subtitlePrefix(geohash: gh, coverage: coverage)
                     let name = bookmarks.bookmarkNames[gh]
-                    let participantCount = viewModel.geohashParticipantCount(for: gh)
+                    let participantCount = participantStore.participantCount(for: gh)
                     channelRow(
                         title: Strings.bookmarkTitle(geohash: gh, count: participantCount),
                         subtitlePrefix: subtitle,
@@ -457,8 +475,8 @@ struct LocationChannelsSheet: View {
     // MARK: - Helpers for counts
     private func meshCount() -> Int {
         // Count mesh-connected OR mesh-reachable peers (exclude self)
-        let myID = viewModel.meshService.myPeerID
-        return viewModel.allPeers.reduce(0) { acc, peer in
+        let myID = peerPresentationStore.myPeerID
+        return peerStore.peers.reduce(0) { acc, peer in
             if peer.peerID != myID && (peer.isConnected || peer.isReachable) { return acc + 1 }
             return acc
         }

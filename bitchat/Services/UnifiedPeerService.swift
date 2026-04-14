@@ -30,8 +30,8 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     private let meshService: Transport
     private let idBridge: NostrIdentityBridge
     private let identityManager: SecureIdentityStateManagerProtocol
+    private let favoritesService: FavoritesPersistenceService
     weak var messageRouter: MessageRouter?
-    private let favoritesService = FavoritesPersistenceService.shared
     private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Initialization
@@ -39,11 +39,13 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     init(
         meshService: Transport,
         idBridge: NostrIdentityBridge,
-        identityManager: SecureIdentityStateManagerProtocol
+        identityManager: SecureIdentityStateManagerProtocol,
+        favoritesService: FavoritesPersistenceService? = nil
     ) {
         self.meshService = meshService
         self.idBridge = idBridge
         self.identityManager = identityManager
+        self.favoritesService = favoritesService ?? FavoritesPersistenceService.shared
         
         // Subscribe to changes from both services
         setupSubscriptions()
@@ -60,8 +62,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         // Subscribe to mesh peer updates via delegate (preferred over publishers)
         meshService.peerEventsDelegate = self
         
-        // Also listen for favorite change notifications
-        NotificationCenter.default.publisher(for: .favoriteStatusChanged)
+        favoritesService.changes
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.updatePeers()
@@ -71,13 +72,16 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
 
     // TransportPeerEventsDelegate
     func didUpdatePeerSnapshots(_ peers: [TransportPeerSnapshot]) {
-        updatePeers()
+        applyTransportPeerSnapshots(peers)
     }
     
     // MARK: - Core Update Logic
     
     private func updatePeers() {
-        let meshPeers = meshService.currentPeerSnapshots()
+        applyTransportPeerSnapshots(meshService.currentPeerSnapshots())
+    }
+
+    func applyTransportPeerSnapshots(_ meshPeers: [TransportPeerSnapshot]) {
         // If we have no direct links at all, peers should not be marked reachable
         // "Reachable" means mesh-attached via at least one live link.
         let hasAnyConnected = meshPeers.contains { $0.isConnected }
@@ -314,13 +318,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
             meshService.sendFavoriteNotification(to: peerID, isFavorite: !wasFavorite)
         }
         
-        // Force update of peers to reflect the change
         updatePeers()
-        
-        // Force UI update by notifying SwiftUI directly
-        DispatchQueue.main.async { [weak self] in
-            self?.objectWillChange.send()
-        }
     }
     
     func getFingerprint(for peerID: PeerID) -> String? {

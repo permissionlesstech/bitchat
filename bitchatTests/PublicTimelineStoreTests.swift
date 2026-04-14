@@ -2,12 +2,13 @@ import Foundation
 import Testing
 @testable import bitchat
 
+@MainActor
 @Suite("PublicTimelineStore Tests")
 struct PublicTimelineStoreTests {
 
     @Test("Mesh timeline deduplicates and trims to cap")
     func meshTimelineDeduplicatesAndTrims() {
-        var store = PublicTimelineStore(meshCap: 2, geohashCap: 2)
+        let store = PublicTimelineStore(meshCap: 2, geohashCap: 2)
         let first = TestHelpers.createTestMessage(content: "one")
         let second = TestHelpers.createTestMessage(content: "two")
         let third = TestHelpers.createTestMessage(content: "three")
@@ -23,7 +24,7 @@ struct PublicTimelineStoreTests {
 
     @Test("Geohash appendIfAbsent remove and clear work together")
     func geohashStoreSupportsAppendRemoveAndClear() {
-        var store = PublicTimelineStore(meshCap: 2, geohashCap: 3)
+        let store = PublicTimelineStore(meshCap: 2, geohashCap: 3)
         let geohash = "u4pruydq"
         let channel = ChannelID.location(GeohashChannel(level: .city, geohash: geohash))
         let first = TestHelpers.createTestMessage(content: "geo one")
@@ -44,9 +45,23 @@ struct PublicTimelineStoreTests {
         #expect(store.messages(for: channel).isEmpty)
     }
 
+    @Test("Clearing the active channel also clears visible messages")
+    func clearActiveChannelClearsVisibleMessages() {
+        let store = PublicTimelineStore(meshCap: 3, geohashCap: 3)
+        let message = TestHelpers.createTestMessage(content: "mesh")
+
+        store.append(message, to: .mesh)
+        store.activate(channel: .mesh)
+        #expect(store.visibleMessages.map(\.content) == ["mesh"])
+
+        store.clear(channel: .mesh)
+        #expect(store.messages(for: .mesh).isEmpty)
+        #expect(store.visibleMessages.isEmpty)
+    }
+
     @Test("Mutate geohash updates stored messages in place")
     func mutateGeohashAppliesTransformation() {
-        var store = PublicTimelineStore(meshCap: 2, geohashCap: 3)
+        let store = PublicTimelineStore(meshCap: 2, geohashCap: 3)
         let geohash = "u4pruydq"
         let channel = ChannelID.location(GeohashChannel(level: .city, geohash: geohash))
         let first = TestHelpers.createTestMessage(content: "geo one")
@@ -61,12 +76,71 @@ struct PublicTimelineStoreTests {
 
     @Test("Queued geohash system messages drain once")
     func pendingGeohashSystemMessagesDrainOnce() {
-        var store = PublicTimelineStore(meshCap: 1, geohashCap: 1)
+        let store = PublicTimelineStore(meshCap: 1, geohashCap: 1)
 
         store.queueGeohashSystemMessage("first")
         store.queueGeohashSystemMessage("second")
 
         #expect(store.drainPendingGeohashSystemMessages() == ["first", "second"])
+        #expect(store.drainPendingGeohashSystemMessages().isEmpty)
+    }
+
+    @Test("Activating a channel refreshes visible messages from that timeline")
+    func activateChannelRefreshesVisibleMessages() {
+        let store = PublicTimelineStore(meshCap: 3, geohashCap: 3)
+        let geohash = "u4pruydq"
+        let channel = ChannelID.location(GeohashChannel(level: .city, geohash: geohash))
+
+        store.append(TestHelpers.createTestMessage(content: "mesh"), to: .mesh)
+        store.append(TestHelpers.createTestMessage(content: "geo"), toGeohash: geohash)
+
+        store.activate(channel: .mesh)
+        #expect(store.visibleMessages.map(\.content) == ["mesh"])
+
+        store.activate(channel: channel)
+        #expect(store.visibleMessages.map(\.content) == ["geo"])
+    }
+
+    @Test("Updating a stored message also updates the visible timeline")
+    func updateMessageSynchronizesStoredAndVisibleTimelines() {
+        let store = PublicTimelineStore(meshCap: 3, geohashCap: 3)
+        let deliveredAt = Date()
+        let message = BitchatMessage(
+            sender: "alice",
+            content: "pending",
+            timestamp: Date(),
+            isRelay: false,
+            deliveryStatus: .sending
+        )
+
+        store.append(message, to: .mesh)
+        store.activate(channel: .mesh)
+
+        let didUpdate = store.updateMessage(id: message.id) {
+            $0.withDeliveryStatus(.delivered(to: "bob", at: deliveredAt))
+        }
+
+        #expect(didUpdate)
+        #expect(store.messages(for: .mesh).first?.deliveryStatus == .delivered(to: "bob", at: deliveredAt))
+        #expect(store.visibleMessages.first?.deliveryStatus == .delivered(to: "bob", at: deliveredAt))
+    }
+
+    @Test("Clearing all timelines resets visible and pending state")
+    func clearAllResetsAllBackings() {
+        let store = PublicTimelineStore(meshCap: 3, geohashCap: 3)
+        let geohash = "u4pruydq"
+        let channel = ChannelID.location(GeohashChannel(level: .city, geohash: geohash))
+
+        store.append(TestHelpers.createTestMessage(content: "mesh"), to: .mesh)
+        store.append(TestHelpers.createTestMessage(content: "geo"), toGeohash: geohash)
+        store.queueGeohashSystemMessage("queued")
+        store.activate(channel: channel)
+
+        store.clearAll()
+
+        #expect(store.messages(for: .mesh).isEmpty)
+        #expect(store.messages(for: channel).isEmpty)
+        #expect(store.visibleMessages.isEmpty)
         #expect(store.drainPendingGeohashSystemMessages().isEmpty)
     }
 }

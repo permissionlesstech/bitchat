@@ -31,6 +31,13 @@ final class FavoritesPersistenceService: ObservableObject {
     
     @Published private(set) var favorites: [Data: FavoriteRelationship] = [:] // Noise pubkey -> relationship
     @Published private(set) var mutualFavorites: Set<Data> = []
+
+    var changes: AnyPublisher<Void, Never> {
+        $favorites
+            .dropFirst()
+            .map { _ in () }
+            .eraseToAnyPublisher()
+    }
     
     static let shared = FavoritesPersistenceService()
 
@@ -74,12 +81,6 @@ final class FavoritesPersistenceService: ObservableObject {
         favorites[peerNoisePublicKey] = relationship
         saveFavorites()
         
-        // Notify observers
-        NotificationCenter.default.post(
-            name: .favoriteStatusChanged,
-            object: nil,
-            userInfo: ["peerPublicKey": peerNoisePublicKey]
-        )
     }
     
     /// Remove a favorite
@@ -109,12 +110,6 @@ final class FavoritesPersistenceService: ObservableObject {
         
         saveFavorites()
         
-        // Notify observers
-        NotificationCenter.default.post(
-            name: .favoriteStatusChanged,
-            object: nil,
-            userInfo: ["peerPublicKey": peerNoisePublicKey]
-        )
     }
     
     /// Update when we learn a peer favorited/unfavorited us
@@ -154,12 +149,6 @@ final class FavoritesPersistenceService: ObservableObject {
         
         saveFavorites()
         
-        // Notify observers
-        NotificationCenter.default.post(
-            name: .favoriteStatusChanged,
-            object: nil,
-            userInfo: ["peerPublicKey": peerNoisePublicKey]
-        )
     }
     
     /// Check if a peer is favorited by us
@@ -201,8 +190,6 @@ final class FavoritesPersistenceService: ObservableObject {
             service: Self.keychainService
         )
         
-        // Post notification for UI update
-        NotificationCenter.default.post(name: .favoriteStatusChanged, object: nil)
     }
     
     // MARK: - Persistence
@@ -288,8 +275,6 @@ final class FavoritesPersistenceService: ObservableObject {
                 // Save cleaned favorites
                 saveFavorites()
                 
-                // Notify that favorites have been cleaned up (synchronously since we're already on main actor)
-                NotificationCenter.default.post(name: .favoriteStatusChanged, object: nil)
             } else {
                 // No duplicates, just populate normally
                 for relationship in cleanedRelationships {
@@ -303,10 +288,4 @@ final class FavoritesPersistenceService: ObservableObject {
             SecureLogger.error("Failed to load favorites: \(error)", category: .session)
         }
     }
-}
-
-// MARK: - Notification Names
-
-extension Notification.Name {
-    static let favoriteStatusChanged = Notification.Name("FavoriteStatusChanged")
 }

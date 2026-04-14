@@ -16,6 +16,7 @@ import BitFoundation
 /// Creates a ChatViewModel with mock dependencies for testing
 @MainActor
 private func makeTestableViewModel() -> (viewModel: ChatViewModel, transport: MockTransport) {
+    TestHelpers.resetSharedApplicationState()
     let keychain = MockKeychain()
     let keychainHelper = MockKeychainHelper()
     let idBridge = NostrIdentityBridge(keychain: keychainHelper)
@@ -34,6 +35,7 @@ private func makeTestableViewModel() -> (viewModel: ChatViewModel, transport: Mo
 
 // MARK: - Initialization Tests
 
+@Suite(.serialized)
 struct ChatViewModelInitializationTests {
 
     @Test @MainActor
@@ -71,6 +73,7 @@ struct ChatViewModelInitializationTests {
 
 // MARK: - Message Sending Tests
 
+@Suite(.serialized)
 struct ChatViewModelSendingTests {
 
     @Test @MainActor
@@ -117,6 +120,7 @@ struct ChatViewModelSendingTests {
 
 // MARK: - Command Handling Tests
 
+@Suite(.serialized)
 struct ChatViewModelCommandTests {
 
     @Test @MainActor
@@ -137,6 +141,7 @@ struct ChatViewModelCommandTests {
 
 // MARK: - Timeline Cap Tests
 
+@Suite(.serialized)
 struct ChatViewModelTimelineCapTests {
 
     @Test @MainActor
@@ -155,6 +160,7 @@ struct ChatViewModelTimelineCapTests {
 
 // MARK: - Message Receiving Tests
 
+@Suite(.serialized)
 struct ChatViewModelReceivingTests {
 
     @Test @MainActor
@@ -206,6 +212,7 @@ struct ChatViewModelReceivingTests {
 
 // MARK: - Rate Limiting Tests
 
+@Suite(.serialized)
 struct ChatViewModelRateLimitingTests {
 
     @Test @MainActor
@@ -240,6 +247,7 @@ struct ChatViewModelRateLimitingTests {
 
 // MARK: - Peer Connection Tests
 
+@Suite(.serialized)
 struct ChatViewModelPeerTests {
 
     @Test @MainActor
@@ -282,6 +290,7 @@ struct ChatViewModelPeerTests {
 // Note: Detailed deduplication logic is tested in MessageDeduplicationServiceTests.
 // These tests verify that ChatViewModel has a deduplication service configured.
 
+@Suite(.serialized)
 struct ChatViewModelDeduplicationTests {
 
     @Test @MainActor
@@ -313,6 +322,7 @@ struct ChatViewModelDeduplicationTests {
 
 // MARK: - Private Chat Tests
 
+@Suite(.serialized)
 struct ChatViewModelPrivateChatTests {
 
     @Test @MainActor
@@ -334,6 +344,7 @@ struct ChatViewModelPrivateChatTests {
 
 // MARK: - Private Chat Selection Tests
 
+@Suite(.serialized)
 struct ChatViewModelPrivateChatSelectionTests {
 
     @Test @MainActor
@@ -422,6 +433,7 @@ struct ChatViewModelPrivateChatSelectionTests {
 
 // MARK: - Bluetooth State Tests
 
+@Suite(.serialized)
 struct ChatViewModelBluetoothTests {
 
     @Test @MainActor
@@ -463,6 +475,7 @@ struct ChatViewModelBluetoothTests {
 
 // MARK: - Panic Clear Tests
 
+@Suite(.serialized)
 struct ChatViewModelPanicTests {
 
     @Test @MainActor
@@ -507,6 +520,7 @@ struct ChatViewModelPanicTests {
 
 // MARK: - Service Lifecycle Tests
 
+@Suite(.serialized)
 struct ChatViewModelLifecycleTests {
 
     @Test @MainActor

@@ -13,6 +13,7 @@ import BitFoundation
 
 @MainActor
 private func makeSmokeViewModel() -> (viewModel: ChatViewModel, transport: MockTransport, identityManager: MockIdentityManager) {
+    TestHelpers.resetSharedApplicationState()
     let keychain = MockKeychain()
     let keychainHelper = MockKeychainHelper()
     let idBridge = NostrIdentityBridge(keychain: keychainHelper)
@@ -113,10 +114,12 @@ private func makeTemporaryImageURL() throws -> URL {
 }
 
 @MainActor
+@Suite(.serialized)
 struct ViewSmokeTests {
     @Test
     func fingerprintView_renders_verifiedAndPendingStates() async {
         let (viewModel, transport, _) = makeSmokeViewModel()
+        let peerPresentationStore = viewModel.peerPresentationStore
         let verifiedPeer = PeerID(str: "0102030405060708")
         let pendingPeer = PeerID(str: "1112131415161718")
         let verifiedFingerprint = String(repeating: "ab", count: 32)
@@ -131,11 +134,11 @@ struct ViewSmokeTests {
 
         viewModel.verifiedFingerprints.insert(verifiedFingerprint)
 
-        let verifiedView = FingerprintView(viewModel: viewModel, peerID: verifiedPeer)
-        let pendingView = FingerprintView(viewModel: viewModel, peerID: pendingPeer)
+        let verifiedView = FingerprintView(peerID: verifiedPeer)
+            .environmentObject(peerPresentationStore)
+        let pendingView = FingerprintView(peerID: pendingPeer)
+            .environmentObject(peerPresentationStore)
 
-        _ = verifiedView.body
-        _ = pendingView.body
         _ = mount(verifiedView)
         _ = mount(pendingView)
 
@@ -145,6 +148,8 @@ struct ViewSmokeTests {
     @Test
     func verificationViews_renderCoreBranches() throws {
         let (viewModel, transport, _) = makeSmokeViewModel()
+        let peerPresentationStore = viewModel.peerPresentationStore
+        let verificationStore = viewModel.verificationStore
         let peerID = PeerID(str: "2122232425262728")
         let fingerprint = String(repeating: "cd", count: 32)
         var isPresented = true
@@ -160,9 +165,6 @@ struct ViewSmokeTests {
         let qrCode = QRCodeImage(data: "bitchat://verify?hello=world", size: 96)
         let imageWrapper = ImageWrapper(image: image)
 
-        _ = myQR.body
-        _ = qrCode.body
-        _ = imageWrapper.body
         _ = mount(myQR)
         _ = mount(qrCode)
         _ = mount(imageWrapper)
@@ -173,36 +175,31 @@ struct ViewSmokeTests {
                     set: { isPresented = $0 }
                 )
             )
-            .environmentObject(viewModel)
+            .environmentObject(peerPresentationStore)
+            .environmentObject(verificationStore)
         )
     }
 
     @Test
     func meshPeerList_renders_emptyAndPopulatedStates() async {
         let (viewModel, transport, identityManager) = makeSmokeViewModel()
+        let sessionStore = viewModel.sessionStore
+        let peerPresentationStore = viewModel.peerPresentationStore
         let connectedPeer = PeerID(str: "3132333435363738")
         let blockedPeer = PeerID(str: "4142434445464748")
         let blockedFingerprint = String(repeating: "ef", count: 32)
 
         _ = mount(
             MeshPeerList(
-                viewModel: viewModel,
+                sessionStore: sessionStore,
+                peerPresentationStore: peerPresentationStore,
+                peerStore: viewModel.unifiedPeerService,
+                privateConversationsStore: viewModel.privateChatManager,
                 textColor: .green,
                 secondaryTextColor: .gray,
-                onTapPeer: { _ in },
-                onToggleFavorite: { _ in },
-                onShowFingerprint: { _ in }
+                onTapPeer: { _ in }
             )
         )
-        _ = MeshPeerList(
-            viewModel: viewModel,
-            textColor: .green,
-            secondaryTextColor: .gray,
-            onTapPeer: { _ in },
-            onToggleFavorite: { _ in },
-            onShowFingerprint: { _ in }
-        ).body
-
         transport.peerFingerprints[blockedPeer] = blockedFingerprint
         identityManager.setBlocked(blockedFingerprint, isBlocked: true)
         transport.updatePeerSnapshots([
@@ -214,12 +211,13 @@ struct ViewSmokeTests {
 
         _ = mount(
             MeshPeerList(
-                viewModel: viewModel,
+                sessionStore: sessionStore,
+                peerPresentationStore: peerPresentationStore,
+                peerStore: viewModel.unifiedPeerService,
+                privateConversationsStore: viewModel.privateChatManager,
                 textColor: .green,
                 secondaryTextColor: .gray,
-                onTapPeer: { _ in },
-                onToggleFavorite: { _ in },
-                onShowFingerprint: { _ in }
+                onTapPeer: { _ in }
             )
         )
 
@@ -229,6 +227,7 @@ struct ViewSmokeTests {
     @Test
     func commandSuggestionsAndLocationViews_render() {
         let (viewModel, _, _) = makeSmokeViewModel()
+        let peerPresentationStore = viewModel.peerPresentationStore
         let channel = GeohashChannel(level: .city, geohash: "u4pruy")
         var messageText = "/f"
 
@@ -240,16 +239,22 @@ struct ViewSmokeTests {
                     get: { messageText },
                     set: { messageText = $0 }
                 ),
+                selectedPrivatePeer: nil,
+                activeChannel: .location(channel),
                 textColor: .green,
                 backgroundColor: .black,
                 secondaryTextColor: .gray
             )
-            .environmentObject(viewModel)
         )
 
         _ = mount(
-            LocationChannelsSheet(isPresented: .constant(true))
-                .environmentObject(viewModel)
+            LocationChannelsSheet(
+                isPresented: .constant(true),
+                participantStore: viewModel.participantTracker,
+                peerStore: viewModel.unifiedPeerService,
+                manager: viewModel.locationManager
+            )
+            .environmentObject(peerPresentationStore)
         )
 
         #expect(messageText == "/f")
@@ -260,6 +265,7 @@ struct ViewSmokeTests {
     @Test
     func locationNotesView_rendersNoRelayAndLoadedStates() throws {
         let (viewModel, _, _) = makeSmokeViewModel()
+        let sessionStore = viewModel.sessionStore
 
         let noRelayManager = LocationNotesManager(
             geohash: "u4pruydq",
@@ -302,12 +308,12 @@ struct ViewSmokeTests {
         eose?()
 
         _ = mount(
-            LocationNotesView(geohash: "u4pruydq", manager: noRelayManager)
-                .environmentObject(viewModel)
+            LocationNotesView(geohash: "u4pruydq", manager: noRelayManager, locationManager: viewModel.locationManager)
+                .environmentObject(sessionStore)
         )
         _ = mount(
-            LocationNotesView(geohash: "u4pruydq", manager: loadedManager)
-                .environmentObject(viewModel)
+            LocationNotesView(geohash: "u4pruydq", manager: loadedManager, locationManager: viewModel.locationManager)
+                .environmentObject(sessionStore)
         )
 
         #expect(loadedManager.notes.count == 1)
@@ -328,22 +334,17 @@ struct ViewSmokeTests {
         let paymentCashu = PaymentChipView(paymentType: .cashu("cashuA_test-token"))
         let paymentLightning = PaymentChipView(paymentType: .lightning("lightning:lnbc1test"))
 
-        _ = appInfo.body
-        _ = header.body
-        _ = featureRow.body
-        _ = paymentCashu.body
-        _ = paymentLightning.body
-        _ = DeliveryStatusView(status: .sending).body
-        _ = DeliveryStatusView(status: .sent).body
-        _ = DeliveryStatusView(status: .delivered(to: "Alice", at: Date())).body
-        _ = DeliveryStatusView(status: .read(by: "Alice", at: Date())).body
-        _ = DeliveryStatusView(status: .failed(reason: "offline")).body
-        _ = DeliveryStatusView(status: .partiallyDelivered(reached: 2, total: 3)).body
         _ = mount(appInfo)
         _ = mount(header)
         _ = mount(featureRow)
         _ = mount(paymentCashu)
         _ = mount(paymentLightning)
+        _ = mount(DeliveryStatusView(status: .sending))
+        _ = mount(DeliveryStatusView(status: .sent))
+        _ = mount(DeliveryStatusView(status: .delivered(to: "Alice", at: Date())))
+        _ = mount(DeliveryStatusView(status: .read(by: "Alice", at: Date())))
+        _ = mount(DeliveryStatusView(status: .failed(reason: "offline")))
+        _ = mount(DeliveryStatusView(status: .partiallyDelivered(reached: 2, total: 3)))
 
         #expect(PaymentChipView.PaymentType.cashu("cashuA_test-token").url?.scheme == "cashu")
         #expect(PaymentChipView.PaymentType.cashu("https://example.com/cashu").url?.absoluteString == "https://example.com/cashu")
@@ -353,8 +354,13 @@ struct ViewSmokeTests {
     @Test
     func geohashAndTextMessageViews_renderCoreBranches() {
         let (viewModel, _, _) = makeSmokeViewModel()
+        let sessionStore = viewModel.sessionStore
+        let geohashPeopleStore = viewModel.geohashPeopleStore
         let geohashPeopleList = GeohashPeopleList(
-            viewModel: viewModel,
+            geohashPeopleStore: geohashPeopleStore,
+            locationManager: viewModel.locationManager,
+            sessionStore: sessionStore,
+            participantStore: viewModel.participantTracker,
             textColor: .green,
             secondaryTextColor: .gray,
             onTapPerson: {}
@@ -377,10 +383,17 @@ struct ViewSmokeTests {
             deliveryStatus: .partiallyDelivered(reached: 1, total: 2)
         )
 
-        _ = geohashPeopleList.body
         _ = mount(geohashPeopleList)
-        _ = mount(TextMessageView(message: truncatableMessage).environmentObject(viewModel))
-        _ = mount(TextMessageView(message: paymentMessage).environmentObject(viewModel))
+        _ = mount(
+            TextMessageView(message: truncatableMessage)
+                .environmentObject(viewModel)
+                .environmentObject(sessionStore)
+        )
+        _ = mount(
+            TextMessageView(message: paymentMessage)
+                .environmentObject(viewModel)
+                .environmentObject(sessionStore)
+        )
 
         #expect(truncatableMessage.content.count > TransportConfig.uiLongMessageLengthThreshold)
         #expect(paymentMessage.content.contains("lightning:") && paymentMessage.content.contains("cashu"))
@@ -420,8 +433,6 @@ struct ViewSmokeTests {
         )
         let playback = VoiceNotePlaybackController(url: audioURL)
 
-        _ = waveformView.body
-        _ = imageView.body
         _ = mount(waveformView)
         _ = mount(imageView)
         _ = mount(voiceNoteView)
@@ -440,7 +451,9 @@ struct ViewSmokeTests {
         await VoiceRecorder.shared.cancelRecording()
 
         #expect(bins.count == 16)
-        #expect(WaveformCache.shared.cachedWaveform(for: audioURL)?.count == 16)
+        // VoiceNoteView also warms this URL with its default bin count asynchronously,
+        // so only assert that the cache is populated rather than pinning the final size.
+        #expect((WaveformCache.shared.cachedWaveform(for: audioURL)?.isEmpty ?? true) == false)
         #expect(playback.duration > 0)
         #expect(playback.progress == 0)
     }

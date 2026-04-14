@@ -20,6 +20,7 @@ import BitFoundation
 
 @MainActor
 private func makeTestableViewModel() -> (viewModel: ChatViewModel, transport: MockTransport) {
+    TestHelpers.resetSharedApplicationState()
     let keychain = MockKeychain()
     let keychainHelper = MockKeychainHelper()
     let idBridge = NostrIdentityBridge(keychain: keychainHelper)
@@ -38,6 +39,7 @@ private func makeTestableViewModel() -> (viewModel: ChatViewModel, transport: Mo
 
 // MARK: - Private Chat Extension Tests
 
+@Suite(.serialized)
 struct ChatViewModelPrivateChatExtensionTests {
 
     @Test @MainActor
@@ -162,7 +164,7 @@ struct ChatViewModelPrivateChatExtensionTests {
     
     @Test @MainActor
     func migratePrivateChats_consolidatesHistory_onFingerprintMatch() async {
-        let (viewModel, _) = makeTestableViewModel()
+        let (viewModel, transport) = makeTestableViewModel()
         let oldPeerID = PeerID(str: "OLD_PEER")
         let newPeerID = PeerID(str: "NEW_PEER")
         let fingerprint = "fp_123"
@@ -178,10 +180,10 @@ struct ChatViewModelPrivateChatExtensionTests {
             senderPeerID: oldPeerID
         )
         viewModel.privateChats[oldPeerID] = [oldMessage]
-        viewModel.peerIDToPublicKeyFingerprint[oldPeerID] = fingerprint
+        transport.peerFingerprints[oldPeerID] = fingerprint
         
         // Setup new peer fingerprint
-        viewModel.peerIDToPublicKeyFingerprint[newPeerID] = fingerprint
+        transport.peerFingerprints[newPeerID] = fingerprint
         
         // Trigger migration
         viewModel.migratePrivateChatsIfNeeded(for: newPeerID, senderNickname: "User")
@@ -194,13 +196,11 @@ struct ChatViewModelPrivateChatExtensionTests {
     
     @Test @MainActor
     func isMessageBlocked_filtersBlockedUsers() async {
-        let (viewModel, _) = makeTestableViewModel()
+        let (viewModel, transport) = makeTestableViewModel()
         let blockedPeerID = PeerID(str: "BLOCKED_PEER")
         
-        // Block the peer
-        // MockIdentityManager stores state based on fingerprint
-        // We need to map peerID to a fingerprint
-        viewModel.peerIDToPublicKeyFingerprint[blockedPeerID] = "fp_blocked"
+        // Block the peer via its transport fingerprint resolution path.
+        transport.peerFingerprints[blockedPeerID] = "fp_blocked"
         viewModel.identityManager.setBlocked("fp_blocked", isBlocked: true)
         
         // Also ensure UnifiedPeerService can resolve the fingerprint.
@@ -253,6 +253,7 @@ struct ChatViewModelPrivateChatExtensionTests {
 
 // MARK: - Nostr Extension Tests
 
+@Suite(.serialized)
 struct ChatViewModelNostrExtensionTests {
     
     @Test @MainActor
@@ -275,14 +276,9 @@ struct ChatViewModelNostrExtensionTests {
         let geohash = "u4pruydq"
         let channel = ChannelID.location(GeohashChannel(level: .city, geohash: geohash))
 
-        LocationChannelManager.shared.select(channel)
-        defer { LocationChannelManager.shared.select(.mesh) }
-
-        _ = await TestHelpers.waitUntil({ LocationChannelManager.shared.selectedChannel == channel })
-
         let (viewModel, _) = makeTestableViewModel()
-        
-        _ = await TestHelpers.waitUntil({ viewModel.activeChannel == channel })
+        viewModel.switchLocationChannel(to: channel)
+        #expect(viewModel.activeChannel == channel)
         
         let signer = try NostrIdentity.generate()
         let event = NostrEvent(
@@ -297,8 +293,12 @@ struct ChatViewModelNostrExtensionTests {
         
         let didAppend = await TestHelpers.waitUntil({
             viewModel.publicMessagePipeline.flushIfNeeded()
-            return viewModel.messages.contains { $0.content == "Hello Geo" }
-        })
+            let stored = viewModel.timelineStore.messages(for: channel).contains { $0.content == "Hello Geo" }
+            if stored {
+                viewModel.refreshVisibleMessages(from: channel)
+            }
+            return stored && viewModel.timelineStore.visibleMessages.contains { $0.content == "Hello Geo" }
+        }, timeout: 10.0)
         #expect(didAppend)
     }
 
@@ -682,6 +682,7 @@ struct ChatViewModelNostrExtensionTests {
 
 // MARK: - Geohash Queue Tests
 
+@Suite(.serialized)
 struct ChatViewModelGeohashQueueTests {
 
     @Test @MainActor
@@ -700,6 +701,7 @@ struct ChatViewModelGeohashQueueTests {
 
 // MARK: - GeoDM Tests
 
+@Suite(.serialized)
 struct ChatViewModelGeoDMTests {
 
     @Test @MainActor
@@ -797,6 +799,7 @@ struct ChatViewModelGeoDMTests {
     }
 }
 
+@Suite(.serialized)
 struct ChatViewModelMediaTransferTests {
 
     @Test @MainActor

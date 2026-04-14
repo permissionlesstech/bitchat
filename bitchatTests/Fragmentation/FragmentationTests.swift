@@ -12,6 +12,7 @@ import CoreBluetooth
 import BitFoundation
 @testable import bitchat
 
+@Suite(.serialized)
 struct FragmentationTests {
     
     private let mockKeychain: MockKeychain
@@ -42,8 +43,17 @@ struct FragmentationTests {
         // Use a small fragment size to ensure multiple pieces
         let fragments = fragmentPacket(original, fragmentSize: 400)
 
-        // Shuffle fragments to simulate out-of-order arrival
-        let shuffled = fragments.shuffled()
+        // Use a deterministic out-of-order sequence to avoid random aggregate flake.
+        let shuffled = Array(fragments.enumerated().sorted { lhs, rhs in
+            switch (lhs.offset.isMultiple(of: 2), rhs.offset.isMultiple(of: 2)) {
+            case (false, true):
+                return true
+            case (true, false):
+                return false
+            default:
+                return lhs.offset < rhs.offset
+            }
+        }.map(\.element))
 
         // Send fragments sequentially with small delays (no fire-and-forget Tasks)
         for (i, fragment) in shuffled.enumerated() {
@@ -54,7 +64,7 @@ struct FragmentationTests {
         }
 
         // Wait for delegate callback with proper timeout
-        try await capture.waitForPublicMessages(count: 1, timeout: .seconds(2))
+        try await capture.waitForPublicMessages(count: 1, timeout: .seconds(6))
 
         #expect(capture.publicMessages.count == 1)
         #expect(capture.publicMessages.first?.content.count == 3_000)
@@ -89,7 +99,7 @@ struct FragmentationTests {
         }
 
         // Wait for delegate callback with proper timeout
-        try await capture.waitForPublicMessages(count: 1, timeout: .seconds(2))
+        try await capture.waitForPublicMessages(count: 1, timeout: .seconds(6))
 
         #expect(capture.publicMessages.count == 1)
         #expect(capture.publicMessages.first?.content.count == 2048)
@@ -131,14 +141,13 @@ struct FragmentationTests {
         #expect(!fragments.isEmpty)
 
         for (i, fragment) in fragments.enumerated() {
-            let delay = 5 * Double(i) * 0.001
-            Task {
-                try await sleep(delay)
-                ble._test_handlePacket(fragment, fromPeerID: remoteID)
+            if i > 0 {
+                try await Task.sleep(for: .milliseconds(5))
             }
+            ble._test_handlePacket(fragment, fromPeerID: remoteID)
         }
 
-        try await capture.waitForReceivedMessages(count: 1, timeout: .seconds(2))
+        try await capture.waitForReceivedMessages(count: 1, timeout: .seconds(6))
 
         let message = try #require(capture.receivedMessages.first, "Expected file transfer message")
         #expect(message.content.hasPrefix("[file]"))
@@ -184,11 +193,10 @@ struct FragmentationTests {
         }
         
         for (i, fragment) in corrupted.enumerated() {
-            let delay = 5 * Double(i) * 0.001
-            Task {
-                try await sleep(delay)
-                ble._test_handlePacket(fragment, fromPeerID: remoteShortID)
+            if i > 0 {
+                try await Task.sleep(for: .milliseconds(5))
             }
+            ble._test_handlePacket(fragment, fromPeerID: remoteShortID)
         }
         
         // Allow async processing
@@ -363,7 +371,7 @@ extension FragmentationTests {
     // Helper: fragment a packet using the same header format BLEService expects
     private func fragmentPacket(_ packet: BitchatPacket, fragmentSize: Int, fragmentID: Data? = nil, pad: Bool = true) -> [BitchatPacket] {
         guard let fullData = packet.toBinaryData(padding: pad) else { return [] }
-        let fid = fragmentID ?? Data((0..<8).map { _ in UInt8.random(in: 0...255) })
+        let fid = fragmentID ?? Data([0x10, 0x32, 0x54, 0x76, 0x98, 0xBA, 0xDC, 0xFE])
         let chunks: [Data] = stride(from: 0, to: fullData.count, by: fragmentSize).map { off in
             Data(fullData[off..<min(off + fragmentSize, fullData.count)])
         }

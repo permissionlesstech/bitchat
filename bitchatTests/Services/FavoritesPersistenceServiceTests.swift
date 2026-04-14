@@ -1,5 +1,6 @@
-import XCTest
 import BitFoundation
+import XCTest
+import Combine
 @testable import bitchat
 
 @MainActor
@@ -7,11 +8,16 @@ final class FavoritesPersistenceServiceTests: XCTestCase {
     private let storageKey = "chat.bitchat.favorites"
     private let serviceKey = "chat.bitchat.favorites"
 
-    func test_addFavorite_persistsAndPostsNotification() throws {
+    func test_addFavorite_persistsAndEmitsChange() throws {
         let keychain = MockKeychain()
         let service = FavoritesPersistenceService(keychain: keychain)
         let peerKey = Data((0..<32).map(UInt8.init))
-        let expectation = expectation(forNotification: .favoriteStatusChanged, object: nil)
+        var cancellables = Set<AnyCancellable>()
+        let expectation = expectation(description: "favorites change emitted")
+
+        service.changes
+            .sink { expectation.fulfill() }
+            .store(in: &cancellables)
 
         service.addFavorite(peerNoisePublicKey: peerKey, peerNostrPublicKey: "npub1alice", peerNickname: "Alice")
 

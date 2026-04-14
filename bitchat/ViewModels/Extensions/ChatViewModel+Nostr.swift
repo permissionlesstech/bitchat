@@ -28,7 +28,7 @@ extension ChatViewModel {
         // Ensure participant decay timer is running
         participantTracker.startRefreshTimer()
         // Unsubscribe + resubscribe
-        NostrRelayManager.shared.unsubscribe(id: subID)
+        nostrRelayManager?.unsubscribe(id: subID)
         let filter = NostrFilter.geohashEphemeral(
             ch.geohash,
             since: Date().addingTimeInterval(-TransportConfig.nostrGeohashInitialLookbackSeconds),
@@ -38,24 +38,27 @@ extension ChatViewModel {
             toGeohash: ch.geohash,
             count: TransportConfig.nostrGeoRelayCount
         )
-        NostrRelayManager.shared.subscribe(filter: filter, id: subID, relayUrls: subRelays) { [weak self] event in
-            self?.subscribeNostrEvent(event)
+        nostrRelayManager?.subscribe(filter: filter, id: subID, relayUrls: subRelays) { [weak self] event in
+            Task { @MainActor [weak self] in
+                self?.subscribeNostrEvent(event)
+            }
         }
         // Resubscribe geohash DMs for this identity
         if let dmSub = geoDmSubscriptionID {
-            NostrRelayManager.shared.unsubscribe(id: dmSub); geoDmSubscriptionID = nil
+            nostrRelayManager?.unsubscribe(id: dmSub); geoDmSubscriptionID = nil
         }
         
         if let id = try? idBridge.deriveIdentity(forGeohash: ch.geohash) {
             let dmSub = "geo-dm-\(ch.geohash)"
             geoDmSubscriptionID = dmSub
             let dmFilter = NostrFilter.giftWrapsFor(pubkey: id.publicKeyHex, since: Date().addingTimeInterval(-TransportConfig.nostrDMSubscribeLookbackSeconds))
-            NostrRelayManager.shared.subscribe(filter: dmFilter, id: dmSub) { [weak self] giftWrap in
+            nostrRelayManager?.subscribe(filter: dmFilter, id: dmSub) { [weak self] giftWrap in
                 self?.subscribeGiftWrap(giftWrap, id: id)
             }
         }
     }
     
+    @MainActor
     func subscribeNostrEvent(_ event: NostrEvent) {
         guard event.isValidSignature() else { return }
         guard (event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue || 
@@ -79,12 +82,12 @@ extension ChatViewModel {
         
         if let nickTag = event.tags.first(where: { $0.first == "n" }), nickTag.count >= 2 {
             let nick = nickTag[1].trimmed
-            geoNicknames[event.pubkey.lowercased()] = nick
+            geohashPeopleStore.registerNickname(nick, for: event.pubkey)
         }
-        
+
         // Store mapping for geohash sender IDs used in messages (ensures consistent colors)
-        nostrKeyMapping[PeerID(nostr_: event.pubkey)] = event.pubkey
-        nostrKeyMapping[PeerID(nostr: event.pubkey)] = event.pubkey
+        geohashPeopleStore.registerPubkey(event.pubkey, for: PeerID(nostr_: event.pubkey))
+        geohashPeopleStore.registerPubkey(event.pubkey, for: PeerID(nostr: event.pubkey))
 
         // Update participants last-seen for this pubkey
         participantTracker.recordParticipant(pubkeyHex: event.pubkey)
@@ -109,14 +112,18 @@ extension ChatViewModel {
                 return false
             }()
             if !isSelf {
-                Task { @MainActor in
-                    teleportedGeo = teleportedGeo.union([key])
-                }
+                teleportedGeo = teleportedGeo.union([key])
             }
         }
         
         let senderName = displayNameForNostrPubkey(event.pubkey)
         let content = event.content.trimmed
+
+        // Teleport heartbeat events can arrive on the chat stream without content.
+        // Track presence above, but do not persist a blank public message.
+        if hasTeleportTag && content.isEmpty {
+            return
+        }
 
         // Clamp future timestamps to now to avoid future-dated messages skewing order
         let rawTs = Date(timeIntervalSince1970: TimeInterval(event.created_at))
@@ -131,19 +138,17 @@ extension ChatViewModel {
             senderPeerID: PeerID(nostr: event.pubkey),
             mentions: mentions.isEmpty ? nil : mentions
         )
-        Task { @MainActor in
-            // BCH-01-012: Check blocking before any notifications
-            // handlePublicMessage has its own blocking check but returns silently,
-            // so we must also guard checkForMentions to prevent notification bypass
-            let isBlocked = identityManager.isNostrBlocked(pubkeyHexLowercased: event.pubkey.lowercased())
+        // BCH-01-012: Check blocking before any notifications
+        // handlePublicMessage has its own blocking check but returns silently,
+        // so we must also guard checkForMentions to prevent notification bypass
+        let isBlocked = identityManager.isNostrBlocked(pubkeyHexLowercased: event.pubkey.lowercased())
 
-            handlePublicMessage(msg)
+        handlePublicMessage(msg)
 
-            // Only check mentions and send haptic if sender is not blocked
-            if !isBlocked {
-                checkForMentions(msg)
-                sendHapticFeedback(for: msg)
-            }
+        // Only check mentions and send haptic if sender is not blocked
+        if !isBlocked {
+            checkForMentions(msg)
+            sendHapticFeedback(for: msg)
         }
     }
 
@@ -162,7 +167,7 @@ extension ChatViewModel {
         
         let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTs))
         let convKey = PeerID(nostr_: senderPubkey)
-        nostrKeyMapping[convKey] = senderPubkey
+        geohashPeopleStore.registerPubkey(senderPubkey, for: convKey)
         
         switch noisePayload.type {
         case .privateMessage:
@@ -193,7 +198,7 @@ extension ChatViewModel {
         case .mesh:
             refreshVisibleMessages(from: .mesh)
             // Debug: log if any empty messages are present
-            let emptyMesh = messages.filter { $0.content.trimmed.isEmpty }.count
+            let emptyMesh = timelineStore.visibleMessages.filter { $0.content.trimmed.isEmpty }.count
             if emptyMesh > 0 {
                 SecureLogger.debug("RenderGuard: mesh timeline contains \(emptyMesh) empty messages", category: .session)
             }
@@ -211,17 +216,17 @@ extension ChatViewModel {
         }
         // Unsubscribe previous
         if let sub = geoSubscriptionID {
-            NostrRelayManager.shared.unsubscribe(id: sub)
+            nostrRelayManager?.unsubscribe(id: sub)
             geoSubscriptionID = nil
         }
         if let dmSub = geoDmSubscriptionID {
-            NostrRelayManager.shared.unsubscribe(id: dmSub)
+            nostrRelayManager?.unsubscribe(id: dmSub)
             geoDmSubscriptionID = nil
         }
         currentGeohash = nil
         participantTracker.setActiveGeohash(nil)
         // Reset nickname cache for geochat participants
-        geoNicknames.removeAll()
+        geohashPeopleStore.clearNicknames()
 
         guard case .location(let ch) = channel else { return }
         currentGeohash = ch.geohash
@@ -230,10 +235,10 @@ extension ChatViewModel {
         // Ensure self appears immediately in the people list; mark teleported state only when truly teleported
         if let id = try? idBridge.deriveIdentity(forGeohash: ch.geohash) {
             participantTracker.recordParticipant(pubkeyHex: id.publicKeyHex)
-            let hasRegional = !LocationChannelManager.shared.availableChannels.isEmpty
-            let inRegional = LocationChannelManager.shared.availableChannels.contains { $0.geohash == ch.geohash }
+            let hasRegional = !locationManager.availableChannels.isEmpty
+            let inRegional = locationManager.availableChannels.contains { $0.geohash == ch.geohash }
             let key = id.publicKeyHex.lowercased()
-            if LocationChannelManager.shared.teleported && hasRegional && !inRegional {
+            if locationManager.teleported && hasRegional && !inRegional {
                 teleportedGeo = teleportedGeo.union([key])
                 SecureLogger.info("GeoTeleport: channel switch mark self teleported key=\(key.prefix(8))… total=\(teleportedGeo.count)", category: .session)
             } else {
@@ -247,109 +252,18 @@ extension ChatViewModel {
         let ts = Date().addingTimeInterval(-TransportConfig.nostrGeohashInitialLookbackSeconds)
         let filter = NostrFilter.geohashEphemeral(ch.geohash, since: ts, limit: TransportConfig.nostrGeohashInitialLimit)
         let subRelays = GeoRelayDirectory.shared.closestRelays(toGeohash: ch.geohash, count: 5)
-        NostrRelayManager.shared.subscribe(filter: filter, id: subID, relayUrls: subRelays) { [weak self] event in
-            self?.handleNostrEvent(event)
+        nostrRelayManager?.subscribe(filter: filter, id: subID, relayUrls: subRelays) { [weak self] event in
+            Task { @MainActor [weak self] in
+                self?.subscribeNostrEvent(event)
+            }
         }
 
         subscribeToGeoChat(ch)
     }
     
+    @MainActor
     func handleNostrEvent(_ event: NostrEvent) {
-        guard event.isValidSignature() else { return }
-        // Only handle ephemeral kind 20000 or presence kind 20001 with matching tag
-        guard (event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue ||
-               event.kind == NostrProtocol.EventKind.geohashPresence.rawValue) else { return }
-        
-        // Deduplicate
-        if deduplicationService.hasProcessedNostrEvent(event.id) { return }
-        deduplicationService.recordNostrEvent(event.id)
-        
-        // Log incoming tags for diagnostics
-        let tagSummary = event.tags.map { "[" + $0.joined(separator: ",") + "]" }.joined(separator: ",")
-        SecureLogger.debug("GeoTeleport: recv pub=\(event.pubkey.prefix(8))… tags=\(tagSummary)", category: .session)
-        
-        // If this pubkey is blocked, skip mapping, participants, and timeline
-        if identityManager.isNostrBlocked(pubkeyHexLowercased: event.pubkey) {
-            return
-        }
-        
-        // Track teleport tag for participants – only our format ["t", "teleport"]
-        let hasTeleportTag: Bool = event.tags.contains { tag in
-            tag.count >= 2 && tag[0].lowercased() == "t" && tag[1].lowercased() == "teleport"
-        }
-        
-        let isSelf: Bool = {
-            if let gh = currentGeohash, let my = try? idBridge.deriveIdentity(forGeohash: gh) {
-                return my.publicKeyHex.lowercased() == event.pubkey.lowercased()
-            }
-            return false
-        }()
-
-        if hasTeleportTag {
-            // Avoid marking our own key from historical events; rely on manager.teleported for self
-            if !isSelf {
-                let key = event.pubkey.lowercased()
-                Task { @MainActor in
-                    teleportedGeo = teleportedGeo.union([key])
-                    SecureLogger.info("GeoTeleport: mark peer teleported key=\(key.prefix(8))… total=\(teleportedGeo.count)", category: .session)
-                }
-            }
-        }
-        
-        // Update participants last-seen for this pubkey
-        participantTracker.recordParticipant(pubkeyHex: event.pubkey)
-
-        // Skip only very recent self-echo from relay; include older self events for hydration
-        if isSelf {
-            let eventTime = Date(timeIntervalSince1970: TimeInterval(event.created_at))
-            if Date().timeIntervalSince(eventTime) < 15 {
-                return
-            }
-        }
-        
-        // Cache nickname from tag if present
-        if let nickTag = event.tags.first(where: { $0.first == "n" }), nickTag.count >= 2 {
-            geoNicknames[event.pubkey.lowercased()] = nickTag[1].trimmed
-        }
-        
-        // Store mapping for geohash DM initiation
-        nostrKeyMapping[PeerID(nostr_: event.pubkey)] = event.pubkey
-        nostrKeyMapping[PeerID(nostr: event.pubkey)] = event.pubkey
-        
-        // If presence heartbeat (Kind 20001), stop here - no content to display
-        if event.kind == NostrProtocol.EventKind.geohashPresence.rawValue {
-            return
-        }
-        
-        let senderName = displayNameForNostrPubkey(event.pubkey)
-        let content = event.content
-        
-        // If this is a teleport presence event (no content), don't add to timeline
-        if let teleTag = event.tags.first(where: { $0.first == "t" }),
-           teleTag.count >= 2,
-           teleTag[1] == "teleport",
-           content.trimmed.isEmpty {
-            return
-        }
-        
-        // Clamp future timestamps
-        let rawTs = Date(timeIntervalSince1970: TimeInterval(event.created_at))
-        let mentions = parseMentions(from: content)
-        let msg = BitchatMessage(
-            id: event.id,
-            sender: senderName,
-            content: content,
-            timestamp: min(rawTs, Date()),
-            isRelay: false,
-            senderPeerID: PeerID(nostr: event.pubkey),
-            mentions: mentions.isEmpty ? nil : mentions
-        )
-        
-        Task { @MainActor in
-            handlePublicMessage(msg)
-            checkForMentions(msg)
-            sendHapticFeedback(for: msg)
-        }
+        subscribeNostrEvent(event)
     }
     
     @MainActor
@@ -364,7 +278,7 @@ extension ChatViewModel {
             SecureLogger.debug("GeoDM: subscribing DMs pub=\(id.publicKeyHex.prefix(8))… sub=\(dmSub)", category: .session)
         }
         let dmFilter = NostrFilter.giftWrapsFor(pubkey: id.publicKeyHex, since: Date().addingTimeInterval(-TransportConfig.nostrDMSubscribeLookbackSeconds))
-        NostrRelayManager.shared.subscribe(filter: dmFilter, id: dmSub) { [weak self] giftWrap in
+        nostrRelayManager?.subscribe(filter: dmFilter, id: dmSub) { [weak self] giftWrap in
             self?.handleGiftWrap(giftWrap, id: id)
         }
     }
@@ -392,7 +306,7 @@ extension ChatViewModel {
         }
         
         let convKey = PeerID(nostr_: senderPubkey)
-        nostrKeyMapping[convKey] = senderPubkey
+        geohashPeopleStore.registerPubkey(senderPubkey, for: convKey)
         
         switch payload.type {
         case .privateMessage:
@@ -423,18 +337,18 @@ extension ChatViewModel {
         if targetRelays.isEmpty {
             SecureLogger.warning("Geo: no geohash relays available for \(ch.geohash); not sending", category: .session)
         } else {
-            NostrRelayManager.shared.sendEvent(event, to: targetRelays)
+            nostrRelayManager?.sendEvent(event, to: targetRelays)
         }
 
         // Track ourselves as active participant
         participantTracker.recordParticipant(pubkeyHex: identity.publicKeyHex)
-        nostrKeyMapping[PeerID(nostr: identity.publicKeyHex)] = identity.publicKeyHex
+        geohashPeopleStore.registerPubkey(identity.publicKeyHex, for: PeerID(nostr: identity.publicKeyHex))
         SecureLogger.debug("GeoTeleport: sent geo message pub=\(identity.publicKeyHex.prefix(8))… teleported=\(context.teleported)", category: .session)
 
         // If we tagged this as teleported, also mark our pubkey in teleportedGeo for UI
         // Only when not in our regional set (and regional list is known)
-        let hasRegional = !LocationChannelManager.shared.availableChannels.isEmpty
-        let inRegional = LocationChannelManager.shared.availableChannels.contains { $0.geohash == ch.geohash }
+        let hasRegional = !locationManager.availableChannels.isEmpty
+        let inRegional = locationManager.availableChannels.contains { $0.geohash == ch.geohash }
 
         if context.teleported && hasRegional && !inRegional {
             let key = identity.publicKeyHex.lowercased()
@@ -462,7 +376,7 @@ extension ChatViewModel {
         let toRemove = current.subtracting(desired)
 
         for (subID, gh) in geoSamplingSubs where toRemove.contains(gh) {
-            NostrRelayManager.shared.unsubscribe(id: subID)
+            nostrRelayManager?.unsubscribe(id: subID)
             geoSamplingSubs.removeValue(forKey: subID)
         }
 
@@ -481,11 +395,14 @@ extension ChatViewModel {
             limit: TransportConfig.nostrGeohashSampleLimit
         )
         let subRelays = GeoRelayDirectory.shared.closestRelays(toGeohash: gh, count: 5)
-        NostrRelayManager.shared.subscribe(filter: filter, id: subID, relayUrls: subRelays) { [weak self] event in
-            self?.subscribeNostrEvent(event, gh: gh)
+        nostrRelayManager?.subscribe(filter: filter, id: subID, relayUrls: subRelays) { [weak self] event in
+            Task { @MainActor [weak self] in
+                self?.subscribeNostrEvent(event, gh: gh)
+            }
         }
     }
     
+    @MainActor
     func subscribeNostrEvent(_ event: NostrEvent, gh: String) {
         guard event.isValidSignature() else { return }
         guard (event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue ||
@@ -567,7 +484,7 @@ extension ChatViewModel {
     /// Stop sampling all extra geohashes.
     @MainActor
     func endGeohashSampling() {
-        for subID in geoSamplingSubs.keys { NostrRelayManager.shared.unsubscribe(id: subID) }
+        for subID in geoSamplingSubs.keys { nostrRelayManager?.unsubscribe(id: subID) }
         geoSamplingSubs.removeAll()
     }
 
@@ -638,8 +555,8 @@ extension ChatViewModel {
                     let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTimestamp))
                     // Store Nostr mapping
                     await MainActor.run {
-                        nostrKeyMapping[targetPeerID] = senderPubkey
-                        
+                        geohashPeopleStore.registerPubkey(senderPubkey, for: targetPeerID)
+
                         // Handle packet types
                         switch payload.type {
                         case .privateMessage:
@@ -663,7 +580,7 @@ extension ChatViewModel {
 
     func findNoiseKey(for nostrPubkey: String) -> Data? {
         // Check favorites for this Nostr key
-        let favorites = FavoritesPersistenceService.shared.favorites.values
+        let favorites = favoritesService.favorites.values
         var npubToMatch = nostrPubkey
         
         // Convert hex to npub if needed for comparison
@@ -741,7 +658,7 @@ extension ChatViewModel {
         
         // Update favorite status
         if isFavorite {
-            FavoritesPersistenceService.shared.addFavorite(
+            favoritesService.addFavorite(
                 peerNoisePublicKey: senderNoiseKey,
                 peerNostrPublicKey: nostrPubkey,
                 peerNickname: senderNickname
@@ -773,7 +690,7 @@ extension ChatViewModel {
         // If they favorited us and provided their Nostr key, ensure it's stored
         if isFavorite && extractedNostrPubkey != nil {
             SecureLogger.info("💾 Storing Nostr key association for \(senderNickname): \(extractedNostrPubkey!.prefix(16))...", category: .session)
-             FavoritesPersistenceService.shared.addFavorite(
+             favoritesService.addFavorite(
                 peerNoisePublicKey: senderNoiseKey,
                 peerNostrPublicKey: extractedNostrPubkey,
                 peerNickname: senderNickname
@@ -790,7 +707,7 @@ extension ChatViewModel {
 
     func sendFavoriteNotificationViaNostr(noisePublicKey: Data, isFavorite: Bool) {
         // Find peer Nostr key
-        guard let relationship = FavoritesPersistenceService.shared.getFavoriteStatus(for: noisePublicKey),
+        guard let relationship = favoritesService.getFavoriteStatus(for: noisePublicKey),
               relationship.peerNostrPublicKey != nil else {
             SecureLogger.warning("⚠️ Cannot send favorite notification - no Nostr key for peer", category: .session)
             return
@@ -818,33 +735,18 @@ extension ChatViewModel {
     // MARK: - Geohash Nickname Resolution (for /block in geohash)
 
     func nostrPubkeyForDisplayName(_ name: String) -> String? {
-        // Look up current visible geohash participants for an exact displayName match
-        for p in visibleGeohashPeople() {
-            if p.displayName == name {
-                return p.id
-            }
-        }
-        // Also check nickname cache directly
-        for (pub, nick) in geoNicknames {
-            if nick == name { return pub }
-        }
-        return nil
+        geohashPeopleStore.nostrPubkey(forDisplayName: name)
     }
     
     func startGeohashDM(withPubkeyHex hex: String) {
-        let convKey = PeerID(nostr_: hex)
-        nostrKeyMapping[convKey] = hex
-        startPrivateChat(with: convKey)
+        geohashPeopleStore.startDirectMessage(withPubkeyHex: hex)
     }
     
     func fullNostrHex(forSenderPeerID senderID: PeerID) -> String? {
-        return nostrKeyMapping[senderID]
+        geohashPeopleStore.fullNostrHex(for: senderID)
     }
     
     func geohashDisplayName(for convKey: PeerID) -> String {
-        guard let full = nostrKeyMapping[convKey] else {
-            return convKey.bare
-        }
-        return displayNameForNostrPubkey(full)
+        geohashPeopleStore.geohashDisplayName(for: convKey)
     }
 }

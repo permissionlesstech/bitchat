@@ -11,6 +11,7 @@ import SwiftUI
 struct TextMessageView: View {
     @Environment(\.colorScheme) private var colorScheme: ColorScheme
     @EnvironmentObject private var viewModel: ChatViewModel
+    @EnvironmentObject private var sessionStore: SessionStore
     
     let message: BitchatMessage
     @State private var expandedMessageIDs: Set<String> = []
@@ -29,7 +30,7 @@ struct TextMessageView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 
                 // Delivery status indicator for private messages
-                if message.isPrivate && message.sender == viewModel.nickname,
+                if message.isPrivate && message.sender == sessionStore.nickname,
                    let status = message.deliveryStatus {
                     DeliveryStatusView(status: status)
                         .padding(.leading, 4)
@@ -93,4 +94,5 @@ struct TextMessageView: View {
             identityManager: SecureIdentityStateManager(keychain)
         )
     )
+    .environmentObject(SessionStore())
 }

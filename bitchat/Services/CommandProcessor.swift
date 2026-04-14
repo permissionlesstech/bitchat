@@ -22,12 +22,33 @@ struct CommandGeoParticipant {
     let displayName: String
 }
 
+@MainActor
+protocol CommandFavoriteStoring: AnyObject {
+    func getFavoriteStatus(for peerNoisePublicKey: Data) -> FavoritesPersistenceService.FavoriteRelationship?
+    func addFavorite(peerNoisePublicKey: Data, peerNostrPublicKey: String?, peerNickname: String)
+    func removeFavorite(peerNoisePublicKey: Data)
+}
+
+extension FavoritesPersistenceService: CommandFavoriteStoring {}
+
+@MainActor
+private final class NullCommandFavoriteStore: CommandFavoriteStoring {
+    func getFavoriteStatus(for peerNoisePublicKey: Data) -> FavoritesPersistenceService.FavoriteRelationship? {
+        nil
+    }
+
+    func addFavorite(peerNoisePublicKey: Data, peerNostrPublicKey: String?, peerNickname: String) {}
+
+    func removeFavorite(peerNoisePublicKey: Data) {}
+}
+
 /// Protocol defining what CommandProcessor needs from its context.
 /// This breaks the circular dependency between CommandProcessor and ChatViewModel.
 @MainActor
 protocol CommandContextProvider: AnyObject {
     // MARK: - State Properties
     var nickname: String { get }
+    var activeChannel: ChannelID { get }
     var selectedPrivateChatPeer: PeerID? { get }
     var blockedUsers: Set<String> { get }
     var privateChats: [PeerID: [BitchatMessage]] { get set }
@@ -59,27 +80,33 @@ final class CommandProcessor {
     weak var contextProvider: CommandContextProvider?
     weak var meshService: Transport?
     private let identityManager: SecureIdentityStateManagerProtocol
+    private let activeChannelProvider: @MainActor () -> ChannelID
+    private let favoritesStore: any CommandFavoriteStoring
 
-    init(contextProvider: CommandContextProvider? = nil, meshService: Transport? = nil, identityManager: SecureIdentityStateManagerProtocol) {
+    init(
+        contextProvider: CommandContextProvider? = nil,
+        meshService: Transport? = nil,
+        identityManager: SecureIdentityStateManagerProtocol,
+        activeChannelProvider: @escaping @MainActor () -> ChannelID = { .mesh },
+        favoritesStore: (any CommandFavoriteStoring)? = nil
+    ) {
         self.contextProvider = contextProvider
         self.meshService = meshService
         self.identityManager = identityManager
+        self.activeChannelProvider = activeChannelProvider
+        self.favoritesStore = favoritesStore ?? NullCommandFavoriteStore()
     }
     
     /// Process a command string
     @MainActor
     func process(_ command: String) -> CommandResult {
+        let activeChannel = contextProvider?.activeChannel ?? activeChannelProvider()
         let parts = command.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: false)
         guard let cmd = parts.first else { return .error(message: "Invalid command") }
         let args = parts.count > 1 ? String(parts[1]) : ""
         
         // Geohash context: disable favoriting in public geohash or GeoDM
-        let inGeoPublic: Bool = {
-            switch LocationChannelManager.shared.selectedChannel {
-            case .mesh: return false
-            case .location: return true
-            }
-        }()
+        let inGeoPublic = activeChannel.isLocation
         let inGeoDM = contextProvider?.selectedPrivateChatPeer?.isGeoDM == true
 
         switch cmd {
@@ -135,7 +162,7 @@ final class CommandProcessor {
     
     private func handleWho() -> CommandResult {
         // Show geohash participants when in a geohash channel; otherwise mesh peers
-        switch LocationChannelManager.shared.selectedChannel {
+        switch contextProvider?.activeChannel ?? activeChannelProvider() {
         case .location(let ch):
             // Geohash context: show visible geohash participants (exclude self)
             guard let vm = contextProvider else { return .success(message: "nobody around") }
@@ -325,8 +352,8 @@ final class CommandProcessor {
         }
         
         if add {
-            let existingFavorite = FavoritesPersistenceService.shared.getFavoriteStatus(for: noisePublicKey)
-            FavoritesPersistenceService.shared.addFavorite(
+            let existingFavorite = favoritesStore.getFavoriteStatus(for: noisePublicKey)
+            favoritesStore.addFavorite(
                 peerNoisePublicKey: noisePublicKey,
                 peerNostrPublicKey: existingFavorite?.peerNostrPublicKey,
                 peerNickname: nickname
@@ -337,7 +364,7 @@ final class CommandProcessor {
             
             return .success(message: "added \(nickname) to favorites")
         } else {
-            FavoritesPersistenceService.shared.removeFavorite(peerNoisePublicKey: noisePublicKey)
+            favoritesStore.removeFavorite(peerNoisePublicKey: noisePublicKey)
             
             contextProvider?.toggleFavorite(peerID: peerID)
             contextProvider?.sendFavoriteNotification(to: peerID, isFavorite: false)

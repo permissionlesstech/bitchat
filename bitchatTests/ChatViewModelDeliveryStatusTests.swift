@@ -14,6 +14,7 @@ import BitFoundation
 
 @MainActor
 private func makeTestableViewModel() -> (viewModel: ChatViewModel, transport: MockTransport) {
+    TestHelpers.resetSharedApplicationState()
     let keychain = MockKeychain()
     let keychainHelper = MockKeychainHelper()
     let idBridge = NostrIdentityBridge(keychain: keychainHelper)
@@ -32,6 +33,7 @@ private func makeTestableViewModel() -> (viewModel: ChatViewModel, transport: Mo
 
 // MARK: - Delivery Status Tests
 
+@Suite(.serialized)
 struct ChatViewModelDeliveryStatusTests {
 
     // MARK: - Status Transition Tests
