@@ -96,11 +96,7 @@ Phase 3: Swap Init (0x30, Noise-encrypted)
   sends swapInit. Both parties can determine this independently,
   preventing duplicate exchanges.
   
-  Initiator → Responder: { session_id, protocol_version, max_items }
-  
-  The effective item limit per set is min(local_max, peer_max).
-  If a round-1 message contains more items per set than the
-  receiver's effective limit, the receiver aborts the session.
+  Initiator → Responder: { session_id, protocol_version }
 
 Phase 4: Swap Exchange Round 1 (0x31 step=1, Noise-encrypted)
   Each party picks two independent random secret exponents — one for
@@ -136,8 +132,9 @@ Phase 6: Local Intersection (no network traffic)
   Non-matching items produce unrelated group elements → no leak.
 
 Phase 7: Chat (optional)
-  If matches exist, the swap initiator (same party from Phase 3)
-  opens a private chat over the existing Noise session.
+  Chat opens only when BOTH sides found matches (two-way barter).
+  The party with the lexicographically lower Noise static public
+  key initiates the chat over the existing Noise session.
   Sessions not completed within 30 seconds are silently discarded.
 ```
 
@@ -165,7 +162,8 @@ Items are drawn from a versioned catalog distributed with the app:
     "medical": ["bandage_small", "bandage_large", "antiseptic", "painkillers", ...],
     "power": ["battery_aa", "battery_aaa", "powerbank", "solar_charger", ...],
     "communication": ["sim_card_local", "sim_card_intl", "radio_handheld", ...],
-    "food_water": ["water_bottle", "water_purification", "ration_pack", ...]
+    "food_water": ["water_bottle", "water_purification", "ration_pack", ...],
+    "exchange": ["cash_local", "cash_usd", "labor", "barter_open"]
   }
 }
 ```
@@ -196,11 +194,13 @@ The protocol protects against honest-but-curious peers. It does **not** protect 
 
 1. **Rate limiting** slows probing but doesn't stop a resourced adversary:
     ```
+    max_items_per_set: 50  (protocol constant — not negotiated)
     max_concurrent_swaps: 4
     max_swaps_per_hour: 20
-    max_items_per_set: 50
     cooldown_after_swap: 30 seconds
     ```
+    Round-1 messages exceeding `max_items_per_set` are invalid;
+    the receiver aborts the session.
 
 2. **Require prior trust before swap.** Only allow swap with verified or favorited peers. This is the strongest mitigation — an adversary must first establish a trust relationship (QR code scan, mutual contact) before they can probe. Trade-off: reduces the "swap with strangers" use case.
 
