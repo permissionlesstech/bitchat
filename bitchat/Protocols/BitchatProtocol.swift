@@ -60,6 +60,7 @@
 
 import Foundation
 import CoreBluetooth
+import BitFoundation
 
 // MARK: - Message Types
 

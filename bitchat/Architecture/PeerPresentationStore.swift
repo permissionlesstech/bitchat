@@ -1,3 +1,4 @@
+import BitFoundation
 import Combine
 import BitLogger
 import Foundation

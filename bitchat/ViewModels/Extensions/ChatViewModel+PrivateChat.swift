@@ -8,6 +8,7 @@
 import Foundation
 import Combine
 import BitLogger
+import BitFoundation
 import SwiftUI
 
 extension ChatViewModel {

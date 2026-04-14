@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import BitFoundation
 
 struct FingerprintView: View {
     @EnvironmentObject var peerPresentationStore: PeerPresentationStore

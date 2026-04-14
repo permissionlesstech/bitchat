@@ -1,5 +1,6 @@
 import Foundation
 import BitLogger
+import BitFoundation
 
 // Gossip-based sync manager using on-demand GCS filters
 final class GossipSyncManager {

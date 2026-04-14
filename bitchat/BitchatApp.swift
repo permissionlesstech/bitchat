@@ -8,6 +8,7 @@
 
 import Tor
 import SwiftUI
+import BitFoundation
 import UserNotifications
 
 @main

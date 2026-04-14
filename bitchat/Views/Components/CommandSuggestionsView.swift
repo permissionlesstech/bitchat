@@ -5,6 +5,7 @@
 //  Created by Islam on 29/10/2025.
 //
 
+import BitFoundation
 import SwiftUI
 
 struct CommandSuggestionsView: View {

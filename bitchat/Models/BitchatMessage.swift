@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import BitFoundation
 
 final class CachedAttributedStringBox: NSObject {
     let value: AttributedString

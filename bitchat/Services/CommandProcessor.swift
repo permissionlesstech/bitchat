@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import BitFoundation
 
 /// Result of command processing
 enum CommandResult {

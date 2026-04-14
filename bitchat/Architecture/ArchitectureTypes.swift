@@ -1,3 +1,4 @@
+import BitFoundation
 import Combine
 import CoreBluetooth
 import Foundation

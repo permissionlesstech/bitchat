@@ -1,3 +1,4 @@
+import BitFoundation
 import BitLogger
 import Foundation
 import Security

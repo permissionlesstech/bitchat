@@ -9,6 +9,7 @@
 import Foundation
 import CryptoKit
 import Testing
+import BitFoundation
 @testable import bitchat
 
 struct IntegrationTests {

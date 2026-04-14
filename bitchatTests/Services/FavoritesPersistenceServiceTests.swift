@@ -1,3 +1,4 @@
+import BitFoundation
 import XCTest
 import Combine
 @testable import bitchat

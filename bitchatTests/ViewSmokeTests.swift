@@ -8,6 +8,7 @@ import UIKit
 #else
 import AppKit
 #endif
+import BitFoundation
 @testable import bitchat
 
 @MainActor

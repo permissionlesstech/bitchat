@@ -1,4 +1,5 @@
 import CoreBluetooth
+import BitFoundation
 import Foundation
 
 final class TransportEventBridge: BitchatDelegate, TransportPeerEventsDelegate {
