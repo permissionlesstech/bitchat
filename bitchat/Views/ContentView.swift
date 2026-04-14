@@ -16,12 +16,6 @@ import AppKit
 import UniformTypeIdentifiers
 import BitLogger
 
-// MARK: - Supporting Types
-
-//
-
-//
-
 private struct MessageDisplayItem: Identifiable {
     let id: String
     let message: BitchatMessage
@@ -78,7 +72,6 @@ struct ContentView: View {
     @State private var autocompleteDebounceTimer: Timer?
     @State private var showLocationChannelsSheet = false
     @State private var showVerifySheet = false
-    @State private var expandedMessageIDs: Set<String> = []
     @State private var showLocationNotes = false
     @State private var notesGeohash: String? = nil
     @State private var imagePreviewURL: URL? = nil
@@ -366,8 +359,6 @@ struct ContentView: View {
             Text(sessionStore.bluetoothAlertMessage)
         }
         .onDisappear {
-            // Clean up timers
-            scrollThrottleTimer?.invalidate()
             autocompleteDebounceTimer?.invalidate()
         }
     }
@@ -599,7 +590,6 @@ struct ContentView: View {
             return .systemAction
         })
     }
-    
     // MARK: - Input View
 
     @ViewBuilder
@@ -695,7 +685,7 @@ struct ContentView: View {
             }
         }
     }
-    
+
     private func handleOpenURL(_ url: URL) {
         guard url.scheme == "bitchat" else { return }
         switch url.host {
@@ -803,8 +793,7 @@ struct ContentView: View {
     // MARK: - Actions
     
     private func sendMessage() {
-        let trimmed = trimmedMessageText
-        guard !trimmed.isEmpty else { return }
+        guard let trimmed = messageText.trimmedOrNilIfEmpty else { return }
 
         // Clear input immediately for instant feedback
         messageText = ""
@@ -1445,7 +1434,7 @@ private extension ContentView {
         } else if let media = message.mediaAttachment(for: viewModel.nickname) {
             MediaMessageView(message: message, media: media, imagePreviewURL: $imagePreviewURL)
         } else {
-            TextMessageView(message: message, expandedMessageIDs: $expandedMessageIDs)
+            TextMessageView(message: message)
         }
     }
 
@@ -1487,7 +1476,6 @@ private extension ContentView {
             }
         }
     }
-
     var recordingIndicator: some View {
         HStack(spacing: 12) {
             Image(systemName: "waveform.circle.fill")
@@ -1515,10 +1503,6 @@ private extension ContentView {
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color.red.opacity(0.15))
         )
-    }
-
-    private var trimmedMessageText: String {
-        messageText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private var shouldShowMediaControls: Bool {
@@ -1581,7 +1565,7 @@ private extension ContentView {
 
     @ViewBuilder
     var sendOrMicButton: some View {
-        let hasText = !trimmedMessageText.isEmpty
+        let hasText = !messageText.trimmed.isEmpty
         if shouldShowVoiceControl {
             ZStack {
                 micButtonView

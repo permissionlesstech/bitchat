@@ -266,14 +266,13 @@ struct LocationNotesView: View {
     }
 
     private func send() {
-        let content = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !content.isEmpty else { return }
+        guard let content = draft.trimmedOrNilIfEmpty else { return }
         manager.send(content: content, nickname: sessionStore.nickname)
         draft = ""
     }
 
     private var sendButtonEnabled: Bool {
-        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && manager.state != .noRelays
+        !draft.trimmed.isEmpty && manager.state != .noRelays
     }
 
     // MARK: - Timestamp Formatting

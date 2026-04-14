@@ -390,7 +390,7 @@ extension ChatMessage {
 
 extension Array where Element == BitchatMessage {
     func cleanedAndDeduped() -> [Element] {
-        let arr = filter { $0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false }
+        let arr = filter { $0.content.trimmed.isEmpty == false }
         guard arr.count > 1 else {
             return arr
         }

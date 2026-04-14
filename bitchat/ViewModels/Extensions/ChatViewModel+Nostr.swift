@@ -80,7 +80,7 @@ extension ChatViewModel {
         }
         
         if let nickTag = event.tags.first(where: { $0.first == "n" }), nickTag.count >= 2 {
-            let nick = nickTag[1].trimmingCharacters(in: .whitespacesAndNewlines)
+            let nick = nickTag[1].trimmed
             geohashPeopleStore.registerNickname(nick, for: event.pubkey)
         }
 
@@ -116,14 +116,14 @@ extension ChatViewModel {
         }
         
         let senderName = displayNameForNostrPubkey(event.pubkey)
-        let content = event.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        let content = event.content.trimmed
 
         // Teleport heartbeat events can arrive on the chat stream without content.
         // Track presence above, but do not persist a blank public message.
         if hasTeleportTag && content.isEmpty {
             return
         }
-        
+
         // Clamp future timestamps to now to avoid future-dated messages skewing order
         let rawTs = Date(timeIntervalSince1970: TimeInterval(event.created_at))
         let timestamp = min(rawTs, Date())
@@ -197,7 +197,7 @@ extension ChatViewModel {
         case .mesh:
             refreshVisibleMessages(from: .mesh)
             // Debug: log if any empty messages are present
-            let emptyMesh = timelineStore.visibleMessages.filter { $0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
+            let emptyMesh = timelineStore.visibleMessages.filter { $0.content.trimmed.isEmpty }.count
             if emptyMesh > 0 {
                 SecureLogger.debug("RenderGuard: mesh timeline contains \(emptyMesh) empty messages", category: .session)
             }
@@ -414,9 +414,8 @@ extension ChatViewModel {
         participantTracker.recordParticipant(pubkeyHex: event.pubkey, geohash: gh)
         
         // Notify only on rising-edge: previously zero people, now someone sends a chat
-        let content = event.content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !content.isEmpty else { return }
-        
+        guard let content = event.content.trimmedOrNilIfEmpty else { return }
+
         // Respect geohash blocks
         if identityManager.isNostrBlocked(pubkeyHexLowercased: event.pubkey.lowercased()) { return }
         

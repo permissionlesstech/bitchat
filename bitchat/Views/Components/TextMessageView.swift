@@ -14,7 +14,7 @@ struct TextMessageView: View {
     @EnvironmentObject private var sessionStore: SessionStore
     
     let message: BitchatMessage
-    @Binding var expandedMessageIDs: Set<String>
+    @State private var expandedMessageIDs: Set<String> = []
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -67,14 +67,12 @@ struct TextMessageView: View {
     }
 }
 
-@available(macOS 14, iOS 17, *)
 #Preview {
-    @Previewable @State var ids: Set<String> = []
     let keychain = PreviewKeychainManager()
     
     Group {
         List {
-            TextMessageView(message: .preview, expandedMessageIDs: $ids)
+            TextMessageView(message: .preview)
                 .listRowSeparator(.hidden)
                 .listRowInsets(EdgeInsets())
                 .listRowBackground(EmptyView())
@@ -82,7 +80,7 @@ struct TextMessageView: View {
         .environment(\.colorScheme, .light)
         
         List {
-            TextMessageView(message: .preview, expandedMessageIDs: $ids)
+            TextMessageView(message: .preview)
                 .listRowSeparator(.hidden)
                 .listRowInsets(EdgeInsets())
                 .listRowBackground(EmptyView())
