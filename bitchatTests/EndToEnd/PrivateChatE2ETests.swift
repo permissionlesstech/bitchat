@@ -9,7 +9,7 @@
 import Testing
 import CryptoKit
 import struct Foundation.UUID
-import BitFoundation
+@testable import BitFoundation // to avoid unnecessary public's
 @testable import bitchat
 
 struct PrivateChatE2ETests {

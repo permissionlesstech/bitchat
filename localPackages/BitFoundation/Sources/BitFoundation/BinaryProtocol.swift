@@ -88,40 +88,31 @@
 /// - Platform-optimized byte swapping
 ///
 
-import Foundation
-import BitLogger
-
-extension Data {
-    func trimmingNullBytes() -> Data {
-        // Find the first null byte
-        if let nullIndex = self.firstIndex(of: 0) {
-            return self.prefix(nullIndex)
-        }
-        return self
-    }
-}
+import struct Foundation.Data
+import class Foundation.NSData
+private import BitLogger
 
 /// Implements binary encoding and decoding for BitChat protocol messages.
 /// Provides static methods for converting between BitchatPacket objects and
 /// their binary wire format representation.
 /// - Note: All multi-byte values use network byte order (big-endian)
-struct BinaryProtocol {
-    static let v1HeaderSize = 14
+public struct BinaryProtocol {
+    public static let v1HeaderSize = 14
     static let v2HeaderSize = 16
-    static let senderIDSize = 8
-    static let recipientIDSize = 8
-    static let signatureSize = 64
+    public static let senderIDSize = 8
+    public static let recipientIDSize = 8
+    public static let signatureSize = 64
 
     // Field offsets within packet header
-    struct Offsets {
+    public struct Offsets {
         static let version = 0
         static let type = 1
         static let ttl = 2
         static let timestamp = 3
-        static let flags = 11  // After version(1) + type(1) + ttl(1) + timestamp(8)
+        public static let flags = 11  // After version(1) + type(1) + ttl(1) + timestamp(8)
     }
 
-    static func headerSize(for version: UInt8) -> Int? {
+    public static func headerSize(for version: UInt8) -> Int? {
         switch version {
         case 1: return v1HeaderSize
         case 2: return v2HeaderSize
@@ -133,11 +124,11 @@ struct BinaryProtocol {
         return version == 2 ? 4 : 2
     }
     
-    struct Flags {
-        static let hasRecipient: UInt8 = 0x01
-        static let hasSignature: UInt8 = 0x02
-        static let isCompressed: UInt8 = 0x04
-        static let hasRoute: UInt8 = 0x08
+    public struct Flags {
+        public static let hasRecipient: UInt8 = 0x01
+        public static let hasSignature: UInt8 = 0x02
+        public static let isCompressed: UInt8 = 0x04
+        public static let hasRoute: UInt8 = 0x08
         static let isRSR: UInt8 = 0x10
     }
     
@@ -266,7 +257,7 @@ struct BinaryProtocol {
     }
     
     // Decode binary data to BitchatPacket
-    static func decode(_ data: Data) -> BitchatPacket? {
+    public static func decode(_ data: Data) -> BitchatPacket? {
         // Try decode as-is first (robust when padding wasn't applied)
         if let pkt = decodeCore(data) { return pkt }
         // If that fails, try after removing padding

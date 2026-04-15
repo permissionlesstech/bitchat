@@ -133,9 +133,6 @@ enum TransportConfig {
     static let nostrShortKeyDisplayLength: Int = 8
     static let nostrConvKeyPrefixLength: Int = 16
 
-    // Compression
-    static let compressionThresholdBytes: Int = 100
-
     // Message deduplication
     static let messageDedupMaxAgeSeconds: TimeInterval = 300
     static let messageDedupMaxCount: Int = 1000

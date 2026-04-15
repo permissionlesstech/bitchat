@@ -6,26 +6,26 @@
 // For more information, see <https://unlicense.org>
 //
 
-import Foundation
-import BitFoundation
+import struct Foundation.Data
+import struct Foundation.Date
 
 /// The core packet structure for all BitChat protocol messages.
 /// Encapsulates all data needed for routing through the mesh network,
 /// including TTL for hop limiting and optional encryption.
 /// - Note: Packets larger than BLE MTU (512 bytes) are automatically fragmented
-struct BitchatPacket: Codable {
+public struct BitchatPacket: Codable {
     let version: UInt8
-    let type: UInt8
-    let senderID: Data
-    let recipientID: Data?
-    let timestamp: UInt64
-    let payload: Data
-    var signature: Data?
-    var ttl: UInt8
-    var route: [Data]?
-    var isRSR: Bool
+    public let type: UInt8
+    public let senderID: Data
+    public let recipientID: Data?
+    public let timestamp: UInt64
+    public let payload: Data
+    public var signature: Data?
+    public var ttl: UInt8
+    public var route: [Data]?
+    public var isRSR: Bool
     
-    init(type: UInt8, senderID: Data, recipientID: Data?, timestamp: UInt64, payload: Data, signature: Data?, ttl: UInt8, version: UInt8 = 1, route: [Data]? = nil, isRSR: Bool = false) {
+    public init(type: UInt8, senderID: Data, recipientID: Data?, timestamp: UInt64, payload: Data, signature: Data?, ttl: UInt8, version: UInt8 = 1, route: [Data]? = nil, isRSR: Bool = false) {
         self.version = version
         self.type = type
         self.senderID = senderID
@@ -66,18 +66,18 @@ struct BitchatPacket: Codable {
         BinaryProtocol.encode(self)
     }
     
-    func toBinaryData(padding: Bool = true) -> Data? {
+    public func toBinaryData(padding: Bool = true) -> Data? {
         BinaryProtocol.encode(self, padding: padding)
     }
 
     // Backward-compatible helper (defaults to padded encoding)
-    func toBinaryData() -> Data? {
+    public func toBinaryData() -> Data? {
         toBinaryData(padding: true)
     }
     
     /// Create binary representation for signing (without signature and TTL fields)
     /// TTL is excluded because it changes during packet relay operations
-    func toBinaryDataForSigning() -> Data? {
+    public func toBinaryDataForSigning() -> Data? {
         // Create a copy without signature and with fixed TTL for signing
         // TTL must be excluded because it changes during relay
         let unsignedPacket = BitchatPacket(
@@ -95,7 +95,7 @@ struct BitchatPacket: Codable {
         return BinaryProtocol.encode(unsignedPacket)
     }
     
-    static func from(_ data: Data) -> BitchatPacket? {
+    public static func from(_ data: Data) -> BitchatPacket? {
         BinaryProtocol.decode(data)
     }
 }

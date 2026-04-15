@@ -5,15 +5,15 @@
 // Binary encoding utilities for efficient protocol messages
 //
 
-import Foundation
-import BitFoundation
+import struct Foundation.Data
+import struct Foundation.Date
 
 // MARK: - Binary Encoding Utilities
 
 extension Data {
     // MARK: Writing
     
-    @inlinable mutating func appendUInt8(_ value: UInt8) {
+    @inlinable public mutating func appendUInt8(_ value: UInt8) {
         self.append(value)
     }
     
@@ -35,7 +35,7 @@ extension Data {
         }
     }
     
-    mutating func appendString(_ string: String, maxLength: Int = 255) {
+    public mutating func appendString(_ string: String, maxLength: Int = 255) {
         guard let data = string.data(using: .utf8) else { return }
         let length = Swift.min(data.count, maxLength)
         
@@ -48,7 +48,7 @@ extension Data {
         self.append(data.prefix(length))
     }
     
-    mutating func appendData(_ data: Data, maxLength: Int = 65535) {
+    public mutating func appendData(_ data: Data, maxLength: Int = 65535) {
         let length = Swift.min(data.count, maxLength)
         
         if maxLength <= 255 {
@@ -60,12 +60,12 @@ extension Data {
         self.append(data.prefix(length))
     }
     
-    mutating func appendDate(_ date: Date) {
+    public mutating func appendDate(_ date: Date) {
         let timestamp = UInt64(date.timeIntervalSince1970 * 1000) // milliseconds
         self.appendUInt64(timestamp)
     }
     
-    mutating func appendUUID(_ uuid: String) {
+    public mutating func appendUUID(_ uuid: String) {
         // Convert UUID string to 16 bytes
         var uuidData = Data(count: 16)
         
@@ -86,7 +86,7 @@ extension Data {
     
     // MARK: Reading
     
-    @inlinable func readUInt8(at offset: inout Int) -> UInt8? {
+    @inlinable public func readUInt8(at offset: inout Int) -> UInt8? {
         guard offset >= 0 && offset < self.count else { return nil }
         let value = self[offset]
         offset += 1
@@ -120,7 +120,7 @@ extension Data {
         return value
     }
     
-    func readString(at offset: inout Int, maxLength: Int = 255) -> String? {
+    public func readString(at offset: inout Int, maxLength: Int = 255) -> String? {
         let length: Int
         
         if maxLength <= 255 {
@@ -139,7 +139,7 @@ extension Data {
         return String(data: stringData, encoding: .utf8)
     }
     
-    func readData(at offset: inout Int, maxLength: Int = 65535) -> Data? {
+    public func readData(at offset: inout Int, maxLength: Int = 65535) -> Data? {
         let length: Int
         
         if maxLength <= 255 {
@@ -158,12 +158,12 @@ extension Data {
         return data
     }
     
-    func readDate(at offset: inout Int) -> Date? {
+    public func readDate(at offset: inout Int) -> Date? {
         guard let timestamp = readUInt64(at: &offset) else { return nil }
         return Date(timeIntervalSince1970: Double(timestamp) / 1000.0)
     }
     
-    func readUUID(at offset: inout Int) -> String? {
+    public func readUUID(at offset: inout Int) -> String? {
         guard offset + 16 <= self.count else { return nil }
         
         let uuidData = self[offset..<offset + 16]
@@ -184,7 +184,7 @@ extension Data {
         return result.uppercased()
     }
     
-    func readFixedBytes(at offset: inout Int, count: Int) -> Data? {
+    public func readFixedBytes(at offset: inout Int, count: Int) -> Data? {
         guard offset + count <= self.count else { return nil }
         
         let data = self[offset..<offset + count]

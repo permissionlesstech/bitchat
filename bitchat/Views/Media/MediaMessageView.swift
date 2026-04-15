@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import BitFoundation
 
 struct MediaMessageView: View {
     @Environment(\.colorScheme) private var colorScheme

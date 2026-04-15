@@ -14,9 +14,15 @@ let package = Package(
             targets: ["BitFoundation"]
         )
     ],
+    dependencies: [
+        .package(path: "../BitLogger")
+    ],
     targets: [
         .target(
             name: "BitFoundation",
+            dependencies: [
+                .product(name: "BitLogger", package: "BitLogger"),
+            ],
             path: "Sources"
         ),
         .testTarget(
