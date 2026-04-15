@@ -28,6 +28,7 @@ struct CommandGeoParticipant {
 protocol CommandContextProvider: AnyObject {
     // MARK: - State Properties
     var nickname: String { get }
+    var activeChannel: ChannelID { get }
     var selectedPrivateChatPeer: PeerID? { get }
     var blockedUsers: Set<String> { get }
     var privateChats: [PeerID: [BitchatMessage]] { get set }
@@ -75,7 +76,7 @@ final class CommandProcessor {
         
         // Geohash context: disable favoriting in public geohash or GeoDM
         let inGeoPublic: Bool = {
-            switch LocationChannelManager.shared.selectedChannel {
+            switch contextProvider?.activeChannel ?? .mesh {
             case .mesh: return false
             case .location: return true
             }
@@ -135,7 +136,7 @@ final class CommandProcessor {
     
     private func handleWho() -> CommandResult {
         // Show geohash participants when in a geohash channel; otherwise mesh peers
-        switch LocationChannelManager.shared.selectedChannel {
+        switch contextProvider?.activeChannel ?? .mesh {
         case .location(let ch):
             // Geohash context: show visible geohash participants (exclude self)
             guard let vm = contextProvider else { return .success(message: "nobody around") }

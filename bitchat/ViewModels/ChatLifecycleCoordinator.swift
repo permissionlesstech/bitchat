@@ -71,10 +71,11 @@ final class ChatLifecycleCoordinator {
 
     func markPrivateMessagesAsRead(from peerID: PeerID) {
         viewModel.privateChatManager.markAsRead(from: peerID)
+        viewModel.synchronizePrivateConversationStore()
 
         if peerID.isGeoDM,
            let recipientHex = viewModel.nostrKeyMapping[peerID],
-           case .location(let channel) = LocationChannelManager.shared.selectedChannel,
+           case .location(let channel) = viewModel.activeChannel,
            let identity = try? viewModel.idBridge.deriveIdentity(forGeohash: channel.geohash) {
             let messages = viewModel.privateChats[peerID] ?? []
             for message in messages where message.senderPeerID == peerID && !message.isRelay {
@@ -225,7 +226,7 @@ private extension ChatLifecycleCoordinator {
                     geohash: channel.geohash,
                     senderIdentity: identity,
                     nickname: viewModel.nickname,
-                    teleported: LocationChannelManager.shared.teleported
+                    teleported: viewModel.locationManager.teleported
                 )
 
                 let targetRelays = GeoRelayDirectory.shared.closestRelays(toGeohash: channel.geohash, count: 5)

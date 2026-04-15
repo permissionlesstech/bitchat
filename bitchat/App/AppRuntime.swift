@@ -14,8 +14,9 @@ import AppKit
 final class AppRuntime: ObservableObject {
     let chatViewModel: ChatViewModel
     let events = AppEventStream()
-    let identityResolver = IdentityResolver()
-    let conversationStore = ConversationStore()
+    let conversationStore: ConversationStore
+    let peerIdentityStore: PeerIdentityStore
+    let locationPresenceStore: LocationPresenceStore
     let publicChatModel: PublicChatModel
     let privateInboxModel: PrivateInboxModel
     let privateConversationModel: PrivateConversationModel
@@ -39,32 +40,49 @@ final class AppRuntime: ObservableObject {
         idBridge: NostrIdentityBridge = NostrIdentityBridge()
     ) {
         self.idBridge = idBridge
+        let identityResolver = IdentityResolver()
+        let conversationStore = ConversationStore()
+        let peerIdentityStore = PeerIdentityStore()
+        let locationPresenceStore = LocationPresenceStore()
+        let locationManager = LocationChannelManager.shared
+        self.conversationStore = conversationStore
+        self.peerIdentityStore = peerIdentityStore
+        self.locationPresenceStore = locationPresenceStore
         self.chatViewModel = ChatViewModel(
             keychain: keychain,
             idBridge: idBridge,
-            identityManager: SecureIdentityStateManager(keychain)
+            identityManager: SecureIdentityStateManager(keychain),
+            conversationStore: conversationStore,
+            identityResolver: identityResolver,
+            peerIdentityStore: peerIdentityStore,
+            locationPresenceStore: locationPresenceStore,
+            locationManager: locationManager
         )
-        self.publicChatModel = PublicChatModel(conversationStore: self.conversationStore)
-        self.privateInboxModel = PrivateInboxModel(conversationStore: self.conversationStore)
-        self.locationChannelsModel = LocationChannelsModel()
+        self.publicChatModel = PublicChatModel(conversationStore: conversationStore)
+        self.privateInboxModel = PrivateInboxModel(conversationStore: conversationStore)
+        self.locationChannelsModel = LocationChannelsModel(manager: locationManager)
         self.privateConversationModel = PrivateConversationModel(
             chatViewModel: self.chatViewModel,
-            conversationStore: self.conversationStore,
-            identityResolver: self.identityResolver,
-            locationChannelsModel: self.locationChannelsModel
+            conversationStore: conversationStore,
+            locationChannelsModel: self.locationChannelsModel,
+            peerIdentityStore: peerIdentityStore
         )
         self.verificationModel = VerificationModel(
             chatViewModel: self.chatViewModel,
-            privateConversationModel: self.privateConversationModel
+            privateConversationModel: self.privateConversationModel,
+            peerIdentityStore: peerIdentityStore
         )
         self.conversationUIModel = ConversationUIModel(
             chatViewModel: self.chatViewModel,
             privateConversationModel: self.privateConversationModel,
-            conversationStore: self.conversationStore
+            conversationStore: conversationStore
         )
         self.peerListModel = PeerListModel(
             chatViewModel: self.chatViewModel,
-            locationChannelsModel: self.locationChannelsModel
+            conversationStore: conversationStore,
+            locationChannelsModel: self.locationChannelsModel,
+            peerIdentityStore: peerIdentityStore,
+            locationPresenceStore: locationPresenceStore
         )
         self.appChromeModel = AppChromeModel(
             chatViewModel: self.chatViewModel,
@@ -72,11 +90,7 @@ final class AppRuntime: ObservableObject {
         )
 
         GeoRelayDirectory.shared.prefetchIfNeeded()
-        bindStores()
         bindRuntimeObservers()
-        syncCurrentPublicConversation()
-        syncPrivateConversations()
-        syncConversationSelection()
         NotificationDelegate.shared.runtime = self
     }
 
@@ -201,7 +215,7 @@ final class AppRuntime: ObservableObject {
         userInfo: [AnyHashable: Any]
     ) async -> UNNotificationPresentationOptions {
         if identifier.hasPrefix("private-"), let peerID = PeerID(str: userInfo["peerID"] as? String) {
-            if chatViewModel.selectedPrivateChatPeer == peerID {
+            if conversationStore.selectedPrivatePeerID == peerID {
                 return []
             }
             return [.banner, .sound]
@@ -268,77 +282,6 @@ private extension AppRuntime {
             }
             .store(in: &cancellables)
         #endif
-    }
-
-    func bindStores() {
-        chatViewModel.unifiedPeerService.$peers
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] peers in
-                guard let self else { return }
-                self.identityResolver.register(peers: peers)
-                self.syncPrivateConversations()
-                self.syncConversationSelection()
-            }
-            .store(in: &cancellables)
-
-        chatViewModel.$messages
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.syncCurrentPublicConversation()
-            }
-            .store(in: &cancellables)
-
-        chatViewModel.$activeChannel
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.syncCurrentPublicConversation()
-                self?.syncConversationSelection()
-            }
-            .store(in: &cancellables)
-
-        chatViewModel.privateChatManager.$privateChats
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.syncPrivateConversations()
-            }
-            .store(in: &cancellables)
-
-        chatViewModel.privateChatManager.$unreadMessages
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.syncPrivateConversations()
-            }
-            .store(in: &cancellables)
-
-        chatViewModel.privateChatManager.$selectedPeer
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.syncConversationSelection()
-            }
-            .store(in: &cancellables)
-    }
-
-    func syncCurrentPublicConversation() {
-        conversationStore.synchronizePublicConversation(
-            chatViewModel.messages,
-            activeChannel: chatViewModel.activeChannel
-        )
-    }
-
-    func syncPrivateConversations() {
-        conversationStore.synchronizePrivateChats(
-            chatViewModel.privateChats,
-            unreadPeerIDs: chatViewModel.unreadPrivateMessages,
-            identityResolver: identityResolver
-        )
-    }
-
-    func syncConversationSelection() {
-        conversationStore.synchronizeSelection(
-            activeChannel: chatViewModel.activeChannel,
-            selectedPeerID: chatViewModel.selectedPrivateChatPeer,
-            identityResolver: identityResolver
-        )
     }
 
     func checkForSharedContent() {

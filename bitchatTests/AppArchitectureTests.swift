@@ -4,17 +4,21 @@ import Testing
 @testable import bitchat
 
 @MainActor
-private func makeArchitectureViewModel() -> ChatViewModel {
+private func makeArchitectureViewModel(
+    locationManager: LocationChannelManager? = nil
+) -> ChatViewModel {
     let keychain = MockKeychain()
     let keychainHelper = MockKeychainHelper()
     let idBridge = NostrIdentityBridge(keychain: keychainHelper)
     let identityManager = MockIdentityManager(keychain)
+    let locationManager = locationManager ?? makeArchitectureLocationManager()
 
     return ChatViewModel(
         keychain: keychain,
         idBridge: idBridge,
         identityManager: identityManager,
-        transport: MockTransport()
+        transport: MockTransport(),
+        locationManager: locationManager
     )
 }
 
@@ -57,6 +61,69 @@ private func waitUntil(
 
 @Suite("App Architecture Tests", .serialized)
 struct AppArchitectureTests {
+
+    @Test("PeerIdentityStore owns fingerprint, mapping, and verification state")
+    @MainActor
+    func peerIdentityStoreOwnsIdentityState() {
+        let store = PeerIdentityStore()
+        let shortPeerID = PeerID(str: "peer-short")
+        let stablePeerID = PeerID(str: "peer-stable")
+        let canonicalPeerID = PeerID(str: "peer-canonical")
+
+        store.setStablePeerID(stablePeerID, forShortID: shortPeerID)
+        store.setFingerprint("fp-1", for: shortPeerID)
+        store.setCachedEncryptionStatus(.noiseHandshaking, for: shortPeerID)
+        store.setEncryptionStatus(.noiseSecured, for: shortPeerID)
+        store.setVerified("fp-1", verified: true)
+
+        let migratedFingerprint = store.migrateFingerprintMapping(
+            from: shortPeerID,
+            to: canonicalPeerID
+        )
+
+        #expect(store.stablePeerID(forShortID: shortPeerID) == stablePeerID)
+        #expect(store.shortPeerID(forStablePeerID: stablePeerID) == shortPeerID)
+        #expect(migratedFingerprint == "fp-1")
+        #expect(store.fingerprint(for: shortPeerID) == nil)
+        #expect(store.fingerprint(for: canonicalPeerID) == "fp-1")
+        #expect(store.selectedPrivateChatFingerprint == "fp-1")
+        #expect(store.encryptionStatus(for: shortPeerID) == .noiseSecured)
+        #expect(store.cachedEncryptionStatus(for: shortPeerID) == nil)
+        #expect(store.isVerified("fp-1"))
+
+        store.clearAll()
+
+        #expect(store.encryptionStatuses.isEmpty)
+        #expect(store.verifiedFingerprints.isEmpty)
+        #expect(store.peerFingerprintsByPeerID.isEmpty)
+        #expect(store.selectedPrivateChatFingerprint == nil)
+        #expect(store.stablePeerID(forShortID: shortPeerID) == nil)
+    }
+
+    @Test("LocationPresenceStore normalizes and resets geohash presence state")
+    @MainActor
+    func locationPresenceStoreNormalizesPresenceState() {
+        let store = LocationPresenceStore()
+
+        store.setCurrentGeohash("U4PRUY")
+        store.replaceGeoNicknames([
+            "ABCDEF": "alice",
+            "123456": "bob"
+        ])
+        store.markTeleported("ABCDEF")
+        store.replaceTeleportedGeo(Set(["FEDCBA", "123456"]))
+
+        #expect(store.currentGeohash == "u4pruy")
+        #expect(store.geoNicknames["abcdef"] == "alice")
+        #expect(store.geoNicknames["123456"] == "bob")
+        #expect(store.teleportedGeo == Set(["fedcba", "123456"]))
+
+        store.reset()
+
+        #expect(store.currentGeohash == nil)
+        #expect(store.geoNicknames.isEmpty)
+        #expect(store.teleportedGeo.isEmpty)
+    }
 
     @Test("PeerHandle equality and hashing use the canonical identity only")
     func peerHandleEqualityUsesCanonicalIdentity() {
@@ -117,9 +184,9 @@ struct AppArchitectureTests {
             senderPeerID: PeerID(str: "peer-a")
         )
 
-        store.replaceMessages([newer, older, replacement], for: .mesh)
+        store.replaceMessages([newer, older, replacement], for: ConversationID.mesh)
 
-        let messages = store.messages(for: .mesh)
+        let messages = store.messages(for: ConversationID.mesh)
         #expect(messages.map(\.id) == ["m1", "m2"])
         #expect(messages.last?.content == "second-updated")
     }
@@ -191,14 +258,14 @@ struct AppArchitectureTests {
         #expect(store.selectedConversationID == expectedConversationID)
 
         store.synchronizeSelection(
-            activeChannel: .mesh,
+            activeChannel: ChannelID.mesh,
             selectedPeerID: nil,
             identityResolver: resolver
         )
 
-        #expect(store.activeChannel == .mesh)
+        #expect(store.activeChannel == ChannelID.mesh)
         #expect(store.selectedPrivatePeerID == nil)
-        #expect(store.selectedConversationID == .mesh)
+        #expect(store.selectedConversationID == ConversationID.mesh)
     }
 
     @Test("ConversationStore exposes direct conversations by the latest routing peer ID")
@@ -294,7 +361,7 @@ struct AppArchitectureTests {
             identityResolver: resolver
         )
         store.synchronizeSelection(
-            activeChannel: .mesh,
+            activeChannel: ChannelID.mesh,
             selectedPeerID: selectedOnlyPeerID,
             identityResolver: resolver
         )
@@ -374,14 +441,11 @@ struct AppArchitectureTests {
             Issue.record("Expected ChatViewModel meshService to be a MockTransport in architecture tests")
             return
         }
-        let conversationStore = ConversationStore()
-        let resolver = IdentityResolver()
+        let conversationStore = viewModel.conversationStore
         let locationChannelsModel = LocationChannelsModel(manager: makeArchitectureLocationManager())
-        let privateInboxModel = PrivateInboxModel(conversationStore: conversationStore)
         let conversationModel = PrivateConversationModel(
             chatViewModel: viewModel,
             conversationStore: conversationStore,
-            identityResolver: resolver,
             locationChannelsModel: locationChannelsModel
         )
 
@@ -422,20 +486,19 @@ struct AppArchitectureTests {
     @Test("ConversationUIModel mirrors composer state and forwards sends")
     @MainActor
     func conversationUIModelMirrorsComposerStateAndForwardsSends() async {
-        let viewModel = makeArchitectureViewModel()
+        let locationManager = makeArchitectureLocationManager()
+        let viewModel = makeArchitectureViewModel(locationManager: locationManager)
         guard let transport = viewModel.meshService as? MockTransport else {
             Issue.record("Expected ChatViewModel meshService to be a MockTransport in architecture tests")
             return
         }
 
-        let conversationStore = ConversationStore()
-        let resolver = IdentityResolver()
-        let locationChannelsModel = LocationChannelsModel()
-        let privateInboxModel = PrivateInboxModel(conversationStore: conversationStore)
+        let conversationStore = viewModel.conversationStore
+        locationManager.select(.mesh)
+        let locationChannelsModel = LocationChannelsModel(manager: locationManager)
         let privateConversationModel = PrivateConversationModel(
             chatViewModel: viewModel,
             conversationStore: conversationStore,
-            identityResolver: resolver,
             locationChannelsModel: locationChannelsModel
         )
         let uiModel = ConversationUIModel(
@@ -444,15 +507,13 @@ struct AppArchitectureTests {
             conversationStore: conversationStore
         )
         let geohashChannel = ChannelID.location(GeohashChannel(level: .city, geohash: "9q8yy"))
+        defer {
+            locationManager.select(.mesh)
+        }
         viewModel.nickname = "builder"
         viewModel.autocompleteSuggestions = ["alice"]
         viewModel.showAutocomplete = true
         locationChannelsModel.select(geohashChannel)
-        conversationStore.synchronizeSelection(
-            activeChannel: geohashChannel,
-            selectedPeerID: nil,
-            identityResolver: resolver
-        )
 
         await waitUntil {
             viewModel.activeChannel == geohashChannel &&
@@ -468,18 +529,13 @@ struct AppArchitectureTests {
         #expect(uiModel.autocompleteSuggestions == ["alice"])
         #expect(!uiModel.canSendMediaInCurrentContext)
 
-        locationChannelsModel.select(.mesh)
-        conversationStore.synchronizeSelection(
-            activeChannel: .mesh,
-            selectedPeerID: nil,
-            identityResolver: resolver
-        )
+        locationChannelsModel.select(ChannelID.mesh)
         await waitUntil {
-            viewModel.activeChannel == .mesh &&
+            viewModel.activeChannel == ChannelID.mesh &&
             uiModel.canSendMediaInCurrentContext
         }
 
-        #expect(viewModel.activeChannel == .mesh)
+        #expect(viewModel.activeChannel == ChannelID.mesh)
         #expect(uiModel.canSendMediaInCurrentContext)
 
         uiModel.sendMessage("hello mesh")
@@ -502,14 +558,11 @@ struct AppArchitectureTests {
 
         let peerID = PeerID(str: "0011223344556677")
         let fingerprint = "verified-fingerprint"
-        let conversationStore = ConversationStore()
-        let resolver = IdentityResolver()
+        let conversationStore = viewModel.conversationStore
         let locationChannelsModel = LocationChannelsModel(manager: makeArchitectureLocationManager())
-        let privateInboxModel = PrivateInboxModel(conversationStore: conversationStore)
         let privateConversationModel = PrivateConversationModel(
             chatViewModel: viewModel,
             conversationStore: conversationStore,
-            identityResolver: resolver,
             locationChannelsModel: locationChannelsModel
         )
         let verificationModel = VerificationModel(
@@ -578,7 +631,7 @@ struct AppArchitectureTests {
         transport.reachablePeers.insert(otherPeerID)
         viewModel.nickname = "builder"
         viewModel.verifiedFingerprints.insert(verifiedFingerprint)
-        viewModel.privateChatManager.unreadMessages = Set([otherPeerID])
+        viewModel.unreadPrivateMessages = Set([otherPeerID])
         transport.updatePeerSnapshots([
             makeArchitectureSnapshot(
                 peerID: myPeerID,
@@ -611,6 +664,7 @@ struct AppArchitectureTests {
 
         let peerListModel = PeerListModel(
             chatViewModel: viewModel,
+            conversationStore: viewModel.conversationStore,
             locationChannelsModel: locationChannelsModel
         )
 
@@ -634,9 +688,9 @@ struct AppArchitectureTests {
         viewModel.participantTracker.clear()
         viewModel.teleportedGeo = []
         locationManager.markTeleported(for: geohash, false)
-        locationManager.select(.mesh)
+        locationManager.select(ChannelID.mesh)
         await waitUntil {
-            if case .mesh = locationManager.selectedChannel {
+            if case ChannelID.mesh = locationManager.selectedChannel {
                 return true
             }
             return false

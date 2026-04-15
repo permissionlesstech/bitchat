@@ -167,6 +167,31 @@ struct ChatViewModelDeliveryStatusTests {
         }())
     }
 
+    @Test @MainActor
+    func cleanupOldReadReceipts_removesReceiptIDsWithoutMessages() async {
+        let (viewModel, transport) = makeTestableViewModel()
+        let peerID = PeerID(str: "0102030405060709")
+
+        let message = BitchatMessage(
+            id: "keep-receipt",
+            sender: viewModel.nickname,
+            content: "Keep me",
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: true,
+            recipientNickname: "Peer",
+            senderPeerID: transport.myPeerID,
+            deliveryStatus: .sent
+        )
+        viewModel.privateChats[peerID] = [message]
+        viewModel.sentReadReceipts = ["keep-receipt", "drop-receipt"]
+        viewModel.isStartupPhase = false
+
+        viewModel.cleanupOldReadReceipts()
+
+        #expect(viewModel.sentReadReceipts == ["keep-receipt"])
+    }
+
     // MARK: - Public Timeline Status Tests
 
     @Test @MainActor

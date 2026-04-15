@@ -67,7 +67,7 @@ private extension ChatOutgoingCoordinator {
                 displaySender = viewModel.nickname + "#" + suffix
                 localSenderPeerID = PeerID(nostr: identity.publicKeyHex)
 
-                let teleported = LocationChannelManager.shared.teleported
+                let teleported = viewModel.locationManager.teleported
                 let event = try NostrProtocol.createEphemeralGeohashEvent(
                     content: trimmed,
                     geohash: channel.geohash,

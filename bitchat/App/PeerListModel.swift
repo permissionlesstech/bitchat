@@ -37,15 +37,24 @@ final class PeerListModel: ObservableObject {
     @Published private(set) var renderID = ""
 
     private let chatViewModel: ChatViewModel
+    private let conversationStore: ConversationStore
     private let locationChannelsModel: LocationChannelsModel
+    private let peerIdentityStore: PeerIdentityStore
+    private let locationPresenceStore: LocationPresenceStore
     private var cancellables = Set<AnyCancellable>()
 
     init(
         chatViewModel: ChatViewModel,
-        locationChannelsModel: LocationChannelsModel? = nil
+        conversationStore: ConversationStore,
+        locationChannelsModel: LocationChannelsModel? = nil,
+        peerIdentityStore: PeerIdentityStore? = nil,
+        locationPresenceStore: LocationPresenceStore? = nil
     ) {
         self.chatViewModel = chatViewModel
+        self.conversationStore = conversationStore
         self.locationChannelsModel = locationChannelsModel ?? LocationChannelsModel()
+        self.peerIdentityStore = peerIdentityStore ?? chatViewModel.peerIdentityStore
+        self.locationPresenceStore = locationPresenceStore ?? chatViewModel.locationPresenceStore
         self.allPeers = chatViewModel.allPeers
 
         bind()
@@ -106,35 +115,28 @@ final class PeerListModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        chatViewModel.$teleportedGeo
+        locationPresenceStore.$teleportedGeo
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.refresh()
             }
             .store(in: &cancellables)
 
-        chatViewModel.privateChatManager.$unreadMessages
+        conversationStore.$unreadConversations
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.refresh()
             }
             .store(in: &cancellables)
 
-        chatViewModel.$messages
+        peerIdentityStore.$encryptionStatuses
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.refresh()
             }
             .store(in: &cancellables)
 
-        chatViewModel.$peerEncryptionStatus
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.refresh()
-            }
-            .store(in: &cancellables)
-
-        chatViewModel.$verifiedFingerprints
+        peerIdentityStore.$verifiedFingerprints
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.refresh()
@@ -184,7 +186,7 @@ final class PeerListModel: ObservableObject {
             let verifiedBadge: Bool
             if !isMe && !peer.isConnected,
                let fingerprint = chatViewModel.getFingerprint(for: peer.peerID) {
-                verifiedBadge = chatViewModel.verifiedFingerprints.contains(fingerprint)
+                verifiedBadge = peerIdentityStore.isVerified(fingerprint)
             } else {
                 verifiedBadge = false
             }
@@ -233,7 +235,7 @@ final class PeerListModel: ObservableObject {
 
     private func buildGeohashPeople() -> [GeohashPersonRow] {
         let myHex = currentGeohashIdentityHex()
-        let teleportedSet = Set(chatViewModel.teleportedGeo.map { $0.lowercased() })
+        let teleportedSet = Set(locationPresenceStore.teleportedGeo.map { $0.lowercased() })
 
         return chatViewModel.visibleGeohashPeople().map { person in
             let isMe = person.id == myHex

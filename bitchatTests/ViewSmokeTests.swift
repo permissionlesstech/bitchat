@@ -51,8 +51,7 @@ private func makeSmokeLocationManager() -> LocationChannelManager {
 @MainActor
 private func makeSmokeFeatureModels(for viewModel: ChatViewModel) -> SmokeFeatureModels {
     let locationManager = makeSmokeLocationManager()
-    let conversationStore = ConversationStore()
-    let identityResolver = IdentityResolver()
+    let conversationStore = viewModel.conversationStore
     let locationChannelsModel = LocationChannelsModel(manager: locationManager)
     let privateInboxModel = PrivateInboxModel(conversationStore: conversationStore)
     let appChromeModel = AppChromeModel(
@@ -62,7 +61,6 @@ private func makeSmokeFeatureModels(for viewModel: ChatViewModel) -> SmokeFeatur
     let privateConversationModel = PrivateConversationModel(
         chatViewModel: viewModel,
         conversationStore: conversationStore,
-        identityResolver: identityResolver,
         locationChannelsModel: locationChannelsModel
     )
     let verificationModel = VerificationModel(
@@ -76,6 +74,7 @@ private func makeSmokeFeatureModels(for viewModel: ChatViewModel) -> SmokeFeatur
     )
     let peerListModel = PeerListModel(
         chatViewModel: viewModel,
+        conversationStore: conversationStore,
         locationChannelsModel: locationChannelsModel
     )
 

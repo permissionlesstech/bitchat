@@ -94,20 +94,20 @@ final class PrivateConversationModel: ObservableObject {
 
     private let chatViewModel: ChatViewModel
     private let conversationStore: ConversationStore
-    private let identityResolver: IdentityResolver
     private let locationChannelsModel: LocationChannelsModel
+    private let peerIdentityStore: PeerIdentityStore
     private var cancellables = Set<AnyCancellable>()
 
     init(
         chatViewModel: ChatViewModel,
         conversationStore: ConversationStore,
-        identityResolver: IdentityResolver,
-        locationChannelsModel: LocationChannelsModel? = nil
+        locationChannelsModel: LocationChannelsModel? = nil,
+        peerIdentityStore: PeerIdentityStore? = nil
     ) {
         self.chatViewModel = chatViewModel
         self.conversationStore = conversationStore
-        self.identityResolver = identityResolver
         self.locationChannelsModel = locationChannelsModel ?? LocationChannelsModel()
+        self.peerIdentityStore = peerIdentityStore ?? chatViewModel.peerIdentityStore
         let initialPeerID = conversationStore.selectedPrivatePeerID
         self.selectedPeerID = initialPeerID
         self.selectedHeaderState = initialPeerID.flatMap { peerID in
@@ -119,11 +119,6 @@ final class PrivateConversationModel: ObservableObject {
 
     func startConversation(with peerID: PeerID) {
         chatViewModel.startPrivateChat(with: peerID)
-        conversationStore.synchronizeSelection(
-            activeChannel: chatViewModel.activeChannel,
-            selectedPeerID: chatViewModel.selectedPrivateChatPeer,
-            identityResolver: identityResolver
-        )
         refreshSelectedConversation()
     }
 
@@ -135,21 +130,11 @@ final class PrivateConversationModel: ObservableObject {
             chatViewModel.startPrivateChat(with: peerID)
         }
 
-        conversationStore.synchronizeSelection(
-            activeChannel: chatViewModel.activeChannel,
-            selectedPeerID: chatViewModel.selectedPrivateChatPeer,
-            identityResolver: identityResolver
-        )
         refreshSelectedConversation()
     }
 
     func endConversation() {
         chatViewModel.endPrivateChat()
-        conversationStore.synchronizeSelection(
-            activeChannel: chatViewModel.activeChannel,
-            selectedPeerID: chatViewModel.selectedPrivateChatPeer,
-            identityResolver: identityResolver
-        )
         refreshSelectedConversation()
     }
 
@@ -182,7 +167,7 @@ final class PrivateConversationModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        chatViewModel.$peerEncryptionStatus
+        peerIdentityStore.$encryptionStatuses
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.refreshSelectedConversation()

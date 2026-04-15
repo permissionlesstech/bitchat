@@ -89,6 +89,33 @@ private extension ChatViewModelBootstrapper {
             }
             .store(in: &viewModel.cancellables)
 
+        viewModel.privateChatManager.$privateChats
+            .receive(on: DispatchQueue.main)
+            .sink { [weak viewModel] _ in
+                Task { @MainActor [weak viewModel] in
+                    viewModel?.synchronizePrivateConversationStore()
+                }
+            }
+            .store(in: &viewModel.cancellables)
+
+        viewModel.privateChatManager.$unreadMessages
+            .receive(on: DispatchQueue.main)
+            .sink { [weak viewModel] _ in
+                Task { @MainActor [weak viewModel] in
+                    viewModel?.synchronizePrivateConversationStore()
+                }
+            }
+            .store(in: &viewModel.cancellables)
+
+        viewModel.privateChatManager.$selectedPeer
+            .receive(on: DispatchQueue.main)
+            .sink { [weak viewModel] _ in
+                Task { @MainActor [weak viewModel] in
+                    viewModel?.synchronizeConversationSelectionStore()
+                }
+            }
+            .store(in: &viewModel.cancellables)
+
         viewModel.participantTracker.objectWillChange
             .sink { [weak viewModel] _ in
                 viewModel?.objectWillChange.send()
@@ -115,7 +142,7 @@ private extension ChatViewModelBootstrapper {
     func startRuntimeServices() {
         viewModel.meshService.startServices()
 
-        viewModel.publicMessagePipeline.delegate = viewModel
+        viewModel.publicMessagePipeline.delegate = viewModel.publicConversationCoordinator
         viewModel.publicMessagePipeline.updateActiveChannel(viewModel.activeChannel)
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak viewModel] in
@@ -145,6 +172,7 @@ private extension ChatViewModelBootstrapper {
                     guard let viewModel else { return }
 
                     viewModel.allPeers = peers
+                    viewModel.identityResolver.register(peers: peers)
 
                     var uniquePeers: [PeerID: BitchatPeer] = [:]
                     for peer in peers {
@@ -162,6 +190,9 @@ private extension ChatViewModelBootstrapper {
                     if viewModel.hasTrackedPrivateChatSelection {
                         viewModel.updatePrivateChatPeerIfNeeded()
                     }
+
+                    viewModel.synchronizePrivateConversationStore()
+                    viewModel.synchronizeConversationSelectionStore()
                 }
             }
             .store(in: &viewModel.cancellables)
@@ -184,6 +215,7 @@ private extension ChatViewModelBootstrapper {
 
     func configureGeoChannels() {
         viewModel.geoChannelCoordinator = GeoChannelCoordinator(
+            locationManager: viewModel.locationManager,
             onChannelSwitch: { [weak viewModel] channel in
                 viewModel?.switchLocationChannel(to: channel)
             },
@@ -197,7 +229,7 @@ private extension ChatViewModelBootstrapper {
     }
 
     func bindTeleportState() {
-        LocationChannelManager.shared.$teleported
+        viewModel.locationManager.$teleported
             .receive(on: DispatchQueue.main)
             .sink { [weak viewModel] isTeleported in
                 guard let viewModel else { return }
@@ -210,15 +242,15 @@ private extension ChatViewModelBootstrapper {
                     }
 
                     let key = identity.publicKeyHex.lowercased()
-                    let hasRegional = !LocationChannelManager.shared.availableChannels.isEmpty
-                    let inRegional = LocationChannelManager.shared.availableChannels.contains {
+                    let hasRegional = !viewModel.locationManager.availableChannels.isEmpty
+                    let inRegional = viewModel.locationManager.availableChannels.contains {
                         $0.geohash == channel.geohash
                     }
 
                     if isTeleported && hasRegional && !inRegional {
-                        viewModel.teleportedGeo = viewModel.teleportedGeo.union([key])
+                        viewModel.locationPresenceStore.markTeleported(key)
                     } else {
-                        viewModel.teleportedGeo.remove(key)
+                        viewModel.locationPresenceStore.clearTeleported(key)
                     }
                 }
             }

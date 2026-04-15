@@ -230,7 +230,7 @@ private extension ChatTransportEventCoordinator {
                     peerID: peerID,
                     in: viewModel
                   ),
-                  var messages = viewModel.privateChats[foundPeerID],
+                  let messages = viewModel.privateChats[foundPeerID],
                   index < messages.count else { return }
 
             messages[index].deliveryStatus = .read(by: name, at: Date())
@@ -239,108 +239,11 @@ private extension ChatTransportEventCoordinator {
             viewModel.objectWillChange.send()
 
         case .verifyChallenge:
-            guard let challenge = VerificationService.shared.parseVerifyChallenge(payload) else { return }
-
-            let myNoiseHex = viewModel
-                .meshService
-                .getNoiseService()
-                .getStaticPublicKeyData()
-                .hexEncodedString()
-                .lowercased()
-            guard challenge.noiseKeyHex.lowercased() == myNoiseHex else { return }
-            guard viewModel.lastVerifyNonceByPeer[peerID] != challenge.nonceA else { return }
-
-            viewModel.lastVerifyNonceByPeer[peerID] = challenge.nonceA
-
-            if let fingerprint = viewModel.getFingerprint(for: peerID) {
-                viewModel.lastInboundVerifyChallengeAt[fingerprint] = Date()
-
-                if viewModel.verifiedFingerprints.contains(fingerprint) {
-                    maybeSendMutualVerificationNotification(
-                        fingerprint: fingerprint,
-                        peerID: peerID,
-                        title: "Mutual verification",
-                        bodyName: viewModel.unifiedPeerService.getPeer(by: peerID)?.nickname
-                            ?? viewModel.resolveNickname(for: peerID),
-                        notificationPrefix: "verify-mutual",
-                        in: viewModel
-                    )
-                }
-            }
-
-            viewModel.meshService.sendVerifyResponse(
-                to: peerID,
-                noiseKeyHex: challenge.noiseKeyHex,
-                nonceA: challenge.nonceA
-            )
+            viewModel.verificationCoordinator.handleVerifyChallengePayload(from: peerID, payload: payload)
 
         case .verifyResponse:
-            guard let response = VerificationService.shared.parseVerifyResponse(payload),
-                  let pending = viewModel.pendingQRVerifications[peerID],
-                  response.noiseKeyHex.lowercased() == pending.noiseKeyHex.lowercased(),
-                  response.nonceA == pending.nonceA else { return }
-
-            let isValid = VerificationService.shared.verifyResponseSignature(
-                noiseKeyHex: response.noiseKeyHex,
-                nonceA: response.nonceA,
-                signature: response.signature,
-                signerPublicKeyHex: pending.signKeyHex
-            )
-            guard isValid else { return }
-
-            viewModel.pendingQRVerifications.removeValue(forKey: peerID)
-
-            guard let fingerprint = viewModel.getFingerprint(for: peerID) else { return }
-
-            let shortFingerprint = fingerprint.prefix(8)
-            SecureLogger.info("🔐 Marking verified fingerprint: \(shortFingerprint)", category: .security)
-            viewModel.identityManager.setVerified(fingerprint: fingerprint, verified: true)
-            viewModel.saveIdentityState()
-            viewModel.verifiedFingerprints.insert(fingerprint)
-
-            let peerName = viewModel.unifiedPeerService.getPeer(by: peerID)?.nickname
-                ?? viewModel.resolveNickname(for: peerID)
-            NotificationService.shared.sendLocalNotification(
-                title: "Verified",
-                body: "You verified \(peerName)",
-                identifier: "verify-success-\(peerID)-\(UUID().uuidString)"
-            )
-
-            if let challengeTime = viewModel.lastInboundVerifyChallengeAt[fingerprint],
-               Date().timeIntervalSince(challengeTime) < 600 {
-                maybeSendMutualVerificationNotification(
-                    fingerprint: fingerprint,
-                    peerID: peerID,
-                    title: "Mutual verification",
-                    bodyName: peerName,
-                    notificationPrefix: "verify-mutual",
-                    in: viewModel
-                )
-            }
-
-            viewModel.updateEncryptionStatus(for: peerID)
+            viewModel.verificationCoordinator.handleVerifyResponsePayload(from: peerID, payload: payload)
         }
-    }
-
-    @MainActor
-    func maybeSendMutualVerificationNotification(
-        fingerprint: String,
-        peerID: PeerID,
-        title: String,
-        bodyName: String,
-        notificationPrefix: String,
-        in viewModel: ChatViewModel
-    ) {
-        let now = Date()
-        let lastToast = viewModel.lastMutualToastAt[fingerprint] ?? .distantPast
-        guard now.timeIntervalSince(lastToast) > 60 else { return }
-
-        viewModel.lastMutualToastAt[fingerprint] = now
-        NotificationService.shared.sendLocalNotification(
-            title: title,
-            body: "You and \(bodyName) verified each other",
-            identifier: "\(notificationPrefix)-\(peerID)-\(UUID().uuidString)"
-        )
     }
 
     @MainActor

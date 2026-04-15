@@ -79,11 +79,9 @@ struct CommandSuggestionsView: View {
         idBridge: NostrIdentityBridge(),
         identityManager: SecureIdentityStateManager(keychain)
     )
-    let conversationStore = ConversationStore()
     let privateConversationModel = PrivateConversationModel(
         chatViewModel: viewModel,
-        conversationStore: conversationStore,
-        identityResolver: IdentityResolver()
+        conversationStore: viewModel.conversationStore
     )
     let locationChannelsModel = LocationChannelsModel()
     

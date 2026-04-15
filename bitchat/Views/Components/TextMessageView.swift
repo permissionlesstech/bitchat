@@ -73,17 +73,14 @@ struct TextMessageView: View {
         idBridge: NostrIdentityBridge(),
         identityManager: SecureIdentityStateManager(keychain)
     )
-    let conversationStore = ConversationStore()
-    let identityResolver = IdentityResolver()
     let privateConversationModel = PrivateConversationModel(
         chatViewModel: viewModel,
-        conversationStore: conversationStore,
-        identityResolver: identityResolver
+        conversationStore: viewModel.conversationStore
     )
     let conversationUIModel = ConversationUIModel(
         chatViewModel: viewModel,
         privateConversationModel: privateConversationModel,
-        conversationStore: conversationStore
+        conversationStore: viewModel.conversationStore
     )
     
     Group {

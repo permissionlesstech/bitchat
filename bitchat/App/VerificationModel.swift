@@ -27,10 +27,16 @@ final class VerificationModel: ObservableObject {
     @Published private(set) var selectedPeerID: PeerID?
 
     private let chatViewModel: ChatViewModel
+    private let peerIdentityStore: PeerIdentityStore
     private var cancellables = Set<AnyCancellable>()
 
-    init(chatViewModel: ChatViewModel, privateConversationModel: PrivateConversationModel) {
+    init(
+        chatViewModel: ChatViewModel,
+        privateConversationModel: PrivateConversationModel,
+        peerIdentityStore: PeerIdentityStore? = nil
+    ) {
         self.chatViewModel = chatViewModel
+        self.peerIdentityStore = peerIdentityStore ?? chatViewModel.peerIdentityStore
         self.currentNickname = chatViewModel.nickname
         self.selectedPeerID = privateConversationModel.selectedPeerID
 
@@ -68,7 +74,7 @@ final class VerificationModel: ObservableObject {
 
     func isVerified(peerID: PeerID) -> Bool {
         guard let fingerprint = chatViewModel.getFingerprint(for: peerID) else { return false }
-        return chatViewModel.verifiedFingerprints.contains(fingerprint)
+        return peerIdentityStore.isVerified(fingerprint)
     }
 
     func fingerprintPresentation(for peerID: PeerID) -> FingerprintPresentationState {
@@ -83,7 +89,7 @@ final class VerificationModel: ObservableObject {
             encryptionStatus: encryptionStatus,
             theirFingerprint: theirFingerprint,
             myFingerprint: chatViewModel.getMyFingerprint(),
-            isVerified: theirFingerprint.map { chatViewModel.verifiedFingerprints.contains($0) } ?? false
+            isVerified: theirFingerprint.map { peerIdentityStore.isVerified($0) } ?? false
         )
     }
 
@@ -96,14 +102,14 @@ final class VerificationModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .assign(to: &$selectedPeerID)
 
-        chatViewModel.$peerEncryptionStatus
+        peerIdentityStore.$encryptionStatuses
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.objectWillChange.send()
             }
             .store(in: &cancellables)
 
-        chatViewModel.$verifiedFingerprints
+        peerIdentityStore.$verifiedFingerprints
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.objectWillChange.send()

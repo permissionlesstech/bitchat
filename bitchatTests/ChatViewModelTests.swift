@@ -92,6 +92,112 @@ struct ChatViewModelInitializationTests {
     }
 }
 
+// MARK: - Identity Tests
+
+struct ChatViewModelIdentityTests {
+
+    @Test @MainActor
+    func updatePrivateChatPeerIfNeeded_migratesSelectionHistoryByFingerprint() async {
+        let (viewModel, transport) = makeTestableViewModel()
+        let oldPeerID = PeerID(str: "00000000000000d1")
+        let newPeerID = PeerID(str: "00000000000000d2")
+        let sharedFingerprint = "fingerprint-shared"
+        let sharedNoiseKey = Data(repeating: 0xAB, count: 32)
+
+        transport.peerFingerprints[oldPeerID] = sharedFingerprint
+        transport.peerFingerprints[newPeerID] = sharedFingerprint
+        transport.peerNicknames[oldPeerID] = "Alice"
+        transport.peerNicknames[newPeerID] = "Alice"
+        transport.updatePeerSnapshots([
+            TransportPeerSnapshot(
+                peerID: oldPeerID,
+                nickname: "Alice",
+                isConnected: true,
+                noisePublicKey: sharedNoiseKey,
+                lastSeen: Date()
+            )
+        ])
+
+        let oldPeerBound = await TestHelpers.waitUntil({
+            viewModel.connectedPeers.contains(oldPeerID)
+        }, timeout: TestConstants.defaultTimeout)
+        #expect(oldPeerBound)
+
+        let existingMessage = BitchatMessage(
+            id: "pm-migrate-1",
+            sender: "Alice",
+            content: "Still here",
+            timestamp: Date(),
+            isRelay: false,
+            originalSender: nil,
+            isPrivate: true,
+            recipientNickname: viewModel.nickname,
+            senderPeerID: oldPeerID,
+            mentions: nil
+        )
+        viewModel.privateChats[oldPeerID] = [existingMessage]
+        viewModel.startPrivateChat(with: oldPeerID)
+
+        #expect(viewModel.selectedPrivateChatPeer == oldPeerID)
+        #expect(viewModel.hasTrackedPrivateChatSelection)
+        #expect(viewModel.selectedPrivateChatFingerprint == viewModel.getFingerprint(for: oldPeerID))
+
+        transport.updatePeerSnapshots([
+            TransportPeerSnapshot(
+                peerID: newPeerID,
+                nickname: "Alice",
+                isConnected: true,
+                noisePublicKey: sharedNoiseKey,
+                lastSeen: Date()
+            )
+        ])
+
+        let newPeerBound = await TestHelpers.waitUntil({
+            viewModel.connectedPeers.contains(newPeerID) && !viewModel.connectedPeers.contains(oldPeerID)
+        }, timeout: TestConstants.defaultTimeout)
+        #expect(newPeerBound)
+
+        viewModel.updatePrivateChatPeerIfNeeded()
+
+        #expect(viewModel.selectedPrivateChatPeer == newPeerID)
+        #expect(viewModel.privateChats[oldPeerID] == nil)
+        #expect(viewModel.privateChats[newPeerID]?.contains(where: { $0.id == "pm-migrate-1" }) == true)
+    }
+
+    @Test @MainActor
+    func resolveNickname_prefersLocalPetnameOverClaimedNickname() async {
+        let keychain = MockKeychain()
+        let keychainHelper = MockKeychainHelper()
+        let idBridge = NostrIdentityBridge(keychain: keychainHelper)
+        let identityManager = MockIdentityManager(keychain)
+        let transport = MockTransport()
+        let viewModel = ChatViewModel(
+            keychain: keychain,
+            idBridge: idBridge,
+            identityManager: identityManager,
+            transport: transport
+        )
+        let peerID = PeerID(str: "00000000000000d3")
+        let fingerprint = "fingerprint-petname"
+
+        transport.peerFingerprints[peerID] = fingerprint
+        identityManager.updateSocialIdentity(
+            SocialIdentity(
+                fingerprint: fingerprint,
+                localPetname: "Buddy",
+                claimedNickname: "Alice",
+                trustLevel: .trusted,
+                isFavorite: false,
+                isBlocked: false,
+                notes: nil
+            )
+        )
+
+        #expect(viewModel.getFingerprint(for: peerID) == fingerprint)
+        #expect(viewModel.resolveNickname(for: peerID) == "Buddy")
+    }
+}
+
 // MARK: - Message Sending Tests
 
 struct ChatViewModelSendingTests {
@@ -155,6 +261,63 @@ struct ChatViewModelCommandTests {
             #expect(transport.sentMessages.isEmpty)
             #expect(transport.sentPrivateMessages.isEmpty)
         }
+    }
+}
+
+// MARK: - Composer Tests
+
+struct ChatViewModelComposerTests {
+
+    @Test @MainActor
+    func updateAutocomplete_suggestsKnownPeersAndExcludesSelf() async {
+        let (viewModel, transport) = makeTestableViewModel()
+        let alice = PeerID(str: "00000000000000a1")
+        let selfAlias = PeerID(str: "00000000000000a2")
+
+        transport.simulateConnect(alice, nickname: "Alice")
+        transport.simulateConnect(selfAlias, nickname: viewModel.nickname)
+
+        viewModel.updateAutocomplete(for: "hello @Al", cursorPosition: 9)
+
+        #expect(viewModel.showAutocomplete)
+        #expect(viewModel.autocompleteSuggestions == ["@Alice"])
+    }
+
+    @Test @MainActor
+    func completeNickname_replacesTokenAndClearsAutocompleteState() async {
+        let (viewModel, _) = makeTestableViewModel()
+        var text = "hello @Al"
+
+        viewModel.autocompleteSuggestions = ["@Alice"]
+        viewModel.autocompleteRange = NSRange(location: 6, length: 3)
+        viewModel.showAutocomplete = true
+        viewModel.selectedAutocompleteIndex = 0
+
+        _ = viewModel.completeNickname("@Alice", in: &text)
+
+        #expect(text == "hello @Alice")
+        #expect(viewModel.autocompleteSuggestions.isEmpty)
+        #expect(viewModel.autocompleteRange == nil)
+        #expect(!viewModel.showAutocomplete)
+        #expect(viewModel.selectedAutocompleteIndex == 0)
+    }
+
+    @Test @MainActor
+    func parseMentions_filtersToKnownPeerAndSelfTokens() async {
+        let (viewModel, transport) = makeTestableViewModel()
+        let alice = PeerID(str: "00000000000000b1")
+
+        transport.simulateConnect(alice, nickname: "Alice")
+
+        let mentions = Set(
+            viewModel.parseMentions(
+                from: "hi @Alice @nobody @\(viewModel.nickname)"
+            )
+        )
+
+        #expect(mentions.contains("Alice"))
+        #expect(mentions.contains(viewModel.nickname))
+        #expect(!mentions.contains("nobody"))
     }
 }
 
@@ -353,6 +516,103 @@ struct ChatViewModelNoisePayloadTests {
     }
 }
 
+// MARK: - Formatting Tests
+
+struct ChatViewModelFormattingTests {
+
+    @Test @MainActor
+    func formatMessageAsText_formatsSenderContentAndTimestamp() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let message = BitchatMessage(
+            id: "fmt-1",
+            sender: "Alice#a1b2",
+            content: "hello #mesh",
+            timestamp: Date(timeIntervalSince1970: 1_700_010_000),
+            isRelay: false,
+            senderPeerID: PeerID(str: "00000000000000b1")
+        )
+
+        let formatted = viewModel.formatMessageAsText(message, colorScheme: .light)
+
+        #expect(String(formatted.characters) == "<@Alice#a1b2> hello #mesh [\(message.formattedTimestamp)]")
+    }
+
+    @Test @MainActor
+    func formatMessageHeader_formatsSenderHeader() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let message = BitchatMessage(
+            id: "fmt-2",
+            sender: "Alice#a1b2",
+            content: "hello",
+            timestamp: Date(),
+            isRelay: false,
+            senderPeerID: PeerID(str: "00000000000000b2")
+        )
+
+        let header = viewModel.formatMessageHeader(message, colorScheme: .dark)
+
+        #expect(String(header.characters) == "<@Alice#a1b2> ")
+    }
+}
+
+// MARK: - Verification Tests
+
+struct ChatViewModelVerificationTests {
+
+    @Test @MainActor
+    func beginQRVerification_unknownNoiseKeyReturnsFalse() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let qr = VerificationService.VerificationQR(
+            v: 1,
+            noiseKeyHex: String(repeating: "a", count: 64),
+            signKeyHex: String(repeating: "b", count: 64),
+            npub: nil,
+            nickname: "Alice",
+            ts: 1_700_000_000,
+            nonceB64: "nonce",
+            sigHex: "sig"
+        )
+
+        #expect(!viewModel.beginQRVerification(with: qr))
+    }
+
+    @Test @MainActor
+    func beginQRVerification_knownPeerTriggersHandshakeWhenSessionNotEstablished() async {
+        let (viewModel, transport) = makeTestableViewModel()
+        let peerID = PeerID(str: "00000000000000c1")
+        let noiseKey = Data(repeating: 0xAB, count: 32)
+
+        transport.updatePeerSnapshots([
+            TransportPeerSnapshot(
+                peerID: peerID,
+                nickname: "Alice",
+                isConnected: true,
+                noisePublicKey: noiseKey,
+                lastSeen: Date()
+            )
+        ])
+
+        let bound = await TestHelpers.waitUntil({
+            viewModel.unifiedPeerService.peers.contains { $0.peerID == peerID }
+        }, timeout: TestConstants.defaultTimeout)
+        #expect(bound)
+
+        let qr = VerificationService.VerificationQR(
+            v: 1,
+            noiseKeyHex: noiseKey.hexEncodedString(),
+            signKeyHex: String(repeating: "c", count: 64),
+            npub: nil,
+            nickname: "Alice",
+            ts: 1_700_000_000,
+            nonceB64: "nonce",
+            sigHex: "sig"
+        )
+
+        #expect(viewModel.beginQRVerification(with: qr))
+        #expect(transport.triggeredHandshakes == [peerID])
+    }
+}
+
 // MARK: - Rate Limiting Tests
 
 struct ChatViewModelRateLimitingTests {
@@ -384,6 +644,35 @@ struct ChatViewModelRateLimitingTests {
         let burstMessages = viewModel.messages.filter { $0.content.hasPrefix("rate-msg-") }
         #expect(burstMessages.count == 5)
         #expect(!burstMessages.contains { $0.content == "rate-msg-5" })
+    }
+}
+
+// MARK: - Public Conversation Tests
+
+struct ChatViewModelPublicConversationTests {
+
+    @Test @MainActor
+    func addPublicSystemMessage_persistsAcrossTimelineRefresh() async {
+        let (viewModel, _) = makeTestableViewModel()
+
+        viewModel.addPublicSystemMessage("system refresh test")
+        viewModel.messages.removeAll()
+        viewModel.refreshVisibleMessages(from: .mesh)
+
+        #expect(viewModel.messages.last?.content == "system refresh test")
+    }
+
+    @Test @MainActor
+    func clearCurrentPublicTimeline_clearsVisibleAndBackedMessages() async {
+        let (viewModel, _) = makeTestableViewModel()
+
+        viewModel.addPublicSystemMessage("system clear test")
+        #expect(!viewModel.messages.isEmpty)
+
+        viewModel.clearCurrentPublicTimeline()
+        viewModel.refreshVisibleMessages(from: .mesh)
+
+        #expect(viewModel.messages.isEmpty)
     }
 }
 
