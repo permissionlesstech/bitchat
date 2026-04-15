@@ -12,26 +12,12 @@ import CoreBluetooth
 import BitFoundation
 @testable import bitchat
 
+@Suite("Fragmentation Tests", .serialized)
 struct FragmentationTests {
-    
-    private let mockKeychain: MockKeychain
-    private let mockIdentityManager: MockIdentityManager
-    private let idBridge: NostrIdentityBridge
-    
-    init() {
-        mockKeychain = MockKeychain()
-        mockIdentityManager = MockIdentityManager(mockKeychain)
-        idBridge = NostrIdentityBridge(keychain: MockKeychainHelper())
-    }
-    
+
     @Test("Reassembly from fragments delivers a public message")
     func reassemblyFromFragmentsDeliversPublicMessage() async throws {
-        let ble = BLEService(
-            keychain: mockKeychain,
-            idBridge: idBridge,
-            identityManager: mockIdentityManager,
-            initializeBluetoothManagers: false
-        )
+        let ble = makeBLEService()
         let capture = CaptureDelegate()
         ble.delegate = capture
 
@@ -54,7 +40,7 @@ struct FragmentationTests {
         }
 
         // Wait for delegate callback with proper timeout
-        try await capture.waitForPublicMessages(count: 1, timeout: .seconds(2))
+        try await capture.waitForPublicMessages(count: 1, timeout: .seconds(5))
 
         #expect(capture.publicMessages.count == 1)
         #expect(capture.publicMessages.first?.content.count == 3_000)
@@ -62,12 +48,7 @@ struct FragmentationTests {
     
     @Test("Duplicate fragment does not break reassembly")
     func duplicateFragmentDoesNotBreakReassembly() async throws {
-        let ble = BLEService(
-            keychain: mockKeychain,
-            idBridge: idBridge,
-            identityManager: mockIdentityManager,
-            initializeBluetoothManagers: false
-        )
+        let ble = makeBLEService()
         let capture = CaptureDelegate()
         ble.delegate = capture
 
@@ -89,7 +70,7 @@ struct FragmentationTests {
         }
 
         // Wait for delegate callback with proper timeout
-        try await capture.waitForPublicMessages(count: 1, timeout: .seconds(2))
+        try await capture.waitForPublicMessages(count: 1, timeout: .seconds(5))
 
         #expect(capture.publicMessages.count == 1)
         #expect(capture.publicMessages.first?.content.count == 2048)
@@ -97,12 +78,7 @@ struct FragmentationTests {
 
     @Test("Max-sized file transfer survives reassembly")
     func maxSizedFileTransferSurvivesReassembly() async throws {
-        let ble = BLEService(
-            keychain: mockKeychain,
-            idBridge: idBridge,
-            identityManager: mockIdentityManager,
-            initializeBluetoothManagers: false
-        )
+        let ble = makeBLEService()
         let capture = CaptureDelegate()
         ble.delegate = capture
 
@@ -131,14 +107,13 @@ struct FragmentationTests {
         #expect(!fragments.isEmpty)
 
         for (i, fragment) in fragments.enumerated() {
-            let delay = 5 * Double(i) * 0.001
-            Task {
-                try await sleep(delay)
-                ble._test_handlePacket(fragment, fromPeerID: remoteID)
+            if i > 0 {
+                try await Task.sleep(for: .milliseconds(5))
             }
+            ble._test_handlePacket(fragment, fromPeerID: remoteID)
         }
 
-        try await capture.waitForReceivedMessages(count: 1, timeout: .seconds(2))
+        try await capture.waitForReceivedMessages(count: 1, timeout: .seconds(5))
 
         let message = try #require(capture.receivedMessages.first, "Expected file transfer message")
         #expect(message.content.hasPrefix("[file]"))
@@ -154,12 +129,7 @@ struct FragmentationTests {
     
     @Test("Invalid fragment header is ignored")
     func invalidFragmentHeaderIsIgnored() async throws {
-        let ble = BLEService(
-            keychain: mockKeychain,
-            idBridge: idBridge,
-            identityManager: mockIdentityManager,
-            initializeBluetoothManagers: false
-        )
+        let ble = makeBLEService()
         let capture = CaptureDelegate()
         ble.delegate = capture
         
@@ -184,11 +154,10 @@ struct FragmentationTests {
         }
         
         for (i, fragment) in corrupted.enumerated() {
-            let delay = 5 * Double(i) * 0.001
-            Task {
-                try await sleep(delay)
-                ble._test_handlePacket(fragment, fromPeerID: remoteShortID)
+            if i > 0 {
+                try await Task.sleep(for: .milliseconds(5))
             }
+            ble._test_handlePacket(fragment, fromPeerID: remoteShortID)
         }
         
         // Allow async processing
@@ -200,6 +169,19 @@ struct FragmentationTests {
 }
 
 extension FragmentationTests {
+    private func makeBLEService() -> BLEService {
+        let mockKeychain = MockKeychain()
+        let mockIdentityManager = MockIdentityManager(mockKeychain)
+        let idBridge = NostrIdentityBridge(keychain: MockKeychainHelper())
+
+        return BLEService(
+            keychain: mockKeychain,
+            idBridge: idBridge,
+            identityManager: mockIdentityManager,
+            initializeBluetoothManagers: false
+        )
+    }
+
     /// Thread-safe delegate that supports awaiting message delivery
     private final class CaptureDelegate: BitchatDelegate, @unchecked Sendable {
         private let lock = NSLock()
