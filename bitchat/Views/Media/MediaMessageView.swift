@@ -9,8 +9,7 @@ import SwiftUI
 
 struct MediaMessageView: View {
     @Environment(\.colorScheme) private var colorScheme
-
-    @EnvironmentObject var viewModel: ChatViewModel
+    @EnvironmentObject private var conversationUIModel: ConversationUIModel
     let message: BitchatMessage
     let media: BitchatMessage.Media
 
@@ -18,15 +17,15 @@ struct MediaMessageView: View {
 
     var body: some View {
         let state = mediaSendState(for: message)
-        let isFromMe = message.sender == viewModel.nickname || message.senderPeerID == viewModel.meshService.myPeerID
-        let cancelAction: (() -> Void)? = state.canCancel ? { viewModel.cancelMediaSend(messageID: message.id) } : nil
+        let isFromMe = conversationUIModel.isMediaMessageFromCurrentUser(message)
+        let cancelAction: (() -> Void)? = state.canCancel ? { conversationUIModel.cancelMediaSend(messageID: message.id) } : nil
 
         VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .center, spacing: 4) {
-                Text(viewModel.formatMessageHeader(message, colorScheme: colorScheme))
+                Text(conversationUIModel.formatMessageHeader(message, colorScheme: colorScheme))
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                if message.isPrivate && message.sender == viewModel.nickname,
+                if message.isPrivate && conversationUIModel.isSentByCurrentUser(message),
                    let status = message.deliveryStatus {
                     DeliveryStatusView(status: status)
                         .padding(.leading, 4)
@@ -54,7 +53,7 @@ struct MediaMessageView: View {
                                 imagePreviewURL = url
                             }
                         },
-                        onDelete: !isFromMe ? { viewModel.deleteMediaMessage(messageID: message.id) } : nil
+                        onDelete: !isFromMe ? { conversationUIModel.deleteMediaMessage(messageID: message.id) } : nil
                     )
                     .frame(maxWidth: 280)
                 }
@@ -80,7 +79,7 @@ struct MediaMessageView: View {
                 break
             }
         }
-        let canCancel = isSending && message.sender == viewModel.nickname
+        let canCancel = isSending && conversationUIModel.isSentByCurrentUser(message)
         let clamped = progress.map { max(0, min(1, $0)) }
         return (isSending, isSending ? clamped : nil, canCancel)
     }

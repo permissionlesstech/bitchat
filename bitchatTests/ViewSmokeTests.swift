@@ -30,6 +30,148 @@ private func makeSmokeViewModel() -> (viewModel: ChatViewModel, transport: MockT
 }
 
 @MainActor
+private struct SmokeFeatureModels {
+    let appChromeModel: AppChromeModel
+    let locationChannelsModel: LocationChannelsModel
+    let privateInboxModel: PrivateInboxModel
+    let privateConversationModel: PrivateConversationModel
+    let verificationModel: VerificationModel
+    let conversationUIModel: ConversationUIModel
+    let peerListModel: PeerListModel
+}
+
+@MainActor
+private func makeSmokeLocationManager() -> LocationChannelManager {
+    let suiteName = "ViewSmokeTests.\(UUID().uuidString)"
+    let storage = UserDefaults(suiteName: suiteName) ?? .standard
+    storage.removePersistentDomain(forName: suiteName)
+    return LocationChannelManager(storage: storage)
+}
+
+@MainActor
+private func makeSmokeFeatureModels(for viewModel: ChatViewModel) -> SmokeFeatureModels {
+    let locationManager = makeSmokeLocationManager()
+    let conversationStore = ConversationStore()
+    let identityResolver = IdentityResolver()
+    let locationChannelsModel = LocationChannelsModel(manager: locationManager)
+    let privateInboxModel = PrivateInboxModel(conversationStore: conversationStore)
+    let appChromeModel = AppChromeModel(
+        chatViewModel: viewModel,
+        privateInboxModel: privateInboxModel
+    )
+    let privateConversationModel = PrivateConversationModel(
+        chatViewModel: viewModel,
+        conversationStore: conversationStore,
+        identityResolver: identityResolver,
+        locationChannelsModel: locationChannelsModel
+    )
+    let verificationModel = VerificationModel(
+        chatViewModel: viewModel,
+        privateConversationModel: privateConversationModel
+    )
+    let conversationUIModel = ConversationUIModel(
+        chatViewModel: viewModel,
+        privateConversationModel: privateConversationModel,
+        conversationStore: conversationStore
+    )
+    let peerListModel = PeerListModel(
+        chatViewModel: viewModel,
+        locationChannelsModel: locationChannelsModel
+    )
+
+    return SmokeFeatureModels(
+        appChromeModel: appChromeModel,
+        locationChannelsModel: locationChannelsModel,
+        privateInboxModel: privateInboxModel,
+        privateConversationModel: privateConversationModel,
+        verificationModel: verificationModel,
+        conversationUIModel: conversationUIModel,
+        peerListModel: peerListModel
+    )
+}
+
+@MainActor
+private func installSmokeEnvironment<V: View>(
+    _ view: V,
+    featureModels: SmokeFeatureModels
+) -> some View {
+    view
+        .environmentObject(featureModels.appChromeModel)
+        .environmentObject(featureModels.locationChannelsModel)
+        .environmentObject(featureModels.privateInboxModel)
+        .environmentObject(featureModels.privateConversationModel)
+        .environmentObject(featureModels.verificationModel)
+        .environmentObject(featureModels.conversationUIModel)
+        .environmentObject(featureModels.peerListModel)
+}
+
+@MainActor
+private struct ContentPeopleSheetHarness: View {
+    @State private var showSidebar = true
+    @State private var messageText = ""
+    @State private var selectedMessageSender: String?
+    @State private var selectedMessageSenderID: PeerID?
+    @State private var imagePreviewURL: URL?
+    @State private var windowCountPublic = 300
+    @State private var windowCountPrivate: [PeerID: Int] = [:]
+    @State private var isAtBottomPrivate = true
+    @State private var autocompleteDebounceTimer: Timer?
+    @StateObject private var voiceRecordingVM = VoiceRecordingViewModel()
+    @FocusState private var isTextFieldFocused: Bool
+    #if os(iOS)
+    @State private var showImagePicker = false
+    @State private var imagePickerSourceType: UIImagePickerController.SourceType = .photoLibrary
+    #else
+    @State private var showMacImagePicker = false
+    #endif
+
+    var body: some View {
+        #if os(iOS)
+        ContentPeopleSheetView(
+            showSidebar: $showSidebar,
+            messageText: $messageText,
+            selectedMessageSender: $selectedMessageSender,
+            selectedMessageSenderID: $selectedMessageSenderID,
+            imagePreviewURL: $imagePreviewURL,
+            windowCountPublic: $windowCountPublic,
+            windowCountPrivate: $windowCountPrivate,
+            isAtBottomPrivate: $isAtBottomPrivate,
+            isTextFieldFocused: $isTextFieldFocused,
+            voiceRecordingVM: voiceRecordingVM,
+            autocompleteDebounceTimer: $autocompleteDebounceTimer,
+            backgroundColor: .black,
+            textColor: .green,
+            secondaryTextColor: .gray,
+            headerHeight: 44,
+            onSendMessage: {},
+            showImagePicker: $showImagePicker,
+            imagePickerSourceType: $imagePickerSourceType
+        )
+        #else
+        ContentPeopleSheetView(
+            showSidebar: $showSidebar,
+            messageText: $messageText,
+            selectedMessageSender: $selectedMessageSender,
+            selectedMessageSenderID: $selectedMessageSenderID,
+            imagePreviewURL: $imagePreviewURL,
+            windowCountPublic: $windowCountPublic,
+            windowCountPrivate: $windowCountPrivate,
+            isAtBottomPrivate: $isAtBottomPrivate,
+            isTextFieldFocused: $isTextFieldFocused,
+            voiceRecordingVM: voiceRecordingVM,
+            autocompleteDebounceTimer: $autocompleteDebounceTimer,
+            backgroundColor: .black,
+            textColor: .green,
+            secondaryTextColor: .gray,
+            headerHeight: 44,
+            onSendMessage: {},
+            showMacImagePicker: $showMacImagePicker
+        )
+        #endif
+    }
+}
+
+@MainActor
 @discardableResult
 private func mount<V: View>(_ view: V) -> AnyObject {
     #if os(iOS)
@@ -112,11 +254,13 @@ private func makeTemporaryImageURL() throws -> URL {
     return url
 }
 
+@Suite("View Smoke Tests", .serialized)
 @MainActor
 struct ViewSmokeTests {
     @Test
     func fingerprintView_renders_verifiedAndPendingStates() async {
         let (viewModel, transport, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
         let verifiedPeer = PeerID(str: "0102030405060708")
         let pendingPeer = PeerID(str: "1112131415161718")
         let verifiedFingerprint = String(repeating: "ab", count: 32)
@@ -131,11 +275,11 @@ struct ViewSmokeTests {
 
         viewModel.verifiedFingerprints.insert(verifiedFingerprint)
 
-        let verifiedView = FingerprintView(viewModel: viewModel, peerID: verifiedPeer)
-        let pendingView = FingerprintView(viewModel: viewModel, peerID: pendingPeer)
+        let verifiedView = FingerprintView(peerID: verifiedPeer)
+            .environmentObject(featureModels.verificationModel)
+        let pendingView = FingerprintView(peerID: pendingPeer)
+            .environmentObject(featureModels.verificationModel)
 
-        _ = verifiedView.body
-        _ = pendingView.body
         _ = mount(verifiedView)
         _ = mount(pendingView)
 
@@ -145,13 +289,14 @@ struct ViewSmokeTests {
     @Test
     func verificationViews_renderCoreBranches() throws {
         let (viewModel, transport, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
         let peerID = PeerID(str: "2122232425262728")
         let fingerprint = String(repeating: "cd", count: 32)
         var isPresented = true
 
         transport.peerFingerprints[peerID] = fingerprint
         transport.updatePeerSnapshots([makeSnapshot(peerID: peerID, nickname: "Verifier", noiseByte: 0x33)])
-        viewModel.selectedPrivateChatPeer = peerID
+        featureModels.privateConversationModel.startConversation(with: peerID)
         viewModel.verifiedFingerprints.insert(fingerprint)
 
         let image = try makeCGImage()
@@ -173,35 +318,36 @@ struct ViewSmokeTests {
                     set: { isPresented = $0 }
                 )
             )
-            .environmentObject(viewModel)
+            .environmentObject(featureModels.verificationModel)
         )
     }
 
     @Test
     func meshPeerList_renders_emptyAndPopulatedStates() async {
         let (viewModel, transport, identityManager) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
         let connectedPeer = PeerID(str: "3132333435363738")
         let blockedPeer = PeerID(str: "4142434445464748")
         let blockedFingerprint = String(repeating: "ef", count: 32)
 
         _ = mount(
             MeshPeerList(
-                viewModel: viewModel,
                 textColor: .green,
                 secondaryTextColor: .gray,
                 onTapPeer: { _ in },
                 onToggleFavorite: { _ in },
                 onShowFingerprint: { _ in }
             )
+            .environmentObject(featureModels.peerListModel)
         )
         _ = MeshPeerList(
-            viewModel: viewModel,
             textColor: .green,
             secondaryTextColor: .gray,
             onTapPeer: { _ in },
             onToggleFavorite: { _ in },
             onShowFingerprint: { _ in }
-        ).body
+        )
+        .environmentObject(featureModels.peerListModel)
 
         transport.peerFingerprints[blockedPeer] = blockedFingerprint
         identityManager.setBlocked(blockedFingerprint, isBlocked: true)
@@ -214,13 +360,13 @@ struct ViewSmokeTests {
 
         _ = mount(
             MeshPeerList(
-                viewModel: viewModel,
                 textColor: .green,
                 secondaryTextColor: .gray,
                 onTapPeer: { _ in },
                 onToggleFavorite: { _ in },
                 onShowFingerprint: { _ in }
             )
+            .environmentObject(featureModels.peerListModel)
         )
 
         #expect(viewModel.hasUnreadMessages(for: blockedPeer))
@@ -229,10 +375,11 @@ struct ViewSmokeTests {
     @Test
     func commandSuggestionsAndLocationViews_render() {
         let (viewModel, _, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
         let channel = GeohashChannel(level: .city, geohash: "u4pruy")
         var messageText = "/f"
 
-        LocationChannelManager.shared.select(.location(channel))
+        featureModels.locationChannelsModel.select(.location(channel))
 
         _ = mount(
             CommandSuggestionsView(
@@ -244,22 +391,25 @@ struct ViewSmokeTests {
                 backgroundColor: .black,
                 secondaryTextColor: .gray
             )
-            .environmentObject(viewModel)
+            .environmentObject(featureModels.privateConversationModel)
+            .environmentObject(featureModels.locationChannelsModel)
         )
 
         _ = mount(
             LocationChannelsSheet(isPresented: .constant(true))
-                .environmentObject(viewModel)
+                .environmentObject(featureModels.locationChannelsModel)
+                .environmentObject(featureModels.peerListModel)
         )
 
         #expect(messageText == "/f")
-        LocationChannelManager.shared.select(.mesh)
-        LocationChannelManager.shared.endLiveRefresh()
+        featureModels.locationChannelsModel.select(.mesh)
+        featureModels.locationChannelsModel.endLiveRefresh()
     }
 
     @Test
     func locationNotesView_rendersNoRelayAndLoadedStates() throws {
         let (viewModel, _, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
 
         let noRelayManager = LocationNotesManager(
             geohash: "u4pruydq",
@@ -302,12 +452,20 @@ struct ViewSmokeTests {
         eose?()
 
         _ = mount(
-            LocationNotesView(geohash: "u4pruydq", manager: noRelayManager)
-                .environmentObject(viewModel)
+            LocationNotesView(
+                geohash: "u4pruydq",
+                senderNickname: viewModel.nickname,
+                manager: noRelayManager
+            )
+            .environmentObject(featureModels.locationChannelsModel)
         )
         _ = mount(
-            LocationNotesView(geohash: "u4pruydq", manager: loadedManager)
-                .environmentObject(viewModel)
+            LocationNotesView(
+                geohash: "u4pruydq",
+                senderNickname: viewModel.nickname,
+                manager: loadedManager
+            )
+            .environmentObject(featureModels.locationChannelsModel)
         )
 
         #expect(loadedManager.notes.count == 1)
@@ -351,10 +509,33 @@ struct ViewSmokeTests {
     }
 
     @Test
+    func contentShellViews_renderPublicAndPrivateBranches() async {
+        let (viewModel, transport, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+        let peerID = PeerID(str: "5152535455565758")
+
+        transport.updatePeerSnapshots([
+            makeSnapshot(peerID: peerID, nickname: "Alice", noiseByte: 0x66)
+        ])
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        _ = mount(installSmokeEnvironment(ContentView(), featureModels: featureModels))
+        _ = mount(installSmokeEnvironment(ContentPeopleSheetHarness(), featureModels: featureModels))
+
+        featureModels.privateConversationModel.startConversation(with: peerID)
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        _ = mount(installSmokeEnvironment(ContentPeopleSheetHarness(), featureModels: featureModels))
+
+        #expect(featureModels.privateConversationModel.selectedPeerID == peerID)
+        #expect(featureModels.privateConversationModel.selectedHeaderState?.headerPeerID == peerID)
+    }
+
+    @Test
     func geohashAndTextMessageViews_renderCoreBranches() {
         let (viewModel, _, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
         let geohashPeopleList = GeohashPeopleList(
-            viewModel: viewModel,
             textColor: .green,
             secondaryTextColor: .gray,
             onTapPerson: {}
@@ -377,10 +558,10 @@ struct ViewSmokeTests {
             deliveryStatus: .partiallyDelivered(reached: 1, total: 2)
         )
 
-        _ = geohashPeopleList.body
-        _ = mount(geohashPeopleList)
-        _ = mount(TextMessageView(message: truncatableMessage).environmentObject(viewModel))
-        _ = mount(TextMessageView(message: paymentMessage).environmentObject(viewModel))
+        _ = mount(geohashPeopleList.environmentObject(featureModels.peerListModel))
+        _ = mount(geohashPeopleList.environmentObject(featureModels.peerListModel))
+        _ = mount(TextMessageView(message: truncatableMessage).environmentObject(featureModels.conversationUIModel))
+        _ = mount(TextMessageView(message: paymentMessage).environmentObject(featureModels.conversationUIModel))
 
         #expect(truncatableMessage.content.count > TransportConfig.uiLongMessageLengthThreshold)
         #expect(paymentMessage.content.contains("lightning:") && paymentMessage.content.contains("cashu"))

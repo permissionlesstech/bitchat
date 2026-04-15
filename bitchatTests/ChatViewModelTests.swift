@@ -67,6 +67,29 @@ struct ChatViewModelInitializationTests {
         // Nickname should be set during init
         #expect(!transport.myNickname.isEmpty)
     }
+
+    @Test @MainActor
+    func initialization_bindsPeerSnapshotsIntoAllPeers() async {
+        let (viewModel, transport) = makeTestableViewModel()
+        let peerID = PeerID(str: "00000000000000a1")
+        let noiseKey = Data(repeating: 0xAB, count: 32)
+
+        transport.updatePeerSnapshots([
+            TransportPeerSnapshot(
+                peerID: peerID,
+                nickname: "Alice",
+                isConnected: true,
+                noisePublicKey: noiseKey,
+                lastSeen: Date()
+            )
+        ])
+
+        let updated = await TestHelpers.waitUntil({
+            viewModel.allPeers.contains { $0.peerID == peerID && $0.nickname == "Alice" }
+        }, timeout: TestConstants.defaultTimeout)
+
+        #expect(updated)
+    }
 }
 
 // MARK: - Message Sending Tests
@@ -135,6 +158,59 @@ struct ChatViewModelCommandTests {
     }
 }
 
+// MARK: - Lifecycle Tests
+
+struct ChatViewModelServiceLifecycleTests {
+
+    @Test @MainActor
+    func handleDidBecomeActive_marksVisiblePrivateMessagesAsRead() async {
+        let (viewModel, transport) = makeTestableViewModel()
+        let peerID = PeerID(str: "0000000000000001")
+        transport.simulateConnect(peerID, nickname: "Alice")
+
+        let message = BitchatMessage(
+            id: "read-1",
+            sender: "Alice",
+            content: "Hello from Alice",
+            timestamp: Date(),
+            isRelay: false,
+            originalSender: nil,
+            isPrivate: true,
+            recipientNickname: viewModel.nickname,
+            senderPeerID: peerID,
+            mentions: nil
+        )
+
+        viewModel.privateChats[peerID] = [message]
+        viewModel.unreadPrivateMessages.insert(peerID)
+        viewModel.selectedPrivateChatPeer = peerID
+
+        viewModel.handleDidBecomeActive()
+
+        let sentReadReceipt = await TestHelpers.waitUntil({
+            transport.sentReadReceipts.contains {
+                $0.peerID == peerID && $0.receipt.originalMessageID == "read-1"
+            }
+        }, timeout: TestConstants.defaultTimeout)
+
+        #expect(sentReadReceipt)
+        #expect(!viewModel.unreadPrivateMessages.contains(peerID))
+    }
+
+    @Test @MainActor
+    func handleScreenshotCaptured_privateChatAddsLocalNoticeWithoutSession() async {
+        let (viewModel, transport) = makeTestableViewModel()
+        let peerID = PeerID(str: "0000000000000002")
+        transport.simulateConnect(peerID, nickname: "Alice")
+
+        viewModel.selectedPrivateChatPeer = peerID
+        viewModel.handleScreenshotCaptured()
+
+        #expect(transport.sentPrivateMessages.isEmpty)
+        #expect(viewModel.privateChats[peerID]?.last?.content == "you took a screenshot")
+    }
+}
+
 // MARK: - Timeline Cap Tests
 
 struct ChatViewModelTimelineCapTests {
@@ -159,7 +235,7 @@ struct ChatViewModelReceivingTests {
 
     @Test @MainActor
     func didReceiveMessage_callsDelegate() async {
-        let (_, transport) = makeTestableViewModel()
+        let (viewModel, transport) = makeTestableViewModel()
 
         let message = BitchatMessage(
             id: "msg-001",
@@ -181,7 +257,7 @@ struct ChatViewModelReceivingTests {
 
         // Message may or may not appear due to rate limiting/pipeline batching
         // The important thing is no crash and delegate was called
-        #expect(transport.delegate != nil)
+        #expect(transport.delegate === viewModel)
     }
 
     @Test @MainActor
@@ -201,6 +277,79 @@ struct ChatViewModelReceivingTests {
         }, timeout: TestConstants.defaultTimeout)
 
         #expect(found)
+    }
+}
+
+// MARK: - Noise Payload Tests
+
+struct ChatViewModelNoisePayloadTests {
+
+    @Test @MainActor
+    func didReceiveNoisePayload_privateMessageStoresMessageAndSendsDeliveryAck() async {
+        let (viewModel, transport) = makeTestableViewModel()
+        let peerID = PeerID(str: "0000000000000003")
+        transport.simulateConnect(peerID, nickname: "Alice")
+
+        let payload = PrivateMessagePacket(messageID: "pm-noise-1", content: "Secret hello").encode()
+        #expect(payload != nil)
+        guard let payload else { return }
+
+        viewModel.didReceiveNoisePayload(
+            from: peerID,
+            type: .privateMessage,
+            payload: payload,
+            timestamp: Date()
+        )
+
+        let stored = await TestHelpers.waitUntil({
+            viewModel.privateChats[peerID]?.contains(where: { $0.id == "pm-noise-1" && $0.content == "Secret hello" }) == true
+        }, timeout: TestConstants.defaultTimeout)
+
+        let acked = await TestHelpers.waitUntil({
+            transport.sentDeliveryAcks.contains { $0.messageID == "pm-noise-1" && $0.peerID == peerID }
+        }, timeout: TestConstants.defaultTimeout)
+
+        #expect(stored)
+        #expect(acked)
+    }
+
+    @Test @MainActor
+    func didReceiveNoisePayload_deliveredUpdatesExistingPrivateMessageStatus() async {
+        let (viewModel, transport) = makeTestableViewModel()
+        let peerID = PeerID(str: "0000000000000004")
+        transport.simulateConnect(peerID, nickname: "Bob")
+
+        let message = BitchatMessage(
+            id: "pm-delivered-1",
+            sender: viewModel.nickname,
+            content: "Waiting on ack",
+            timestamp: Date(),
+            isRelay: false,
+            originalSender: nil,
+            isPrivate: true,
+            recipientNickname: "Bob",
+            senderPeerID: viewModel.meshService.myPeerID,
+            mentions: nil,
+            deliveryStatus: .sent
+        )
+        viewModel.privateChats[peerID] = [message]
+
+        viewModel.didReceiveNoisePayload(
+            from: peerID,
+            type: .delivered,
+            payload: Data("pm-delivered-1".utf8),
+            timestamp: Date()
+        )
+
+        let delivered = await TestHelpers.waitUntil({
+            guard let status = viewModel.privateChats[peerID]?.first?.deliveryStatus else { return false }
+            if case .delivered(let name, _) = status {
+                return name == "Bob"
+            }
+            return false
+        }, timeout: TestConstants.defaultTimeout)
+
+        #expect(delivered)
     }
 }
 
@@ -274,6 +423,46 @@ struct ChatViewModelPeerTests {
         transport.connectedPeers.insert(peerID)
 
         #expect(transport.isPeerConnected(peerID))
+    }
+
+    @Test @MainActor
+    func didUpdatePeerList_removesStaleUnreadPeerWithoutMessages() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let stalePeer = PeerID(str: "00000000000000a2")
+        viewModel.unreadPrivateMessages = [stalePeer]
+
+        viewModel.didUpdatePeerList([])
+
+        let cleaned = await TestHelpers.waitUntil({
+            !viewModel.unreadPrivateMessages.contains(stalePeer)
+        }, timeout: TestConstants.defaultTimeout)
+
+        #expect(cleaned)
+    }
+
+    @Test @MainActor
+    func didUpdatePeerList_preservesStableUnreadPeerWhenMessagesExist() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let stablePeer = PeerID(str: String(repeating: "a", count: 64))
+        let message = BitchatMessage(
+            id: "stable-noise-1",
+            sender: "Alice",
+            content: "Offline hello",
+            timestamp: Date(),
+            isRelay: false,
+            originalSender: nil,
+            isPrivate: true,
+            recipientNickname: viewModel.nickname,
+            senderPeerID: stablePeer,
+            mentions: nil
+        )
+        viewModel.privateChats[stablePeer] = [message]
+        viewModel.unreadPrivateMessages = [stablePeer]
+
+        viewModel.didUpdatePeerList([])
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        #expect(viewModel.unreadPrivateMessages.contains(stablePeer))
     }
 }
 

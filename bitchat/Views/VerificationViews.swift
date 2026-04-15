@@ -107,7 +107,7 @@ struct ImageWrapper: View {
 
 /// Placeholder scanner UI; real camera scanning will be added later.
 struct QRScanView: View {
-    @EnvironmentObject var viewModel: ChatViewModel
+    @EnvironmentObject private var verificationModel: VerificationModel
     var isActive: Bool = true
     var onSuccess: (() -> Void)? = nil  // Called when verification succeeds
     @State private var input = ""
@@ -135,17 +135,15 @@ struct QRScanView: View {
                 // Deduplicate: ignore if we just processed this exact QR code
                 guard code != lastValid else { return }
 
-                if let qr = VerificationService.shared.verifyScannedQR(code) {
-                    let ok = viewModel.beginQRVerification(with: qr)
-                    if ok {
-                        // Successfully initiated verification; remember this QR to prevent re-scanning
-                        lastValid = code
-                        // Close scanner and return to "My QR" view
-                        onSuccess?()
-                    }
-                    // If !ok, peer not found or already pending - don't set lastValid so user can retry
-                } else {
-                    // ignore invalid reads; continue scanning
+                switch verificationModel.verifyScannedPayload(code) {
+                case .requested:
+                    // Successfully initiated verification; remember this QR to prevent re-scanning
+                    lastValid = code
+                    // Close scanner and return to "My QR" view
+                    onSuccess?()
+                case .notFound, .invalid:
+                    // Ignore invalid/no-match reads and keep scanning
+                    break
                 }
             }
             .frame(height: 260)
@@ -163,17 +161,15 @@ struct QRScanView: View {
                     return
                 }
 
-                if let qr = VerificationService.shared.verifyScannedQR(input) {
-                    let ok = viewModel.beginQRVerification(with: qr)
-                    if ok {
-                        result = Strings.requested(qr.nickname)
-                        lastValid = input
-                        // Close scanner and return to "My QR" view
-                        onSuccess?()
-                    } else {
-                        result = Strings.notFound
-                    }
-                } else {
+                switch verificationModel.verifyScannedPayload(input) {
+                case .requested(let nickname):
+                    result = Strings.requested(nickname)
+                    lastValid = input
+                    // Close scanner and return to "My QR" view
+                    onSuccess?()
+                case .notFound:
+                    result = Strings.notFound
+                case .invalid:
                     result = Strings.invalid
                 }
             }
@@ -282,7 +278,7 @@ struct CameraScannerView: UIViewRepresentable {
 
 // Combined sheet: shows my QR by default with a button to scan instead
 struct VerificationSheetView: View {
-    @EnvironmentObject var viewModel: ChatViewModel
+    @EnvironmentObject private var verificationModel: VerificationModel
     @Binding var isPresented: Bool
     @State private var showingScanner = false
     @Environment(\.colorScheme) var colorScheme
@@ -290,11 +286,6 @@ struct VerificationSheetView: View {
     private var backgroundColor: Color { colorScheme == .dark ? Color.black : Color.white }
     private var accentColor: Color { colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0) }
     private var boxColor: Color { Color.gray.opacity(0.1) }
-
-    private func myQRString() -> String {
-        let npub = try? viewModel.idBridge.getCurrentNostrIdentity()?.npub
-        return VerificationService.shared.buildMyQRString(nickname: viewModel.nickname, npub: npub) ?? ""
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -333,14 +324,14 @@ struct VerificationSheetView: View {
                         QRScanView(isActive: showingScanner, onSuccess: {
                             showingScanner = false
                         })
-                            .environmentObject(viewModel)
+                            .environmentObject(verificationModel)
                             .frame(height: 280)
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                         #else
                         QRScanView(onSuccess: {
                             showingScanner = false
                         })
-                            .environmentObject(viewModel)
+                            .environmentObject(verificationModel)
                         #endif
                     }
                     .padding()
@@ -348,8 +339,7 @@ struct VerificationSheetView: View {
                     .background(boxColor)
                     .cornerRadius(8)
                 } else {
-                    let qr = myQRString()
-                    MyQRView(qrString: qr)
+                    MyQRView(qrString: verificationModel.myQRString())
                 }
             }
             .padding(16)
@@ -373,10 +363,9 @@ struct VerificationSheetView: View {
                 }
 
                 // Optional: Remove verification for selected peer (if verified)
-                if let pid = viewModel.selectedPrivateChatPeer,
-                   let fp = viewModel.getFingerprint(for: pid),
-                   viewModel.verifiedFingerprints.contains(fp) {
-                    Button(action: { viewModel.unverifyFingerprint(for: pid) }) {
+                if let peerID = verificationModel.selectedPeerID,
+                   verificationModel.isVerified(peerID: peerID) {
+                    Button(action: { verificationModel.unverifyFingerprint(for: peerID) }) {
                         Label("remove verification", systemImage: "minus.circle")
                             .font(.bitchatSystem(size: 12, design: .monospaced))
                     }

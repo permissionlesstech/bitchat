@@ -10,7 +10,7 @@ import SwiftUI
 
 struct TextMessageView: View {
     @Environment(\.colorScheme) private var colorScheme: ColorScheme
-    @EnvironmentObject private var viewModel: ChatViewModel
+    @EnvironmentObject private var conversationUIModel: ConversationUIModel
     
     let message: BitchatMessage
     @State private var expandedMessageIDs: Set<String> = []
@@ -23,13 +23,13 @@ struct TextMessageView: View {
             HStack(alignment: .top, spacing: 0) {
                 let isLong = (message.content.count > TransportConfig.uiLongMessageLengthThreshold || message.content.hasVeryLongToken(threshold: TransportConfig.uiVeryLongTokenThreshold)) && cashuLinks.isEmpty
                 let isExpanded = expandedMessageIDs.contains(message.id)
-                Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
+                Text(conversationUIModel.formatMessage(message, colorScheme: colorScheme))
                     .fixedSize(horizontal: false, vertical: true)
                     .lineLimit(isLong && !isExpanded ? TransportConfig.uiLongMessageLineLimit : nil)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 
                 // Delivery status indicator for private messages
-                if message.isPrivate && message.sender == viewModel.nickname,
+                if message.isPrivate && conversationUIModel.isSentByCurrentUser(message),
                    let status = message.deliveryStatus {
                     DeliveryStatusView(status: status)
                         .padding(.leading, 4)
@@ -68,6 +68,23 @@ struct TextMessageView: View {
 
 #Preview {
     let keychain = PreviewKeychainManager()
+    let viewModel = ChatViewModel(
+        keychain: keychain,
+        idBridge: NostrIdentityBridge(),
+        identityManager: SecureIdentityStateManager(keychain)
+    )
+    let conversationStore = ConversationStore()
+    let identityResolver = IdentityResolver()
+    let privateConversationModel = PrivateConversationModel(
+        chatViewModel: viewModel,
+        conversationStore: conversationStore,
+        identityResolver: identityResolver
+    )
+    let conversationUIModel = ConversationUIModel(
+        chatViewModel: viewModel,
+        privateConversationModel: privateConversationModel,
+        conversationStore: conversationStore
+    )
     
     Group {
         List {
@@ -86,11 +103,5 @@ struct TextMessageView: View {
         }
         .environment(\.colorScheme, .dark)
     }
-    .environmentObject(
-        ChatViewModel(
-            keychain: keychain,
-            idBridge: NostrIdentityBridge(),
-            identityManager: SecureIdentityStateManager(keychain)
-        )
-    )
+    .environmentObject(conversationUIModel)
 }

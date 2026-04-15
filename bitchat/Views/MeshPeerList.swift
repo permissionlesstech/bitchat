@@ -2,7 +2,7 @@ import SwiftUI
 import BitFoundation
 
 struct MeshPeerList: View {
-    @ObservedObject var viewModel: ChatViewModel
+    @EnvironmentObject private var peerListModel: PeerListModel
     let textColor: Color
     let secondaryTextColor: Color
     let onTapPeer: (PeerID) -> Void
@@ -19,21 +19,13 @@ struct MeshPeerList: View {
     }
 
     var body: some View {
-        let myPeerID = viewModel.meshService.myPeerID
-        let mapped: [(peer: BitchatPeer, isMe: Bool, hasUnread: Bool, enc: EncryptionStatus)] = viewModel.allPeers.map { peer in
-            let isMe = peer.peerID == myPeerID
-            let hasUnread = viewModel.hasUnreadMessages(for: peer.peerID)
-            let enc = viewModel.getEncryptionStatus(for: peer.peerID)
-            return (peer, isMe, hasUnread, enc)
-        }
-        // Stable visual order without mutating state here
-        let currentIDs = mapped.map { $0.peer.peerID.id }
+        let currentIDs = peerListModel.meshRows.map(\.id)
         let displayIDs = orderedIDs.filter { currentIDs.contains($0) } + currentIDs.filter { !orderedIDs.contains($0) }
-        let peers: [(peer: BitchatPeer, isMe: Bool, hasUnread: Bool, enc: EncryptionStatus)] = displayIDs.compactMap { id in
-            mapped.first(where: { $0.peer.peerID.id == id })
+        let peers: [MeshPeerRow] = displayIDs.compactMap { id in
+            peerListModel.meshRows.first(where: { $0.id == id })
         }
-        
-        if viewModel.allPeers.isEmpty {
+
+        if peerListModel.meshRows.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 Text(Strings.noneNearby)
                     .font(.bitchatSystem(size: 14, design: .monospaced))
@@ -44,11 +36,10 @@ struct MeshPeerList: View {
         } else {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(0..<peers.count, id: \.self) { idx in
-                    let item = peers[idx]
-                    let peer = item.peer
-                    let isMe = item.isMe
+                    let peer = peers[idx]
+                    let isMe = peer.isMe
                     HStack(spacing: 4) {
-                        let assigned = viewModel.colorForMeshPeer(id: peer.peerID, isDark: colorScheme == .dark)
+                        let assigned = peerListModel.colorForMeshPeer(id: peer.peerID, isDark: colorScheme == .dark)
                         let baseColor = isMe ? Color.orange : assigned
                         if isMe {
                             Image(systemName: "person.fill")
@@ -76,8 +67,7 @@ struct MeshPeerList: View {
                                 .foregroundColor(secondaryTextColor)
                         }
 
-                        let displayName = isMe ? viewModel.nickname : peer.nickname
-                        let (base, suffix) = displayName.splitSuffix()
+                        let (base, suffix) = peer.displayName.splitSuffix()
                         HStack(spacing: 0) {
                             Text(base)
                                 .font(.bitchatSystem(size: 14, design: .monospaced))
@@ -90,7 +80,7 @@ struct MeshPeerList: View {
                             }
                         }
 
-                        if !isMe, viewModel.isPeerBlocked(peer.peerID) {
+                        if peer.isBlocked {
                             Image(systemName: "nosign")
                                 .font(.bitchatSystem(size: 10))
                                 .foregroundColor(.red)
@@ -99,19 +89,18 @@ struct MeshPeerList: View {
 
                         if !isMe {
                             if peer.isConnected {
-                                if let icon = item.enc.icon {
+                                if let icon = peer.encryptionStatus.icon {
                                     Image(systemName: icon)
                                         .font(.bitchatSystem(size: 10))
                                         .foregroundColor(baseColor)
                                 }
                             } else {
                                 // Offline: prefer showing verified badge from persisted fingerprints
-                                if let fp = viewModel.getFingerprint(for: peer.peerID),
-                                   viewModel.verifiedFingerprints.contains(fp) {
+                                if peer.showsVerifiedBadgeWhenOffline {
                                     Image(systemName: "checkmark.seal.fill")
                                         .font(.bitchatSystem(size: 10))
                                         .foregroundColor(baseColor)
-                                } else if let icon = item.enc.icon {
+                                } else if let icon = peer.encryptionStatus.icon {
                                     // Fallback to whatever status says (likely lock if we had a past session)
                                     Image(systemName: icon)
                                         .font(.bitchatSystem(size: 10))
@@ -123,7 +112,7 @@ struct MeshPeerList: View {
                         Spacer()
 
                         // Unread message indicator for this peer
-                        if !isMe, item.hasUnread {
+                        if peer.hasUnread {
                             Image(systemName: "envelope.fill")
                                 .font(.bitchatSystem(size: 10))
                                 .foregroundColor(.orange)
@@ -132,9 +121,9 @@ struct MeshPeerList: View {
 
                         if !isMe {
                             Button(action: { onToggleFavorite(peer.peerID) }) {
-                                Image(systemName: (peer.favoriteStatus?.isFavorite ?? false) ? "star.fill" : "star")
+                                Image(systemName: peer.isFavorite ? "star.fill" : "star")
                                     .font(.bitchatSystem(size: 12))
-                                    .foregroundColor((peer.favoriteStatus?.isFavorite ?? false) ? .yellow : secondaryTextColor)
+                                    .foregroundColor(peer.isFavorite ? .yellow : secondaryTextColor)
                             }
                             .buttonStyle(.plain)
                         }
@@ -149,10 +138,9 @@ struct MeshPeerList: View {
             }
             // Seed and update order outside result builder
             .onAppear {
-                let currentIDs = mapped.map { $0.peer.peerID.id }
                 orderedIDs = currentIDs
             }
-            .onChange(of: mapped.map { $0.peer.peerID.id }) { ids in
+            .onChange(of: currentIDs) { ids in
                 var newOrder = orderedIDs
                 newOrder.removeAll { !ids.contains($0) }
                 for id in ids where !newOrder.contains(id) { newOrder.append(id) }
