@@ -31,6 +31,7 @@ private func makeSmokeViewModel() -> (viewModel: ChatViewModel, transport: MockT
 
 @MainActor
 private struct SmokeFeatureModels {
+    let publicChatModel: PublicChatModel
     let appChromeModel: AppChromeModel
     let locationChannelsModel: LocationChannelsModel
     let privateInboxModel: PrivateInboxModel
@@ -52,6 +53,7 @@ private func makeSmokeLocationManager() -> LocationChannelManager {
 private func makeSmokeFeatureModels(for viewModel: ChatViewModel) -> SmokeFeatureModels {
     let locationManager = makeSmokeLocationManager()
     let conversationStore = viewModel.conversationStore
+    let publicChatModel = PublicChatModel(conversationStore: conversationStore)
     let locationChannelsModel = LocationChannelsModel(manager: locationManager)
     let privateInboxModel = PrivateInboxModel(conversationStore: conversationStore)
     let appChromeModel = AppChromeModel(
@@ -79,6 +81,7 @@ private func makeSmokeFeatureModels(for viewModel: ChatViewModel) -> SmokeFeatur
     )
 
     return SmokeFeatureModels(
+        publicChatModel: publicChatModel,
         appChromeModel: appChromeModel,
         locationChannelsModel: locationChannelsModel,
         privateInboxModel: privateInboxModel,
@@ -95,6 +98,7 @@ private func installSmokeEnvironment<V: View>(
     featureModels: SmokeFeatureModels
 ) -> some View {
     view
+        .environmentObject(featureModels.publicChatModel)
         .environmentObject(featureModels.appChromeModel)
         .environmentObject(featureModels.locationChannelsModel)
         .environmentObject(featureModels.privateInboxModel)
