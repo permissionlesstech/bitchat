@@ -2,7 +2,7 @@ import BitFoundation
 import BitLogger
 import Foundation
 
-final class ChatPeerListCoordinator {
+final class ChatPeerListCoordinator: @unchecked Sendable {
     private unowned let viewModel: ChatViewModel
     private var recentlySeenPeers: Set<PeerID> = []
     private var lastNetworkNotificationTime = Date.distantPast
@@ -113,7 +113,7 @@ private extension ChatPeerListCoordinator {
     func scheduleNetworkResetTimer() {
         networkResetTimer?.invalidate()
         networkResetTimer = Timer.scheduledTimer(withTimeInterval: networkResetGraceSeconds, repeats: false) { [weak self] _ in
-            Task { @MainActor [weak self] in
+            MainActor.assumeIsolated { [weak self] in
                 self?.handleNetworkResetTimerFired()
             }
         }
@@ -148,7 +148,7 @@ private extension ChatPeerListCoordinator {
             withTimeInterval: TransportConfig.uiMeshEmptyConfirmationSeconds,
             repeats: false
         ) { [weak self] _ in
-            Task { @MainActor [weak self] in
+            MainActor.assumeIsolated { [weak self] in
                 self?.handleNetworkEmptyTimerFired()
             }
         }

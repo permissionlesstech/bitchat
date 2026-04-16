@@ -62,7 +62,9 @@ final class ChatDeliveryCoordinator {
             let currentStatus = chatMessages[index].deliveryStatus
             guard !shouldSkipUpdate(currentStatus: currentStatus, newStatus: status) else { continue }
 
-            privateChats[peerID]?[index].deliveryStatus = status
+            let updatedMessages = chatMessages
+            updatedMessages[index].deliveryStatus = status
+            privateChats[peerID] = updatedMessages
             didUpdateStatus = true
         }
 
