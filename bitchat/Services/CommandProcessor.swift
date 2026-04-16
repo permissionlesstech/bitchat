@@ -182,12 +182,11 @@ final class CommandProcessor {
         let emoteContent = "* \(emoji) \(myNickname) \(action) \(nickname)\(suffix) *"
         
         if contextProvider?.selectedPrivateChatPeer != nil {
-            // In private chat
-            if let peerNickname = meshService?.peerNickname(peerID: targetPeerID) {
+            // In private chat — route through contextProvider so the message goes
+            // via MessageRouter's outbox (survives Noise handshake / offline queue).
+            if let _ = meshService?.peerNickname(peerID: targetPeerID) {
                 let personalMessage = "* \(emoji) \(myNickname) \(action) you\(suffix) *"
-                meshService?.sendPrivateMessage(personalMessage, to: targetPeerID,
-                                               recipientNickname: peerNickname,
-                                               messageID: UUID().uuidString)
+                contextProvider?.sendPrivateMessage(personalMessage, to: targetPeerID)
                 // Also add a local system message so the sender sees a natural-language confirmation
                 let pastAction: String = {
                     switch action {

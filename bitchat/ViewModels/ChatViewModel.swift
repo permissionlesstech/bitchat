@@ -435,7 +435,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
         self.unifiedPeerService = UnifiedPeerService(meshService: meshService, idBridge: idBridge, identityManager: identityManager)
         let nostrTransport = NostrTransport(keychain: keychain, idBridge: idBridge)
         nostrTransport.senderPeerID = meshService.myPeerID
-        self.messageRouter = MessageRouter(transports: [meshService, nostrTransport])
+        self.messageRouter = MessageRouter(transports: [meshService, nostrTransport], idBridge: idBridge)
         // Route receipts from PrivateChatManager through MessageRouter
         self.privateChatManager.messageRouter = self.messageRouter
         // Allow PrivateChatManager to look up peer info for message consolidation
@@ -3087,6 +3087,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
                 if case .read = privateChats[foundPeerID]?[idx].deliveryStatus { return }
 
                 privateChats[foundPeerID]?[idx].deliveryStatus = .delivered(to: name, at: Date())
+                messageRouter.confirmDelivery(messageID: messageID)
                 objectWillChange.send()
 
             case .readReceipt:
@@ -3098,6 +3099,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
                 if let messages = privateChats[foundPeerID], idx < messages.count {
                     messages[idx].deliveryStatus = .read(by: name, at: Date())
                     privateChats[foundPeerID] = messages
+                    messageRouter.confirmDelivery(messageID: messageID)
                     privateChatManager.objectWillChange.send()
                     objectWillChange.send()
                 }
@@ -3235,18 +3237,23 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
     // MARK: - Peer Connection Events
 
     func didConnectToPeer(_ peerID: PeerID) {
-        SecureLogger.debug("🤝 Peer connected: \(peerID)", category: .session)
-        
+        SecureLogger.debug("Peer connected: \(peerID)", category: .session)
+
         // Handle all main actor work async
         Task { @MainActor in
             isConnected = true
-            
+
+            // Reset send timestamps so previously-sent-but-unacknowledged messages
+            // are resent immediately on this new connection
+            messageRouter.resetSendState(for: peerID)
+            messageRouter.flushOutbox(for: peerID)
+
             // Register ephemeral session with identity manager
             identityManager.registerEphemeralSession(peerID: peerID, handshakeState: .none)
-            
+
             // Intentionally do not resend favorites on reconnect.
             // We only send our npub when a favorite is toggled on, or if our npub changes.
-            
+
             // Force UI refresh
             objectWillChange.send()
 
@@ -3255,15 +3262,22 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
                 let noiseKeyHex = PeerID(hexData: peer.noisePublicKey)
                 shortIDToNoiseKey[peerID] = noiseKeyHex
             }
-
-            // Flush any queued messages for this peer via router
-            messageRouter.flushOutbox(for: peerID)
         }
     }
     
+    func didEstablishEncryptedSession(with peerID: PeerID) {
+        Task { @MainActor in
+            // Noise session is now fully established — flush the outbox.
+            // Earlier flushes (from didConnectToPeer / didUpdatePeerList) likely
+            // returned false because the handshake wasn't complete yet.
+            messageRouter.resetSendState(for: peerID)
+            messageRouter.flushOutbox(for: peerID)
+        }
+    }
+
     func didDisconnectFromPeer(_ peerID: PeerID) {
         SecureLogger.debug("👋 Peer disconnected: \(peerID)", category: .session)
-        
+
         // Remove ephemeral session from identity manager
         identityManager.removeEphemeralSession(peerID: peerID)
 
@@ -3390,6 +3404,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
             
             // Don't end private chat when peer temporarily disconnects
             // The fingerprint tracking will allow us to reconnect when they come back
+
+            // Best-effort flush: works when a Noise session is already established
+            // from a prior connection. The primary flush path is
+            // didEstablishEncryptedSession, which fires after handshake completion.
+            self.messageRouter.flushAllOutbox()
         }
     }
     
@@ -3607,11 +3626,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
             privateChats[peerID]?[index].deliveryStatus = status
         }
         
+
         // Trigger UI update for delivery status change
         DispatchQueue.main.async { [weak self] in
             self?.objectWillChange.send()
         }
-        
+
     }
     
     // MARK: - Helper for System Messages
