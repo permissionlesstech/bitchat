@@ -38,6 +38,8 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
     private let teleportedStoreKey = "locationChannel.teleportedSet"
     private let bookmarksKey = "locationChannel.bookmarks"
     private let bookmarkNamesKey = "locationChannel.bookmarkNames"
+    private let bookmarkNamesSchemaVersionKey = "locationChannel.bookmarkNamesSchemaVersion"
+    private let bookmarkNamesCurrentSchemaVersion = 1
 
     // MARK: - Published State (Channel)
 
@@ -129,6 +131,21 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
            let dict = try? JSONDecoder().decode([String: String].self, from: data) {
             bookmarkNames = dict
         }
+
+        migrateBookmarkNamesIfNeeded()
+    }
+
+    // One-time migration: drop cached names for low-precision (≤2-char) geohashes
+    // so the country-first resolver recomputes them on next channel-list display
+    // (via resolveBookmarkNameIfNeeded on LocationChannelsSheet row .onAppear).
+    private func migrateBookmarkNamesIfNeeded() {
+        guard storage.integer(forKey: bookmarkNamesSchemaVersionKey) < bookmarkNamesCurrentSchemaVersion else { return }
+        let pruned = bookmarkNames.filter { $0.key.count > 2 }
+        if pruned.count != bookmarkNames.count {
+            bookmarkNames = pruned
+            persistBookmarkNames()
+        }
+        storage.set(bookmarkNamesCurrentSchemaVersion, forKey: bookmarkNamesSchemaVersionKey)
     }
 
     private func initializePermissionState() {
