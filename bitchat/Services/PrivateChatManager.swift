@@ -184,25 +184,25 @@ final class PrivateChatManager: ObservableObject {
             }
         }
     }
-    
+
     /// Start a private chat with a peer
     func startChat(with peerID: PeerID) {
         selectedPeer = peerID
-        
+
         // Store fingerprint for persistence across reconnections
         if let fingerprint = meshService?.getFingerprint(for: peerID) {
             selectedPeerFingerprint = fingerprint
         }
-        
+
         // Mark messages as read
         markAsRead(from: peerID)
-        
+
         // Initialize chat if needed
         if privateChats[peerID] == nil {
             privateChats[peerID] = []
         }
     }
-    
+
     /// End the current private chat
     func endChat() {
         selectedPeer = nil
@@ -232,11 +232,11 @@ final class PrivateChatManager: ObservableObject {
 
         privateChats[peerID] = deduped
     }
-    
+
     /// Mark messages from a peer as read
     func markAsRead(from peerID: PeerID) {
         unreadMessages.remove(peerID)
-        
+
         // Send read receipts for unread messages that haven't been sent yet
         if let messages = privateChats[peerID] {
             for message in messages {
@@ -246,24 +246,24 @@ final class PrivateChatManager: ObservableObject {
             }
         }
     }
-    
+
     // MARK: - Private Methods
-    
+
     private func sendReadReceipt(for message: BitchatMessage) {
         guard !sentReadReceipts.contains(message.id),
               let senderPeerID = message.senderPeerID else {
             return
         }
-        
+
         sentReadReceipts.insert(message.id)
-        
+
         // Create read receipt using the simplified method
         let receipt = ReadReceipt(
             originalMessageID: message.id,
             readerID: meshService?.myPeerID ?? PeerID(str: ""),
             readerNickname: meshService?.myNickname ?? ""
         )
-        
+
         // Route via MessageRouter to avoid handshakeRequired spam when session isn't established
         if let router = messageRouter {
             SecureLogger.debug("PrivateChatManager: sending READ ack for \(message.id.prefix(8))… to \(senderPeerID.id.prefix(8))… via router", category: .session)

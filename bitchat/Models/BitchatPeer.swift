@@ -10,13 +10,13 @@ struct BitchatPeer: Equatable {
     let lastSeen: Date
     let isConnected: Bool
     let isReachable: Bool
-    
+
     // Favorite-related properties
     var favoriteStatus: FavoritesPersistenceService.FavoriteRelationship?
-    
+
     // Nostr identity (if known)
     var nostrPublicKey: String?
-    
+
     // Connection state
     enum ConnectionState {
         case bluetoothConnected
@@ -24,7 +24,7 @@ struct BitchatPeer: Equatable {
         case nostrAvailable     // Mutual favorite, reachable via Nostr
         case offline            // Not connected via any transport
     }
-    
+
     var connectionState: ConnectionState {
         if isConnected {
             return .bluetoothConnected
@@ -37,24 +37,24 @@ struct BitchatPeer: Equatable {
             return .offline
         }
     }
-    
+
     var isFavorite: Bool {
         favoriteStatus?.isFavorite ?? false
     }
-    
+
     var isMutualFavorite: Bool {
         favoriteStatus?.isMutual ?? false
     }
-    
+
     var theyFavoritedUs: Bool {
         favoriteStatus?.theyFavoritedUs ?? false
     }
-    
+
     // Display helpers
     var displayName: String {
         nickname.isEmpty ? String(peerID.id.prefix(8)) : nickname
     }
-    
+
     var statusIcon: String {
         switch connectionState {
         case .bluetoothConnected:
@@ -71,7 +71,7 @@ struct BitchatPeer: Equatable {
             }
         }
     }
-    
+
     // Initialize from mesh service data
     init(
         peerID: PeerID,
@@ -87,12 +87,12 @@ struct BitchatPeer: Equatable {
         self.lastSeen = lastSeen
         self.isConnected = isConnected
         self.isReachable = isReachable
-        
+
         // Load favorite status - will be set later by the manager
         self.favoriteStatus = nil
         self.nostrPublicKey = nil
     }
-    
+
     static func == (lhs: BitchatPeer, rhs: BitchatPeer) -> Bool {
         lhs.peerID == rhs.peerID
     }

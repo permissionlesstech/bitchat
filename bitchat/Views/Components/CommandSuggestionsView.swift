@@ -10,13 +10,13 @@ import SwiftUI
 struct CommandSuggestionsView: View {
     @EnvironmentObject private var viewModel: ChatViewModel
     @ObservedObject private var locationManager = LocationChannelManager.shared
-    
+
     @Binding var messageText: String
-    
+
     let textColor: Color
     let backgroundColor: Color
     let secondaryTextColor: Color
-    
+
     private var filteredCommands: [CommandInfo] {
         guard messageText.hasPrefix("/") && !messageText.contains(" ") else { return [] }
         let isGeoPublic = locationManager.selectedChannel.isLocation
@@ -25,7 +25,7 @@ struct CommandSuggestionsView: View {
             command.alias.starts(with: messageText.lowercased())
         }
     }
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(filteredCommands) { command in
@@ -44,14 +44,14 @@ struct CommandSuggestionsView: View {
                 .stroke(secondaryTextColor.opacity(0.3), lineWidth: 1)
         )
     }
-    
+
     private func buttonRow(for command: CommandInfo) -> some View {
         HStack {
             Text(command.alias)
                 .font(.bitchatSystem(size: 11, design: .monospaced))
                 .foregroundColor(textColor)
                 .fontWeight(.medium)
-            
+
             if let placeholder = command.placeholder {
                 Text(placeholder)
                     .font(.bitchatSystem(size: 10, design: .monospaced))
@@ -59,7 +59,7 @@ struct CommandSuggestionsView: View {
             }
 
             Spacer()
-            
+
             Text(command.description)
                 .font(.bitchatSystem(size: 10, design: .monospaced))
                 .foregroundColor(secondaryTextColor)
@@ -79,7 +79,7 @@ struct CommandSuggestionsView: View {
         idBridge: NostrIdentityBridge(),
         identityManager: SecureIdentityStateManager(keychain)
     )
-    
+
     CommandSuggestionsView(
         messageText: $messageText,
         textColor: .green,

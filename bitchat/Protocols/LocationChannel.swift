@@ -18,7 +18,7 @@ enum GeohashChannelLevel: CaseIterable, Codable, Equatable {
         case .city: return 5
         case .province: return 4
         case .region: return 2
-    }
+        }
     }
 
     var displayName: String {
@@ -116,14 +116,14 @@ enum ChannelID: Equatable, Codable {
         case .location(let ch): return ch.geohash
         }
     }
-    
+
     var isMesh: Bool {
         switch self {
         case .mesh:     true
         case .location: false
         }
     }
-    
+
     var isLocation: Bool {
         switch self {
         case .mesh:     false
