@@ -104,6 +104,7 @@ protocol SecureIdentityStateManagerProtocol {
     
     // MARK: Cryptographic Identities
     func upsertCryptographicIdentity(fingerprint: String, noisePublicKey: Data, signingPublicKey: Data?, claimedNickname: String?)
+    func clearSigningPublicKey(for fingerprint: String)
     func getCryptoIdentitiesByPeerIDPrefix(_ peerID: PeerID) -> [CryptographicIdentity]
     func updateSocialIdentity(_ identity: SocialIdentity)
     
@@ -145,7 +146,6 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     
     // In-memory state
     private var ephemeralSessions: [PeerID: EphemeralIdentity] = [:]
-    private var cryptographicIdentities: [String: CryptographicIdentity] = [:]
     private var cache: IdentityCache = IdentityCache()
     
     // Thread safety
@@ -261,7 +261,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     func upsertCryptographicIdentity(fingerprint: String, noisePublicKey: Data, signingPublicKey: Data?, claimedNickname: String? = nil) {
         queue.async(flags: .barrier) {
             let now = Date()
-            if var existing = self.cryptographicIdentities[fingerprint] {
+            if var existing = self.cache.cryptographicIdentities[fingerprint] {
                 // Update keys if changed
                 if existing.publicKey != noisePublicKey {
                     existing = CryptographicIdentity(
@@ -271,7 +271,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
                         firstSeen: existing.firstSeen,
                         lastHandshake: now
                     )
-                    self.cryptographicIdentities[fingerprint] = existing
+                    self.cache.cryptographicIdentities[fingerprint] = existing
                 } else {
                     // Update signing key and lastHandshake
                     existing.signingPublicKey = signingPublicKey ?? existing.signingPublicKey
@@ -282,7 +282,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
                         firstSeen: existing.firstSeen,
                         lastHandshake: now
                     )
-                    self.cryptographicIdentities[fingerprint] = updated
+                    self.cache.cryptographicIdentities[fingerprint] = updated
                 }
                 // Persist updated state (already assigned in branches above)
             } else {
@@ -294,7 +294,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
                     firstSeen: now,
                     lastHandshake: now
                 )
-                self.cryptographicIdentities[fingerprint] = entry
+                self.cache.cryptographicIdentities[fingerprint] = entry
             }
 
             // Optionally persist claimed nickname into social identity
@@ -321,12 +321,28 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
         }
     }
 
+    func clearSigningPublicKey(for fingerprint: String) {
+        queue.sync(flags: .barrier) {
+            guard var identity = self.cache.cryptographicIdentities[fingerprint] else { return }
+            guard identity.signingPublicKey != nil else { return }
+            identity = CryptographicIdentity(
+                fingerprint: identity.fingerprint,
+                publicKey: identity.publicKey,
+                signingPublicKey: nil,
+                firstSeen: identity.firstSeen,
+                lastHandshake: identity.lastHandshake
+            )
+            self.cache.cryptographicIdentities[fingerprint] = identity
+            self.saveIdentityCache()
+        }
+    }
+
     /// Find cryptographic identities whose fingerprint prefix matches a peerID (16-hex) short ID
     func getCryptoIdentitiesByPeerIDPrefix(_ peerID: PeerID) -> [CryptographicIdentity] {
         queue.sync {
             // Defensive: ensure hex and correct length
             guard peerID.isShort else { return [] }
-            return cryptographicIdentities.values.filter { $0.fingerprint.hasPrefix(peerID.id) }
+            return cache.cryptographicIdentities.values.filter { $0.fingerprint.hasPrefix(peerID.id) }
         }
     }
     
@@ -485,7 +501,6 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
         queue.async(flags: .barrier) {
             self.cache = IdentityCache()
             self.ephemeralSessions.removeAll()
-            self.cryptographicIdentities.removeAll()
             
             // Delete from keychain
             let deleted = self.keychain.deleteIdentityKey(forKey: self.cacheKey)
@@ -504,7 +519,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     func setVerified(fingerprint: String, verified: Bool) {
         SecureLogger.info("Fingerprint \(verified ? "verified" : "unverified"): \(fingerprint)", category: .security)
         
-        queue.async(flags: .barrier) {
+        queue.sync(flags: .barrier) {
             if verified {
                 self.cache.verifiedFingerprints.insert(fingerprint)
             } else {
