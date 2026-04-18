@@ -924,7 +924,7 @@ extension NoisePattern {
 
 // MARK: - Errors
 
-enum NoiseError: Error {
+public enum NoiseError: Error {
     case uninitializedCipher
     case invalidCiphertext
     case handshakeComplete
