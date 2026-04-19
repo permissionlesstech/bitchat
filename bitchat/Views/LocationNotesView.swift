@@ -1,24 +1,26 @@
 import SwiftUI
 
 struct LocationNotesView: View {
-    @EnvironmentObject var viewModel: ChatViewModel
     @StateObject private var manager: LocationNotesManager
     let geohash: String
+    let senderNickname: String
     let onNotesCountChanged: ((Int) -> Void)?
 
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @ObservedObject private var locationManager = LocationChannelManager.shared
+    @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @Environment(\.dismiss) private var dismiss
     @State private var draft: String = ""
 
     init(
         geohash: String,
+        senderNickname: String,
         onNotesCountChanged: ((Int) -> Void)? = nil,
         manager: LocationNotesManager? = nil
     ) {
         let gh = geohash.lowercased()
         self.geohash = gh
+        self.senderNickname = senderNickname
         self.onNotesCountChanged = onNotesCountChanged
         _manager = StateObject(wrappedValue: manager ?? LocationNotesManager(geohash: gh))
     }
@@ -113,11 +115,11 @@ struct LocationNotesView: View {
                 Spacer()
                 closeButton
             }
-            if let building = locationManager.locationNames[.building], !building.isEmpty {
+            if let building = locationChannelsModel.locationName(for: .building), !building.isEmpty {
                 Text(building)
                     .font(.bitchatSystem(size: 12, design: .monospaced))
                     .foregroundColor(accentGreen)
-            } else if let block = locationManager.locationNames[.block], !block.isEmpty {
+            } else if let block = locationChannelsModel.locationName(for: .block), !block.isEmpty {
                 Text(block)
                     .font(.bitchatSystem(size: 12, design: .monospaced))
                     .foregroundColor(accentGreen)
@@ -265,7 +267,7 @@ struct LocationNotesView: View {
 
     private func send() {
         guard let content = draft.trimmedOrNilIfEmpty else { return }
-        manager.send(content: content, nickname: viewModel.nickname)
+        manager.send(content: content, nickname: senderNickname)
         draft = ""
     }
 

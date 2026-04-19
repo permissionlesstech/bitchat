@@ -14,8 +14,11 @@ private struct MessageDisplayItem: Identifiable {
 }
 
 struct MessageListView: View {
-    @EnvironmentObject private var viewModel: ChatViewModel
-    @ObservedObject private var locationManager = LocationChannelManager.shared
+    @EnvironmentObject private var publicChatModel: PublicChatModel
+    @EnvironmentObject private var privateInboxModel: PrivateInboxModel
+    @EnvironmentObject private var privateConversationModel: PrivateConversationModel
+    @EnvironmentObject private var conversationUIModel: ConversationUIModel
+    @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -43,14 +46,14 @@ struct MessageListView: View {
             return windowCountPublic
         }()
 
-        let messages = viewModel.getMessages(for: privatePeer)
+        let messages = conversationMessages(for: privatePeer)
         let windowedMessages = Array(messages.suffix(currentWindowCount))
 
         let contextKey: String = {
             if let peer = privatePeer {
                 "dm:\(peer)"
             } else {
-                locationManager.selectedChannel.contextKey
+                locationChannelsModel.selectedChannel.contextKey
             }
         }()
 
@@ -106,12 +109,12 @@ struct MessageListView: View {
                             .padding(.vertical, 1)
                     }
                 }
-                .transaction { tx in if viewModel.isBatchingPublic { tx.disablesAnimations = true } }
+                .transaction { tx in if conversationUIModel.isBatchingPublic { tx.disablesAnimations = true } }
                 .padding(.vertical, 2)
             }
             .onOpenURL(perform: handleOpenURL)
             .onTapGesture(count: 3) {
-                viewModel.sendMessage("/clear")
+                conversationUIModel.clearCurrentConversation()
             }
             .onAppear {
                 scrollToBottom(on: proxy)
@@ -119,13 +122,13 @@ struct MessageListView: View {
             .onChange(of: privatePeer) { _ in
                 scrollToBottom(on: proxy)
             }
-            .onChange(of: viewModel.messages.count) { _ in
+            .onChange(of: publicChatModel.messages.count) { _ in
                 onMessagesChange(proxy: proxy)
             }
-            .onChange(of: viewModel.privateChats) { _ in
+            .onChange(of: privateMessageCount(for: privatePeer)) { _ in
                 onPrivateChatsChange(proxy: proxy)
             }
-            .onChange(of: locationManager.selectedChannel) { newChannel in
+            .onChange(of: locationChannelsModel.selectedChannel) { newChannel in
                 onSelectedChannelChange(newChannel, proxy: proxy)
             }
             .confirmationDialog(
@@ -143,13 +146,7 @@ struct MessageListView: View {
 
                 Button("content.actions.direct_message") {
                     if let peerID = selectedMessageSenderID {
-                        if peerID.isGeoChat {
-                            if let full = viewModel.fullNostrHex(forSenderPeerID: peerID) {
-                                viewModel.startGeohashDM(withPubkeyHex: full)
-                            }
-                        } else {
-                            viewModel.startPrivateChat(with: peerID)
-                        }
+                        privateConversationModel.openConversation(for: peerID)
                         withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
                             showSidebar = true
                         }
@@ -158,25 +155,18 @@ struct MessageListView: View {
 
                 Button("content.actions.hug") {
                     if let sender = selectedMessageSender {
-                        viewModel.sendMessage("/hug @\(sender)")
+                        conversationUIModel.sendHug(to: sender)
                     }
                 }
 
                 Button("content.actions.slap") {
                     if let sender = selectedMessageSender {
-                        viewModel.sendMessage("/slap @\(sender)")
+                        conversationUIModel.sendSlap(to: sender)
                     }
                 }
 
                 Button("content.actions.block", role: .destructive) {
-                    // Prefer direct geohash block when we have a Nostr sender ID
-                    if let peerID = selectedMessageSenderID, peerID.isGeoChat,
-                       let full = viewModel.fullNostrHex(forSenderPeerID: peerID),
-                       let sender = selectedMessageSender {
-                        viewModel.blockGeohashUser(pubkeyHexLowercased: full, displayName: sender)
-                    } else if let sender = selectedMessageSender {
-                        viewModel.sendMessage("/block \(sender)")
-                    }
+                    conversationUIModel.block(peerID: selectedMessageSenderID, displayName: selectedMessageSender)
                 }
 
                 Button("common.cancel", role: .cancel) {}
@@ -185,14 +175,14 @@ struct MessageListView: View {
                 // Also check when view appears
                 if let peerID = privatePeer {
                     // Try multiple times to ensure read receipts are sent
-                    viewModel.markPrivateMessagesAsRead(from: peerID)
+                    privateConversationModel.markMessagesAsRead(from: peerID)
 
                     DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiReadReceiptRetryShortSeconds) {
-                        viewModel.markPrivateMessagesAsRead(from: peerID)
+                        privateConversationModel.markMessagesAsRead(from: peerID)
                     }
 
                     DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiReadReceiptRetryLongSeconds) {
-                        viewModel.markPrivateMessagesAsRead(from: peerID)
+                        privateConversationModel.markMessagesAsRead(from: peerID)
                     }
                 }
             }
@@ -222,7 +212,7 @@ private extension MessageListView {
         Group {
             if message.sender == "system" {
                 systemMessageRow(message)
-            } else if let media = message.mediaAttachment(for: viewModel.nickname) {
+            } else if let media = conversationUIModel.mediaAttachment(for: message) {
                 MediaMessageView(message: message, media: media, imagePreviewURL: $imagePreviewURL)
             } else {
                 TextMessageView(message: message)
@@ -232,7 +222,7 @@ private extension MessageListView {
 
     @ViewBuilder
     func systemMessageRow(_ message: BitchatMessage) -> some View {
-        Text(viewModel.formatMessageAsText(message, colorScheme: colorScheme))
+        Text(conversationUIModel.formatMessage(message, colorScheme: colorScheme))
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -246,7 +236,7 @@ private extension MessageListView {
             if let peer = privatePeer {
                 "dm:\(peer)"
             } else {
-                locationManager.selectedChannel.contextKey
+                locationChannelsModel.selectedChannel.contextKey
             }
         }()
         let preserveID = "\(contextKey)|\(message.id)"
@@ -278,15 +268,12 @@ private extension MessageListView {
             let peerID = PeerID(str: id.removingPercentEncoding ?? id)
             selectedMessageSenderID = peerID
 
-            if peerID.isGeoDM || peerID.isGeoChat {
-                selectedMessageSender = viewModel.geohashDisplayName(for: peerID)
-            } else if let name = viewModel.meshService.peerNickname(peerID: peerID) {
-                selectedMessageSender = name
-            } else {
-                selectedMessageSender = viewModel.messages.last(where: { $0.senderPeerID == peerID && $0.sender != "system" })?.sender
-            }
+            selectedMessageSender = conversationUIModel.senderDisplayName(
+                for: peerID,
+                fallbackMessages: conversationMessages(for: privatePeer)
+            )
 
-            if viewModel.isSelfSender(peerID: peerID, displayName: selectedMessageSender) {
+            if conversationUIModel.isSelfSender(peerID: peerID, displayName: selectedMessageSender) {
                 selectedMessageSender = nil
                 selectedMessageSenderID = nil
             } else {
@@ -297,26 +284,7 @@ private extension MessageListView {
             let gh = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased()
             let allowed = Set("0123456789bcdefghjkmnpqrstuvwxyz")
             guard (2...12).contains(gh.count), gh.allSatisfy({ allowed.contains($0) }) else { return }
-
-            func levelForLength(_ len: Int) -> GeohashChannelLevel {
-                switch len {
-                case 0...2: return .region
-                case 3...4: return .province
-                case 5: return .city
-                case 6: return .neighborhood
-                case 7: return .block
-                default: return .block
-                }
-            }
-
-            let level = levelForLength(gh.count)
-            let channel = GeohashChannel(level: level, geohash: gh)
-
-            let inRegional = LocationChannelManager.shared.availableChannels.contains { $0.geohash == gh }
-            if !inRegional && !LocationChannelManager.shared.availableChannels.isEmpty {
-                LocationChannelManager.shared.markTeleported(for: gh, true)
-            }
-            LocationChannelManager.shared.select(ChannelID.location(channel))
+            locationChannelsModel.openLocationChannel(for: gh)
 
         default:
             return
@@ -337,20 +305,21 @@ private extension MessageListView {
 
     var targetPeerID: String? {
         if let peer = privatePeer,
-           let last = viewModel.getPrivateChatMessages(for: peer).suffix(300).last?.id {
+           let last = privateInboxModel.messages(for: peer).suffix(300).last?.id {
             return "dm:\(peer)|\(last)"
         }
-        if let last = viewModel.messages.suffix(300).last?.id {
-            return "\(locationManager.selectedChannel.contextKey)|\(last)"
+        if let last = publicChatModel.messages.suffix(300).last?.id {
+            return "\(locationChannelsModel.selectedChannel.contextKey)|\(last)"
         }
         return nil
     }
 
     func onMessagesChange(proxy: ScrollViewProxy) {
-        guard privatePeer == nil, let lastMsg = viewModel.messages.last else { return }
+        let messages = publicChatModel.messages
+        guard privatePeer == nil, let lastMsg = messages.last else { return }
 
         // If the newest message is from me, always scroll to bottom
-        let isFromSelf = (lastMsg.sender == viewModel.nickname) || lastMsg.sender.hasPrefix(viewModel.nickname + "#")
+        let isFromSelf = conversationUIModel.isSentByCurrentUser(lastMsg)
         if !isFromSelf && !isAtBottom { // Only autoscroll when user is at/near bottom
             return
         } else { // Ensure we consider ourselves at bottom for subsequent messages
@@ -359,8 +328,8 @@ private extension MessageListView {
 
         func scrollIfNeeded(date: Date) {
             lastScrollTime = date
-            let contextKey = locationManager.selectedChannel.contextKey
-            if let target = viewModel.messages.suffix(windowCountPublic).last.map({ "\(contextKey)|\($0.id)" }) {
+            let contextKey = locationChannelsModel.selectedChannel.contextKey
+            if let target = messages.suffix(windowCountPublic).last.map({ "\(contextKey)|\($0.id)" }) {
                 proxy.scrollTo(target, anchor: .bottom)
             }
         }
@@ -382,12 +351,14 @@ private extension MessageListView {
     }
 
     func onPrivateChatsChange(proxy: ScrollViewProxy) {
-        guard let peerID = privatePeer, let messages = viewModel.privateChats[peerID], let lastMsg = messages.last else {
+        guard let peerID = privatePeer,
+              let lastMsg = privateInboxModel.messages(for: peerID).last else {
             return
         }
+        let messages = privateInboxModel.messages(for: peerID)
 
         // If the newest private message is from me, always scroll
-        let isFromSelf = (lastMsg.sender == viewModel.nickname) || lastMsg.sender.hasPrefix(viewModel.nickname + "#")
+        let isFromSelf = conversationUIModel.isSentByCurrentUser(lastMsg)
         if !isFromSelf && !isAtBottom { // Only autoscroll when user is at/near bottom
             return
         } else {
@@ -428,10 +399,21 @@ private extension MessageListView {
             isAtBottom = true
             windowCountPublic = TransportConfig.uiWindowInitialCountPublic
             let contextKey = "geo:\(ch.geohash)"
-            if let target = viewModel.messages.suffix(windowCountPublic).last?.id.map({ "\(contextKey)|\($0)" }) {
+            if let target = publicChatModel.messages.suffix(windowCountPublic).last?.id.map({ "\(contextKey)|\($0)" }) {
                 proxy.scrollTo(target, anchor: .bottom)
             }
         }
+    }
+
+    func conversationMessages(for privatePeer: PeerID?) -> [BitchatMessage] {
+        if let privatePeer {
+            return privateInboxModel.messages(for: privatePeer)
+        }
+        return publicChatModel.messages
+    }
+
+    func privateMessageCount(for privatePeer: PeerID?) -> Int {
+        conversationMessages(for: privatePeer).count
     }
 }
 
