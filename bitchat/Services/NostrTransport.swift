@@ -156,7 +156,8 @@ final class NostrTransport: Transport, @unchecked Sendable {
     // Public broadcast not supported over Nostr here
     func sendMessage(_ content: String, mentions: [String]) { /* no-op */ }
 
-    func sendPrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) {
+    @discardableResult
+    func sendPrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) -> Bool {
         Task { @MainActor in
             guard let recipientNpub = resolveRecipientNpub(for: peerID),
                   let recipientHex = npubToHex(recipientNpub),
@@ -168,6 +169,7 @@ final class NostrTransport: Transport, @unchecked Sendable {
             }
             sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: senderIdentity)
         }
+        return true
     }
 
     func sendReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {
