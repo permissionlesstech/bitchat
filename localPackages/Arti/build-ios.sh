@@ -23,7 +23,8 @@ OUTPUT_DIR="$SCRIPT_DIR/Frameworks"
 TARGETS=(
     "aarch64-apple-ios"           # iOS device
     "aarch64-apple-ios-sim"       # iOS simulator (Apple Silicon)
-    "aarch64-apple-darwin"        # macOS
+    "x86_64-apple-ios"            # iOS simulator (Intel) - optional
+    "x86_64-apple-darwin"         # macOS (Intel)
 )
 
 # Colors for output
