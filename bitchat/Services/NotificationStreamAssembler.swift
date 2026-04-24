@@ -82,7 +82,7 @@ struct NotificationStreamAssembler {
             var frameLength = framePrefix + payloadLength
             if hasRecipient { frameLength += BinaryProtocol.recipientIDSize }
             if hasSignature { frameLength += BinaryProtocol.signatureSize }
-            
+
             if hasRoute {
                 let routeCountOffset = framePrefix + (hasRecipient ? BinaryProtocol.recipientIDSize : 0)
                 let routeCountIndex = buffer.startIndex + routeCountOffset
@@ -90,7 +90,7 @@ struct NotificationStreamAssembler {
                 let routeCount = Int(buffer[routeCountIndex])
                 frameLength += 1 + (routeCount * BinaryProtocol.senderIDSize)
             }
-            
+
             if isCompressed {
                 let rawLengthFieldBytes = (version == 2) ? 4 : 2
                 if payloadLength < rawLengthFieldBytes {

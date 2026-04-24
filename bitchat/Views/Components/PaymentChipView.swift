@@ -11,7 +11,7 @@ import SwiftUI
 struct PaymentChipView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.openURL) private var openURL
-    
+
     enum PaymentType {
         case cashu(String)
         case lightning(String)
@@ -34,14 +34,14 @@ struct PaymentChipView: View {
                 return URL(string: link)
             }
         }
-        
+
         var emoji: String {
             switch self {
             case .cashu:        "🥜"
             case .lightning:    "⚡"
             }
         }
-        
+
         var label: String {
             switch self {
             case .cashu:
@@ -51,9 +51,9 @@ struct PaymentChipView: View {
             }
         }
     }
-    
+
     let paymentType: PaymentType
-    
+
     private var fgColor: Color {
         colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
     }
@@ -61,7 +61,7 @@ struct PaymentChipView: View {
         colorScheme == .dark ? Color.gray.opacity(0.18) : Color.gray.opacity(0.12)
     }
     private var border: Color { fgColor.opacity(0.25) }
-    
+
     var body: some View {
         Button {
             #if os(iOS)
@@ -94,7 +94,7 @@ struct PaymentChipView: View {
 #Preview {
     let cashuLink = "https://example.com/cashu"
     let lightningLink = "https://example.com/lightning"
-    
+
     List {
         HStack {
             PaymentChipView(paymentType: .cashu(cashuLink))
