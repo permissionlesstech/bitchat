@@ -248,12 +248,22 @@ final class BLEService: NSObject {
     }
     
     // MARK: - Initialization
+
+    private static func shouldEnableCoreBluetooth() -> Bool {
+        // SwiftPM's swift-testing/xctest runner is a command-line tool without an Info.plist.
+        // On macOS, touching CoreBluetooth there can crash due to missing usage-description keys (TCC).
+        let processName = ProcessInfo.processInfo.processName.lowercased()
+        if processName.contains("swiftpm-testing-helper") { return false }
+        if processName.contains("xctest") { return false }
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return false }
+        return true
+    }
     
     init(
         keychain: KeychainManagerProtocol,
         idBridge: NostrIdentityBridge,
         identityManager: SecureIdentityStateManagerProtocol,
-        initializeBluetoothManagers: Bool = true
+        initializeBluetoothManagers: Bool = BLEService.shouldEnableCoreBluetooth()
     ) {
         self.keychain = keychain
         self.idBridge = idBridge
@@ -312,6 +322,8 @@ final class BLEService: NSObject {
             centralManager = CBCentralManager(delegate: self, queue: bleQueue)
             peripheralManager = CBPeripheralManager(delegate: self, queue: bleQueue)
             #endif
+        } else {
+            SecureLogger.info("CoreBluetooth disabled (test environment)", category: .session)
         }
         
         // Single maintenance timer for all periodic tasks (dispatch-based for determinism)
@@ -1576,6 +1588,13 @@ final class BLEService: NSObject {
 
     func sendVerifyResponse(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {
         guard let payload = VerificationService.shared.buildVerifyResponse(noiseKeyHex: noiseKeyHex, nonceA: nonceA) else { return }
+        sendNoisePayload(payload, to: peerID)
+    }
+
+    func sendNdrEvent(to peerID: PeerID, eventJson: String) {
+        guard let data = eventJson.data(using: .utf8), !data.isEmpty else { return }
+        var payload = Data([NoisePayloadType.ndrEvent.rawValue])
+        payload.append(data)
         sendNoisePayload(payload, to: peerID)
     }
 }
@@ -4204,6 +4223,11 @@ extension BLEService {
                 let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
                 notifyUI { [weak self] in
                     self?.delegate?.didReceiveNoisePayload(from: peerID, type: .verifyResponse, payload: Data(payloadData), timestamp: ts)
+                }
+            case .ndrEvent:
+                let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
+                notifyUI { [weak self] in
+                    self?.delegate?.didReceiveNoisePayload(from: peerID, type: .ndrEvent, payload: Data(payloadData), timestamp: ts)
                 }
             case .none:
                 SecureLogger.warning("⚠️ Unknown noise payload type: \(payloadType)")

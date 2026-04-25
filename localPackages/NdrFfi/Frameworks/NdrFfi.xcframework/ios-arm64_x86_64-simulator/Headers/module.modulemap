@@ -1,0 +1,4 @@
+module ndr_ffiFFI {
+    header "ndr_ffiFFI.h"
+    export *
+}
