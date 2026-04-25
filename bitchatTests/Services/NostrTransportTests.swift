@@ -20,6 +20,7 @@ struct NostrTransportTests {
     func reachabilityCacheWarmsFromFavorites() async throws {
         let keychain = MockKeychain()
         let idBridge = NostrIdentityBridge(keychain: keychain)
+        let ndrService = try makeNdrService(label: "reachability-cache")
         let recipient = try NostrIdentity.generate()
         let noiseKey = Data((0..<32).map(UInt8.init))
         let fullPeerID = PeerID(hexData: noiseKey)
@@ -34,6 +35,7 @@ struct NostrTransportTests {
         let transport = NostrTransport(
             keychain: keychain,
             idBridge: idBridge,
+            ndrService: ndrService,
             dependencies: makeDependencies(
                 loadFavorites: { favorites },
                 favoriteStatusForNoiseKey: { favorites[$0] },
@@ -52,6 +54,7 @@ struct NostrTransportTests {
     func favoriteStatusNotificationRefreshesReachability() async throws {
         let keychain = MockKeychain()
         let idBridge = NostrIdentityBridge(keychain: keychain)
+        let ndrService = try makeNdrService(label: "favorite-refresh")
         let recipient = try NostrIdentity.generate()
         let noiseKey = Data((32..<64).map(UInt8.init))
         let peerID = PeerID(hexData: noiseKey).toShort()
@@ -61,6 +64,7 @@ struct NostrTransportTests {
         let transport = NostrTransport(
             keychain: keychain,
             idBridge: idBridge,
+            ndrService: ndrService,
             dependencies: makeDependencies(
                 notificationCenter: notificationCenter,
                 loadFavorites: { favorites },
@@ -88,6 +92,7 @@ struct NostrTransportTests {
     func sendPrivateMessageResolvesShortPeerID() async throws {
         let keychain = MockKeychain()
         let idBridge = NostrIdentityBridge(keychain: keychain)
+        let ndrService = try makeNdrService(label: "private-message")
         let sender = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
         let noiseKey = Data((64..<96).map(UInt8.init))
@@ -101,6 +106,7 @@ struct NostrTransportTests {
         let transport = NostrTransport(
             keychain: keychain,
             idBridge: idBridge,
+            ndrService: ndrService,
             dependencies: makeDependencies(
                 favoriteStatusForNoiseKey: { _ in nil },
                 favoriteStatusForPeerID: { $0 == shortPeerID ? relationship : nil },
@@ -128,11 +134,141 @@ struct NostrTransportTests {
         #expect(probe.pendingGiftWrapIDs.isEmpty)
     }
 
+    @Test("Private message prefers NDR when a session already exists")
+    @MainActor
+    func sendPrivateMessagePrefersNdrWhenSessionExists() throws {
+        let keychain = MockKeychain()
+        let idBridge = NostrIdentityBridge(keychain: keychain)
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let senderRelay = FakeRelayManager()
+        let recipientRelay = FakeRelayManager()
+        let senderStorage = try makeTempDir(label: "transport-ndr-sender")
+        let recipientStorage = try makeTempDir(label: "transport-ndr-recipient")
+        let senderNdr = NdrNostrService(
+            relayManager: senderRelay,
+            deviceId: "transport-ndr-sender",
+            storageDirectoryProvider: { senderStorage }
+        )
+        let recipientNdr = NdrNostrService(
+            relayManager: recipientRelay,
+            deviceId: "transport-ndr-recipient",
+            storageDirectoryProvider: { recipientStorage }
+        )
+        senderNdr.configureIfNeeded(identity: sender)
+        recipientNdr.configureIfNeeded(identity: recipient)
+        try establishMutualSession(senderNdr, recipientNdr, senderIdentity: sender, recipientIdentity: recipient)
+
+        let noiseKey = Data((64..<96).map(UInt8.init))
+        let fullPeerID = PeerID(hexData: noiseKey)
+        let relationship = makeRelationship(
+            peerNoisePublicKey: noiseKey,
+            peerNostrPublicKey: recipient.npub,
+            peerNickname: "Carol"
+        )
+        let transport = NostrTransport(
+            keychain: keychain,
+            idBridge: idBridge,
+            ndrService: senderNdr,
+            dependencies: makeDependencies(
+                favoriteStatusForNoiseKey: { $0 == noiseKey ? relationship : nil },
+                favoriteStatusForPeerID: { _ in nil },
+                currentIdentity: { sender }
+            )
+        )
+        transport.senderPeerID = PeerID(str: "0123456789abcdef")
+
+        let transportUsed = try transport.sendPrivateMessageAndReturnTransport(
+            "hello via ndr",
+            to: fullPeerID,
+            recipientNickname: "Carol",
+            messageID: "pm-ndr"
+        )
+
+        #expect(transportUsed == .ndr)
+        #expect(senderRelay.sentEvents.contains(where: { $0.kind == 1060 }))
+    }
+
+    @Test("Private message stays on NDR when an active session queues before relay publish")
+    @MainActor
+    func sendPrivateMessageDoesNotFallBackWhenNdrQueues() throws {
+        let keychain = MockKeychain()
+        let idBridge = NostrIdentityBridge(keychain: keychain)
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let senderRelay = FakeRelayManager()
+        let recipientRelay = FakeRelayManager()
+        let senderStorage = try makeTempDir(label: "transport-ndr-queued-sender")
+        let recipientStorage = try makeTempDir(label: "transport-ndr-queued-recipient")
+        let senderNdr = NdrNostrService(
+            relayManager: senderRelay,
+            deviceId: "transport-ndr-queued-sender",
+            storageDirectoryProvider: { senderStorage }
+        )
+        let recipientNdr = NdrNostrService(
+            relayManager: recipientRelay,
+            deviceId: "transport-ndr-queued-recipient",
+            storageDirectoryProvider: { recipientStorage }
+        )
+        senderNdr.configureIfNeeded(identity: sender)
+        recipientNdr.configureIfNeeded(identity: recipient)
+
+        let senderInvite = try #require(senderNdr.currentInviteEventJson())
+        let recipientPublishes = recipientNdr.processOutOfBandEventJson(senderInvite)
+        let recipientResponse = try #require(
+            recipientPublishes.first(where: { (try? extractNostrKind(json: $0)) == 1059 }),
+            "Recipient should return a response after processing sender invite"
+        )
+        let recipientBootstrap = try #require(
+            recipientRelay.sentEvents.first(where: { $0.kind == 1060 }),
+            "Recipient should publish a bootstrap message event after accepting sender invite"
+        )
+        _ = senderNdr.processOutOfBandEventJson(recipientResponse)
+        #expect(senderNdr.hasActiveSession(with: recipient.publicKeyHex))
+
+        senderRelay.resetSentEvents()
+        let probe = NostrTransportProbe()
+        let noiseKey = Data((80..<112).map(UInt8.init))
+        let fullPeerID = PeerID(hexData: noiseKey)
+        let relationship = makeRelationship(
+            peerNoisePublicKey: noiseKey,
+            peerNostrPublicKey: recipient.npub,
+            peerNickname: "Queued"
+        )
+        let transport = NostrTransport(
+            keychain: keychain,
+            idBridge: idBridge,
+            ndrService: senderNdr,
+            dependencies: makeDependencies(
+                favoriteStatusForNoiseKey: { $0 == noiseKey ? relationship : nil },
+                favoriteStatusForPeerID: { _ in nil },
+                currentIdentity: { sender },
+                sendEvent: probe.record(event:)
+            )
+        )
+        transport.senderPeerID = PeerID(str: "0123456789abcdef")
+
+        let transportUsed = try transport.sendPrivateMessageAndReturnTransport(
+            "queued via ndr",
+            to: fullPeerID,
+            recipientNickname: "Queued",
+            messageID: "pm-ndr-queued"
+        )
+
+        #expect(transportUsed == .ndr)
+        #expect(probe.sentEvents.isEmpty)
+        #expect(senderRelay.sentEvents.filter { $0.kind == 1060 }.isEmpty)
+
+        senderNdr.processInboundRelayEvent(recipientBootstrap)
+        #expect(senderRelay.sentEvents.contains(where: { $0.kind == 1060 }))
+    }
+
     @Test("Favorite notification embeds current npub")
     @MainActor
     func sendFavoriteNotificationEmbedsCurrentIdentity() async throws {
         let keychain = MockKeychain()
         let idBridge = NostrIdentityBridge(keychain: keychain)
+        let ndrService = try makeNdrService(label: "favorite-notification")
         let sender = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
         let noiseKey = Data((96..<128).map(UInt8.init))
@@ -146,6 +282,7 @@ struct NostrTransportTests {
         let transport = NostrTransport(
             keychain: keychain,
             idBridge: idBridge,
+            ndrService: ndrService,
             dependencies: makeDependencies(
                 favoriteStatusForNoiseKey: { $0 == noiseKey ? relationship : nil },
                 favoriteStatusForPeerID: { _ in nil },
@@ -174,6 +311,7 @@ struct NostrTransportTests {
     func sendDeliveryAckEmitsDeliveredAck() async throws {
         let keychain = MockKeychain()
         let idBridge = NostrIdentityBridge(keychain: keychain)
+        let ndrService = try makeNdrService(label: "delivery-ack")
         let sender = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
         let noiseKey = Data((128..<160).map(UInt8.init))
@@ -187,6 +325,7 @@ struct NostrTransportTests {
         let transport = NostrTransport(
             keychain: keychain,
             idBridge: idBridge,
+            ndrService: ndrService,
             dependencies: makeDependencies(
                 favoriteStatusForNoiseKey: { $0 == noiseKey ? relationship : nil },
                 favoriteStatusForPeerID: { _ in nil },
@@ -216,12 +355,14 @@ struct NostrTransportTests {
     func sendPrivateMessageGeohashRegistersPendingGiftWrap() async throws {
         let keychain = MockKeychain()
         let idBridge = NostrIdentityBridge(keychain: keychain)
+        let ndrService = try makeNdrService(label: "geohash-pm")
         let sender = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
         let probe = NostrTransportProbe()
         let transport = NostrTransport(
             keychain: keychain,
             idBridge: idBridge,
+            ndrService: ndrService,
             dependencies: makeDependencies(
                 currentIdentity: { sender },
                 registerPendingGiftWrap: probe.recordPendingGiftWrap(id:),
@@ -257,6 +398,7 @@ struct NostrTransportTests {
     func readReceiptQueueThrottlesSequentially() async throws {
         let keychain = MockKeychain()
         let idBridge = NostrIdentityBridge(keychain: keychain)
+        let ndrService = try makeNdrService(label: "read-queue")
         let sender = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
         let noiseKey = Data((160..<192).map(UInt8.init))
@@ -270,6 +412,7 @@ struct NostrTransportTests {
         let transport = NostrTransport(
             keychain: keychain,
             idBridge: idBridge,
+            ndrService: ndrService,
             dependencies: makeDependencies(
                 favoriteStatusForNoiseKey: { $0 == noiseKey ? relationship : nil },
                 favoriteStatusForPeerID: { _ in nil },
@@ -313,7 +456,8 @@ struct NostrTransportTests {
     func concurrentReadReceiptEnqueue() async throws {
         let keychain = MockKeychain()
         let idBridge = NostrIdentityBridge(keychain: keychain)
-        let transport = NostrTransport(keychain: keychain, idBridge: idBridge)
+        let ndrService = try makeNdrService(label: "concurrent-read")
+        let transport = NostrTransport(keychain: keychain, idBridge: idBridge, ndrService: ndrService)
         let iterations = 100
 
         await withTaskGroup(of: Void.self) { group in
@@ -336,7 +480,8 @@ struct NostrTransportTests {
     func isPeerReachableThreadSafety() async throws {
         let keychain = MockKeychain()
         let idBridge = NostrIdentityBridge(keychain: keychain)
-        let transport = NostrTransport(keychain: keychain, idBridge: idBridge)
+        let ndrService = try makeNdrService(label: "reachable-thread-safety")
+        let transport = NostrTransport(keychain: keychain, idBridge: idBridge, ndrService: ndrService)
         let iterations = 100
 
         await withTaskGroup(of: Bool.self) { group in
@@ -376,6 +521,16 @@ struct NostrTransportTests {
         )
     }
 
+    @MainActor
+    private func makeNdrService(label: String) throws -> NdrNostrService {
+        let storage = try makeTempDir(label: label)
+        return NdrNostrService(
+            relayManager: FakeRelayManager(),
+            deviceId: "nostr-transport-\(label)",
+            storageDirectoryProvider: { storage }
+        )
+    }
+
     private func makeRelationship(
         peerNoisePublicKey: Data,
         peerNostrPublicKey: String?,
@@ -390,6 +545,42 @@ struct NostrTransportTests {
             favoritedAt: Date(timeIntervalSince1970: 1),
             lastUpdated: Date(timeIntervalSince1970: 2)
         )
+    }
+
+    private func makeTempDir(label: String) throws -> URL {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "bitchat-tests-\(label)-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
+        return dir
+    }
+
+    @MainActor
+    private func establishMutualSession(
+        _ senderService: NdrNostrService,
+        _ recipientService: NdrNostrService,
+        senderIdentity: NostrIdentity,
+        recipientIdentity: NostrIdentity
+    ) throws {
+        var toRecipient: [String] = [try #require(senderService.currentInviteEventJson())]
+        var toSender: [String] = [try #require(recipientService.currentInviteEventJson())]
+
+        for _ in 0..<10 {
+            let nextToSender = toRecipient.flatMap { recipientService.processOutOfBandEventJson($0) }
+            let nextToRecipient = toSender.flatMap { senderService.processOutOfBandEventJson($0) }
+            toRecipient = nextToRecipient
+            toSender = nextToSender
+            if senderService.hasActiveSession(with: recipientIdentity.publicKeyHex),
+               recipientService.hasActiveSession(with: senderIdentity.publicKeyHex) {
+                return
+            }
+            if toRecipient.isEmpty && toSender.isEmpty {
+                break
+            }
+        }
+
+        throw NostrTransportTestError.failedToEstablishNdrSession
     }
 
     private func decodeEmbeddedPayload(
@@ -419,12 +610,20 @@ struct NostrTransportTests {
         }
         return message
     }
+
+    private func extractNostrKind(json: String) throws -> Int {
+        let data = Data(json.utf8)
+        let obj = try JSONSerialization.jsonObject(with: data, options: [])
+        let dict = try #require(obj as? [String: Any], "Nostr event should be a JSON object")
+        return try #require(dict["kind"] as? Int, "Nostr event should include kind")
+    }
 }
 
 private enum NostrTransportTestError: Error {
     case invalidEmbeddedContent
     case invalidPacket
     case invalidPrivateMessage
+    case failedToEstablishNdrSession
 }
 
 private func base64URLDecode(_ string: String) -> Data? {
