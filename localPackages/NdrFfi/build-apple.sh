@@ -64,7 +64,7 @@ for target in aarch64-apple-darwin x86_64-apple-darwin; do
         CXXFLAGS_aarch64_apple_darwin="-mmacosx-version-min=$MACOS_MIN" \
         CFLAGS_x86_64_apple_darwin="-mmacosx-version-min=$MACOS_MIN" \
         CXXFLAGS_x86_64_apple_darwin="-mmacosx-version-min=$MACOS_MIN" \
-        RUSTFLAGS="-C link-arg=-mmacosx-version-min=$MACOS_MIN" \
+        RUSTFLAGS="-C link-arg=-mmacosx-version-min=$MACOS_MIN -C panic=abort" \
         cargo build -p ndr-ffi --lib --release --target "$target"
 done
 
@@ -73,6 +73,7 @@ for target in aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios; do
     env \
         CARGO_TARGET_DIR="$TARGET_DIR" \
         IPHONEOS_DEPLOYMENT_TARGET="$IOS_MIN" \
+        RUSTFLAGS="-C panic=abort" \
         cargo build -p ndr-ffi --lib --release --target "$target"
 done
 
