@@ -97,7 +97,7 @@ enum EncryptionStatus: Equatable {
     case noiseHandshaking   // Currently establishing
     case noiseSecured       // Established but not verified
     case noiseVerified      // Established and verified
-    
+
     var icon: String? {  // Made optional to hide icon when no handshake
         switch self {
         case .none:
@@ -112,7 +112,7 @@ enum EncryptionStatus: Equatable {
             return "checkmark.seal.fill"  // Verified badge
         }
     }
-    
+
     var description: String {
         switch self {
         case .none:
@@ -154,40 +154,40 @@ final class NoiseEncryptionService {
     // Static identity key (persistent across sessions)
     private let staticIdentityKey: Curve25519.KeyAgreement.PrivateKey
     public let staticIdentityPublicKey: Curve25519.KeyAgreement.PublicKey
-    
+
     // Ed25519 signing key (persistent across sessions)
     private let signingKey: Curve25519.Signing.PrivateKey
     public let signingPublicKey: Curve25519.Signing.PublicKey
-    
+
     // Session manager
     private let sessionManager: NoiseSessionManager
-    
+
     // Peer fingerprints (SHA256 hash of static public key)
     private var peerFingerprints: [PeerID: String] = [:]
     private var fingerprintToPeerID: [String: PeerID] = [:]
-    
+
     // Thread safety
     private let serviceQueue = DispatchQueue(label: "chat.bitchat.noise.service", attributes: .concurrent)
-    
+
     // Security components
     private let rateLimiter = NoiseRateLimiter()
     private let keychain: KeychainManagerProtocol
-    
+
     // Session maintenance
     private var rekeyTimer: Timer?
     private let rekeyCheckInterval: TimeInterval = 60.0 // Check every minute
-    
+
     // Callbacks
     private var onPeerAuthenticatedHandlers: [((PeerID, String) -> Void)] = [] // Array of handlers for peer authentication
     var onHandshakeRequired: ((PeerID) -> Void)? // peerID needs handshake
-    
+
     // Add a handler for peer authentication
     func addOnPeerAuthenticatedHandler(_ handler: @escaping (PeerID, String) -> Void) {
         serviceQueue.async(flags: .barrier) { [weak self] in
             self?.onPeerAuthenticatedHandlers.append(handler)
         }
     }
-    
+
     // Legacy support - setting this will add to the handlers array
     var onPeerAuthenticated: ((PeerID, String) -> Void)? {
         get { nil } // Always return nil for backward compatibility
@@ -197,7 +197,7 @@ final class NoiseEncryptionService {
             }
         }
     }
-    
+
     init(keychain: KeychainManagerProtocol) {
         self.keychain = keychain
 
@@ -347,29 +347,29 @@ final class NoiseEncryptionService {
 
         return newKey
     }
-    
+
     // MARK: - Public Interface
-    
+
     /// Get our static public key for sharing
     func getStaticPublicKeyData() -> Data {
         return staticIdentityPublicKey.rawRepresentation
     }
-    
+
     /// Get our signing public key for sharing
     func getSigningPublicKeyData() -> Data {
         return signingPublicKey.rawRepresentation
     }
-    
+
     /// Get our identity fingerprint
     func getIdentityFingerprint() -> String {
         staticIdentityPublicKey.rawRepresentation.sha256Fingerprint()
     }
-    
+
     /// Get peer's public key data
     func getPeerPublicKeyData(_ peerID: PeerID) -> Data? {
         return sessionManager.getRemoteStaticKey(for: peerID)?.rawRepresentation
     }
-    
+
     /// Clear persistent identity (for panic mode)
     func clearPersistentIdentity() {
         // Clear from keychain
@@ -380,7 +380,7 @@ final class NoiseEncryptionService {
         // Stop rekey timer
         stopRekeyTimer()
     }
-    
+
     /// Sign data with our Ed25519 signing key
     func signData(_ data: Data) -> Data? {
         do {
@@ -391,7 +391,7 @@ final class NoiseEncryptionService {
             return nil
         }
     }
-    
+
     /// Verify signature with a peer's Ed25519 public key
     func verifySignature(_ signature: Data, for data: Data, publicKey: Data) -> Bool {
         do {
@@ -428,7 +428,7 @@ final class NoiseEncryptionService {
     private func canonicalAnnounceBytes(peerID: Data, noiseKey: Data, ed25519Key: Data, nickname: String, timestampMs: UInt64) -> Data {
         var out = Data()
         // context
-        let context = "bitchat-announce-v1".data(using: .utf8) ?? Data()
+        let context = Data("bitchat-announce-v1".utf8)
         out.append(UInt8(min(context.count, 255)))
         out.append(context.prefix(255))
         // peerID (expect 8 bytes; pad/truncate to 8 for canonicalization)
@@ -452,156 +452,155 @@ final class NoiseEncryptionService {
         withUnsafeBytes(of: &ts) { raw in out.append(contentsOf: raw) }
         return out
     }
-    
+
     // MARK: - Packet Signing/Verification
-    
+
     /// Sign a BitchatPacket using the noise private key
     func signPacket(_ packet: BitchatPacket) -> BitchatPacket? {
         // Create canonical packet bytes for signing
         guard let packetData = packet.toBinaryDataForSigning() else {
             return nil
         }
-        
+
         // Sign with the noise private key (converted to Ed25519 for signing)
         guard let signature = signData(packetData) else {
             return nil
         }
-        
+
         // Return new packet with signature
         var signedPacket = packet
         signedPacket.signature = signature
         return signedPacket
     }
-    
+
     /// Verify a BitchatPacket signature using the provided public key
     func verifyPacketSignature(_ packet: BitchatPacket, publicKey: Data) -> Bool {
         guard let signature = packet.signature else {
             return false
         }
-        
+
         // Create canonical packet bytes for verification (without signature)
-        
+
         guard let packetData = packet.toBinaryDataForSigning() else {
             return false
         }
-        
+
         // For noise public keys, we need to derive the Ed25519 key for verification
         // This assumes the noise key can be used for Ed25519 signing
         return verifySignature(signature, for: packetData, publicKey: publicKey)
     }
 
-    
+
     // MARK: - Handshake Management
-    
+
     /// Initiate a Noise handshake with a peer
     func initiateHandshake(with peerID: PeerID) throws -> Data {
-        
+
         // Validate peer ID
         guard peerID.isValid else {
             SecureLogger.warning(.authenticationFailed(peerID: peerID.id))
             throw NoiseSecurityError.invalidPeerID
         }
-        
+
         // Check rate limit
         guard rateLimiter.allowHandshake(from: peerID) else {
             SecureLogger.warning(.authenticationFailed(peerID: "Rate limited: \(peerID)"))
             throw NoiseSecurityError.rateLimitExceeded
         }
-        
+
         SecureLogger.info(.handshakeStarted(peerID: peerID.id))
-        
+
         // Return raw handshake data without wrapper
         // The Noise protocol handles its own message format
         let handshakeData = try sessionManager.initiateHandshake(with: peerID)
         return handshakeData
     }
-    
+
     /// Process an incoming handshake message
     func processHandshakeMessage(from peerID: PeerID, message: Data) throws -> Data? {
-        
+
         // Validate peer ID
         guard peerID.isValid else {
             SecureLogger.warning(.authenticationFailed(peerID: peerID.id))
             throw NoiseSecurityError.invalidPeerID
         }
-        
+
         // Validate message size
         guard NoiseSecurityValidator.validateHandshakeMessageSize(message) else {
             SecureLogger.warning(.handshakeFailed(peerID: peerID.id, error: "Message too large"))
             throw NoiseSecurityError.messageTooLarge
         }
-        
+
         // Check rate limit
         guard rateLimiter.allowHandshake(from: peerID) else {
             SecureLogger.warning(.authenticationFailed(peerID: "Rate limited: \(peerID)"))
             throw NoiseSecurityError.rateLimitExceeded
         }
-        
+
         // For handshakes, we process the raw data directly without NoiseMessage wrapper
         // The Noise protocol handles its own message format
         let responsePayload = try sessionManager.handleIncomingHandshake(from: peerID, message: message)
-        
-        
+
         // Return raw response without wrapper
         return responsePayload
     }
-    
+
     /// Check if we have an established session with a peer
     func hasEstablishedSession(with peerID: PeerID) -> Bool {
         return sessionManager.getSession(for: peerID)?.isEstablished() ?? false
     }
-    
+
     /// Check if we have a session (established or handshaking) with a peer
     func hasSession(with peerID: PeerID) -> Bool {
         return sessionManager.getSession(for: peerID) != nil
     }
-    
+
     // MARK: - Encryption/Decryption
-    
+
     /// Encrypt data for a specific peer
     func encrypt(_ data: Data, for peerID: PeerID) throws -> Data {
         // Validate message size
         guard NoiseSecurityValidator.validateMessageSize(data) else {
             throw NoiseSecurityError.messageTooLarge
         }
-        
+
         // Check rate limit
         guard rateLimiter.allowMessage(from: peerID) else {
             throw NoiseSecurityError.rateLimitExceeded
         }
-        
+
         // Check if we have an established session
         guard hasEstablishedSession(with: peerID) else {
             // Signal that handshake is needed
             onHandshakeRequired?(peerID)
             throw NoiseEncryptionError.handshakeRequired
         }
-        
+
         return try sessionManager.encrypt(data, for: peerID)
     }
-    
+
     /// Decrypt data from a specific peer
     func decrypt(_ data: Data, from peerID: PeerID) throws -> Data {
         // Validate message size
         guard NoiseSecurityValidator.validateMessageSize(data) else {
             throw NoiseSecurityError.messageTooLarge
         }
-        
+
         // Check rate limit
         guard rateLimiter.allowMessage(from: peerID) else {
             throw NoiseSecurityError.rateLimitExceeded
         }
-        
+
         // Check if we have an established session
         guard hasEstablishedSession(with: peerID) else {
             throw NoiseEncryptionError.sessionNotEstablished
         }
-        
+
         return try sessionManager.decrypt(data, from: peerID)
     }
-    
+
     // MARK: - Peer Management
-    
+
     /// Get fingerprint for a peer
     func getPeerFingerprint(_ peerID: PeerID) -> String? {
         return serviceQueue.sync {
@@ -628,22 +627,22 @@ final class NoiseEncryptionService {
         }
         SecureLogger.debug("🔓 Cleared Noise session for \(peerID)", category: .session)
     }
-    
+
     // MARK: - Private Helpers
-    
+
     private func handleSessionEstablished(peerID: PeerID, remoteStaticKey: Curve25519.KeyAgreement.PublicKey) {
         // Calculate fingerprint
         let fingerprint = remoteStaticKey.rawRepresentation.sha256Fingerprint()
-        
+
         // Store fingerprint mapping
         serviceQueue.sync(flags: .barrier) {
             peerFingerprints[peerID] = fingerprint
             fingerprintToPeerID[fingerprint] = peerID
         }
-        
+
         // Log security event
         SecureLogger.info(.handshakeCompleted(peerID: peerID.id))
-        
+
         // Notify all handlers about authentication
         serviceQueue.async { [weak self] in
             self?.onPeerAuthenticatedHandlers.forEach { handler in
@@ -651,30 +650,30 @@ final class NoiseEncryptionService {
             }
         }
     }
-        
+
     // MARK: - Session Maintenance
-    
+
     private func startRekeyTimer() {
         rekeyTimer = Timer.scheduledTimer(withTimeInterval: rekeyCheckInterval, repeats: true) { [weak self] _ in
             self?.checkSessionsForRekey()
         }
     }
-    
+
     private func stopRekeyTimer() {
         rekeyTimer?.invalidate()
         rekeyTimer = nil
     }
-    
+
     private func checkSessionsForRekey() {
         let sessionsNeedingRekey = sessionManager.getSessionsNeedingRekey()
-        
+
         for (peerID, needsRekey) in sessionsNeedingRekey where needsRekey {
-            
+
             // Attempt to rekey the session
             do {
                 try sessionManager.initiateRekey(for: peerID)
                 SecureLogger.debug("Key rotation initiated for peer: \(peerID)", category: .security)
-                
+
                 // Signal that handshake is needed
                 onHandshakeRequired?(peerID)
             } catch {
@@ -682,7 +681,7 @@ final class NoiseEncryptionService {
             }
         }
     }
-    
+
     deinit {
         stopRekeyTimer()
     }
@@ -709,13 +708,13 @@ struct NoiseMessage: Codable {
     let type: UInt8
     let sessionID: String  // Random ID for this handshake session
     let payload: Data
-    
+
     init(type: NoiseMessageType, sessionID: String, payload: Data) {
         self.type = type.rawValue
         self.sessionID = sessionID
         self.payload = payload
     }
-    
+
     func encode() -> Data? {
         do {
             let encoded = try JSONEncoder().encode(self)
@@ -724,11 +723,11 @@ struct NoiseMessage: Codable {
             return nil
         }
     }
-    
+
     static func decode(from data: Data) -> NoiseMessage? {
         return try? JSONDecoder().decode(NoiseMessage.self, from: data)
     }
-    
+
     static func decodeWithError(from data: Data) -> NoiseMessage? {
         do {
             let decoded = try JSONDecoder().decode(NoiseMessage.self, from: data)
@@ -737,9 +736,9 @@ struct NoiseMessage: Codable {
             return nil
         }
     }
-    
+
     // MARK: - Binary Encoding
-    
+
     func toBinaryData() -> Data {
         var data = Data()
         data.appendUInt8(type)
@@ -747,19 +746,19 @@ struct NoiseMessage: Codable {
         data.appendData(payload)
         return data
     }
-    
+
     static func fromBinaryData(_ data: Data) -> NoiseMessage? {
         // Create defensive copy
         let dataCopy = Data(data)
-        
+
         var offset = 0
-        
+
         guard let type = dataCopy.readUInt8(at: &offset),
               let sessionID = dataCopy.readUUID(at: &offset),
               let payload = dataCopy.readData(at: &offset) else { return nil }
-        
+
         guard let messageType = NoiseMessageType(rawValue: type) else { return nil }
-        
+
         return NoiseMessage(type: messageType, sessionID: sessionID, payload: payload)
     }
 }

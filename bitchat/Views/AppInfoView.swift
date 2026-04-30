@@ -3,19 +3,19 @@ import SwiftUI
 struct AppInfoView: View {
     @Environment(\.dismiss) var dismiss
     @Environment(\.colorScheme) var colorScheme
-    
+
     private var backgroundColor: Color {
         colorScheme == .dark ? Color.black : Color.white
     }
-    
+
     private var textColor: Color {
         colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
     }
-    
+
     private var secondaryTextColor: Color {
         colorScheme == .dark ? Color.green.opacity(0.8) : Color(red: 0, green: 0.5, blue: 0).opacity(0.8)
     }
-    
+
     // MARK: - Constants
     private enum Strings {
         static let appName: LocalizedStringKey = "app_info.app_name"
@@ -87,7 +87,7 @@ struct AppInfoView: View {
         }
 
     }
-    
+
     var body: some View {
         #if os(macOS)
         VStack(spacing: 0) {
@@ -102,7 +102,7 @@ struct AppInfoView: View {
                 .padding()
             }
             .background(backgroundColor.opacity(0.95))
-            
+
             ScrollView {
                 infoContent
             }
@@ -131,7 +131,7 @@ struct AppInfoView: View {
         }
         #endif
     }
-    
+
     @ViewBuilder
     private var infoContent: some View {
         VStack(alignment: .leading, spacing: 24) {
@@ -140,14 +140,14 @@ struct AppInfoView: View {
                 Text(Strings.appName)
                     .font(.bitchatSystem(size: 32, weight: .bold, design: .monospaced))
                     .foregroundColor(textColor)
-                
+
                 Text(Strings.tagline)
                     .font(.bitchatSystem(size: 16, design: .monospaced))
                     .foregroundColor(secondaryTextColor)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical)
-            
+
             // How to Use
             VStack(alignment: .leading, spacing: 16) {
                 SectionHeader(Strings.HowToUse.title)
@@ -202,15 +202,15 @@ struct AppInfoFeatureInfo {
 struct SectionHeader: View {
     let title: LocalizedStringKey
     @Environment(\.colorScheme) var colorScheme
-    
+
     private var textColor: Color {
         colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
     }
-    
+
     init(_ title: LocalizedStringKey) {
         self.title = title
     }
-    
+
     var body: some View {
         Text(title)
             .font(.bitchatSystem(size: 16, weight: .bold, design: .monospaced))
@@ -222,33 +222,33 @@ struct SectionHeader: View {
 struct FeatureRow: View {
     let info: AppInfoFeatureInfo
     @Environment(\.colorScheme) var colorScheme
-    
+
     private var textColor: Color {
         colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
     }
-    
+
     private var secondaryTextColor: Color {
         colorScheme == .dark ? Color.green.opacity(0.8) : Color(red: 0, green: 0.5, blue: 0).opacity(0.8)
     }
-    
+
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: info.icon)
                 .font(.bitchatSystem(size: 20))
                 .foregroundColor(textColor)
                 .frame(width: 30)
-            
+
             VStack(alignment: .leading, spacing: 4) {
                 Text(info.title)
                     .font(.bitchatSystem(size: 14, weight: .semibold, design: .monospaced))
                     .foregroundColor(textColor)
-                
+
                 Text(info.description)
                     .font(.bitchatSystem(size: 12, design: .monospaced))
                     .foregroundColor(secondaryTextColor)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            
+
             Spacer()
         }
     }
