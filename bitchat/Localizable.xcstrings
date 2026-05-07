@@ -23478,6 +23478,28 @@
         }
       }
     },
+    "geohash_picker.instruction" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tap on map to select a geohash"
+          }
+        }
+      }
+    },
+    "geohash_picker.select_button" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "select"
+          }
+        }
+      }
+    },
     "location_channels.action.open_settings" : {
       "extractionState" : "manual",
       "localizations" : {
