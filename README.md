@@ -8,9 +8,6 @@ A decentralized peer-to-peer messaging app with dual transport architecture: loc
 
 📲 [App Store](https://apps.apple.com/us/app/bitchat-mesh/id6748219622)
 
-> [!WARNING]
-> Private messages have not received external security review and may contain vulnerabilities. Do not use for sensitive use cases, and do not rely on its security until it has been reviewed. Now uses the [Noise Protocol](https://www.noiseprotocol.org) for identity and encryption. Public local chat (the main feature) has no security concerns.
-
 ## License
 
 This project is released into the public domain. See the [LICENSE](LICENSE) file for details.

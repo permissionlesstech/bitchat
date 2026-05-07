@@ -9,6 +9,7 @@
 import BitLogger
 import Foundation
 import CryptoKit
+import BitFoundation
 
 class NoiseSession {
     let peerID: PeerID
@@ -102,23 +103,23 @@ class NoiseSession {
             
             // Check if handshake is complete
             if handshake.isHandshakeComplete() {
-                // Get transport ciphers
-                let (send, receive) = try handshake.getTransportCiphers()
+                // Get transport ciphers and handshake hash (hash captured before split clears state)
+                let (send, receive, hash) = try handshake.getTransportCiphers(useExtractedNonce: true)
                 sendCipher = send
                 receiveCipher = receive
-                
+
                 // Store remote static key
                 remoteStaticPublicKey = handshake.getRemoteStaticPublicKey()
-                
+
                 // Store handshake hash for channel binding
-                handshakeHash = handshake.getHandshakeHash()
-                
+                handshakeHash = hash
+
                 state = .established
                 handshakeState = nil // Clear handshake state
-                
+
                 SecureLogger.debug("NoiseSession[\(peerID)]: Handshake complete (no response needed), transitioning to established")
                 SecureLogger.info(.handshakeCompleted(peerID: peerID.id))
-                
+
                 return nil
             } else {
                 // Generate response
@@ -128,20 +129,20 @@ class NoiseSession {
                 
                 // Check if handshake is complete after writing
                 if handshake.isHandshakeComplete() {
-                    // Get transport ciphers
-                    let (send, receive) = try handshake.getTransportCiphers()
+                    // Get transport ciphers and handshake hash (hash captured before split clears state)
+                    let (send, receive, hash) = try handshake.getTransportCiphers(useExtractedNonce: true)
                     sendCipher = send
                     receiveCipher = receive
-                    
+
                     // Store remote static key
                     remoteStaticPublicKey = handshake.getRemoteStaticPublicKey()
-                    
+
                     // Store handshake hash for channel binding
-                    handshakeHash = handshake.getHandshakeHash()
-                    
+                    handshakeHash = hash
+
                     state = .established
                     handshakeState = nil // Clear handshake state
-                    
+
                     SecureLogger.debug("NoiseSession[\(peerID)]: Handshake complete after writing response, transitioning to established")
                     SecureLogger.info(.handshakeCompleted(peerID: peerID.id))
                 }

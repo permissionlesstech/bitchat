@@ -1,3 +1,4 @@
+import BitFoundation
 import Foundation
 import Combine
 
@@ -58,6 +59,10 @@ protocol Transport: AnyObject {
     // QR verification (optional for transports)
     func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data)
     func sendVerifyResponse(to peerID: PeerID, noiseKeyHex: String, nonceA: Data)
+
+    // Pending file management (BCH-01-002: files held in memory until user accepts)
+    func acceptPendingFile(id: String) -> URL?
+    func declinePendingFile(id: String)
 }
 
 extension Transport {
@@ -70,6 +75,9 @@ extension Transport {
     func sendMessage(_ content: String, mentions: [String], messageID: String, timestamp: Date) {
         sendMessage(content, mentions: mentions)
     }
+
+    func acceptPendingFile(id: String) -> URL? { nil }
+    func declinePendingFile(id: String) {}
 }
 
 protocol TransportPeerEventsDelegate: AnyObject {

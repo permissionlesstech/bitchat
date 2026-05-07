@@ -21,9 +21,7 @@ struct InputValidator {
     /// Rejects strings containing control characters to prevent potential security issues
     /// and UI rendering problems. This strict approach ensures data integrity at input time.
     static func validateUserString(_ string: String, maxLength: Int) -> String? {
-        let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        guard trimmed.count <= maxLength else { return nil }
+        guard let trimmed = string.trimmedOrNilIfEmpty, trimmed.count <= maxLength else { return nil }
 
         // Reject control characters outright instead of rewriting the string.
         // This prevents injection attacks and ensures consistent UI rendering.
@@ -52,11 +50,13 @@ struct InputValidator {
     // MessageType/NoisePayloadType enums; keeping validator free of stale lists.
 
     /// Validates timestamp is reasonable (not too far in past or future)
+    /// BCH-01-011: Reduced from ±1 hour to ±5 minutes to limit replay attack window
     static func validateTimestamp(_ timestamp: Date) -> Bool {
         let now = Date()
-        let oneHourAgo = now.addingTimeInterval(-3600)
-        let oneHourFromNow = now.addingTimeInterval(3600)
-        return timestamp >= oneHourAgo && timestamp <= oneHourFromNow
+        // 5 minutes = 300 seconds (industry standard for replay protection)
+        let fiveMinutesAgo = now.addingTimeInterval(-300)
+        let fiveMinutesFromNow = now.addingTimeInterval(300)
+        return timestamp >= fiveMinutesAgo && timestamp <= fiveMinutesFromNow
     }
 
 }

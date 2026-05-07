@@ -191,5 +191,22 @@ enum MimeType: CaseIterable, Hashable {
 extension MimeType {
     enum Category: String {
         case audio, image, file
+
+        /// Ends with a space
+        var messagePrefix: String {
+            switch self {
+            case .audio: "[voice] "
+            case .image: "[image] "
+            case .file: "[file] "
+            }
+        }
+
+        var mediaDir: String {
+            switch self {
+            case .audio: "voicenotes"
+            case .image: "images"
+            case .file: "files"
+            }
+        }
     }
 }

@@ -44,4 +44,33 @@ final class BitchatFilePacketTests: XCTestCase {
         XCTAssertEqual(decoded.fileSize, UInt64(content.count))
         XCTAssertEqual(decoded.content, content)
     }
+
+    func testDecodeSupportsLegacyEightByteFileSizeTLV() throws {
+        let content = Data([0x01, 0x02, 0x03, 0x04])
+        var data = Data()
+
+        data.append(0x02)
+        data.append(contentsOf: [0x00, 0x08])
+        data.append(contentsOf: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00])
+        data.append(0x04)
+        data.append(contentsOf: [0x00, 0x00, 0x00, 0x04])
+        data.append(content)
+
+        let decoded = try XCTUnwrap(BitchatFilePacket.decode(data))
+        XCTAssertEqual(decoded.fileSize, 256)
+        XCTAssertEqual(decoded.content, content)
+    }
+
+    func testDecodeUsesContentCountWhenFileSizeTLVIsMissing() throws {
+        let content = Data([0xAA, 0xBB, 0xCC])
+        var data = Data()
+
+        data.append(0x04)
+        data.append(contentsOf: [0x00, 0x00, 0x00, 0x03])
+        data.append(content)
+
+        let decoded = try XCTUnwrap(BitchatFilePacket.decode(data))
+        XCTAssertEqual(decoded.fileSize, UInt64(content.count))
+        XCTAssertEqual(decoded.content, content)
+    }
 }

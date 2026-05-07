@@ -1,17 +1,28 @@
 import BitLogger
+import BitFoundation
 import Foundation
 
-/// Routes messages between BLE and Nostr transports
+/// Routes messages using available transports (Mesh, Nostr, etc.)
 @MainActor
 final class MessageRouter {
-    private let mesh: Transport
-    private let nostr: NostrTransport
-    private var outbox: [PeerID: [(content: String, nickname: String, messageID: String)]] = [:] // peerID -> queued messages
+    private let transports: [Transport]
 
-    init(mesh: Transport, nostr: NostrTransport) {
-        self.mesh = mesh
-        self.nostr = nostr
-        self.nostr.senderPeerID = mesh.myPeerID
+    // Outbox entry with timestamp for TTL-based eviction
+    private struct QueuedMessage {
+        let content: String
+        let nickname: String
+        let messageID: String
+        let timestamp: Date
+    }
+
+    private var outbox: [PeerID: [QueuedMessage]] = [:]
+
+    // Outbox limits to prevent unbounded memory growth
+    private static let maxMessagesPerPeer = 100
+    private static let messageTTLSeconds: TimeInterval = 24 * 60 * 60 // 24 hours
+
+    init(transports: [Transport]) {
+        self.transports = transports
 
         // Observe favorites changes to learn Nostr mapping and flush queued messages
         NotificationCenter.default.addObserver(
@@ -37,89 +48,87 @@ final class MessageRouter {
         }
     }
 
+    // MARK: - Transport Selection
+
+    private func reachableTransport(for peerID: PeerID) -> Transport? {
+        transports.first { $0.isPeerReachable(peerID) }
+    }
+
+    private func connectedTransport(for peerID: PeerID) -> Transport? {
+        transports.first { $0.isPeerConnected(peerID) }
+    }
+
+    // MARK: - Message Sending
+
     func sendPrivate(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) {
-        let reachableMesh = mesh.isPeerReachable(peerID)
-        if reachableMesh {
-            SecureLogger.debug("Routing PM via mesh (reachable) to \(peerID.id.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
-            // BLEService will initiate a handshake if needed and queue the message
-            mesh.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname, messageID: messageID)
-        } else if canSendViaNostr(peerID: peerID) {
-            SecureLogger.debug("Routing PM via Nostr to \(peerID.id.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
-            nostr.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname, messageID: messageID)
+        if let transport = reachableTransport(for: peerID) {
+            SecureLogger.debug("Routing PM via \(type(of: transport)) to \(peerID.id.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
+            transport.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname, messageID: messageID)
         } else {
-            // Queue for later (when mesh connects or Nostr mapping appears)
+            // Queue for later with timestamp for TTL tracking
             if outbox[peerID] == nil { outbox[peerID] = [] }
-            outbox[peerID]?.append((content, recipientNickname, messageID))
-            SecureLogger.debug("Queued PM for \(peerID.id.prefix(8))… (no mesh, no Nostr mapping) id=\(messageID.prefix(8))…", category: .session)
+
+            let message = QueuedMessage(content: content, nickname: recipientNickname, messageID: messageID, timestamp: Date())
+            outbox[peerID]?.append(message)
+
+            // Enforce per-peer size limit with FIFO eviction
+            if let count = outbox[peerID]?.count, count > Self.maxMessagesPerPeer {
+                let evicted = outbox[peerID]?.removeFirst()
+                SecureLogger.warning("📤 Outbox overflow for \(peerID.id.prefix(8))… - evicted oldest message: \(evicted?.messageID.prefix(8) ?? "?")…", category: .session)
+            }
+
+            SecureLogger.debug("Queued PM for \(peerID.id.prefix(8))… (no reachable transport) id=\(messageID.prefix(8))… queue=\(outbox[peerID]?.count ?? 0)", category: .session)
         }
     }
 
     func sendReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {
-        // Prefer mesh for reachable peers; BLE will queue if handshake is needed
-        if mesh.isPeerReachable(peerID) {
-            SecureLogger.debug("Routing READ ack via mesh (reachable) to \(peerID.id.prefix(8))… id=\(receipt.originalMessageID.prefix(8))…", category: .session)
-            mesh.sendReadReceipt(receipt, to: peerID)
-        } else {
-            SecureLogger.debug("Routing READ ack via Nostr to \(peerID.id.prefix(8))… id=\(receipt.originalMessageID.prefix(8))…", category: .session)
-            nostr.sendReadReceipt(receipt, to: peerID)
+        if let transport = reachableTransport(for: peerID) {
+            SecureLogger.debug("Routing READ ack via \(type(of: transport)) to \(peerID.id.prefix(8))… id=\(receipt.originalMessageID.prefix(8))…", category: .session)
+            transport.sendReadReceipt(receipt, to: peerID)
+        } else if !transports.isEmpty {
+            SecureLogger.debug("No reachable transport for READ ack to \(peerID.id.prefix(8))…", category: .session)
         }
     }
 
     func sendDeliveryAck(_ messageID: String, to peerID: PeerID) {
-        if mesh.isPeerReachable(peerID) {
-            SecureLogger.debug("Routing DELIVERED ack via mesh (reachable) to \(peerID.id.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
-            mesh.sendDeliveryAck(for: messageID, to: peerID)
-        } else {
-            nostr.sendDeliveryAck(for: messageID, to: peerID)
+        if let transport = reachableTransport(for: peerID) {
+            SecureLogger.debug("Routing DELIVERED ack via \(type(of: transport)) to \(peerID.id.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
+            transport.sendDeliveryAck(for: messageID, to: peerID)
         }
     }
 
     func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {
-        // Route via mesh when connected; else use Nostr
-        if mesh.isPeerConnected(peerID) {
-            mesh.sendFavoriteNotification(to: peerID, isFavorite: isFavorite)
-        } else {
-            nostr.sendFavoriteNotification(to: peerID, isFavorite: isFavorite)
+        if let transport = connectedTransport(for: peerID) {
+            transport.sendFavoriteNotification(to: peerID, isFavorite: isFavorite)
+        } else if let transport = reachableTransport(for: peerID) {
+            transport.sendFavoriteNotification(to: peerID, isFavorite: isFavorite)
         }
     }
 
     // MARK: - Outbox Management
-    private func canSendViaNostr(peerID: PeerID) -> Bool {
-        // Two forms are supported:
-        // - 64-hex Noise public key (32 bytes)
-        // - 16-hex short peer ID (derived from Noise pubkey)
-        if let noiseKey = peerID.noiseKey {
-            if let fav = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey),
-               fav.peerNostrPublicKey != nil {
-                return true
-            }
-        } else if peerID.isShort {
-            if let fav = FavoritesPersistenceService.shared.getFavoriteStatus(forPeerID: peerID),
-               fav.peerNostrPublicKey != nil {
-                return true
-            }
-        }
-        return false
-    }
 
     func flushOutbox(for peerID: PeerID) {
         guard let queued = outbox[peerID], !queued.isEmpty else { return }
         SecureLogger.debug("Flushing outbox for \(peerID.id.prefix(8))… count=\(queued.count)", category: .session)
-        var remaining: [(content: String, nickname: String, messageID: String)] = []
-        // Prefer mesh if connected; else try Nostr if mapping exists
-        for (content, nickname, messageID) in queued {
-            if mesh.isPeerReachable(peerID) {
-                SecureLogger.debug("Outbox -> mesh for \(peerID.id.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
-                mesh.sendPrivateMessage(content, to: peerID, recipientNickname: nickname, messageID: messageID)
-            } else if canSendViaNostr(peerID: peerID) {
-                SecureLogger.debug("Outbox -> Nostr for \(peerID.id.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
-                nostr.sendPrivateMessage(content, to: peerID, recipientNickname: nickname, messageID: messageID)
+
+        let now = Date()
+        var remaining: [QueuedMessage] = []
+
+        for message in queued {
+            // Skip expired messages (TTL exceeded)
+            if now.timeIntervalSince(message.timestamp) > Self.messageTTLSeconds {
+                SecureLogger.debug("⏰ Expired queued message for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))… (age: \(Int(now.timeIntervalSince(message.timestamp)))s)", category: .session)
+                continue
+            }
+
+            if let transport = reachableTransport(for: peerID) {
+                SecureLogger.debug("Outbox -> \(type(of: transport)) for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))…", category: .session)
+                transport.sendPrivateMessage(message.content, to: peerID, recipientNickname: message.nickname, messageID: message.messageID)
             } else {
-                // Keep unsent items queued
-                remaining.append((content, nickname, messageID))
+                remaining.append(message)
             }
         }
-        // Persist only items we could not send
+
         if remaining.isEmpty {
             outbox.removeValue(forKey: peerID)
         } else {
@@ -129,5 +138,16 @@ final class MessageRouter {
 
     func flushAllOutbox() {
         for key in Array(outbox.keys) { flushOutbox(for: key) }
+    }
+
+    /// Periodically clean up expired messages from all outboxes
+    func cleanupExpiredMessages() {
+        let now = Date()
+        for peerID in Array(outbox.keys) {
+            outbox[peerID]?.removeAll { now.timeIntervalSince($0.timestamp) > Self.messageTTLSeconds }
+            if outbox[peerID]?.isEmpty == true {
+                outbox.removeValue(forKey: peerID)
+            }
+        }
     }
 }

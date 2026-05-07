@@ -44,4 +44,12 @@ struct LocationChannelsTests {
         let id2 = try idBridge.deriveIdentity(forGeohash: gh)
         #expect(id1.publicKeyHex == id2.publicKeyHex)
     }
+
+    @Test func geohashNeighborsNearPoleSkipOutOfBoundsCells() {
+        let nearPole = Geohash.encode(latitude: 89.9999, longitude: 0.0, precision: 8)
+        let neighbors = Geohash.neighbors(of: nearPole)
+
+        #expect(neighbors.isEmpty == false)
+        #expect(neighbors.count < 8)
+    }
 }

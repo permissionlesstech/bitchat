@@ -1,3 +1,4 @@
+import struct BitFoundation.BitchatPacket
 import Foundation
 import CryptoKit
 

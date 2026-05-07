@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import BitFoundation
 
 struct DeliveryStatusView: View {
     @Environment(\.colorScheme) private var colorScheme

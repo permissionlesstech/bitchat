@@ -6,10 +6,52 @@
 // For more information, see <https://unlicense.org>
 //
 
-import Testing
 import CryptoKit
 import Foundation
+import Testing
+import BitFoundation
 @testable import bitchat
+
+// MARK: - Test Vector Support
+
+struct NoiseTestVector: Codable {
+    let protocol_name: String
+    let init_prologue: String
+    let init_static: String
+    let init_ephemeral: String
+    let init_psks: [String]?
+    let resp_prologue: String
+    let resp_static: String
+    let resp_ephemeral: String
+    let resp_psks: [String]?
+    let handshake_hash: String?
+    let messages: [TestMessage]
+    
+    struct TestMessage: Codable {
+        let payload: String
+        let ciphertext: String
+    }
+}
+
+extension Data {
+    init?(hex: String) {
+        let cleaned = hex.replacingOccurrences(of: " ", with: "")
+        guard cleaned.count % 2 == 0 else { return nil }
+        var data = Data(capacity: cleaned.count / 2)
+        var index = cleaned.startIndex
+        while index < cleaned.endIndex {
+            let nextIndex = cleaned.index(index, offsetBy: 2)
+            guard let byte = UInt8(cleaned[index..<nextIndex], radix: 16) else { return nil }
+            data.append(byte)
+            index = nextIndex
+        }
+        self = data
+    }
+    
+    func hexString() -> String {
+        map { String(format: "%02x", $0) }.joined()
+    }
+}
 
 struct NoiseProtocolTests {
     
@@ -61,7 +103,7 @@ struct NoiseProtocolTests {
         
         // Bob processes message 3 and completes handshake
         let finalMessage = try bobSession.processHandshakeMessage(message3!)
-        #expect(finalMessage == nil) // No more messages needed
+        #expect(finalMessage == nil)  // No more messages needed
         #expect(bobSession.getState() == .established)
         
         // Verify both sessions are established
@@ -69,8 +111,12 @@ struct NoiseProtocolTests {
         #expect(bobSession.isEstablished())
         
         // Verify they have each other's static keys
-        #expect(aliceSession.getRemoteStaticPublicKey()?.rawRepresentation == bobKey.publicKey.rawRepresentation)
-        #expect(bobSession.getRemoteStaticPublicKey()?.rawRepresentation == aliceKey.publicKey.rawRepresentation)
+        #expect(
+            aliceSession.getRemoteStaticPublicKey()?.rawRepresentation
+            == bobKey.publicKey.rawRepresentation)
+        #expect(
+            bobSession.getRemoteStaticPublicKey()?.rawRepresentation
+            == aliceKey.publicKey.rawRepresentation)
     }
     
     @Test func handshakeStateValidation() throws {
@@ -98,7 +144,7 @@ struct NoiseProtocolTests {
         // Alice encrypts
         let ciphertext = try aliceSession.encrypt(plaintext)
         #expect(ciphertext != plaintext)
-        #expect(ciphertext.count > plaintext.count) // Should have overhead
+        #expect(ciphertext.count > plaintext.count)  // Should have overhead
         
         // Bob decrypts
         let decrypted = try bobSession.decrypt(ciphertext)
@@ -150,16 +196,16 @@ struct NoiseProtocolTests {
     
     @Test func sessionManagerBasicOperations() throws {
         let manager = NoiseSessionManager(localStaticKey: aliceKey, keychain: mockKeychain)
-
+        
         #expect(manager.getSession(for: alicePeerID) == nil)
-
+        
         _ = try manager.initiateHandshake(with: alicePeerID)
         #expect(manager.getSession(for: alicePeerID) != nil)
-
+        
         // Get session
         let retrieved = manager.getSession(for: alicePeerID)
         #expect(retrieved != nil)
-
+        
         // Remove session
         manager.removeSession(for: alicePeerID)
         #expect(manager.getSession(for: alicePeerID) == nil)
@@ -190,11 +236,13 @@ struct NoiseProtocolTests {
         #expect(message2 != nil)
         
         // Continue handshake
-        let message3 = try aliceManager.handleIncomingHandshake(from: alicePeerID, message: message2!)
+        let message3 = try aliceManager.handleIncomingHandshake(
+            from: alicePeerID, message: message2!)
         #expect(message3 != nil)
         
         // Complete handshake
-        let finalMessage = try bobManager.handleIncomingHandshake(from: bobPeerID, message: message3!)
+        let finalMessage = try bobManager.handleIncomingHandshake(
+            from: bobPeerID, message: message3!)
         #expect(finalMessage == nil)
         
         // Both should have established sessions
@@ -258,11 +306,19 @@ struct NoiseProtocolTests {
     
     @Test func sessionIsolation() throws {
         // Create two separate session pairs
-        let aliceSession1 = NoiseSession(peerID: PeerID(str: "peer1"), role: .initiator, keychain: mockKeychain, localStaticKey: aliceKey)
-        let bobSession1 = NoiseSession(peerID: PeerID(str: "alice1"), role: .responder, keychain: mockKeychain, localStaticKey: bobKey)
+        let aliceSession1 = NoiseSession(
+            peerID: PeerID(str: "peer1"), role: .initiator, keychain: mockKeychain,
+            localStaticKey: aliceKey)
+        let bobSession1 = NoiseSession(
+            peerID: PeerID(str: "alice1"), role: .responder, keychain: mockKeychain,
+            localStaticKey: bobKey)
         
-        let aliceSession2 = NoiseSession(peerID: PeerID(str: "peer2"), role: .initiator, keychain: mockKeychain, localStaticKey: aliceKey)
-        let bobSession2 = NoiseSession(peerID: PeerID(str: "alice2"), role: .responder, keychain: mockKeychain, localStaticKey: bobKey)
+        let aliceSession2 = NoiseSession(
+            peerID: PeerID(str: "peer2"), role: .initiator, keychain: mockKeychain,
+            localStaticKey: aliceKey)
+        let bobSession2 = NoiseSession(
+            peerID: PeerID(str: "alice2"), role: .responder, keychain: mockKeychain,
+            localStaticKey: bobKey)
         
         // Establish both pairs
         try performHandshake(initiator: aliceSession1, responder: bobSession1)
@@ -305,17 +361,20 @@ struct NoiseProtocolTests {
         _ = try aliceManager.decrypt(message2, from: alicePeerID)
         
         // Simulate Bob restart by creating new manager with same key
-        let bobManagerRestarted = NoiseSessionManager(localStaticKey: bobKey, keychain: mockKeychain)
+        let bobManagerRestarted = NoiseSessionManager(
+            localStaticKey: bobKey, keychain: mockKeychain)
         
         // Bob initiates new handshake after restart
         let newHandshake1 = try bobManagerRestarted.initiateHandshake(with: bobPeerID)
         
         // Alice should accept the new handshake (clearing old session)
-        let newHandshake2 = try aliceManager.handleIncomingHandshake(from: alicePeerID, message: newHandshake1)
+        let newHandshake2 = try aliceManager.handleIncomingHandshake(
+            from: alicePeerID, message: newHandshake1)
         #expect(newHandshake2 != nil)
         
         // Complete the new handshake
-        let newHandshake3 = try bobManagerRestarted.handleIncomingHandshake(from: bobPeerID, message: newHandshake2!)
+        let newHandshake3 = try bobManagerRestarted.handleIncomingHandshake(
+            from: bobPeerID, message: newHandshake2!)
         #expect(newHandshake3 != nil)
         _ = try aliceManager.handleIncomingHandshake(from: alicePeerID, message: newHandshake3!)
         
@@ -328,8 +387,10 @@ struct NoiseProtocolTests {
     
     @Test func nonceDesynchronizationRecovery() throws {
         // Create two sessions
-        let aliceSession = NoiseSession(peerID: alicePeerID, role: .initiator, keychain: mockKeychain, localStaticKey: aliceKey)
-        let bobSession = NoiseSession(peerID: bobPeerID, role: .responder, keychain: mockKeychain, localStaticKey: bobKey)
+        let aliceSession = NoiseSession(
+            peerID: alicePeerID, role: .initiator, keychain: mockKeychain, localStaticKey: aliceKey)
+        let bobSession = NoiseSession(
+            peerID: bobPeerID, role: .responder, keychain: mockKeychain, localStaticKey: bobKey)
         
         // Establish sessions
         try performHandshake(initiator: aliceSession, responder: bobSession)
@@ -361,7 +422,8 @@ struct NoiseProtocolTests {
         
         let messageCount = 100
         
-        try await confirmation("All messages encrypted and decrypted", expectedCount: messageCount) { completion in
+        try await confirmation("All messages encrypted and decrypted", expectedCount: messageCount)
+        { completion in
             var encryptedMessages: [Int: Data] = [:]
             // Encrypt messages sequentially to avoid nonce races in manager
             for i in 0..<messageCount {
@@ -412,7 +474,7 @@ struct NoiseProtocolTests {
         
         // Create a corrupted message
         var encrypted = try aliceManager.encrypt("Test".data(using: .utf8)!, for: alicePeerID)
-        encrypted[10] ^= 0xFF // Corrupt the data
+        encrypted[10] ^= 0xFF  // Corrupt the data
         
         // Decryption should fail
         if #available(macOS 14.4, iOS 17.4, *) {
@@ -454,11 +516,13 @@ struct NoiseProtocolTests {
         let newHandshake1 = try aliceManager.initiateHandshake(with: alicePeerID)
         
         // Bob should accept the new handshake even though he has a valid session
-        let newHandshake2 = try bobManager.handleIncomingHandshake(from: bobPeerID, message: newHandshake1)
+        let newHandshake2 = try bobManager.handleIncomingHandshake(
+            from: bobPeerID, message: newHandshake1)
         #expect(newHandshake2 != nil, "Bob should accept handshake despite having valid session")
         
         // Complete the handshake
-        let newHandshake3 = try aliceManager.handleIncomingHandshake(from: alicePeerID, message: newHandshake2!)
+        let newHandshake3 = try aliceManager.handleIncomingHandshake(
+            from: alicePeerID, message: newHandshake2!)
         #expect(newHandshake3 != nil)
         _ = try bobManager.handleIncomingHandshake(from: bobPeerID, message: newHandshake3!)
         
@@ -489,7 +553,8 @@ struct NoiseProtocolTests {
         }
         
         // With nonce carried in packet, decryption should not throw here
-        let desyncMessage = try aliceManager.encrypt("This now succeeds".data(using: .utf8)!, for: alicePeerID)
+        let desyncMessage = try aliceManager.encrypt(
+            "This now succeeds".data(using: .utf8)!, for: alicePeerID)
         #expect(throws: Never.self) {
             try bobManager.decrypt(desyncMessage, from: bobPeerID)
         }
@@ -499,11 +564,13 @@ struct NoiseProtocolTests {
         let rehandshake1 = try bobManager.initiateHandshake(with: bobPeerID)
         
         // Alice should accept despite having a "valid" (but desynced) session
-        let rehandshake2 = try aliceManager.handleIncomingHandshake(from: alicePeerID, message: rehandshake1)
+        let rehandshake2 = try aliceManager.handleIncomingHandshake(
+            from: alicePeerID, message: rehandshake1)
         #expect(rehandshake2 != nil, "Alice should accept handshake to fix desync")
         
         // Complete handshake
-        let rehandshake3 = try bobManager.handleIncomingHandshake(from: bobPeerID, message: rehandshake2!)
+        let rehandshake3 = try bobManager.handleIncomingHandshake(
+            from: bobPeerID, message: rehandshake2!)
         #expect(rehandshake3 != nil)
         _ = try aliceManager.handleIncomingHandshake(from: alicePeerID, message: rehandshake3!)
         
@@ -512,6 +579,18 @@ struct NoiseProtocolTests {
         let encryptedResync = try aliceManager.encrypt(testResynced, for: alicePeerID)
         let decryptedResync = try bobManager.decrypt(encryptedResync, from: bobPeerID)
         #expect(decryptedResync == testResynced)
+    }
+    
+    // MARK: - Test Vector Tests
+    
+    @Test func noiseTestVectors() throws {
+        // Load test vectors from bundle
+        let testVectors = try loadTestVectors()
+        
+        for (index, testVector) in testVectors.enumerated() {
+            print("Running test vector \(index + 1): \(testVector.protocol_name)")
+            try runTestVector(testVector)
+        }
     }
     
     // MARK: - Helper Methods
@@ -523,10 +602,346 @@ struct NoiseProtocolTests {
         _ = try responder.processHandshakeMessage(msg3)
     }
     
-    private func establishManagerSessions(aliceManager: NoiseSessionManager, bobManager: NoiseSessionManager) throws {
+    private func establishManagerSessions(
+        aliceManager: NoiseSessionManager, bobManager: NoiseSessionManager
+    ) throws {
         let msg1 = try aliceManager.initiateHandshake(with: alicePeerID)
         let msg2 = try bobManager.handleIncomingHandshake(from: bobPeerID, message: msg1)!
         let msg3 = try aliceManager.handleIncomingHandshake(from: alicePeerID, message: msg2)!
         _ = try bobManager.handleIncomingHandshake(from: bobPeerID, message: msg3)
+    }
+    
+    private func loadTestVectors() throws -> [NoiseTestVector] {
+        // Try to load from test bundle
+        let testBundle = Bundle(for: MockKeychain.self)
+        guard let url = testBundle.url(forResource: "NoiseTestVectors", withExtension: "json")
+        else {
+            throw NSError(
+                domain: "NoiseTests", code: 1,
+                userInfo: [
+                    NSLocalizedDescriptionKey: "Could not find NoiseTestVectors.json in test bundle"
+                ])
+        }
+        
+        let data = try Data(contentsOf: url)
+        return try JSONDecoder().decode([NoiseTestVector].self, from: data)
+    }
+    
+    private func runTestVector(_ testVector: NoiseTestVector) throws {
+        // Parse test inputs
+        guard let initStatic = Data(hex: testVector.init_static),
+              let initEphemeral = Data(hex: testVector.init_ephemeral),
+              let respStatic = Data(hex: testVector.resp_static),
+              let respEphemeral = Data(hex: testVector.resp_ephemeral),
+              let prologue = Data(hex: testVector.init_prologue)
+        else {
+            throw NSError(
+                domain: "NoiseTests", code: 2,
+                userInfo: [NSLocalizedDescriptionKey: "Failed to parse test vector hex strings"])
+        }
+        
+        let expectedHash = testVector.handshake_hash.flatMap { Data(hex: $0) }
+        
+        // Create keys
+        guard
+            let initStaticKey = try? Curve25519.KeyAgreement.PrivateKey(
+                rawRepresentation: initStatic),
+            let initEphemeralKey = try? Curve25519.KeyAgreement.PrivateKey(
+                rawRepresentation: initEphemeral),
+            let respStaticKey = try? Curve25519.KeyAgreement.PrivateKey(
+                rawRepresentation: respStatic),
+            let respEphemeralKey = try? Curve25519.KeyAgreement.PrivateKey(
+                rawRepresentation: respEphemeral)
+        else {
+            throw NSError(
+                domain: "NoiseTests", code: 3,
+                userInfo: [NSLocalizedDescriptionKey: "Failed to create keys from test vectors"])
+        }
+        
+        let keychain = MockKeychain()
+        
+        // Create handshake states
+        let initiatorHandshake = NoiseHandshakeState(
+            role: .initiator,
+            pattern: .XX,
+            keychain: keychain,
+            localStaticKey: initStaticKey,
+            prologue: prologue,
+            predeterminedEphemeralKey: initEphemeralKey
+        )
+        
+        let responderHandshake = NoiseHandshakeState(
+            role: .responder,
+            pattern: .XX,
+            keychain: keychain,
+            localStaticKey: respStaticKey,
+            prologue: prologue,
+            predeterminedEphemeralKey: respEphemeralKey
+        )
+        
+        // For XX pattern, we have 3 handshake messages, then transport messages
+        // The test vector messages are ordered as: [msg1, msg2, msg3, transport1, transport2, ...]
+        
+        guard testVector.messages.count >= 3 else {
+            throw NSError(
+                domain: "NoiseTests", code: 5,
+                userInfo: [NSLocalizedDescriptionKey: "Test vector must have at least 3 messages for XX pattern"])
+        }
+        
+        // Message 1: Initiator -> Responder (e)
+        guard let payload1 = Data(hex: testVector.messages[0].payload),
+              let expectedCiphertext1 = Data(hex: testVector.messages[0].ciphertext) else {
+            throw NSError(
+                domain: "NoiseTests", code: 4,
+                userInfo: [NSLocalizedDescriptionKey: "Message 1: Failed to parse hex"])
+        }
+        
+        let msg1 = try initiatorHandshake.writeMessage(payload: payload1)
+        #expect(!msg1.isEmpty, "Message 1 should not be empty")
+        #expect(msg1 == expectedCiphertext1, "Message 1 ciphertext should match expected value. Got: \(msg1.hexString()), Expected: \(expectedCiphertext1.hexString())")
+        
+        let decrypted1 = try responderHandshake.readMessage(msg1)
+        #expect(decrypted1 == payload1, "Message 1: Decrypted payload should match original")
+        
+        // Message 2: Responder -> Initiator (e, ee, s, es)
+        guard let payload2 = Data(hex: testVector.messages[1].payload),
+              let expectedCiphertext2 = Data(hex: testVector.messages[1].ciphertext) else {
+            throw NSError(
+                domain: "NoiseTests", code: 4,
+                userInfo: [NSLocalizedDescriptionKey: "Message 2: Failed to parse hex"])
+        }
+        
+        let msg2 = try responderHandshake.writeMessage(payload: payload2)
+        #expect(!msg2.isEmpty, "Message 2 should not be empty")
+        #expect(msg2 == expectedCiphertext2, "Message 2 ciphertext should match expected value. Got: \(msg2.hexString()), Expected: \(expectedCiphertext2.hexString())")
+        
+        let decrypted2 = try initiatorHandshake.readMessage(msg2)
+        #expect(decrypted2 == payload2, "Message 2: Decrypted payload should match original")
+        
+        // Message 3: Initiator -> Responder (s, se)
+        guard let payload3 = Data(hex: testVector.messages[2].payload),
+              let expectedCiphertext3 = Data(hex: testVector.messages[2].ciphertext) else {
+            throw NSError(
+                domain: "NoiseTests", code: 4,
+                userInfo: [NSLocalizedDescriptionKey: "Message 3: Failed to parse hex"])
+        }
+        
+        let msg3 = try initiatorHandshake.writeMessage(payload: payload3)
+        #expect(!msg3.isEmpty, "Message 3 should not be empty")
+        #expect(msg3 == expectedCiphertext3, "Message 3 ciphertext should match expected value. Got: \(msg3.hexString()), Expected: \(expectedCiphertext3.hexString())")
+        
+        let decrypted3 = try responderHandshake.readMessage(msg3)
+        #expect(decrypted3 == payload3, "Message 3: Decrypted payload should match original")
+        
+        // Verify handshake hash
+        let initiatorHash = initiatorHandshake.getHandshakeHash()
+        let responderHash = responderHandshake.getHandshakeHash()
+        
+        #expect(initiatorHash == responderHash, "Initiator and responder hashes should match")
+        
+        if let expectedHash = expectedHash {
+            #expect(
+                initiatorHash == expectedHash,
+                "Handshake hash should match expected value from test vector. Got: \(initiatorHash.hexString()), Expected: \(expectedHash.hexString())")
+        }
+        
+        // Get transport ciphers
+        let (initSend, initRecv, _) = try initiatorHandshake.getTransportCiphers(useExtractedNonce: false)
+        let (respSend, respRecv, _) = try responderHandshake.getTransportCiphers(useExtractedNonce: false)
+
+        // Test transport messages (messages after the 3 handshake messages)
+        for index in 3..<testVector.messages.count {
+            let testMsg = testVector.messages[index]
+            guard let payload = Data(hex: testMsg.payload),
+                  let expectedCiphertext = Data(hex: testMsg.ciphertext) else {
+                throw NSError(
+                    domain: "NoiseTests", code: 4,
+                    userInfo: [
+                        NSLocalizedDescriptionKey:
+                            "Message \(index + 1): Failed to parse payload hex"
+                    ])
+            }
+            
+            // Alternate between responder and initiator sending
+            // Responder sends first transport message (since initiator sent last handshake message)
+            let (sender, receiver): (NoiseCipherState, NoiseCipherState)
+            let transportIndex = index - 3
+            if transportIndex % 2 == 0 {
+                // Even transport messages: responder sends
+                sender = respSend
+                receiver = initRecv
+            } else {
+                // Odd transport messages: initiator sends
+                sender = initSend
+                receiver = respRecv
+            }
+            
+            // Encrypt and validate ciphertext matches expected value
+            let ciphertext = try sender.encrypt(plaintext: payload)
+            #expect(
+                ciphertext == expectedCiphertext,
+                "Message \(index + 1) ciphertext should match expected value. Got: \(ciphertext.hexString()), Expected: \(expectedCiphertext.hexString())")
+
+            // Decrypt and validate payload
+            let decrypted = try receiver.decrypt(ciphertext: ciphertext)
+            #expect(
+                decrypted == payload,
+                "Message \(index + 1): Decrypted payload should match original")
+        }
+    }
+
+    // MARK: - DH Shared Secret Clearing Tests
+
+    @Test func secureClearCalledDuringHandshake() throws {
+        // Use TrackingMockKeychain to verify secureClear is called
+        let trackingKeychain = TrackingMockKeychain()
+
+        let aliceKey = Curve25519.KeyAgreement.PrivateKey()
+        let bobKey = Curve25519.KeyAgreement.PrivateKey()
+
+        let alice = NoiseSession(
+            peerID: PeerID(str: "alice-test"),
+            role: .initiator,
+            keychain: trackingKeychain,
+            localStaticKey: aliceKey
+        )
+
+        let bob = NoiseSession(
+            peerID: PeerID(str: "bob-test"),
+            role: .responder,
+            keychain: trackingKeychain,
+            localStaticKey: bobKey
+        )
+
+        // Perform handshake
+        let msg1 = try alice.startHandshake()
+        let msg2 = try bob.processHandshakeMessage(msg1)!
+        let msg3 = try alice.processHandshakeMessage(msg2)!
+        _ = try bob.processHandshakeMessage(msg3)
+
+        // In Noise XX pattern handshake:
+        // - Message 1 (initiator): e token only (no DH)
+        // - Message 2 (responder): e, ee, s, es tokens (2 DH operations: ee, es)
+        // - Message 3 (initiator): s, se tokens (1 DH operation: se)
+        // Total in writeMessage: 3 DH operations (ee, es, se)
+        //
+        // In readMessage (performDHOperation):
+        // - After msg1: no DH
+        // - After msg2: ee, es (2 DH operations)
+        // - After msg3: se (1 DH operation)
+        // Total in performDHOperation: 3 DH operations
+        //
+        // Grand total: 6 DH operations requiring secureClear
+        //
+        // Note: .ss pattern is only used in certain handshake patterns, not XX
+        let expectedMinimumCalls = 6
+        #expect(
+            trackingKeychain.secureClearDataCallCount >= expectedMinimumCalls,
+            "Expected at least \(expectedMinimumCalls) secureClear calls for DH secrets, got \(trackingKeychain.secureClearDataCallCount)"
+        )
+    }
+
+    @Test func encryptionWorksAfterSecureClear() throws {
+        // Verify that encryption/decryption still works correctly after adding secureClear
+        let trackingKeychain = TrackingMockKeychain()
+
+        let aliceKey = Curve25519.KeyAgreement.PrivateKey()
+        let bobKey = Curve25519.KeyAgreement.PrivateKey()
+
+        let alice = NoiseSession(
+            peerID: PeerID(str: "alice-test-enc"),
+            role: .initiator,
+            keychain: trackingKeychain,
+            localStaticKey: aliceKey
+        )
+
+        let bob = NoiseSession(
+            peerID: PeerID(str: "bob-test-enc"),
+            role: .responder,
+            keychain: trackingKeychain,
+            localStaticKey: bobKey
+        )
+
+        // Perform handshake
+        let msg1 = try alice.startHandshake()
+        let msg2 = try bob.processHandshakeMessage(msg1)!
+        let msg3 = try alice.processHandshakeMessage(msg2)!
+        _ = try bob.processHandshakeMessage(msg3)
+
+        // Verify both sessions are established
+        #expect(alice.isEstablished())
+        #expect(bob.isEstablished())
+
+        // Verify secureClear was called (basic sanity check)
+        #expect(trackingKeychain.secureClearDataCallCount > 0)
+
+        // Test encryption from Alice to Bob
+        let plaintext1 = "Hello from Alice after secureClear!".data(using: .utf8)!
+        let ciphertext1 = try alice.encrypt(plaintext1)
+        let decrypted1 = try bob.decrypt(ciphertext1)
+        #expect(decrypted1 == plaintext1)
+
+        // Test encryption from Bob to Alice
+        let plaintext2 = "Hello from Bob after secureClear!".data(using: .utf8)!
+        let ciphertext2 = try bob.encrypt(plaintext2)
+        let decrypted2 = try alice.decrypt(ciphertext2)
+        #expect(decrypted2 == plaintext2)
+
+        // Test multiple messages to verify cipher state is correct
+        for i in 1...10 {
+            let msg = "Message \(i) from Alice".data(using: .utf8)!
+            let cipher = try alice.encrypt(msg)
+            let dec = try bob.decrypt(cipher)
+            #expect(dec == msg)
+        }
+    }
+
+    @Test func secureClearCalledInBothWriteAndReadPaths() throws {
+        // Verify secureClear is called in both writeMessage and readMessage paths
+        // We do this by checking the count increases at each step
+
+        let aliceKeychain = TrackingMockKeychain()
+        let bobKeychain = TrackingMockKeychain()
+
+        let aliceKey = Curve25519.KeyAgreement.PrivateKey()
+        let bobKey = Curve25519.KeyAgreement.PrivateKey()
+
+        let alice = NoiseSession(
+            peerID: PeerID(str: "alice-paths"),
+            role: .initiator,
+            keychain: aliceKeychain,
+            localStaticKey: aliceKey
+        )
+
+        let bob = NoiseSession(
+            peerID: PeerID(str: "bob-paths"),
+            role: .responder,
+            keychain: bobKeychain,
+            localStaticKey: bobKey
+        )
+
+        // Message 1: Alice writes (e token only, no DH)
+        let msg1 = try alice.startHandshake()
+        let aliceCountAfterMsg1 = aliceKeychain.secureClearDataCallCount
+        // No DH in message 1 for initiator
+        #expect(aliceCountAfterMsg1 == 0, "No DH secrets in message 1 write")
+
+        // Bob reads message 1 (no DH) and writes message 2 (ee, es DH operations)
+        let msg2 = try bob.processHandshakeMessage(msg1)!
+        let bobCountAfterMsg2 = bobKeychain.secureClearDataCallCount
+        // Bob should have cleared secrets for: ee (read), es (read), ee (write), es (write)
+        #expect(bobCountAfterMsg2 >= 2, "Bob should clear DH secrets when processing/writing message 2")
+
+        // Alice reads message 2 (ee, es) and writes message 3 (se)
+        let msg3 = try alice.processHandshakeMessage(msg2)!
+        let aliceCountAfterMsg3 = aliceKeychain.secureClearDataCallCount
+        // Alice should have cleared: ee (read), es (read), se (write)
+        #expect(aliceCountAfterMsg3 >= 3, "Alice should clear DH secrets when processing/writing message 3")
+
+        // Bob reads message 3 (se)
+        _ = try bob.processHandshakeMessage(msg3)
+        let bobFinalCount = bobKeychain.secureClearDataCallCount
+        // Bob should have additionally cleared: se (read)
+        #expect(bobFinalCount > bobCountAfterMsg2, "Bob should clear DH secrets when processing message 3")
     }
 }

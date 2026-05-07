@@ -83,6 +83,7 @@
 ///
 
 import BitLogger
+import BitFoundation
 import Foundation
 import CryptoKit
 
@@ -199,63 +200,152 @@ final class NoiseEncryptionService {
     
     init(keychain: KeychainManagerProtocol) {
         self.keychain = keychain
-        
-        // Load or create static identity key (ONLY from keychain)
+
+        // BCH-01-009: Load or create static identity key with proper error handling
         let loadedKey: Curve25519.KeyAgreement.PrivateKey
-        
-        // Try to load from keychain
-        if let identityData = keychain.getIdentityKey(forKey: "noiseStaticKey"),
-           let key = try? Curve25519.KeyAgreement.PrivateKey(rawRepresentation: identityData) {
-            loadedKey = key
-            SecureLogger.logKeyOperation(.load, keyType: "noiseStaticKey", success: true)
-        }
-        // If no identity exists, create new one
-        else {
+
+        // Try to load from keychain with proper error classification
+        let noiseKeyResult = keychain.getIdentityKeyWithResult(forKey: "noiseStaticKey")
+
+        switch noiseKeyResult {
+        case .success(let identityData):
+            if let key = try? Curve25519.KeyAgreement.PrivateKey(rawRepresentation: identityData) {
+                loadedKey = key
+                SecureLogger.logKeyOperation(.load, keyType: "noiseStaticKey", success: true)
+            } else {
+                // Data corrupted, regenerate
+                SecureLogger.warning("Noise static key data corrupted, regenerating", category: .keychain)
+                loadedKey = Self.generateAndSaveNoiseKey(keychain: keychain)
+            }
+
+        case .itemNotFound:
+            // Expected case: no key exists yet, create new one
+            loadedKey = Self.generateAndSaveNoiseKey(keychain: keychain)
+
+        case .accessDenied:
+            // Critical error - log but proceed with ephemeral key (will be lost on restart)
+            SecureLogger.error(NSError(domain: "Keychain", code: -1),
+                               context: "Keychain access denied - using ephemeral identity", category: .keychain)
             loadedKey = Curve25519.KeyAgreement.PrivateKey()
-            let keyData = loadedKey.rawRepresentation
-            
-            // Save to keychain
-            let saved = keychain.saveIdentityKey(keyData, forKey: "noiseStaticKey")
-            SecureLogger.logKeyOperation(.create, keyType: "noiseStaticKey", success: saved)
+
+        case .deviceLocked, .authenticationFailed:
+            // Recoverable error - use ephemeral key and warn
+            SecureLogger.warning("Device locked or auth failed - using ephemeral identity until unlocked", category: .keychain)
+            loadedKey = Curve25519.KeyAgreement.PrivateKey()
+
+        case .otherError(let status):
+            // Unexpected error - log and use ephemeral key
+            SecureLogger.error(NSError(domain: "Keychain", code: Int(status)),
+                               context: "Unexpected keychain error - using ephemeral identity", category: .keychain)
+            loadedKey = Curve25519.KeyAgreement.PrivateKey()
         }
-        
+
         // Now assign the final value
         self.staticIdentityKey = loadedKey
         self.staticIdentityPublicKey = staticIdentityKey.publicKey
-        
-        // Load or create signing key pair
+
+        // BCH-01-009: Load or create signing key pair with proper error handling
         let loadedSigningKey: Curve25519.Signing.PrivateKey
-        
-        // Try to load from keychain
-        if let signingData = keychain.getIdentityKey(forKey: "ed25519SigningKey"),
-           let key = try? Curve25519.Signing.PrivateKey(rawRepresentation: signingData) {
-            loadedSigningKey = key
-            SecureLogger.logKeyOperation(.load, keyType: "ed25519SigningKey", success: true)
-        }
-        // If no signing key exists, create new one
-        else {
+
+        let signingKeyResult = keychain.getIdentityKeyWithResult(forKey: "ed25519SigningKey")
+
+        switch signingKeyResult {
+        case .success(let signingData):
+            if let key = try? Curve25519.Signing.PrivateKey(rawRepresentation: signingData) {
+                loadedSigningKey = key
+                SecureLogger.logKeyOperation(.load, keyType: "ed25519SigningKey", success: true)
+            } else {
+                // Data corrupted, regenerate
+                SecureLogger.warning("Ed25519 signing key data corrupted, regenerating", category: .keychain)
+                loadedSigningKey = Self.generateAndSaveSigningKey(keychain: keychain)
+            }
+
+        case .itemNotFound:
+            // Expected case: no key exists yet, create new one
+            loadedSigningKey = Self.generateAndSaveSigningKey(keychain: keychain)
+
+        case .accessDenied:
+            // Critical error - log but proceed with ephemeral key
+            SecureLogger.error(NSError(domain: "Keychain", code: -1),
+                               context: "Keychain access denied - using ephemeral signing key", category: .keychain)
             loadedSigningKey = Curve25519.Signing.PrivateKey()
-            let keyData = loadedSigningKey.rawRepresentation
-            
-            // Save to keychain
-            let saved = keychain.saveIdentityKey(keyData, forKey: "ed25519SigningKey")
-            SecureLogger.logKeyOperation(.create, keyType: "ed25519SigningKey", success: saved)
+
+        case .deviceLocked, .authenticationFailed:
+            // Recoverable error - use ephemeral key and warn
+            SecureLogger.warning("Device locked or auth failed - using ephemeral signing key until unlocked", category: .keychain)
+            loadedSigningKey = Curve25519.Signing.PrivateKey()
+
+        case .otherError(let status):
+            // Unexpected error - log and use ephemeral key
+            SecureLogger.error(NSError(domain: "Keychain", code: Int(status)),
+                               context: "Unexpected keychain error - using ephemeral signing key", category: .keychain)
+            loadedSigningKey = Curve25519.Signing.PrivateKey()
         }
-        
+
         // Now assign the signing keys
         self.signingKey = loadedSigningKey
         self.signingPublicKey = signingKey.publicKey
-        
+
         // Initialize session manager
         self.sessionManager = NoiseSessionManager(localStaticKey: staticIdentityKey, keychain: keychain)
-        
+
         // Set up session callbacks
         sessionManager.onSessionEstablished = { [weak self] peerID, remoteStaticKey in
             self?.handleSessionEstablished(peerID: peerID, remoteStaticKey: remoteStaticKey)
         }
-        
+
         // Start session maintenance timer
         startRekeyTimer()
+    }
+
+    // MARK: - BCH-01-009: Key Generation Helpers with Save Verification
+
+    /// Generate and save a new Noise static key, verifying the save succeeds
+    private static func generateAndSaveNoiseKey(keychain: KeychainManagerProtocol) -> Curve25519.KeyAgreement.PrivateKey {
+        let newKey = Curve25519.KeyAgreement.PrivateKey()
+        let keyData = newKey.rawRepresentation
+
+        // Save to keychain and verify success
+        let saveResult = keychain.saveIdentityKeyWithResult(keyData, forKey: "noiseStaticKey")
+
+        switch saveResult {
+        case .success:
+            SecureLogger.logKeyOperation(.create, keyType: "noiseStaticKey", success: true)
+        case .duplicateItem:
+            // This shouldn't happen since we just tried to load, but handle it
+            SecureLogger.warning("Noise key already exists (race condition?)", category: .keychain)
+        default:
+            // Save failed - log but continue with the key (it will be ephemeral)
+            SecureLogger.error(NSError(domain: "Keychain", code: -1),
+                               context: "Failed to persist noise static key - identity will be lost on restart",
+                               category: .keychain)
+        }
+
+        return newKey
+    }
+
+    /// Generate and save a new Ed25519 signing key, verifying the save succeeds
+    private static func generateAndSaveSigningKey(keychain: KeychainManagerProtocol) -> Curve25519.Signing.PrivateKey {
+        let newKey = Curve25519.Signing.PrivateKey()
+        let keyData = newKey.rawRepresentation
+
+        // Save to keychain and verify success
+        let saveResult = keychain.saveIdentityKeyWithResult(keyData, forKey: "ed25519SigningKey")
+
+        switch saveResult {
+        case .success:
+            SecureLogger.logKeyOperation(.create, keyType: "ed25519SigningKey", success: true)
+        case .duplicateItem:
+            // This shouldn't happen since we just tried to load, but handle it
+            SecureLogger.warning("Signing key already exists (race condition?)", category: .keychain)
+        default:
+            // Save failed - log but continue with the key (it will be ephemeral)
+            SecureLogger.error(NSError(domain: "Keychain", code: -1),
+                               context: "Failed to persist signing key - identity will be lost on restart",
+                               category: .keychain)
+        }
+
+        return newKey
     }
     
     // MARK: - Public Interface
@@ -526,6 +616,17 @@ final class NoiseEncryptionService {
             fingerprintToPeerID.removeAll()
         }
         rateLimiter.resetAll()
+    }
+
+    /// Clear session for a specific peer (e.g., on decryption failure to allow re-handshake)
+    func clearSession(for peerID: PeerID) {
+        sessionManager.removeSession(for: peerID)
+        serviceQueue.sync(flags: .barrier) {
+            if let fingerprint = peerFingerprints.removeValue(forKey: peerID) {
+                fingerprintToPeerID.removeValue(forKey: fingerprint)
+            }
+        }
+        SecureLogger.debug("🔓 Cleared Noise session for \(peerID)", category: .session)
     }
     
     // MARK: - Private Helpers

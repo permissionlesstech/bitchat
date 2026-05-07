@@ -10,11 +10,12 @@
 		17901751FD8010AFC8E750F2 /* bitchatShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 61F92EBA29C47C0FCC482F1F /* bitchatShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		3EE336D150427F736F32B56C /* P256K in Frameworks */ = {isa = PBXBuildFile; productRef = B1D9136AA0083366353BFA2F /* P256K */; };
 		885BBED78092484A5B069461 /* P256K in Frameworks */ = {isa = PBXBuildFile; productRef = 4EB6BA1B8464F1EA38F4E286 /* P256K */; };
+		A6BCF9482F80953E001CF9B9 /* BitFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = A6BCF9472F80953E001CF9B9 /* BitFoundation */; };
+		A6BCF94A2F809550001CF9B9 /* BitFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = A6BCF9492F809550001CF9B9 /* BitFoundation */; };
 		A6E3E5702E77036A0032EA8A /* BitLogger in Frameworks */ = {isa = PBXBuildFile; productRef = A6E3E56F2E77036A0032EA8A /* BitLogger */; };
 		A6E3E5722E7703760032EA8A /* BitLogger in Frameworks */ = {isa = PBXBuildFile; productRef = A6E3E5712E7703760032EA8A /* BitLogger */; };
 		A6E3EA7F2E7706720032EA8A /* Tor in Frameworks */ = {isa = PBXBuildFile; productRef = A6E3EA7E2E7706720032EA8A /* Tor */; };
 		A6E3EA812E7706A80032EA8A /* Tor in Frameworks */ = {isa = PBXBuildFile; productRef = A6E3EA802E7706A80032EA8A /* Tor */; };
-		A6F183FD2E948783006A9046 /* tor-nolzma.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A6F183FC2E948783006A9046 /* tor-nolzma.xcframework */; };
 		E0A1B2C3D4E5F6012345678D /* relays/online_relays_gps.csv in Resources */ = {isa = PBXBuildFile; fileRef = E0A1B2C3D4E5F6012345678A /* relays/online_relays_gps.csv */; };
 		E0A1B2C3D4E5F6012345678E /* relays/online_relays_gps.csv in Resources */ = {isa = PBXBuildFile; fileRef = E0A1B2C3D4E5F6012345678A /* relays/online_relays_gps.csv */; };
 /* End PBXBuildFile section */
@@ -95,6 +96,24 @@
 			);
 			target = 57CA17A36A2532A6CFF367BB /* bitchatShareExtension */;
 		};
+		C5E027A52ECCDFD700BD6012 /* Exceptions for "bitchatTests" folder in "bitchatTests_macOS" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+				Localization/PrimaryLocalizationKeys.json,
+				README.md,
+			);
+			target = 47FF23248747DD7CB666CB91 /* bitchatTests_macOS */;
+		};
+		C5E027A82ECCDFE200BD6012 /* Exceptions for "bitchatTests" folder in "bitchatTests_iOS" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+				Localization/PrimaryLocalizationKeys.json,
+				README.md,
+			);
+			target = 6CB97DF2EA57234CB3E563B8 /* bitchatTests_iOS */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -118,6 +137,10 @@
 		};
 		A6E32D412E762EAE0032EA8A /* bitchatTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				C5E027A82ECCDFE200BD6012 /* Exceptions for "bitchatTests" folder in "bitchatTests_iOS" target */,
+				C5E027A52ECCDFD700BD6012 /* Exceptions for "bitchatTests" folder in "bitchatTests_macOS" target */,
+			);
 			path = bitchatTests;
 			sourceTree = "<group>";
 		};
@@ -135,15 +158,16 @@
 				A6E3E5722E7703760032EA8A /* BitLogger in Frameworks */,
 				3EE336D150427F736F32B56C /* P256K in Frameworks */,
 				A6E3EA812E7706A80032EA8A /* Tor in Frameworks */,
+				A6BCF94A2F809550001CF9B9 /* BitFoundation in Frameworks */,
 			);
 		};
 		B5A5CC493FFB3D8966548140 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
-				A6F183FD2E948783006A9046 /* tor-nolzma.xcframework in Frameworks */,
 				A6E3E5702E77036A0032EA8A /* BitLogger in Frameworks */,
 				885BBED78092484A5B069461 /* P256K in Frameworks */,
 				A6E3EA7F2E7706720032EA8A /* Tor in Frameworks */,
+				A6BCF9482F80953E001CF9B9 /* BitFoundation in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -203,6 +227,7 @@
 				B1D9136AA0083366353BFA2F /* P256K */,
 				A6E3E5712E7703760032EA8A /* BitLogger */,
 				A6E3EA802E7706A80032EA8A /* Tor */,
+				A6BCF9492F809550001CF9B9 /* BitFoundation */,
 			);
 			productName = bitchat_macOS;
 			productReference = 8F3A7C058C2C8E1A06C8CF8B /* bitchat.app */;
@@ -213,6 +238,7 @@
 			buildConfigurationList = 1C27B5BA3DB46DDF0DBFEF62 /* Build configuration list for PBXNativeTarget "bitchatTests_macOS" */;
 			buildPhases = (
 				5C22AA7B9ACC5A861445C769 /* Sources */,
+				C5E027A42ECCDFD700BD6012 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -245,6 +271,7 @@
 			buildConfigurationList = 38C4AF6313E5037F25CEF30B /* Build configuration list for PBXNativeTarget "bitchatTests_iOS" */;
 			buildPhases = (
 				865C8403EF02C089369A9FCB /* Sources */,
+				C5E027A72ECCDFE200BD6012 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -281,6 +308,7 @@
 				4EB6BA1B8464F1EA38F4E286 /* P256K */,
 				A6E3E56F2E77036A0032EA8A /* BitLogger */,
 				A6E3EA7E2E7706720032EA8A /* Tor */,
+				A6BCF9472F80953E001CF9B9 /* BitFoundation */,
 			);
 			productName = bitchat_iOS;
 			productReference = 96D0D41CA19EE5A772AA8434 /* bitchat.app */;
@@ -321,7 +349,8 @@
 			packageReferences = (
 				B8C407587481BBB190741C93 /* XCRemoteSwiftPackageReference "swift-secp256k1" */,
 				A6E3E56E2E77036A0032EA8A /* XCLocalSwiftPackageReference "localPackages/BitLogger" */,
-				A6E3EA7D2E7706720032EA8A /* XCLocalSwiftPackageReference "localPackages/Tor" */,
+				A6E3EA7D2E7706720032EA8A /* XCLocalSwiftPackageReference "localPackages/Arti" */,
+				A6BCF9462F80953E001CF9B9 /* XCLocalSwiftPackageReference "localPackages/BitFoundation" */,
 			);
 			preferredProjectObjectVersion = 90;
 			projectDirPath = "";
@@ -341,6 +370,16 @@
 			isa = PBXResourcesBuildPhase;
 			files = (
 				E0A1B2C3D4E5F6012345678D /* relays/online_relays_gps.csv in Resources */,
+			);
+		};
+		C5E027A42ECCDFD700BD6012 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+		C5E027A72ECCDFE200BD6012 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
 			);
 		};
 		CD6E8F32BC38357473954F97 /* Resources */ = {
@@ -516,6 +555,7 @@
 				CODE_SIGNING_REQUIRED = YES;
 				CODE_SIGN_ENTITLEMENTS = bitchat/bitchat.entitlements;
 				CODE_SIGN_STYLE = "$(CODE_SIGN_STYLE)";
+				DEVELOPMENT_ASSET_PATHS = bitchat/_PreviewHelpers;
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_PREVIEWS = NO;
 				INFOPLIST_FILE = bitchat/Info.plist;
@@ -526,7 +566,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = "$(MARKETING_VERSION)";
+				MARKETING_VERSION = 1.5.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_BUNDLE_IDENTIFIER)";
 				PRODUCT_NAME = bitchat;
 				SDKROOT = iphoneos;
@@ -576,6 +616,7 @@
 				CODE_SIGNING_REQUIRED = YES;
 				CODE_SIGN_ENTITLEMENTS = bitchat/bitchat.entitlements;
 				CODE_SIGN_STYLE = "$(CODE_SIGN_STYLE)";
+				DEVELOPMENT_ASSET_PATHS = bitchat/_PreviewHelpers;
 				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = bitchat/Info.plist;
@@ -586,7 +627,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = "$(MARKETING_VERSION)";
+				MARKETING_VERSION = 1.5.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_BUNDLE_IDENTIFIER)";
 				PRODUCT_NAME = bitchat;
 				SDKROOT = iphoneos;
@@ -622,7 +663,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = "$(MACOSX_DEPLOYMENT_TARGET)";
-				MARKETING_VERSION = "$(MARKETING_VERSION)";
+				MARKETING_VERSION = 1.5.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_BUNDLE_IDENTIFIER)";
 				PRODUCT_NAME = bitchat;
 				REGISTER_APP_GROUPS = YES;
@@ -714,7 +755,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = "$(MACOSX_DEPLOYMENT_TARGET)";
-				MARKETING_VERSION = "$(MARKETING_VERSION)";
+				MARKETING_VERSION = 1.5.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_BUNDLE_IDENTIFIER)";
 				PRODUCT_NAME = bitchat;
 				REGISTER_APP_GROUPS = YES;
@@ -875,13 +916,17 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
+		A6BCF9462F80953E001CF9B9 /* XCLocalSwiftPackageReference "localPackages/BitFoundation" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = localPackages/BitFoundation;
+		};
 		A6E3E56E2E77036A0032EA8A /* XCLocalSwiftPackageReference "localPackages/BitLogger" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = localPackages/BitLogger;
 		};
-		A6E3EA7D2E7706720032EA8A /* XCLocalSwiftPackageReference "localPackages/Tor" */ = {
+		A6E3EA7D2E7706720032EA8A /* XCLocalSwiftPackageReference "localPackages/Arti" */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = localPackages/Tor;
+			relativePath = localPackages/Arti;
 		};
 /* End XCLocalSwiftPackageReference section */
 
@@ -890,8 +935,8 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/21-DOT-DEV/swift-secp256k1";
 			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 0.21.1;
+				kind = exactVersion;
+				version = 0.21.1;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -901,6 +946,15 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B8C407587481BBB190741C93 /* XCRemoteSwiftPackageReference "swift-secp256k1" */;
 			productName = P256K;
+		};
+		A6BCF9472F80953E001CF9B9 /* BitFoundation */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = BitFoundation;
+		};
+		A6BCF9492F809550001CF9B9 /* BitFoundation */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A6BCF9462F80953E001CF9B9 /* XCLocalSwiftPackageReference "localPackages/BitFoundation" */;
+			productName = BitFoundation;
 		};
 		A6E3E56F2E77036A0032EA8A /* BitLogger */ = {
 			isa = XCSwiftPackageProductDependency;

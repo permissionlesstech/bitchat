@@ -86,10 +86,6 @@ struct AppInfoView: View {
             ]
         }
 
-        enum Warning {
-            static let title: LocalizedStringKey = "app_info.warning.title"
-            static let message: LocalizedStringKey = "app_info.warning.message"
-        }
     }
     
     var body: some View {
@@ -192,24 +188,6 @@ struct AppInfoView: View {
 
                 FeatureRow(info: Strings.Privacy.panic)
             }
-
-            // Warning
-            VStack(alignment: .leading, spacing: 6) {
-                SectionHeader(Strings.Warning.title)
-                    .foregroundColor(Color.red)
-                
-                Text(Strings.Warning.message)
-                    .font(.bitchatSystem(size: 14, design: .monospaced))
-                    .foregroundColor(Color.red)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.top, 6)
-            .padding(.bottom, 16)
-            .padding(.horizontal)
-            .background(Color.red.opacity(0.1))
-            .cornerRadius(8)
-            
-            .padding(.top)
         }
         .padding()
     }

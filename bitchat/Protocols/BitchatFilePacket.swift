@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import BitFoundation
 import BitLogger
 
 /// TLV payload for Bluetooth mesh file transfers (voice notes, images, generic files).

@@ -5,21 +5,6 @@
 
 import Foundation
 
-private enum RegexCache {
-    static let cashu: NSRegularExpression = {
-        try! NSRegularExpression(pattern: "\\bcashu[AB][A-Za-z0-9._-]{40,}\\b", options: [])
-    }()
-    static let lightningScheme: NSRegularExpression = {
-        try! NSRegularExpression(pattern: "(?i)\\blightning:[^\\s]+", options: [])
-    }()
-    static let bolt11: NSRegularExpression = {
-        try! NSRegularExpression(pattern: "(?i)\\bln(bc|tb|bcrt)[0-9][a-z0-9]{50,}\\b", options: [])
-    }()
-    static let lnurl: NSRegularExpression = {
-        try! NSRegularExpression(pattern: "(?i)\\blnurl1[a-z0-9]{20,}\\b", options: [])
-    }()
-}
-
 extension String {
     // Detect if there is an extremely long token (no whitespace/newlines) that could break layout
     func hasVeryLongToken(threshold: Int) -> Bool {
@@ -38,7 +23,7 @@ extension String {
 
     // Extract up to `max` Cashu tokens (cashuA/cashuB). Allow dot '.' and shorter lengths.
     func extractCashuLinks(max: Int = 3) -> [String] {
-        let regex = RegexCache.cashu
+        let regex = MessageFormattingEngine.Patterns.cashu
         let ns = self as NSString
         let range = NSRange(location: 0, length: ns.length)
         var found: [String] = []
@@ -59,19 +44,19 @@ extension String {
         let ns = self as NSString
         let full = NSRange(location: 0, length: ns.length)
         // lightning: scheme
-        for m in RegexCache.lightningScheme.matches(in: self, range: full) {
+        for m in MessageFormattingEngine.Patterns.lightningScheme.matches(in: self, range: full) {
             let s = ns.substring(with: m.range(at: 0))
             results.append(s)
             if results.count >= max { return results }
         }
         // BOLT11
-        for m in RegexCache.bolt11.matches(in: self, range: full) {
+        for m in MessageFormattingEngine.Patterns.bolt11.matches(in: self, range: full) {
             let s = ns.substring(with: m.range(at: 0))
             results.append("lightning:\(s)")
             if results.count >= max { return results }
         }
         // LNURL bech32
-        for m in RegexCache.lnurl.matches(in: self, range: full) {
+        for m in MessageFormattingEngine.Patterns.lnurl.matches(in: self, range: full) {
             let s = ns.substring(with: m.range(at: 0))
             results.append("lightning:\(s)")
             if results.count >= max { return results }

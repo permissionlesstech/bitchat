@@ -6,6 +6,7 @@
 // For more information, see <https://unlicense.org>
 //
 
+import BitFoundation
 import Foundation
 import UserNotifications
 #if os(iOS)
@@ -14,13 +15,103 @@ import UIKit
 import AppKit
 #endif
 
+protocol NotificationAuthorizing {
+    func requestAuthorization(
+        options: UNAuthorizationOptions,
+        completionHandler: @escaping (Bool, Error?) -> Void
+    )
+}
+
+protocol NotificationRequestDelivering {
+    func add(_ request: UNNotificationRequest)
+}
+
+private final class NotificationCenterAuthorizerAdapter: NotificationAuthorizing {
+    private let center: UNUserNotificationCenter
+
+    init(center: UNUserNotificationCenter) {
+        self.center = center
+    }
+
+    func requestAuthorization(
+        options: UNAuthorizationOptions,
+        completionHandler: @escaping (Bool, Error?) -> Void
+    ) {
+        center.requestAuthorization(options: options, completionHandler: completionHandler)
+    }
+}
+
+private final class NotificationCenterRequestDelivererAdapter: NotificationRequestDelivering {
+    private let center: UNUserNotificationCenter
+
+    init(center: UNUserNotificationCenter) {
+        self.center = center
+    }
+
+    func add(_ request: UNNotificationRequest) {
+        Task {
+            try? await center.add(request)
+        }
+    }
+}
+
+private struct NoopNotificationAuthorizer: NotificationAuthorizing {
+    func requestAuthorization(
+        options: UNAuthorizationOptions,
+        completionHandler: @escaping (Bool, Error?) -> Void
+    ) {
+        completionHandler(false, nil)
+    }
+}
+
+private struct NoopNotificationRequestDeliverer: NotificationRequestDelivering {
+    func add(_ request: UNNotificationRequest) {}
+}
+
 final class NotificationService {
     static let shared = NotificationService()
-    
-    private init() {}
-    
+
+    private let isRunningTestsProvider: () -> Bool
+    private let authorizer: NotificationAuthorizing
+    private let requestDeliverer: NotificationRequestDelivering
+
+    /// Returns true if running in test environment (XCTest, Swift Testing, or CI)
+    private var isRunningTests: Bool {
+        isRunningTestsProvider()
+    }
+
+    private init() {
+        self.isRunningTestsProvider = {
+            let env = ProcessInfo.processInfo.environment
+            return NSClassFromString("XCTestCase") != nil ||
+                   env["XCTestConfigurationFilePath"] != nil ||
+                   env["XCTestBundlePath"] != nil ||
+                   env["GITHUB_ACTIONS"] != nil ||
+                   env["CI"] != nil
+        }
+        if isRunningTestsProvider() {
+            self.authorizer = NoopNotificationAuthorizer()
+            self.requestDeliverer = NoopNotificationRequestDeliverer()
+        } else {
+            let center = UNUserNotificationCenter.current()
+            self.authorizer = NotificationCenterAuthorizerAdapter(center: center)
+            self.requestDeliverer = NotificationCenterRequestDelivererAdapter(center: center)
+        }
+    }
+
+    internal init(
+        isRunningTestsProvider: @escaping () -> Bool,
+        authorizer: NotificationAuthorizing,
+        requestDeliverer: NotificationRequestDelivering
+    ) {
+        self.isRunningTestsProvider = isRunningTestsProvider
+        self.authorizer = authorizer
+        self.requestDeliverer = requestDeliverer
+    }
+
     func requestAuthorization() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+        guard !isRunningTests else { return }
+        authorizer.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if granted {
                 // Permission granted
             } else {
@@ -36,6 +127,7 @@ final class NotificationService {
         userInfo: [String: Any]? = nil,
         interruptionLevel: UNNotificationInterruptionLevel = .active
     ) {
+        guard !isRunningTests else { return }
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
@@ -52,7 +144,7 @@ final class NotificationService {
             trigger: nil // Deliver immediately
         )
 
-        UNUserNotificationCenter.current().add(request)
+        requestDeliverer.add(request)
     }
     
     func sendMentionNotification(from sender: String, message: String) {
@@ -84,7 +176,8 @@ final class NotificationService {
     func sendNetworkAvailableNotification(peerCount: Int) {
         let title = "👥 bitchatters nearby!"
         let body = peerCount == 1 ? "1 person around" : "\(peerCount) people around"
-        let identifier = "network-available-\(Date().timeIntervalSince1970)"
+        // Fixed identifier so iOS updates the existing notification instead of creating new ones
+        let identifier = "network-available"
 
         sendLocalNotification(
             title: title,

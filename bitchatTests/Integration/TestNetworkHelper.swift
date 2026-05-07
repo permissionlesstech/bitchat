@@ -8,6 +8,7 @@
 
 import Foundation
 import CryptoKit
+@testable import BitFoundation // to avoid unnecessary public's
 @testable import bitchat
 
 final class TestNetworkHelper {

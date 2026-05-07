@@ -1,0 +1,4 @@
+module ArtiC {
+    header "arti.h"
+    export *
+}

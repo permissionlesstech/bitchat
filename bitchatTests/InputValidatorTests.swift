@@ -131,6 +131,7 @@ struct InputValidatorTests {
     }
 
     // MARK: - Timestamp Validation Tests
+    // BCH-01-011: Window reduced from ±1 hour to ±5 minutes
 
     @Test func currentTimestampIsValid() throws {
         let now = Date()
@@ -138,29 +139,46 @@ struct InputValidatorTests {
         #expect(result == true)
     }
 
-    @Test func timestampWithinOneHourIsValid() throws {
+    @Test func timestampWithinFiveMinutesIsValid() throws {
+        // 2 minutes ago should be valid (within 5-minute window)
+        let twoMinutesAgo = Date().addingTimeInterval(-2 * 60)
+        let result = InputValidator.validateTimestamp(twoMinutesAgo)
+        #expect(result == true)
+    }
+
+    @Test func timestampThirtyMinutesAgoIsInvalid() throws {
+        // BCH-01-011: 30 minutes is now outside the 5-minute window
         let thirtyMinutesAgo = Date().addingTimeInterval(-30 * 60)
         let result = InputValidator.validateTimestamp(thirtyMinutesAgo)
-        #expect(result == true)
-    }
-
-    @Test func timestampTwoHoursAgoIsInvalid() throws {
-        let twoHoursAgo = Date().addingTimeInterval(-2 * 3600)
-        let result = InputValidator.validateTimestamp(twoHoursAgo)
         #expect(result == false)
     }
 
-    @Test func timestampTwoHoursInFutureIsInvalid() throws {
-        let twoHoursFromNow = Date().addingTimeInterval(2 * 3600)
-        let result = InputValidator.validateTimestamp(twoHoursFromNow)
+    @Test func timestampTenMinutesAgoIsInvalid() throws {
+        // 10 minutes is outside the 5-minute window
+        let tenMinutesAgo = Date().addingTimeInterval(-10 * 60)
+        let result = InputValidator.validateTimestamp(tenMinutesAgo)
         #expect(result == false)
     }
 
-    @Test func timestampAtOneHourBoundaryIsValid() throws {
-        // Just slightly within the one-hour window
-        let almostOneHourAgo = Date().addingTimeInterval(-3599)
-        let result = InputValidator.validateTimestamp(almostOneHourAgo)
+    @Test func timestampTenMinutesInFutureIsInvalid() throws {
+        // 10 minutes in future is outside the 5-minute window
+        let tenMinutesFromNow = Date().addingTimeInterval(10 * 60)
+        let result = InputValidator.validateTimestamp(tenMinutesFromNow)
+        #expect(result == false)
+    }
+
+    @Test func timestampAtFiveMinuteBoundaryIsValid() throws {
+        // Just slightly within the five-minute window (299 seconds)
+        let almostFiveMinutesAgo = Date().addingTimeInterval(-299)
+        let result = InputValidator.validateTimestamp(almostFiveMinutesAgo)
         #expect(result == true)
+    }
+
+    @Test func timestampJustOutsideFiveMinuteWindowIsInvalid() throws {
+        // Just outside the five-minute window (301 seconds)
+        let justOverFiveMinutesAgo = Date().addingTimeInterval(-301)
+        let result = InputValidator.validateTimestamp(justOverFiveMinutesAgo)
+        #expect(result == false)
     }
 
     // MARK: - Edge Cases

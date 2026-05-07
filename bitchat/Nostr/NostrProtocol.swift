@@ -18,6 +18,7 @@ struct NostrProtocol {
         case seal = 13 // NIP-17 sealed event
         case giftWrap = 1059 // NIP-59 gift wrap
         case ephemeralEvent = 20000
+        case geohashPresence = 20001
     }
     
     /// Create a NIP-17 private message
@@ -108,7 +109,7 @@ struct NostrProtocol {
         teleported: Bool = false
     ) throws -> NostrEvent {
         var tags = [["g", geohash]]
-        if let nickname = nickname?.trimmingCharacters(in: .whitespacesAndNewlines), !nickname.isEmpty {
+        if let nickname = nickname?.trimmedOrNilIfEmpty {
             tags.append(["n", nickname])
         }
         if teleported {
@@ -125,6 +126,24 @@ struct NostrProtocol {
         return try event.sign(with: schnorrKey)
     }
 
+    /// Create a geohash presence heartbeat (kind 20001)
+    /// Must contain empty content and NO nickname tag
+    static func createGeohashPresenceEvent(
+        geohash: String,
+        senderIdentity: NostrIdentity
+    ) throws -> NostrEvent {
+        let tags = [["g", geohash]]
+        let event = NostrEvent(
+            pubkey: senderIdentity.publicKeyHex,
+            createdAt: Date(),
+            kind: .geohashPresence,
+            tags: tags,
+            content: ""
+        )
+        let schnorrKey = try senderIdentity.schnorrSigningKey()
+        return try event.sign(with: schnorrKey)
+    }
+
     /// Create a persistent location note (kind 1: text note) tagged to a street-level geohash.
     static func createGeohashTextNote(
         content: String,
@@ -133,7 +152,7 @@ struct NostrProtocol {
         nickname: String? = nil
     ) throws -> NostrEvent {
         var tags = [["g", geohash]]
-        if let nickname = nickname?.trimmingCharacters(in: .whitespacesAndNewlines), !nickname.isEmpty {
+        if let nickname = nickname?.trimmedOrNilIfEmpty {
             tags.append(["n", nickname])
         }
         let event = NostrEvent(
@@ -508,6 +527,26 @@ struct NostrEvent: Codable {
         signed.id = eventId
         signed.sig = signatureHex
         return signed
+    }
+
+    /// Validate that the event ID and Schnorr signature match the content and pubkey.
+    /// Returns false when the signature is missing, malformed, or does not verify.
+    func isValidSignature() -> Bool {
+        guard let sig = sig,
+              let sigData = Data(hexString: sig),
+              let pubData = Data(hexString: pubkey),
+              sigData.count == 64,
+              pubData.count == 32,
+              let signature = try? P256K.Schnorr.SchnorrSignature(dataRepresentation: sigData),
+              let (expectedId, eventHash) = try? calculateEventId(),
+              expectedId == id
+        else {
+            return false
+        }
+
+        var messageBytes = [UInt8](eventHash)
+        let xonly = P256K.Schnorr.XonlyKey(dataRepresentation: pubData)
+        return xonly.isValid(signature, for: &messageBytes)
     }
     
     private func calculateEventId() throws -> (String, Data) {

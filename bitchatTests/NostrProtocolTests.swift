@@ -8,6 +8,7 @@
 import Testing
 import CryptoKit
 import Foundation
+import BitFoundation
 @testable import bitchat
 
 struct NostrProtocolTests {
@@ -211,6 +212,45 @@ struct NostrProtocolTests {
         default:
             Issue.record("Unexpected payload type: \(payload.type)")
         }
+    }
+
+    @Test func nostrEventSignatureVerification_roundTrip() throws {
+        let identity = try NostrIdentity.generate()
+        let event = NostrEvent(
+            pubkey: identity.publicKeyHex,
+            createdAt: Date(),
+            kind: .ephemeralEvent,
+            tags: [],
+            content: "Signed event"
+        )
+        let signed = try event.sign(with: identity.schnorrSigningKey())
+        #expect(signed.isValidSignature())
+    }
+
+    @Test func nostrEventSignatureVerification_detectsTamper() throws {
+        let identity = try NostrIdentity.generate()
+        let event = NostrEvent(
+            pubkey: identity.publicKeyHex,
+            createdAt: Date(),
+            kind: .ephemeralEvent,
+            tags: [],
+            content: "Original"
+        )
+        var signed = try event.sign(with: identity.schnorrSigningKey())
+        signed.id = "deadbeef"
+        #expect(!signed.isValidSignature())
+    }
+
+    @Test func geohashNotesSingleFilter_encodesExpectedTagShape() throws {
+        let since = Date(timeIntervalSince1970: 1_234_567)
+        let filter = NostrFilter.geohashNotes("u4pruyd", since: since, limit: 42)
+        let data = try JSONEncoder().encode(filter)
+        let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        #expect(object["kinds"] as? [Int] == [1])
+        #expect(object["#g"] as? [String] == ["u4pruyd"])
+        #expect(object["since"] as? Int == 1_234_567)
+        #expect(object["limit"] as? Int == 42)
     }
 
     // MARK: - Helpers

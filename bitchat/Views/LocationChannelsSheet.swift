@@ -41,10 +41,31 @@ struct LocationChannelsSheet: View {
         }
 
         static func levelTitle(for level: GeohashChannelLevel, count: Int) -> String {
+            // High-precision uncertainty: if count is 0 for high-precision levels,
+            // show "?" because presence broadcasting is disabled for privacy.
+            let isHighPrecision = (level == .neighborhood || level == .block || level == .building)
+            if isHighPrecision && count == 0 {
+                return String(
+                    format: String(localized: "location_channels.row_title_unknown", defaultValue: "%@ [? people]"),
+                    locale: .current,
+                    level.displayName
+                )
+            }
             return rowTitle(label: level.displayName, count: count)
         }
 
         static func bookmarkTitle(geohash: String, count: Int) -> String {
+            // Check precision for bookmarks too
+            let len = geohash.count
+            // Neighborhood=6, Block=7, Building=8+
+            let isHighPrecision = (len >= 6)
+            if isHighPrecision && count == 0 {
+                return String(
+                    format: String(localized: "location_channels.row_title_unknown", defaultValue: "%@ [? people]"),
+                    locale: .current,
+                    "#\(geohash)"
+                )
+            }
             return rowTitle(label: "#\(geohash)", count: count)
         }
 
@@ -105,7 +126,7 @@ struct LocationChannelsSheet: View {
                             Text(Strings.permissionDenied)
                                 .font(.bitchatSystem(size: 12, design: .monospaced))
                                 .foregroundColor(.secondary)
-                            Button(Strings.openSettings) { openSystemLocationSettings() }
+                            Button(Strings.openSettings, action: SystemSettings.location.open)
                             .buttonStyle(.plain)
                         }
                     case LocationChannelManager.PermissionState.authorized:
@@ -226,9 +247,7 @@ struct LocationChannelsSheet: View {
                     sectionDivider
                     torToggleSection
                         .padding(.top, 12)
-                    Button(action: {
-                        openSystemLocationSettings()
-                    }) {
+                    Button(action: SystemSettings.location.open) {
                         Text(Strings.removeAccess)
                             .font(.bitchatSystem(size: 12, design: .monospaced))
                             .foregroundColor(Color(red: 0.75, green: 0.1, blue: 0.1))
@@ -320,7 +339,7 @@ struct LocationChannelsSheet: View {
                     }
                     #endif
                 let normalized = customGeohash
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .trimmed
                     .lowercased()
                     .replacingOccurrences(of: "#", with: "")
                 let isValid = validateGeohash(normalized)
@@ -394,7 +413,7 @@ struct LocationChannelsSheet: View {
                         isPresented = false
                     }
                     .padding(.vertical, 6)
-                    .onAppear { bookmarks.resolveNameIfNeeded(for: gh) }
+                    .onAppear { bookmarks.resolveBookmarkNameIfNeeded(for: gh) }
 
                     if index < entries.count - 1 {
                         sectionDivider
@@ -467,7 +486,7 @@ struct LocationChannelsSheet: View {
     // Split a title like "#mesh [3 people]" into base and suffix "[3 people]"
     private func splitTitleAndCount(_ s: String) -> (base: String, countSuffix: String?) {
         guard let idx = s.lastIndex(of: "[") else { return (s, nil) }
-        let prefix = String(s[..<idx]).trimmingCharacters(in: .whitespaces)
+        let prefix = String(s[..<idx]).trimmed
         let suffix = String(s[idx...])
         return (prefix, suffix)
     }
@@ -640,19 +659,3 @@ extension LocationChannelsSheet {
         }
     }
 }
-
-// MARK: - Open Settings helper
-private func openSystemLocationSettings() {
-    #if os(iOS)
-    if let url = URL(string: UIApplication.openSettingsURLString) {
-        UIApplication.shared.open(url)
-    }
-    #else
-    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices") {
-        NSWorkspace.shared.open(url)
-    } else if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security") {
-        NSWorkspace.shared.open(url)
-    }
-    #endif
-}
-

@@ -7,10 +7,14 @@
 //
 
 import Foundation
+import BitFoundation
 @testable import bitchat
 
 final class MockIdentityManager: SecureIdentityStateManagerProtocol {
     private let keychain: KeychainManagerProtocol
+    private var blockedFingerprints: Set<String> = []
+    private var blockedNostrPubkeys: Set<String> = []
+    private var socialIdentities: [String: SocialIdentity] = [:]
     
     init(_ keychain: KeychainManagerProtocol) {
         self.keychain = keychain
@@ -23,7 +27,7 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
     func forceSave() {}
     
     func getSocialIdentity(for fingerprint: String) -> SocialIdentity? {
-        nil
+        socialIdentities[fingerprint]
     }
     
     func upsertCryptographicIdentity(fingerprint: String, noisePublicKey: Data, signingPublicKey: Data?, claimedNickname: String?) {}
@@ -32,7 +36,14 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
         []
     }
     
-    func updateSocialIdentity(_ identity: SocialIdentity) {}
+    func updateSocialIdentity(_ identity: SocialIdentity) {
+        socialIdentities[identity.fingerprint] = identity
+        if identity.isBlocked {
+            blockedFingerprints.insert(identity.fingerprint)
+        } else {
+            blockedFingerprints.remove(identity.fingerprint)
+        }
+    }
     
     func getFavorites() -> Set<String> {
         Set()
@@ -45,19 +56,46 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
     }
     
     func isBlocked(fingerprint: String) -> Bool {
-        false
+        blockedFingerprints.contains(fingerprint) || socialIdentities[fingerprint]?.isBlocked == true
     }
     
-    func setBlocked(_ fingerprint: String, isBlocked: Bool) {}
+    func setBlocked(_ fingerprint: String, isBlocked: Bool) {
+        if var identity = socialIdentities[fingerprint] {
+            identity.isBlocked = isBlocked
+            socialIdentities[fingerprint] = identity
+        } else {
+            let identity = SocialIdentity(
+                fingerprint: fingerprint,
+                localPetname: nil,
+                claimedNickname: "",
+                trustLevel: .unknown,
+                isFavorite: false,
+                isBlocked: isBlocked,
+                notes: nil
+            )
+            socialIdentities[fingerprint] = identity
+        }
+        if isBlocked {
+            blockedFingerprints.insert(fingerprint)
+        } else {
+            blockedFingerprints.remove(fingerprint)
+        }
+    }
     
     func isNostrBlocked(pubkeyHexLowercased: String) -> Bool {
-        true
+        blockedNostrPubkeys.contains(pubkeyHexLowercased)
     }
     
-    func setNostrBlocked(_ pubkeyHexLowercased: String, isBlocked: Bool) {}
+    func setNostrBlocked(_ pubkeyHexLowercased: String, isBlocked: Bool) {
+        if isBlocked {
+            blockedNostrPubkeys.insert(pubkeyHexLowercased)
+        } else {
+            blockedNostrPubkeys.remove(pubkeyHexLowercased)
+        }
+    }
     
     func getBlockedNostrPubkeys() -> Set<String> {
-        Set()
+        blockedNostrPubkeys
     }
     
     func registerEphemeralSession(peerID: PeerID, handshakeState: HandshakeState) {}

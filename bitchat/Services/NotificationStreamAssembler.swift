@@ -7,6 +7,7 @@
 //
 
 import BitLogger
+import BitFoundation
 import Foundation
 
 struct NotificationStreamAssembler {
@@ -62,6 +63,7 @@ struct NotificationStreamAssembler {
             let hasRecipient = (flags & BinaryProtocol.Flags.hasRecipient) != 0
             let hasSignature = (flags & BinaryProtocol.Flags.hasSignature) != 0
             let isCompressed = (flags & BinaryProtocol.Flags.isCompressed) != 0
+            let hasRoute = (version >= 2) && (flags & BinaryProtocol.Flags.hasRoute) != 0
 
             let lengthOffset = 12
             let payloadLength: Int
@@ -80,6 +82,15 @@ struct NotificationStreamAssembler {
             var frameLength = framePrefix + payloadLength
             if hasRecipient { frameLength += BinaryProtocol.recipientIDSize }
             if hasSignature { frameLength += BinaryProtocol.signatureSize }
+            
+            if hasRoute {
+                let routeCountOffset = framePrefix + (hasRecipient ? BinaryProtocol.recipientIDSize : 0)
+                let routeCountIndex = buffer.startIndex + routeCountOffset
+                guard buffer.count > routeCountOffset else { break }
+                let routeCount = Int(buffer[routeCountIndex])
+                frameLength += 1 + (routeCount * BinaryProtocol.senderIDSize)
+            }
+            
             if isCompressed {
                 let rawLengthFieldBytes = (version == 2) ? 4 : 2
                 if payloadLength < rawLengthFieldBytes {

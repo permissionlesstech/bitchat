@@ -15,10 +15,22 @@ struct PaymentChipView: View {
     enum PaymentType {
         case cashu(String)
         case lightning(String)
-        
+
+        private static let cashuAllowedCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+
+        private static func cashuURL(from link: String) -> URL? {
+            if let url = URL(string: link), url.scheme != nil {
+                return url
+            }
+            let enc = link.addingPercentEncoding(withAllowedCharacters: cashuAllowedCharacters) ?? link
+            return URL(string: "cashu:\(enc)")
+        }
+
         var url: URL? {
             switch self {
-            case .cashu(let link), .lightning(let link):
+            case .cashu(let link):
+                return Self.cashuURL(from: link)
+            case .lightning(let link):
                 return URL(string: link)
             }
         }

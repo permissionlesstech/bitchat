@@ -9,6 +9,7 @@
 import Testing
 import Foundation
 import CoreBluetooth
+import BitFoundation
 @testable import bitchat
 
 struct FragmentationTests {
@@ -28,33 +29,33 @@ struct FragmentationTests {
         let ble = BLEService(
             keychain: mockKeychain,
             idBridge: idBridge,
-            identityManager: mockIdentityManager
+            identityManager: mockIdentityManager,
+            initializeBluetoothManagers: false
         )
         let capture = CaptureDelegate()
         ble.delegate = capture
-        
+
         // Construct a big packet (3KB) from a remote sender (not our own ID)
         let remoteShortID = PeerID(str: "1122334455667788")
         let original = makeLargePublicPacket(senderShortHex: remoteShortID, size: 3_000)
-        
+
         // Use a small fragment size to ensure multiple pieces
         let fragments = fragmentPacket(original, fragmentSize: 400)
-        
+
         // Shuffle fragments to simulate out-of-order arrival
         let shuffled = fragments.shuffled()
-        
-        // Inject fragments spaced out to avoid concurrent mutation inside BLEService
+
+        // Send fragments sequentially with small delays (no fire-and-forget Tasks)
         for (i, fragment) in shuffled.enumerated() {
-            let delay = 5 * Double(i) * 0.001
-            Task {
-                try await sleep(delay)
-                ble._test_handlePacket(fragment, fromPeerID: remoteShortID)
+            if i > 0 {
+                try await Task.sleep(for: .milliseconds(5))
             }
+            ble._test_handlePacket(fragment, fromPeerID: remoteShortID)
         }
-        
-        // Allow async processing
-        try await sleep(0.5)
-        
+
+        // Wait for delegate callback with proper timeout
+        try await capture.waitForPublicMessages(count: 1, timeout: .seconds(2))
+
         #expect(capture.publicMessages.count == 1)
         #expect(capture.publicMessages.first?.content.count == 3_000)
     }
@@ -64,30 +65,31 @@ struct FragmentationTests {
         let ble = BLEService(
             keychain: mockKeychain,
             idBridge: idBridge,
-            identityManager: mockIdentityManager
+            identityManager: mockIdentityManager,
+            initializeBluetoothManagers: false
         )
         let capture = CaptureDelegate()
         ble.delegate = capture
-        
+
         let remoteShortID = PeerID(str: "A1B2C3D4E5F60708")
         let original = makeLargePublicPacket(senderShortHex: remoteShortID, size: 2048)
         var frags = fragmentPacket(original, fragmentSize: 300)
-        
+
         // Duplicate one fragment
         if let dup = frags.first {
             frags.insert(dup, at: 1)
         }
-        
+
+        // Send fragments sequentially with small delays (no fire-and-forget Tasks)
         for (i, fragment) in frags.enumerated() {
-            let delay = 5 * Double(i) * 0.001
-            Task {
-                try await sleep(delay)
-                ble._test_handlePacket(fragment, fromPeerID: remoteShortID)
+            if i > 0 {
+                try await Task.sleep(for: .milliseconds(5))
             }
+            ble._test_handlePacket(fragment, fromPeerID: remoteShortID)
         }
-        
-        // Allow async processing
-        try await sleep(0.5)
+
+        // Wait for delegate callback with proper timeout
+        try await capture.waitForPublicMessages(count: 1, timeout: .seconds(2))
 
         #expect(capture.publicMessages.count == 1)
         #expect(capture.publicMessages.first?.content.count == 2048)
@@ -98,7 +100,8 @@ struct FragmentationTests {
         let ble = BLEService(
             keychain: mockKeychain,
             idBridge: idBridge,
-            identityManager: mockIdentityManager
+            identityManager: mockIdentityManager,
+            initializeBluetoothManagers: false
         )
         let capture = CaptureDelegate()
         ble.delegate = capture
@@ -135,7 +138,7 @@ struct FragmentationTests {
             }
         }
 
-        try await sleep(1.0)
+        try await capture.waitForReceivedMessages(count: 1, timeout: .seconds(2))
 
         let message = try #require(capture.receivedMessages.first, "Expected file transfer message")
         #expect(message.content.hasPrefix("[file]"))
@@ -154,7 +157,8 @@ struct FragmentationTests {
         let ble = BLEService(
             keychain: mockKeychain,
             idBridge: idBridge,
-            identityManager: mockIdentityManager
+            identityManager: mockIdentityManager,
+            initializeBluetoothManagers: false
         )
         let capture = CaptureDelegate()
         ble.delegate = capture
@@ -196,12 +200,140 @@ struct FragmentationTests {
 }
 
 extension FragmentationTests {
-    private final class CaptureDelegate: BitchatDelegate {
-        var publicMessages: [(peerID: PeerID, nickname: String, content: String)] = []
-        var receivedMessages: [BitchatMessage] = []
-        func didReceiveMessage(_ message: BitchatMessage) {
-            receivedMessages.append(message)
+    /// Thread-safe delegate that supports awaiting message delivery
+    private final class CaptureDelegate: BitchatDelegate, @unchecked Sendable {
+        private let lock = NSLock()
+        private var _publicMessages: [(peerID: PeerID, nickname: String, content: String)] = []
+        private var _receivedMessages: [BitchatMessage] = []
+        private var publicMessageContinuation: CheckedContinuation<Void, Never>?
+        private var receivedMessageContinuation: CheckedContinuation<Void, Never>?
+        private var expectedPublicMessageCount: Int = 0
+        private var expectedReceivedMessageCount: Int = 0
+
+        private func withLock<T>(_ body: () -> T) -> T {
+            lock.lock()
+            defer { lock.unlock() }
+            return body()
         }
+
+        var publicMessages: [(peerID: PeerID, nickname: String, content: String)] {
+            withLock { _publicMessages }
+        }
+
+        var receivedMessages: [BitchatMessage] {
+            withLock { _receivedMessages }
+        }
+
+        func didReceiveMessage(_ message: BitchatMessage) {
+            lock.lock()
+            _receivedMessages.append(message)
+            let count = _receivedMessages.count
+            let expected = expectedReceivedMessageCount
+            let continuation = receivedMessageContinuation
+            lock.unlock()
+
+            if count >= expected, let cont = continuation {
+                lock.lock()
+                receivedMessageContinuation = nil
+                lock.unlock()
+                cont.resume()
+            }
+        }
+
+        func didReceivePublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date, messageID: String?) {
+            lock.lock()
+            _publicMessages.append((peerID, nickname, content))
+            let count = _publicMessages.count
+            let expected = expectedPublicMessageCount
+            let continuation = publicMessageContinuation
+            lock.unlock()
+
+            if count >= expected, let cont = continuation {
+                lock.lock()
+                publicMessageContinuation = nil
+                lock.unlock()
+                cont.resume()
+            }
+        }
+
+        /// Waits for the specified number of public messages to be received
+        func waitForPublicMessages(count: Int, timeout: Duration = .seconds(2)) async throws {
+            let isAlreadySatisfied = withLock { () -> Bool in
+                if _publicMessages.count >= count {
+                    return true
+                }
+                expectedPublicMessageCount = count
+                return false
+            }
+            if isAlreadySatisfied {
+                return
+            }
+
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                group.addTask {
+                    await withCheckedContinuation { continuation in
+                        let shouldResumeImmediately = self.withLock {
+                            // Recheck count after acquiring lock to avoid race condition
+                            // where message arrives between initial check and continuation install
+                            if self._publicMessages.count >= count {
+                                return true
+                            }
+                            self.publicMessageContinuation = continuation
+                            return false
+                        }
+                        if shouldResumeImmediately {
+                            continuation.resume()
+                        }
+                    }
+                }
+                group.addTask {
+                    try await Task.sleep(for: timeout)
+                    throw CancellationError()
+                }
+                try await group.next()
+                group.cancelAll()
+            }
+        }
+
+        /// Waits for the specified number of received messages
+        func waitForReceivedMessages(count: Int, timeout: Duration = .seconds(2)) async throws {
+            let isAlreadySatisfied = withLock { () -> Bool in
+                if _receivedMessages.count >= count {
+                    return true
+                }
+                expectedReceivedMessageCount = count
+                return false
+            }
+            if isAlreadySatisfied {
+                return
+            }
+
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                group.addTask {
+                    await withCheckedContinuation { continuation in
+                        let shouldResumeImmediately = self.withLock {
+                            // Recheck count after acquiring lock to avoid race condition
+                            // where message arrives between initial check and continuation install
+                            if self._receivedMessages.count >= count {
+                                return true
+                            }
+                            self.receivedMessageContinuation = continuation
+                            return false
+                        }
+                        if shouldResumeImmediately {
+                            continuation.resume()
+                        }
+                    }
+                }
+                group.addTask {
+                    try await Task.sleep(for: timeout)
+                    throw CancellationError()
+                }
+                try await group.next()
+                group.cancelAll()
+            }
+        }
+
         func didConnectToPeer(_ peerID: PeerID) {}
         func didDisconnectFromPeer(_ peerID: PeerID) {}
         func didUpdatePeerList(_ peers: [PeerID]) {}
@@ -209,9 +341,6 @@ extension FragmentationTests {
         func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {}
         func didReceiveNoisePayload(from peerID: PeerID, type: NoisePayloadType, payload: Data, timestamp: Date) {}
         func didUpdateBluetoothState(_ state: CBManagerState) {}
-        func didReceivePublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date, messageID: String?) {
-            publicMessages.append((peerID, nickname, content))
-        }
         func didReceiveRegionalPublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date) {}
     }
 
