@@ -9,6 +9,7 @@
 import Foundation
 import CryptoKit
 import Testing
+import Noise
 @testable import BitFoundation // to avoid unnecessary public's
 @testable import bitchat
 

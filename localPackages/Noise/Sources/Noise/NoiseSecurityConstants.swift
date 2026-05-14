@@ -8,7 +8,7 @@
 
 import Foundation
 
-enum NoiseSecurityConstants {
+public enum NoiseSecurityConstants {
     // Maximum message size to prevent memory exhaustion
     static let maxMessageSize = 65535 // 64KB as per Noise spec
     
@@ -28,10 +28,10 @@ enum NoiseSecurityConstants {
     static let maxSessionsPerPeer = 3
     
     // Rate limiting
-    static let maxHandshakesPerMinute = 10
-    static let maxMessagesPerSecond = 100
+    public static let maxHandshakesPerMinute = 10
+    public static let maxMessagesPerSecond = 100
     
     // Global rate limiting (across all peers)
-    static let maxGlobalHandshakesPerMinute = 30
-    static let maxGlobalMessagesPerSecond = 500
+    public static let maxGlobalHandshakesPerMinute = 30
+    public static let maxGlobalMessagesPerSecond = 500
 }

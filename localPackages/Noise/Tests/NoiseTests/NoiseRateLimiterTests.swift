@@ -1,6 +1,6 @@
 import XCTest
 import BitFoundation
-@testable import bitchat
+@testable import Noise
 
 final class NoiseRateLimiterTests: XCTestCase {
     func test_allowHandshake_blocksAfterPerPeerLimit() {

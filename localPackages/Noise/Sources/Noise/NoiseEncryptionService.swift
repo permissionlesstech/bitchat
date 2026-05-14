@@ -84,7 +84,6 @@
 
 import BitLogger
 import BitFoundation
-import Noise
 import Foundation
 import CryptoKit
 
