@@ -7,10 +7,8 @@ import AppKit
 #endif
 struct LocationChannelsSheet: View {
     @Binding var isPresented: Bool
-    @ObservedObject private var manager = LocationChannelManager.shared
-    @ObservedObject private var bookmarks = GeohashBookmarksStore.shared
-    @ObservedObject private var network = NetworkActivationService.shared
-    @EnvironmentObject var viewModel: ChatViewModel
+    @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
+    @EnvironmentObject private var peerListModel: PeerListModel
     @Environment(\.colorScheme) var colorScheme
     @State private var customGeohash: String = ""
     @State private var customError: String? = nil
@@ -108,9 +106,9 @@ struct LocationChannelsSheet: View {
                     .foregroundColor(.secondary)
 
                 Group {
-                    switch manager.permissionState {
-                    case LocationChannelManager.PermissionState.notDetermined:
-                        Button(action: { manager.enableLocationChannels() }) {
+                    switch locationChannelsModel.permissionState {
+                    case .notDetermined:
+                        Button(action: { locationChannelsModel.enableLocationChannels() }) {
                             Text(Strings.requestPermissions)
                                 .font(.bitchatSystem(size: 12, design: .monospaced))
                                 .foregroundColor(standardGreen)
@@ -120,7 +118,7 @@ struct LocationChannelsSheet: View {
                                 .cornerRadius(6)
                         }
                         .buttonStyle(.plain)
-                    case LocationChannelManager.PermissionState.denied, LocationChannelManager.PermissionState.restricted:
+                    case .denied, .restricted:
                         VStack(alignment: .leading, spacing: 8) {
                             Text(Strings.permissionDenied)
                                 .font(.bitchatSystem(size: 12, design: .monospaced))
@@ -128,7 +126,7 @@ struct LocationChannelsSheet: View {
                             Button(Strings.openSettings, action: SystemSettings.location.open)
                             .buttonStyle(.plain)
                         }
-                    case LocationChannelManager.PermissionState.authorized:
+                    case .authorized:
                         EmptyView()
                     }
                 }
@@ -152,22 +150,22 @@ struct LocationChannelsSheet: View {
         .background(backgroundColor)
         .onAppear {
             // Refresh channels when opening
-            if manager.permissionState == LocationChannelManager.PermissionState.authorized {
-                manager.refreshChannels()
+            if locationChannelsModel.permissionState == .authorized {
+                locationChannelsModel.refreshChannels()
             }
             // Begin periodic refresh while sheet is open
-            manager.beginLiveRefresh()
+            locationChannelsModel.beginLiveRefresh()
             // Geohash sampling is now managed by ChatViewModel globally
         }
         .onDisappear {
-            manager.endLiveRefresh()
+            locationChannelsModel.endLiveRefresh()
         }
-        .onChange(of: manager.permissionState) { newValue in
-            if newValue == LocationChannelManager.PermissionState.authorized {
-                manager.refreshChannels()
+        .onChange(of: locationChannelsModel.permissionState) { newValue in
+            if newValue == .authorized {
+                locationChannelsModel.refreshChannels()
             }
         }
-        .onChange(of: manager.availableChannels) { _ in }
+        .onChange(of: locationChannelsModel.availableChannels) { _ in }
     }
 
     private var closeButton: some View {
@@ -183,20 +181,20 @@ struct LocationChannelsSheet: View {
     private var channelList: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
-                channelRow(title: Strings.meshTitle(meshCount()), subtitlePrefix: Strings.subtitlePrefix(geohash: "bluetooth", coverage: bluetoothRangeString()), isSelected: isMeshSelected, titleColor: standardBlue, titleBold: meshCount() > 0) {
-                    manager.select(ChannelID.mesh)
+                channelRow(title: Strings.meshTitle(peerListModel.reachableMeshPeerCount), subtitlePrefix: Strings.subtitlePrefix(geohash: "bluetooth", coverage: bluetoothRangeString()), isSelected: isMeshSelected, titleColor: standardBlue, titleBold: peerListModel.reachableMeshPeerCount > 0) {
+                    locationChannelsModel.select(ChannelID.mesh)
                     isPresented = false
                 }
                 .padding(.vertical, 6)
 
-                let nearby = manager.availableChannels.filter { $0.level != .building }
+                let nearby = locationChannelsModel.availableChannels.filter { $0.level != .building }
                 if !nearby.isEmpty {
                     ForEach(nearby) { channel in
                         sectionDivider
                         let coverage = coverageString(forPrecision: channel.geohash.count)
                         let nameBase = locationName(for: channel.level)
                         let namePart = nameBase.map { formattedNamePrefix(for: channel.level) + $0 }
-                        let participantCount = viewModel.geohashParticipantCount(for: channel.geohash)
+                        let participantCount = peerListModel.participantCount(for: channel.geohash)
                         let subtitlePrefix = Strings.subtitlePrefix(geohash: channel.geohash, coverage: coverage)
                         let highlight = participantCount > 0
                         channelRow(
@@ -206,16 +204,16 @@ struct LocationChannelsSheet: View {
                             isSelected: isSelected(channel),
                             titleBold: highlight,
                             trailingAccessory: {
-                                Button(action: { bookmarks.toggle(channel.geohash) }) {
-                                    Image(systemName: bookmarks.isBookmarked(channel.geohash) ? "bookmark.fill" : "bookmark")
+                                Button(action: { locationChannelsModel.toggleBookmark(channel.geohash) }) {
+                                    Image(systemName: locationChannelsModel.isBookmarked(channel.geohash) ? "bookmark.fill" : "bookmark")
                                         .font(.bitchatSystem(size: 14))
                                 }
                                 .buttonStyle(.plain)
                                 .padding(.leading, 8)
                             }
                         ) {
-                            manager.markTeleported(for: channel.geohash, false)
-                            manager.select(ChannelID.location(channel))
+                            locationChannelsModel.markTeleported(for: channel.geohash, false)
+                            locationChannelsModel.select(ChannelID.location(channel))
                             isPresented = false
                         }
                         .padding(.vertical, 6)
@@ -235,14 +233,14 @@ struct LocationChannelsSheet: View {
                 customTeleportSection
                     .padding(.vertical, 8)
 
-                let bookmarkedList = bookmarks.bookmarks
+                let bookmarkedList = locationChannelsModel.bookmarks
                 if !bookmarkedList.isEmpty {
                     sectionDivider
                     bookmarkedSection(bookmarkedList)
                         .padding(.vertical, 8)
                 }
 
-                if manager.permissionState == LocationChannelManager.PermissionState.authorized {
+                if locationChannelsModel.permissionState == .authorized {
                     sectionDivider
                     torToggleSection
                         .padding(.top, 12)
@@ -309,10 +307,7 @@ struct LocationChannelsSheet: View {
                 Button(action: {
                     let gh = normalized
                     guard isValid else { customError = Strings.invalidGeohash; return }
-                    let level = levelForLength(gh.count)
-                    let ch = GeohashChannel(level: level, geohash: gh)
-                    manager.markTeleported(for: ch.geohash, true)
-                    manager.select(ChannelID.location(ch))
+                    locationChannelsModel.teleport(to: gh)
                     isPresented = false
                 }) {
                     HStack(spacing: 6) {
@@ -350,33 +345,33 @@ struct LocationChannelsSheet: View {
                     let channel = GeohashChannel(level: level, geohash: gh)
                     let coverage = coverageString(forPrecision: gh.count)
                     let subtitle = Strings.subtitlePrefix(geohash: gh, coverage: coverage)
-                    let name = bookmarks.bookmarkNames[gh]
-                    let participantCount = viewModel.geohashParticipantCount(for: gh)
+                    let name = locationChannelsModel.bookmarkNames[gh]
+                    let participantCount = peerListModel.participantCount(for: gh)
                     channelRow(
                         title: Strings.bookmarkTitle(geohash: gh, count: participantCount),
                         subtitlePrefix: subtitle,
                         subtitleName: name.map { formattedNamePrefix(for: level) + $0 },
-                        isSelected: isSelected(channel),
+                        isSelected: locationChannelsModel.isSelected(channel),
                         trailingAccessory: {
-                            Button(action: { bookmarks.toggle(gh) }) {
-                                Image(systemName: bookmarks.isBookmarked(gh) ? "bookmark.fill" : "bookmark")
+                            Button(action: { locationChannelsModel.toggleBookmark(gh) }) {
+                                Image(systemName: locationChannelsModel.isBookmarked(gh) ? "bookmark.fill" : "bookmark")
                                     .font(.bitchatSystem(size: 14))
                             }
                             .buttonStyle(.plain)
                             .padding(.leading, 8)
                         }
                     ) {
-                        let inRegional = manager.availableChannels.contains { $0.geohash == gh }
-                        if !inRegional && !manager.availableChannels.isEmpty {
-                            manager.markTeleported(for: gh, true)
+                        let inRegional = locationChannelsModel.availableChannels.contains { $0.geohash == gh }
+                        if !inRegional && !locationChannelsModel.availableChannels.isEmpty {
+                            locationChannelsModel.markTeleported(for: gh, true)
                         } else {
-                            manager.markTeleported(for: gh, false)
+                            locationChannelsModel.markTeleported(for: gh, false)
                         }
-                        manager.select(ChannelID.location(channel))
+                        locationChannelsModel.select(ChannelID.location(channel))
                         isPresented = false
                     }
                     .padding(.vertical, 6)
-                    .onAppear { bookmarks.resolveBookmarkNameIfNeeded(for: gh) }
+                    .onAppear { locationChannelsModel.resolveBookmarkNameIfNeeded(for: gh) }
 
                     if index < entries.count - 1 {
                         sectionDivider
@@ -388,14 +383,11 @@ struct LocationChannelsSheet: View {
 
 
     private func isSelected(_ channel: GeohashChannel) -> Bool {
-        if case .location(let ch) = manager.selectedChannel {
-            return ch == channel
-        }
-        return false
+        locationChannelsModel.isSelected(channel)
     }
 
     private var isMeshSelected: Bool {
-        if case .mesh = manager.selectedChannel { return true }
+        if case .mesh = locationChannelsModel.selectedChannel { return true }
         return false
     }
 
@@ -453,17 +445,6 @@ struct LocationChannelsSheet: View {
         let suffix = String(s[idx...])
         return (prefix, suffix)
     }
-
-    // MARK: - Helpers for counts
-    private func meshCount() -> Int {
-        // Count mesh-connected OR mesh-reachable peers (exclude self)
-        let myID = viewModel.meshService.myPeerID
-        return viewModel.allPeers.reduce(0) { acc, peer in
-            if peer.peerID != myID && (peer.isConnected || peer.isReachable) { return acc + 1 }
-            return acc
-        }
-    }
-
     private func validateGeohash(_ s: String) -> Bool {
         let allowed = Set("0123456789bcdefghjkmnpqrstuvwxyz")
         guard !s.isEmpty, s.count <= 12 else { return false }
@@ -487,8 +468,8 @@ struct LocationChannelsSheet: View {
 extension LocationChannelsSheet {
     private var torToggleBinding: Binding<Bool> {
         Binding(
-            get: { network.userTorEnabled },
-            set: { network.setUserTorEnabled($0) }
+            get: { locationChannelsModel.userTorEnabled },
+            set: { locationChannelsModel.setUserTorEnabled($0) }
         )
     }
 
@@ -608,7 +589,7 @@ extension LocationChannelsSheet {
     }
 
     private func locationName(for level: GeohashChannelLevel) -> String? {
-        manager.locationNames[level]
+        locationChannelsModel.locationName(for: level)
     }
 
     private func formattedNamePrefix(for level: GeohashChannelLevel) -> String {

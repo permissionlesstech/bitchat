@@ -8,8 +8,8 @@
 import SwiftUI
 
 struct CommandSuggestionsView: View {
-    @EnvironmentObject private var viewModel: ChatViewModel
-    @ObservedObject private var locationManager = LocationChannelManager.shared
+    @EnvironmentObject private var privateConversationModel: PrivateConversationModel
+    @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     
     @Binding var messageText: String
     
@@ -19,8 +19,8 @@ struct CommandSuggestionsView: View {
     
     private var filteredCommands: [CommandInfo] {
         guard messageText.hasPrefix("/") && !messageText.contains(" ") else { return [] }
-        let isGeoPublic = locationManager.selectedChannel.isLocation
-        let isGeoDM = viewModel.selectedPrivateChatPeer?.isGeoDM == true
+        let isGeoPublic = locationChannelsModel.selectedChannel.isLocation
+        let isGeoDM = privateConversationModel.selectedPeerID?.isGeoDM == true
         return CommandInfo.all(isGeoPublic: isGeoPublic, isGeoDM: isGeoDM).filter { command in
             command.alias.starts(with: messageText.lowercased())
         }
@@ -79,6 +79,11 @@ struct CommandSuggestionsView: View {
         idBridge: NostrIdentityBridge(),
         identityManager: SecureIdentityStateManager(keychain)
     )
+    let privateConversationModel = PrivateConversationModel(
+        chatViewModel: viewModel,
+        conversationStore: viewModel.conversationStore
+    )
+    let locationChannelsModel = LocationChannelsModel()
     
     CommandSuggestionsView(
         messageText: $messageText,
@@ -86,5 +91,6 @@ struct CommandSuggestionsView: View {
         backgroundColor: .primary,
         secondaryTextColor: .secondary
     )
-    .environmentObject(viewModel)
+    .environmentObject(privateConversationModel)
+    .environmentObject(locationChannelsModel)
 }

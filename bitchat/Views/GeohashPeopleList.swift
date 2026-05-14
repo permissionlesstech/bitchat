@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct GeohashPeopleList: View {
-    @ObservedObject var viewModel: ChatViewModel
+    @EnvironmentObject private var peerListModel: PeerListModel
     let textColor: Color
     let secondaryTextColor: Color
     let onTapPerson: () -> Void
@@ -17,7 +17,7 @@ struct GeohashPeopleList: View {
     }
 
     var body: some View {
-        if viewModel.visibleGeohashPeople().isEmpty {
+        if peerListModel.geohashPeople.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 Text(Strings.noneNearby)
                     .font(.bitchatSystem(size: 14, design: .monospaced))
@@ -26,26 +26,16 @@ struct GeohashPeopleList: View {
                     .padding(.top, 12)
             }
         } else {
-            let myHex: String? = {
-                if case .location(let ch) = LocationChannelManager.shared.selectedChannel,
-                   let id = try? viewModel.idBridge.deriveIdentity(forGeohash: ch.geohash) {
-                    return id.publicKeyHex.lowercased()
-                }
-                return nil
-            }()
-            let people = viewModel.visibleGeohashPeople()
-            let currentIDs = people.map { $0.id }
-
-            let teleportedSet = Set(viewModel.teleportedGeo.map { $0.lowercased() })
-            let isTeleportedID: (String) -> Bool = { id in
-                if teleportedSet.contains(id.lowercased()) { return true }
-                if let me = myHex, id == me, LocationChannelManager.shared.teleported { return true }
-                return false
-            }
+            let people = peerListModel.geohashPeople
+            let currentIDs = people.map(\.id)
 
             let displayIDs = orderedIDs.filter { currentIDs.contains($0) } + currentIDs.filter { !orderedIDs.contains($0) }
-            let nonTele = displayIDs.filter { !isTeleportedID($0) }
-            let tele = displayIDs.filter { isTeleportedID($0) }
+            let nonTele = displayIDs.filter { id in
+                !(people.first(where: { $0.id == id })?.isTeleported ?? false)
+            }
+            let tele = displayIDs.filter { id in
+                people.first(where: { $0.id == id })?.isTeleported ?? false
+            }
             let finalOrder: [String] = nonTele + tele
             let firstID = finalOrder.first
             let personByID = Dictionary(uniqueKeysWithValues: people.map { ($0.id, $0) })
@@ -54,38 +44,34 @@ struct GeohashPeopleList: View {
                 ForEach(finalOrder.filter { personByID[$0] != nil }, id: \.self) { pid in
                     let person = personByID[pid]!
                     HStack(spacing: 4) {
-                        let isMe = (person.id == myHex)
-                        let teleported = viewModel.teleportedGeo.contains(person.id.lowercased()) || (isMe && LocationChannelManager.shared.teleported)
-                        let icon = teleported ? "face.dashed" : "mappin.and.ellipse"
-                        let assignedColor = viewModel.colorForNostrPubkey(person.id, isDark: colorScheme == .dark)
-                        let rowColor: Color = isMe ? .orange : assignedColor
+                        let icon = person.isTeleported ? "face.dashed" : "mappin.and.ellipse"
+                        let assignedColor = peerListModel.colorForGeohashPerson(id: person.id, isDark: colorScheme == .dark)
+                        let rowColor: Color = person.isMe ? .orange : assignedColor
                         Image(systemName: icon).font(.bitchatSystem(size: 12)).foregroundColor(rowColor)
 
                         let (base, suffix) = person.displayName.splitSuffix()
                         HStack(spacing: 0) {
                             Text(base)
                                 .font(.bitchatSystem(size: 14, design: .monospaced))
-                                .fontWeight(isMe ? .bold : .regular)
+                                .fontWeight(person.isMe ? .bold : .regular)
                                 .foregroundColor(rowColor)
                             if !suffix.isEmpty {
-                                let suffixColor = isMe ? Color.orange.opacity(0.6) : rowColor.opacity(0.6)
+                                let suffixColor = person.isMe ? Color.orange.opacity(0.6) : rowColor.opacity(0.6)
                                 Text(suffix)
                                     .font(.bitchatSystem(size: 14, design: .monospaced))
                                     .foregroundColor(suffixColor)
                             }
-                            if isMe {
+                            if person.isMe {
                                 Text(Strings.youSuffix)
                                     .font(.bitchatSystem(size: 14, design: .monospaced))
                                     .foregroundColor(rowColor)
                             }
                         }
-                        if let me = myHex, person.id != me {
-                            if viewModel.isGeohashUserBlocked(pubkeyHexLowercased: person.id) {
-                                Image(systemName: "nosign")
-                                    .font(.bitchatSystem(size: 10))
-                                    .foregroundColor(.red)
-                                    .help(Strings.blockedTooltip)
-                            }
+                        if person.isBlocked {
+                            Image(systemName: "nosign")
+                                .font(.bitchatSystem(size: 10))
+                                .foregroundColor(.red)
+                                .help(Strings.blockedTooltip)
                         }
                         Spacer()
                     }
@@ -94,20 +80,29 @@ struct GeohashPeopleList: View {
                     .padding(.top, person.id == firstID ? 10 : 0)
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        if person.id != myHex {
-                            viewModel.startGeohashDM(withPubkeyHex: person.id)
+                        if !person.isMe {
+                            peerListModel.openGeohashDirectMessage(with: person.id)
                             onTapPerson()
                         }
                     }
                     .contextMenu {
-                        if let me = myHex, person.id == me {
+                        if person.isMe {
                             EmptyView()
                         } else {
-                            let blocked = viewModel.isGeohashUserBlocked(pubkeyHexLowercased: person.id)
-                            if blocked {
-                                Button(Strings.unblock) { viewModel.unblockGeohashUser(pubkeyHexLowercased: person.id, displayName: person.displayName) }
+                            if person.isBlocked {
+                                Button(Strings.unblock) {
+                                    peerListModel.unblockGeohashUser(
+                                        pubkeyHexLowercased: person.id,
+                                        displayName: person.displayName
+                                    )
+                                }
                             } else {
-                                Button(Strings.block) { viewModel.blockGeohashUser(pubkeyHexLowercased: person.id, displayName: person.displayName) }
+                                Button(Strings.block) {
+                                    peerListModel.blockGeohashUser(
+                                        pubkeyHexLowercased: person.id,
+                                        displayName: person.displayName
+                                    )
+                                }
                             }
                         }
                     }
