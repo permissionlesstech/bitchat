@@ -1,0 +1,5 @@
+// Your Apple Developer Team ID - https://stackoverflow.com/a/18727947
+DEVELOPMENT_TEAM = ABC123
+
+// Unique bundle id to be able to register and run locally
+PRODUCT_BUNDLE_IDENTIFIER = chat.bitchat.$(DEVELOPMENT_TEAM)

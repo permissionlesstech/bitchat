@@ -126,7 +126,7 @@ If we update this policy:
 ## Contact
 
 bitchat is an open source project. For privacy questions:
-- Review our code: https://github.com/yourusername/bitchat
+- View our source code: [https://github.com/permissionlesstech/bitchat/tree/main](https://github.com/permissionlesstech/bitchat/tree/main)
 - Open an issue on GitHub
 - Join the discussion in public rooms
 

@@ -1,0 +1,13 @@
+language = "C"
+include_guard = "ARTI_H"
+no_includes = true
+sys_includes = ["stdint.h", "stdbool.h"]
+
+[export]
+include = ["arti_start", "arti_stop", "arti_is_running", "arti_bootstrap_progress", "arti_bootstrap_summary", "arti_go_dormant", "arti_wake"]
+
+[fn]
+args = "Auto"
+
+[parse]
+parse_deps = false

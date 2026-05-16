@@ -1,0 +1,38 @@
+[package]
+name = "arti-bitchat"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.86"
+
+[lib]
+crate-type = ["staticlib"]
+
+[dependencies]
+# Arti core - minimal features for client-only SOCKS proxy
+arti-client = { version = "0.38", default-features = false, features = [
+    "tokio",
+    "rustls",
+] }
+
+# Async runtime
+tokio = { version = "1", default-features = false, features = [
+    "rt-multi-thread",
+    "net",
+    "sync",
+    "time",
+    "macros",
+] }
+
+# Tor runtime compatibility
+tor-rtcompat = { version = "0.38", default-features = false, features = ["tokio"] }
+
+# FFI utilities
+libc = "0.2"
+once_cell = "1"
+
+# Logging (minimal)
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt"] }
+
+[features]
+default = []

@@ -1,0 +1,10 @@
+[workspace]
+resolver = "2"
+members = ["arti-bitchat"]
+
+[profile.release]
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"

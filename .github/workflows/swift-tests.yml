@@ -1,0 +1,42 @@
+name: Build & Test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  test:
+    name: Run Swift Tests (${{ matrix.name }})
+    runs-on: macos-latest
+
+    strategy:
+      fail-fast: false # Don't cancel other matrix jobs when one fails
+      matrix:
+        include:
+          - name: app
+            path: .
+          - name: BitLogger
+            path: localPackages/BitLogger
+          - name: BitFoundation
+            path: localPackages/BitFoundation
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Swift
+        uses: swift-actions/setup-swift@v2
+
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: ${{ matrix.path }}/.build
+          key: ${{ runner.os }}-${{ matrix.name }}-${{ hashFiles(format('{0}/**/*.swift', matrix.path), format('{0}/**/Package.resolved', matrix.path)) }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.name }}-${{ hashFiles(format('{0}/**/Package.resolved', matrix.path)) }}
+            ${{ runner.os }}-${{ matrix.name }}-
+
+      - name: Run Tests
+        run: swift test --parallel --quiet --package-path ${{ matrix.path }}

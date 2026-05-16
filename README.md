@@ -1,10 +1,12 @@
-![ChatGPT Image Jul 5, 2025 at 06_07_31 PM](https://github.com/user-attachments/assets/2660f828-49c7-444d-beca-d8b01854667a)
-# bitchat
+<img width="256" height="256" alt="icon_128x128@2x" src="https://github.com/user-attachments/assets/90133f83-b4f6-41c6-aab9-25d0859d2a47" />
 
-> [!WARNING]
-> This software has not received external security review and may contain vulnerabilities and may not necessarily meet its stated security goals. Do not use it for sensitive use cases, and do not rely on its security until it has been reviewed. Work in progress.
+## bitchat
 
-A secure, decentralized, peer-to-peer messaging app that works over Bluetooth mesh networks. No internet required, no servers, no phone numbers - just pure encrypted communication.
+A decentralized peer-to-peer messaging app with dual transport architecture: local Bluetooth mesh networks for offline communication and internet-based Nostr protocol for global reach. No accounts, no phone numbers, no central servers. It's the side-groupchat.
+
+[bitchat.free](http://bitchat.free)
+
+📲 [App Store](https://apps.apple.com/us/app/bitchat-mesh/id6748219622)
 
 ## License
 
@@ -12,148 +14,109 @@ This project is released into the public domain. See the [LICENSE](LICENSE) file
 
 ## Features
 
+- **Dual Transport Architecture**: Bluetooth mesh for offline + Nostr protocol for internet-based messaging
+- **Location-Based Channels**: Geographic chat rooms using geohash coordinates over global Nostr relays
+- **Intelligent Message Routing**: Automatically chooses best transport (Bluetooth → Nostr fallback)
 - **Decentralized Mesh Network**: Automatic peer discovery and multi-hop message relay over Bluetooth LE
-- **End-to-End Encryption**: X25519 key exchange + AES-256-GCM for private messages
-- **Channel-Based Chats**: Topic-based group messaging with optional password protection
-- **Store & Forward**: Messages cached for offline peers and delivered when they reconnect
 - **Privacy First**: No accounts, no phone numbers, no persistent identifiers
-- **IRC-Style Commands**: Familiar `/join`, `/msg`, `/who` style interface
-- **Message Retention**: Optional channel-wide message saving controlled by channel owners
+- **Private Message End-to-End Encryption**: [Noise Protocol](https://noiseprotocol.org) for mesh, NIP-17 for Nostr
+- **IRC-Style Commands**: Familiar `/slap`, `/msg`, `/who` style interface
 - **Universal App**: Native support for iOS and macOS
-- **Cover Traffic**: Timing obfuscation and dummy messages for enhanced privacy
 - **Emergency Wipe**: Triple-tap to instantly clear all data
 - **Performance Optimizations**: LZ4 message compression, adaptive battery modes, and optimized networking
 
-## Setup
+## [Technical Architecture](https://deepwiki.com/permissionlesstech/bitchat)
 
-### Option 1: Using XcodeGen (Recommended)
+BitChat uses a **hybrid messaging architecture** with two complementary transport layers:
 
-1. Install XcodeGen if you haven't already:
-   ```bash
-   brew install xcodegen
-   ```
+### Bluetooth Mesh Network (Offline)
 
-2. Generate the Xcode project:
-   ```bash
-   cd bitchat
-   xcodegen generate
-   ```
+- **Local Communication**: Direct peer-to-peer within Bluetooth range
+- **Multi-hop Relay**: Messages route through nearby devices (max 7 hops)
+- **No Internet Required**: Works completely offline in disaster scenarios
+- **Noise Protocol Encryption**: End-to-end encryption with forward secrecy
+- **Binary Protocol**: Compact packet format optimized for Bluetooth LE constraints
+- **Automatic Discovery**: Peer discovery and connection management
+- **Adaptive Power**: Battery-optimized duty cycling
 
-3. Open the generated project:
-   ```bash
-   open bitchat.xcodeproj
-   ```
+### Nostr Protocol (Internet)
 
-### Option 2: Using Swift Package Manager
+- **Global Reach**: Connect with users worldwide via internet relays
+- **Location Channels**: Geographic chat rooms using geohash coordinates
+- **290+ Relay Network**: Distributed across the globe for reliability
+- **NIP-17 Encryption**: Gift-wrapped private messages for internet privacy
+- **Ephemeral Keys**: Fresh cryptographic identity per geohash area
 
-1. Open the project in Xcode:
-   ```bash
-   cd bitchat
-   open Package.swift
-   ```
+### Channel Types
 
-2. Select your target device and run
+#### `mesh #bluetooth`
 
-### Option 3: Manual Xcode Project
+- **Transport**: Bluetooth Low Energy mesh network
+- **Scope**: Local devices within multi-hop range
+- **Internet**: Not required
+- **Use Case**: Offline communication, protests, disasters, remote areas
 
-1. Open Xcode and create a new iOS/macOS App
-2. Copy all Swift files from the `bitchat` directory into your project
-3. Update Info.plist with Bluetooth permissions
-4. Set deployment target to iOS 16.0 / macOS 13.0
+#### Location Channels (`block #dr5rsj7`, `neighborhood #dr5rs`, `country #dr`)
 
-## Usage
+- **Transport**: Nostr protocol over internet
+- **Scope**: Geographic areas defined by geohash precision
+  - `block` (7 chars): City block level
+  - `neighborhood` (6 chars): District/neighborhood
+  - `city` (5 chars): City level
+  - `province` (4 chars): State/province
+  - `region` (2 chars): Country/large region
+- **Internet**: Required (connects to Nostr relays)
+- **Use Case**: Location-based community chat, local events, regional discussions
 
-### Basic Commands
+### Direct Message Routing
 
-- `/j #channel` - Join or create a channel
-- `/m @name message` - Send a private message
-- `/w` - List online users
-- `/channels` - Show all discovered channels
-- `/block @name` - Block a peer from messaging you
-- `/block` - List all blocked peers
-- `/unblock @name` - Unblock a peer
-- `/clear` - Clear chat messages
-- `/pass [password]` - Set/change channel password (owner only)
-- `/transfer @name` - Transfer channel ownership
-- `/save` - Toggle message retention for channel (owner only)
+Private messages use **intelligent transport selection**:
 
-### Getting Started
+1. **Bluetooth First** (preferred when available)
 
-1. Launch bitchat on your device
-2. Set your nickname (or use the auto-generated one)
-3. You'll automatically connect to nearby peers
-4. Join a channel with `/j #general` or start chatting in public
-5. Messages relay through the mesh network to reach distant peers
+   - Direct connection with established Noise session
+   - Fastest and most private option
 
-### Channel Features
+2. **Nostr Fallback** (when Bluetooth unavailable)
 
-- **Password Protection**: Channel owners can set passwords with `/pass`
-- **Message Retention**: Owners can enable mandatory message saving with `/save`
-- **@ Mentions**: Use `@nickname` to mention users (with autocomplete)
-- **Ownership Transfer**: Pass control to trusted users with `/transfer`
+   - Uses recipient's Nostr public key
+   - NIP-17 gift-wrapping for privacy
+   - Routes through global relay network
 
-## Security & Privacy
-
-### Encryption
-- **Private Messages**: X25519 key exchange + AES-256-GCM encryption
-- **Channel Messages**: Argon2id password derivation + AES-256-GCM
-- **Digital Signatures**: Ed25519 for message authenticity
-- **Forward Secrecy**: New key pairs generated each session
-
-### Privacy Features
-- **No Registration**: No accounts, emails, or phone numbers required
-- **Ephemeral by Default**: Messages exist only in device memory
-- **Cover Traffic**: Random delays and dummy messages prevent traffic analysis
-- **Emergency Wipe**: Triple-tap logo to instantly clear all data
-- **Local-First**: Works completely offline, no servers involved
-
-## Performance & Efficiency
-
-### Message Compression
-- **LZ4 Compression**: Automatic compression for messages >100 bytes
-- **30-70% bandwidth savings** on typical text messages
-- **Smart compression**: Skips already-compressed data
-
-### Battery Optimization
-- **Adaptive Power Modes**: Automatically adjusts based on battery level
-  - Performance mode: Full features when charging or >60% battery
-  - Balanced mode: Default operation (30-60% battery)
-  - Power saver: Reduced scanning when <30% battery
-  - Ultra-low power: Emergency mode when <10% battery
-- **Background efficiency**: Automatic power saving when app backgrounded
-- **Configurable scanning**: Duty cycle adapts to battery state
-
-### Network Efficiency
-- **Optimized Bloom filters**: Faster duplicate detection with less memory
-- **Message aggregation**: Batches small messages to reduce transmissions
-- **Adaptive connection limits**: Adjusts peer connections based on power mode
-
-## Technical Architecture
-
-### Binary Protocol
-bitchat uses an efficient binary protocol optimized for Bluetooth LE:
-- Compact packet format with 1-byte type field
-- TTL-based message routing (max 7 hops)
-- Automatic fragmentation for large messages
-- Message deduplication via unique IDs
-
-### Mesh Networking
-- Each device acts as both client and peripheral
-- Automatic peer discovery and connection management
-- Store-and-forward for offline message delivery
-- Adaptive duty cycling for battery optimization
+3. **Smart Queuing** (when neither available)
+   - Messages queued until transport becomes available
+   - Automatic delivery when connection established
 
 For detailed protocol documentation, see the [Technical Whitepaper](WHITEPAPER.md).
 
-## Building for Production
+## Setup
 
-1. Set your development team in project settings
-2. Configure code signing
-3. Archive and distribute through App Store or TestFlight
+### Option 1: Using Xcode
 
-## Android Compatibility
+   ```bash
+   cd bitchat
+   open bitchat.xcodeproj
+   ```
 
-The protocol is designed to be platform-agnostic. An Android client can be built using:
-- Bluetooth LE APIs
-- Same packet structure and encryption
-- Compatible service/characteristic UUIDs
+   To run on a device there're a few steps to prepare the code:
+   - Clone the local configs: `cp Configs/Local.xcconfig.example Configs/Local.xcconfig`
+   - Add your Developer Team ID into the newly created `Configs/Local.xcconfig`
+      - Bundle ID would be set to `chat.bitchat.<team_id>` (unless you set to something else)
+   - Entitlements need to be updated manually (TODO: Automate):
+      - Search and replace `group.chat.bitchat` with `group.<your_bundle_id>` (e.g. `group.chat.bitchat.ABC123`)
+
+### Option 2: Using `just`
+
+   ```bash
+   brew install just
+   ```
+
+Want to try this on macos: `just run` will set it up and run from source.
+Run `just clean` afterwards to restore things to original state for mobile app building and development.
+
+## Localization
+
+- Base app resources live under `bitchat/Localization/Base.lproj/`. Add new copy to `Localizable.strings` and plural rules to `Localizable.stringsdict`.
+- Share extension strings are separate in `bitchatShareExtension/Localization/Base.lproj/Localizable.strings`.
+- Prefer keys that describe intent (`app_info.features.offline.title`) and reuse existing ones where possible.
+- Run `xcodebuild -project bitchat.xcodeproj -scheme "bitchat (macOS)" -configuration Debug CODE_SIGNING_ALLOWED=NO build` to compile-check any localization updates.
