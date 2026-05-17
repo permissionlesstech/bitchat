@@ -6,7 +6,7 @@
 // For more information, see <https://unlicense.org>
 //
 
-import Foundation
+import struct Foundation.Data
 
 /// Provides privacy-preserving message padding to obscure actual content length.
 /// Uses PKCS#7-style padding with random bytes to prevent traffic analysis.

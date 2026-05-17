@@ -1,4 +1,5 @@
 import Foundation
+import BitFoundation
 
 /// Resolves a stable display name for peers, adding a short suffix when collisions exist.
 struct PeerDisplayNameResolver {

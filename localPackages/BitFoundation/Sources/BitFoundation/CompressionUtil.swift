@@ -6,12 +6,12 @@
 // For more information, see <https://unlicense.org>
 //
 
-import Foundation
-import Compression
+import struct Foundation.Data
+private import Compression
 
 struct CompressionUtil {
     // Compression threshold - don't compress if data is smaller than this
-    static let compressionThreshold = TransportConfig.compressionThresholdBytes // bytes
+    static let compressionThreshold = Constants.compressionThresholdBytes // bytes
     
     // Compress data using zlib algorithm (most compatible)
     static func compress(_ data: Data) -> Data? {

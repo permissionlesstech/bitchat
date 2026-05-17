@@ -8,6 +8,7 @@
 
 import Foundation
 import BitLogger
+import BitFoundation
 
 /// Manages outgoing sync requests and validates incoming responses.
 ///

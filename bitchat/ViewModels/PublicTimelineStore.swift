@@ -5,6 +5,7 @@
 // Maintains mesh and geohash public timelines with simple caps and helpers.
 //
 
+import BitFoundation
 import Foundation
 
 struct PublicTimelineStore {

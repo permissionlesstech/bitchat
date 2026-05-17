@@ -6,7 +6,7 @@
 //
 
 import Testing
-@testable import bitchat
+@testable import BitFoundation
 
 struct BinaryProtocolPaddingTests {
     @Test func padded_vs_unpadded_length() throws {

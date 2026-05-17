@@ -2,6 +2,7 @@ import Testing
 import Foundation
 import Combine
 import CoreBluetooth
+import BitFoundation
 @testable import bitchat
 
 private final class DefaultDelegateProbe: BitchatDelegate {

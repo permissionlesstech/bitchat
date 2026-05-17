@@ -78,6 +78,7 @@
 ///
 
 import BitLogger
+import BitFoundation
 import Foundation
 import SwiftUI
 import Combine
@@ -1799,7 +1800,15 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
             }
         }
     }
-    
+
+    func getMessages(for peerID: PeerID?) -> [BitchatMessage] {
+        if let peerID {
+            return getPrivateChatMessages(for: peerID)
+        } else {
+            return messages
+        }
+    }
+
     @MainActor
     func getPrivateChatMessages(for peerID: PeerID) -> [BitchatMessage] {
         var combined: [BitchatMessage] = []

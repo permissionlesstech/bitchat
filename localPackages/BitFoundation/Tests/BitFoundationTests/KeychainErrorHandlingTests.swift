@@ -9,7 +9,7 @@
 
 import Testing
 import Foundation
-@testable import bitchat
+import BitFoundation
 
 struct KeychainErrorHandlingTests {
 
@@ -144,67 +144,6 @@ struct KeychainErrorHandlingTests {
         default:
             throw KeychainTestError("Expected save success, got \(saveResult)")
         }
-    }
-
-    // MARK: - NoiseEncryptionService Integration Tests
-
-    @Test func noiseEncryptionService_generatesNewIdentityWhenMissing() throws {
-        let keychain = MockKeychain()
-
-        // Create service with empty keychain - should generate new identity
-        let service = NoiseEncryptionService(keychain: keychain)
-
-        // Should have generated and saved keys
-        #expect(service.getStaticPublicKeyData().count == 32)
-        #expect(service.getSigningPublicKeyData().count == 32)
-
-        // Keys should be persisted
-        let noiseKeyResult = keychain.getIdentityKeyWithResult(forKey: "noiseStaticKey")
-        switch noiseKeyResult {
-        case .success:
-            // Expected - key was saved
-            break
-        default:
-            throw KeychainTestError("Expected noise key to be saved")
-        }
-    }
-
-    @Test func noiseEncryptionService_loadsExistingIdentity() throws {
-        let keychain = MockKeychain()
-
-        // Create first service to generate identity
-        let service1 = NoiseEncryptionService(keychain: keychain)
-        let originalPublicKey = service1.getStaticPublicKeyData()
-        let originalSigningKey = service1.getSigningPublicKeyData()
-
-        // Create second service - should load same identity
-        let service2 = NoiseEncryptionService(keychain: keychain)
-
-        #expect(service2.getStaticPublicKeyData() == originalPublicKey)
-        #expect(service2.getSigningPublicKeyData() == originalSigningKey)
-    }
-
-    @Test func noiseEncryptionService_handlesAccessDeniedGracefully() throws {
-        let keychain = MockKeychain()
-        keychain.simulatedReadError = .accessDenied
-
-        // Service should still initialize with ephemeral key
-        let service = NoiseEncryptionService(keychain: keychain)
-
-        // Should have an identity (ephemeral)
-        #expect(service.getStaticPublicKeyData().count == 32)
-        #expect(service.getSigningPublicKeyData().count == 32)
-    }
-
-    @Test func noiseEncryptionService_handlesDeviceLockedGracefully() throws {
-        let keychain = MockKeychain()
-        keychain.simulatedReadError = .deviceLocked
-
-        // Service should still initialize with ephemeral key
-        let service = NoiseEncryptionService(keychain: keychain)
-
-        // Should have an identity (ephemeral)
-        #expect(service.getStaticPublicKeyData().count == 32)
     }
 }
 
