@@ -42,7 +42,7 @@ struct NostrTransportTests {
             )
         )
 
-        #expect(!transport.isPeerReachable(fullPeerID))
+        #expect(transport.isPeerReachable(fullPeerID))
         #expect(transport.isPeerReachable(shortPeerID))
         #expect(!transport.isPeerReachable(PeerID(str: "feedfeedfeedfeed")))
     }

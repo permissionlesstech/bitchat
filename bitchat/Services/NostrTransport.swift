@@ -125,13 +125,11 @@ final class NostrTransport: Transport, @unchecked Sendable {
     
     func isPeerReachable(_ peerID: PeerID) -> Bool {
         queue.sync {
-            // Check if exact match
-            if reachablePeers.contains(peerID) { return true }
-            // Check for short ID match
-            if peerID.isShort {
-                return reachablePeers.contains(where: { $0.toShort() == peerID })
+            let shortPeerID = peerID.toShort()
+            if reachablePeers.contains(peerID) || reachablePeers.contains(shortPeerID) {
+                return true
             }
-            return false
+            return reachablePeers.contains { $0.toShort() == shortPeerID }
         }
     }
     

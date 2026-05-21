@@ -450,8 +450,7 @@ final class BLEService: NSObject {
             return
         }
         // Pre-mark our own broadcast as processed to avoid handling relayed self copy
-        let senderHex = signedPacket.senderID.hexEncodedString()
-        let dedupID = "\(senderHex)-\(signedPacket.timestamp)-\(signedPacket.type)"
+        let dedupID = makeMessageID(for: signedPacket)
         messageDeduplicator.markProcessed(dedupID)
         if let messageID {
             selfBroadcastMessageIDs[dedupID] = (id: messageID, timestamp: sendDate)
@@ -673,9 +672,10 @@ final class BLEService: NSObject {
     }
     
     func getNoiseSessionState(for peerID: PeerID) -> LazyHandshakeState {
-        if noiseService.hasEstablishedSession(with: peerID) {
+        let sessionPeerID = peerID.toShort()
+        if noiseService.hasEstablishedSession(with: sessionPeerID) {
             return .established
-        } else if noiseService.hasSession(with: peerID) {
+        } else if noiseService.hasSession(with: sessionPeerID) {
             return .handshaking
         } else {
             return .none
@@ -683,7 +683,7 @@ final class BLEService: NSObject {
     }
     
     func triggerHandshake(with peerID: PeerID) {
-        initiateNoiseHandshake(with: peerID)
+        initiateNoiseHandshake(with: peerID.toShort())
     }
     
     func getNoiseService() -> NoiseEncryptionService {
@@ -754,9 +754,7 @@ final class BLEService: NSObject {
                 return
             }
 
-            let senderHex = packet.senderID.hexEncodedString()
-            let dedupID = "\(senderHex)-\(packet.timestamp)-\(packet.type)"
-            self.messageDeduplicator.markProcessed(dedupID)
+            self.messageDeduplicator.markProcessed(self.makeMessageID(for: packet))
 
             SecureLogger.debug("📁 Broadcasting file transfer payload bytes=\(payload.count)", category: .session)
             self.broadcastPacket(packet, transferId: transferId)
@@ -804,15 +802,20 @@ final class BLEService: NSObject {
         // Create typed payload: [type byte] + [message ID]
         var payload = Data([NoisePayloadType.readReceipt.rawValue])
         payload.append(contentsOf: receipt.originalMessageID.utf8)
+        let sessionPeerID = peerID.toShort()
 
-        if noiseService.hasEstablishedSession(with: peerID) {
-            SecureLogger.debug("📤 Sending READ receipt for message \(receipt.originalMessageID) to \(peerID)", category: .session)
+        if noiseService.hasEstablishedSession(with: sessionPeerID) {
+            SecureLogger.debug("📤 Sending READ receipt for message \(receipt.originalMessageID) to \(sessionPeerID)", category: .session)
             do {
-                let encrypted = try noiseService.encrypt(payload, for: peerID)
+                let encrypted = try noiseService.encrypt(payload, for: sessionPeerID)
+                guard let recipientData = routingData(for: sessionPeerID) else {
+                    SecureLogger.error("Invalid recipient peer ID for read receipt: \(peerID)", category: .session)
+                    return
+                }
                 let packet = BitchatPacket(
                     type: MessageType.noiseEncrypted.rawValue,
                     senderID: myPeerIDData,
-                    recipientID: Data(hexString: peerID.id),
+                    recipientID: recipientData,
                     timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                     payload: encrypted,
                     signature: nil,
@@ -826,10 +829,10 @@ final class BLEService: NSObject {
             // Queue for after handshake and initiate if needed
             collectionsQueue.async(flags: .barrier) { [weak self] in
                 guard let self = self else { return }
-                self.pendingNoisePayloadsAfterHandshake[peerID, default: []].append(payload)
+                self.pendingNoisePayloadsAfterHandshake[sessionPeerID, default: []].append(payload)
             }
-            if !noiseService.hasSession(with: peerID) { initiateNoiseHandshake(with: peerID) }
-            SecureLogger.debug("🕒 Queued READ receipt for \(peerID) until handshake completes", category: .session)
+            if !noiseService.hasSession(with: sessionPeerID) { initiateNoiseHandshake(with: sessionPeerID) }
+            SecureLogger.debug("🕒 Queued READ receipt for \(sessionPeerID) until handshake completes", category: .session)
         }
     }
     
@@ -1186,7 +1189,7 @@ final class BLEService: NSObject {
 
         // Skip directed packets that are not intended for us
         if let recipient = packet.recipientID {
-            if PeerID(hexData: recipient) != myPeerID && !recipient.allSatisfy({ $0 == 0xFF }) {
+            if !isRecipientAddressedToMe(recipient) && !recipient.allSatisfy({ $0 == 0xFF }) {
                 return
             }
         }
@@ -1233,7 +1236,7 @@ final class BLEService: NSObject {
             return
         }
 
-        let isPrivateMessage = PeerID(hexData: packet.recipientID) == myPeerID
+        let isPrivateMessage = isRecipientAddressedToMe(packet.recipientID)
 
         if isPrivateMessage {
             updatePeerLastSeen(peerID)
@@ -1282,14 +1285,19 @@ final class BLEService: NSObject {
         // Create typed payload: [type byte] + [message ID]
         var payload = Data([NoisePayloadType.delivered.rawValue])
         payload.append(contentsOf: messageID.utf8)
+        let sessionPeerID = peerID.toShort()
 
-        if noiseService.hasEstablishedSession(with: peerID) {
+        if noiseService.hasEstablishedSession(with: sessionPeerID) {
             do {
-                let encrypted = try noiseService.encrypt(payload, for: peerID)
+                let encrypted = try noiseService.encrypt(payload, for: sessionPeerID)
+                guard let recipientData = routingData(for: sessionPeerID) else {
+                    SecureLogger.error("Invalid recipient peer ID for delivery ACK: \(peerID)", category: .session)
+                    return
+                }
                 let packet = BitchatPacket(
                     type: MessageType.noiseEncrypted.rawValue,
                     senderID: myPeerIDData,
-                    recipientID: Data(hexString: peerID.id),
+                    recipientID: recipientData,
                     timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                     payload: encrypted,
                     signature: nil,
@@ -1303,10 +1311,10 @@ final class BLEService: NSObject {
             // Queue for after handshake and initiate if needed
             collectionsQueue.async(flags: .barrier) { [weak self] in
                 guard let self = self else { return }
-                self.pendingNoisePayloadsAfterHandshake[peerID, default: []].append(payload)
+                self.pendingNoisePayloadsAfterHandshake[sessionPeerID, default: []].append(payload)
             }
-            if !noiseService.hasSession(with: peerID) { initiateNoiseHandshake(with: peerID) }
-            SecureLogger.debug("🕒 Queued DELIVERED ack for \(peerID) until handshake completes", category: .session)
+            if !noiseService.hasSession(with: sessionPeerID) { initiateNoiseHandshake(with: sessionPeerID) }
+            SecureLogger.debug("🕒 Queued DELIVERED ack for \(sessionPeerID) until handshake completes", category: .session)
         }
     }
 
@@ -2056,6 +2064,10 @@ extension BLEService {
         }
         handleReceivedPacket(packet, from: fromPeerID)
     }
+
+    func _test_isRecipientAddressedToMe(_ recipientData: Data?) -> Bool {
+        isRecipientAddressedToMe(recipientData)
+    }
 }
 #endif
 
@@ -2773,6 +2785,19 @@ extension BLEService {
         peerID.toShort().routingData
     }
 
+    private func isRecipientAddressedToMe(_ recipientData: Data?) -> Bool {
+        guard let recipientData else {
+            return false
+        }
+        let recipientPeerID = PeerID(hexData: recipientData)
+
+        if recipientPeerID == myPeerID || recipientPeerID.toShort() == myPeerID.toShort() {
+            return true
+        }
+
+        return recipientData == noiseService.getStaticPublicKeyData()
+    }
+
     private func refreshLocalTopology() {
         let neighbors: [Data] = collectionsQueue.sync {
             peers.values.filter { $0.isConnected }.compactMap { $0.peerID.routingData }
@@ -2900,25 +2925,30 @@ extension BLEService {
 
     
     private func sendNoisePayload(_ typedPayload: Data, to peerID: PeerID) {
-        guard noiseService.hasSession(with: peerID) else {
+        let sessionPeerID = peerID.toShort()
+        guard noiseService.hasSession(with: sessionPeerID) else {
             // No session yet - queue the payload SYNCHRONOUSLY before initiating handshake
             // to prevent race where fast handshake completion drains empty queue
             collectionsQueue.sync(flags: .barrier) {
-                if self.pendingNoisePayloadsAfterHandshake[peerID] == nil {
-                    self.pendingNoisePayloadsAfterHandshake[peerID] = []
+                if self.pendingNoisePayloadsAfterHandshake[sessionPeerID] == nil {
+                    self.pendingNoisePayloadsAfterHandshake[sessionPeerID] = []
                 }
-                self.pendingNoisePayloadsAfterHandshake[peerID]?.append(typedPayload)
-                SecureLogger.debug("📥 Queued noise payload for \(peerID) pending handshake", category: .session)
+                self.pendingNoisePayloadsAfterHandshake[sessionPeerID]?.append(typedPayload)
+                SecureLogger.debug("📥 Queued noise payload for \(sessionPeerID) pending handshake", category: .session)
             }
-            initiateNoiseHandshake(with: peerID)
+            initiateNoiseHandshake(with: sessionPeerID)
             return
         }
         do {
-            let encrypted = try noiseService.encrypt(typedPayload, for: peerID)
+            let encrypted = try noiseService.encrypt(typedPayload, for: sessionPeerID)
+            guard let recipientData = routingData(for: sessionPeerID) else {
+                SecureLogger.error("Invalid recipient peer ID for verification payload: \(peerID)", category: .session)
+                return
+            }
             let packet = BitchatPacket(
                 type: MessageType.noiseEncrypted.rawValue,
                 senderID: myPeerIDData,
-                recipientID: Data(hexString: peerID.id),
+                recipientID: recipientData,
                 timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                 payload: encrypted,
                 signature: nil,
@@ -3156,10 +3186,11 @@ extension BLEService {
     // MARK: Private Message Handling
     
     private func sendPrivateMessage(_ content: String, to recipientID: PeerID, messageID: String) {
-        SecureLogger.debug("📨 Sending PM to \(recipientID): \(content.prefix(30))...", category: .session)
+        let sessionPeerID = recipientID.toShort()
+        SecureLogger.debug("📨 Sending PM to \(sessionPeerID), id: \(messageID.prefix(8))...", category: .session)
         
         // Check if we have an established Noise session
-        if noiseService.hasEstablishedSession(with: recipientID) {
+        if noiseService.hasEstablishedSession(with: sessionPeerID) {
             // Encrypt and send
             do {
                 // Create TLV-encoded private message
@@ -3173,22 +3204,10 @@ extension BLEService {
                 var messagePayload = Data([NoisePayloadType.privateMessage.rawValue])
                 messagePayload.append(tlvData)
                 
-                let encrypted = try noiseService.encrypt(messagePayload, for: recipientID)
-                
-                // Convert recipientID to Data (assuming it's a hex string)
-                var recipientData = Data()
-                var tempID = recipientID.id
-                while tempID.count >= 2 {
-                    let hexByte = String(tempID.prefix(2))
-                    if let byte = UInt8(hexByte, radix: 16) {
-                        recipientData.append(byte)
-                    }
-                    tempID = String(tempID.dropFirst(2))
-                }
-                if tempID.count == 1 {
-                    if let byte = UInt8(tempID, radix: 16) {
-                        recipientData.append(byte)
-                    }
+                let encrypted = try noiseService.encrypt(messagePayload, for: sessionPeerID)
+                guard let recipientData = routingData(for: sessionPeerID) else {
+                    SecureLogger.error("Invalid recipient peer ID for private message: \(recipientID)", category: .session)
+                    return
                 }
 
                 let packet = BitchatPacket(
@@ -3212,17 +3231,17 @@ extension BLEService {
             }
         } else {
             // Queue message for sending after handshake completes
-            SecureLogger.debug("🤝 No session with \(recipientID), initiating handshake and queueing message", category: .session)
+            SecureLogger.debug("🤝 No session with \(sessionPeerID), initiating handshake and queueing message", category: .session)
             
             // Queue the message (especially important for favorite notifications)
             collectionsQueue.sync(flags: .barrier) {
-                if pendingMessagesAfterHandshake[recipientID] == nil {
-                    pendingMessagesAfterHandshake[recipientID] = []
+                if pendingMessagesAfterHandshake[sessionPeerID] == nil {
+                    pendingMessagesAfterHandshake[sessionPeerID] = []
                 }
-                pendingMessagesAfterHandshake[recipientID]?.append((content, messageID))
+                pendingMessagesAfterHandshake[sessionPeerID]?.append((content, messageID))
             }
             
-            initiateNoiseHandshake(with: recipientID)
+            initiateNoiseHandshake(with: sessionPeerID)
             
             // Notify delegate that message is pending
             notifyUI { [weak self] in
@@ -3232,17 +3251,22 @@ extension BLEService {
     }
     
     private func initiateNoiseHandshake(with peerID: PeerID) {
+        let sessionPeerID = peerID.toShort()
         // Use NoiseEncryptionService for handshake
-        guard !noiseService.hasSession(with: peerID) else { return }
+        guard !noiseService.hasSession(with: sessionPeerID) else { return }
+        guard let recipientData = routingData(for: sessionPeerID) else {
+            SecureLogger.error("Invalid recipient peer ID for handshake: \(peerID)", category: .session)
+            return
+        }
         
         do {
-            let handshakeData = try noiseService.initiateHandshake(with: peerID)
+            let handshakeData = try noiseService.initiateHandshake(with: sessionPeerID)
             
             // Send handshake init
             let packet = BitchatPacket(
                 type: MessageType.noiseHandshake.rawValue,
                 senderID: myPeerIDData,
-                recipientID: Data(hexString: peerID.id),
+                recipientID: recipientData,
                 timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                 payload: handshakeData,
                 signature: nil,
@@ -3255,16 +3279,17 @@ extension BLEService {
     }
     
     private func sendPendingMessagesAfterHandshake(for peerID: PeerID) {
+        let sessionPeerID = peerID.toShort()
         // Atomically take all pending messages to process (prevents concurrent modification)
         let pendingMessages = collectionsQueue.sync(flags: .barrier) { () -> [(content: String, messageID: String)]? in
-            let messages = pendingMessagesAfterHandshake[peerID]
-            pendingMessagesAfterHandshake.removeValue(forKey: peerID)
+            let messages = pendingMessagesAfterHandshake[sessionPeerID]
+            pendingMessagesAfterHandshake.removeValue(forKey: sessionPeerID)
             return messages
         }
 
         guard let messages = pendingMessages, !messages.isEmpty else { return }
 
-        SecureLogger.debug("📤 Sending \(messages.count) pending messages after handshake to \(peerID)", category: .session)
+        SecureLogger.debug("📤 Sending \(messages.count) pending messages after handshake to \(sessionPeerID)", category: .session)
 
         // Track failed messages for re-queuing
         var failedMessages: [(content: String, messageID: String)] = []
@@ -3283,12 +3308,17 @@ extension BLEService {
                 var messagePayload = Data([NoisePayloadType.privateMessage.rawValue])
                 messagePayload.append(tlvData)
 
-                let encrypted = try noiseService.encrypt(messagePayload, for: peerID)
+                let encrypted = try noiseService.encrypt(messagePayload, for: sessionPeerID)
+                guard let recipientData = routingData(for: sessionPeerID) else {
+                    SecureLogger.error("Invalid recipient peer ID for pending private message: \(peerID)", category: .session)
+                    failedMessages.append((content, messageID))
+                    continue
+                }
 
                 let packet = BitchatPacket(
                     type: MessageType.noiseEncrypted.rawValue,
                     senderID: myPeerIDData,
-                    recipientID: Data(hexString: peerID.id),
+                    recipientID: recipientData,
                     timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                     payload: encrypted,
                     signature: nil,
@@ -3319,12 +3349,12 @@ extension BLEService {
         if !failedMessages.isEmpty {
             collectionsQueue.async(flags: .barrier) { [weak self] in
                 guard let self = self else { return }
-                if self.pendingMessagesAfterHandshake[peerID] == nil {
-                    self.pendingMessagesAfterHandshake[peerID] = []
+                if self.pendingMessagesAfterHandshake[sessionPeerID] == nil {
+                    self.pendingMessagesAfterHandshake[sessionPeerID] = []
                 }
                 // Prepend failed messages to maintain order
-                self.pendingMessagesAfterHandshake[peerID]?.insert(contentsOf: failedMessages, at: 0)
-                SecureLogger.warning("⚠️ Re-queued \(failedMessages.count) failed messages for \(peerID)", category: .session)
+                self.pendingMessagesAfterHandshake[sessionPeerID]?.insert(contentsOf: failedMessages, at: 0)
+                SecureLogger.warning("⚠️ Re-queued \(failedMessages.count) failed messages for \(sessionPeerID)", category: .session)
             }
         }
     }
@@ -3702,8 +3732,7 @@ extension BLEService {
         
         // Deduplication (thread-safe)
         let senderID = PeerID(hexData: packet.senderID)
-        // Include packet type in message ID to prevent collisions between different packet types
-        let messageID = "\(senderID)-\(packet.timestamp)-\(packet.type)"
+        let messageID = makeMessageID(for: packet)
         
         // Only log non-announce packets to reduce noise
         if packet.type != MessageType.announce.rawValue {
@@ -4110,9 +4139,7 @@ extension BLEService {
         let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
         var resolvedSelfMessageID: String? = nil
         if peerID == myPeerID {
-            let senderHex = packet.senderID.hexEncodedString()
-            let dedupID = "\(senderHex)-\(packet.timestamp)-\(packet.type)"
-            resolvedSelfMessageID = selfBroadcastMessageIDs.removeValue(forKey: dedupID)?.id
+            resolvedSelfMessageID = selfBroadcastMessageIDs.removeValue(forKey: makeMessageID(for: packet))?.id
         }
         notifyUI { [weak self] in
             self?.delegate?.didReceivePublicMessage(from: peerID,
@@ -4125,15 +4152,19 @@ extension BLEService {
     
     private func handleNoiseHandshake(_ packet: BitchatPacket, from peerID: PeerID) {
         // Use NoiseEncryptionService for handshake processing
-        if PeerID(hexData: packet.recipientID) == myPeerID {
+        if isRecipientAddressedToMe(packet.recipientID) {
             // Handshake is for us
             do {
                 if let response = try noiseService.processHandshakeMessage(from: peerID, message: packet.payload) {
+                    guard let recipientData = routingData(for: peerID) else {
+                        SecureLogger.error("Invalid recipient peer ID for handshake response: \(peerID)", category: .session)
+                        return
+                    }
                     // Send response
                     let responsePacket = BitchatPacket(
                         type: MessageType.noiseHandshake.rawValue,
                         senderID: myPeerIDData,
-                        recipientID: Data(hexString: peerID.id),
+                        recipientID: recipientData,
                         timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                         payload: response,
                         signature: nil,
@@ -4163,7 +4194,7 @@ extension BLEService {
             return
         }
         
-        if recipientID != myPeerID {
+        if !isRecipientAddressedToMe(packet.recipientID) {
             SecureLogger.debug("🔐 Encrypted message not for me (for \(recipientID), I am \(myPeerID))", category: .session)
             return
         }
@@ -4227,20 +4258,25 @@ extension BLEService {
     // MARK: Helper Functions
     
     private func sendPendingNoisePayloadsAfterHandshake(for peerID: PeerID) {
+        let sessionPeerID = peerID.toShort()
         let payloads = collectionsQueue.sync(flags: .barrier) { () -> [Data] in
-            let list = pendingNoisePayloadsAfterHandshake[peerID] ?? []
-            pendingNoisePayloadsAfterHandshake.removeValue(forKey: peerID)
+            let list = pendingNoisePayloadsAfterHandshake[sessionPeerID] ?? []
+            pendingNoisePayloadsAfterHandshake.removeValue(forKey: sessionPeerID)
             return list
         }
         guard !payloads.isEmpty else { return }
-        SecureLogger.debug("📤 Sending \(payloads.count) pending noise payloads to \(peerID) after handshake", category: .session)
+        SecureLogger.debug("📤 Sending \(payloads.count) pending noise payloads to \(sessionPeerID) after handshake", category: .session)
         for payload in payloads {
             do {
-                let encrypted = try noiseService.encrypt(payload, for: peerID)
+                let encrypted = try noiseService.encrypt(payload, for: sessionPeerID)
+                guard let recipientData = routingData(for: sessionPeerID) else {
+                    SecureLogger.error("Invalid recipient peer ID for pending noise payload: \(peerID)", category: .session)
+                    continue
+                }
                 let packet = BitchatPacket(
                     type: MessageType.noiseEncrypted.rawValue,
                     senderID: myPeerIDData,
-                    recipientID: Data(hexString: peerID.id),
+                    recipientID: recipientData,
                     timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                     payload: encrypted,
                     signature: nil,
@@ -4248,7 +4284,7 @@ extension BLEService {
                 )
                 broadcastPacket(packet)
             } catch {
-                SecureLogger.error("❌ Failed to send pending noise payload to \(peerID): \(error)")
+                SecureLogger.error("❌ Failed to send pending noise payload to \(sessionPeerID): \(error)")
             }
         }
     }

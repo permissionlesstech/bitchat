@@ -7,6 +7,9 @@
 
 import BitFoundation
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
 private struct MessageDisplayItem: Identifiable {
     let id: String
@@ -105,6 +108,9 @@ struct MessageListView: View {
                             .padding(.horizontal, 12)
                             .padding(.vertical, 1)
                     }
+                    Color.clear
+                        .frame(height: 1)
+                        .id(bottomAnchorID)
                 }
                 .transaction { tx in if viewModel.isBatchingPublic { tx.disablesAnimations = true } }
                 .padding(.vertical, 2)
@@ -115,9 +121,15 @@ struct MessageListView: View {
             }
             .onAppear {
                 scrollToBottom(on: proxy)
+                if shouldHandleComposerScroll {
+                    scrollToBottomAfterLayoutSettles(on: proxy)
+                }
             }
             .onChange(of: privatePeer) { _ in
                 scrollToBottom(on: proxy)
+                if shouldHandleComposerScroll {
+                    scrollToBottomAfterLayoutSettles(on: proxy)
+                }
             }
             .onChange(of: viewModel.messages.count) { _ in
                 onMessagesChange(proxy: proxy)
@@ -128,6 +140,23 @@ struct MessageListView: View {
             .onChange(of: locationManager.selectedChannel) { newChannel in
                 onSelectedChannelChange(newChannel, proxy: proxy)
             }
+            .onChange(of: isTextFieldFocused.wrappedValue) { isFocused in
+                onTextFieldFocusChange(isFocused: isFocused, proxy: proxy)
+            }
+#if os(iOS)
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+                onKeyboardFrameChange(proxy: proxy)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { _ in
+                onKeyboardFrameChange(proxy: proxy)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
+                onKeyboardFrameChange(proxy: proxy)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidChangeFrameNotification)) { _ in
+                onKeyboardFrameChange(proxy: proxy)
+            }
+#endif
             .confirmationDialog(
                 selectedMessageSender.map { "@\($0)" } ?? String(localized: "content.actions.title", comment: "Fallback title for the message action sheet"),
                 isPresented: $showMessageActions,
@@ -325,26 +354,47 @@ private extension MessageListView {
 
     func scrollToBottom(on proxy: ScrollViewProxy) {
         isAtBottom = true
-        if let targetPeerID {
-            proxy.scrollTo(targetPeerID, anchor: .bottom)
-        }
+        proxy.scrollTo(bottomAnchorID, anchor: .bottom)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            if let secondTarget = self.targetPeerID {
-                proxy.scrollTo(secondTarget, anchor: .bottom)
+            proxy.scrollTo(bottomAnchorID, anchor: .bottom)
+        }
+    }
+
+    var shouldHandleComposerScroll: Bool {
+        if let privatePeer {
+            return viewModel.selectedPrivateChatPeer == privatePeer
+        }
+        return viewModel.selectedPrivateChatPeer == nil && !showSidebar
+    }
+
+    var bottomAnchorID: String {
+        if let peer = privatePeer {
+            return "dm:\(peer)|bottom"
+        }
+        return "\(locationManager.selectedChannel.contextKey)|bottom"
+    }
+
+    func onTextFieldFocusChange(isFocused: Bool, proxy: ScrollViewProxy) {
+        guard isFocused, shouldHandleComposerScroll else { return }
+        scrollToBottomAfterLayoutSettles(on: proxy)
+    }
+
+    func scrollToBottomAfterLayoutSettles(on proxy: ScrollViewProxy) {
+        scrollToBottom(on: proxy)
+
+        for delay in [0.05, 0.15, 0.30, 0.45, 0.60, 0.85] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                scrollToBottom(on: proxy)
             }
         }
     }
 
-    var targetPeerID: String? {
-        if let peer = privatePeer,
-           let last = viewModel.getPrivateChatMessages(for: peer).suffix(300).last?.id {
-            return "dm:\(peer)|\(last)"
-        }
-        if let last = viewModel.messages.suffix(300).last?.id {
-            return "\(locationManager.selectedChannel.contextKey)|\(last)"
-        }
-        return nil
+#if os(iOS)
+    func onKeyboardFrameChange(proxy: ScrollViewProxy) {
+        guard shouldHandleComposerScroll else { return }
+        scrollToBottomAfterLayoutSettles(on: proxy)
     }
+#endif
 
     func onMessagesChange(proxy: ScrollViewProxy) {
         guard privatePeer == nil, let lastMsg = viewModel.messages.last else { return }
@@ -359,10 +409,7 @@ private extension MessageListView {
 
         func scrollIfNeeded(date: Date) {
             lastScrollTime = date
-            let contextKey = locationManager.selectedChannel.contextKey
-            if let target = viewModel.messages.suffix(windowCountPublic).last.map({ "\(contextKey)|\($0.id)" }) {
-                proxy.scrollTo(target, anchor: .bottom)
-            }
+            proxy.scrollTo(bottomAnchorID, anchor: .bottom)
         }
 
         // Throttle scroll animations to prevent excessive UI updates
@@ -382,7 +429,12 @@ private extension MessageListView {
     }
 
     func onPrivateChatsChange(proxy: ScrollViewProxy) {
-        guard let peerID = privatePeer, let messages = viewModel.privateChats[peerID], let lastMsg = messages.last else {
+        guard let peerID = privatePeer else {
+            return
+        }
+
+        let messages = viewModel.getPrivateChatMessages(for: peerID)
+        guard let lastMsg = messages.last else {
             return
         }
 
@@ -396,11 +448,7 @@ private extension MessageListView {
 
         func scrollIfNeeded(date: Date) {
             lastScrollTime = date
-            let contextKey = "dm:\(peerID)"
-            let count = windowCountPrivate[peerID] ?? 300
-            if let target = messages.suffix(count).last.map({ "\(contextKey)|\($0.id)" }){
-                proxy.scrollTo(target, anchor: .bottom)
-            }
+            proxy.scrollTo(bottomAnchorID, anchor: .bottom)
         }
 
         // Same throttling for private chats
@@ -423,14 +471,11 @@ private extension MessageListView {
         switch channel {
         case .mesh:
             break
-        case .location(let ch):
+        case .location:
             // Reset window size
             isAtBottom = true
             windowCountPublic = TransportConfig.uiWindowInitialCountPublic
-            let contextKey = "geo:\(ch.geohash)"
-            if let target = viewModel.messages.suffix(windowCountPublic).last?.id.map({ "\(contextKey)|\($0)" }) {
-                proxy.scrollTo(target, anchor: .bottom)
-            }
+            scrollToBottomAfterLayoutSettles(on: proxy)
         }
     }
 }

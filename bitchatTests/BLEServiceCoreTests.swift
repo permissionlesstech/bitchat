@@ -60,6 +60,37 @@ struct BLEServiceCoreTests {
     }
 
     @Test
+    func sameTimestampDistinctPackets_areNotDeduped() async {
+        let ble = makeService()
+        let delegate = PublicCaptureDelegate()
+        ble.delegate = delegate
+
+        let sender = PeerID(str: "0102030405060708")
+        let timestamp = UInt64(Date().timeIntervalSince1970 * 1000)
+        let first = makePublicPacket(content: "one", sender: sender, timestamp: timestamp)
+        let second = makePublicPacket(content: "two", sender: sender, timestamp: timestamp)
+
+        ble._test_handlePacket(first, fromPeerID: sender)
+        ble._test_handlePacket(second, fromPeerID: sender)
+
+        let receivedBoth = await TestHelpers.waitUntil(
+            { delegate.publicMessagesSnapshot().count == 2 },
+            timeout: TestConstants.defaultTimeout
+        )
+        #expect(receivedBoth)
+        #expect(Set(delegate.publicMessagesSnapshot().map(\.content)) == Set(["one", "two"]))
+    }
+
+    @Test
+    func localRecipientAddressing_acceptsShortIDAndFullNoiseKey() {
+        let ble = makeService()
+
+        #expect(ble._test_isRecipientAddressedToMe(Data(hexString: ble.myPeerID.id)))
+        #expect(ble._test_isRecipientAddressedToMe(ble.getNoiseService().getStaticPublicKeyData()))
+        #expect(!ble._test_isRecipientAddressedToMe(Data(repeating: 0xAA, count: 8)))
+    }
+
+    @Test
     func announceSenderMismatch_isRejected() async throws {
         let ble = makeService()
 
