@@ -6,6 +6,7 @@ import signal
 import shutil
 import socket
 import subprocess
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -29,6 +30,10 @@ class ServicePaths:
     @property
     def log_path(self) -> Path:
         return self.base_dir / "service.log"
+
+    @property
+    def web_log_path(self) -> Path:
+        return self.base_dir / "web.log"
 
 
 class LiveServiceClient:
@@ -99,6 +104,11 @@ class LiveServiceManager:
     def start(self) -> dict[str, Any]:
         current = self.status()
         if current.get("status") == "running":
+            metadata = self._read_metadata() or {}
+            if current.get("web_status") != "running":
+                self._start_web_service(metadata)
+                self._write_metadata(metadata)
+                current = self.status()
             current["already_running"] = True
             return current
 
@@ -148,6 +158,8 @@ class LiveServiceManager:
                     pass
                 raise RuntimeError(f"BitChat live service exited during startup; see {self.paths.log_path}")
             if client.is_running():
+                self._start_web_service(metadata)
+                self._write_metadata(metadata)
                 return self.status()
             time.sleep(0.25)
 
@@ -175,8 +187,10 @@ class LiveServiceManager:
                 "log_path": metadata.get("log_path"),
             }
 
-        running = LiveServiceClient(paths=self.paths, timeout=0.35).is_running()
-        return {
+        running = self._live_client_running()
+        web_pid = int(metadata.get("web_pid", 0))
+        web_running = self._process_alive(web_pid)
+        status = {
             "type": "service",
             "status": "running" if running else "starting",
             "backend_mode": "live",
@@ -185,7 +199,12 @@ class LiveServiceManager:
             "started_at": metadata.get("started_at"),
             "log_path": metadata.get("log_path"),
             "build_configuration": metadata.get("build_configuration"),
+            "web_status": "running" if web_running else "stopped",
+            "web_pid": web_pid or None,
+            "web_port": metadata.get("web_port"),
+            "web_url": metadata.get("web_url"),
         }
+        return status
 
     def stop(self) -> dict[str, Any]:
         metadata = self._read_metadata()
@@ -193,6 +212,8 @@ class LiveServiceManager:
             return {"type": "service", "status": "stopped"}
 
         pid = int(metadata.get("pid", 0))
+        web_pid = int(metadata.get("web_pid", 0))
+        self._terminate_process(web_pid)
         self._terminate_process(pid)
 
         try:
@@ -206,6 +227,53 @@ class LiveServiceManager:
             return [{"type": "event", "event": "service-log", "text": ""}]
         lines = self.paths.log_path.read_text(encoding="utf-8", errors="replace").splitlines()
         return [{"type": "event", "event": "service-log", "text": line} for line in lines[-tail:]]
+
+    def _start_web_service(self, metadata: dict[str, Any]) -> None:
+        web_pid = int(metadata.get("web_pid", 0))
+        if self._process_alive(web_pid):
+            return
+
+        self.paths.base_dir.mkdir(parents=True, exist_ok=True)
+        web_port = self._reserve_port()
+        host = "127.0.0.1"
+        cmd = [
+            sys.executable,
+            "-m",
+            "cli_anything.bitchat.web_app",
+            "--host",
+            host,
+            "--port",
+            str(web_port),
+            "--base-dir",
+            str(self.paths.base_dir),
+        ]
+        with self.paths.web_log_path.open("a", encoding="utf-8") as log_handle:
+            log_handle.write(f"\n--- starting {' '.join(cmd)} ---\n")
+            log_handle.flush()
+            proc = subprocess.Popen(
+                cmd,
+                cwd=self.source_dir,
+                stdout=log_handle,
+                stderr=subprocess.STDOUT,
+                text=True,
+                start_new_session=True,
+            )
+
+        deadline = time.time() + 5.0
+        while time.time() < deadline:
+            if proc.poll() is not None:
+                raise RuntimeError(f"BitChat web service exited during startup; see {self.paths.web_log_path}")
+            if self._port_accepts_connections(host, web_port):
+                metadata["web_host"] = host
+                metadata["web_pid"] = int(proc.pid)
+                metadata["web_port"] = web_port
+                metadata["web_url"] = f"http://{host}:{web_port}"
+                metadata["web_log_path"] = str(self.paths.web_log_path)
+                return
+            time.sleep(0.1)
+
+        self._terminate_process(proc.pid)
+        raise RuntimeError(f"BitChat web service did not become ready; see {self.paths.web_log_path}")
 
     def _service_arguments(self, port: int) -> list[str]:
         return [
@@ -319,6 +387,7 @@ class LiveServiceManager:
             return json.load(handle)
 
     def _write_metadata(self, metadata: dict[str, Any]) -> None:
+        self.paths.base_dir.mkdir(parents=True, exist_ok=True)
         tmp_path = self.paths.metadata_path.with_suffix(".tmp")
         with tmp_path.open("w", encoding="utf-8") as handle:
             json.dump(metadata, handle, sort_keys=True)
@@ -350,6 +419,17 @@ class LiveServiceManager:
             time.sleep(0.1)
         if cls._process_alive(pid):
             os.kill(pid, signal.SIGKILL)
+
+    def _live_client_running(self) -> bool:
+        return LiveServiceClient(paths=self.paths, timeout=0.35).is_running()
+
+    @staticmethod
+    def _port_accepts_connections(host: str, port: int) -> bool:
+        try:
+            with socket.create_connection((host, port), timeout=0.25):
+                return True
+        except OSError:
+            return False
 
     @staticmethod
     def _iso_now() -> str:

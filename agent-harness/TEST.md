@@ -20,6 +20,7 @@ swift test --filter BitchatHarnessServiceTests
 pip install -e agent-harness
 cli-anything-bitchat --json status
 cli-anything-bitchat --json service start
+cli-anything-bitchat --json service status  # includes web_url for the local PWA
 cli-anything-bitchat --json --backend live status
 cli-anything-bitchat --json --backend live send --text "agent harness smoke"
 cli-anything-bitchat --json service stop

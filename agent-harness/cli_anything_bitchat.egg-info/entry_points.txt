@@ -1,0 +1,2 @@
+[console_scripts]
+cli-anything-bitchat = cli_anything.bitchat.bitchat_cli:main

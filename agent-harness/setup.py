@@ -6,6 +6,9 @@ setup(
     version="0.1.0",
     description="CLI-Anything harness for BitChat",
     packages=find_namespace_packages(include=["cli_anything.*"]),
+    package_data={
+        "cli_anything.bitchat.web_static": ["*.html", "*.css", "*.js", "*.webmanifest", "icons/*.svg"],
+    },
     install_requires=["click>=8.0"],
     entry_points={
         "console_scripts": [

@@ -24,10 +24,10 @@ inspect and operate BitChat from the command line. The harness includes:
 Quick start:
 
 ```bash
-python3 -m pip install -e agent-harness
-.agents/skills/bitchat-harness/scripts/bitchat-harness --json service start
-.agents/skills/bitchat-harness/scripts/bitchat-harness --json --backend live peers
-.agents/skills/bitchat-harness/scripts/bitchat-harness --json --backend live send --text "hello mesh"
+uv tool install -e agent-harness --force
+cli-anything-bitchat --json service start
+cli-anything-bitchat --json --backend live peers
+cli-anything-bitchat --json --backend live send --text "hello mesh"
 ```
 
 `service start` builds the harness app bundle in Release by default so it joins

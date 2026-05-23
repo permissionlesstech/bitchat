@@ -1,0 +1,9 @@
+Metadata-Version: 2.4
+Name: cli-anything-bitchat
+Version: 0.1.0
+Summary: CLI-Anything harness for BitChat
+Requires-Python: >=3.9
+Requires-Dist: click>=8.0
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary

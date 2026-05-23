@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#000000">
+    <title>BitChat Local</title>
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/app.css?v=2">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <span class="status-dot" id="service-dot"></span>
+          <span class="brand-name">BitChat</span>
+          <span class="brand-mode" id="backend-mode">local</span>
+        </div>
+        <div class="status-strip">
+          <span id="nickname">nickname: --</span>
+          <span id="bluetooth-state">bluetooth: --</span>
+          <span id="peer-count">peers: --</span>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <aside class="sidebar">
+          <section>
+            <div class="rail-label">Channels</div>
+            <div class="chat-list" id="chat-list"></div>
+          </section>
+          <section>
+            <div class="rail-label">Peers</div>
+            <div class="peer-list" id="peer-list"></div>
+          </section>
+        </aside>
+
+        <section class="conversation">
+          <div class="conversation-head">
+            <div>
+              <div class="rail-label">Viewing</div>
+              <h1 id="active-chat-name">#mesh</h1>
+            </div>
+            <div class="head-meta" id="active-chat-meta">view only</div>
+          </div>
+
+          <div class="messages" id="messages" aria-live="polite"></div>
+
+          <footer class="composer" aria-label="Message composer disabled until V2">
+            <span class="prompt">$</span>
+            <input value="send feature arrives in V2" disabled>
+            <button disabled>Send</button>
+          </footer>
+        </section>
+      </main>
+    </div>
+    <script src="/app.js?v=2" type="module"></script>
+  </body>
+</html>

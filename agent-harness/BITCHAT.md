@@ -11,6 +11,7 @@ surface for agents:
 - `--json` newline-delimited machine output
 - local JSONL history for messages observed or sent through the harness
 - `service start/status/stop/logs` for the live Bluetooth mesh service
+- local read-only PWA web chat launched and stopped with the live service
 
 Short-lived harness operations call the native Swift helper through:
 
@@ -27,6 +28,13 @@ cli-anything-bitchat --json --backend live command "/who"
 cli-anything-bitchat --json --backend live send --text "hello mesh"
 cli-anything-bitchat --json service stop
 ```
+
+`service start` also launches a localhost-only web app. The JSON emitted by
+`service start` and `service status` includes `web_url`, `web_port`, `web_pid`,
+and `web_status`. Open `web_url` manually when you want the V1 read-only chat
+view; the harness does not auto-open a browser so agent workflows stay quiet.
+The PWA shell is installable/offline-capable, but message data still comes from
+the running local service and `~/.bitchat/agent-harness/history.jsonl`.
 
 Set `BITCHAT_HARNESS_BINARY` to point at a prebuilt helper executable when a
 faster backend is available.

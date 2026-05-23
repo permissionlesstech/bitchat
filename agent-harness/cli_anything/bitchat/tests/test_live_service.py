@@ -90,3 +90,45 @@ def test_live_service_manager_allows_debug_bundle_for_testnet(tmp_path, monkeypa
 
     assert manager.build_configuration == "debug"
     assert manager._swift_build_command() == ["swift", "build", "-c", "debug"]
+
+
+def test_live_service_manager_metadata_includes_web_service(tmp_path):
+    from cli_anything.bitchat.utils.live_service import LiveServiceManager, ServicePaths
+
+    manager = LiveServiceManager(source_dir=tmp_path, paths=ServicePaths(tmp_path / "state"))
+    metadata = {
+        "host": "127.0.0.1",
+        "pid": 123,
+        "port": 4567,
+        "started_at": "2026-05-23T18:19:48Z",
+        "log_path": str(tmp_path / "service.log"),
+        "build_configuration": "release",
+        "web_host": "127.0.0.1",
+        "web_pid": 234,
+        "web_port": 5678,
+        "web_url": "http://127.0.0.1:5678",
+    }
+    manager._write_metadata(metadata)
+    manager._process_alive = lambda pid: pid in {123, 234}
+    manager._live_client_running = lambda: True
+
+    status = manager.status()
+
+    assert status["status"] == "running"
+    assert status["web_status"] == "running"
+    assert status["web_url"] == "http://127.0.0.1:5678"
+
+
+def test_live_service_manager_stop_terminates_web_service(tmp_path):
+    from cli_anything.bitchat.utils.live_service import LiveServiceManager, ServicePaths
+
+    manager = LiveServiceManager(source_dir=tmp_path, paths=ServicePaths(tmp_path / "state"))
+    manager._write_metadata({"pid": 123, "port": 4567, "web_pid": 234, "web_port": 5678})
+    terminated = []
+    manager._terminate_process = lambda pid: terminated.append(pid)
+
+    status = manager.stop()
+
+    assert status == {"type": "service", "status": "stopped"}
+    assert terminated == [234, 123]
+    assert not manager.paths.metadata_path.exists()

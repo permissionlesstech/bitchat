@@ -40,6 +40,11 @@ the same mainnet BLE mesh as normal phone builds. Set
 Debug/testnet peers. Live `status` includes `bluetooth_service_uuid` so agents can
 verify the active mesh UUID.
 
+`service start` also starts a localhost-only read-only web app and includes
+`web_url` in `service start` and `service status` JSON. Open that URL manually to
+view the V1 PWA chat console. `service stop` terminates both the live BitChat
+service and the web app.
+
 Public live mesh sends do not require `peers` or `/who` to show another peer
 first. An empty peer list means this Mac has not discovered a nearby BitChat peer
 yet; direct/private sends still require a discovered peer nickname or id.
