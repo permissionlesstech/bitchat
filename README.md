@@ -8,6 +8,33 @@ A decentralized peer-to-peer messaging app with dual transport architecture: loc
 
 📲 [App Store](https://apps.apple.com/us/app/bitchat-mesh/id6748219622)
 
+## About this fork
+
+This fork adds a CLI-Anything harness so AI agents and local automation tools can
+inspect and operate BitChat from the command line. The harness includes:
+
+- an imsg-like CLI surface for `status`, `peers`, `chats`, `send`, `history`,
+  `watch`, `command`, and nickname management
+- a live macOS service mode for Bluetooth mesh chat via
+  `service start/status/stop/logs`
+- JSON output intended for agents such as Claude Code, Codex, and other shell
+  operators
+- a repo-local agent skill in `.agents/skills/bitchat-harness`
+
+Quick start:
+
+```bash
+python3 -m pip install -e agent-harness
+.agents/skills/bitchat-harness/scripts/bitchat-harness --json service start
+.agents/skills/bitchat-harness/scripts/bitchat-harness --json --backend live peers
+.agents/skills/bitchat-harness/scripts/bitchat-harness --json --backend live send --text "hello mesh"
+```
+
+`service start` builds the harness app bundle in Release by default so it joins
+the same mainnet BLE mesh as normal phone builds. Live `status` includes
+`bluetooth_service_uuid`, `build_configuration`, and peer counts to make
+discovery issues visible.
+
 ## License
 
 This project is released into the public domain. See the [LICENSE](LICENSE) file for details.
