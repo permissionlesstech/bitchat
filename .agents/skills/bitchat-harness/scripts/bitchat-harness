@@ -2,18 +2,21 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEFAULT_REPO="/Users/jasonxu/Documents/personal/bitchat"
-REPO="${BITCHAT_REPO:-$DEFAULT_REPO}"
-CLI="${BITCHAT_CLI:-/Users/jasonxu/Library/Python/3.13/bin/cli-anything-bitchat}"
+REPO="${BITCHAT_REPO:-$(cd "$SCRIPT_DIR/../../../.." && pwd)}"
+CLI="${BITCHAT_CLI:-}"
 
 if [[ ! -d "$REPO" ]]; then
-  REPO="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+  REPO="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 fi
 
 cd "$REPO"
 
-if [[ -x "$CLI" ]]; then
+if [[ -n "$CLI" && -x "$CLI" ]]; then
   exec "$CLI" "$@"
+fi
+
+if command -v cli-anything-bitchat >/dev/null 2>&1; then
+  exec cli-anything-bitchat "$@"
 fi
 
 exec python3 -m cli_anything.bitchat "$@"

@@ -1,6 +1,6 @@
 # BitChat Harness Notes
 
-Target software: BitChat at `/Users/jasonxu/Documents/personal/bitchat`.
+Target software: the local BitChat checkout containing this harness.
 
 The harness follows the CLI-Anything layout and exposes an imsg-like operator
 surface for agents:

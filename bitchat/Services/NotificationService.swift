@@ -26,6 +26,11 @@ protocol NotificationRequestDelivering {
     func add(_ request: UNNotificationRequest)
 }
 
+enum HarnessNotificationConstants {
+    static let privateMessageCategoryIdentifier = "chat.bitchat.harness.private-message"
+    static let copyMessageActionIdentifier = "chat.bitchat.harness.copy-message"
+}
+
 private final class NotificationCenterAuthorizerAdapter: NotificationAuthorizing {
     private let center: UNUserNotificationCenter
 
@@ -125,6 +130,7 @@ final class NotificationService {
         body: String,
         identifier: String,
         userInfo: [String: Any]? = nil,
+        categoryIdentifier: String? = nil,
         interruptionLevel: UNNotificationInterruptionLevel = .active
     ) {
         guard !isRunningTests else { return }
@@ -133,6 +139,9 @@ final class NotificationService {
         content.body = body
         content.sound = .default
         content.interruptionLevel = interruptionLevel
+        if let categoryIdentifier {
+            content.categoryIdentifier = categoryIdentifier
+        }
 
         if let userInfo = userInfo {
             content.userInfo = userInfo
@@ -159,9 +168,15 @@ final class NotificationService {
         let title = "🔒 DM from \(sender)"
         let body = message
         let identifier = "private-\(UUID().uuidString)"
-        let userInfo = ["peerID": peerID.id, "senderName": sender]
+        let userInfo = ["peerID": peerID.id, "senderName": sender, "message": message]
         
-        sendLocalNotification(title: title, body: body, identifier: identifier, userInfo: userInfo)
+        sendLocalNotification(
+            title: title,
+            body: body,
+            identifier: identifier,
+            userInfo: userInfo,
+            categoryIdentifier: HarnessNotificationConstants.privateMessageCategoryIdentifier
+        )
     }
     
     // Geohash public chat notification with deep link to a specific geohash

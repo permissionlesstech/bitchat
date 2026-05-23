@@ -3,8 +3,8 @@ name: bitchat-harness
 description: Operate the local BitChat CLI-Anything harness for status, peers, chats, live sends, service start/stop/logs, command parsing, nickname management, history, and watch workflows. Use when the user asks an agent to inspect or drive BitChat through the local harness.
 disable-model-invocation: true
 license: MIT
-compatibility: Requires macOS, the local BitChat checkout at /Users/jasonxu/Documents/personal/bitchat, and the editable cli-anything-bitchat harness install.
-allowed-tools: Bash(/Users/jasonxu/Documents/personal/bitchat/.agents/skills/bitchat-harness/scripts/bitchat-harness *)
+compatibility: Requires macOS, a local BitChat checkout, and the editable cli-anything-bitchat harness install.
+allowed-tools: Bash(./.agents/skills/bitchat-harness/scripts/bitchat-harness *)
 argument-hint: "[bitchat harness request]"
 ---
 
@@ -15,13 +15,13 @@ Use this skill to operate the local BitChat CLI-Anything harness from an agent s
 The stable command for agents is:
 
 ```bash
-/Users/jasonxu/Documents/personal/bitchat/.agents/skills/bitchat-harness/scripts/bitchat-harness --json status
+./.agents/skills/bitchat-harness/scripts/bitchat-harness --json status
 ```
 
 The wrapper runs from the BitChat repo and delegates to:
 
 ```bash
-/Users/jasonxu/Library/Python/3.13/bin/cli-anything-bitchat
+cli-anything-bitchat
 ```
 
 `service start` builds and launches the harness app bundle in Release by default so it joins the same mainnet BLE mesh as normal phone builds. To intentionally test against Debug/testnet peers, prefix commands with `BITCHAT_HARNESS_CONFIGURATION=debug`.
@@ -29,7 +29,6 @@ The wrapper runs from the BitChat repo and delegates to:
 If the harness is not installed or has drifted, refresh it with:
 
 ```bash
-cd /Users/jasonxu/Documents/personal/bitchat
 python3 -m pip install -e agent-harness
 ```
 
@@ -38,20 +37,20 @@ python3 -m pip install -e agent-harness
 Prefer `--json` for all agent-readable calls.
 
 ```bash
-/Users/jasonxu/Documents/personal/bitchat/.agents/skills/bitchat-harness/scripts/bitchat-harness --json status
-/Users/jasonxu/Documents/personal/bitchat/.agents/skills/bitchat-harness/scripts/bitchat-harness --json peers
-/Users/jasonxu/Documents/personal/bitchat/.agents/skills/bitchat-harness/scripts/bitchat-harness --json chats
-/Users/jasonxu/Documents/personal/bitchat/.agents/skills/bitchat-harness/scripts/bitchat-harness --json send --text "hello mesh"
-/Users/jasonxu/Documents/personal/bitchat/.agents/skills/bitchat-harness/scripts/bitchat-harness --json send --to alice --text "private hello"
-/Users/jasonxu/Documents/personal/bitchat/.agents/skills/bitchat-harness/scripts/bitchat-harness --json command "/who"
-/Users/jasonxu/Documents/personal/bitchat/.agents/skills/bitchat-harness/scripts/bitchat-harness --json nickname get
-/Users/jasonxu/Documents/personal/bitchat/.agents/skills/bitchat-harness/scripts/bitchat-harness --json nickname set jason
-/Users/jasonxu/Documents/personal/bitchat/.agents/skills/bitchat-harness/scripts/bitchat-harness --json history --chat-id mesh --limit 20
-/Users/jasonxu/Documents/personal/bitchat/.agents/skills/bitchat-harness/scripts/bitchat-harness --json watch --once
-/Users/jasonxu/Documents/personal/bitchat/.agents/skills/bitchat-harness/scripts/bitchat-harness --json service start
-/Users/jasonxu/Documents/personal/bitchat/.agents/skills/bitchat-harness/scripts/bitchat-harness --json service status
-/Users/jasonxu/Documents/personal/bitchat/.agents/skills/bitchat-harness/scripts/bitchat-harness --json service logs --tail 40
-/Users/jasonxu/Documents/personal/bitchat/.agents/skills/bitchat-harness/scripts/bitchat-harness --json service stop
+./.agents/skills/bitchat-harness/scripts/bitchat-harness --json status
+./.agents/skills/bitchat-harness/scripts/bitchat-harness --json peers
+./.agents/skills/bitchat-harness/scripts/bitchat-harness --json chats
+./.agents/skills/bitchat-harness/scripts/bitchat-harness --json send --text "hello mesh"
+./.agents/skills/bitchat-harness/scripts/bitchat-harness --json send --to alice --text "private hello"
+./.agents/skills/bitchat-harness/scripts/bitchat-harness --json command "/who"
+./.agents/skills/bitchat-harness/scripts/bitchat-harness --json nickname get
+./.agents/skills/bitchat-harness/scripts/bitchat-harness --json nickname set agent
+./.agents/skills/bitchat-harness/scripts/bitchat-harness --json history --chat-id mesh --limit 20
+./.agents/skills/bitchat-harness/scripts/bitchat-harness --json watch --once
+./.agents/skills/bitchat-harness/scripts/bitchat-harness --json service start
+./.agents/skills/bitchat-harness/scripts/bitchat-harness --json service status
+./.agents/skills/bitchat-harness/scripts/bitchat-harness --json service logs --tail 40
+./.agents/skills/bitchat-harness/scripts/bitchat-harness --json service stop
 ```
 
 ## Live Chat
@@ -59,16 +58,16 @@ Prefer `--json` for all agent-readable calls.
 For live Bluetooth mesh chat, start the service first:
 
 ```bash
-/Users/jasonxu/Documents/personal/bitchat/.agents/skills/bitchat-harness/scripts/bitchat-harness --json service start
+./.agents/skills/bitchat-harness/scripts/bitchat-harness --json service start
 ```
 
 Then force the live backend for operations that should go through the running mesh service:
 
 ```bash
-/Users/jasonxu/Documents/personal/bitchat/.agents/skills/bitchat-harness/scripts/bitchat-harness --json --backend live status
-/Users/jasonxu/Documents/personal/bitchat/.agents/skills/bitchat-harness/scripts/bitchat-harness --json --backend live peers
-/Users/jasonxu/Documents/personal/bitchat/.agents/skills/bitchat-harness/scripts/bitchat-harness --json --backend live command "/who"
-/Users/jasonxu/Documents/personal/bitchat/.agents/skills/bitchat-harness/scripts/bitchat-harness --json --backend live send --text "hello mesh"
+./.agents/skills/bitchat-harness/scripts/bitchat-harness --json --backend live status
+./.agents/skills/bitchat-harness/scripts/bitchat-harness --json --backend live peers
+./.agents/skills/bitchat-harness/scripts/bitchat-harness --json --backend live command "/who"
+./.agents/skills/bitchat-harness/scripts/bitchat-harness --json --backend live send --text "hello mesh"
 ```
 
 `--backend auto` uses the live service when it is running and falls back to the short-lived native harness when it is stopped.
@@ -78,13 +77,13 @@ For public mesh chat, do not require `peers` or `/who` to show another peer befo
 Only direct/private sends require a discovered peer:
 
 ```bash
-/Users/jasonxu/Documents/personal/bitchat/.agents/skills/bitchat-harness/scripts/bitchat-harness --json --backend live send --to alice --text "private hello"
+./.agents/skills/bitchat-harness/scripts/bitchat-harness --json --backend live send --to alice --text "private hello"
 ```
 
 Invoking the wrapper with no subcommand starts the harness REPL:
 
 ```bash
-/Users/jasonxu/Documents/personal/bitchat/.agents/skills/bitchat-harness/scripts/bitchat-harness
+./.agents/skills/bitchat-harness/scripts/bitchat-harness
 ```
 
 ## Output Contract

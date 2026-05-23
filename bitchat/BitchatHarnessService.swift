@@ -1,9 +1,11 @@
 #if os(macOS)
+import AppKit
 import BitFoundation
 import Combine
 import CoreBluetooth
 import Foundation
 import Network
+import UserNotifications
 
 enum HarnessServiceLog {
     private static let queue = DispatchQueue(label: "chat.bitchat.harness.service-log")
@@ -71,6 +73,132 @@ enum HarnessServiceError: LocalizedError {
         switch self {
         case .message(let message): return message
         }
+    }
+}
+
+protocol HarnessDirectMessageNotifying: AnyObject {
+    func requestAuthorization()
+    func notifyPrivateMessage(from sender: String, message: String, peerID: PeerID)
+}
+
+protocol HarnessNotificationCenterManaging: AnyObject {
+    func setNotificationCategories(_ categories: Set<UNNotificationCategory>)
+    func setDelegate(_ delegate: (any UNUserNotificationCenterDelegate)?)
+    func requestAuthorization(
+        options: UNAuthorizationOptions,
+        completionHandler: @escaping (Bool, Error?) -> Void
+    )
+}
+
+protocol HarnessMessagePasteboarding: AnyObject {
+    func copyMessage(_ message: String) -> Bool
+}
+
+private final class HarnessNotificationCenterManager: HarnessNotificationCenterManaging {
+    private let center: UNUserNotificationCenter
+
+    init(center: UNUserNotificationCenter = .current()) {
+        self.center = center
+    }
+
+    func setNotificationCategories(_ categories: Set<UNNotificationCategory>) {
+        center.setNotificationCategories(categories)
+    }
+
+    func setDelegate(_ delegate: (any UNUserNotificationCenterDelegate)?) {
+        center.delegate = delegate
+    }
+
+    func requestAuthorization(
+        options: UNAuthorizationOptions,
+        completionHandler: @escaping (Bool, Error?) -> Void
+    ) {
+        center.requestAuthorization(options: options, completionHandler: completionHandler)
+    }
+}
+
+private final class HarnessMessagePasteboard: HarnessMessagePasteboarding {
+    func copyMessage(_ message: String) -> Bool {
+        NSPasteboard.general.clearContents()
+        return NSPasteboard.general.setString(message, forType: .string)
+    }
+}
+
+final class HarnessNotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
+    private let pasteboard: HarnessMessagePasteboarding
+    private let logger: (String) -> Void
+
+    init(
+        pasteboard: HarnessMessagePasteboarding = HarnessMessagePasteboard(),
+        logger: @escaping (String) -> Void = HarnessServiceLog.write
+    ) {
+        self.pasteboard = pasteboard
+        self.logger = logger
+    }
+
+    func handleResponse(actionIdentifier: String, userInfo: [AnyHashable: Any]) {
+        guard actionIdentifier == HarnessNotificationConstants.copyMessageActionIdentifier else { return }
+        guard let message = userInfo["message"] as? String else {
+            logger("BitChat harness service: notification copy action missing message content")
+            return
+        }
+        if pasteboard.copyMessage(message) {
+            logger("BitChat harness service: copied notification message to clipboard")
+        } else {
+            logger("BitChat harness service: failed to copy notification message to clipboard")
+        }
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        handleResponse(
+            actionIdentifier: response.actionIdentifier,
+            userInfo: response.notification.request.content.userInfo
+        )
+        completionHandler()
+    }
+}
+
+final class HarnessUserNotificationDirectMessageNotifier: HarnessDirectMessageNotifying {
+    private let notificationCenter: HarnessNotificationCenterManaging
+    private let notificationDelegate: HarnessNotificationDelegate
+
+    init(
+        notificationCenter: HarnessNotificationCenterManaging = HarnessNotificationCenterManager(),
+        pasteboard: HarnessMessagePasteboarding = HarnessMessagePasteboard()
+    ) {
+        self.notificationCenter = notificationCenter
+        self.notificationDelegate = HarnessNotificationDelegate(pasteboard: pasteboard)
+    }
+
+    func requestAuthorization() {
+        let copyAction = UNNotificationAction(
+            identifier: HarnessNotificationConstants.copyMessageActionIdentifier,
+            title: "Copy Message",
+            options: []
+        )
+        let category = UNNotificationCategory(
+            identifier: HarnessNotificationConstants.privateMessageCategoryIdentifier,
+            actions: [copyAction],
+            intentIdentifiers: [],
+            options: []
+        )
+        notificationCenter.setNotificationCategories([category])
+        notificationCenter.setDelegate(notificationDelegate)
+        notificationCenter.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+            if let error {
+                HarnessServiceLog.write("BitChat harness service: notification authorization failed: \(error.localizedDescription)")
+            } else if !granted {
+                HarnessServiceLog.write("BitChat harness service: notification authorization denied")
+            }
+        }
+    }
+
+    func notifyPrivateMessage(from sender: String, message: String, peerID: PeerID) {
+        NotificationService.shared.sendPrivateMessageNotification(from: sender, message: message, peerID: peerID)
     }
 }
 
@@ -151,6 +279,7 @@ final class LiveHarnessRuntime: NSObject, @MainActor BitchatDelegate, CommandCon
     private let identityManager: SecureIdentityStateManager
     private let transport: BLEService
     private let recorder: LiveHarnessEventRecorder
+    private let directMessageNotifier: HarnessDirectMessageNotifying
     private let nicknameKey = "bitchat.nickname"
     private var bluetoothState: CBManagerState = .unknown
     var nickname: String
@@ -158,21 +287,23 @@ final class LiveHarnessRuntime: NSObject, @MainActor BitchatDelegate, CommandCon
     var blockedUsers: Set<String> = []
     var privateChats: [PeerID: [BitchatMessage]] = [:]
 
-    override init() {
+    init(directMessageNotifier: HarnessDirectMessageNotifying = HarnessUserNotificationDirectMessageNotifier()) {
         keychain = HarnessFileKeychain()
         idBridge = NostrIdentityBridge(keychain: keychain)
         identityManager = SecureIdentityStateManager(keychain)
         transport = BLEService(keychain: keychain, idBridge: idBridge, identityManager: identityManager)
+        self.directMessageNotifier = directMessageNotifier
         nickname = UserDefaults.standard.string(forKey: nicknameKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if nickname.isEmpty {
             nickname = "agent\(Int.random(in: 1000...9999))"
             UserDefaults.standard.set(nickname, forKey: nicknameKey)
         }
-        recorder = LiveHarnessEventRecorder(myPeerID: transport.myPeerID)
+        recorder = LiveHarnessEventRecorder(myPeerID: transport.myPeerID, notifier: directMessageNotifier)
         super.init()
 
         transport.delegate = self
         transport.setNickname(nickname)
+        directMessageNotifier.requestAuthorization()
         transport.startServices()
         HarnessServiceLog.write(
             "BitChat harness service: bluetooth service uuid \(BLEService.serviceUUID.uuidString) (\(Self.buildConfiguration))"
@@ -418,15 +549,22 @@ final class LiveHarnessEventRecorder {
     private let path: URL
     private let queue = DispatchQueue(label: "chat.bitchat.harness.event-recorder")
     private let myPeerID: PeerID
+    private let notifier: HarnessDirectMessageNotifying?
     private var seenIDs: Set<String> = []
 
-    init(myPeerID: PeerID) {
+    init(myPeerID: PeerID, historyPath: URL? = nil, notifier: HarnessDirectMessageNotifying? = nil) {
         self.myPeerID = myPeerID
-        let base = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".bitchat", isDirectory: true)
-            .appendingPathComponent("agent-harness", isDirectory: true)
-        path = base.appendingPathComponent("history.jsonl")
-        try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        self.notifier = notifier
+        if let historyPath {
+            path = historyPath
+            try? FileManager.default.createDirectory(at: historyPath.deletingLastPathComponent(), withIntermediateDirectories: true)
+        } else {
+            let base = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent(".bitchat", isDirectory: true)
+                .appendingPathComponent("agent-harness", isDirectory: true)
+            path = base.appendingPathComponent("history.jsonl")
+            try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        }
     }
 
     func recordIfInbound(_ message: BitchatMessage, chatID: String, nickname: String) {
@@ -434,6 +572,9 @@ final class LiveHarnessEventRecorder {
         guard message.senderPeerID != myPeerID else { return }
         guard message.sender != nickname && !message.sender.hasPrefix("\(nickname)#") else { return }
         seenIDs.insert(message.id)
+        if message.isPrivate, let peerID = message.senderPeerID {
+            notifier?.notifyPrivateMessage(from: message.sender, message: message.content, peerID: peerID)
+        }
         let object: [String: Any] = [
             "type": "message",
             "id": message.id,

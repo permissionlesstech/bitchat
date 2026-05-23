@@ -70,8 +70,10 @@ final class NotificationServiceTests: XCTestCase {
         let request = deliverer.requests.singleValue
         XCTAssertEqual(request?.content.title, "🔒 DM from Alice")
         XCTAssertEqual(request?.content.body, "hi")
+        XCTAssertEqual(request?.content.categoryIdentifier, HarnessNotificationConstants.privateMessageCategoryIdentifier)
         XCTAssertEqual(request?.content.userInfo["peerID"] as? String, peerID.id)
         XCTAssertEqual(request?.content.userInfo["senderName"] as? String, "Alice")
+        XCTAssertEqual(request?.content.userInfo["message"] as? String, "hi")
     }
 
     func test_wrapperNotifications_setExpectedIdentifiersAndDeepLinks() {
