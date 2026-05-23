@@ -11,7 +11,6 @@ import SwiftUI
 import BitFoundation
 import UserNotifications
 
-@main
 struct BitchatApp: App {
     static let bundleID = Bundle.main.bundleIdentifier ?? "chat.bitchat"
     static let groupID = "group.\(bundleID)"
@@ -279,4 +278,3 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
         completionHandler([.banner, .sound])
     }
 }
-

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>chat.bitchat.harness</string>
+	<key>CFBundleName</key>
+	<string>bitchat-harness</string>
+	<key>CFBundleExecutable</key>
+	<string>bitchat</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>BitChat harness uses Bluetooth to create a secure mesh network for live chat.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>BitChat harness uses Bluetooth to discover and connect with nearby BitChat peers.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>BitChat harness uses approximate location only for optional geohash public chats.</string>
+	<key>NSLocationUsageDescription</key>
+	<string>BitChat harness uses approximate location only for optional geohash public chats.</string>
+</dict>
+</plist>

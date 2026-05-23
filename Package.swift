@@ -33,6 +33,7 @@ let package = Package(
             path: "bitchat",
             exclude: [
                 "Info.plist",
+                "HarnessInfo.plist",
                 "Assets.xcassets",
                 "_PreviewHelpers/PreviewAssets.xcassets",
                 "bitchat.entitlements",
@@ -42,6 +43,14 @@ let package = Package(
             ],
             resources: [
                 .process("Localizable.xcstrings")
+            ],
+            linkerSettings: [
+                .unsafeFlags([
+                    "-Xlinker", "-sectcreate",
+                    "-Xlinker", "__TEXT",
+                    "-Xlinker", "__info_plist",
+                    "-Xlinker", "bitchat/HarnessInfo.plist"
+                ])
             ]
         ),
         .testTarget(

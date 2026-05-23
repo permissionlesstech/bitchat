@@ -1,0 +1,8 @@
+interface:
+  display_name: "BitChat Harness"
+  short_description: "Operate the local BitChat CLI-Anything harness"
+  default_prompt: "Use $bitchat-harness to inspect or drive the local BitChat harness."
+
+policy:
+  allow_implicit_invocation: false
+
