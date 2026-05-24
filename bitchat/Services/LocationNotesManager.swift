@@ -14,7 +14,7 @@ struct LocationNotesDependencies {
     var sendEvent: SendEvent
     var deriveIdentity: (_ geohash: String) throws -> NostrIdentity
     var now: () -> Date
-    
+
     private static let idBridge = NostrIdentityBridge()
 
     static let live = LocationNotesDependencies(

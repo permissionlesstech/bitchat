@@ -15,27 +15,27 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
     private var blockedFingerprints: Set<String> = []
     private var blockedNostrPubkeys: Set<String> = []
     private var socialIdentities: [String: SocialIdentity] = [:]
-    
+
     init(_ keychain: KeychainManagerProtocol) {
         self.keychain = keychain
     }
-    
+
     func loadIdentityCache() {}
-    
+
     func saveIdentityCache() {}
-    
+
     func forceSave() {}
-    
+
     func getSocialIdentity(for fingerprint: String) -> SocialIdentity? {
         socialIdentities[fingerprint]
     }
-    
+
     func upsertCryptographicIdentity(fingerprint: String, noisePublicKey: Data, signingPublicKey: Data?, claimedNickname: String?) {}
-    
+
     func getCryptoIdentitiesByPeerIDPrefix(_ peerID: PeerID) -> [CryptographicIdentity] {
         []
     }
-    
+
     func updateSocialIdentity(_ identity: SocialIdentity) {
         socialIdentities[identity.fingerprint] = identity
         if identity.isBlocked {
@@ -44,21 +44,21 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
             blockedFingerprints.remove(identity.fingerprint)
         }
     }
-    
+
     func getFavorites() -> Set<String> {
         Set()
     }
-    
+
     func setFavorite(_ fingerprint: String, isFavorite: Bool) {}
-    
+
     func isFavorite(fingerprint: String) -> Bool {
         false
     }
-    
+
     func isBlocked(fingerprint: String) -> Bool {
         blockedFingerprints.contains(fingerprint) || socialIdentities[fingerprint]?.isBlocked == true
     }
-    
+
     func setBlocked(_ fingerprint: String, isBlocked: Bool) {
         if var identity = socialIdentities[fingerprint] {
             identity.isBlocked = isBlocked
@@ -81,11 +81,11 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
             blockedFingerprints.remove(fingerprint)
         }
     }
-    
+
     func isNostrBlocked(pubkeyHexLowercased: String) -> Bool {
         blockedNostrPubkeys.contains(pubkeyHexLowercased)
     }
-    
+
     func setNostrBlocked(_ pubkeyHexLowercased: String, isBlocked: Bool) {
         if isBlocked {
             blockedNostrPubkeys.insert(pubkeyHexLowercased)
@@ -93,25 +93,25 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
             blockedNostrPubkeys.remove(pubkeyHexLowercased)
         }
     }
-    
+
     func getBlockedNostrPubkeys() -> Set<String> {
         blockedNostrPubkeys
     }
-    
+
     func registerEphemeralSession(peerID: PeerID, handshakeState: HandshakeState) {}
-    
+
     func updateHandshakeState(peerID: PeerID, state: HandshakeState) {}
-    
+
     func clearAllIdentityData() {}
-    
+
     func removeEphemeralSession(peerID: PeerID) {}
-    
+
     func setVerified(fingerprint: String, verified: Bool) {}
-    
+
     func isVerified(fingerprint: String) -> Bool {
         true
     }
-    
+
     func getVerifiedFingerprints() -> Set<String> {
         Set()
     }

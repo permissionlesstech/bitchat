@@ -127,10 +127,10 @@ struct SocialIdentity: Codable {
 }
 
 enum TrustLevel: String, Codable {
-    case unknown = "unknown"
-    case casual = "casual"
-    case trusted = "trusted"
-    case verified = "verified"
+    case unknown
+    case casual
+    case trusted
+    case verified
 }
 
 // MARK: - Identity Cache
@@ -141,20 +141,20 @@ enum TrustLevel: String, Codable {
 struct IdentityCache: Codable {
     // Fingerprint -> Social mapping
     var socialIdentities: [String: SocialIdentity] = [:]
-    
+
     // Nickname -> [Fingerprints] reverse index
     // Multiple fingerprints can claim same nickname
     var nicknameIndex: [String: Set<String>] = [:]
-    
+
     // Verified fingerprints (cryptographic proof)
     var verifiedFingerprints: Set<String> = []
-    
+
     // Last interaction timestamps (privacy: optional)
-    var lastInteractions: [String: Date] = [:] 
-    
+    var lastInteractions: [String: Date] = [:]
+
     // Blocked Nostr pubkeys (lowercased hex) for geohash chats
     var blockedNostrPubkeys: Set<String> = []
-    
+
     // Schema version for future migrations
     var version: Int = 1
 }

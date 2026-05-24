@@ -4,18 +4,18 @@ import BitLogger
 /// Comprehensive input validation for BitChat protocol
 /// Prevents injection attacks, buffer overflows, and malformed data
 struct InputValidator {
-    
+
     // MARK: - Constants
-    
+
     struct Limits {
         static let maxNicknameLength = 50
         // BinaryProtocol caps payload length at UInt16.max (65_535). Leave headroom
         // for headers/padding by limiting user content to 60_000 bytes.
         static let maxMessageLength = 60_000
     }
-    
+
     // MARK: - String Content Validation
-    
+
     /// Validates and sanitizes user-provided strings used in UI
     ///
     /// Rejects strings containing control characters to prevent potential security issues
@@ -38,12 +38,12 @@ struct InputValidator {
 
         return trimmed
     }
-    
+
     /// Validates nickname
     static func validateNickname(_ nickname: String) -> String? {
         return validateUserString(nickname, maxLength: Limits.maxNicknameLength)
     }
-    
+
     // MARK: - Protocol Field Validation
 
     // Note: Message type validation is performed closer to decoding using

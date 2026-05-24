@@ -23,7 +23,7 @@ struct MeshTopologyTrackerTests {
         // Bidirectional announcement
         tracker.updateNeighbors(for: a, neighbors: [b])
         tracker.updateNeighbors(for: b, neighbors: [a])
-        
+
         let route = try #require(tracker.computeRoute(from: a, to: b))
         // Direct connection returns empty route (no intermediate hops)
         #expect(route == [])
@@ -62,7 +62,7 @@ struct MeshTopologyTrackerTests {
 
         // Should NOT find route A->C because B->C is unconfirmed (C didn't announce B)
         #expect(tracker.computeRoute(from: a, to: c) == nil)
-        
+
         // Now C announces B
         tracker.updateNeighbors(for: c, neighbors: [b])
         // Should find route
@@ -94,7 +94,7 @@ struct MeshTopologyTrackerTests {
 
         tracker.updateNeighbors(for: a, neighbors: [b])
         tracker.updateNeighbors(for: b, neighbors: [a])
-        
+
         // When start == end, route should be empty (no intermediate hops needed)
         let route = try #require(tracker.computeRoute(from: a, to: a))
         #expect(route == [])

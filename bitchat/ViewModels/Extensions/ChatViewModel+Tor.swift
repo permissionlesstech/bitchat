@@ -10,9 +10,9 @@ import Combine
 import Tor
 
 extension ChatViewModel {
-    
+
     // MARK: - Tor notifications
-    
+
     @objc func handleTorWillStart() {
         Task { @MainActor in
             if !self.torStatusAnnounced && TorManager.shared.torEnforced {

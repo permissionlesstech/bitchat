@@ -12,70 +12,70 @@ import BitFoundation
 @testable import bitchat
 
 struct NostrProtocolTests {
-    
+
     @Test func nip17MessageRoundTrip() throws {
         // Create sender and recipient identities
         let sender = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
-        
+
         print("Sender pubkey: \(sender.publicKeyHex)")
         print("Recipient pubkey: \(recipient.publicKeyHex)")
-        
+
         // Create a test message
         let originalContent = "Hello from NIP-17 test!"
-        
+
         // Create encrypted gift wrap
         let giftWrap = try NostrProtocol.createPrivateMessage(
             content: originalContent,
             recipientPubkey: recipient.publicKeyHex,
             senderIdentity: sender
         )
-        
+
         print("Gift wrap created with ID: \(giftWrap.id)")
         print("Gift wrap pubkey: \(giftWrap.pubkey)")
-        
+
         // Decrypt the gift wrap
         let (decryptedContent, senderPubkey, timestamp) = try NostrProtocol.decryptPrivateMessage(
             giftWrap: giftWrap,
             recipientIdentity: recipient
         )
-        
+
         // Verify
         #expect(decryptedContent == originalContent)
         #expect(senderPubkey == sender.publicKeyHex)
-        
+
         // Verify timestamp is reasonable (within last minute)
         let messageDate = Date(timeIntervalSince1970: TimeInterval(timestamp))
         let timeDiff = abs(messageDate.timeIntervalSinceNow)
         #expect(timeDiff < 60, "Message timestamp should be recent")
-        
+
         print("✅ Successfully decrypted message: '\(decryptedContent)' from \(senderPubkey) at \(messageDate)")
     }
-    
+
     @Test func giftWrapUsesUniqueEphemeralKeys() throws {
         // Create identities
         let sender = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
-        
+
         // Create two messages
         let message1 = try NostrProtocol.createPrivateMessage(
             content: "Message 1",
             recipientPubkey: recipient.publicKeyHex,
             senderIdentity: sender
         )
-        
+
         let message2 = try NostrProtocol.createPrivateMessage(
             content: "Message 2",
             recipientPubkey: recipient.publicKeyHex,
             senderIdentity: sender
         )
-        
+
         // Gift wrap pubkeys should be different (unique ephemeral keys)
         #expect(message1.pubkey != message2.pubkey)
-        
+
         print("Message 1 gift wrap pubkey: \(message1.pubkey)")
         print("Message 2 gift wrap pubkey: \(message2.pubkey)")
-        
+
         // Both should decrypt successfully
         let (content1, _, _) = try NostrProtocol.decryptPrivateMessage(
             giftWrap: message1,
@@ -85,23 +85,23 @@ struct NostrProtocolTests {
             giftWrap: message2,
             recipientIdentity: recipient
         )
-        
+
         #expect(content1 == "Message 1")
         #expect(content2 == "Message 2")
     }
-    
+
     @Test func decryptionFailsWithWrongRecipient() throws {
         let sender = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
         let wrongRecipient = try NostrIdentity.generate()
-        
+
         // Create message for recipient
         let giftWrap = try NostrProtocol.createPrivateMessage(
             content: "Secret message",
             recipientPubkey: recipient.publicKeyHex,
             senderIdentity: sender
         )
-        
+
         // Try to decrypt with wrong recipient
         if #available(macOS 14.4, iOS 17.4, *) {
             #expect(throws: CryptoKitError.authenticationFailure) {
@@ -158,10 +158,10 @@ struct NostrProtocolTests {
         let base64url = String(content.dropFirst("bitchat1:".count))
         let packetData = try #require(Self.base64URLDecode(base64url))
         let packet = try #require(BitchatPacket.from(packetData), "Failed to decode bitchat packet")
-        
+
         #expect(packet.type == MessageType.noiseEncrypted.rawValue)
         let payload = try #require(NoisePayload.decode(packet.payload), "Failed to decode NoisePayload")
-        
+
         switch payload.type {
         case .delivered:
             let mid = String(data: payload.data, encoding: .utf8)
@@ -175,7 +175,7 @@ struct NostrProtocolTests {
         // Identities
         let sender = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
-        
+
         let messageID = "TEST-MSG-READ-1"
         let senderPeerID = PeerID(str: "fedcba9876543210") // 8-byte hex peer ID
         let embedded = try #require(
@@ -201,10 +201,10 @@ struct NostrProtocolTests {
         let base64url = String(content.dropFirst("bitchat1:".count))
         let packetData = try #require(Self.base64URLDecode(base64url))
         let packet = try #require(BitchatPacket.from(packetData), "Failed to decode bitchat packet")
-        
+
         #expect(packet.type == MessageType.noiseEncrypted.rawValue)
         let payload = try #require(NoisePayload.decode(packet.payload), "Failed to decode NoisePayload")
-        
+
         switch payload.type {
         case .readReceipt:
             let mid = String(data: payload.data, encoding: .utf8)

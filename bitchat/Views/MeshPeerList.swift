@@ -32,7 +32,7 @@ struct MeshPeerList: View {
         let peers: [(peer: BitchatPeer, isMe: Bool, hasUnread: Bool, enc: EncryptionStatus)] = displayIDs.compactMap { id in
             mapped.first(where: { $0.peer.peerID.id == id })
         }
-        
+
         if viewModel.allPeers.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 Text(Strings.noneNearby)

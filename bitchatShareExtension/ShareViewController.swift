@@ -23,7 +23,7 @@ final class ShareViewController: UIViewController {
         static let sharedTextConfirmation = String(localized: "share.status.shared_text", comment: "Confirmation after successfully sharing text")
         static let failedToEncode = String(localized: "share.status.failed_to_encode", comment: "Shown when the share payload cannot be encoded")
     }
-    
+
     private let statusLabel: UILabel = {
         let l = UILabel()
         l.translatesAutoresizingMaskIntoConstraints = false

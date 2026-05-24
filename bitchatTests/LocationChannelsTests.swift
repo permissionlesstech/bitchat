@@ -12,13 +12,13 @@ struct LocationChannelsTests {
         let city = Geohash.encode(latitude: lat, longitude: lon, precision: GeohashChannelLevel.city.precision)
         let region = Geohash.encode(latitude: lat, longitude: lon, precision: GeohashChannelLevel.province.precision)
         let country = Geohash.encode(latitude: lat, longitude: lon, precision: GeohashChannelLevel.region.precision)
-        
+
         #expect(block.count == 7)
         #expect(neighborhood.count == 6)
         #expect(city.count == 5)
         #expect(region.count == 4)
         #expect(country.count == 2)
-        
+
         // All prefixes must match progressively
         #expect(block.hasPrefix(neighborhood))
         #expect(neighborhood.hasPrefix(city))

@@ -14,11 +14,11 @@ struct FingerprintView: View {
     let peerID: PeerID
     @Environment(\.dismiss) var dismiss
     @Environment(\.colorScheme) var colorScheme
-    
+
     private var textColor: Color {
         colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
     }
-    
+
     private var backgroundColor: Color {
         colorScheme == .dark ? Color.black : Color.white
     }
@@ -45,7 +45,7 @@ struct FingerprintView: View {
             String(localized: "common.unknown", comment: "Label for an unknown peer")
         }
     }
-    
+
     var body: some View {
         VStack(spacing: 20) {
             // Header
@@ -53,9 +53,9 @@ struct FingerprintView: View {
                 Text(Strings.title)
                     .font(.bitchatSystem(size: 16, weight: .bold, design: .monospaced))
                     .foregroundColor(textColor)
-                
+
                 Spacer()
-                
+
                 Button(action: { dismiss() }) {
                     Image(systemName: "xmark")
                         .font(.bitchatSystem(size: 14, weight: .semibold))
@@ -63,7 +63,7 @@ struct FingerprintView: View {
                 .foregroundColor(textColor)
             }
             .padding()
-            
+
             VStack(alignment: .leading, spacing: 16) {
                 // Prefer short mesh ID for session/encryption status
                 let statusPeerID = viewModel.getShortIDForNoiseKey(peerID)
@@ -83,36 +83,36 @@ struct FingerprintView: View {
                 }()
                 // Accurate encryption state based on short ID session
                 let encryptionStatus = viewModel.getEncryptionStatus(for: statusPeerID)
-                
+
                 HStack {
                     if let icon = encryptionStatus.icon {
                         Image(systemName: icon)
                             .font(.bitchatSystem(size: 20))
                             .foregroundColor(encryptionStatus == .noiseVerified ? Color.green : textColor)
                     }
-                    
+
                     VStack(alignment: .leading, spacing: 4) {
                         Text(peerNickname)
                             .font(.bitchatSystem(size: 18, weight: .semibold, design: .monospaced))
                             .foregroundColor(textColor)
-                        
+
                         Text(encryptionStatus.description)
                             .font(.bitchatSystem(size: 12, design: .monospaced))
                             .foregroundColor(textColor.opacity(0.7))
                     }
-                    
+
                     Spacer()
                 }
                 .padding()
                 .background(Color.gray.opacity(0.1))
                 .cornerRadius(8)
-                
+
                 // Their fingerprint
                 VStack(alignment: .leading, spacing: 8) {
                     Text(Strings.theirFingerprint)
                         .font(.bitchatSystem(size: 12, weight: .bold, design: .monospaced))
                         .foregroundColor(textColor.opacity(0.7))
-                    
+
                     if let fingerprint = viewModel.getFingerprint(for: statusPeerID) {
                         Text(formatFingerprint(fingerprint))
                             .font(.bitchatSystem(size: 14, design: .monospaced))
@@ -147,7 +147,7 @@ struct FingerprintView: View {
                     Text(Strings.yourFingerprint)
                         .font(.bitchatSystem(size: 12, weight: .bold, design: .monospaced))
                         .foregroundColor(textColor.opacity(0.7))
-                    
+
                     let myFingerprint = viewModel.getMyFingerprint()
                     Text(formatFingerprint(myFingerprint))
                         .font(.bitchatSystem(size: 14, design: .monospaced))
@@ -170,17 +170,17 @@ struct FingerprintView: View {
                             }
                         }
                 }
-                
+
                 // Verification status
                 if encryptionStatus == .noiseSecured || encryptionStatus == .noiseVerified {
                     let isVerified = encryptionStatus == .noiseVerified
-                    
+
                     VStack(spacing: 12) {
                         Text(isVerified ? Strings.verifiedBadge : Strings.notVerifiedBadge)
                             .font(.bitchatSystem(size: 14, weight: .bold, design: .monospaced))
                             .foregroundColor(isVerified ? Color.green : Color.orange)
                             .frame(maxWidth: .infinity)
-                        
+
                         Group {
                             if isVerified {
                                 Text(Strings.verifiedMessage)
@@ -194,7 +194,7 @@ struct FingerprintView: View {
                             .lineLimit(nil)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity)
-                        
+
                         if !isVerified {
                             Button(action: {
                                 viewModel.verifyFingerprint(for: peerID)
@@ -231,19 +231,19 @@ struct FingerprintView: View {
             }
             .padding()
             .frame(maxWidth: 500) // Constrain max width for better readability
-            
+
             Spacer()
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(backgroundColor)
     }
-    
+
     private func formatFingerprint(_ fingerprint: String) -> String {
         // Convert to uppercase and format into 4 lines (4 groups of 4 on each line)
         let uppercased = fingerprint.uppercased()
         var formatted = ""
-        
+
         for (index, char) in uppercased.enumerated() {
             // Add space every 4 characters (but not at the start)
             if index > 0 && index % 4 == 0 {
@@ -256,7 +256,7 @@ struct FingerprintView: View {
             }
             formatted += String(char)
         }
-        
+
         return formatted
     }
 }

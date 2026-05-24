@@ -12,22 +12,22 @@ import BitFoundation
 @testable import bitchat
 
 final class TestHelpers {
-    
+
     // MARK: - Key Generation
-    
+
     static func generateTestKeyPair() -> (privateKey: Curve25519.KeyAgreement.PrivateKey, publicKey: Curve25519.KeyAgreement.PublicKey) {
         let privateKey = Curve25519.KeyAgreement.PrivateKey()
         let publicKey = privateKey.publicKey
         return (privateKey, publicKey)
     }
-    
+
     static func generateTestIdentity(peerID: String, nickname: String) -> (peerID: String, nickname: String, privateKey: Curve25519.KeyAgreement.PrivateKey, publicKey: Curve25519.KeyAgreement.PublicKey) {
         let (privateKey, publicKey) = generateTestKeyPair()
         return (peerID: peerID, nickname: nickname, privateKey: privateKey, publicKey: publicKey)
     }
-    
+
     // MARK: - Message Creation
-    
+
     static func createTestMessage(
         content: String = TestConstants.testMessage1,
         sender: String = TestConstants.testNickname1,
@@ -49,7 +49,7 @@ final class TestHelpers {
             mentions: mentions
         )
     }
-    
+
     static func createTestPacket(
         type: UInt8 = 0x01,
         senderID: PeerID = PeerID(str: UUID().uuidString),
@@ -68,9 +68,9 @@ final class TestHelpers {
             ttl: ttl
         )
     }
-    
+
     // MARK: - Data Generation
-    
+
     static func generateRandomData(length: Int) -> Data {
         var data = Data(count: length)
         _ = data.withUnsafeMutableBytes { bytes in
@@ -78,13 +78,13 @@ final class TestHelpers {
         }
         return data
     }
-    
+
     static func generateTestPeerID() -> String {
         return "PEER" + UUID().uuidString.prefix(8)
     }
-    
+
     // MARK: - Async Helpers
-    
+
     static func waitFor(_ condition: @escaping () -> Bool, timeout: TimeInterval = TestConstants.defaultTimeout) async throws {
         let start = Date()
         while !condition() {
@@ -110,7 +110,7 @@ final class TestHelpers {
         }
         return true
     }
-    
+
     static func expectAsync<T>(
         timeout: TimeInterval = TestConstants.defaultTimeout,
         operation: @escaping () async throws -> T
@@ -119,12 +119,12 @@ final class TestHelpers {
             group.addTask {
                 return try await operation()
             }
-            
+
             group.addTask {
                 try await sleep(1)
                 throw TestError.timeout
             }
-            
+
             let result = try await group.next()!
             group.cancelAll()
             return result

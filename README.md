@@ -119,4 +119,4 @@ Run `just clean` afterwards to restore things to original state for mobile app b
 - Base app resources live under `bitchat/Localization/Base.lproj/`. Add new copy to `Localizable.strings` and plural rules to `Localizable.stringsdict`.
 - Share extension strings are separate in `bitchatShareExtension/Localization/Base.lproj/Localizable.strings`.
 - Prefer keys that describe intent (`app_info.features.offline.title`) and reuse existing ones where possible.
-- Run `xcodebuild -project bitchat.xcodeproj -scheme "bitchat (macOS)" -configuration Debug CODE_SIGNING_ALLOWED=NO build` to compile-check any localization updates.
+- Run `xcodebuild -project bitchat.xcodeproj -scheme "bitchat (macOS)" -configuration Debug CODE_SIGNING_ALLOWED=NO -skipPackagePluginValidation build` to compile-check any localization updates.

@@ -16,7 +16,7 @@ final class MockBLEBus {
 
     // Enable automatic flooding for public messages in integration tests only
     let autoFloodEnabled: Bool
-    
+
     init(autoFloodEnabled: Bool = false) {
         self.autoFloodEnabled = autoFloodEnabled
     }

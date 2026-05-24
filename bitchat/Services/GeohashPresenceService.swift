@@ -55,13 +55,13 @@ final class GeohashPresenceService: ObservableObject {
     private let relaySender: (NostrEvent, [String]) -> Void
     private let sleeper: (UInt64) async -> Void
     private let scheduleTimer: (TimeInterval, @escaping () -> Void) -> GeohashPresenceTimerProtocol
-    
+
     // MARK: - Constants
 
     // Loop interval range in seconds
     private let loopMinInterval: TimeInterval
     private let loopMaxInterval: TimeInterval
-    
+
     // Per-broadcast decorrelation delay range in seconds
     private let burstMinDelay: TimeInterval
     private let burstMaxDelay: TimeInterval
@@ -144,7 +144,7 @@ final class GeohashPresenceService: ObservableObject {
         self.burstMaxDelay = burstMaxDelay
         setupObservers()
     }
-    
+
     /// Start the service (safe to call multiple times)
     func start() {
         SecureLogger.info("Presence: service starting...", category: .session)
@@ -173,7 +173,7 @@ final class GeohashPresenceService: ObservableObject {
         // to announce presence in the new zone, then reset the loop.
         SecureLogger.debug("Presence: location changed, scheduling update", category: .session)
         heartbeatTimer?.invalidate()
-        
+
         // Small delay to allow location state to settle
         heartbeatTimer = scheduleTimer(5.0) { [weak self] in
             Task { @MainActor [weak self] in
@@ -181,7 +181,7 @@ final class GeohashPresenceService: ObservableObject {
             }
         }
     }
-    
+
     func handleConnectivityChange() {
         SecureLogger.debug("Presence: connectivity restored, triggering heartbeat", category: .session)
         // If we were waiting for network, do it now
@@ -209,7 +209,7 @@ final class GeohashPresenceService: ObservableObject {
             SecureLogger.debug("Presence: skipping heartbeat (Tor not ready)", category: .session)
             return
         }
-        
+
         // App must be active (or at least we shouldn't broadcast if in background, usually)
         if !torIsForeground() {
             return
@@ -226,14 +226,14 @@ final class GeohashPresenceService: ObservableObject {
             if !self.allowedPrecisions.contains(channel.geohash.count) {
                 continue
             }
-            
+
             // Launch independent task for each channel's delay
             Task { @MainActor in
                 // Random delay for decorrelation
                 let delay = TimeInterval.random(in: self.burstMinDelay...self.burstMaxDelay)
                 let nanoseconds = UInt64(delay * 1_000_000_000)
                 await self.sleeper(nanoseconds)
-                
+
                 self.broadcastPresence(for: channel.geohash)
             }
         }
@@ -244,15 +244,15 @@ final class GeohashPresenceService: ObservableObject {
             guard let identity = try? deriveIdentity(geohash) else {
                 return
             }
-            
+
             let event = try NostrProtocol.createGeohashPresenceEvent(
                 geohash: geohash,
                 senderIdentity: identity
             )
-            
+
             // Send via RelayManager
             let targetRelays = relayLookup(geohash, TransportConfig.nostrGeoRelayCount)
-            
+
             if !targetRelays.isEmpty {
                 relaySender(event, targetRelays)
                 SecureLogger.debug("Presence: sent heartbeat for \(geohash) (pub=\(identity.publicKeyHex.prefix(6))...)", category: .session)

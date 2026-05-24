@@ -37,7 +37,7 @@ private struct FocusEffectDisabledModifier: ViewModifier {
 
 struct ContentView: View {
     // MARK: - Properties
-    
+
     @EnvironmentObject var viewModel: ChatViewModel
     @StateObject private var voiceRecordingVM = VoiceRecordingViewModel()
     @ObservedObject private var locationManager = LocationChannelManager.shared
@@ -73,9 +73,9 @@ struct ContentView: View {
     // Window sizes for rendering (infinite scroll up)
     @State private var windowCountPublic: Int = 300
     @State private var windowCountPrivate: [PeerID: Int] = [:]
-    
+
     // MARK: - Computed Properties
-    
+
     private var backgroundColor: Color {
         colorScheme == .dark ? Color.black : Color.white
     }
@@ -113,8 +113,7 @@ struct ContentView: View {
             return viewModel.visibleGeohashPeople().count
         }
     }
-    
-    
+
     private struct PrivateHeaderContext {
         let headerPeerID: PeerID
         let peer: BitchatPeer?
@@ -274,7 +273,7 @@ struct ContentView: View {
             autocompleteDebounceTimer?.invalidate()
         }
     }
-    
+
     // MARK: - Input View
 
     @ViewBuilder
@@ -374,7 +373,7 @@ struct ContentView: View {
     }
 
     // MARK: - Actions
-    
+
     private func sendMessage() {
         guard let trimmed = messageText.trimmedOrNilIfEmpty else { return }
 
@@ -386,9 +385,9 @@ struct ContentView: View {
             self.viewModel.sendMessage(trimmed)
         }
     }
-    
+
     // MARK: - Sheet Content
-    
+
     private var peopleSheetView: some View {
         NavigationStack {
             Group {
@@ -445,9 +444,9 @@ struct ContentView: View {
         }
         #endif
     }
-    
+
     // MARK: - People Sheet Views
-    
+
     private var peopleListSheetView: some View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
@@ -512,7 +511,7 @@ struct ContentView: View {
             .padding(.top, 16)
             .padding(.bottom, 12)
             .background(backgroundColor)
-            
+
             ScrollView {
                 VStack(alignment: .leading, spacing: 6) {
                     if case .location = locationManager.selectedChannel {
@@ -547,7 +546,7 @@ struct ContentView: View {
             }
         }
     }
-    
+
     // MARK: - View Components
 
     private var privateChatSheetView: some View {
@@ -608,7 +607,7 @@ struct ContentView: View {
                             .font(.bitchatSystem(size: 12, weight: .semibold, design: .monospaced))
                             .frame(width: 32, height: 32)
                     }
-                
+
                     .buttonStyle(.plain)
                     .accessibilityLabel("Close")
                 }
@@ -803,7 +802,6 @@ struct ContentView: View {
         }
     }
 
-    
     private var mainHeaderView: some View {
         HStack(spacing: 0) {
             Text(verbatim: "bitchat/")
@@ -817,12 +815,12 @@ struct ContentView: View {
                     // Single tap for app info
                     showAppInfo = true
                 }
-            
+
             HStack(spacing: 0) {
                 Text(verbatim: "@")
                     .font(.bitchatSystem(size: 14, design: .monospaced))
                     .foregroundColor(secondaryTextColor)
-                
+
                 TextField("content.input.nickname_placeholder", text: $viewModel.nickname)
                     .textFieldStyle(.plain)
                     .font(.bitchatSystem(size: 14, design: .monospaced))
@@ -844,9 +842,9 @@ struct ContentView: View {
                         viewModel.validateAndSaveNickname()
                     }
             }
-            
+
             Spacer()
-            
+
             // Channel badge + dynamic spacing + people counter
             // Precompute header count and color outside the ViewBuilder expressions
             let cc = channelPeopleCountAndColor()
@@ -860,7 +858,7 @@ struct ContentView: View {
 
             HStack(spacing: 10) {
                 // Unread icon immediately to the left of the channel badge (independent from channel button)
-                
+
                 // Unread indicator (now shown on iOS and macOS)
                 if viewModel.hasAnyUnreadMessages {
                     Button(action: { viewModel.openMostRelevantPrivateChat() }) {

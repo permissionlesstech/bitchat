@@ -43,7 +43,7 @@ struct NotificationStreamAssemblerTests {
 
         let frameData = try #require(result.frames.first, "Missing frame data")
         #expect(frameData.count == frame.count)
-        
+
         let decoded = try #require(BinaryProtocol.decode(frameData), "Failed to decode frame")
         #expect(decoded.type == packet.type)
         #expect(decoded.payload == packet.payload)
@@ -74,7 +74,7 @@ struct NotificationStreamAssemblerTests {
 
         result = assembler.append(secondChunk)
         #expect(result.frames.count == 2)
-        
+
         let decoded1 = try #require(BinaryProtocol.decode(result.frames[0]), "Failed to decode frame")
         let decoded2 = try #require(BinaryProtocol.decode(result.frames[1]), "Failed to decode frame")
         #expect(decoded1.timestamp == packet1.timestamp)

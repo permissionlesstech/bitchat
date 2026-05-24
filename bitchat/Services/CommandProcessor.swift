@@ -65,14 +65,14 @@ final class CommandProcessor {
         self.meshService = meshService
         self.identityManager = identityManager
     }
-    
+
     /// Process a command string
     @MainActor
     func process(_ command: String) -> CommandResult {
         let parts = command.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: false)
         guard let cmd = parts.first else { return .error(message: "Invalid command") }
         let args = parts.count > 1 ? String(parts[1]) : ""
-        
+
         // Geohash context: disable favoriting in public geohash or GeoDM
         let inGeoPublic: Bool = {
             switch LocationChannelManager.shared.selectedChannel {
@@ -109,16 +109,16 @@ final class CommandProcessor {
     }
 
     // MARK: - Command Handlers
-    
+
     private func handleMessage(_ args: String) -> CommandResult {
         let parts = args.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: false)
         guard !parts.isEmpty else {
             return .error(message: "usage: /msg @nickname [message]")
         }
-        
+
         let targetName = String(parts[0])
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
-        
+
         guard let peerID = contextProvider?.getPeerIDForNickname(nickname) else {
             return .error(message: "'\(nickname)' not found")
         }
@@ -129,10 +129,10 @@ final class CommandProcessor {
             let message = String(parts[1])
             contextProvider?.sendPrivateMessage(message, to: peerID)
         }
-        
+
         return .success(message: "started private chat with \(nickname)")
     }
-    
+
     private func handleWho() -> CommandResult {
         // Show geohash participants when in a geohash channel; otherwise mesh peers
         switch LocationChannelManager.shared.selectedChannel {
@@ -156,7 +156,7 @@ final class CommandProcessor {
             return .success(message: "online: \(onlineList)")
         }
     }
-    
+
     private func handleClear() -> CommandResult {
         if let peerID = contextProvider?.selectedPrivateChatPeer {
             contextProvider?.privateChats[peerID]?.removeAll()
@@ -165,22 +165,22 @@ final class CommandProcessor {
         }
         return .handled
     }
-    
+
     private func handleEmote(_ args: String, command: String, action: String, emoji: String, suffix: String = "") -> CommandResult {
         let targetName = args.trimmed
         guard !targetName.isEmpty else {
             return .error(message: "usage: /\(command) <nickname>")
         }
-        
+
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
-        
+
         guard let targetPeerID = contextProvider?.getPeerIDForNickname(nickname),
               let myNickname = contextProvider?.nickname else {
             return .error(message: "cannot \(command) \(nickname): not found")
         }
-        
+
         let emoteContent = "* \(emoji) \(myNickname) \(action) \(nickname)\(suffix) *"
-        
+
         if contextProvider?.selectedPrivateChatPeer != nil {
             // In private chat
             if let peerNickname = meshService?.peerNickname(peerID: targetPeerID) {
@@ -205,13 +205,13 @@ final class CommandProcessor {
             let publicEcho = "\(emoji) \(myNickname) \(action) \(nickname)\(suffix)"
             contextProvider?.addPublicSystemMessage(publicEcho)
         }
-        
+
         return .handled
     }
-    
+
     private func handleBlock(_ args: String) -> CommandResult {
         let targetName = args.trimmed
-        
+
         if targetName.isEmpty {
             // List blocked users (mesh) and geohash (Nostr) blocks
             let meshBlocked = contextProvider?.blockedUsers ?? []
@@ -245,9 +245,9 @@ final class CommandProcessor {
             let geoList = geoNames.isEmpty ? "none" : geoNames.sorted().joined(separator: ", ")
             return .success(message: "blocked peers: \(meshList) | geohash blocks: \(geoList)")
         }
-        
+
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
-        
+
         if let peerID = contextProvider?.getPeerIDForNickname(nickname),
            let fingerprint = meshService?.getFingerprint(for: peerID) {
             if identityManager.isBlocked(fingerprint: fingerprint) {
@@ -280,18 +280,18 @@ final class CommandProcessor {
             identityManager.setNostrBlocked(pub, isBlocked: true)
             return .success(message: "blocked \(nickname) in geohash chats")
         }
-        
+
         return .error(message: "cannot block \(nickname): not found or unable to verify identity")
     }
-    
+
     private func handleUnblock(_ args: String) -> CommandResult {
         let targetName = args.trimmed
         guard !targetName.isEmpty else {
             return .error(message: "usage: /unblock <nickname>")
         }
-        
+
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
-        
+
         if let peerID = contextProvider?.getPeerIDForNickname(nickname),
            let fingerprint = meshService?.getFingerprint(for: peerID) {
             if !identityManager.isBlocked(fingerprint: fingerprint) {
@@ -310,20 +310,20 @@ final class CommandProcessor {
         }
         return .error(message: "cannot unblock \(nickname): not found")
     }
-    
+
     private func handleFavorite(_ args: String, add: Bool) -> CommandResult {
         let targetName = args.trimmed
         guard !targetName.isEmpty else {
             return .error(message: "usage: /\(add ? "fav" : "unfav") <nickname>")
         }
-        
+
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
-        
+
         guard let peerID = contextProvider?.getPeerIDForNickname(nickname),
               let noisePublicKey = Data(hexString: peerID.id) else {
             return .error(message: "can't find peer: \(nickname)")
         }
-        
+
         if add {
             let existingFavorite = FavoritesPersistenceService.shared.getFavoriteStatus(for: noisePublicKey)
             FavoritesPersistenceService.shared.addFavorite(
@@ -331,19 +331,18 @@ final class CommandProcessor {
                 peerNostrPublicKey: existingFavorite?.peerNostrPublicKey,
                 peerNickname: nickname
             )
-            
+
             contextProvider?.toggleFavorite(peerID: peerID)
             contextProvider?.sendFavoriteNotification(to: peerID, isFavorite: true)
-            
+
             return .success(message: "added \(nickname) to favorites")
         } else {
             FavoritesPersistenceService.shared.removeFavorite(peerNoisePublicKey: noisePublicKey)
-            
+
             contextProvider?.toggleFavorite(peerID: peerID)
             contextProvider?.sendFavoriteNotification(to: peerID, isFavorite: false)
-            
+
             return .success(message: "removed \(nickname) from favorites")
         }
     }
-    
 }

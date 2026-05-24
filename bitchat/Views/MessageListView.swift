@@ -398,7 +398,7 @@ private extension MessageListView {
             lastScrollTime = date
             let contextKey = "dm:\(peerID)"
             let count = windowCountPrivate[peerID] ?? 300
-            if let target = messages.suffix(count).last.map({ "\(contextKey)|\($0.id)" }){
+            if let target = messages.suffix(count).last.map({ "\(contextKey)|\($0.id)" }) {
                 proxy.scrollTo(target, anchor: .bottom)
             }
         }
@@ -443,7 +443,3 @@ private extension ChannelID {
         }
     }
 }
-
-//#Preview {
-//    MessageListView()
-//}
