@@ -56,6 +56,7 @@ private final class TestIdentityManager: SecureIdentityStateManagerProtocol {
     }
 
     func upsertCryptographicIdentity(fingerprint: String, noisePublicKey: Data, signingPublicKey: Data?, claimedNickname: String?) {}
+    func clearSigningPublicKey(for fingerprint: String) {}
 
     func getCryptoIdentitiesByPeerIDPrefix(_ peerID: PeerID) -> [CryptographicIdentity] {
         []

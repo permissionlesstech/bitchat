@@ -15,6 +15,9 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
     private var blockedFingerprints: Set<String> = []
     private var blockedNostrPubkeys: Set<String> = []
     private var socialIdentities: [String: SocialIdentity] = [:]
+    private var cryptographicIdentities: [String: CryptographicIdentity] = [:]
+    private(set) var lastUpsertedIdentity: (fingerprint: String, noisePublicKey: Data, signingPublicKey: Data?, claimedNickname: String?)?
+    private(set) var lastClearedSigningKeyFingerprint: String?
     
     init(_ keychain: KeychainManagerProtocol) {
         self.keychain = keychain
@@ -30,10 +33,41 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
         socialIdentities[fingerprint]
     }
     
-    func upsertCryptographicIdentity(fingerprint: String, noisePublicKey: Data, signingPublicKey: Data?, claimedNickname: String?) {}
+    func upsertCryptographicIdentity(fingerprint: String, noisePublicKey: Data, signingPublicKey: Data?, claimedNickname: String?) {
+        let existingSigningKey = cryptographicIdentities[fingerprint]?.signingPublicKey
+        cryptographicIdentities[fingerprint] = CryptographicIdentity(
+            fingerprint: fingerprint,
+            publicKey: noisePublicKey,
+            signingPublicKey: signingPublicKey ?? existingSigningKey,
+            firstSeen: cryptographicIdentities[fingerprint]?.firstSeen ?? Date(),
+            lastHandshake: Date()
+        )
+        lastUpsertedIdentity = (fingerprint, noisePublicKey, signingPublicKey, claimedNickname)
+    }
+
+    func clearSigningPublicKey(for fingerprint: String) {
+        lastClearedSigningKeyFingerprint = fingerprint
+        guard var identity = cryptographicIdentities[fingerprint] else { return }
+        identity.signingPublicKey = nil
+        cryptographicIdentities[fingerprint] = identity
+    }
     
     func getCryptoIdentitiesByPeerIDPrefix(_ peerID: PeerID) -> [CryptographicIdentity] {
-        []
+        cryptographicIdentities.values.filter { $0.fingerprint.hasPrefix(peerID.id) }
+    }
+
+    func seedCryptographicIdentity(fingerprint: String, noisePublicKey: Data, signingPublicKey: Data?) {
+        cryptographicIdentities[fingerprint] = CryptographicIdentity(
+            fingerprint: fingerprint,
+            publicKey: noisePublicKey,
+            signingPublicKey: signingPublicKey,
+            firstSeen: Date(),
+            lastHandshake: Date()
+        )
+    }
+
+    func signingPublicKey(for fingerprint: String) -> Data? {
+        cryptographicIdentities[fingerprint]?.signingPublicKey
     }
     
     func updateSocialIdentity(_ identity: SocialIdentity) {
