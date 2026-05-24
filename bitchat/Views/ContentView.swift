@@ -58,6 +58,7 @@ struct ContentView: View {
     @State private var showLocationChannelsSheet = false
     @State private var showVerifySheet = false
     @State private var showLocationNotes = false
+    @State private var customGeohash: String = ""
     @State private var notesGeohash: String? = nil
     @State private var imagePreviewURL: URL? = nil
 #if os(iOS)
@@ -979,9 +980,12 @@ struct ContentView: View {
         .frame(height: headerHeight)
         .padding(.horizontal, 12)
         .sheet(isPresented: $showLocationChannelsSheet) {
-            LocationChannelsSheet(isPresented: $showLocationChannelsSheet)
+            LocationChannelsSheet(isPresented: $showLocationChannelsSheet, customGeohash: $customGeohash)
                 .environmentObject(viewModel)
-                .onAppear { viewModel.isLocationChannelsSheetPresented = true }
+                .onAppear {
+                    viewModel.isLocationChannelsSheetPresented = true
+                    customGeohash = ""
+                }
                 .onDisappear { viewModel.isLocationChannelsSheetPresented = false }
         }
         .sheet(isPresented: $showLocationNotes, onDismiss: {
