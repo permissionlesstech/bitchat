@@ -80,3 +80,4 @@ build.log
 
 # Local configs
 Local.xcconfig
+.local/

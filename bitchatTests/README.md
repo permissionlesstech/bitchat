@@ -43,3 +43,14 @@ This test suite uses an in-memory networking harness to make end-to-end and inte
 - Enable broadcast flooding for Integration suites only:
   - `MockBLEService.autoFloodEnabled = true`
 
+## Optional Device Smoke
+
+For a real macOS/iOS/Android NDR private-message smoke, use:
+
+- `cp scripts/ndr-device-e2e.env.example .local/ndr-device-e2e.env`
+- Fill device IDs and the Android checkout path in `.local/ndr-device-e2e.env`
+- `scripts/ndr-device-e2e.sh run`
+
+The script keeps local device IDs in gitignored `.local/`, launches configured
+clients, captures logs, and prints a manual checklist for cross-device private
+messages and late-subscription relay delivery.

@@ -175,7 +175,7 @@ extension ChatViewModel {
                 return
             }
             SecureLogger.debug("GeoDM: local send mid=\(messageID.prefix(8))… to=\(recipientHex.prefix(8))… conv=\(peerID)", category: .session)
-            let nostrTransport = NostrTransport(keychain: keychain, idBridge: idBridge)
+            let nostrTransport = NostrTransport(keychain: keychain, idBridge: idBridge, ndrService: ndrService)
             nostrTransport.senderPeerID = meshService.myPeerID
             nostrTransport.sendPrivateMessageGeohash(content: content, toRecipientHex: recipientHex, from: id, messageID: messageID)
             if let msgIdx = privateChats[peerID]?.firstIndex(where: { $0.id == messageID }) {
@@ -288,7 +288,7 @@ extension ChatViewModel {
 
     func sendDeliveryAckIfNeeded(to messageId: String, senderPubKey: String, from id: NostrIdentity) {
         guard !sentGeoDeliveryAcks.contains(messageId) else { return }
-        let nt = NostrTransport(keychain: keychain, idBridge: idBridge)
+        let nt = NostrTransport(keychain: keychain, idBridge: idBridge, ndrService: ndrService)
         nt.senderPeerID = meshService.myPeerID
         nt.sendDeliveryAckGeohash(for: messageId, toRecipientHex: senderPubKey, from: id)
         sentGeoDeliveryAcks.insert(messageId)
@@ -296,7 +296,7 @@ extension ChatViewModel {
     
     func sendReadReceiptIfNeeded(to messageId: String, senderPubKey: String, from id: NostrIdentity) {
         guard !sentReadReceipts.contains(messageId) else { return }
-        let nt = NostrTransport(keychain: keychain, idBridge: idBridge)
+        let nt = NostrTransport(keychain: keychain, idBridge: idBridge, ndrService: ndrService)
         nt.senderPeerID = meshService.myPeerID
         nt.sendReadReceiptGeohash(messageId, toRecipientHex: senderPubKey, from: id)
         sentReadReceipts.insert(messageId)
@@ -846,7 +846,7 @@ extension ChatViewModel {
                 messageRouter.sendReadReceipt(receipt, to: PeerID(hexData: key))
                 sentReadReceipts.insert(message.id)
             } else if let id = try? idBridge.getCurrentNostrIdentity() {
-                let nt = NostrTransport(keychain: keychain, idBridge: idBridge)
+                let nt = NostrTransport(keychain: keychain, idBridge: idBridge, ndrService: ndrService)
                 nt.senderPeerID = meshService.myPeerID
                 nt.sendReadReceiptGeohash(message.id, toRecipientHex: senderPubkey, from: id)
                 sentReadReceipts.insert(message.id)

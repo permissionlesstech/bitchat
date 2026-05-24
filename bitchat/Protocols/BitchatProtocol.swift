@@ -75,6 +75,9 @@ enum NoisePayloadType: UInt8 {
     // Verification (QR-based OOB binding)
     case verifyChallenge = 0x10     // Verification challenge
     case verifyResponse  = 0x11     // Verification response
+    // Double Ratchet (nostr-double-ratchet) out-of-band session bootstrap
+    // Nostr invite/response events are exchanged over the BLE Noise channel (not published to Nostr).
+    case ndrEvent = 0x12            // UTF-8 Nostr event JSON (invite/response)
     
     var description: String {
         switch self {
@@ -83,6 +86,7 @@ enum NoisePayloadType: UInt8 {
         case .delivered: return "delivered"
         case .verifyChallenge: return "verifyChallenge"
         case .verifyResponse: return "verifyResponse"
+        case .ndrEvent: return "ndrEvent"
         }
     }
 }

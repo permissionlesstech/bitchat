@@ -59,6 +59,9 @@ protocol Transport: AnyObject {
     // QR verification (optional for transports)
     func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data)
     func sendVerifyResponse(to peerID: PeerID, noiseKeyHex: String, nonceA: Data)
+    
+    // Double Ratchet out-of-band bootstrap (optional for transports)
+    func sendNdrEvent(to peerID: PeerID, eventJson: String)
 
     // Pending file management (BCH-01-002: files held in memory until user accepts)
     func acceptPendingFile(id: String) -> URL?
@@ -68,6 +71,7 @@ protocol Transport: AnyObject {
 extension Transport {
     func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {}
     func sendVerifyResponse(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {}
+    func sendNdrEvent(to peerID: PeerID, eventJson: String) {}
     func sendFileBroadcast(_ packet: BitchatFilePacket, transferId: String) {}
     func sendFilePrivate(_ packet: BitchatFilePacket, to peerID: PeerID, transferId: String) {}
     func cancelTransfer(_ transferId: String) {}

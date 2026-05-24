@@ -965,7 +965,7 @@ enum NostrRequest: Encodable {
     }
 }
 
-struct NostrFilter: Encodable {
+struct NostrFilter: Codable {
     var ids: [String]?
     var authors: [String]?
     var kinds: [Int]?
@@ -974,7 +974,7 @@ struct NostrFilter: Encodable {
     var limit: Int?
     
     // Tag filters - stored internally but encoded specially
-    fileprivate var tagFilters: [String: [String]]?
+    var tagFilters: [String: [String]]?
     
     init() {
         // Default initializer
@@ -983,6 +983,29 @@ struct NostrFilter: Encodable {
     // Custom encoding to handle tag filters properly
     enum CodingKeys: String, CodingKey {
         case ids, authors, kinds, since, until, limit
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: DynamicCodingKey.self)
+
+        self.ids = try container.decodeIfPresent([String].self, forKey: DynamicCodingKey(stringValue: "ids"))
+        self.authors = try container.decodeIfPresent([String].self, forKey: DynamicCodingKey(stringValue: "authors"))
+        self.kinds = try container.decodeIfPresent([Int].self, forKey: DynamicCodingKey(stringValue: "kinds"))
+        self.since = try container.decodeIfPresent(Int.self, forKey: DynamicCodingKey(stringValue: "since"))
+        self.until = try container.decodeIfPresent(Int.self, forKey: DynamicCodingKey(stringValue: "until"))
+        self.limit = try container.decodeIfPresent(Int.self, forKey: DynamicCodingKey(stringValue: "limit"))
+
+        // Decode tag filters (#p, #d, etc) into internal storage without the leading '#'.
+        var decodedTagFilters: [String: [String]] = [:]
+        for key in container.allKeys {
+            let name = key.stringValue
+            guard name.hasPrefix("#") else { continue }
+            let tag = String(name.dropFirst())
+            if let values = try container.decodeIfPresent([String].self, forKey: key) {
+                decodedTagFilters[tag] = values
+            }
+        }
+        self.tagFilters = decodedTagFilters.isEmpty ? nil : decodedTagFilters
     }
     
     func encode(to encoder: Encoder) throws {

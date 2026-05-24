@@ -171,7 +171,7 @@ extension ChatViewModel {
             handleDelivered(noisePayload, senderPubkey: senderPubkey, convKey: convKey)
         case .readReceipt:
             handleReadReceipt(noisePayload, senderPubkey: senderPubkey, convKey: convKey)
-        case .verifyChallenge, .verifyResponse:
+        case .verifyChallenge, .verifyResponse, .ndrEvent:
             // QR verification payloads over Nostr are not supported; ignore in geohash DMs
             break
         }
@@ -404,7 +404,7 @@ extension ChatViewModel {
             handleReadReceipt(payload, senderPubkey: senderPubkey, convKey: convKey)
         
         // Explicitly list other cases so we get compile-time check if a new case is added in the future
-        case .verifyChallenge, .verifyResponse:
+        case .verifyChallenge, .verifyResponse, .ndrEvent:
             break
         }
     }
@@ -572,7 +572,8 @@ extension ChatViewModel {
     }
 
     // MARK: - Nostr DM Handling
-
+    
+    @MainActor
     func setupNostrMessageHandling() {
         guard let currentIdentity = try? idBridge.getCurrentNostrIdentity() else {
             SecureLogger.warning("⚠️ No Nostr identity available for message handling", category: .session)
@@ -580,6 +581,14 @@ extension ChatViewModel {
         }
         
         SecureLogger.debug("🔑 Setting up Nostr subscription for pubkey: \(currentIdentity.publicKeyHex.prefix(16))...", category: .session)
+
+        // Configure nostr-double-ratchet (ndr-ffi) integration.
+        // BitChat policy: invite/response handshake is exchanged out-of-band over BLE (mutual favorites),
+        // so we only use Nostr here for kind 1060 message exchange and decryption.
+        ndrService.configureIfNeeded(identity: currentIdentity)
+        ndrService.onDecryptedMessage = { [weak self] innerEvent in
+            self?.handleNdrDecryptedMessage(innerEvent)
+        }
         
         // Subscribe to Nostr messages
         let filter = NostrFilter.giftWrapsFor(
@@ -612,52 +621,86 @@ extension ChatViewModel {
                 giftWrap: giftWrap,
                 recipientIdentity: currentIdentity
             )
-            
-            // Handle verification payloads first
-            if content.hasPrefix("verify:") {
-                // Ignore verification payloads arriving via Nostr path for now
-                // Verification should ideally happen over mesh for security binding
-                return
-            }
-            
-            // Check if it's a BitChat packet embedded in the content (bitchat1:...)
-            if content.hasPrefix("bitchat1:") {
-                guard let packet = Self.decodeEmbeddedBitChatPacket(from: content) else {
-                    SecureLogger.error("Failed to decode embedded BitChat packet from Nostr DM", category: .session)
-                    return
-                }
-                
-                // Map sender by Nostr pubkey to Noise key when possible
-                let actualSenderNoiseKey = findNoiseKey(for: senderPubkey)
-                
-                // Stable target ID if we know Noise key; otherwise temporary Nostr-based peer
-                let targetPeerID = PeerID(str: actualSenderNoiseKey?.hexEncodedString()) ?? PeerID(nostr_: senderPubkey)
-                
-                if packet.type == MessageType.noiseEncrypted.rawValue,
-                   let payload = NoisePayload.decode(packet.payload) {
-                    let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTimestamp))
-                    // Store Nostr mapping
-                    await MainActor.run {
-                        nostrKeyMapping[targetPeerID] = senderPubkey
-                        
-                        // Handle packet types
-                        switch payload.type {
-                        case .privateMessage:
-                            handlePrivateMessage(payload, senderPubkey: senderPubkey, convKey: targetPeerID, id: currentIdentity, messageTimestamp: messageTimestamp)
-                        case .delivered:
-                            handleDelivered(payload, senderPubkey: senderPubkey, convKey: targetPeerID)
-                        case .readReceipt:
-                            handleReadReceipt(payload, senderPubkey: senderPubkey, convKey: targetPeerID)
-                        case .verifyChallenge, .verifyResponse:
-                            break
-                        }
-                    }
-                }
-            } else {
-                SecureLogger.debug("Ignoring non-embedded Nostr DM content", category: .session)
-            }
+            await processDecryptedNostrDMContent(
+                content,
+                senderPubkey: senderPubkey,
+                rumorTimestamp: rumorTimestamp,
+                currentIdentity: currentIdentity
+            )
         } catch {
             SecureLogger.error("Failed to decrypt Nostr message: \(error)", category: .session)
+        }
+    }
+
+    func handleNdrDecryptedMessage(_ innerEvent: NostrEvent) {
+        // Deduplicate using the stable inner event id.
+        if deduplicationService.hasProcessedNostrEvent(innerEvent.id) { return }
+        deduplicationService.recordNostrEvent(innerEvent.id)
+
+        let content = innerEvent.content
+        let senderPubkey = innerEvent.pubkey
+        let rumorTimestamp = innerEvent.created_at
+
+        Task(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            guard let currentIdentity = try? self.idBridge.getCurrentNostrIdentity() else { return }
+            await self.processDecryptedNostrDMContent(
+                content,
+                senderPubkey: senderPubkey,
+                rumorTimestamp: rumorTimestamp,
+                currentIdentity: currentIdentity
+            )
+        }
+    }
+
+    private func processDecryptedNostrDMContent(
+        _ content: String,
+        senderPubkey: String,
+        rumorTimestamp: Int,
+        currentIdentity: NostrIdentity
+    ) async {
+        // Handle verification payloads first
+        if content.hasPrefix("verify:") {
+            // Ignore verification payloads arriving via Nostr path for now
+            // Verification should ideally happen over mesh for security binding
+            return
+        }
+
+        // Check if it's a BitChat packet embedded in the content (bitchat1:...)
+        if content.hasPrefix("bitchat1:") {
+            guard let packet = Self.decodeEmbeddedBitChatPacket(from: content) else {
+                SecureLogger.error("Failed to decode embedded BitChat packet from Nostr DM", category: .session)
+                return
+            }
+
+            // Map sender by Nostr pubkey to Noise key when possible
+            let actualSenderNoiseKey = findNoiseKey(for: senderPubkey)
+
+            // Stable target ID if we know Noise key; otherwise temporary Nostr-based peer
+            let targetPeerID = PeerID(str: actualSenderNoiseKey?.hexEncodedString()) ?? PeerID(nostr_: senderPubkey)
+
+            if packet.type == MessageType.noiseEncrypted.rawValue,
+               let payload = NoisePayload.decode(packet.payload) {
+                let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTimestamp))
+                // Store Nostr mapping
+                await MainActor.run {
+                    nostrKeyMapping[targetPeerID] = senderPubkey
+
+                    // Handle packet types
+                    switch payload.type {
+                    case .privateMessage:
+                        handlePrivateMessage(payload, senderPubkey: senderPubkey, convKey: targetPeerID, id: currentIdentity, messageTimestamp: messageTimestamp)
+                    case .delivered:
+                        handleDelivered(payload, senderPubkey: senderPubkey, convKey: targetPeerID)
+                    case .readReceipt:
+                        handleReadReceipt(payload, senderPubkey: senderPubkey, convKey: targetPeerID)
+                    case .verifyChallenge, .verifyResponse, .ndrEvent:
+                        break
+                    }
+                }
+            }
+        } else {
+            SecureLogger.debug("Ignoring non-embedded Nostr DM content", category: .session)
         }
     }
 
@@ -703,13 +746,13 @@ extension ChatViewModel {
              // Ideally we would use MessageRouter here, but for simplicity in this direct callback:
              // check if we have an identity
              if let id = try? idBridge.getCurrentNostrIdentity() {
-                 let nt = NostrTransport(keychain: keychain, idBridge: idBridge)
+                 let nt = NostrTransport(keychain: keychain, idBridge: idBridge, ndrService: ndrService)
                  nt.senderPeerID = meshService.myPeerID
                  nt.sendDeliveryAckGeohash(for: message.id, toRecipientHex: senderPubkey, from: id)
              }
         } else if let id = try? idBridge.getCurrentNostrIdentity() {
             // Fallback: no Noise mapping yet — send directly to sender's Nostr pubkey
-            let nt = NostrTransport(keychain: keychain, idBridge: idBridge)
+            let nt = NostrTransport(keychain: keychain, idBridge: idBridge, ndrService: ndrService)
             nt.senderPeerID = meshService.myPeerID
             nt.sendDeliveryAckGeohash(for: message.id, toRecipientHex: senderPubkey, from: id)
             SecureLogger.debug("Sent DELIVERED ack directly to Nostr pub=\(senderPubkey.prefix(8))… for mid=\(message.id.prefix(8))…", category: .session)
@@ -719,12 +762,12 @@ extension ChatViewModel {
         if !wasReadBefore && selectedPrivateChatPeer == message.senderPeerID {
              if let _ = key {
                  if let id = try? idBridge.getCurrentNostrIdentity() {
-                     let nt = NostrTransport(keychain: keychain, idBridge: idBridge)
+                     let nt = NostrTransport(keychain: keychain, idBridge: idBridge, ndrService: ndrService)
                      nt.senderPeerID = meshService.myPeerID
                      nt.sendReadReceiptGeohash(message.id, toRecipientHex: senderPubkey, from: id)
                  }
              } else if let id = try? idBridge.getCurrentNostrIdentity() {
-                 let nt = NostrTransport(keychain: keychain, idBridge: idBridge)
+                 let nt = NostrTransport(keychain: keychain, idBridge: idBridge, ndrService: ndrService)
                  nt.senderPeerID = meshService.myPeerID
                  nt.sendReadReceiptGeohash(message.id, toRecipientHex: senderPubkey, from: id)
                  SecureLogger.debug("Viewing chat; sent READ ack directly to Nostr pub=\(senderPubkey.prefix(8))… for mid=\(message.id.prefix(8))…", category: .session)

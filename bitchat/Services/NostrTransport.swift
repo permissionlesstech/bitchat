@@ -5,6 +5,34 @@ import Combine
 
 // Minimal Nostr transport conforming to Transport for offline sending
 final class NostrTransport: Transport, @unchecked Sendable {
+    enum OutboundPrivateMessageTransport: String, Codable {
+        case ndr
+        case nip17
+    }
+
+    enum OutboundPrivateMessageError: LocalizedError {
+        case missingRecipientNpub(String)
+        case invalidRecipientNpub(String)
+        case missingSenderIdentity
+        case failedToEncodePacket
+        case failedToBuildNip17Event
+
+        var errorDescription: String? {
+            switch self {
+            case .missingRecipientNpub(let peerID):
+                return "Missing recipient Nostr public key for peer \(peerID)"
+            case .invalidRecipientNpub(let npub):
+                return "Recipient Nostr public key is invalid: \(npub)"
+            case .missingSenderIdentity:
+                return "Local Nostr identity is unavailable"
+            case .failedToEncodePacket:
+                return "Failed to encode embedded private-message packet"
+            case .failedToBuildNip17Event:
+                return "Failed to build fallback NIP-17 event"
+            }
+        }
+    }
+
     struct Dependencies {
         let notificationCenter: NotificationCenter
         let loadFavorites: @MainActor () -> [Data: FavoritesPersistenceService.FavoriteRelationship]
@@ -45,6 +73,7 @@ final class NostrTransport: Transport, @unchecked Sendable {
     private let keychain: KeychainManagerProtocol
     private let idBridge: NostrIdentityBridge
     private let dependencies: Dependencies
+    private let ndrService: NdrNostrService
     private var favoriteStatusObserver: NSObjectProtocol?
 
     // Reachability Cache (thread-safe)
@@ -55,11 +84,13 @@ final class NostrTransport: Transport, @unchecked Sendable {
     init(
         keychain: KeychainManagerProtocol,
         idBridge: NostrIdentityBridge,
+        ndrService: NdrNostrService? = nil,
         dependencies: Dependencies? = nil
     ) {
         self.keychain = keychain
         self.idBridge = idBridge
         self.dependencies = dependencies ?? .live(idBridge: idBridge)
+        self.ndrService = ndrService ?? NdrNostrService.shared
         
         setupObservers()
         
@@ -158,16 +189,44 @@ final class NostrTransport: Transport, @unchecked Sendable {
 
     func sendPrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) {
         Task { @MainActor in
-            guard let recipientNpub = resolveRecipientNpub(for: peerID),
-                  let recipientHex = npubToHex(recipientNpub),
-                  let senderIdentity = try? dependencies.currentIdentity() else { return }
-            SecureLogger.debug("NostrTransport: preparing PM to \(recipientNpub.prefix(16))… id=\(messageID.prefix(8))…", category: .session)
-            guard let embedded = NostrEmbeddedBitChat.encodePMForNostr(content: content, messageID: messageID, recipientPeerID: peerID, senderPeerID: senderPeerID) else {
-                SecureLogger.error("NostrTransport: failed to embed PM packet", category: .session)
-                return
+            do {
+                _ = try sendPrivateMessageAndReturnTransport(
+                    content,
+                    to: peerID,
+                    recipientNickname: recipientNickname,
+                    messageID: messageID
+                )
+            } catch {
+                SecureLogger.error("NostrTransport: failed to send PM: \(error)", category: .session)
             }
-            sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: senderIdentity)
         }
+    }
+
+    @MainActor
+    func sendPrivateMessageAndReturnTransport(
+        _ content: String,
+        to peerID: PeerID,
+        recipientNickname: String,
+        messageID: String
+    ) throws -> OutboundPrivateMessageTransport {
+        guard let recipientNpub = resolveRecipientNpub(for: peerID) else {
+            throw OutboundPrivateMessageError.missingRecipientNpub(peerID.id)
+        }
+        guard let recipientHex = npubToHex(recipientNpub) else {
+            throw OutboundPrivateMessageError.invalidRecipientNpub(recipientNpub)
+        }
+        guard let senderIdentity = try dependencies.currentIdentity() else {
+            throw OutboundPrivateMessageError.missingSenderIdentity
+        }
+        SecureLogger.debug("NostrTransport: preparing PM to \(recipientNpub.prefix(16))… id=\(messageID.prefix(8))…", category: .session)
+        guard let embedded = NostrEmbeddedBitChat.encodePMForNostr(content: content, messageID: messageID, recipientPeerID: peerID, senderPeerID: senderPeerID) else {
+            SecureLogger.error("NostrTransport: failed to embed PM packet", category: .session)
+            throw OutboundPrivateMessageError.failedToEncodePacket
+        }
+        guard let transport = sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: senderIdentity) else {
+            throw OutboundPrivateMessageError.failedToBuildNip17Event
+        }
+        return transport
     }
 
     func sendReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {
@@ -190,7 +249,7 @@ final class NostrTransport: Transport, @unchecked Sendable {
                 SecureLogger.error("NostrTransport: failed to embed favorite notification", category: .session)
                 return
             }
-            sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: senderIdentity)
+            _ = sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: senderIdentity)
         }
     }
 
@@ -205,7 +264,7 @@ final class NostrTransport: Transport, @unchecked Sendable {
                 SecureLogger.error("NostrTransport: failed to embed DELIVERED ack", category: .session)
                 return
             }
-            sendWrappedMessage(content: ack, recipientHex: recipientHex, senderIdentity: senderIdentity)
+            _ = sendWrappedMessage(content: ack, recipientHex: recipientHex, senderIdentity: senderIdentity)
         }
     }
 }
@@ -219,7 +278,7 @@ extension NostrTransport {
         Task { @MainActor in
             SecureLogger.debug("GeoDM: send DELIVERED mid=\(messageID.prefix(8))…", category: .session)
             guard let embedded = NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(type: .delivered, messageID: messageID, senderPeerID: senderPeerID) else { return }
-            sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: identity, registerPending: true)
+            _ = sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: identity, registerPending: true)
         }
     }
 
@@ -227,7 +286,7 @@ extension NostrTransport {
         Task { @MainActor in
             SecureLogger.debug("GeoDM: send READ mid=\(messageID.prefix(8))…", category: .session)
             guard let embedded = NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(type: .readReceipt, messageID: messageID, senderPeerID: senderPeerID) else { return }
-            sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: identity, registerPending: true)
+            _ = sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: identity, registerPending: true)
         }
     }
 
@@ -240,7 +299,7 @@ extension NostrTransport {
                 SecureLogger.error("NostrTransport: failed to embed geohash PM packet", category: .session)
                 return
             }
-            sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: identity, registerPending: true)
+            _ = sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: identity, registerPending: true)
         }
     }
 }
@@ -263,15 +322,24 @@ extension NostrTransport {
 
     /// Creates and sends a gift-wrapped private message event
     @MainActor
-    private func sendWrappedMessage(content: String, recipientHex: String, senderIdentity: NostrIdentity, registerPending: Bool = false) {
+    private func sendWrappedMessage(content: String, recipientHex: String, senderIdentity: NostrIdentity, registerPending: Bool = false) -> OutboundPrivateMessageTransport? {
+        // Prefer nostr-double-ratchet when a session exists.
+        // BitChat policy: double-ratchet invite/response handshake is exchanged out-of-band over BLE (mutual favorites),
+        // so we do not attempt Nostr-based invite discovery here.
+        ndrService.configureIfNeeded(identity: senderIdentity)
+        if ndrService.sendIfPossible(content, to: recipientHex) {
+            return .ndr
+        }
+
         guard let event = try? NostrProtocol.createPrivateMessage(content: content, recipientPubkey: recipientHex, senderIdentity: senderIdentity) else {
             SecureLogger.error("NostrTransport: failed to build Nostr event", category: .session)
-            return
+            return nil
         }
         if registerPending {
             dependencies.registerPendingGiftWrap(event.id)
         }
         dependencies.sendEvent(event)
+        return .nip17
     }
 
     /// Must be called within a barrier on `queue`
@@ -295,7 +363,7 @@ extension NostrTransport {
                 SecureLogger.error("NostrTransport: failed to embed READ ack", category: .session)
                 return
             }
-            sendWrappedMessage(content: ack, recipientHex: recipientHex, senderIdentity: senderIdentity)
+            _ = sendWrappedMessage(content: ack, recipientHex: recipientHex, senderIdentity: senderIdentity)
         }
     }
 

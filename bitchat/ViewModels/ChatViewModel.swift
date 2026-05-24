@@ -267,6 +267,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
     let meshService: Transport
     let idBridge: NostrIdentityBridge
     let identityManager: SecureIdentityStateManagerProtocol
+    let ndrService: NdrNostrService
     
     var nostrRelayManager: NostrRelayManager?
     private let userDefaults = UserDefaults.standard
@@ -395,13 +396,15 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
     convenience init(
         keychain: KeychainManagerProtocol,
         idBridge: NostrIdentityBridge,
-        identityManager: SecureIdentityStateManagerProtocol
+        identityManager: SecureIdentityStateManagerProtocol,
+        ndrService: NdrNostrService? = nil
     ) {
         self.init(
             keychain: keychain,
             idBridge: idBridge,
             identityManager: identityManager,
-            transport: BLEService(keychain: keychain, idBridge: idBridge, identityManager: identityManager)
+            transport: BLEService(keychain: keychain, idBridge: idBridge, identityManager: identityManager),
+            ndrService: ndrService
         )
     }
 
@@ -412,11 +415,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
         keychain: KeychainManagerProtocol,
         idBridge: NostrIdentityBridge,
         identityManager: SecureIdentityStateManagerProtocol,
-        transport: Transport
+        transport: Transport,
+        ndrService: NdrNostrService? = nil
     ) {
+        let resolvedNdrService = ndrService ?? NdrNostrService.shared
         self.keychain = keychain
         self.idBridge = idBridge
         self.identityManager = identityManager
+        self.ndrService = resolvedNdrService
         self.meshService = transport
         self.publicMessagePipeline = PublicMessagePipeline()
         
@@ -433,7 +439,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
         self.commandProcessor = CommandProcessor(identityManager: identityManager)
         self.privateChatManager = PrivateChatManager(meshService: meshService)
         self.unifiedPeerService = UnifiedPeerService(meshService: meshService, idBridge: idBridge, identityManager: identityManager)
-        let nostrTransport = NostrTransport(keychain: keychain, idBridge: idBridge)
+        let nostrTransport = NostrTransport(keychain: keychain, idBridge: idBridge, ndrService: resolvedNdrService)
         nostrTransport.senderPeerID = meshService.myPeerID
         self.messageRouter = MessageRouter(transports: [meshService, nostrTransport])
         // Route receipts from PrivateChatManager through MessageRouter
@@ -1559,7 +1565,59 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
             // Update peer manager to refresh UI
             // UnifiedPeerService updates automatically via subscriptions
             }
+
+            // If this update produced a mutual favorite relationship with a currently-connected peer,
+            // bootstrap nostr-double-ratchet over the BLE Noise channel (no Nostr invite publishing).
+            if let connected = unifiedPeerService.peers.first(where: { $0.isConnected && $0.noisePublicKey == peerPublicKey }) {
+                maybeBootstrapDoubleRatchetIfNeeded(for: connected.peerID)
+            }
         }
+    }
+
+    @MainActor
+    private func maybeBootstrapDoubleRatchetIfNeeded(for peerID: PeerID) {
+        guard let peer = unifiedPeerService.getPeer(by: peerID) else { return }
+        guard let relationship = FavoritesPersistenceService.shared.getFavoriteStatus(for: peer.noisePublicKey),
+              relationship.isMutual,
+              let peerNostrKey = relationship.peerNostrPublicKey,
+              let peerPubkeyHex = nostrPubkeyHex(from: peerNostrKey),
+              let currentIdentity = try? idBridge.getCurrentNostrIdentity()
+        else {
+            return
+        }
+
+        ndrService.configureIfNeeded(identity: currentIdentity)
+        if ndrService.hasActiveSession(with: peerPubkeyHex) {
+            return
+        }
+        guard let inviteJson = ndrService.currentInviteEventJson() else {
+            return
+        }
+
+        SecureLogger.debug(
+            "NDR: OOB invite -> \(peerID.id.prefix(8))… peer=\(peerPubkeyHex.prefix(8))…",
+            category: .session
+        )
+        meshService.sendNdrEvent(to: peerID, eventJson: inviteJson)
+    }
+
+    private func nostrPubkeyHex(from npubOrHex: String) -> String? {
+        if npubOrHex.hasPrefix("npub") {
+            do {
+                let (hrp, data) = try Bech32.decode(npubOrHex)
+                guard hrp == "npub" else { return nil }
+                return data.hexEncodedString()
+            } catch {
+                return nil
+            }
+        }
+
+        // Accept raw hex pubkeys too.
+        let lowered = npubOrHex.lowercased()
+        if lowered.count == 64, lowered.allSatisfy({ $0.isHexDigit }) {
+            return lowered
+        }
+        return nil
     }
     
     // MARK: - App Lifecycle
@@ -1748,7 +1806,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
             for message in messages where message.senderPeerID == peerID && !message.isRelay {
                 if !sentReadReceipts.contains(message.id) {
                     SecureLogger.debug("GeoDM: sending READ for mid=\(message.id.prefix(8))… to=\(recipientHex.prefix(8))…", category: .session)
-                    let nostrTransport = NostrTransport(keychain: keychain, idBridge: idBridge)
+                    let nostrTransport = NostrTransport(keychain: keychain, idBridge: idBridge, ndrService: ndrService)
                     nostrTransport.senderPeerID = meshService.myPeerID
                     nostrTransport.sendReadReceiptGeohash(message.id, toRecipientHex: recipientHex, from: id)
                     sentReadReceipts.insert(message.id)
@@ -3167,6 +3225,18 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
                         updateEncryptionStatus(for: peerID)
                     }
                 }
+            case .ndrEvent:
+                // Double Ratchet out-of-band event exchange (invite/response) is allowed only for mutual favorites.
+                guard let eventJson = String(data: payload, encoding: .utf8), !eventJson.isEmpty else { return }
+                guard let peer = unifiedPeerService.getPeer(by: peerID) else { return }
+                guard FavoritesPersistenceService.shared.isMutualFavorite(peer.noisePublicKey) else { return }
+                guard let currentIdentity = try? idBridge.getCurrentNostrIdentity() else { return }
+
+                ndrService.configureIfNeeded(identity: currentIdentity)
+                let outbound = ndrService.processOutOfBandEventJson(eventJson)
+                for json in outbound {
+                    meshService.sendNdrEvent(to: peerID, eventJson: json)
+                }
             }
         }
     }
@@ -3258,6 +3328,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
 
             // Flush any queued messages for this peer via router
             messageRouter.flushOutbox(for: peerID)
+
+            // If this is a mutual favorite, bootstrap nostr-double-ratchet out-of-band over BLE.
+            maybeBootstrapDoubleRatchetIfNeeded(for: peerID)
         }
     }
     
