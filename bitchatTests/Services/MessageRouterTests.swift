@@ -27,6 +27,21 @@ struct MessageRouterTests {
     }
 
     @Test @MainActor
+    func sendPrivate_routesFullNoiseKeyWhenShortIDIsReachable() async {
+        let noiseKey = Data((0..<32).map { UInt8($0) })
+        let fullPeerID = PeerID(hexData: noiseKey)
+        let shortPeerID = fullPeerID.toShort()
+        let transport = MockTransport()
+        transport.reachablePeers.insert(shortPeerID)
+
+        let router = MessageRouter(transports: [transport])
+        router.sendPrivate("Hello", to: fullPeerID, recipientNickname: "Peer", messageID: "m-short-route")
+
+        #expect(transport.sentPrivateMessages.count == 1)
+        #expect(transport.sentPrivateMessages.first?.peerID == fullPeerID)
+    }
+
+    @Test @MainActor
     func sendPrivate_queuesThenFlushesWhenReachable() async {
         let peerID = PeerID(str: "0000000000000002")
         let transport = MockTransport()
@@ -40,6 +55,25 @@ struct MessageRouterTests {
         router.flushOutbox(for: peerID)
 
         #expect(transport.sentPrivateMessages.count == 1)
+    }
+
+    @Test @MainActor
+    func sendPrivate_queuesFullNoiseKeyThenFlushesWhenShortIDConnects() async {
+        let noiseKey = Data((32..<64).map { UInt8($0) })
+        let fullPeerID = PeerID(hexData: noiseKey)
+        let shortPeerID = fullPeerID.toShort()
+        let transport = MockTransport()
+
+        let router = MessageRouter(transports: [transport])
+        router.sendPrivate("Queued", to: fullPeerID, recipientNickname: "Peer", messageID: "m-short-flush")
+
+        #expect(transport.sentPrivateMessages.isEmpty)
+
+        transport.reachablePeers.insert(shortPeerID)
+        router.flushOutbox(for: shortPeerID)
+
+        #expect(transport.sentPrivateMessages.count == 1)
+        #expect(transport.sentPrivateMessages.first?.peerID == fullPeerID)
     }
 
     @Test @MainActor
