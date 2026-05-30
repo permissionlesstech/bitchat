@@ -51,6 +51,26 @@ struct RelayControllerTests {
     }
 
     @Test
+    func localRecipientDoesNotRelayDirectedTraffic() async {
+        let decision = RelayController.decide(
+            ttl: 7,
+            senderIsSelf: false,
+            recipientIsSelf: true,
+            isEncrypted: true,
+            isDirectedEncrypted: true,
+            isFragment: false,
+            isDirectedFragment: false,
+            isHandshake: false,
+            isAnnounce: false,
+            degree: 3,
+            highDegreeThreshold: TransportConfig.bleHighDegreeThreshold
+        )
+
+        #expect(!decision.shouldRelay)
+        #expect(decision.newTTL == 7)
+    }
+
+    @Test
     func fragment_relaysWithFragmentCap() async {
         let decision = RelayController.decide(
             ttl: 10,

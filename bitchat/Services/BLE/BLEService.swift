@@ -3,7 +3,6 @@ import BitFoundation
 import Foundation
 import CoreBluetooth
 import Combine
-import CryptoKit
 #if os(iOS)
 import UIKit
 #endif
@@ -148,12 +147,8 @@ final class BLEService: NSObject {
     // Track short-lived traffic bursts to adapt announces/scanning under load
     private var recentPacketTimestamps: [Date] = []
 
-    // Ingress link tracking for last-hop suppression
-    private enum LinkID: Hashable {
-        case peripheral(String)
-        case central(String)
-    }
-    private var ingressByMessageID: [String: (link: LinkID, timestamp: Date)] = [:]
+    // Ingress link tracking for duplicate and last-hop suppression
+    private var ingressLinks = BLEIngressLinkRegistry()
 
     private struct PendingFragmentTransfer {
         let packet: BitchatPacket
@@ -360,7 +355,7 @@ final class BLEService: NSObject {
             pendingFragmentTransfers.removeAll()
             pendingNotifications.removeAll()
             pendingDirectedRelays.removeAll()
-            ingressByMessageID.removeAll()
+            ingressLinks.removeAll()
             recentPacketTimestamps.removeAll()
             scheduledRelays.values.forEach { $0.cancel() }
             scheduledRelays.removeAll()
@@ -819,37 +814,28 @@ final class BLEService: NSObject {
         case unknown
     }
 
-    private struct IngressPacketContext {
-        let receivedFromPeerID: PeerID
-        let validationPeerID: PeerID
-    }
-
-    private func requiresDirectSenderBinding(_ packet: BitchatPacket) -> Bool {
-        packet.type == MessageType.announce.rawValue && packet.ttl == messageTTL
-    }
-
     private func makeIngressPacketContext(
         for packet: BitchatPacket,
         claimedSenderID: PeerID,
         boundPeerID: PeerID?,
         linkDescription: String
-    ) -> IngressPacketContext? {
-        if claimedSenderID == myPeerID {
+    ) -> BLEIngressPacketContext? {
+        switch BLEIngressLinkRegistry.packetContext(
+            for: packet,
+            claimedSenderID: claimedSenderID,
+            boundPeerID: boundPeerID,
+            localPeerID: myPeerID,
+            directAnnounceTTL: messageTTL
+        ) {
+        case .success(let context):
+            return context
+        case .failure(.selfLoopback):
             SecureLogger.debug("↩️ Dropping BLE self-loopback packet type \(packet.type) from \(linkDescription)", category: .session)
             return nil
-        }
-
-        if let boundPeerID, boundPeerID != claimedSenderID, requiresDirectSenderBinding(packet) {
+        case .failure(.directSenderMismatch(let boundPeerID, let claimedSenderID)):
             SecureLogger.warning("🚫 SECURITY: Sender ID spoofing attempt detected! \(linkDescription) claimed to be \(claimedSenderID.id.prefix(8))… but is bound to \(boundPeerID.id.prefix(8))…", category: .security)
             return nil
         }
-
-        let receivedFromPeerID = boundPeerID ?? claimedSenderID
-        let validationPeerID = packet.isRSR ? receivedFromPeerID : claimedSenderID
-        return IngressPacketContext(
-            receivedFromPeerID: receivedFromPeerID,
-            validationPeerID: validationPeerID
-        )
     }
 
     private func validatePacket(_ packet: BitchatPacket, from peerID: PeerID, connectionSource: ConnectionSource = .unknown) -> Bool {
@@ -882,18 +868,14 @@ final class BLEService: NSObject {
         return true
     }
 
-    private func recordIngressIfNew(_ packet: BitchatPacket, link: LinkID) -> Bool {
-        let messageID = makeMessageID(for: packet)
-        let now = Date()
-
+    private func recordIngressIfNew(_ packet: BitchatPacket, link: BLEIngressLinkID, peerID: PeerID) -> Bool {
         return collectionsQueue.sync(flags: .barrier) {
-            if let existing = ingressByMessageID[messageID],
-               now.timeIntervalSince(existing.timestamp) <= TransportConfig.bleIngressRecordLifetimeSeconds {
-                return false
-            }
-
-            ingressByMessageID[messageID] = (link, now)
-            return true
+            ingressLinks.recordIfNew(
+                packet,
+                link: link,
+                peerID: peerID,
+                lifetime: TransportConfig.bleIngressRecordLifetimeSeconds
+            )
         }
     }
 
@@ -1020,9 +1002,10 @@ final class BLEService: NSObject {
     }
 
     private func sendOnAllLinks(packet: BitchatPacket, data: Data, pad: Bool, directedOnlyPeer: PeerID?) {
-        // Determine last-hop link for this message to avoid echoing back
+        // Determine the last-hop peer/link for this message to avoid echoing back over either BLE role.
         let messageID = makeMessageID(for: packet)
-        let ingressLink: LinkID? = collectionsQueue.sync { ingressByMessageID[messageID]?.link }
+        let ingressRecord = collectionsQueue.sync { ingressLinks.record(for: packet) }
+        let excludedPeerLinks = links(to: ingressRecord?.peerID)
         let directedPeerHint: PeerID? = {
             if let explicit = directedOnlyPeer { return explicit }
             if let recipient = PeerID(str: packet.recipientID?.hexEncodedString()), !recipient.isEmpty {
@@ -1068,35 +1051,19 @@ final class BLEService: NSObject {
             subscribedCentrals = []
         }
 
-        // Exclude ingress link
-        var allowedPeripheralIDs = connectedPeripheralIDs
-        var allowedCentralIDs = centralIDs
-        if let ingress = ingressLink {
-            switch ingress {
-            case .peripheral(let id):
-                allowedPeripheralIDs.removeAll { $0 == id }
-            case .central(let id):
-                allowedCentralIDs.removeAll { $0 == id }
-            }
-        }
-
-        // For broadcast (no directed peer) and non-fragment, choose a subset deterministically
-        // Special-case control/presence messages: do NOT subset to maximize immediate coverage
-        var selectedPeripheralIDs = Set(allowedPeripheralIDs)
-        var selectedCentralIDs = Set(allowedCentralIDs)
-        if directedPeerHint == nil
-            && packet.type != MessageType.fragment.rawValue
-            && packet.type != MessageType.announce.rawValue
-            && packet.type != MessageType.requestSync.rawValue {
-            let kp = subsetSizeForFanout(allowedPeripheralIDs.count)
-            let kc = subsetSizeForFanout(allowedCentralIDs.count)
-            selectedPeripheralIDs = selectDeterministicSubset(ids: allowedPeripheralIDs, k: kp, seed: messageID)
-            selectedCentralIDs = selectDeterministicSubset(ids: allowedCentralIDs, k: kc, seed: messageID)
-        }
+        let selectedLinks = BLEFanoutSelector.selectLinks(
+            peripheralIDs: connectedPeripheralIDs,
+            centralIDs: centralIDs,
+            ingressLink: ingressRecord?.link,
+            excludedLinks: excludedPeerLinks,
+            directedPeerHint: directedPeerHint,
+            packetType: packet.type,
+            messageID: messageID
+        )
 
         // If directed and we currently have no links to forward on, spool for a short window
         if let only = directedPeerHint,
-           selectedPeripheralIDs.isEmpty && selectedCentralIDs.isEmpty,
+           selectedLinks.peripheralIDs.isEmpty && selectedLinks.centralIDs.isEmpty,
            (packet.type == MessageType.noiseEncrypted.rawValue || packet.type == MessageType.noiseHandshake.rawValue) {
             spoolDirectedPacket(packet, recipientPeerID: only)
         }
@@ -1104,14 +1071,14 @@ final class BLEService: NSObject {
         // Writes to selected connected peripherals
         for s in states where s.isConnected {
             let pid = s.peripheral.identifier.uuidString
-            guard selectedPeripheralIDs.contains(pid) else { continue }
+            guard selectedLinks.peripheralIDs.contains(pid) else { continue }
             if let ch = s.characteristic {
                 writeOrEnqueue(data, to: s.peripheral, characteristic: ch, priority: outboundPriority)
             }
         }
         // Notify selected subscribed centrals
         if let ch = characteristic {
-            let targets = subscribedCentrals.filter { selectedCentralIDs.contains($0.identifier.uuidString) }
+            let targets = subscribedCentrals.filter { selectedLinks.centralIDs.contains($0.identifier.uuidString) }
             if !targets.isEmpty {
                 let success = peripheralManager?.updateValue(data, for: ch, onSubscribedCentrals: targets) ?? false
                 if !success {
@@ -2091,7 +2058,7 @@ extension BLEService {
     }
 
     func _test_recordIngressIfNew(packet: BitchatPacket, linkID: String) -> Bool {
-        recordIngressIfNew(packet, link: .central(linkID))
+        recordIngressIfNew(packet, link: .central(linkID), peerID: PeerID(hexData: packet.senderID))
     }
 }
 #endif
@@ -2252,7 +2219,7 @@ extension BLEService: CBPeripheralDelegate {
                 peripherals[peripheralUUID] = state
             }
 
-            if !recordIngressIfNew(packet, link: .peripheral(peripheralUUID)) {
+            if !recordIngressIfNew(packet, link: .peripheral(peripheralUUID), peerID: context.receivedFromPeerID) {
                 continue
             }
             processNotificationPacket(
@@ -2691,12 +2658,12 @@ extension BLEService: CBPeripheralManagerDelegate {
                         centralToPeerID[centralUUID] = claimedSenderID
                         refreshLocalTopology()
                     }
-                    if !recordIngressIfNew(packet, link: .central(centralUUID)) {
+                    if !recordIngressIfNew(packet, link: .central(centralUUID), peerID: context.receivedFromPeerID) {
                         continue
                     }
                     handleReceivedPacket(packet, from: context.receivedFromPeerID)
                 } else {
-                    if !recordIngressIfNew(packet, link: .central(centralUUID)) {
+                    if !recordIngressIfNew(packet, link: .central(centralUUID), peerID: context.receivedFromPeerID) {
                         continue
                     }
                     handleReceivedPacket(packet, from: context.receivedFromPeerID)
@@ -2855,6 +2822,10 @@ extension BLEService {
     }
 
     private func forwardAlongRouteIfNeeded(_ packet: BitchatPacket) -> Bool {
+        if PeerID(hexData: packet.recipientID) == myPeerID {
+            return true
+        }
+
         guard let route = packet.route, !route.isEmpty else { return false }
         let myRoutingData = routingData(for: myPeerID) ?? (myPeerIDData.isEmpty ? nil : myPeerIDData)
         guard let selfData = myRoutingData else { return false }
@@ -2916,6 +2887,27 @@ extension BLEService {
             return computeState()
         } else {
             return bleQueue.sync { computeState() }
+        }
+    }
+
+    private func links(to peerID: PeerID?) -> Set<BLEIngressLinkID> {
+        guard let peerID else { return [] }
+
+        let computeLinks = { () -> Set<BLEIngressLinkID> in
+            var links: Set<BLEIngressLinkID> = []
+            if let peripheralUUID = self.peerToPeripheralUUID[peerID] {
+                links.insert(.peripheral(peripheralUUID))
+            }
+            for (centralUUID, mappedPeerID) in self.centralToPeerID where mappedPeerID == peerID {
+                links.insert(.central(centralUUID))
+            }
+            return links
+        }
+
+        if DispatchQueue.getSpecific(key: bleQueueKey) != nil {
+            return computeLinks()
+        } else {
+            return bleQueue.sync { computeLinks() }
         }
     }
     
@@ -2992,37 +2984,7 @@ extension BLEService {
     // MARK: Helpers: IDs, selection, and write backpressure
     
     private func makeMessageID(for packet: BitchatPacket) -> String {
-        let senderID = packet.senderID.hexEncodedString()
-        let digestPrefix = packet.payload.sha256Hash().prefix(4).hexEncodedString()
-        return "\(senderID)-\(packet.timestamp)-\(packet.type)-\(digestPrefix)"
-    }
-
-    private func subsetSizeForFanout(_ n: Int) -> Int {
-        guard n > 0 else { return 0 }
-        if n <= 2 { return n }
-        // approx ceil(log2(n)) + 1 without floating point
-        var v = n - 1
-        var bits = 0
-        while v > 0 { v >>= 1; bits += 1 }
-        return min(n, max(1, bits + 1))
-    }
-
-    private func selectDeterministicSubset(ids: [String], k: Int, seed: String) -> Set<String> {
-        guard k > 0 && ids.count > k else { return Set(ids) }
-        // Stable order by SHA256(seed || "::" || id)
-        var scored: [(score: [UInt8], id: String)] = []
-        for id in ids {
-            let msg = (seed + "::" + id).data(using: .utf8) ?? Data()
-            let digest = Array(SHA256.hash(data: msg))
-            scored.append((digest, id))
-        }
-        scored.sort { a, b in
-            for i in 0..<min(a.score.count, b.score.count) {
-                if a.score[i] != b.score[i] { return a.score[i] < b.score[i] }
-            }
-            return a.id < b.id
-        }
-        return Set(scored.prefix(k).map { $0.id })
+        BLEIngressLinkRegistry.messageID(for: packet)
     }
 
     private func priority(for packet: BitchatPacket, data: Data) -> BLEOutboundWritePriority {
@@ -3822,6 +3784,7 @@ extension BLEService {
             let decision = RelayController.decide(
                 ttl: packet.ttl,
                 senderIsSelf: senderID == myPeerID,
+                recipientIsSelf: PeerID(hexData: packet.recipientID) == myPeerID,
                 isEncrypted: packet.type == MessageType.noiseEncrypted.rawValue,
                 isDirectedEncrypted: (packet.type == MessageType.noiseEncrypted.rawValue) && (packet.recipientID != nil),
                 isFragment: packet.type == MessageType.fragment.rawValue,
@@ -4507,8 +4470,8 @@ extension BLEService {
         collectionsQueue.async(flags: .barrier) { [weak self] in
             guard let self = self else { return }
             let cutoff = now.addingTimeInterval(-TransportConfig.bleIngressRecordLifetimeSeconds)
-            if !self.ingressByMessageID.isEmpty {
-                self.ingressByMessageID = self.ingressByMessageID.filter { $0.value.timestamp >= cutoff }
+            if !self.ingressLinks.isEmpty {
+                self.ingressLinks.prune(before: cutoff)
             }
             // Clean expired directed spooled items
             if !self.pendingDirectedRelays.isEmpty {

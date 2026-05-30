@@ -11,6 +11,7 @@ struct RelayDecision {
 struct RelayController {
     static func decide(ttl: UInt8,
                        senderIsSelf: Bool,
+                       recipientIsSelf: Bool = false,
                        isEncrypted: Bool,
                        isDirectedEncrypted: Bool,
                        isFragment: Bool,
@@ -22,7 +23,7 @@ struct RelayController {
         let ttlCap = min(ttl, TransportConfig.messageTTLDefault)
 
         // Suppress obvious non-relays
-        if ttlCap <= 1 || senderIsSelf {
+        if ttlCap <= 1 || senderIsSelf || recipientIsSelf {
             return RelayDecision(shouldRelay: false, newTTL: ttlCap, delayMs: 0)
         }
 
