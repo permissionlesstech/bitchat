@@ -138,7 +138,7 @@ final class BLEService: NSObject {
     // Noise typed payloads (ACKs, read receipts, etc.) pending handshake
     private var pendingNoisePayloadsAfterHandshake: [PeerID: [Data]] = [:]
     // Queue for notifications that failed due to full queue
-    private var pendingNotifications: [(data: Data, centrals: [CBCentral]?)] = []
+    private var pendingNotifications = BLEOutboundNotificationBuffer<CBCentral>()
 
     // Accumulate long write chunks per central until a full frame decodes
     private var pendingWriteBuffers: [String: Data] = [:]
@@ -982,9 +982,14 @@ final class BLEService: NSObject {
     private func enqueuePendingNotification(data: Data, centrals: [CBCentral]?, context: String, attempt: Int = 0) {
         collectionsQueue.async(flags: .barrier) { [weak self] in
             guard let self = self else { return }
-            if self.pendingNotifications.count < TransportConfig.blePendingNotificationsCapCount {
-                self.pendingNotifications.append((data: data, centrals: centrals))
-                SecureLogger.debug("📋 Queued \(context) packet for retry (pending=\(self.pendingNotifications.count))", category: .session)
+            let result = self.pendingNotifications.enqueue(
+                data: data,
+                targets: centrals,
+                capCount: TransportConfig.blePendingNotificationsCapCount
+            )
+
+            if case let .enqueued(count) = result {
+                SecureLogger.debug("📋 Queued \(context) packet for retry (pending=\(count))", category: .session)
                 return
             }
 
@@ -2557,54 +2562,50 @@ extension BLEService: CBPeripheralManagerDelegate {
     
     func peripheralManagerIsReady(toUpdateSubscribers peripheral: CBPeripheralManager) {
         SecureLogger.debug("📤 Peripheral manager ready to send more notifications", category: .session)
-        
-        // Retry pending notifications now that queue has space
+
+        drainPendingNotifications(logPrefix: "✅ Sent")
+    }
+
+    private func drainPendingNotifications(logPrefix: String) {
         collectionsQueue.async(flags: .barrier) { [weak self] in
             guard let self = self,
                   let characteristic = self.characteristic,
                   !self.pendingNotifications.isEmpty else { return }
-            
-            let pending = self.pendingNotifications
-            self.pendingNotifications.removeAll()
-            
-            // Try to send pending notifications
-            var sentCount = 0
-            for (index, (data, centrals)) in pending.enumerated() {
-                if let centrals = centrals {
-                    // Send to specific centrals
-                    let success = self.peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: centrals) ?? false
-                    if !success {
-                        // Still full, re-queue this and all remaining items
-                        let remaining = pending.dropFirst(index)
-                        self.pendingNotifications.append(contentsOf: remaining)
-                        SecureLogger.debug("⚠️ Notification queue still full after \(sentCount) sent, re-queuing \(remaining.count) items", category: .session)
-                        break  // Stop trying, wait for next ready callback
-                    } else {
-                        sentCount += 1
-                    }
-                } else {
-                    // Broadcast to all
-                    let success = self.peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: nil) ?? false
-                    if !success {
-                        // Still full, re-queue this and all remaining items
-                        let remaining = pending.dropFirst(index)
-                        self.pendingNotifications.append(contentsOf: remaining)
-                        SecureLogger.debug("⚠️ Notification queue still full after \(sentCount) sent, re-queuing \(remaining.count) items", category: .session)
-                        break
-                    } else {
-                        sentCount += 1
-                    }
-                }
-            }
+
+            let pending = self.pendingNotifications.takeAll()
+            let sentCount = self.sendPendingNotifications(pending, characteristic: characteristic)
 
             if sentCount > 0 {
-                SecureLogger.debug("✅ Sent \(sentCount) pending notifications from retry queue", category: .session)
+                SecureLogger.debug("\(logPrefix) \(sentCount) pending notifications from retry queue", category: .session)
             }
-            
+
             if !self.pendingNotifications.isEmpty {
                 SecureLogger.debug("📋 Still have \(self.pendingNotifications.count) pending notifications", category: .session)
             }
         }
+    }
+
+    private func sendPendingNotifications(_ pending: [BLEPendingNotification<CBCentral>], characteristic: CBMutableCharacteristic) -> Int {
+        var sentCount = 0
+
+        for (index, notification) in pending.enumerated() {
+            let success = peripheralManager?.updateValue(
+                notification.data,
+                for: characteristic,
+                onSubscribedCentrals: notification.targets
+            ) ?? false
+
+            guard success else {
+                let remaining = Array(pending.dropFirst(index))
+                pendingNotifications.prepend(remaining)
+                SecureLogger.debug("⚠️ Notification queue still full after \(sentCount) sent, re-queuing \(remaining.count) items", category: .session)
+                break
+            }
+
+            sentCount += 1
+        }
+
+        return sentCount
     }
     
     func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveWrite requests: [CBATTRequest]) {
@@ -3097,37 +3098,7 @@ extension BLEService {
 
     /// Periodically try to drain pending notifications as a backup mechanism
     private func drainPendingNotificationsIfPossible() {
-        collectionsQueue.async(flags: .barrier) { [weak self] in
-            guard let self = self,
-                  let characteristic = self.characteristic,
-                  !self.pendingNotifications.isEmpty else { return }
-
-            let pending = self.pendingNotifications
-            self.pendingNotifications.removeAll()
-
-            var sentCount = 0
-            for (index, (data, centrals)) in pending.enumerated() {
-                let success: Bool
-                if let centrals = centrals {
-                    success = self.peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: centrals) ?? false
-                } else {
-                    success = self.peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: nil) ?? false
-                }
-
-                if !success {
-                    // Re-queue this and all remaining items
-                    let remaining = pending.dropFirst(index)
-                    self.pendingNotifications.append(contentsOf: remaining)
-                    break
-                } else {
-                    sentCount += 1
-                }
-            }
-
-            if sentCount > 0 {
-                SecureLogger.debug("🔄 Periodic drain: sent \(sentCount) pending notifications", category: .session)
-            }
-        }
+        drainPendingNotifications(logPrefix: "🔄 Periodic drain: sent")
     }
 
     /// Periodically try to drain pending writes for all connected peripherals
