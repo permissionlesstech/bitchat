@@ -87,9 +87,7 @@ final class BLEService: NSObject {
     private let meshTopology = MeshTopologyTracker()
     
     // 5. Fragment Reassembly (necessary for messages > MTU)
-    private struct FragmentKey: Hashable { let sender: UInt64; let id: UInt64 }
-    private var incomingFragments: [FragmentKey: [Int: Data]] = [:]
-    private var fragmentMetadata: [FragmentKey: (type: UInt8, total: Int, timestamp: Date)] = [:]
+    private var fragmentAssemblyBuffer = BLEFragmentAssemblyBuffer()
     private struct ActiveTransferState {
         let totalFragments: Int
         var sentFragments: Int
@@ -354,6 +352,7 @@ final class BLEService: NSObject {
             pendingPeripheralWrites.removeAll()
             pendingFragmentTransfers.removeAll()
             pendingNotifications.removeAll()
+            fragmentAssemblyBuffer.removeAll()
             pendingDirectedRelays.removeAll()
             ingressLinks.removeAll()
             recentPacketTimestamps.removeAll()
@@ -571,8 +570,7 @@ final class BLEService: NSObject {
         let cancelledTransfers: [(id: String, items: [DispatchWorkItem])] = collectionsQueue.sync(flags: .barrier) {
             let entries = activeTransfers.map { ($0.key, $0.value.workItems) }
             peers.removeAll()
-            incomingFragments.removeAll()
-            fragmentMetadata.removeAll()
+            fragmentAssemblyBuffer.removeAll()
             activeTransfers.removeAll()
             // Also clear pending message queues to avoid stale state across sessions
             pendingMessagesAfterHandshake.removeAll()
@@ -3553,102 +3551,19 @@ extension BLEService {
             return
         }
 
-        // Minimum header: 8 bytes ID + 2 index + 2 total + 1 type
-        guard packet.payload.count >= 13 else { return }
+        guard let header = BLEFragmentHeader(packet: packet) else { return }
 
-        // Compute compact fragment key (sender: 8 bytes, id: 8 bytes), big-endian
-        var senderU64: UInt64 = 0
-        for b in packet.senderID.prefix(8) { senderU64 = (senderU64 << 8) | UInt64(b) }
-        var fragU64: UInt64 = 0
-        for b in packet.payload.prefix(8) { fragU64 = (fragU64 << 8) | UInt64(b) }
-        // Parse big-endian UInt16 safely without alignment assumptions
-        let idxHi = UInt16(packet.payload[8])
-        let idxLo = UInt16(packet.payload[9])
-        let index = Int((idxHi << 8) | idxLo)
-        let totHi = UInt16(packet.payload[10])
-        let totLo = UInt16(packet.payload[11])
-        let total = Int((totHi << 8) | totLo)
-        let originalType = packet.payload[12]
-        let fragmentData = packet.payload.suffix(from: 13)
-
-        // Sanity checks - add reasonable upper bound on total to prevent DoS
-        guard total > 0 && total <= 10000 && index >= 0 && index < total else { return }
-
-        let isBroadcastFragment: Bool = {
-            guard let recipient = packet.recipientID else { return true }
-            return recipient.count == 8 && recipient.allSatisfy { $0 == 0xFF }
-        }()
-        if isBroadcastFragment {
+        if header.isBroadcastFragment {
             gossipSyncManager?.onPublicPacketSeen(packet)
         }
 
-        // Compute fragment key for this assembly
-        let key = FragmentKey(sender: senderU64, id: fragU64)
-
-        // Critical section: Store fragment and check completion status
-        var shouldReassemble: Bool = false
-        var fragmentsToReassemble: [Int: Data]? = nil
-
-        collectionsQueue.sync(flags: .barrier) {
-            if incomingFragments[key] == nil {
-                // Cap in-flight assemblies to prevent memory/battery blowups
-                if incomingFragments.count >= maxInFlightAssemblies {
-                    // Evict the oldest assembly by timestamp
-                    if let oldest = fragmentMetadata.min(by: { $0.value.timestamp < $1.value.timestamp })?.key {
-                        incomingFragments.removeValue(forKey: oldest)
-                        fragmentMetadata.removeValue(forKey: oldest)
-                    }
-                }
-                incomingFragments[key] = [:]
-                fragmentMetadata[key] = (originalType, total, Date())
-                SecureLogger.debug("📦 Started fragment assembly id=\(String(format: "%016llx", fragU64)) total=\(total)", category: .session)
-            }
-
-            // Check cumulative size before storing this fragment
-            let currentSize = incomingFragments[key]?.values.reduce(0) { $0 + $1.count } ?? 0
-            let assemblyLimit: Int = {
-                if originalType == MessageType.fileTransfer.rawValue {
-                    // Allow headroom for TLV metadata and binary framing overhead.
-                    return FileTransferLimits.maxFramedFileBytes
-                }
-                return FileTransferLimits.maxPayloadBytes
-            }()
-            let projectedSize = currentSize + fragmentData.count
-            guard projectedSize <= assemblyLimit else {
-                // Exceeds size limit - evict this assembly
-                SecureLogger.warning(
-                    "🚫 Fragment assembly exceeds size limit (\(projectedSize) bytes > \(assemblyLimit)), evicting. Type=\(originalType) Index=\(index)/\(total)",
-                    category: .security
-                )
-                incomingFragments.removeValue(forKey: key)
-                fragmentMetadata.removeValue(forKey: key)
-                shouldReassemble = false
-                fragmentsToReassemble = nil
-                return
-            }
-
-            incomingFragments[key]?[index] = Data(fragmentData)
-            SecureLogger.debug("📦 Fragment \(index + 1)/\(total) (len=\(fragmentData.count)) for id=\(String(format: "%016llx", fragU64))", category: .session)
-
-            // Check if complete
-            if let fragments = incomingFragments[key], fragments.count == total {
-                shouldReassemble = true
-                fragmentsToReassemble = fragments
-            } else {
-                shouldReassemble = false
-                fragmentsToReassemble = nil
-            }
+        let assemblyResult = collectionsQueue.sync(flags: .barrier) {
+            fragmentAssemblyBuffer.append(header, maxInFlightAssemblies: maxInFlightAssemblies)
         }
 
-        // Heavy work outside lock: reassemble and decode
-        guard shouldReassemble, let fragments = fragmentsToReassemble else { return }
+        logFragmentAssemblyResult(assemblyResult)
 
-        var reassembled = Data()
-        for i in 0..<total {
-            if let fragment = fragments[i] {
-                reassembled.append(fragment)
-            }
-        }
+        guard case let .complete(completedHeader, reassembled, _) = assemblyResult else { return }
 
         // Decode the original packet bytes we reassembled, so flags/compression are preserved
         if var originalPacket = BinaryProtocol.decode(reassembled) {
@@ -3658,18 +3573,37 @@ extension BLEService {
             if !validatePacket(originalPacket, from: innerSender) {
                 // Cleanup below
             } else {
-                SecureLogger.debug("✅ Reassembled packet id=\(String(format: "%016llx", fragU64)) type=\(originalPacket.type) bytes=\(reassembled.count)", category: .session)
+                SecureLogger.debug("✅ Reassembled packet id=\(completedHeader.idLogString) type=\(originalPacket.type) bytes=\(reassembled.count)", category: .session)
                 originalPacket.ttl = 0
                 handleReceivedPacket(originalPacket, from: peerID)
             }
         } else {
-            SecureLogger.error("❌ Failed to decode reassembled packet (type=\(originalType), total=\(total))", category: .session)
+            SecureLogger.error("❌ Failed to decode reassembled packet (type=\(completedHeader.originalType), total=\(completedHeader.total))", category: .session)
+        }
+    }
+
+    private func logFragmentAssemblyResult(_ result: BLEFragmentAssemblyBuffer.AppendResult) {
+        func logStartedIfNeeded(header: BLEFragmentHeader, started: Bool) {
+            if started {
+                SecureLogger.debug("📦 Started fragment assembly id=\(header.idLogString) total=\(header.total)", category: .session)
+            }
         }
 
-        // Critical section: Cleanup completed assembly
-        collectionsQueue.sync(flags: .barrier) {
-            incomingFragments.removeValue(forKey: key)
-            fragmentMetadata.removeValue(forKey: key)
+        switch result {
+        case let .stored(header, started):
+            logStartedIfNeeded(header: header, started: started)
+            SecureLogger.debug("📦 Fragment \(header.index + 1)/\(header.total) (len=\(header.fragmentData.count)) for id=\(header.idLogString)", category: .session)
+
+        case let .complete(header, _, started):
+            logStartedIfNeeded(header: header, started: started)
+            SecureLogger.debug("📦 Fragment \(header.index + 1)/\(header.total) (len=\(header.fragmentData.count)) for id=\(header.idLogString)", category: .session)
+
+        case let .oversized(header, projectedSize, limit, started):
+            logStartedIfNeeded(header: header, started: started)
+            SecureLogger.warning(
+                "🚫 Fragment assembly exceeds size limit (\(projectedSize) bytes > \(limit)), evicting. Type=\(header.originalType) Index=\(header.index)/\(header.total)",
+                category: .security
+            )
         }
     }
     
@@ -4439,11 +4373,7 @@ extension BLEService {
         // Clean old fragments (> configured seconds old)
         collectionsQueue.sync(flags: .barrier) {
             let cutoff = now.addingTimeInterval(-TransportConfig.bleFragmentLifetimeSeconds)
-            let oldFragments = fragmentMetadata.filter { $0.value.timestamp < cutoff }.map { $0.key }
-            for fragmentID in oldFragments {
-                incomingFragments.removeValue(forKey: fragmentID)
-                fragmentMetadata.removeValue(forKey: fragmentID)
-            }
+            fragmentAssemblyBuffer.removeExpired(before: cutoff)
         }
 
         // Clean old connection timeout backoff entries (> window)
