@@ -121,13 +121,12 @@ final class NostrRelayManager: ObservableObject {
         var nextReconnectTime: Date?
     }
     
-    // Default relay list (can be customized)
+    // Default relays carry NIP-17 gift wraps, so avoid relays known to reject kind 1059.
     private static let defaultRelays = [
         "wss://relay.damus.io",
         "wss://nos.lol",
         "wss://relay.primal.net",
-        "wss://offchain.pub",
-        "wss://nostr21.com"
+        "wss://offchain.pub"
         // For local testing, you can add: "ws://localhost:8080"
     ]
     private static let defaultRelaySet = Set(defaultRelays)
@@ -143,9 +142,18 @@ final class NostrRelayManager: ObservableObject {
     private var subscriptions: [String: Set<String>] = [:] // relay URL -> active subscription IDs
     private var pendingSubscriptions: [String: [String: String]] = [:] // relay URL -> (subscription id -> encoded REQ JSON)
     private var messageHandlers: [String: (NostrEvent) -> Void] = [:]
-    // Coalesce duplicate subscribe requests for the same id within a short window
+    // Coalesce duplicate subscribe requests for the same id within a short window.
+    private let subscribeCoalesceInterval: TimeInterval = 1.0
     private var subscribeCoalesce: [String: Date] = [:]
+    private var pendingTorConnectionURLs = Set<String>()
+    private var awaitingTorForConnections = false
     private var cancellables = Set<AnyCancellable>()
+
+    private struct SubscriptionRequestState: Equatable {
+        let messageString: String
+        let relayURLs: Set<String>
+    }
+    private var subscriptionRequestState: [String: SubscriptionRequestState] = [:]
 
     // Track EOSE per subscription to signal when initial stored events are done
     private struct EOSETracker {
@@ -154,6 +162,7 @@ final class NostrRelayManager: ObservableObject {
         var timer: Timer?
     }
     private var eoseTrackers: [String: EOSETracker] = [:]
+    private var pendingEOSECallbacks: [String: () -> Void] = [:]
     
     // Message queue for reliability
     // Pending sends held only for relays that are not yet connected.
@@ -233,25 +242,7 @@ final class NostrRelayManager: ObservableObject {
     func connect() {
         // Global network policy gate
         guard dependencies.activationAllowed() else { return }
-        if shouldUseTor {
-            // Ensure Tor is started early and wait for readiness off-main; then hop back to connect.
-            dependencies.awaitTorReady { [weak self] ready in
-                guard let self = self else { return }
-                if !ready {
-                    SecureLogger.error("❌ Tor not ready; aborting relay connections (fail-closed)", category: .session)
-                    return
-                }
-                SecureLogger.debug("🌐 Connecting to \(self.relays.count) Nostr relays (via Tor)", category: .session)
-                for relay in self.relays {
-                    self.connectToRelay(relay.url)
-                }
-            }
-        } else {
-            SecureLogger.debug("🌐 Connecting to \(self.relays.count) Nostr relays (direct)", category: .session)
-            for relay in self.relays {
-                connectToRelay(relay.url)
-            }
-        }
+        connectToRelays(relays.map(\.url), shouldLog: true)
     }
     
     /// Disconnect from all relays
@@ -264,6 +255,14 @@ final class NostrRelayManager: ObservableObject {
         // Clear known subscriptions and any queued subs since connections are gone
         subscriptions.removeAll()
         pendingSubscriptions.removeAll()
+        subscriptionRequestState.removeAll()
+        pendingEOSECallbacks.removeAll()
+        for (_, tracker) in eoseTrackers {
+            tracker.timer?.invalidate()
+        }
+        eoseTrackers.removeAll()
+        pendingTorConnectionURLs.removeAll()
+        awaitingTorForConnections = false
         updateConnectionStatus()
     }
     
@@ -273,22 +272,12 @@ final class NostrRelayManager: ObservableObject {
         guard dependencies.activationAllowed() else { return }
         let targets = allowedRelayList(from: relayUrls)
         guard !targets.isEmpty else { return }
-        if shouldUseTor && dependencies.torEnforced() && !dependencies.torIsReady() {
-            // Defer until Tor is fully ready; avoid queuing connection attempts early
-            dependencies.awaitTorReady { [weak self] ready in
-                guard let self = self else { return }
-                if ready { self.ensureConnections(to: relayUrls) }
-            }
-            return
-        }
         var existing = Set(relays.map { $0.url })
         for url in targets where !existing.contains(url) {
             relays.append(Relay(url: url))
             existing.insert(url)
         }
-        for url in targets where connections[url] == nil {
-            connectToRelay(url)
-        }
+        connectToRelays(targets)
     }
 
     /// Send an event to specified relays (or all if none specified)
@@ -311,7 +300,7 @@ final class NostrRelayManager: ObservableObject {
         // Attempt immediate send to relays with active connections; queue the rest
         var stillPending = Set<String>()
         for relayUrl in targetRelays {
-            if let connection = connections[relayUrl] {
+            if let connection = connectedConnection(for: relayUrl) {
                 sendToRelay(event: event, connection: connection, relayUrl: relayUrl)
             } else {
                 stillPending.insert(relayUrl)
@@ -333,7 +322,7 @@ final class NostrRelayManager: ObservableObject {
             // Flush only for a specific relay
             for i in (0..<messageQueue.count).reversed() {
                 var item = messageQueue[i]
-                if item.pendingRelays.contains(target), let conn = connections[target] {
+                if item.pendingRelays.contains(target), let conn = connectedConnection(for: target) {
                     sendToRelay(event: item.event, connection: conn, relayUrl: target)
                     item.pendingRelays.remove(target)
                     if item.pendingRelays.isEmpty {
@@ -348,7 +337,7 @@ final class NostrRelayManager: ObservableObject {
             for i in (0..<messageQueue.count).reversed() {
                 var item = messageQueue[i]
                 for url in item.pendingRelays {
-                    if let conn = connections[url] {
+                    if let conn = connectedConnection(for: url) {
                         sendToRelay(event: item.event, connection: conn, relayUrl: url)
                         item.pendingRelays.remove(url)
                     }
@@ -361,6 +350,14 @@ final class NostrRelayManager: ObservableObject {
             }
         }
     }
+
+    private func connectedConnection(for relayUrl: String) -> NostrRelayConnectionProtocol? {
+        guard let connection = connections[relayUrl],
+              relays.first(where: { $0.url == relayUrl })?.isConnected == true else {
+            return nil
+        }
+        return connection
+    }
     
     /// Subscribe to events matching a filter. If `relayUrls` provided, targets only those relays.
     func subscribe(
@@ -372,24 +369,12 @@ final class NostrRelayManager: ObservableObject {
     ) {
         // Global network policy gate
         guard dependencies.activationAllowed() else { return }
-        // Coalesce rapid duplicate subscribe requests only if a handler already exists
+        // Coalesce rapid duplicate subscribe requests even while Tor readiness is pending.
         let now = dependencies.now()
-        if messageHandlers[id] != nil {
-            if let last = subscribeCoalesce[id], now.timeIntervalSince(last) < 1.0 {
-                return
-            }
-        }
-        subscribeCoalesce[id] = now
-        if shouldUseTor && dependencies.torEnforced() && !dependencies.torIsReady() {
-            // Defer subscription setup until Tor is ready; avoid queuing subs early
-            dependencies.awaitTorReady { [weak self] ready in
-                guard let self = self else { return }
-                if ready {
-                    self.subscribe(filter: filter, id: id, relayUrls: relayUrls, handler: handler, onEOSE: onEOSE)
-                }
-            }
+        if let last = subscribeCoalesce[id], now.timeIntervalSince(last) < subscribeCoalesceInterval {
             return
         }
+        subscribeCoalesce[id] = now
         messageHandlers[id] = handler
         
         let req = NostrRequest.subscribe(id: id, filters: [filter])
@@ -407,10 +392,17 @@ final class NostrRelayManager: ObservableObject {
             let baseUrls = relayUrls ?? Self.defaultRelays
             let candidateUrls = baseUrls.filter { !isPermanentlyFailed($0) }
             let urls = allowedRelayList(from: candidateUrls)
+            let requestState = SubscriptionRequestState(messageString: messageString, relayURLs: Set(urls))
+            if subscriptionRequestState[id] == requestState, subscriptionStateExists(id: id, requestState: requestState) {
+                return
+            }
+            subscriptionRequestState[id] = requestState
+
             // Always queue subscriptions; sending happens when a relay reports connected
-            let existingSet = Set(relays.map { $0.url })
+            var existingSet = Set(relays.map { $0.url })
             for url in urls where !existingSet.contains(url) {
                 relays.append(Relay(url: url))
+                existingSet.insert(url)
             }
             for url in urls {
                 var map = self.pendingSubscriptions[url] ?? [:]
@@ -421,20 +413,10 @@ final class NostrRelayManager: ObservableObject {
             if let onEOSE = onEOSE {
                 if urls.isEmpty {
                     onEOSE()
+                } else if shouldWaitForTorBeforeConnecting {
+                    pendingEOSECallbacks[id] = onEOSE
                 } else {
-                    var tracker = EOSETracker(pendingRelays: Set(urls), callback: onEOSE, timer: nil)
-                    // Fallback timeout to avoid hanging if a relay never sends EOSE
-                    tracker.timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
-                        Task { @MainActor in
-                            guard let self = self else { return }
-                            if let t = self.eoseTrackers[id] {
-                                t.timer?.invalidate()
-                                self.eoseTrackers.removeValue(forKey: id)
-                                onEOSE()
-                            }
-                        }
-                    }
-                    eoseTrackers[id] = tracker
+                    startEOSETracking(id: id, relayURLs: Set(urls), callback: onEOSE)
                 }
             }
             SecureLogger.debug("📋 Queued subscription id=\(id) for \(urls.count) relay(s)", category: .session)
@@ -506,6 +488,13 @@ final class NostrRelayManager: ObservableObject {
         messageHandlers.removeValue(forKey: id)
         // Allow immediate re-subscription by clearing coalescer timestamp
         subscribeCoalesce.removeValue(forKey: id)
+        subscriptionRequestState.removeValue(forKey: id)
+        pendingEOSECallbacks.removeValue(forKey: id)
+        eoseTrackers[id]?.timer?.invalidate()
+        eoseTrackers.removeValue(forKey: id)
+        for url in Array(pendingSubscriptions.keys) {
+            pendingSubscriptions[url]?.removeValue(forKey: id)
+        }
         
         let req = NostrRequest.close(id: id)
         let message = try? encoder.encode(req)
@@ -525,6 +514,100 @@ final class NostrRelayManager: ObservableObject {
     }
     
     // MARK: - Private Methods
+
+    private var shouldWaitForTorBeforeConnecting: Bool {
+        shouldUseTor && !dependencies.torIsReady()
+    }
+
+    private func connectToRelays(_ relayUrls: [String], shouldLog: Bool = false) {
+        guard dependencies.activationAllowed() else { return }
+        let targets = allowedRelayList(from: relayUrls).filter {
+            connections[$0] == nil && !isPermanentlyFailed($0)
+        }
+        guard !targets.isEmpty else { return }
+
+        if shouldWaitForTorBeforeConnecting {
+            queueConnectionsUntilTorReady(targets)
+            return
+        }
+
+        if shouldLog {
+            let route = shouldUseTor ? "via Tor" : "direct"
+            SecureLogger.debug("🌐 Connecting to \(targets.count) Nostr relay(s) (\(route))", category: .session)
+        }
+
+        for url in targets {
+            connectToRelay(url)
+        }
+    }
+
+    private func queueConnectionsUntilTorReady(_ relayUrls: [String]) {
+        let targets = allowedRelayList(from: relayUrls).filter {
+            connections[$0] == nil && !isPermanentlyFailed($0)
+        }
+        guard !targets.isEmpty else { return }
+
+        pendingTorConnectionURLs.formUnion(targets)
+        guard !awaitingTorForConnections else { return }
+
+        awaitingTorForConnections = true
+        let generation = connectionGeneration
+        dependencies.awaitTorReady { [weak self] ready in
+            guard let self else { return }
+            guard generation == self.connectionGeneration else { return }
+
+            let pending = Array(self.pendingTorConnectionURLs)
+            self.pendingTorConnectionURLs.removeAll()
+            self.awaitingTorForConnections = false
+
+            guard ready else {
+                SecureLogger.error("❌ Tor not ready; aborting relay connections (fail-closed)", category: .session)
+                return
+            }
+
+            self.connectToRelays(pending, shouldLog: true)
+        }
+    }
+
+    private func subscriptionStateExists(id: String, requestState: SubscriptionRequestState) -> Bool {
+        guard !requestState.relayURLs.isEmpty else { return true }
+        return requestState.relayURLs.allSatisfy { url in
+            pendingSubscriptions[url]?[id] == requestState.messageString ||
+                subscriptions[url]?.contains(id) == true
+        }
+    }
+
+    private func startEOSETracking(id: String, relayURLs: Set<String>, callback: @escaping () -> Void) {
+        eoseTrackers[id]?.timer?.invalidate()
+        var tracker = EOSETracker(pendingRelays: relayURLs, callback: callback, timer: nil)
+        // Fallback timeout to avoid hanging if a relay never sends EOSE.
+        tracker.timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                if let tracker = self.eoseTrackers[id] {
+                    tracker.timer?.invalidate()
+                    self.eoseTrackers.removeValue(forKey: id)
+                    callback()
+                }
+            }
+        }
+        eoseTrackers[id] = tracker
+    }
+
+    private func startPendingEOSETrackingIfNeeded(id: String) {
+        guard eoseTrackers[id] == nil,
+              let callback = pendingEOSECallbacks.removeValue(forKey: id),
+              let requestState = subscriptionRequestState[id]
+        else {
+            return
+        }
+
+        if requestState.relayURLs.isEmpty {
+            callback()
+        } else {
+            startEOSETracking(id: id, relayURLs: requestState.relayURLs, callback: callback)
+        }
+    }
     
     private func connectToRelay(_ urlString: String) {
         // Global network policy gate
@@ -550,12 +633,8 @@ final class NostrRelayManager: ObservableObject {
         // Attempting to connect to Nostr relay via the proxied session
         
         // If Tor is enforced but not ready, delay connection until it is.
-        if shouldUseTor && dependencies.torEnforced() && !dependencies.torIsReady() {
-            dependencies.awaitTorReady { [weak self] ready in
-                guard let self = self else { return }
-                if ready { self.connectToRelay(urlString) }
-                else { SecureLogger.error("❌ Tor not ready; skipping connection to \(urlString)", category: .session) }
-            }
+        if shouldWaitForTorBeforeConnecting {
+            queueConnectionsUntilTorReady([urlString])
             return
         }
         
@@ -592,6 +671,7 @@ final class NostrRelayManager: ObservableObject {
         guard let connection = connections[relayUrl] else { return }
         for (id, messageString) in map {
             if self.subscriptions[relayUrl]?.contains(id) == true { continue }
+            startPendingEOSETrackingIfNeeded(id: id)
             connection.send(.string(messageString)) { error in
                 if let error = error {
                     SecureLogger.error("❌ Failed to send pending subscription to \(relayUrl): \(error)", category: .session)
@@ -671,9 +751,9 @@ final class NostrRelayManager: ObservableObject {
             } else {
                 let isGiftWrap = Self.pendingGiftWrapIDs.remove(eventId) != nil
                 if isGiftWrap {
-                    SecureLogger.warning("📮 Rejected id=\(eventId.prefix(16))… reason=\(reason)", category: .session)
+                    SecureLogger.warning("📮 Rejected id=\(eventId.prefix(16))… relay=\(relayUrl) reason=\(reason)", category: .session)
                 } else {
-                    SecureLogger.error("📮 Rejected id=\(eventId.prefix(16))… reason=\(reason)", category: .session)
+                    SecureLogger.error("📮 Rejected id=\(eventId.prefix(16))… relay=\(relayUrl) reason=\(reason)", category: .session)
                 }
             }
         case .notice:

@@ -4,6 +4,8 @@ import XCTest
 
 @MainActor
 final class NostrRelayManagerTests: XCTestCase {
+    private let expectedDefaultRelayCount = 4
+
     func test_connect_directMode_connectsExistingDefaultRelaysWhenActivationBecomesAllowed() async {
         let context = makeContext(permission: .authorized, activationAllowed: false)
 
@@ -13,7 +15,7 @@ final class NostrRelayManagerTests: XCTestCase {
         context.manager.connect()
 
         let connected = await waitUntil {
-            context.sessionFactory.requestedURLs.count == 5 &&
+            context.sessionFactory.requestedURLs.count == self.expectedDefaultRelayCount &&
             context.manager.relays.allSatisfy(\.isConnected)
         }
         XCTAssertTrue(connected)
@@ -27,7 +29,7 @@ final class NostrRelayManagerTests: XCTestCase {
         context.permissionSubject.send(.authorized)
 
         let defaultRelaysConnected = await waitUntil {
-            context.manager.getRelayStatuses().count == 5 &&
+            context.manager.getRelayStatuses().count == self.expectedDefaultRelayCount &&
             context.manager.relays.allSatisfy(\.isConnected)
         }
         XCTAssertTrue(defaultRelaysConnected)
@@ -38,7 +40,7 @@ final class NostrRelayManagerTests: XCTestCase {
             context.manager.getRelayStatuses().isEmpty
         }
         XCTAssertTrue(defaultRelaysRemoved)
-        XCTAssertEqual(context.sessionFactory.allConnections.count, 5)
+        XCTAssertEqual(context.sessionFactory.allConnections.count, expectedDefaultRelayCount)
         XCTAssertTrue(context.sessionFactory.allConnections.allSatisfy { $0.cancelCallCount >= 1 })
     }
 
@@ -52,7 +54,26 @@ final class NostrRelayManagerTests: XCTestCase {
         context.torWaiter.resolve(true)
 
         let connectedAfterTorReady = await waitUntil {
-            context.sessionFactory.requestedURLs.count == 5 &&
+            context.sessionFactory.requestedURLs.count == self.expectedDefaultRelayCount &&
+            context.manager.relays.allSatisfy(\.isConnected)
+        }
+        XCTAssertTrue(connectedAfterTorReady)
+    }
+
+    func test_connect_coalescesRepeatedCallsWhileWaitingForTor() async {
+        let context = makeContext(permission: .authorized, userTorEnabled: true, torEnforced: true, torIsReady: false)
+
+        context.manager.connect()
+        context.manager.connect()
+        context.manager.connect()
+
+        XCTAssertEqual(context.torWaiter.awaitCallCount, 1)
+        XCTAssertTrue(context.sessionFactory.requestedURLs.isEmpty)
+
+        context.torWaiter.resolve(true)
+
+        let connectedAfterTorReady = await waitUntil {
+            context.sessionFactory.requestedURLs.count == self.expectedDefaultRelayCount &&
             context.manager.relays.allSatisfy(\.isConnected)
         }
         XCTAssertTrue(connectedAfterTorReady)
@@ -85,6 +106,24 @@ final class NostrRelayManagerTests: XCTestCase {
             context.manager.relays.first(where: { $0.url == relayURL })?.messagesSent == 1
         }
         XCTAssertTrue(sentAfterTorReady)
+    }
+
+    func test_sendEvent_queuesUntilRelayIsMarkedConnected() async throws {
+        let relayURL = "wss://connect-before-send.example"
+        let context = makeContext(permission: .denied)
+        let event = try makeSignedEvent(content: "wait for connected")
+
+        context.manager.sendEvent(event, to: [relayURL])
+
+        XCTAssertEqual(context.sessionFactory.latestConnection(for: relayURL)?.sentStrings.count, 0)
+        XCTAssertEqual(context.manager.debugPendingMessageQueueCount, 1)
+
+        let sentAfterConnected = await waitUntil {
+            context.sessionFactory.latestConnection(for: relayURL)?.sentStrings.count == 1 &&
+            context.manager.debugPendingMessageQueueCount == 0 &&
+            context.manager.relays.first(where: { $0.url == relayURL })?.messagesSent == 1
+        }
+        XCTAssertTrue(sentAfterConnected)
     }
 
     func test_sendEvent_queuesWhileBackgroundedAndFlushesWhenForegrounded() async throws {
@@ -179,6 +218,26 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertEqual(context.sessionFactory.requestedURLs, [relayOne, relayTwo])
     }
 
+    func test_ensureConnections_coalescesTargetsWhileWaitingForTor() async {
+        let relayOne = "wss://tor-one.example"
+        let relayTwo = "wss://tor-two.example"
+        let context = makeContext(permission: .denied, userTorEnabled: true, torEnforced: true, torIsReady: false)
+
+        context.manager.ensureConnections(to: [relayOne])
+        context.manager.ensureConnections(to: [relayTwo, relayOne])
+
+        XCTAssertEqual(context.torWaiter.awaitCallCount, 1)
+        XCTAssertTrue(context.sessionFactory.requestedURLs.isEmpty)
+
+        context.torWaiter.resolve(true)
+
+        let connected = await waitUntil {
+            Set(context.sessionFactory.requestedURLs) == Set([relayOne, relayTwo]) &&
+            context.manager.relays.allSatisfy(\.isConnected)
+        }
+        XCTAssertTrue(connected)
+    }
+
     func test_subscribe_coalescesRapidDuplicateRequests() async {
         let relayURL = "wss://subscribe.example"
         let context = makeContext(permission: .denied)
@@ -195,6 +254,63 @@ final class NostrRelayManagerTests: XCTestCase {
         context.manager.subscribe(filter: filter, id: "sub", relayUrls: [relayURL], handler: { _ in })
 
         XCTAssertEqual(context.sessionFactory.latestConnection(for: relayURL)?.sentStrings.count, 1)
+    }
+
+    func test_subscribe_coalescesDuplicateRequestsBeforeTorReadyAndDefersEOSE() async throws {
+        let relayURL = "wss://tor-subscribe-coalesce.example"
+        let context = makeContext(permission: .denied, userTorEnabled: true, torEnforced: true, torIsReady: false)
+        var eoseCount = 0
+
+        context.manager.subscribe(
+            filter: makeFilter(),
+            id: "tor-sub",
+            relayUrls: [relayURL],
+            handler: { _ in },
+            onEOSE: { eoseCount += 1 }
+        )
+        context.manager.subscribe(
+            filter: makeFilter(),
+            id: "tor-sub",
+            relayUrls: [relayURL],
+            handler: { _ in },
+            onEOSE: { eoseCount += 1 }
+        )
+
+        XCTAssertEqual(context.torWaiter.awaitCallCount, 1)
+        XCTAssertEqual(context.manager.debugPendingSubscriptionCount(for: relayURL), 1)
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertEqual(eoseCount, 0)
+
+        context.torWaiter.resolve(true)
+
+        let subscribed = await waitUntil {
+            context.sessionFactory.latestConnection(for: relayURL)?.sentStrings.count == 1
+        }
+        XCTAssertTrue(subscribed)
+
+        try context.sessionFactory.latestConnection(for: relayURL)?.emitEOSE(subscriptionID: "tor-sub")
+        let eoseCompleted = await waitUntil { eoseCount == 1 }
+        XCTAssertTrue(eoseCompleted)
+    }
+
+    func test_subscribe_sameActiveRequestDoesNotRequeue() async {
+        let relayURL = "wss://active-subscribe.example"
+        let context = makeContext(permission: .denied)
+        let filter = makeFilter()
+
+        context.manager.subscribe(filter: filter, id: "sub", relayUrls: [relayURL], handler: { _ in })
+
+        let firstSent = await waitUntil {
+            context.sessionFactory.latestConnection(for: relayURL)?.sentStrings.count == 1
+        }
+        XCTAssertTrue(firstSent)
+
+        context.clock.now = context.clock.now.addingTimeInterval(2.0)
+        context.manager.subscribe(filter: filter, id: "sub", relayUrls: [relayURL], handler: { _ in })
+        try? await Task.sleep(nanoseconds: 20_000_000)
+
+        XCTAssertEqual(context.sessionFactory.latestConnection(for: relayURL)?.sentStrings.count, 1)
+        XCTAssertEqual(context.manager.debugPendingSubscriptionCount(for: relayURL), 0)
     }
 
     func test_subscribe_waitsForTorReadinessAndPreservesEOSECallback() async throws {
@@ -239,7 +355,7 @@ final class NostrRelayManagerTests: XCTestCase {
 
         context.permissionSubject.send(.authorized)
         let connected = await waitUntil {
-            context.sessionFactory.allConnections.count == 5 &&
+            context.sessionFactory.allConnections.count == self.expectedDefaultRelayCount &&
             context.manager.relays.allSatisfy(\.isConnected)
         }
         XCTAssertTrue(connected)
@@ -810,6 +926,7 @@ private final class MutableBool {
 
 private final class MockTorWaiter {
     private var completions: [(Bool) -> Void] = []
+    private(set) var awaitCallCount = 0
     var isReady: Bool
 
     init(isReady: Bool) {
@@ -817,6 +934,7 @@ private final class MockTorWaiter {
     }
 
     func await(completion: @escaping (Bool) -> Void) {
+        awaitCallCount += 1
         completions.append(completion)
     }
 

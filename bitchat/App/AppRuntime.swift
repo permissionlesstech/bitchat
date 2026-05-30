@@ -29,6 +29,8 @@ final class AppRuntime: ObservableObject {
     private let idBridge: NostrIdentityBridge
     private var cancellables = Set<AnyCancellable>()
     private var started = false
+    private var lastNostrRelayConnectedState = false
+    private var didHandleInitialNostrConnection = false
 
     #if os(iOS)
     private var didHandleInitialActive = false
@@ -160,6 +162,7 @@ final class AppRuntime: ObservableObject {
             record(.scenePhaseChanged(.active))
             chatViewModel.meshService.startServices()
             TorManager.shared.setAppForeground(true)
+            let shouldRefreshNostrConnections = didHandleInitialActive && didEnterBackground
 
             if didHandleInitialActive && didEnterBackground {
                 if TorManager.shared.isAutoStartAllowed() && !TorManager.shared.isReady {
@@ -171,7 +174,7 @@ final class AppRuntime: ObservableObject {
 
             didEnterBackground = false
 
-            if TorManager.shared.isAutoStartAllowed() {
+            if shouldRefreshNostrConnections && TorManager.shared.isAutoStartAllowed() {
                 Task.detached {
                     let _ = await TorManager.shared.awaitReady(timeout: 60)
                     await MainActor.run {
@@ -320,12 +323,20 @@ private extension AppRuntime {
     func handleNostrRelayConnectionChanged(_ isConnected: Bool) {
         record(.nostrRelayConnectionChanged(isConnected))
 
-        guard started, isConnected else { return }
+        let becameConnected = isConnected && !lastNostrRelayConnectedState
+        lastNostrRelayConnectedState = isConnected
+
+        guard started, becameConnected else { return }
+
+        let isInitialConnection = !didHandleInitialNostrConnection
+        didHandleInitialNostrConnection = true
 
         if !chatViewModel.nostrHandlersSetup {
             chatViewModel.setupNostrMessageHandling()
             chatViewModel.nostrHandlersSetup = true
         }
+
+        guard !isInitialConnection else { return }
 
         chatViewModel.resubscribeCurrentGeohash()
         chatViewModel.geoChannelCoordinator?.refreshSampling()
