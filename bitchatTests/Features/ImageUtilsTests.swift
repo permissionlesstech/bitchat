@@ -64,4 +64,19 @@ struct ImageUtilsTests {
         #expect(data.starts(with: Data([0xFF, 0xD8])))
         #expect(data.count > 0)
     }
+
+    @Test
+    func processImage_usesUniqueOutputURLs() throws {
+        let image = makePlatformImage(size: CGSize(width: 64, height: 64))
+        let firstURL = try ImageUtils.processImage(image, maxDimension: 64)
+        let secondURL = try ImageUtils.processImage(image, maxDimension: 64)
+        defer {
+            try? FileManager.default.removeItem(at: firstURL)
+            try? FileManager.default.removeItem(at: secondURL)
+        }
+
+        #expect(firstURL != secondURL)
+        #expect(FileManager.default.fileExists(atPath: firstURL.path))
+        #expect(FileManager.default.fileExists(atPath: secondURL.path))
+    }
 }

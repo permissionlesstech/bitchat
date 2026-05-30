@@ -189,7 +189,7 @@ enum ImageUtils {
     private static func makeOutputURL() throws -> URL {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd_HHmmss"
-        let fileName = "img_\(formatter.string(from: Date())).jpg"
+        let fileName = "img_\(formatter.string(from: Date()))_\(UUID().uuidString).jpg"
 
         let directory = try applicationFilesDirectory().appendingPathComponent("images/outgoing", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: nil)
