@@ -149,6 +149,36 @@ struct BLEServiceCoreTests {
         #expect(ble._test_recordIngressIfNew(packet: packet, linkID: "central-a"))
         #expect(!ble._test_recordIngressIfNew(packet: packet, linkID: "central-b"))
     }
+
+    @Test
+    func modifiedServices_rediscoverWhenBitChatServiceIsInvalidated() async throws {
+        let otherService = CBUUID(string: "0000180F-0000-1000-8000-00805F9B34FB")
+
+        #expect(BLEService._test_shouldRediscoverBitChatService(
+            invalidatedServiceUUIDs: [BLEService.serviceUUID],
+            cachedServiceUUIDs: [otherService]
+        ))
+    }
+
+    @Test
+    func modifiedServices_rediscoverWhenCachedServicesNoLongerIncludeBitChat() async throws {
+        let otherService = CBUUID(string: "0000180F-0000-1000-8000-00805F9B34FB")
+
+        #expect(BLEService._test_shouldRediscoverBitChatService(
+            invalidatedServiceUUIDs: [otherService],
+            cachedServiceUUIDs: [otherService]
+        ))
+    }
+
+    @Test
+    func modifiedServices_ignoreUnrelatedInvalidationWhenBitChatIsStillCached() async throws {
+        let otherService = CBUUID(string: "0000180F-0000-1000-8000-00805F9B34FB")
+
+        #expect(!BLEService._test_shouldRediscoverBitChatService(
+            invalidatedServiceUUIDs: [otherService],
+            cachedServiceUUIDs: [BLEService.serviceUUID, otherService]
+        ))
+    }
 }
 
 private func makeService() -> BLEService {

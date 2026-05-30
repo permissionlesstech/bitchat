@@ -2017,6 +2017,15 @@ extension BLEService {
     }
 }
 
+private extension BLEService {
+    static func shouldRediscoverBitChatService(
+        invalidatedServiceUUIDs: [CBUUID],
+        cachedServiceUUIDs: [CBUUID]?
+    ) -> Bool {
+        invalidatedServiceUUIDs.contains(serviceUUID) || cachedServiceUUIDs?.contains(serviceUUID) != true
+    }
+}
+
 #if DEBUG
 // Test-only helper to inject packets into the receive pipeline
 extension BLEService {
@@ -2059,6 +2068,16 @@ extension BLEService {
 
     func _test_recordIngressIfNew(packet: BitchatPacket, linkID: String) -> Bool {
         recordIngressIfNew(packet, link: .central(linkID), peerID: PeerID(hexData: packet.senderID))
+    }
+
+    static func _test_shouldRediscoverBitChatService(
+        invalidatedServiceUUIDs: [CBUUID],
+        cachedServiceUUIDs: [CBUUID]?
+    ) -> Bool {
+        shouldRediscoverBitChatService(
+            invalidatedServiceUUIDs: invalidatedServiceUUIDs,
+            cachedServiceUUIDs: cachedServiceUUIDs
+        )
     }
 }
 #endif
@@ -2271,18 +2290,23 @@ extension BLEService: CBPeripheralDelegate {
     
     func peripheral(_ peripheral: CBPeripheral, didModifyServices invalidatedServices: [CBService]) {
         SecureLogger.warning("⚠️ Services modified for \(peripheral.name ?? peripheral.identifier.uuidString)", category: .session)
-        
-        // Check if our service was invalidated (peer app quit)
-        let hasOurService = peripheral.services?.contains { $0.uuid == BLEService.serviceUUID } ?? false
-        
-        if !hasOurService {
-            // Service is gone - disconnect
-            SecureLogger.warning("❌ BitChat service removed - disconnecting from \(peripheral.name ?? peripheral.identifier.uuidString)", category: .session)
-            centralManager?.cancelPeripheralConnection(peripheral)
-        } else {
-            // Try to rediscover
-            peripheral.discoverServices([BLEService.serviceUUID])
+
+        let shouldRediscover = BLEService.shouldRediscoverBitChatService(
+            invalidatedServiceUUIDs: invalidatedServices.map(\.uuid),
+            cachedServiceUUIDs: peripheral.services?.map(\.uuid)
+        )
+
+        guard shouldRediscover else { return }
+
+        let peripheralID = peripheral.identifier.uuidString
+        if var state = peripherals[peripheralID] {
+            state.characteristic = nil
+            state.assembler = NotificationStreamAssembler()
+            peripherals[peripheralID] = state
         }
+
+        SecureLogger.debug("🔄 BitChat service changed for \(peripheral.name ?? peripheral.identifier.uuidString), rediscovering", category: .session)
+        peripheral.discoverServices([BLEService.serviceUUID])
     }
     
     func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
