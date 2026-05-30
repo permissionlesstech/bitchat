@@ -306,6 +306,7 @@ struct NostrTransportTests {
         let secondPayload = try decodeEmbeddedPayload(from: secondEvent, recipient: recipient).payload
         #expect(secondPayload.type == .readReceipt)
         #expect(String(data: secondPayload.data, encoding: .utf8) == "read-2")
+        withExtendedLifetime(transport) {}
     }
 
     @Test("Concurrent read receipt enqueue does not crash")
