@@ -265,9 +265,6 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
     @Published var autocompleteRange: NSRange? = nil
     @Published var selectedAutocompleteIndex: Int = 0
     
-    // Temporary property to fix compilation
-    @Published var showPasswordPrompt = false
-    
     // MARK: - Services and Storage
     
     let meshService: Transport

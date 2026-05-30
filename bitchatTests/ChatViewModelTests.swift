@@ -806,7 +806,7 @@ struct ChatViewModelPrivateChatTests {
 
         // The message routing depends on connection state and other factors
         // At minimum, it should not crash
-        #expect(true) // If we get here without crash, the test passes
+        #expect(Bool(true)) // If we get here without crash, the test passes
     }
 }
 
