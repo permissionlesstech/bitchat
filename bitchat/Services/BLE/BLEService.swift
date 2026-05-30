@@ -141,7 +141,7 @@ final class BLEService: NSObject {
     private var pendingNotifications = BLEOutboundNotificationBuffer<CBCentral>()
 
     // Accumulate long write chunks per central until a full frame decodes
-    private var pendingWriteBuffers: [String: Data] = [:]
+    private var pendingWriteBuffers = BLEInboundWriteBuffer()
     // Relay jitter scheduling to reduce redundant floods
     private var scheduledRelays: [String: DispatchWorkItem] = [:]
     // Track short-lived traffic bursts to adapt announces/scanning under load
@@ -2628,85 +2628,85 @@ extension BLEService: CBPeripheralManagerDelegate {
             // Sort by offset ascending
             let sorted = group.sorted { $0.offset < $1.offset }
             let hasMultiple = sorted.count > 1 || (sorted.first?.offset ?? 0) > 0
-
-            // Always merge into a persistent per-central buffer to handle multi-callback long writes
-            var combined = pendingWriteBuffers[centralUUID] ?? Data()
-            var appendedBytes = 0
-            var offsets: [Int] = []
-            for r in sorted {
-                guard let chunk = r.value, !chunk.isEmpty else { continue }
-                offsets.append(r.offset)
-                let end = r.offset + chunk.count
-                if combined.count < end {
-                    combined.append(Data(repeating: 0, count: end - combined.count))
-                }
-                // Write chunk into the correct position (supports out-of-order and overlapping writes)
-                combined.replaceSubrange(r.offset..<end, with: chunk)
-                appendedBytes += chunk.count
-            }
-            pendingWriteBuffers[centralUUID] = combined
-
-            // Peek type byte for debug: version is at 0, type at 1 when well-formed
-            if combined.count >= 2 {
-                let peekType = combined[1]
-                if peekType != MessageType.announce.rawValue {
-                    SecureLogger.debug("📥 Accumulated write from central \(centralUUID): size=\(combined.count) (+\(appendedBytes)) bytes (type=\(peekType)), offsets=\(offsets)", category: .session)
-                }
+            let chunks = sorted.compactMap { request -> BLEInboundWriteChunk? in
+                guard let data = request.value, !data.isEmpty else { return nil }
+                return BLEInboundWriteChunk(offset: request.offset, data: data)
             }
 
-            // Try decode the accumulated buffer
-            if let packet = BinaryProtocol.decode(combined) {
-                // Clear buffer on success
-                pendingWriteBuffers.removeValue(forKey: centralUUID)
+            let result = pendingWriteBuffers.append(
+                chunks: chunks,
+                for: centralUUID,
+                capBytes: TransportConfig.blePendingWriteBufferCapBytes
+            )
 
-                let claimedSenderID = PeerID(hexData: packet.senderID)
-                let context = makeIngressPacketContext(
-                    for: packet,
-                    claimedSenderID: claimedSenderID,
-                    boundPeerID: centralToPeerID[centralUUID],
-                    linkDescription: "Central \(centralUUID.prefix(8))…"
-                )
-                guard let context else { continue }
+            switch result {
+            case let .decoded(packet, metadata):
+                logAccumulatedCentralWrite(metadata, centralUUID: centralUUID)
+                processDecodedCentralWrite(packet, centralUUID: centralUUID, central: sorted[0].central)
 
-                if !validatePacket(packet, from: context.validationPeerID, connectionSource: .central(centralUUID)) {
-                    continue
-                }
+            case let .waiting(metadata):
+                logAccumulatedCentralWrite(metadata, centralUUID: centralUUID)
+                logFailedSingleWriteIfNeeded(hasMultiple: hasMultiple, sortedRequests: sorted)
 
-                if packet.type != MessageType.announce.rawValue {
-                    SecureLogger.debug("📦 Decoded (combined) packet type: \(packet.type) from sender: \(claimedSenderID)", category: .session)
-                }
-                if !subscribedCentrals.contains(sorted[0].central) {
-                    subscribedCentrals.append(sorted[0].central)
-                }
-                if packet.type == MessageType.announce.rawValue {
-                    if packet.ttl == messageTTL {
-                        centralToPeerID[centralUUID] = claimedSenderID
-                        refreshLocalTopology()
-                    }
-                    if !recordIngressIfNew(packet, link: .central(centralUUID), peerID: context.receivedFromPeerID) {
-                        continue
-                    }
-                    handleReceivedPacket(packet, from: context.receivedFromPeerID)
-                } else {
-                    if !recordIngressIfNew(packet, link: .central(centralUUID), peerID: context.receivedFromPeerID) {
-                        continue
-                    }
-                    handleReceivedPacket(packet, from: context.receivedFromPeerID)
-                }
-            } else {
-                // If buffer grows suspiciously large, reset to avoid memory leak
-                if combined.count > TransportConfig.blePendingWriteBufferCapBytes { // cap for safety
-                    pendingWriteBuffers.removeValue(forKey: centralUUID)
-                    SecureLogger.warning("⚠️ Dropping oversized pending write buffer (\(combined.count) bytes) for central \(centralUUID)", category: .session)
-                }
-                // If this was a single short write and still failed, log the raw chunk for debugging
-                if !hasMultiple, let only = sorted.first, let raw = only.value {
-                    let prefix = raw.prefix(16).map { String(format: "%02x", $0) }.joined(separator: " ")
-                    SecureLogger.error("❌ Failed to decode packet from central (len=\(raw.count), prefix=\(prefix))", category: .session)
-                }
+            case let .oversized(metadata):
+                logAccumulatedCentralWrite(metadata, centralUUID: centralUUID)
+                SecureLogger.warning("⚠️ Dropping oversized pending write buffer (\(metadata.accumulatedBytes) bytes) for central \(centralUUID)", category: .session)
+                logFailedSingleWriteIfNeeded(hasMultiple: hasMultiple, sortedRequests: sorted)
             }
         }
-    }    
+    }
+
+    private func logAccumulatedCentralWrite(_ metadata: BLEInboundWriteAppendMetadata, centralUUID: String) {
+        guard let packetType = metadata.packetType,
+              packetType != MessageType.announce.rawValue else { return }
+
+        SecureLogger.debug(
+            "📥 Accumulated write from central \(centralUUID): size=\(metadata.accumulatedBytes) (+\(metadata.appendedBytes)) bytes (type=\(packetType)), offsets=\(metadata.offsets)",
+            category: .session
+        )
+    }
+
+    private func logFailedSingleWriteIfNeeded(hasMultiple: Bool, sortedRequests: [CBATTRequest]) {
+        guard !hasMultiple, let raw = sortedRequests.first?.value else { return }
+
+        let prefix = raw.prefix(16).map { String(format: "%02x", $0) }.joined(separator: " ")
+        SecureLogger.error("❌ Failed to decode packet from central (len=\(raw.count), prefix=\(prefix))", category: .session)
+    }
+
+    private func processDecodedCentralWrite(_ packet: BitchatPacket, centralUUID: String, central: CBCentral) {
+        let claimedSenderID = PeerID(hexData: packet.senderID)
+        let context = makeIngressPacketContext(
+            for: packet,
+            claimedSenderID: claimedSenderID,
+            boundPeerID: centralToPeerID[centralUUID],
+            linkDescription: "Central \(centralUUID.prefix(8))…"
+        )
+        guard let context else { return }
+
+        guard validatePacket(packet, from: context.validationPeerID, connectionSource: .central(centralUUID)) else {
+            return
+        }
+
+        if packet.type != MessageType.announce.rawValue {
+            SecureLogger.debug("📦 Decoded (combined) packet type: \(packet.type) from sender: \(claimedSenderID)", category: .session)
+        }
+
+        if !subscribedCentrals.contains(central) {
+            subscribedCentrals.append(central)
+        }
+
+        if packet.type == MessageType.announce.rawValue,
+           packet.ttl == messageTTL {
+            centralToPeerID[centralUUID] = claimedSenderID
+            refreshLocalTopology()
+        }
+
+        guard recordIngressIfNew(packet, link: .central(centralUUID), peerID: context.receivedFromPeerID) else {
+            return
+        }
+
+        handleReceivedPacket(packet, from: context.receivedFromPeerID)
+    }
 }
 
 // MARK: - Advertising Builders & Alias Rotation
