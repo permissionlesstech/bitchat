@@ -202,8 +202,12 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
             let decryptedData = try AES.GCM.open(sealedBox, using: encryptionKey)
             cache = try JSONDecoder().decode(IdentityCache.self, from: decryptedData)
         } catch {
-            // Log error but continue with empty cache
-            SecureLogger.error(error, context: "Failed to load identity cache", category: .security)
+            cache = IdentityCache()
+            let deleted = keychain.deleteIdentityKey(forKey: cacheKey)
+            SecureLogger.warning(
+                "Discarded unreadable identity cache; starting fresh (deleted=\(deleted), error=\(error.localizedDescription))",
+                category: .security
+            )
         }
     }
     

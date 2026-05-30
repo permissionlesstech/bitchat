@@ -4080,8 +4080,6 @@ extension BLEService {
     }
     
     private func handleNoiseEncrypted(_ packet: BitchatPacket, from peerID: PeerID) {
-        SecureLogger.debug("🔐 handleNoiseEncrypted called for packet from \(peerID)")
-        
         guard let recipientID = PeerID(hexData: packet.recipientID) else {
             SecureLogger.warning("⚠️ Encrypted message has no recipient ID", category: .session)
             return
@@ -4102,8 +4100,15 @@ extension BLEService {
             // First byte indicates the payload type
             let payloadType = decrypted[0]
             let payloadData = decrypted.dropFirst()
-            
-            switch NoisePayloadType(rawValue: payloadType) {
+
+            guard let noisePayloadType = NoisePayloadType(rawValue: payloadType) else {
+                SecureLogger.warning("⚠️ Unknown noise payload type: \(payloadType)")
+                return
+            }
+
+            SecureLogger.debug("🔐 Decrypted noise payload type \(noisePayloadType.description) from \(peerID)", category: .session)
+
+            switch noisePayloadType {
             case .privateMessage:
                 let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
                 notifyUI { [weak self] in
@@ -4129,8 +4134,6 @@ extension BLEService {
                 notifyUI { [weak self] in
                     self?.deliverTransportEvent(.noisePayloadReceived(peerID: peerID, type: .verifyResponse, payload: Data(payloadData), timestamp: ts))
                 }
-            case .none:
-                SecureLogger.warning("⚠️ Unknown noise payload type: \(payloadType)")
             }
         } catch NoiseEncryptionError.sessionNotEstablished {
             // We received an encrypted message before establishing a session with this peer.
