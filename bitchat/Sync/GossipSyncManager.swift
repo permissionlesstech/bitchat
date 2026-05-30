@@ -128,17 +128,15 @@ final class GossipSyncManager {
     func scheduleInitialSyncToPeer(_ peerID: PeerID, delaySeconds: TimeInterval = 5.0) {
         queue.asyncAfter(deadline: .now() + delaySeconds) { [weak self] in
             guard let self = self else { return }
-            self.sendRequestSync(to: peerID, types: .publicMessages)
+
+            var types: SyncTypeFlags = .publicMessages
             if self.config.fragmentCapacity > 0 && self.config.fragmentSyncIntervalSeconds > 0 {
-                self.queue.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                    self?.sendRequestSync(to: peerID, types: .fragment)
-                }
+                types.formUnion(.fragment)
             }
             if self.config.fileTransferCapacity > 0 && self.config.fileTransferSyncIntervalSeconds > 0 {
-                self.queue.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-                    self?.sendRequestSync(to: peerID, types: .fileTransfer)
-                }
+                types.formUnion(.fileTransfer)
             }
+            self.sendRequestSync(to: peerID, types: types)
         }
     }
 
@@ -393,12 +391,17 @@ final class GossipSyncManager {
         cleanupStaleAnnouncementsIfNeeded(now: now)
         requestSyncManager.cleanup() // Cleanup expired sync requests
         
+        var dueTypes: SyncTypeFlags = []
         for index in syncSchedules.indices {
             guard syncSchedules[index].interval > 0 else { continue }
             if syncSchedules[index].lastSent == .distantPast || now.timeIntervalSince(syncSchedules[index].lastSent) >= syncSchedules[index].interval {
                 syncSchedules[index].lastSent = now
-                sendPeriodicSync(for: syncSchedules[index].types)
+                dueTypes.formUnion(syncSchedules[index].types)
             }
+        }
+
+        if !dueTypes.isEmpty {
+            sendPeriodicSync(for: dueTypes)
         }
     }
 

@@ -19,6 +19,7 @@ final class MockTransport: Transport {
     // MARK: - Protocol Properties
 
     weak var delegate: BitchatDelegate?
+    weak var eventDelegate: TransportEventDelegate?
     weak var peerEventsDelegate: TransportPeerEventsDelegate?
 
     var myPeerID: PeerID = PeerID(str: "TESTPEER")

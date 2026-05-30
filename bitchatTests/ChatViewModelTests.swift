@@ -42,6 +42,7 @@ struct ChatViewModelInitializationTests {
 
         // The viewModel should set itself as the transport delegate
         #expect(transport.delegate === viewModel)
+        #expect(transport.eventDelegate === viewModel)
     }
 
     @Test @MainActor
@@ -421,6 +422,7 @@ struct ChatViewModelReceivingTests {
         // Message may or may not appear due to rate limiting/pipeline batching
         // The important thing is no crash and delegate was called
         #expect(transport.delegate === viewModel)
+        #expect(transport.eventDelegate === viewModel)
     }
 
     @Test @MainActor

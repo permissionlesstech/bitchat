@@ -130,6 +130,7 @@ private extension ChatViewModelBootstrapper {
 
     func configureTransport() {
         viewModel.meshService.delegate = viewModel
+        viewModel.meshService.eventDelegate = viewModel
 
         DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiStartupInitialDelaySeconds) { [weak viewModel] in
             guard let viewModel else { return }

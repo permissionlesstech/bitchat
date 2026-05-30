@@ -92,6 +92,63 @@ struct BLEServiceCoreTests {
         _ = await TestHelpers.waitUntil({ !ble.currentPeerSnapshots().isEmpty }, timeout: 0.3)
         #expect(ble.currentPeerSnapshots().isEmpty)
     }
+
+    @Test
+    func ingressAllowsRelayedSenderOnBoundLink() async throws {
+        let ble = makeService()
+        let boundPeer = PeerID(str: "1122334455667788")
+        let relayedSender = PeerID(str: "8899aabbccddeeff")
+        let packet = makePublicPacket(
+            content: "Relayed",
+            sender: relayedSender,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000)
+        )
+
+        #expect(ble._test_acceptsIngress(packet: packet, boundPeerID: boundPeer))
+    }
+
+    @Test
+    func ingressRejectsDirectAnnounceThatConflictsWithBoundLink() async throws {
+        let ble = makeService()
+        let boundPeer = PeerID(str: "1122334455667788")
+        let claimedPeer = PeerID(str: "8899aabbccddeeff")
+        let packet = BitchatPacket(
+            type: MessageType.announce.rawValue,
+            senderID: Data(hexString: claimedPeer.id) ?? Data(),
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: Data(),
+            signature: nil,
+            ttl: 7
+        )
+
+        #expect(!ble._test_acceptsIngress(packet: packet, boundPeerID: boundPeer))
+    }
+
+    @Test
+    func ingressRejectsSelfLoopbackBeforeSpoofChecks() async throws {
+        let ble = makeService()
+        let packet = makePublicPacket(
+            content: "Loopback",
+            sender: ble.myPeerID,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000)
+        )
+
+        #expect(!ble._test_acceptsIngress(packet: packet, boundPeerID: PeerID(str: "1122334455667788")))
+    }
+
+    @Test
+    func ingressRecordSuppressesSecondLinkDuplicate() async throws {
+        let ble = makeService()
+        let packet = makePublicPacket(
+            content: "Duplicate link copy",
+            sender: PeerID(str: "1122334455667788"),
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000)
+        )
+
+        #expect(ble._test_recordIngressIfNew(packet: packet, linkID: "central-a"))
+        #expect(!ble._test_recordIngressIfNew(packet: packet, linkID: "central-b"))
+    }
 }
 
 private func makeService() -> BLEService {

@@ -93,7 +93,7 @@ import UniformTypeIdentifiers
 /// Manages the application state and business logic for BitChat.
 /// Acts as the primary coordinator between UI components and backend services,
 /// implementing the BitchatDelegate protocol to handle network events.
-final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProvider, GeohashParticipantContext, MessageFormattingContext {
+final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDelegate, CommandContextProvider, GeohashParticipantContext, MessageFormattingContext {
     // Use MessageFormattingEngine.Patterns for regex matching (shared, precompiled)
     typealias Patterns = MessageFormattingEngine.Patterns
 
@@ -1298,6 +1298,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
     }
     
     // MARK: - Message Reception
+
+    @MainActor
+    func didReceiveTransportEvent(_ event: TransportEvent) {
+        receiveTransportEvent(event)
+    }
     
     func didReceiveMessage(_ message: BitchatMessage) {
         transportEventCoordinator.didReceiveMessage(message)

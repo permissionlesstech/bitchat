@@ -195,12 +195,39 @@ struct GossipSyncManagerTests {
         manager._performMaintenanceSynchronously(now: Date())
 
         let sentPackets = delegate.packets
-        #expect(sentPackets.count == 3)
+        #expect(sentPackets.count == 1)
         let decoded = sentPackets.compactMap { RequestSyncPacket.decode(from: $0.payload) }
-        #expect(decoded.count == 3)
-        #expect(decoded[0].types == .publicMessages)
-        #expect(decoded[1].types == .fragment)
-        #expect(decoded[2].types == .fileTransfer)
+        #expect(decoded.count == 1)
+        let types = try #require(decoded.first?.types)
+        #expect(types.contains(.announce))
+        #expect(types.contains(.message))
+        #expect(types.contains(.fragment))
+        #expect(types.contains(.fileTransfer))
+    }
+
+    @Test func initialSyncCoalescesEnabledTypes() async throws {
+        var config = GossipSyncManager.Config()
+        config.seenCapacity = 10
+        config.fragmentCapacity = 5
+        config.fileTransferCapacity = 4
+        config.fragmentSyncIntervalSeconds = 1
+        config.fileTransferSyncIntervalSeconds = 1
+
+        let requestSyncManager = RequestSyncManager()
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: requestSyncManager)
+        let delegate = RecordingDelegate()
+        manager.delegate = delegate
+
+        manager.scheduleInitialSyncToPeer(PeerID(str: "FFFFFFFFFFFFFFFF"), delaySeconds: 0.0)
+
+        try await TestHelpers.waitFor({ delegate.packets.count == 1 }, timeout: TestConstants.shortTimeout)
+        let packet = try #require(delegate.packets.first)
+        let request = try #require(RequestSyncPacket.decode(from: packet.payload))
+        let types = try #require(request.types)
+        #expect(types.contains(.announce))
+        #expect(types.contains(.message))
+        #expect(types.contains(.fragment))
+        #expect(types.contains(.fileTransfer))
     }
 
     @Test func handleRequestSyncHonorsTypeFilter() async throws {

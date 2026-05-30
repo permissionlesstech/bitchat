@@ -38,3 +38,9 @@ This branch starts a larger simplification effort focused on performance, reliab
 3. Move private/public conversation mutation behind the new store instead of still mirroring legacy message writes from `ChatViewModel`.
 4. Replace remaining singleton-heavy seams with injected runtime services where practical.
 5. Revisit actor isolation for identity and conversation state once the remaining message/peer models are safe to move off the main actor.
+
+## Transport Follow-Up
+
+The Bluetooth architecture branch begins step 2 by adding a typed `TransportEvent` boundary while preserving the legacy `BitchatDelegate` bridge. New transport code should emit typed events first, with delegate forwarding used only as a compatibility adapter during migration.
+
+The branch also starts carving performance-sensitive BLE scheduling state out of `BLEService`: pending write backpressure now lives in `BLEOutboundWriteBuffer`, giving the outbound hot path a focused, unit-tested component before deeper fragmentation and link-scheduler work.

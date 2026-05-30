@@ -15,6 +15,7 @@ private final class DefaultDelegateProbe: BitchatDelegate {
 
 private final class DefaultTransportProbe: Transport {
     weak var delegate: BitchatDelegate?
+    weak var eventDelegate: TransportEventDelegate?
     weak var peerEventsDelegate: TransportPeerEventsDelegate?
 
     let subject = CurrentValueSubject<[TransportPeerSnapshot], Never>([])

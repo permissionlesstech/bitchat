@@ -1,6 +1,7 @@
 import BitFoundation
 import Foundation
 import Combine
+import CoreBluetooth
 
 /// Abstract transport interface used by ChatViewModel and services.
 /// BLEService implements this protocol; a future Nostr transport can too.
@@ -12,9 +13,27 @@ struct TransportPeerSnapshot: Equatable, Hashable {
     let lastSeen: Date
 }
 
+enum TransportEvent: @unchecked Sendable {
+    case messageReceived(BitchatMessage)
+    case publicMessageReceived(peerID: PeerID, nickname: String, content: String, timestamp: Date, messageID: String?)
+    case noisePayloadReceived(peerID: PeerID, type: NoisePayloadType, payload: Data, timestamp: Date)
+    case peerConnected(PeerID)
+    case peerDisconnected(PeerID)
+    case peerListUpdated([PeerID])
+    case peerSnapshotsUpdated([TransportPeerSnapshot])
+    case messageDeliveryStatusUpdated(messageID: String, status: DeliveryStatus)
+    case bluetoothStateUpdated(CBManagerState)
+}
+
+protocol TransportEventDelegate: AnyObject {
+    @MainActor func didReceiveTransportEvent(_ event: TransportEvent)
+}
+
 protocol Transport: AnyObject {
     // Event sink
     var delegate: BitchatDelegate? { get set }
+    // Typed event sink for transport-domain events. Prefer this over BitchatDelegate for new code.
+    var eventDelegate: TransportEventDelegate? { get set }
     // Peer events (preferred over publishers for UI)
     var peerEventsDelegate: TransportPeerEventsDelegate? { get set }
     
@@ -82,6 +101,38 @@ extension Transport {
 
 protocol TransportPeerEventsDelegate: AnyObject {
     @MainActor func didUpdatePeerSnapshots(_ peers: [TransportPeerSnapshot])
+}
+
+extension BitchatDelegate {
+    @MainActor
+    func receiveTransportEvent(_ event: TransportEvent) {
+        switch event {
+        case .messageReceived(let message):
+            didReceiveMessage(message)
+        case let .publicMessageReceived(peerID, nickname, content, timestamp, messageID):
+            didReceivePublicMessage(
+                from: peerID,
+                nickname: nickname,
+                content: content,
+                timestamp: timestamp,
+                messageID: messageID
+            )
+        case let .noisePayloadReceived(peerID, type, payload, timestamp):
+            didReceiveNoisePayload(from: peerID, type: type, payload: payload, timestamp: timestamp)
+        case .peerConnected(let peerID):
+            didConnectToPeer(peerID)
+        case .peerDisconnected(let peerID):
+            didDisconnectFromPeer(peerID)
+        case .peerListUpdated(let peers):
+            didUpdatePeerList(peers)
+        case .peerSnapshotsUpdated:
+            break
+        case let .messageDeliveryStatusUpdated(messageID, status):
+            didUpdateMessageDeliveryStatus(messageID, status: status)
+        case .bluetoothStateUpdated(let state):
+            didUpdateBluetoothState(state)
+        }
+    }
 }
 
 extension BLEService: Transport {}
