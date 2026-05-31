@@ -124,6 +124,26 @@ struct BLEIngressLinkRegistryTests {
         #expect(context.receivedFromPeerID == boundPeer)
         #expect(context.validationPeerID == boundPeer)
     }
+
+    @Test
+    func packetContextAllowsSelfAuthoredRSRWithTTLZeroFromBoundPeer() throws {
+        let localPeer = PeerID(str: "0011223344556677")
+        let boundPeer = PeerID(str: "1122334455667788")
+        var packet = makePacket(sender: localPeer, timestamp: 1)
+        packet.isRSR = true
+        packet.ttl = 0
+
+        let context = try #require(trySuccess(BLEIngressLinkRegistry.packetContext(
+            for: packet,
+            claimedSenderID: localPeer,
+            boundPeerID: boundPeer,
+            localPeerID: localPeer,
+            directAnnounceTTL: 7
+        )))
+
+        #expect(context.receivedFromPeerID == boundPeer)
+        #expect(context.validationPeerID == boundPeer)
+    }
 }
 
 private func makePacket(sender: PeerID, timestamp: UInt64) -> BitchatPacket {

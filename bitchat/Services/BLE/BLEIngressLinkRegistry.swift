@@ -73,7 +73,8 @@ struct BLEIngressLinkRegistry {
         localPeerID: PeerID,
         directAnnounceTTL: UInt8
     ) -> Result<BLEIngressPacketContext, BLEIngressRejection> {
-        if claimedSenderID == localPeerID {
+        if claimedSenderID == localPeerID,
+           !isSelfAuthoredSyncResponse(packet) {
             return .failure(.selfLoopback(packetType: packet.type))
         }
 
@@ -99,5 +100,9 @@ struct BLEIngressLinkRegistry {
 
     private static func requiresDirectSenderBinding(_ packet: BitchatPacket, directAnnounceTTL: UInt8) -> Bool {
         packet.type == MessageType.announce.rawValue && packet.ttl == directAnnounceTTL
+    }
+
+    private static func isSelfAuthoredSyncResponse(_ packet: BitchatPacket) -> Bool {
+        packet.isRSR && packet.ttl == 0
     }
 }
