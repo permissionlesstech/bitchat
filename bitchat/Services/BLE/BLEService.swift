@@ -34,23 +34,9 @@ final class BLEService: NSObject {
     private let highDegreeThreshold = TransportConfig.bleHighDegreeThreshold // for adaptive TTL/probabilistic relays
     
     // MARK: - Core State (5 Essential Collections)
-    
-    // 1. Consolidated Peripheral Tracking
-    private struct PeripheralState {
-        let peripheral: CBPeripheral
-        var characteristic: CBCharacteristic?
-        var peerID: PeerID?
-        var isConnecting: Bool = false
-        var isConnected: Bool = false
-        var lastConnectionAttempt: Date? = nil
-        var assembler = NotificationStreamAssembler()
-    }
-    private var peripherals: [String: PeripheralState] = [:]  // UUID -> PeripheralState
-    private var peerToPeripheralUUID: [PeerID: String] = [:]  // PeerID -> Peripheral UUID
-    
-    // 2. BLE Centrals (when acting as peripheral)
-    private var subscribedCentrals: [CBCentral] = []
-    private var centralToPeerID: [String: PeerID] = [:]  // Central UUID -> Peer ID mapping
+
+    // 1. Consolidated BLE link tracking for both central and peripheral roles.
+    private var linkStateStore = BLELinkStateStore()
 
     // BCH-01-004: Rate-limiting for subscription-triggered announces
     // Tracks subscription attempts per central to prevent enumeration attacks
@@ -506,7 +492,7 @@ final class BLEService: NSObject {
 
             // Snapshot BLE state under bleQueue to avoid races with delegate callbacks
             let (peripheralStates, centralsCount, char) = bleQueue.sync {
-                (Array(peripherals.values), subscribedCentrals.count, characteristic)
+                (linkStateStore.peripheralStates, linkStateStore.subscribedCentralCount, characteristic)
             }
 
             // Send to peripherals we're connected to as central
@@ -543,7 +529,7 @@ final class BLEService: NSObject {
         peripheralManager?.stopAdvertising()
 
         // Disconnect all peripherals (synchronized access)
-        let peripheralsToDisconnect = bleQueue.sync { Array(peripherals.values) }
+        let peripheralsToDisconnect = bleQueue.sync { linkStateStore.peripheralStates }
         for state in peripheralsToDisconnect {
             centralManager?.cancelPeripheralConnection(state.peripheral)
         }
@@ -573,10 +559,7 @@ final class BLEService: NSObject {
 
         // Clear peripheral references (synchronized access to avoid races with BLE callbacks)
         bleQueue.sync {
-            peripherals.removeAll()
-            peerToPeripheralUUID.removeAll()
-            subscribedCentrals.removeAll()
-            centralToPeerID.removeAll()
+            linkStateStore.clearAll()
             centralSubscriptionRateLimits.removeAll()
         }
         meshTopology.reset()
@@ -888,16 +871,8 @@ final class BLEService: NSObject {
         let outboundPriority = BLEOutboundPacketPolicy.priority(for: packet, data: data)
 
         // Per-link limits for the specific peer
-        let directPeripheralState: PeripheralState? = {
-            if DispatchQueue.getSpecific(key: bleQueueKey) != nil {
-                return peerToPeripheralUUID[recipientPeerID].flatMap { peripherals[$0] }
-            }
-            return bleQueue.sync {
-                peerToPeripheralUUID[recipientPeerID].flatMap { peripherals[$0] }
-            }
-        }()
-        let (centrals, mapping) = snapshotSubscribedCentrals()
-        let recipientCentral = centrals.first { mapping[$0.identifier.uuidString] == recipientPeerID }
+        let directPeripheralState = snapshotDirectPeripheralState(for: recipientPeerID)
+        let recipientCentral = snapshotSubscribedCentrals().central(for: recipientPeerID)
 
         if let peripheralMaxLen = directPeripheralState?.peripheral.maximumWriteValueLength(for: .withoutResponse),
            data.count > peripheralMaxLen {
@@ -987,7 +962,7 @@ final class BLEService: NSObject {
             let m = s.peripheral.maximumWriteValueLength(for: .withoutResponse)
             minCentralWriteLen = minCentralWriteLen.map { min($0, m) } ?? m
         }
-        let subscribedCentrals = characteristic == nil ? [] : snapshotSubscribedCentrals().0
+        let subscribedCentrals = characteristic == nil ? [] : snapshotSubscribedCentrals().centrals
         let minNotifyLen = subscribedCentrals.map { $0.maximumUpdateValueLength }.min()
 
         // Avoid re-fragmenting fragment packets
@@ -1378,14 +1353,14 @@ extension BLEService: CBCentralManagerDelegate {
         for peripheral in restoredPeripherals {
             let identifier = peripheral.identifier.uuidString
             peripheral.delegate = self
-            let existing = peripherals[identifier]
+            let existing = linkStateStore.state(forPeripheralID: identifier)
             let assembler = existing?.assembler ?? NotificationStreamAssembler()
             let characteristic = existing?.characteristic
             let peerID = existing?.peerID
             let wasConnecting = existing?.isConnecting ?? false
             let wasConnected = existing?.isConnected ?? false
 
-            let restoredState = PeripheralState(
+            let restoredState = BLEPeripheralLinkState(
                 peripheral: peripheral,
                 characteristic: characteristic,
                 peerID: peerID,
@@ -1394,7 +1369,7 @@ extension BLEService: CBCentralManagerDelegate {
                 lastConnectionAttempt: existing?.lastConnectionAttempt,
                 assembler: assembler
             )
-            peripherals[identifier] = restoredState
+            linkStateStore.setPeripheralState(restoredState, for: identifier)
         }
 
         captureBluetoothStatus(context: "central-restore")
@@ -1418,12 +1393,12 @@ extension BLEService: CBCentralManagerDelegate {
             SecureLogger.info("📴 Bluetooth powered off - cleaning up central state", category: .session)
             central.stopScan()
             // Mark all peripheral connections as disconnected (they are now invalid)
-            let peerIDs: [PeerID] = peripherals.compactMap { $0.value.peerID }
-            for state in peripherals.values {
+            let peripheralStates = linkStateStore.peripheralStates
+            let peerIDs: [PeerID] = peripheralStates.compactMap(\.peerID)
+            for state in peripheralStates {
                 central.cancelPeripheralConnection(state.peripheral)
             }
-            peripherals.removeAll()
-            peerToPeripheralUUID.removeAll()
+            _ = linkStateStore.clearPeripherals()
             // Notify UI of disconnections
             for peerID in peerIDs {
                 notifyUI { [weak self] in
@@ -1435,8 +1410,7 @@ extension BLEService: CBCentralManagerDelegate {
             // User denied Bluetooth permission
             SecureLogger.warning("🚫 Bluetooth unauthorized - user denied permission", category: .session)
             central.stopScan()
-            peripherals.removeAll()
-            peerToPeripheralUUID.removeAll()
+            _ = linkStateStore.clearPeripherals()
 
         case .unsupported:
             // Device doesn't support BLE
@@ -1500,7 +1474,7 @@ extension BLEService: CBCentralManagerDelegate {
         }
         
         // Budget: limit simultaneous central links (connected + connecting)
-        let currentCentralLinks = peripherals.values.filter { $0.isConnected || $0.isConnecting }.count
+        let currentCentralLinks = linkStateStore.connectedOrConnectingPeripheralCount
         if currentCentralLinks >= maxCentralLinks {
             // Enqueue as candidate; we'll attempt later as slots open
             connectionCandidates.append(ConnectionCandidate(peripheral: peripheral, rssi: rssiValue, name: String(advertisedName), isConnectable: isConnectable, discoveredAt: Date()))
@@ -1532,18 +1506,18 @@ extension BLEService: CBCentralManagerDelegate {
         }
 
         // Check if we already have this peripheral
-        if let state = peripherals[peripheralID] {
+        if let state = linkStateStore.state(forPeripheralID: peripheralID) {
             if state.isConnected || state.isConnecting {
                 return // Already connected or connecting
             }
-            
-        // Add backoff for reconnection attempts
-        if let lastAttempt = state.lastConnectionAttempt {
-            let timeSinceLastAttempt = Date().timeIntervalSince(lastAttempt)
-            if timeSinceLastAttempt < 2.0 {
-                return // Wait at least 2 seconds between connection attempts
+
+            // Add backoff for reconnection attempts
+            if let lastAttempt = state.lastConnectionAttempt {
+                let timeSinceLastAttempt = Date().timeIntervalSince(lastAttempt)
+                if timeSinceLastAttempt < 2.0 {
+                    return // Wait at least 2 seconds between connection attempts
+                }
             }
-        }
         }
         
         // Backoff if this peripheral recently timed out connection within the last 15 seconds
@@ -1563,15 +1537,7 @@ extension BLEService: CBCentralManagerDelegate {
         // Discovered BLE peripheral
         
         // Store the peripheral and mark as connecting
-        peripherals[peripheralID] = PeripheralState(
-            peripheral: peripheral,
-            characteristic: nil,
-            peerID: nil,
-            isConnecting: true,
-            isConnected: false,
-            lastConnectionAttempt: Date(),
-            assembler: NotificationStreamAssembler()
-        )
+        linkStateStore.beginConnecting(to: peripheral, at: Date())
         peripheral.delegate = self
         
         // Connect to the peripheral with options for faster connection
@@ -1590,7 +1556,7 @@ extension BLEService: CBCentralManagerDelegate {
         // Use BLE queue to mutate BLE-related state consistently
         bleQueue.asyncAfter(deadline: .now() + TransportConfig.bleConnectTimeoutSeconds) { [weak self] in
             guard let self = self,
-                  let state = self.peripherals[peripheralID],
+                  let state = self.linkStateStore.state(forPeripheralID: peripheralID),
                   state.isConnecting && !state.isConnected else { return }
 
             // Double-check actual CBPeripheral state to avoid canceling a just-connected peripheral
@@ -1603,7 +1569,7 @@ extension BLEService: CBCentralManagerDelegate {
             // Connection timed out - cancel it
             SecureLogger.debug("⏱️ Timeout: \(advertisedName)", category: .session)
             central.cancelPeripheralConnection(peripheral)
-            self.peripherals[peripheralID] = nil
+            _ = self.linkStateStore.removePeripheral(peripheralID)
             self.recentConnectTimeouts[peripheralID] = Date()
             self.failureCounts[peripheralID, default: 0] += 1
             // Try next candidate if any
@@ -1611,26 +1577,11 @@ extension BLEService: CBCentralManagerDelegate {
         }
     }
     
-func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+    func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         let peripheralID = peripheral.identifier.uuidString
         
         // Update state to connected
-        if var state = peripherals[peripheralID] {
-            state.isConnecting = false
-            state.isConnected = true
-            peripherals[peripheralID] = state
-        } else {
-            // Create new state if not found
-            peripherals[peripheralID] = PeripheralState(
-                peripheral: peripheral,
-                characteristic: nil,
-                peerID: nil,
-                isConnecting: false,
-                isConnected: true,
-                lastConnectionAttempt: nil,
-                assembler: NotificationStreamAssembler()
-            )
-        }
+        linkStateStore.markConnected(peripheral)
         
         // Reset backoff state on success
         failureCounts[peripheralID] = 0
@@ -1646,7 +1597,7 @@ func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeriph
         let peripheralID = peripheral.identifier.uuidString
         
         // Find the peer ID if we have it
-        let peerID = peripherals[peripheralID]?.peerID
+        let peerID = linkStateStore.peerID(forPeripheralID: peripheralID)
         
         SecureLogger.debug("📱 Disconnect: \(peerID?.id ?? peripheralID)\(error != nil ? " (\(error!.localizedDescription))" : "")", category: .session)
 
@@ -1655,13 +1606,9 @@ func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeriph
             recentConnectTimeouts[peripheralID] = Date()
         }
         
-        // Clean up references
-        peripherals.removeValue(forKey: peripheralID)
-        
-        // Clean up peer mappings
+        // Clean up references and peer mappings
+        _ = linkStateStore.removePeripheral(peripheralID)
         if let peerID {
-            peerToPeripheralUUID.removeValue(forKey: peerID)
-            
             // Do not remove peer; mark as not connected but retain for reachability
             collectionsQueue.sync(flags: .barrier) {
                 if var info = peers[peerID] {
@@ -1703,7 +1650,7 @@ func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeriph
         let peripheralID = peripheral.identifier.uuidString
         
         // Clean up the references
-        peripherals.removeValue(forKey: peripheralID)
+        _ = linkStateStore.removePeripheral(peripheralID)
         
         SecureLogger.error("❌ Failed to connect to peripheral: \(peripheral.name ?? "Unknown") [\(peripheralID)] - Error: \(error?.localizedDescription ?? "Unknown")", category: .session)
         failureCounts[peripheralID, default: 0] += 1
@@ -1717,7 +1664,7 @@ extension BLEService {
     private func tryConnectFromQueue() {
         guard let central = centralManager, central.state == .poweredOn else { return }
         // Check budget and rate limit
-        let current = peripherals.values.filter { $0.isConnected || $0.isConnecting }.count
+        let current = linkStateStore.connectedOrConnectingPeripheralCount
         guard current < maxCentralLinks else { return }
         let delta = Date().timeIntervalSince(lastGlobalConnectAttempt)
         guard delta >= connectRateLimitInterval else {
@@ -1756,21 +1703,14 @@ extension BLEService {
                 return
             }
         }
-        if peripherals[peripheralID]?.isConnected == true || peripherals[peripheralID]?.isConnecting == true {
+        let existingState = linkStateStore.state(forPeripheralID: peripheralID)
+        if existingState?.isConnected == true || existingState?.isConnecting == true {
             // Already in progress; skip
             bleQueue.async { [weak self] in self?.tryConnectFromQueue() }
             return
         }
         // Initiate connection
-        peripherals[peripheralID] = PeripheralState(
-            peripheral: peripheral,
-            characteristic: nil,
-            peerID: nil,
-            isConnecting: true,
-            isConnected: false,
-            lastConnectionAttempt: Date(),
-            assembler: NotificationStreamAssembler()
-        )
+        linkStateStore.beginConnecting(to: peripheral, at: Date())
         peripheral.delegate = self
         let options: [String: Any] = [
             CBConnectPeripheralOptionNotifyOnConnectionKey: true,
@@ -1906,10 +1846,7 @@ extension BLEService: CBPeripheralDelegate {
         
         // Store characteristic in our consolidated structure
         let peripheralID = peripheral.identifier.uuidString
-        if var state = peripherals[peripheralID] {
-            state.characteristic = characteristic
-            peripherals[peripheralID] = state
-        }
+        linkStateStore.updateCharacteristic(characteristic, forPeripheralID: peripheralID)
         
         // Subscribe for notifications
         if characteristic.properties.contains(.notify) {
@@ -1944,7 +1881,7 @@ extension BLEService: CBPeripheralDelegate {
     private func bufferNotificationChunk(_ chunk: Data, from peripheral: CBPeripheral) {
         let peripheralUUID = peripheral.identifier.uuidString
 
-        var state = peripherals[peripheralUUID] ?? PeripheralState(
+        var state = linkStateStore.state(forPeripheralID: peripheralUUID) ?? BLEPeripheralLinkState(
             peripheral: peripheral,
             characteristic: nil,
             peerID: nil,
@@ -1957,7 +1894,7 @@ extension BLEService: CBPeripheralDelegate {
         var assembler = state.assembler
         let result = assembler.append(chunk)
         state.assembler = assembler
-        peripherals[peripheralUUID] = state
+        linkStateStore.setPeripheralState(state, for: peripheralUUID)
 
         for byte in result.droppedPrefixes {
             SecureLogger.warning("⚠️ Dropping byte from BLE stream (unexpected prefix \(String(format: "%02x", byte)))", category: .session)
@@ -1969,7 +1906,7 @@ extension BLEService: CBPeripheralDelegate {
         
         // Codex review identified TOCTOU in this patch.
         // Enforce per-link sender binding immediately within the same notification batch.
-        // NOTE: `processNotificationPacket` may bind `peripherals[peripheralUUID].peerID` when an announce
+        // NOTE: `processNotificationPacket` may bind the stored peer ID when an announce
         // is processed, but `state` above is a snapshot. Track a local binding that we update as soon as
         // we see a binding-eligible announce so subsequent frames can't spoof a different sender.
         var boundPeerID: PeerID? = state.peerID
@@ -2001,7 +1938,7 @@ extension BLEService: CBPeripheralDelegate {
                packet.ttl == messageTTL {
                 boundPeerID = claimedSenderID
                 state.peerID = claimedSenderID
-                peripherals[peripheralUUID] = state
+                linkStateStore.bindPeripheral(peripheralUUID, to: claimedSenderID)
             }
 
             if !recordIngressIfNew(packet, link: .peripheral(peripheralUUID), peerID: context.receivedFromPeerID) {
@@ -2025,11 +1962,7 @@ extension BLEService: CBPeripheralDelegate {
 
         if packet.type == MessageType.announce.rawValue {
             if packet.ttl == messageTTL {
-                if var state = peripherals[peripheralUUID] {
-                    state.peerID = senderID
-                    peripherals[peripheralUUID] = state
-                }
-                peerToPeripheralUUID[senderID] = peripheralUUID
+                linkStateStore.bindPeripheral(peripheralUUID, to: senderID)
                 refreshLocalTopology()
             }
 
@@ -2065,10 +1998,9 @@ extension BLEService: CBPeripheralDelegate {
         guard shouldRediscover else { return }
 
         let peripheralID = peripheral.identifier.uuidString
-        if var state = peripherals[peripheralID] {
-            state.characteristic = nil
-            state.assembler = NotificationStreamAssembler()
-            peripherals[peripheralID] = state
+        linkStateStore.updatePeripheral(peripheralID) {
+            $0.characteristic = nil
+            $0.assembler = NotificationStreamAssembler()
         }
 
         SecureLogger.debug("🔄 BitChat service changed for \(peripheral.name ?? peripheral.identifier.uuidString), rediscovering", category: .session)
@@ -2123,9 +2055,7 @@ extension BLEService: CBPeripheralManagerDelegate {
             SecureLogger.info("📴 Bluetooth powered off - cleaning up peripheral state", category: .session)
             peripheral.stopAdvertising()
             // Clear subscribed centrals (they are now invalid)
-            let centralPeerIDs = centralToPeerID.values.map { $0 }
-            subscribedCentrals.removeAll()
-            centralToPeerID.removeAll()
+            let centralPeerIDs = linkStateStore.clearCentrals()
             centralSubscriptionRateLimits.removeAll()
             characteristic = nil
             // Notify UI of disconnections
@@ -2139,8 +2069,7 @@ extension BLEService: CBPeripheralManagerDelegate {
             // User denied Bluetooth permission
             SecureLogger.warning("🚫 Bluetooth unauthorized for peripheral role", category: .session)
             peripheral.stopAdvertising()
-            subscribedCentrals.removeAll()
-            centralToPeerID.removeAll()
+            _ = linkStateStore.clearCentrals()
             centralSubscriptionRateLimits.removeAll()
             characteristic = nil
 
@@ -2204,7 +2133,7 @@ extension BLEService: CBPeripheralManagerDelegate {
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didSubscribeTo characteristic: CBCharacteristic) {
         let centralUUID = central.identifier.uuidString
         SecureLogger.debug("📥 Central subscribed: \(centralUUID.prefix(8))…", category: .session)
-        subscribedCentrals.append(central)
+        linkStateStore.addSubscribedCentral(central)
 
         // BCH-01-004: Rate-limit subscription-triggered announces to prevent enumeration attacks
         let now = Date()
@@ -2283,7 +2212,7 @@ extension BLEService: CBPeripheralManagerDelegate {
     
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic) {
         SecureLogger.debug("📤 Central unsubscribed: \(central.identifier.uuidString.prefix(8))…", category: .session)
-        subscribedCentrals.removeAll { $0.identifier == central.identifier }
+        let removedPeerID = linkStateStore.removeSubscribedCentral(central)
         
         // Ensure we're still advertising for other devices to find us
         if peripheral.isAdvertising == false {
@@ -2292,8 +2221,7 @@ extension BLEService: CBPeripheralManagerDelegate {
         }
         
         // Find and disconnect the peer associated with this central
-        let centralUUID = central.identifier.uuidString
-        if let peerID = centralToPeerID[centralUUID] {
+        if let peerID = removedPeerID {
             // Mark peer as not connected; retain for reachability
             collectionsQueue.sync(flags: .barrier) {
                 if var info = peers[peerID] {
@@ -2302,8 +2230,6 @@ extension BLEService: CBPeripheralManagerDelegate {
                 }
             }
             
-            // Clean up mappings
-            centralToPeerID.removeValue(forKey: centralUUID)
             refreshLocalTopology()
             
             // Update UI immediately
@@ -2439,7 +2365,7 @@ extension BLEService: CBPeripheralManagerDelegate {
         let context = makeIngressPacketContext(
             for: packet,
             claimedSenderID: claimedSenderID,
-            boundPeerID: centralToPeerID[centralUUID],
+            boundPeerID: linkStateStore.peerID(forCentralUUID: centralUUID),
             linkDescription: "Central \(centralUUID.prefix(8))…"
         )
         guard let context else { return }
@@ -2452,13 +2378,11 @@ extension BLEService: CBPeripheralManagerDelegate {
             SecureLogger.debug("📦 Decoded (combined) packet type: \(packet.type) from sender: \(claimedSenderID.id.prefix(8))…", category: .session)
         }
 
-        if !subscribedCentrals.contains(central) {
-            subscribedCentrals.append(central)
-        }
+        linkStateStore.addSubscribedCentral(central)
 
         if packet.type == MessageType.announce.rawValue,
            packet.ttl == messageTTL {
-            centralToPeerID[centralUUID] = claimedSenderID
+            linkStateStore.bindCentral(centralUUID, to: claimedSenderID)
             refreshLocalTopology()
         }
 
@@ -2662,39 +2586,12 @@ extension BLEService {
 
     /// Safely fetch the current direct-link state for a peer using the BLE queue.
     private func linkState(for peerID: PeerID) -> (hasPeripheral: Bool, hasCentral: Bool) {
-        let computeState = { () -> (Bool, Bool) in
-            let peripheralUUID = self.peerToPeripheralUUID[peerID]
-            let hasPeripheral = peripheralUUID.flatMap { self.peripherals[$0]?.isConnected } ?? false
-            let hasCentral = self.centralToPeerID.values.contains(peerID)
-            return (hasPeripheral, hasCentral)
-        }
-
-        if DispatchQueue.getSpecific(key: bleQueueKey) != nil {
-            return computeState()
-        } else {
-            return bleQueue.sync { computeState() }
-        }
+        let state = readLinkState { $0.directLinkState(for: peerID) }
+        return (state.hasPeripheral, state.hasCentral)
     }
 
     private func links(to peerID: PeerID?) -> Set<BLEIngressLinkID> {
-        guard let peerID else { return [] }
-
-        let computeLinks = { () -> Set<BLEIngressLinkID> in
-            var links: Set<BLEIngressLinkID> = []
-            if let peripheralUUID = self.peerToPeripheralUUID[peerID] {
-                links.insert(.peripheral(peripheralUUID))
-            }
-            for (centralUUID, mappedPeerID) in self.centralToPeerID where mappedPeerID == peerID {
-                links.insert(.central(centralUUID))
-            }
-            return links
-        }
-
-        if DispatchQueue.getSpecific(key: bleQueueKey) != nil {
-            return computeLinks()
-        } else {
-            return bleQueue.sync { computeLinks() }
-        }
+        readLinkState { $0.links(to: peerID) }
     }
     
     private func configureNoiseServiceCallbacks(for service: NoiseEncryptionService) {
@@ -2751,20 +2648,25 @@ extension BLEService {
     }
     
     // MARK: Link capability snapshots (thread-safe via bleQueue)
-    
-    private func snapshotPeripheralStates() -> [PeripheralState] {
+
+    private func readLinkState<T>(_ body: (BLELinkStateStore) -> T) -> T {
         if DispatchQueue.getSpecific(key: bleQueueKey) != nil {
-            return Array(peripherals.values)
+            return body(linkStateStore)
         } else {
-            return bleQueue.sync { Array(peripherals.values) }
+            return bleQueue.sync { body(linkStateStore) }
         }
     }
-    private func snapshotSubscribedCentrals() -> ([CBCentral], [String: PeerID]) {
-        if DispatchQueue.getSpecific(key: bleQueueKey) != nil {
-            return (self.subscribedCentrals, self.centralToPeerID)
-        } else {
-            return bleQueue.sync { (self.subscribedCentrals, self.centralToPeerID) }
-        }
+
+    private func snapshotDirectPeripheralState(for peerID: PeerID) -> BLEPeripheralLinkState? {
+        readLinkState { $0.directPeripheralState(for: peerID) }
+    }
+
+    private func snapshotPeripheralStates() -> [BLEPeripheralLinkState] {
+        readLinkState(\.peripheralStates)
+    }
+
+    private func snapshotSubscribedCentrals() -> BLESubscribedCentralSnapshot {
+        readLinkState(\.subscribedCentralSnapshot)
     }
     
     // MARK: Helpers: IDs, selection, and write backpressure
@@ -2802,7 +2704,7 @@ extension BLEService {
         let uuid = peripheral.identifier.uuidString
         bleQueue.async { [weak self] in
             guard let self = self else { return }
-            guard let state = self.peripherals[uuid], let ch = state.characteristic else { return }
+            guard let state = self.linkStateStore.state(forPeripheralID: uuid), let ch = state.characteristic else { return }
 
             // Atomically take all pending items from the queue to avoid race conditions
             // where new items could be enqueued between read and update
@@ -2841,7 +2743,7 @@ extension BLEService {
     private func drainAllPendingWrites() {
         let uuids = collectionsQueue.sync { pendingPeripheralWrites.peripheralIDs }
         for uuid in uuids {
-            guard let state = peripherals[uuid], state.isConnected else { continue }
+            guard let state = linkStateStore.state(forPeripheralID: uuid), state.isConnected else { continue }
             drainPendingWrites(for: state.peripheral)
         }
     }
@@ -4134,7 +4036,7 @@ extension BLEService {
         // Base threshold when connected
         var threshold = TransportConfig.bleDynamicRSSIThresholdDefault
         // If we're at budget or queue is large, prefer closer peers
-        let linkCount = peripherals.values.filter { $0.isConnected || $0.isConnecting }.count
+        let linkCount = linkStateStore.connectedOrConnectingPeripheralCount
         if linkCount >= maxCentralLinks || connectionCandidates.count > TransportConfig.bleConnectionCandidatesMax {
             threshold = TransportConfig.bleRSSIConnectedThreshold
         }
