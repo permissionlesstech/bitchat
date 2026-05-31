@@ -516,6 +516,57 @@ struct ChatViewModelNoisePayloadTests {
 
         #expect(delivered)
     }
+
+    @Test @MainActor
+    func didReceiveNoisePayload_readReceiptUpdatesBeforePeerNicknameIsKnown() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let peerID = PeerID(str: "0000000000000005")
+
+        let message = BitchatMessage(
+            id: "pm-read-before-name",
+            sender: viewModel.nickname,
+            content: "Waiting on read receipt",
+            timestamp: Date(),
+            isRelay: false,
+            originalSender: nil,
+            isPrivate: true,
+            recipientNickname: "Peer",
+            senderPeerID: viewModel.meshService.myPeerID,
+            mentions: nil,
+            deliveryStatus: .sent
+        )
+        viewModel.privateChats[peerID] = [message]
+
+        viewModel.didReceiveNoisePayload(
+            from: peerID,
+            type: .readReceipt,
+            payload: Data("pm-read-before-name".utf8),
+            timestamp: Date()
+        )
+
+        let privateChatUpdated = await TestHelpers.waitUntil({
+            guard let status = viewModel.privateChats[peerID]?.first?.deliveryStatus else { return false }
+            if case .read = status {
+                return true
+            }
+            return false
+        }, timeout: TestConstants.defaultTimeout)
+
+        let conversationStoreUpdated = await TestHelpers.waitUntil({
+            let messages = viewModel.conversationStore.directMessages(
+                for: peerID,
+                identityResolver: viewModel.identityResolver
+            )
+            guard let status = messages.first?.deliveryStatus else { return false }
+            if case .read = status {
+                return true
+            }
+            return false
+        }, timeout: TestConstants.defaultTimeout)
+
+        #expect(privateChatUpdated)
+        #expect(conversationStoreUpdated)
+    }
 }
 
 // MARK: - Formatting Tests

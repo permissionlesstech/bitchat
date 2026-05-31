@@ -44,7 +44,8 @@ final class ChatDeliveryCoordinator {
     }
 
     @MainActor
-    func updateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {
+    @discardableResult
+    func updateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) -> Bool {
         var didUpdateStatus = false
 
         if let index = viewModel.messages.firstIndex(where: { $0.id == messageID }) {
@@ -72,6 +73,8 @@ final class ChatDeliveryCoordinator {
             viewModel.privateChats = privateChats
             viewModel.objectWillChange.send()
         }
+
+        return didUpdateStatus
     }
 }
 

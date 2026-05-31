@@ -209,34 +209,30 @@ private extension ChatTransportEventCoordinator {
             viewModel.meshService.sendDeliveryAck(for: packet.messageID, to: peerID)
 
         case .delivered:
-            guard let messageID = String(data: payload, encoding: .utf8),
-                  let name = viewModel.unifiedPeerService.getPeer(by: peerID)?.nickname,
-                  let (foundPeerID, index) = findMessageIndex(
-                    for: messageID,
-                    peerID: peerID,
-                    in: viewModel
-                  ) else { return }
+            guard let messageID = String(data: payload, encoding: .utf8) else { return }
 
-            if case .read = viewModel.privateChats[foundPeerID]?[index].deliveryStatus { return }
+            let name = deliveryStatusName(for: peerID, in: viewModel)
+            let didUpdate = viewModel.deliveryCoordinator.updateMessageDeliveryStatus(
+                messageID,
+                status: .delivered(to: name, at: Date())
+            )
 
-            viewModel.privateChats[foundPeerID]?[index].deliveryStatus = .delivered(to: name, at: Date())
-            viewModel.objectWillChange.send()
+            if !didUpdate {
+                SecureLogger.debug("📬 Delivered ACK for unknown message id=\(messageID.prefix(8))… from \(peerID.id.prefix(8))…", category: .session)
+            }
 
         case .readReceipt:
-            guard let messageID = String(data: payload, encoding: .utf8),
-                  let name = viewModel.unifiedPeerService.getPeer(by: peerID)?.nickname,
-                  let (foundPeerID, index) = findMessageIndex(
-                    for: messageID,
-                    peerID: peerID,
-                    in: viewModel
-                  ),
-                  let messages = viewModel.privateChats[foundPeerID],
-                  index < messages.count else { return }
+            guard let messageID = String(data: payload, encoding: .utf8) else { return }
 
-            messages[index].deliveryStatus = .read(by: name, at: Date())
-            viewModel.privateChats[foundPeerID] = messages
-            viewModel.privateChatManager.objectWillChange.send()
-            viewModel.objectWillChange.send()
+            let name = deliveryStatusName(for: peerID, in: viewModel)
+            let didUpdate = viewModel.deliveryCoordinator.updateMessageDeliveryStatus(
+                messageID,
+                status: .read(by: name, at: Date())
+            )
+
+            if !didUpdate {
+                SecureLogger.debug("📖 Read receipt for unknown message id=\(messageID.prefix(8))… from \(peerID.id.prefix(8))…", category: .session)
+            }
 
         case .verifyChallenge:
             viewModel.verificationCoordinator.handleVerifyChallengePayload(from: peerID, payload: payload)
@@ -247,34 +243,7 @@ private extension ChatTransportEventCoordinator {
     }
 
     @MainActor
-    func findMessageIndex(
-        for messageID: String,
-        peerID: PeerID,
-        in viewModel: ChatViewModel
-    ) -> (peerID: PeerID, index: Int)? {
-        if let messages = viewModel.privateChats[peerID],
-           let index = messages.firstIndex(where: { $0.id == messageID }) {
-            return (peerID, index)
-        }
-
-        if peerID.bare.count == 16,
-           let peer = viewModel.unifiedPeerService.getPeer(by: peerID),
-           !peer.noisePublicKey.isEmpty {
-            let longID = PeerID(hexData: peer.noisePublicKey)
-            if let messages = viewModel.privateChats[longID],
-               let index = messages.firstIndex(where: { $0.id == messageID }) {
-                return (longID, index)
-            }
-        }
-
-        if peerID.bare.count == 64 {
-            let shortID = peerID.toShort()
-            if let messages = viewModel.privateChats[shortID],
-               let index = messages.firstIndex(where: { $0.id == messageID }) {
-                return (shortID, index)
-            }
-        }
-
-        return nil
+    func deliveryStatusName(for peerID: PeerID, in viewModel: ChatViewModel) -> String {
+        viewModel.unifiedPeerService.getPeer(by: peerID)?.nickname ?? viewModel.resolveNickname(for: peerID)
     }
 }
