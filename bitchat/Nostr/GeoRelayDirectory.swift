@@ -381,12 +381,7 @@ final class GeoRelayDirectory {
             if idx == 0 && line.lowercased().contains("relay url") { continue }
             let parts = line.split(separator: ",").map { $0.trimmed }
             guard parts.count >= 3 else { continue }
-            var host = parts[0]
-            host = host.replacingOccurrences(of: "https://", with: "")
-            host = host.replacingOccurrences(of: "http://", with: "")
-            host = host.replacingOccurrences(of: "wss://", with: "")
-            host = host.replacingOccurrences(of: "ws://", with: "")
-            host = host.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            guard let host = NostrRelayURL.directoryAddress(parts[0]) else { continue }
             guard let lat = Double(parts[1]), let lon = Double(parts[2]) else { continue }
             result.insert(Entry(host: host, lat: lat, lon: lon))
         }

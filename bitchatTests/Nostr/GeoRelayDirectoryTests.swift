@@ -10,7 +10,9 @@ final class GeoRelayDirectoryTests: XCTestCase {
         relay url,lat,lon
         wss://one.example/,10,20
         https://one.example,10,20
+        wss://one.example:443/,10,20
         http://two.example/,11,21
+        wss://two.example:443,11,21
         invalid row
         ws://three.example,not-a-lat,22
         """

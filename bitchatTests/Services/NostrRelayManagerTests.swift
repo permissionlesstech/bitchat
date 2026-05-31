@@ -208,7 +208,7 @@ final class NostrRelayManagerTests: XCTestCase {
         let relayTwo = "wss://relay-two.example"
         let context = makeContext(permission: .denied)
 
-        context.manager.ensureConnections(to: [relayOne, relayOne, relayTwo])
+        context.manager.ensureConnections(to: [relayOne, "wss://relay-one.example:443/", "WSS://RELAY-TWO.EXAMPLE:443"])
 
         let connected = await waitUntil {
             Set(context.manager.getRelayStatuses().map(\.url)) == Set([relayOne, relayTwo]) &&

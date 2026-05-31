@@ -218,7 +218,11 @@ private extension ChatTransportEventCoordinator {
             )
 
             if !didUpdate {
-                SecureLogger.debug("📬 Delivered ACK for unknown message id=\(messageID.prefix(8))… from \(peerID.id.prefix(8))…", category: .session)
+                if case .read? = viewModel.deliveryCoordinator.deliveryStatus(for: messageID) {
+                    SecureLogger.debug("📬 Ignored stale delivered ACK for already-read message id=\(messageID.prefix(8))… from \(peerID.id.prefix(8))…", category: .session)
+                } else {
+                    SecureLogger.debug("📬 Delivered ACK for unknown message id=\(messageID.prefix(8))… from \(peerID.id.prefix(8))…", category: .session)
+                }
             }
 
         case .readReceipt:

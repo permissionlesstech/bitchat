@@ -129,7 +129,7 @@ final class NostrRelayManager: ObservableObject {
         "wss://offchain.pub"
         // For local testing, you can add: "ws://localhost:8080"
     ]
-    private static let defaultRelaySet = Set(defaultRelays)
+    private static let defaultRelaySet = Set(defaultRelays.compactMap { NostrRelayURL.normalized($0) })
     
     @Published private(set) var relays: [Relay] = []
     @Published private(set) var isConnected = false
@@ -390,8 +390,7 @@ final class NostrRelayManager: ObservableObject {
             
             // Target specific relays if provided; else default. Filter permanently failed relays.
             let baseUrls = relayUrls ?? Self.defaultRelays
-            let candidateUrls = baseUrls.filter { !isPermanentlyFailed($0) }
-            let urls = allowedRelayList(from: candidateUrls)
+            let urls = allowedRelayList(from: baseUrls).filter { !isPermanentlyFailed($0) }
             let requestState = SubscriptionRequestState(messageString: messageString, relayURLs: Set(urls))
             if subscriptionRequestState[id] == requestState, subscriptionStateExists(id: id, requestState: requestState) {
                 return
@@ -474,7 +473,8 @@ final class NostrRelayManager: ObservableObject {
     private func allowedRelayList(from urls: [String]) -> [String] {
         var seen = Set<String>()
         var result: [String] = []
-        for url in urls {
+        for rawURL in urls {
+            guard let url = NostrRelayURL.normalized(rawURL) else { continue }
             if !allowDefaultRelays && Self.defaultRelaySet.contains(url) { continue }
             if seen.insert(url).inserted {
                 result.append(url)
@@ -881,7 +881,8 @@ final class NostrRelayManager: ObservableObject {
     
     /// Manually retry connection to a specific relay
     func retryConnection(to relayUrl: String) {
-        guard let index = relays.firstIndex(where: { $0.url == relayUrl }) else { return }
+        let normalizedRelayUrl = NostrRelayURL.normalized(relayUrl) ?? relayUrl
+        guard let index = relays.firstIndex(where: { $0.url == normalizedRelayUrl }) else { return }
         
         // Reset reconnection attempts
         relays[index].reconnectAttempts = 0
@@ -889,13 +890,13 @@ final class NostrRelayManager: ObservableObject {
         relays[index].lastError = nil
         
         // Disconnect if connected
-        if let connection = connections[relayUrl] {
+        if let connection = connections[normalizedRelayUrl] {
             connection.cancel(with: .goingAway, reason: nil)
-            connections.removeValue(forKey: relayUrl)
+            connections.removeValue(forKey: normalizedRelayUrl)
         }
         
         // Attempt immediate reconnection
-        connectToRelay(relayUrl)
+        connectToRelay(normalizedRelayUrl)
     }
     
     /// Get detailed status for all relays
