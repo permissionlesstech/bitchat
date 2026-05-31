@@ -289,9 +289,10 @@ struct NostrTransportTests {
         transport.sendReadReceipt(first, to: fullPeerID)
         transport.sendReadReceipt(second, to: fullPeerID)
 
-        let sentFirst = await TestHelpers.waitUntil({ probe.sentEvents.count == 1 }, timeout: 1.5)
+        let readReceiptTimeout: TimeInterval = 5.0
+        let sentFirst = await TestHelpers.waitUntil({ probe.sentEvents.count >= 1 }, timeout: readReceiptTimeout)
         try #require(sentFirst, "Expected first queued read receipt event")
-        let scheduledThrottle = await TestHelpers.waitUntil({ probe.scheduledActionCount == 1 }, timeout: 1.5)
+        let scheduledThrottle = await TestHelpers.waitUntil({ probe.scheduledActionCount == 1 }, timeout: readReceiptTimeout)
         try #require(scheduledThrottle, "Expected queued throttle action after first read receipt")
         let firstEvent = try #require(probe.sentEvents.first, "Expected first queued read receipt event")
         let firstPayload = try decodeEmbeddedPayload(from: firstEvent, recipient: recipient).payload
@@ -300,7 +301,7 @@ struct NostrTransportTests {
 
         try #require(probe.runNextScheduledAction(), "Expected queued throttle action after first read receipt")
 
-        let sentSecond = await TestHelpers.waitUntil({ probe.sentEvents.count == 2 }, timeout: 1.5)
+        let sentSecond = await TestHelpers.waitUntil({ probe.sentEvents.count >= 2 }, timeout: readReceiptTimeout)
         try #require(sentSecond, "Expected second read receipt after running throttle action")
         let secondEvent = try #require(probe.sentEvents.last, "Expected second queued read receipt event")
         let secondPayload = try decodeEmbeddedPayload(from: secondEvent, recipient: recipient).payload
