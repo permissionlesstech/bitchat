@@ -138,6 +138,20 @@ struct BLEServiceCoreTests {
     }
 
     @Test
+    func ingressAllowsSelfAuthoredRSRWithTTLZeroFromBoundPeer() async throws {
+        let ble = makeService()
+        var packet = makePublicPacket(
+            content: "Recovered by sync",
+            sender: ble.myPeerID,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000)
+        )
+        packet.isRSR = true
+        packet.ttl = 0
+
+        #expect(ble._test_acceptsIngress(packet: packet, boundPeerID: PeerID(str: "1122334455667788")))
+    }
+
+    @Test
     func ingressRecordSuppressesSecondLinkDuplicate() async throws {
         let ble = makeService()
         let packet = makePublicPacket(

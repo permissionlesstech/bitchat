@@ -828,13 +828,18 @@ final class BLEService: NSObject {
         packet.type == MessageType.announce.rawValue && packet.ttl == messageTTL
     }
 
+    private func isSelfAuthoredSyncResponse(_ packet: BitchatPacket) -> Bool {
+        packet.isRSR && packet.ttl == 0
+    }
+
     private func makeIngressPacketContext(
         for packet: BitchatPacket,
         claimedSenderID: PeerID,
         boundPeerID: PeerID?,
         linkDescription: String
     ) -> IngressPacketContext? {
-        if claimedSenderID == myPeerID {
+        if claimedSenderID == myPeerID,
+           !isSelfAuthoredSyncResponse(packet) {
             SecureLogger.debug("↩️ Dropping BLE self-loopback packet type \(packet.type) from \(linkDescription)", category: .session)
             return nil
         }
