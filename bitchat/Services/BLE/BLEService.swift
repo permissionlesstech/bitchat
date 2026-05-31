@@ -88,12 +88,7 @@ final class BLEService: NSObject {
     
     // 5. Fragment Reassembly (necessary for messages > MTU)
     private var fragmentAssemblyBuffer = BLEFragmentAssemblyBuffer()
-    private struct ActiveTransferState {
-        let totalFragments: Int
-        var sentFragments: Int
-        var workItems: [DispatchWorkItem]
-    }
-    private var activeTransfers: [String: ActiveTransferState] = [:]
+    private var outboundFragmentTransfers = BLEOutboundFragmentTransferScheduler()
     // Backoff for peripherals that recently timed out connecting
     private var recentConnectTimeouts: [String: Date] = [:] // Peripheral UUID -> last timeout
     
@@ -148,15 +143,7 @@ final class BLEService: NSObject {
     // Ingress link tracking for duplicate and last-hop suppression
     private var ingressLinks = BLEIngressLinkRegistry()
 
-    private struct PendingFragmentTransfer {
-        let packet: BitchatPacket
-        let pad: Bool
-        let maxChunk: Int?
-        let directedPeer: PeerID?
-        let transferId: String?
-    }
     private var pendingPeripheralWrites = BLEOutboundWriteBuffer()
-    private var pendingFragmentTransfers: [PendingFragmentTransfer] = []
     // Debounce duplicate disconnect notifies
     private var recentDisconnectNotifies: [PeerID: Date] = [:]
     // Store-and-forward for directed messages when we have no links
@@ -348,16 +335,22 @@ final class BLEService: NSObject {
             pendingNoisePayloadsAfterHandshake.removeAll()
         }
 
-        collectionsQueue.sync(flags: .barrier) {
+        let cancelledTransfers = collectionsQueue.sync(flags: .barrier) {
             pendingPeripheralWrites.removeAll()
-            pendingFragmentTransfers.removeAll()
             pendingNotifications.removeAll()
+            let transfers = outboundFragmentTransfers.removeAll()
             fragmentAssemblyBuffer.removeAll()
             pendingDirectedRelays.removeAll()
             ingressLinks.removeAll()
             recentPacketTimestamps.removeAll()
             scheduledRelays.values.forEach { $0.cancel() }
             scheduledRelays.removeAll()
+            return transfers
+        }
+
+        for entry in cancelledTransfers {
+            entry.workItems.forEach { $0.cancel() }
+            TransferProgressManager.shared.cancel(id: entry.id)
         }
 
         bleQueue.sync {
@@ -568,10 +561,9 @@ final class BLEService: NSObject {
 
         // Clear all sessions and peers
         let cancelledTransfers: [(id: String, items: [DispatchWorkItem])] = collectionsQueue.sync(flags: .barrier) {
-            let entries = activeTransfers.map { ($0.key, $0.value.workItems) }
+            let entries = outboundFragmentTransfers.removeAll().map { ($0.id, $0.workItems) }
             peers.removeAll()
             fragmentAssemblyBuffer.removeAll()
-            activeTransfers.removeAll()
             // Also clear pending message queues to avoid stale state across sessions
             pendingMessagesAfterHandshake.removeAll()
             pendingNoisePayloadsAfterHandshake.removeAll()
@@ -672,17 +664,22 @@ final class BLEService: NSObject {
     func cancelTransfer(_ transferId: String) {
         collectionsQueue.async(flags: .barrier) { [weak self] in
             guard let self = self else { return }
-            if let state = self.activeTransfers.removeValue(forKey: transferId) {
-                state.workItems.forEach { $0.cancel() }
+
+            switch self.outboundFragmentTransfers.cancelTransfer(transferId) {
+            case let .active(id, workItems):
+                workItems.forEach { $0.cancel() }
                 TransferProgressManager.shared.cancel(id: transferId)
-                SecureLogger.debug("🛑 Cancelled transfer \(transferId.prefix(8))…", category: .session)
+                SecureLogger.debug("🛑 Cancelled transfer \(id.prefix(8))…", category: .session)
                 self.messageQueue.async { [weak self] in
                     self?.startNextPendingTransferIfNeeded()
                 }
-            } else if let pendingIndex = self.pendingFragmentTransfers.firstIndex(where: { $0.transferId == transferId }) {
-                self.pendingFragmentTransfers.remove(at: pendingIndex)
+
+            case let .pending(id):
                 TransferProgressManager.shared.cancel(id: transferId)
-                SecureLogger.debug("🛑 Removed pending transfer \(transferId.prefix(8))… before start", category: .session)
+                SecureLogger.debug("🛑 Removed pending transfer \(id.prefix(8))… before start", category: .session)
+
+            case .missing:
+                break
             }
         }
     }
@@ -3315,68 +3312,49 @@ extension BLEService {
     // MARK: Fragmentation (Required for messages > BLE MTU)
     
     private func sendFragmentedPacket(_ packet: BitchatPacket, pad: Bool, maxChunk: Int? = nil, directedOnlyPeer: PeerID? = nil, transferId: String? = nil) {
-        let context = PendingFragmentTransfer(packet: packet, pad: pad, maxChunk: maxChunk, directedPeer: directedOnlyPeer, transferId: transferId)
-        if packet.type == MessageType.fileTransfer.rawValue {
-            let shouldQueue = collectionsQueue.sync {
-                self.activeTransfers.count >= TransportConfig.bleMaxConcurrentTransfers
-            }
-            if shouldQueue {
-                queueFragmentTransfer(context, prioritizeFront: false)
-                return
-            }
+        let request = BLEOutboundFragmentTransferRequest(
+            packet: packet,
+            pad: pad,
+            maxChunk: maxChunk,
+            directedPeer: directedOnlyPeer,
+            transferId: transferId
+        )
+
+        let result = collectionsQueue.sync(flags: .barrier) {
+            outboundFragmentTransfers.submit(request, maxConcurrentTransfers: TransportConfig.bleMaxConcurrentTransfers)
         }
-        startFragmentedPacket(context)
+        handleFragmentTransferSubmitResult(result)
     }
 
-    private func queueFragmentTransfer(_ context: PendingFragmentTransfer, prioritizeFront: Bool) {
-        collectionsQueue.async(flags: .barrier) { [weak self] in
-            guard let self = self else { return }
-            if prioritizeFront {
-                self.pendingFragmentTransfers.insert(context, at: 0)
+    private func handleFragmentTransferSubmitResult(_ result: BLEOutboundFragmentTransferScheduler.SubmitResult) {
+        switch result {
+        case let .start(request, reservedTransferId):
+            startFragmentedPacket(request, reservedTransferId: reservedTransferId)
+
+        case let .queued(_, transferId, _):
+            if let transferId {
+                SecureLogger.debug("🚦 Queued media transfer \(transferId.prefix(8))… waiting for slot", category: .session)
             } else {
-                self.pendingFragmentTransfers.append(context)
+                SecureLogger.debug("🚦 Queued fragment transfer waiting for slot", category: .session)
             }
-        }
-        if let transferId = context.transferId {
-            SecureLogger.debug("🚦 Queued media transfer \(transferId.prefix(8))… waiting for slot", category: .session)
-        } else {
-            SecureLogger.debug("🚦 Queued fragment transfer waiting for slot", category: .session)
         }
     }
 
-    private func startFragmentedPacket(_ context: PendingFragmentTransfer) {
-        let packet = context.packet
-        let isFileTransfer = packet.type == MessageType.fileTransfer.rawValue
-        var reservedTransferId: String?
+    private func startFragmentedPacket(_ request: BLEOutboundFragmentTransferRequest, reservedTransferId: String?) {
+        let packet = request.packet
 
-        let releaseReservedSlot: (String) -> Void = { id in
+        let releaseReservedSlot: (String) -> Void = { [weak self] id in
+            guard let self = self else { return }
             TransferProgressManager.shared.cancel(id: id)
             self.collectionsQueue.async(flags: .barrier) { [weak self] in
-                self?.activeTransfers.removeValue(forKey: id)
+                _ = self?.outboundFragmentTransfers.releaseReservation(id)
             }
             self.messageQueue.async { [weak self] in
                 self?.startNextPendingTransferIfNeeded()
             }
         }
 
-        if isFileTransfer {
-            let candidateId = context.transferId ?? packet.payload.sha256Hex()
-            var didReserve = false
-            collectionsQueue.sync(flags: .barrier) {
-                if self.activeTransfers.count < TransportConfig.bleMaxConcurrentTransfers,
-                   self.activeTransfers[candidateId] == nil {
-                    self.activeTransfers[candidateId] = ActiveTransferState(totalFragments: 0, sentFragments: 0, workItems: [])
-                    didReserve = true
-                }
-            }
-            guard didReserve else {
-                queueFragmentTransfer(context, prioritizeFront: true)
-                return
-            }
-            reservedTransferId = candidateId
-        }
-
-        guard let fullData = packet.toBinaryData(padding: context.pad) else {
+        guard let fullData = packet.toBinaryData(padding: request.pad) else {
             if let id = reservedTransferId {
                 releaseReservedSlot(id)
             }
@@ -3398,7 +3376,7 @@ extension BLEService {
             calculatedChunk = max(64, bleMaxMTU - overhead)
         }
 
-        let chunk = context.maxChunk ?? calculatedChunk
+        let chunk = request.maxChunk ?? calculatedChunk
         let safeChunk = max(64, chunk)
         let fragments = stride(from: 0, to: fullData.count, by: safeChunk).map { offset in
             Data(fullData[offset..<min(offset + safeChunk, fullData.count)])
@@ -3423,12 +3401,12 @@ extension BLEService {
                 }
             }
         }
-        let perFragMs = (context.directedPeer != nil || packet.recipientID != nil) ? TransportConfig.bleFragmentSpacingDirectedMs : TransportConfig.bleFragmentSpacingMs
+        let perFragMs = (request.directedPeer != nil || packet.recipientID != nil) ? TransportConfig.bleFragmentSpacingDirectedMs : TransportConfig.bleFragmentSpacingMs
 
         let transferIdentifier: String? = {
             guard let id = reservedTransferId else { return nil }
             collectionsQueue.sync(flags: .barrier) {
-                self.activeTransfers[id] = ActiveTransferState(totalFragments: totalFragments, sentFragments: 0, workItems: [])
+                _ = self.outboundFragmentTransfers.activateReservedTransfer(id: id, totalFragments: totalFragments, workItems: [])
             }
             TransferProgressManager.shared.start(id: id, totalFragments: totalFragments)
             return id
@@ -3445,7 +3423,7 @@ extension BLEService {
             payload.append(fragment)
 
             let fragmentRecipient: Data? = {
-                if let only = context.directedPeer { return Data(hexString: only.id) }
+                if let only = request.directedPeer { return Data(hexString: only.id) }
                 return packet.recipientID
             }()
 
@@ -3465,7 +3443,7 @@ extension BLEService {
             let workItem = DispatchWorkItem { [weak self] in
                 guard let self = self else { return }
                 if let transferId = transferIdentifier {
-                    let isActive = self.collectionsQueue.sync { self.activeTransfers[transferId] != nil }
+                    let isActive = self.collectionsQueue.sync { self.outboundFragmentTransfers.isActive(transferId) }
                     guard isActive else { return }
                 }
                 if fragmentRecipient == nil || fragmentRecipient?.allSatisfy({ $0 == 0xFF }) == true {
@@ -3483,9 +3461,7 @@ extension BLEService {
         if let transferId = transferIdentifier {
             let workItems = scheduledItems.map { $0.item }
             collectionsQueue.async(flags: .barrier) { [weak self] in
-                guard let self = self, var state = self.activeTransfers[transferId] else { return }
-                state.workItems = workItems
-                self.activeTransfers[transferId] = state
+                _ = self?.outboundFragmentTransfers.updateWorkItems(workItems, for: transferId)
             }
         }
 
@@ -3499,16 +3475,17 @@ extension BLEService {
 
     private func markFragmentSent(transferId: String) {
         collectionsQueue.async(flags: .barrier) { [weak self] in
-            guard let self = self, var state = self.activeTransfers[transferId] else { return }
-            state.sentFragments = min(state.sentFragments + 1, state.totalFragments)
-            let isComplete = state.sentFragments >= state.totalFragments
-            if isComplete {
-                self.activeTransfers.removeValue(forKey: transferId)
-            } else {
-                self.activeTransfers[transferId] = state
+            guard let self = self else { return }
+
+            switch self.outboundFragmentTransfers.markFragmentSent(transferId: transferId) {
+            case .progress, .complete:
+                TransferProgressManager.shared.recordFragmentSent(id: transferId)
+
+            case .missing:
+                return
             }
-            TransferProgressManager.shared.recordFragmentSent(id: transferId)
-            if isComplete {
+
+            if !self.outboundFragmentTransfers.isActive(transferId) {
                 self.messageQueue.async { [weak self] in
                     self?.startNextPendingTransferIfNeeded()
                 }
@@ -3517,20 +3494,13 @@ extension BLEService {
     }
 
     private func startNextPendingTransferIfNeeded() {
-        collectionsQueue.async(flags: .barrier) { [weak self] in
-            guard let self = self else { return }
-            let limit = TransportConfig.bleMaxConcurrentTransfers
-            var availableSlots = max(0, limit - self.activeTransfers.count)
-            guard availableSlots > 0, !self.pendingFragmentTransfers.isEmpty else { return }
-            var toStart: [PendingFragmentTransfer] = []
-            while availableSlots > 0, !self.pendingFragmentTransfers.isEmpty {
-                toStart.append(self.pendingFragmentTransfers.removeFirst())
-                availableSlots -= 1
-            }
-            for context in toStart {
-                self.messageQueue.async { [weak self] in
-                    self?.startFragmentedPacket(context)
-                }
+        let results = collectionsQueue.sync(flags: .barrier) {
+            outboundFragmentTransfers.reservePendingStarts(maxConcurrentTransfers: TransportConfig.bleMaxConcurrentTransfers)
+        }
+
+        for result in results {
+            messageQueue.async { [weak self] in
+                self?.handleFragmentTransferSubmitResult(result)
             }
         }
     }
