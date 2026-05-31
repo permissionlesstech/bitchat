@@ -79,16 +79,12 @@ final class BLEService: NSObject {
     // 4. Efficient Message Deduplication
     private let messageDeduplicator = MessageDeduplicator()
     private var selfBroadcastMessageIDs: [String: (id: String, timestamp: Date)] = [:]
-    private lazy var mediaDateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd_HHmmss"
-        return formatter
-    }()
     private let meshTopology = MeshTopologyTracker()
     
     // 5. Fragment Reassembly (necessary for messages > MTU)
     private var fragmentAssemblyBuffer = BLEFragmentAssemblyBuffer()
     private var outboundFragmentTransfers = BLEOutboundFragmentTransferScheduler()
+    private let incomingFileStore = BLEIncomingFileStore()
     // Backoff for peripherals that recently timed out connecting
     private var recentConnectTimeouts: [String: Date] = [:] // Peripheral UUID -> last timeout
     
@@ -506,7 +502,7 @@ final class BLEService: NSObject {
 
         // Send immediately to all connected peers (synchronized access to BLE state)
         if let data = leavePacket.toBinaryData(padding: false) {
-            let leavePriority = priority(for: leavePacket, data: data)
+            let leavePriority = BLEOutboundPacketPolicy.priority(for: leavePacket, data: data)
 
             // Snapshot BLE state under bleQueue to avoid races with delegate callbacks
             let (peripheralStates, centralsCount, char) = bleQueue.sync {
@@ -869,7 +865,7 @@ final class BLEService: NSObject {
         }
         
         // Encode once using a small per-type padding policy, then delegate by type
-        let padForBLE = padPolicy(for: packetToSend.type)
+        let padForBLE = BLEOutboundPacketPolicy.padsBLEFrame(for: packetToSend.type)
         if packetToSend.type == MessageType.fileTransfer.rawValue {
             sendFragmentedPacket(packetToSend, pad: padForBLE, maxChunk: nil, directedOnlyPeer: nil, transferId: transferId)
             return
@@ -885,21 +881,11 @@ final class BLEService: NSObject {
         sendGenericBroadcast(packetToSend, data: data, pad: padForBLE)
     }
 
-    // MARK: - Broadcast helpers (single responsibility)
-    private func padPolicy(for type: UInt8) -> Bool {
-        switch MessageType(rawValue: type) {
-        case .noiseEncrypted, .noiseHandshake:
-            return true
-        case .none, .announce, .message, .leave, .requestSync, .fragment, .fileTransfer:
-            return false
-        }
-    }
-
     private func sendEncrypted(_ packet: BitchatPacket, data: Data, pad: Bool) {
         guard let recipientPeerID = PeerID(hexData: packet.recipientID) else { return }
         var sentEncrypted = false
 
-        let outboundPriority = priority(for: packet, data: data)
+        let outboundPriority = BLEOutboundPacketPolicy.priority(for: packet, data: data)
 
         // Per-link limits for the specific peer
         var peripheralMaxLen: Int?
@@ -916,14 +902,12 @@ final class BLEService: NSObject {
             }
         }
         if let pm = peripheralMaxLen, data.count > pm {
-            let overhead = 13 + 8 + 8 + 13
-            let chunk = max(64, pm - overhead)
+            let chunk = BLEOutboundPacketPolicy.fragmentChunkSize(forLinkLimit: pm)
             sendFragmentedPacket(packet, pad: pad, maxChunk: chunk, directedOnlyPeer: recipientPeerID)
             return
         }
         if let cm = centralMaxLen, data.count > cm {
-            let overhead = 13 + 8 + 8 + 13
-            let chunk = max(64, cm - overhead)
+            let chunk = BLEOutboundPacketPolicy.fragmentChunkSize(forLinkLimit: cm)
             sendFragmentedPacket(packet, pad: pad, maxChunk: chunk, directedOnlyPeer: recipientPeerID)
             return
         }
@@ -986,7 +970,7 @@ final class BLEService: NSObject {
 
     private func sendOnAllLinks(packet: BitchatPacket, data: Data, pad: Bool, directedOnlyPeer: PeerID?) {
         // Determine the last-hop peer/link for this message to avoid echoing back over either BLE role.
-        let messageID = makeMessageID(for: packet)
+        let messageID = BLEOutboundPacketPolicy.messageID(for: packet)
         let ingressRecord = collectionsQueue.sync { ingressLinks.record(for: packet) }
         let excludedPeerLinks = links(to: ingressRecord?.peerID)
         let directedPeerHint: PeerID? = {
@@ -996,7 +980,7 @@ final class BLEService: NSObject {
             }
             return nil
         }()
-        let outboundPriority = priority(for: packet, data: data)
+        let outboundPriority = BLEOutboundPacketPolicy.priority(for: packet, data: data)
 
         let states = snapshotPeripheralStates()
         var minCentralWriteLen: Int?
@@ -1017,8 +1001,7 @@ final class BLEService: NSObject {
         if packet.type != MessageType.fragment.rawValue,
            let minLen = [minCentralWriteLen, minNotifyLen].compactMap({ $0 }).min(),
            data.count > minLen {
-            let overhead = 13 + 8 + 8 + 13
-            let chunk = max(64, minLen - overhead)
+            let chunk = BLEOutboundPacketPolicy.fragmentChunkSize(forLinkLimit: minLen)
             sendFragmentedPacket(packet, pad: pad, maxChunk: chunk, directedOnlyPeer: directedOnlyPeer)
             return
         }
@@ -1082,7 +1065,7 @@ final class BLEService: NSObject {
 
     // MARK: - Directed store-and-forward
     private func spoolDirectedPacket(_ packet: BitchatPacket, recipientPeerID: PeerID) {
-        let msgID = makeMessageID(for: packet)
+        let msgID = BLEOutboundPacketPolicy.messageID(for: packet)
         collectionsQueue.async(flags: .barrier) { [weak self] in
             guard let self = self else { return }
             var byMsg = self.pendingDirectedRelays[recipientPeerID] ?? [:]
@@ -1199,9 +1182,9 @@ final class BLEService: NSObject {
         }
 
         // BCH-01-002: Enforce storage quota before saving
-        enforceIncomingFilesQuota(reservingBytes: filePacket.content.count)
+        incomingFileStore.enforceQuota(reservingBytes: filePacket.content.count)
 
-        guard let destination = saveIncomingFile(
+        guard let destination = incomingFileStore.save(
             data: filePacket.content,
             preferredName: filePacket.fileName,
             subdirectory: "\(mime.category.mediaDir)/incoming",
@@ -1293,180 +1276,6 @@ final class BLEService: NSObject {
             self.deliverTransportEvent(.peerListUpdated(currentPeerIDs))
         }
     }
-    
-    // MARK: - Helper Functions
-
-    private func applicationFilesDirectory() throws -> URL {
-        let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-        let filesDir = base.appendingPathComponent("files", isDirectory: true)
-        try FileManager.default.createDirectory(at: filesDir, withIntermediateDirectories: true, attributes: nil)
-        return filesDir
-    }
-
-    private func sanitizeFileName(_ name: String?, defaultName: String, fallbackExtension: String?) -> String {
-        var candidate = name ?? ""
-
-        // Security: Remove null bytes (path traversal vector)
-        candidate = candidate.replacingOccurrences(of: "\0", with: "")
-
-        // Security: Unicode normalization prevents fullwidth character bypass
-        candidate = candidate.precomposedStringWithCanonicalMapping
-
-        // Security: Remove ALL path separators (not just strip last component)
-        candidate = candidate.replacingOccurrences(of: "/", with: "_")
-        candidate = candidate.replacingOccurrences(of: "\\", with: "_")
-
-        // Security: Remove control characters and dangerous filesystem chars
-        let invalid = CharacterSet(charactersIn: "<>:\"|?*\0").union(.controlCharacters)
-        candidate = candidate.components(separatedBy: invalid).joined(separator: "_")
-
-        candidate = candidate.trimmed
-        if candidate.isEmpty { candidate = defaultName }
-
-        // Security: Reject dotfiles (hidden file attacks)
-        if candidate.hasPrefix(".") {
-            candidate = "_" + candidate
-        }
-
-        // Truncate while preserving extension
-        if candidate.count > 120 {
-            let ext = (candidate as NSString).pathExtension
-            let base = (candidate as NSString).deletingPathExtension
-            if ext.isEmpty {
-                candidate = String(candidate.prefix(120))
-            } else {
-                let maxBase = max(10, 120 - ext.count - 1)
-                candidate = String(base.prefix(maxBase)) + "." + ext
-            }
-        }
-
-        if let fallbackExtension = fallbackExtension, (candidate as NSString).pathExtension.isEmpty {
-            candidate += ".\(fallbackExtension)"
-        }
-
-        if candidate.isEmpty { candidate = defaultName }
-        return candidate
-    }
-
-    private func uniqueFileURL(in directory: URL, fileName: String) -> URL {
-        var candidate = directory.appendingPathComponent(fileName)
-
-        // Security: Validate path doesn't escape directory
-        if !candidate.path.hasPrefix(directory.path) {
-            SecureLogger.warning("⚠️ Path traversal blocked: \(fileName)", category: .security)
-            return directory.appendingPathComponent("blocked_\(UUID().uuidString)")
-        }
-
-        if !FileManager.default.fileExists(atPath: candidate.path) {
-            return candidate
-        }
-
-        let baseName = (fileName as NSString).deletingPathExtension
-        let ext = (fileName as NSString).pathExtension
-        var counter = 1
-
-        // Limit iterations to prevent DoS
-        while counter < 100 {
-            let newName = ext.isEmpty ? "\(baseName) (\(counter))" : "\(baseName) (\(counter)).\(ext)"
-            candidate = directory.appendingPathComponent(newName)
-
-            // Validate each iteration
-            guard candidate.path.hasPrefix(directory.path) else {
-                return directory.appendingPathComponent("blocked_\(UUID().uuidString)")
-            }
-
-            if !FileManager.default.fileExists(atPath: candidate.path) {
-                return candidate
-            }
-            counter += 1
-        }
-
-        // Fallback: UUID to guarantee uniqueness
-        return directory.appendingPathComponent("\(baseName)_\(UUID().uuidString).\(ext.isEmpty ? "dat" : ext)")
-    }
-
-    private func saveIncomingFile(data: Data, preferredName: String?, subdirectory: String, fallbackExtension: String?, defaultPrefix: String) -> URL? {
-        do {
-            let base = try applicationFilesDirectory().appendingPathComponent(subdirectory, isDirectory: true)
-            try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true, attributes: nil)
-            let timestamp = mediaDateFormatter.string(from: Date())
-            let defaultName = "\(defaultPrefix)_\(timestamp)"
-            let sanitized = sanitizeFileName(preferredName, defaultName: defaultName, fallbackExtension: fallbackExtension)
-            let destination = uniqueFileURL(in: base, fileName: sanitized)
-            try data.write(to: destination, options: .atomic)
-            return destination
-        } catch {
-            SecureLogger.error("❌ Failed to persist incoming media: \(error)", category: .session)
-            return nil
-        }
-    }
-
-    // MARK: - Storage Quota Management (BCH-01-002)
-
-    /// Maximum total storage for incoming files (100 MB)
-    private static let incomingFilesQuota: Int64 = 100 * 1024 * 1024
-
-    /// Enforces storage quota for incoming files by deleting oldest files when quota is exceeded.
-    /// Call before saving a new incoming file.
-    private func enforceIncomingFilesQuota(reservingBytes: Int) {
-        do {
-            let base = try applicationFilesDirectory()
-            let incomingDirs = [
-                base.appendingPathComponent("voicenotes/incoming", isDirectory: true),
-                base.appendingPathComponent("images/incoming", isDirectory: true),
-                base.appendingPathComponent("files/incoming", isDirectory: true)
-            ]
-
-            // Gather all incoming files with their sizes and modification dates
-            var allFiles: [(url: URL, size: Int64, modified: Date)] = []
-            let fileManager = FileManager.default
-
-            for dir in incomingDirs {
-                guard fileManager.fileExists(atPath: dir.path) else { continue }
-                guard let contents = try? fileManager.contentsOfDirectory(
-                    at: dir,
-                    includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey],
-                    options: [.skipsHiddenFiles]
-                ) else { continue }
-
-                for fileURL in contents {
-                    guard let attrs = try? fileURL.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]),
-                          let size = attrs.fileSize,
-                          let modified = attrs.contentModificationDate else { continue }
-                    allFiles.append((url: fileURL, size: Int64(size), modified: modified))
-                }
-            }
-
-            // Calculate current usage
-            let currentUsage = allFiles.reduce(0) { $0 + $1.size }
-            let targetUsage = Self.incomingFilesQuota - Int64(reservingBytes)
-
-            guard currentUsage > targetUsage else { return }
-
-            // Sort by modification date (oldest first) and delete until under quota
-            let sortedFiles = allFiles.sorted { $0.modified < $1.modified }
-            var freedSpace: Int64 = 0
-            let needToFree = currentUsage - targetUsage
-
-            for file in sortedFiles {
-                guard freedSpace < needToFree else { break }
-                do {
-                    try fileManager.removeItem(at: file.url)
-                    freedSpace += file.size
-                    SecureLogger.debug("🗑️ BCH-01-002: Deleted old incoming file to free space: \(file.url.lastPathComponent)", category: .security)
-                } catch {
-                    SecureLogger.warning("⚠️ Failed to delete old file for quota: \(error)", category: .security)
-                }
-            }
-
-            if freedSpace > 0 {
-                SecureLogger.info("📊 BCH-01-002: Freed \(ByteCountFormatter.string(fromByteCount: freedSpace, countStyle: .file)) to stay within incoming files quota", category: .security)
-            }
-        } catch {
-            SecureLogger.warning("⚠️ Could not enforce storage quota: \(error)", category: .security)
-        }
-    }
-
     private func sendAnnounce(forceSend: Bool = false) {
         // Throttle announces to prevent flooding
         let now = Date()
@@ -2975,31 +2784,6 @@ extension BLEService {
     
     // MARK: Helpers: IDs, selection, and write backpressure
     
-    private func makeMessageID(for packet: BitchatPacket) -> String {
-        BLEIngressLinkRegistry.messageID(for: packet)
-    }
-
-    private func priority(for packet: BitchatPacket, data: Data) -> BLEOutboundWritePriority {
-        guard let messageType = MessageType(rawValue: packet.type) else { return .low }
-        switch messageType {
-        case .fragment:
-            let total = fragmentTotalCount(from: packet.payload)
-            return BLEOutboundWritePriority.fragment(totalFragments: total)
-        case .fileTransfer:
-            return .fileTransfer
-        default:
-            return .high
-        }
-    }
-
-    private func fragmentTotalCount(from payload: Data) -> Int {
-        guard payload.count >= 12 else { return Int(UInt16.max) }
-        let totalHigh = Int(payload[10])
-        let totalLow = Int(payload[11])
-        let total = (totalHigh << 8) | totalLow
-        return max(total, 1)
-    }
-
     private func writeOrEnqueue(_ data: Data, to peripheral: CBPeripheral, characteristic: CBCharacteristic, priority: BLEOutboundWritePriority) {
         // BLE operations run on bleQueue; keep queue affinity
         bleQueue.async { [weak self] in
