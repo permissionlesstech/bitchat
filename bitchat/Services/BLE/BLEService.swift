@@ -888,33 +888,32 @@ final class BLEService: NSObject {
         let outboundPriority = BLEOutboundPacketPolicy.priority(for: packet, data: data)
 
         // Per-link limits for the specific peer
-        var peripheralMaxLen: Int?
-        if let perUUID = (DispatchQueue.getSpecific(key: bleQueueKey) != nil) ? peerToPeripheralUUID[recipientPeerID] : bleQueue.sync(execute: { peerToPeripheralUUID[recipientPeerID] }) {
-            if let state = (DispatchQueue.getSpecific(key: bleQueueKey) != nil) ? peripherals[perUUID] : bleQueue.sync(execute: { peripherals[perUUID] }) {
-                peripheralMaxLen = state.peripheral.maximumWriteValueLength(for: .withoutResponse)
+        let directPeripheralState: PeripheralState? = {
+            if DispatchQueue.getSpecific(key: bleQueueKey) != nil {
+                return peerToPeripheralUUID[recipientPeerID].flatMap { peripherals[$0] }
             }
-        }
-        var centralMaxLen: Int?
-        do {
-            let (centrals, mapping) = snapshotSubscribedCentrals()
-            if let central = centrals.first(where: { mapping[$0.identifier.uuidString] == recipientPeerID }) {
-                centralMaxLen = central.maximumUpdateValueLength
+            return bleQueue.sync {
+                peerToPeripheralUUID[recipientPeerID].flatMap { peripherals[$0] }
             }
-        }
-        if let pm = peripheralMaxLen, data.count > pm {
-            let chunk = BLEOutboundPacketPolicy.fragmentChunkSize(forLinkLimit: pm)
+        }()
+        let (centrals, mapping) = snapshotSubscribedCentrals()
+        let recipientCentral = centrals.first { mapping[$0.identifier.uuidString] == recipientPeerID }
+
+        if let peripheralMaxLen = directPeripheralState?.peripheral.maximumWriteValueLength(for: .withoutResponse),
+           data.count > peripheralMaxLen {
+            let chunk = BLEOutboundPacketPolicy.fragmentChunkSize(forLinkLimit: peripheralMaxLen)
             sendFragmentedPacket(packet, pad: pad, maxChunk: chunk, directedOnlyPeer: recipientPeerID)
             return
         }
-        if let cm = centralMaxLen, data.count > cm {
-            let chunk = BLEOutboundPacketPolicy.fragmentChunkSize(forLinkLimit: cm)
+        if let centralMaxLen = recipientCentral?.maximumUpdateValueLength,
+           data.count > centralMaxLen {
+            let chunk = BLEOutboundPacketPolicy.fragmentChunkSize(forLinkLimit: centralMaxLen)
             sendFragmentedPacket(packet, pad: pad, maxChunk: chunk, directedOnlyPeer: recipientPeerID)
             return
         }
 
         // Direct write via peripheral link
-        if let peripheralUUID = (DispatchQueue.getSpecific(key: bleQueueKey) != nil) ? peerToPeripheralUUID[recipientPeerID] : bleQueue.sync(execute: { peerToPeripheralUUID[recipientPeerID] }),
-           let state = (DispatchQueue.getSpecific(key: bleQueueKey) != nil) ? peripherals[peripheralUUID] : bleQueue.sync(execute: { peripherals[peripheralUUID] }),
+        if let state = directPeripheralState,
            state.isConnected,
            let characteristic = state.characteristic {
             writeOrEnqueue(data, to: state.peripheral, characteristic: characteristic, priority: outboundPriority)
@@ -922,12 +921,12 @@ final class BLEService: NSObject {
         }
 
         // Notify via central link (dual-role)
-        if let characteristic = characteristic, !sentEncrypted {
-            let (centrals, mapping) = snapshotSubscribedCentrals()
-            for central in centrals where mapping[central.identifier.uuidString] == recipientPeerID {
-                let success = peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: [central]) ?? false
-                if success { sentEncrypted = true; break }
-                enqueuePendingNotification(data: data, centrals: [central], context: "encrypted")
+        if let characteristic = characteristic, !sentEncrypted, let recipientCentral {
+            let success = peripheralManager?.updateValue(data, for: characteristic, onSubscribedCentrals: [recipientCentral]) ?? false
+            if success {
+                sentEncrypted = true
+            } else {
+                enqueuePendingNotification(data: data, centrals: [recipientCentral], context: "encrypted")
             }
         }
 
@@ -988,15 +987,9 @@ final class BLEService: NSObject {
             let m = s.peripheral.maximumWriteValueLength(for: .withoutResponse)
             minCentralWriteLen = minCentralWriteLen.map { min($0, m) } ?? m
         }
-        var snapshotCentrals: [CBCentral] = []
-        if let _ = characteristic {
-            let (centrals, _) = snapshotSubscribedCentrals()
-            snapshotCentrals = centrals
-        }
-        var minNotifyLen: Int?
-        if !snapshotCentrals.isEmpty {
-            minNotifyLen = snapshotCentrals.map { $0.maximumUpdateValueLength }.min()
-        }
+        let subscribedCentrals = characteristic == nil ? [] : snapshotSubscribedCentrals().0
+        let minNotifyLen = subscribedCentrals.map { $0.maximumUpdateValueLength }.min()
+
         // Avoid re-fragmenting fragment packets
         if packet.type != MessageType.fragment.rawValue,
            let minLen = [minCentralWriteLen, minNotifyLen].compactMap({ $0 }).min(),
@@ -1007,15 +1000,7 @@ final class BLEService: NSObject {
         }
         // Build link lists and apply K-of-N fanout for broadcasts; always exclude ingress link
         let connectedPeripheralIDs: [String] = states.filter { $0.isConnected }.map { $0.peripheral.identifier.uuidString }
-        let subscribedCentrals: [CBCentral]
-        var centralIDs: [String] = []
-        if let _ = characteristic {
-            let (centrals, _) = snapshotSubscribedCentrals()
-            subscribedCentrals = centrals
-            centralIDs = centrals.map { $0.identifier.uuidString }
-        } else {
-            subscribedCentrals = []
-        }
+        let centralIDs = subscribedCentrals.map { $0.identifier.uuidString }
 
         let selectedLinks = BLEFanoutSelector.selectLinks(
             peripheralIDs: connectedPeripheralIDs,
