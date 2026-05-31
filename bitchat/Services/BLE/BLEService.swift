@@ -71,8 +71,6 @@ final class BLEService: NSObject {
     private var fragmentAssemblyBuffer = BLEFragmentAssemblyBuffer()
     private var outboundFragmentTransfers = BLEOutboundFragmentTransferScheduler()
     private let incomingFileStore = BLEIncomingFileStore()
-    // Backoff for peripherals that recently timed out connecting
-    private var recentConnectTimeouts: [String: Date] = [:] // Peripheral UUID -> last timeout
     
     // Simple announce throttling
     private var lastAnnounceSent = Date.distantPast
@@ -142,20 +140,7 @@ final class BLEService: NSObject {
     private var maintenanceCounter = 0  // Track maintenance cycles
 
     // MARK: - Connection budget & scheduling (central role)
-    private let maxCentralLinks = TransportConfig.bleMaxCentralLinks
-    private let connectRateLimitInterval: TimeInterval = TransportConfig.bleConnectRateLimitInterval
-    private var lastGlobalConnectAttempt: Date = .distantPast
-    private struct ConnectionCandidate {
-        let peripheral: CBPeripheral
-        let rssi: Int
-        let name: String
-        let isConnectable: Bool
-        let discoveredAt: Date
-    }
-    private var connectionCandidates: [ConnectionCandidate] = []
-    private var failureCounts: [String: Int] = [:] // Peripheral UUID -> failures
-    private var lastIsolatedAt: Date? = nil
-    private var dynamicRSSIThreshold: Int = TransportConfig.bleDynamicRSSIThresholdDefault
+    private var connectionScheduler = BLEConnectionScheduler<CBPeripheral>()
 
     // MARK: - Adaptive scanning duty-cycle
     private var scanDutyTimer: DispatchSourceTimer?
@@ -334,7 +319,7 @@ final class BLEService: NSObject {
 
         bleQueue.sync {
             pendingWriteBuffers.removeAll()
-            recentConnectTimeouts.removeAll()
+            connectionScheduler.reset()
         }
         recentDisconnectNotifies.removeAll()
 
@@ -560,6 +545,7 @@ final class BLEService: NSObject {
         // Clear peripheral references (synchronized access to avoid races with BLE callbacks)
         bleQueue.sync {
             linkStateStore.clearAll()
+            connectionScheduler.reset()
             centralSubscriptionRateLimits.removeAll()
         }
         meshTopology.reset()
@@ -1455,125 +1441,36 @@ extension BLEService: CBCentralManagerDelegate {
         let advertisedName = advertisementData[CBAdvertisementDataLocalNameKey] as? String ?? (peripheralID.prefix(6) + "…")
         let isConnectable = (advertisementData[CBAdvertisementDataIsConnectable] as? NSNumber)?.boolValue ?? true
         let rssiValue = RSSI.intValue
-        
-        // Skip if peripheral is not connectable (per advertisement data)
-        guard isConnectable else { return }
 
-        // Skip immediate connect if signal too weak for current conditions; enqueue instead
-        if rssiValue <= dynamicRSSIThreshold {
-            connectionCandidates.append(ConnectionCandidate(peripheral: peripheral, rssi: rssiValue, name: String(advertisedName), isConnectable: isConnectable, discoveredAt: Date()))
-            // Keep list tidy
-            connectionCandidates.sort { (a, b) in
-                if a.rssi != b.rssi { return a.rssi > b.rssi }
-                return a.discoveredAt < b.discoveredAt
-            }
-            if connectionCandidates.count > TransportConfig.bleConnectionCandidatesMax {
-                connectionCandidates.removeLast(connectionCandidates.count - TransportConfig.bleConnectionCandidatesMax)
-            }
-            return
-        }
-        
-        // Budget: limit simultaneous central links (connected + connecting)
-        let currentCentralLinks = linkStateStore.connectedOrConnectingPeripheralCount
-        if currentCentralLinks >= maxCentralLinks {
-            // Enqueue as candidate; we'll attempt later as slots open
-            connectionCandidates.append(ConnectionCandidate(peripheral: peripheral, rssi: rssiValue, name: String(advertisedName), isConnectable: isConnectable, discoveredAt: Date()))
-            // Keep candidate list tidy: prefer stronger RSSI, then recency; cap list
-            connectionCandidates.sort { (a, b) in
-                if a.rssi != b.rssi { return a.rssi > b.rssi }
-                return a.discoveredAt < b.discoveredAt
-            }
-            if connectionCandidates.count > TransportConfig.bleConnectionCandidatesMax {
-                connectionCandidates.removeLast(connectionCandidates.count - TransportConfig.bleConnectionCandidatesMax)
-            }
-            return
-        }
+        let candidate = BLEConnectionCandidate(
+            peripheral: peripheral,
+            peripheralID: peripheralID,
+            rssi: rssiValue,
+            name: String(advertisedName),
+            isConnectable: isConnectable,
+            discoveredAt: Date()
+        )
+        let existingState = linkStateStore.state(forPeripheralID: peripheralID).map(BLEExistingConnectionState.init)
 
-        // Rate limit global connect attempts
-        let sinceLast = Date().timeIntervalSince(lastGlobalConnectAttempt)
-        if sinceLast < connectRateLimitInterval {
-            connectionCandidates.append(ConnectionCandidate(peripheral: peripheral, rssi: rssiValue, name: String(advertisedName), isConnectable: isConnectable, discoveredAt: Date()))
-            connectionCandidates.sort { (a, b) in
-                if a.rssi != b.rssi { return a.rssi > b.rssi }
-                return a.discoveredAt < b.discoveredAt
-            }
-            // Schedule a deferred attempt after rate-limit interval
-            let delay = connectRateLimitInterval - sinceLast + 0.05
+        switch connectionScheduler.handleDiscovery(
+            candidate,
+            connectedOrConnectingCount: linkStateStore.connectedOrConnectingPeripheralCount,
+            existingState: existingState,
+            peripheralState: peripheral.state.connectionSchedulerState,
+            now: candidate.discoveredAt
+        ) {
+        case .ignore, .queued:
+            return
+        case .scheduleRetry(let delay):
             bleQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
                 self?.tryConnectFromQueue()
             }
             return
-        }
-
-        // Check if we already have this peripheral
-        if let state = linkStateStore.state(forPeripheralID: peripheralID) {
-            if state.isConnected || state.isConnecting {
-                return // Already connected or connecting
-            }
-
-            // Add backoff for reconnection attempts
-            if let lastAttempt = state.lastConnectionAttempt {
-                let timeSinceLastAttempt = Date().timeIntervalSince(lastAttempt)
-                if timeSinceLastAttempt < 2.0 {
-                    return // Wait at least 2 seconds between connection attempts
-                }
-            }
-        }
-        
-        // Backoff if this peripheral recently timed out connection within the last 15 seconds
-        if let lastTimeout = recentConnectTimeouts[peripheralID], Date().timeIntervalSince(lastTimeout) < 15 {
-            return
-        }
-
-        // Check peripheral state - but cancel if stale
-        if peripheral.state == .connecting || peripheral.state == .connected {
-            // iOS might have stale state - force disconnect and retry
+        case .cancelStaleConnection:
             central.cancelPeripheralConnection(peripheral)
-            // Will retry on next discovery
             return
-        }
-        
-        // Only log when we're actually attempting connection
-        // Discovered BLE peripheral
-        
-        // Store the peripheral and mark as connecting
-        linkStateStore.beginConnecting(to: peripheral, at: Date())
-        peripheral.delegate = self
-        
-        // Connect to the peripheral with options for faster connection
-        SecureLogger.debug("📱 Connect: \(advertisedName) [RSSI:\(rssiValue)]", category: .session)
-        
-        // Use connection options for faster reconnection
-        let options: [String: Any] = [
-            CBConnectPeripheralOptionNotifyOnConnectionKey: true,
-            CBConnectPeripheralOptionNotifyOnDisconnectionKey: true,
-            CBConnectPeripheralOptionNotifyOnNotificationKey: true
-        ]
-        central.connect(peripheral, options: options)
-        lastGlobalConnectAttempt = Date()
-        
-        // Set a timeout for the connection attempt (slightly longer for reliability)
-        // Use BLE queue to mutate BLE-related state consistently
-        bleQueue.asyncAfter(deadline: .now() + TransportConfig.bleConnectTimeoutSeconds) { [weak self] in
-            guard let self = self,
-                  let state = self.linkStateStore.state(forPeripheralID: peripheralID),
-                  state.isConnecting && !state.isConnected else { return }
-
-            // Double-check actual CBPeripheral state to avoid canceling a just-connected peripheral
-            // This prevents a race where connection completes just as timeout fires
-            guard peripheral.state != .connected else {
-                SecureLogger.debug("⏱️ Timeout fired but peripheral already connected: \(advertisedName)", category: .session)
-                return
-            }
-
-            // Connection timed out - cancel it
-            SecureLogger.debug("⏱️ Timeout: \(advertisedName)", category: .session)
-            central.cancelPeripheralConnection(peripheral)
-            _ = self.linkStateStore.removePeripheral(peripheralID)
-            self.recentConnectTimeouts[peripheralID] = Date()
-            self.failureCounts[peripheralID, default: 0] += 1
-            // Try next candidate if any
-            self.tryConnectFromQueue()
+        case .connectNow:
+            beginCentralConnection(candidate, using: central, logPrefix: "📱 Connect")
         }
     }
     
@@ -1584,8 +1481,7 @@ extension BLEService: CBCentralManagerDelegate {
         linkStateStore.markConnected(peripheral)
         
         // Reset backoff state on success
-        failureCounts[peripheralID] = 0
-        recentConnectTimeouts.removeValue(forKey: peripheralID)
+        connectionScheduler.recordConnectionSuccess(peripheralID: peripheralID)
 
         SecureLogger.debug("✅ Connected: \(peripheral.name ?? "Unknown") [\(peripheralID)]", category: .session)
         
@@ -1603,7 +1499,7 @@ extension BLEService: CBCentralManagerDelegate {
 
         // If disconnect carried an error (often timeout), apply short backoff to avoid thrash
         if error != nil {
-            recentConnectTimeouts[peripheralID] = Date()
+            connectionScheduler.recordDisconnectError(peripheralID: peripheralID, at: Date())
         }
         
         // Clean up references and peer mappings
@@ -1653,63 +1549,68 @@ extension BLEService: CBCentralManagerDelegate {
         _ = linkStateStore.removePeripheral(peripheralID)
         
         SecureLogger.error("❌ Failed to connect to peripheral: \(peripheral.name ?? "Unknown") [\(peripheralID)] - Error: \(error?.localizedDescription ?? "Unknown")", category: .session)
-        failureCounts[peripheralID, default: 0] += 1
+        connectionScheduler.recordConnectionFailure(peripheralID: peripheralID)
         // Try next candidate
         bleQueue.async { [weak self] in self?.tryConnectFromQueue() }
     }
 }
 
 // MARK: - Connection scheduling helpers
+private extension BLEExistingConnectionState {
+    init(_ state: BLEPeripheralLinkState) {
+        self.init(
+            isConnecting: state.isConnecting,
+            isConnected: state.isConnected,
+            lastConnectionAttempt: state.lastConnectionAttempt
+        )
+    }
+}
+
+private extension CBPeripheralState {
+    var connectionSchedulerState: BLEPeripheralConnectionState {
+        switch self {
+        case .connected:
+            return .connected
+        case .connecting:
+            return .connecting
+        case .disconnected, .disconnecting:
+            return .disconnected
+        @unknown default:
+            return .disconnected
+        }
+    }
+}
+
 extension BLEService {
     private func tryConnectFromQueue() {
         guard let central = centralManager, central.state == .poweredOn else { return }
-        // Check budget and rate limit
-        let current = linkStateStore.connectedOrConnectingPeripheralCount
-        guard current < maxCentralLinks else { return }
-        let delta = Date().timeIntervalSince(lastGlobalConnectAttempt)
-        guard delta >= connectRateLimitInterval else {
-            let delay = connectRateLimitInterval - delta + 0.05
+
+        let decision = connectionScheduler.nextCandidate(
+            connectedOrConnectingCount: linkStateStore.connectedOrConnectingPeripheralCount,
+            isAlreadyConnectingOrConnected: { [linkStateStore] peripheralID in
+                let state = linkStateStore.state(forPeripheralID: peripheralID)
+                return state?.isConnected == true || state?.isConnecting == true
+            },
+            now: Date()
+        )
+
+        switch decision {
+        case .none:
+            return
+        case .retryAfter(let delay):
             bleQueue.asyncAfter(deadline: .now() + delay) { [weak self] in self?.tryConnectFromQueue() }
-            return
+        case .connect(let candidate):
+            beginCentralConnection(candidate, using: central, logPrefix: "⏩ Queue connect")
         }
-        // Pull best candidate by composite score
-        guard !connectionCandidates.isEmpty else { return }
-        // compute score: connectable> RSSI > recency, with backoff penalty
-        func score(_ c: ConnectionCandidate) -> Int {
-            let uuid = c.peripheral.identifier.uuidString
-            // Penalty if recently timed out (exponential)
-            let fails = failureCounts[uuid] ?? 0
-            let penalty = min(20, (1 << min(4, fails))) // 1,2,4,8,16 cap 16-20
-            let timeoutRecent = recentConnectTimeouts[uuid]
-            let timeoutBias = (timeoutRecent != nil && Date().timeIntervalSince(timeoutRecent!) < 60) ? 10 : 0
-            let base = (c.isConnectable ? 1000 : 0) + (c.rssi + 100) * 2
-            let rec = -Int(Date().timeIntervalSince(c.discoveredAt) * 10)
-            return base + rec - penalty - timeoutBias
-        }
-        connectionCandidates.sort { score($0) > score($1) }
-        let candidate = connectionCandidates.removeFirst()
-        guard candidate.isConnectable else { return }
+    }
+
+    private func beginCentralConnection(
+        _ candidate: BLEConnectionCandidate<CBPeripheral>,
+        using central: CBCentralManager,
+        logPrefix: String
+    ) {
         let peripheral = candidate.peripheral
-        let peripheralID = peripheral.identifier.uuidString
-        // Weak-link cooldown: if we recently timed out and RSSI is very weak, delay retries
-        if let lastTO = recentConnectTimeouts[peripheralID] {
-            let elapsed = Date().timeIntervalSince(lastTO)
-            if elapsed < TransportConfig.bleWeakLinkCooldownSeconds && candidate.rssi <= TransportConfig.bleWeakLinkRSSICutoff {
-                // Requeue the candidate and try again later
-                connectionCandidates.append(candidate)
-                let remaining = TransportConfig.bleWeakLinkCooldownSeconds - elapsed
-                let delay = min(max(2.0, remaining), 15.0)
-                bleQueue.asyncAfter(deadline: .now() + delay) { [weak self] in self?.tryConnectFromQueue() }
-                return
-            }
-        }
-        let existingState = linkStateStore.state(forPeripheralID: peripheralID)
-        if existingState?.isConnected == true || existingState?.isConnecting == true {
-            // Already in progress; skip
-            bleQueue.async { [weak self] in self?.tryConnectFromQueue() }
-            return
-        }
-        // Initiate connection
+        let peripheralID = candidate.peripheralID
         linkStateStore.beginConnecting(to: peripheral, at: Date())
         peripheral.delegate = self
         let options: [String: Any] = [
@@ -1718,8 +1619,25 @@ extension BLEService {
             CBConnectPeripheralOptionNotifyOnNotificationKey: true
         ]
         central.connect(peripheral, options: options)
-        lastGlobalConnectAttempt = Date()
-        SecureLogger.debug("⏩ Queue connect: \(candidate.name) [RSSI:\(candidate.rssi)]", category: .session)
+        connectionScheduler.recordConnectionAttempt(at: Date())
+        SecureLogger.debug("\(logPrefix): \(candidate.name) [RSSI:\(candidate.rssi)]", category: .session)
+
+        bleQueue.asyncAfter(deadline: .now() + TransportConfig.bleConnectTimeoutSeconds) { [weak self] in
+            guard let self = self,
+                  let state = self.linkStateStore.state(forPeripheralID: peripheralID),
+                  state.isConnecting && !state.isConnected else { return }
+
+            guard peripheral.state != .connected else {
+                SecureLogger.debug("⏱️ Timeout fired but peripheral already connected: \(candidate.name)", category: .session)
+                return
+            }
+
+            SecureLogger.debug("⏱️ Timeout: \(candidate.name)", category: .session)
+            central.cancelPeripheralConnection(peripheral)
+            _ = self.linkStateStore.removePeripheral(peripheralID)
+            self.connectionScheduler.recordConnectionTimeout(peripheralID: peripheralID, at: Date())
+            self.tryConnectFromQueue()
+        }
     }
 }
 
@@ -2461,7 +2379,7 @@ extension BLEService {
             (
                 connected: peers.values.filter { $0.isConnected }.count,
                 known: peers.count,
-                candidates: connectionCandidates.count
+                candidates: connectionScheduler.candidateCount
             )
         }
 
@@ -3924,7 +3842,7 @@ extension BLEService {
 
         // Clean old connection timeout backoff entries (> window)
         let timeoutCutoff = now.addingTimeInterval(-TransportConfig.bleConnectTimeoutBackoffWindowSeconds)
-        recentConnectTimeouts = recentConnectTimeouts.filter { $0.value >= timeoutCutoff }
+        connectionScheduler.pruneConnectionTimeouts(before: timeoutCutoff)
 
         // Clean up stale scheduled relays that somehow persisted (> 2s)
         collectionsQueue.async(flags: .barrier) { [weak self] in
@@ -4019,32 +3937,10 @@ extension BLEService {
     }
 
     private func updateRSSIThreshold(connectedCount: Int) {
-        // Adjust RSSI threshold based on connectivity, candidate pressure, and failures
-        if connectedCount == 0 {
-            // Isolated: relax floor slowly to hunt for distant nodes
-            if lastIsolatedAt == nil { lastIsolatedAt = Date() }
-            let iso = lastIsolatedAt ?? Date()
-            let elapsed = Date().timeIntervalSince(iso)
-            if elapsed > TransportConfig.bleIsolationRelaxThresholdSeconds {
-                dynamicRSSIThreshold = TransportConfig.bleRSSIIsolatedRelaxed
-            } else {
-                dynamicRSSIThreshold = TransportConfig.bleRSSIIsolatedBase
-            }
-            return
-        }
-        lastIsolatedAt = nil
-        // Base threshold when connected
-        var threshold = TransportConfig.bleDynamicRSSIThresholdDefault
-        // If we're at budget or queue is large, prefer closer peers
-        let linkCount = linkStateStore.connectedOrConnectingPeripheralCount
-        if linkCount >= maxCentralLinks || connectionCandidates.count > TransportConfig.bleConnectionCandidatesMax {
-            threshold = TransportConfig.bleRSSIConnectedThreshold
-        }
-        // If we have many recent timeouts, raise further
-        let recentTimeouts = recentConnectTimeouts.filter { Date().timeIntervalSince($0.value) < TransportConfig.bleRecentTimeoutWindowSeconds }.count
-        if recentTimeouts >= TransportConfig.bleRecentTimeoutCountThreshold {
-            threshold = max(threshold, TransportConfig.bleRSSIHighTimeoutThreshold)
-        }
-        dynamicRSSIThreshold = threshold
+        connectionScheduler.updateRSSIThreshold(
+            connectedCount: connectedCount,
+            connectedOrConnectingLinkCount: linkStateStore.connectedOrConnectingPeripheralCount,
+            now: Date()
+        )
     }
 }
