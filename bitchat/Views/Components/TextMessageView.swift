@@ -22,7 +22,7 @@ struct TextMessageView: View {
             let cashuLinks = message.content.extractCashuLinks()
             let lightningLinks = message.content.extractLightningLinks()
             HStack(alignment: .top, spacing: 0) {
-                let isLong = (message.content.count > TransportConfig.uiLongMessageLengthThreshold || message.content.hasVeryLongToken(threshold: TransportConfig.uiVeryLongTokenThreshold)) && cashuLinks.isEmpty
+                let isLong = message.content.isLongForDisplay()
                 let isExpanded = expandedMessageIDs.contains(message.id)
                 Text(conversationUIModel.formatMessage(message, colorScheme: colorScheme))
                     .fixedSize(horizontal: false, vertical: true)
@@ -38,7 +38,7 @@ struct TextMessageView: View {
             }
             
             // Expand/Collapse for very long messages
-            if (message.content.count > TransportConfig.uiLongMessageLengthThreshold || message.content.hasVeryLongToken(threshold: TransportConfig.uiVeryLongTokenThreshold)) && cashuLinks.isEmpty {
+            if message.content.isLongForDisplay() {
                 let isExpanded = expandedMessageIDs.contains(message.id)
                 let labelKey = isExpanded ? LocalizedStringKey("content.message.show_less") : LocalizedStringKey("content.message.show_more")
                 Button(labelKey) {

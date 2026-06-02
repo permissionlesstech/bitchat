@@ -606,6 +606,25 @@ struct ChatViewModelFormattingTests {
 
         #expect(String(header.characters) == "<@Alice#a1b2> ")
     }
+
+    @Test @MainActor
+    func formatMessageAsText_longCashuMessageUsesPlainFastPath() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let cashu = "cashuA" + String(repeating: "a", count: 40)
+        let longContent = "hi @bob " + cashu + " " + String(repeating: "x", count: 4_100)
+        let message = BitchatMessage(
+            id: "fmt-long-cashu",
+            sender: "Alice#a1b2",
+            content: longContent,
+            timestamp: Date(timeIntervalSince1970: 1_700_010_123),
+            isRelay: false,
+            senderPeerID: PeerID(str: "00000000000000b3")
+        )
+
+        let formatted = viewModel.formatMessageAsText(message, colorScheme: .light)
+
+        #expect(String(formatted.characters) == "<@Alice#a1b2> \(longContent) [\(message.formattedTimestamp)]")
+    }
 }
 
 // MARK: - Verification Tests
