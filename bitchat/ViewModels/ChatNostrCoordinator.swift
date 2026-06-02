@@ -93,6 +93,10 @@ final class ChatNostrCoordinator {
         let hasTeleportTag = event.tags.contains { tag in
             tag.count >= 2 && tag[0].lowercased() == "t" && tag[1].lowercased() == "teleport"
         }
+        let content = event.content.trimmed
+        if hasTeleportTag && content.isEmpty {
+            return
+        }
 
         if hasTeleportTag {
             let key = event.pubkey.lowercased()
@@ -111,7 +115,6 @@ final class ChatNostrCoordinator {
         }
 
         let senderName = viewModel.displayNameForNostrPubkey(event.pubkey)
-        let content = event.content.trimmed
         let rawTs = Date(timeIntervalSince1970: TimeInterval(event.created_at))
         let timestamp = min(rawTs, Date())
         let mentions = viewModel.parseMentions(from: content)
@@ -272,6 +275,10 @@ final class ChatNostrCoordinator {
         let hasTeleportTag = event.tags.contains { tag in
             tag.count >= 2 && tag[0].lowercased() == "t" && tag[1].lowercased() == "teleport"
         }
+        let content = event.content
+        if hasTeleportTag && content.trimmed.isEmpty {
+            return
+        }
 
         let isSelf: Bool = {
             if let gh = viewModel.currentGeohash,
@@ -314,14 +321,6 @@ final class ChatNostrCoordinator {
         }
 
         let senderName = viewModel.displayNameForNostrPubkey(event.pubkey)
-        let content = event.content
-
-        if let teleTag = event.tags.first(where: { $0.first == "t" }),
-           teleTag.count >= 2,
-           teleTag[1] == "teleport",
-           content.trimmed.isEmpty {
-            return
-        }
 
         let rawTs = Date(timeIntervalSince1970: TimeInterval(event.created_at))
         let mentions = viewModel.parseMentions(from: content)

@@ -17,6 +17,7 @@ enum TransportConfig {
     static let privateChatCap: Int = 1337
     static let meshTimelineCap: Int = 1337
     static let geoTimelineCap: Int = 1337
+    static let geoTeleportedParticipantsCap: Int = 1337
     static let contentLRUCap: Int = 2000
 
     // Timers

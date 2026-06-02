@@ -125,6 +125,26 @@ struct AppArchitectureTests {
         #expect(store.teleportedGeo.isEmpty)
     }
 
+
+    @Test("LocationPresenceStore bounds and prunes teleported geohash participants")
+    @MainActor
+    func locationPresenceStoreBoundsTeleportedParticipants() {
+        let store = LocationPresenceStore(teleportedGeoCapacity: 2)
+
+        store.setCurrentGeohash("u4pruy")
+        store.markTeleported("AAAAAA")
+        store.markTeleported("BBBBBB")
+        store.markTeleported("CCCCCC")
+
+        #expect(store.teleportedGeo == Set(["bbbbbb", "cccccc"]))
+
+        store.retainTeleportedGeo(keeping: Set(["CCCCCC"]))
+        #expect(store.teleportedGeo == Set(["cccccc"]))
+
+        store.setCurrentGeohash("u4pruz")
+        #expect(store.teleportedGeo.isEmpty)
+    }
+
     @Test("PeerHandle equality and hashing use the canonical identity only")
     func peerHandleEqualityUsesCanonicalIdentity() {
         let first = PeerHandle(

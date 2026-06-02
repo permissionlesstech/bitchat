@@ -121,6 +121,17 @@ private extension ChatViewModelBootstrapper {
                 viewModel?.objectWillChange.send()
             }
             .store(in: &viewModel.cancellables)
+
+        viewModel.participantTracker.$visiblePeople
+            .receive(on: DispatchQueue.main)
+            .sink { [weak viewModel] people in
+                Task { @MainActor [weak viewModel] in
+                    viewModel?.locationPresenceStore.retainTeleportedGeo(
+                        keeping: Set(people.map { $0.id })
+                    )
+                }
+            }
+            .store(in: &viewModel.cancellables)
     }
 
     func loadPersistedViewState() {
