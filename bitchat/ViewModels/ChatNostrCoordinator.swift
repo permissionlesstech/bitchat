@@ -848,7 +848,7 @@ private extension ChatNostrCoordinator {
         let maxBytes = FileTransferLimits.maxFramedFileBytes
         let maxEncoded = ((maxBytes + 2) / 3) * 4
         guard encoded.count <= maxEncoded else { return nil }
-        guard let packetData = ChatViewModel.base64URLDecode(encoded),
+        guard let packetData = Base64URLCoding.decode(encoded),
               packetData.count <= maxBytes
         else {
             return nil

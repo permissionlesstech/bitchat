@@ -8,10 +8,6 @@ import UIKit
 
 @MainActor
 final class ChatMediaTransferCoordinator {
-    private enum MediaSendError: Error {
-        case encodingFailed
-    }
-
     private unowned let viewModel: ChatViewModel
 
     private(set) var transferIdToMessageIDs: [String: [String]] = [:]
@@ -40,26 +36,7 @@ final class ChatMediaTransferCoordinator {
         Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
             do {
-                let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-                guard let fileSize = attributes[.size] as? Int,
-                      fileSize <= FileTransferLimits.maxVoiceNoteBytes else {
-                    let size = (attributes[.size] as? Int) ?? 0
-                    SecureLogger.warning("Voice note exceeds size limit (\(size) bytes)", category: .session)
-                    try? FileManager.default.removeItem(at: url)
-                    await MainActor.run {
-                        self.handleMediaSendFailure(messageID: messageID, reason: "Voice note too large")
-                    }
-                    return
-                }
-
-                let data = try Data(contentsOf: url)
-                let packet = BitchatFilePacket(
-                    fileName: url.lastPathComponent,
-                    fileSize: UInt64(data.count),
-                    mimeType: "audio/mp4",
-                    content: data
-                )
-                guard packet.encode() != nil else { throw MediaSendError.encodingFailed }
+                let packet = try ChatMediaPreparation.prepareVoiceNotePacket(at: url)
 
                 await MainActor.run {
                     self.registerTransfer(transferId: transferId, messageID: messageID)
@@ -68,6 +45,12 @@ final class ChatMediaTransferCoordinator {
                     } else {
                         self.viewModel.meshService.sendFileBroadcast(packet, transferId: transferId)
                     }
+                }
+            } catch ChatMediaPreparationError.voiceNoteTooLarge(let size) {
+                SecureLogger.warning("Voice note exceeds size limit (\(size) bytes)", category: .session)
+                try? FileManager.default.removeItem(at: url)
+                await MainActor.run {
+                    self.handleMediaSendFailure(messageID: messageID, reason: "Voice note too large")
                 }
             } catch {
                 SecureLogger.error("Voice note send failed: \(error)", category: .session)
@@ -120,51 +103,42 @@ final class ChatMediaTransferCoordinator {
 
         let targetPeer = viewModel.selectedPrivateChatPeer
 
+        do {
+            try ImageUtils.validateImageSource(at: sourceURL)
+        } catch {
+            SecureLogger.error("Image send preparation failed: \(error)", category: .session)
+            viewModel.addSystemMessage("Failed to prepare image for sending.")
+            return
+        }
+
         Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
-            var processedURL: URL?
             do {
-                let outputURL = try ImageUtils.processImage(at: sourceURL)
-                processedURL = outputURL
-                let data = try Data(contentsOf: outputURL)
-                guard data.count <= FileTransferLimits.maxImageBytes else {
-                    SecureLogger.warning("Processed image exceeds size limit (\(data.count) bytes)", category: .session)
-                    await MainActor.run {
-                        self.viewModel.addSystemMessage("Image is too large to send.")
-                    }
-                    try? FileManager.default.removeItem(at: outputURL)
-                    return
-                }
-
-                let packet = BitchatFilePacket(
-                    fileName: outputURL.lastPathComponent,
-                    fileSize: UInt64(data.count),
-                    mimeType: "image/jpeg",
-                    content: data
-                )
-                guard packet.encode() != nil else { throw MediaSendError.encodingFailed }
+                let prepared = try ChatMediaPreparation.prepareImagePacket(from: sourceURL)
 
                 await MainActor.run {
                     let message = self.enqueueMediaMessage(
-                        content: "\(MimeType.Category.image.messagePrefix)\(outputURL.lastPathComponent)",
+                        content: "\(MimeType.Category.image.messagePrefix)\(prepared.outputURL.lastPathComponent)",
                         targetPeer: targetPeer
                     )
                     let messageID = message.id
                     let transferId = self.makeTransferID(messageID: messageID)
                     self.registerTransfer(transferId: transferId, messageID: messageID)
                     if let peerID = targetPeer {
-                        self.viewModel.meshService.sendFilePrivate(packet, to: peerID, transferId: transferId)
+                        self.viewModel.meshService.sendFilePrivate(prepared.packet, to: peerID, transferId: transferId)
                     } else {
-                        self.viewModel.meshService.sendFileBroadcast(packet, transferId: transferId)
+                        self.viewModel.meshService.sendFileBroadcast(prepared.packet, transferId: transferId)
                     }
+                }
+            } catch ChatMediaPreparationError.imageTooLarge(let size) {
+                SecureLogger.warning("Processed image exceeds size limit (\(size) bytes)", category: .session)
+                await MainActor.run {
+                    self.viewModel.addSystemMessage("Image is too large to send.")
                 }
             } catch {
                 SecureLogger.error("Image send preparation failed: \(error)", category: .session)
                 await MainActor.run {
                     self.viewModel.addSystemMessage("Failed to prepare image for sending.")
-                }
-                if let processedURL {
-                    try? FileManager.default.removeItem(at: processedURL)
                 }
             }
         }

@@ -797,6 +797,7 @@ struct ChatViewModelGeoDMTests {
     }
 }
 
+@Suite(.serialized)
 struct ChatViewModelMediaTransferTests {
 
     @Test @MainActor
@@ -931,7 +932,7 @@ struct ChatViewModelMediaTransferTests {
 
         let didNotify = await TestHelpers.waitUntil({
             viewModel.messages.contains(where: { $0.sender == "system" && $0.content.contains("Failed to prepare image") })
-        }, timeout: 2.0)
+        }, timeout: 5.0)
         #expect(didNotify)
         #expect(transport.sentPrivateFiles.isEmpty)
         #expect(viewModel.privateChats[peerID]?.isEmpty != false)

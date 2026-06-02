@@ -303,7 +303,7 @@ struct NostrProtocol {
         combined.append(nonce24)
         combined.append(sealed.ciphertext)
         combined.append(sealed.tag)
-        return "v2:" + base64URLEncode(combined)
+        return "v2:" + Base64URLCoding.encode(combined)
     }
     
     private static func decrypt(
@@ -314,7 +314,7 @@ struct NostrProtocol {
         // Expect NIP-44 v2 format
         guard ciphertext.hasPrefix("v2:") else { throw NostrError.invalidCiphertext }
         let encoded = String(ciphertext.dropFirst(3))
-        guard let data = base64URLDecode(encoded),
+        guard let data = Base64URLCoding.decode(encoded),
               data.count > (24 + 16),
               let senderPubkeyData = Data(hexString: senderPubkey) else {
             throw NostrError.invalidCiphertext
@@ -580,24 +580,9 @@ enum NostrError: Error {
     case encryptionFailed
 }
 
-// MARK: - NIP-44 v2 helpers (XChaCha20-Poly1305 + base64url)
+// MARK: - NIP-44 v2 helpers (XChaCha20-Poly1305)
 
 private extension NostrProtocol {
-    static func base64URLEncode(_ data: Data) -> String {
-        return data.base64EncodedString()
-            .replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "=", with: "")
-    }
-
-    static func base64URLDecode(_ s: String) -> Data? {
-        var str = s
-        let pad = (4 - (str.count % 4)) % 4
-        if pad > 0 { str += String(repeating: "=", count: pad) }
-        str = str.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
-        return Data(base64Encoded: str)
-    }
-
     static func deriveNIP44V2Key(from sharedSecretData: Data) throws -> Data {
         let derivedKey = HKDF<CryptoKit.SHA256>.deriveKey(
             inputKeyMaterial: SymmetricKey(data: sharedSecretData),

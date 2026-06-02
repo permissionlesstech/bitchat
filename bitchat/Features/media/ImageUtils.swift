@@ -15,17 +15,10 @@ enum ImageUtilsError: Error {
 enum ImageUtils {
     private static let compressionQuality: CGFloat = 0.82
     private static let targetImageBytes: Int = 45_000
+    private static let maxSourceImageBytes: Int = 10 * 1024 * 1024
 
     static func processImage(at url: URL, maxDimension: CGFloat = 448, outputDirectory: URL? = nil) throws -> URL {
-        // Security H1: Check file size BEFORE reading into memory
-        let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
-        guard let fileSize = attrs[.size] as? Int else {
-            throw ImageUtilsError.invalidImage
-        }
-        // Allow up to 10MB source images (will be scaled down)
-        guard fileSize <= 10 * 1024 * 1024 else {
-            throw ImageUtilsError.invalidImage
-        }
+        try validateImageSource(at: url)
 
         let data = try Data(contentsOf: url)
         #if os(iOS)
@@ -35,6 +28,22 @@ enum ImageUtils {
         guard let image = NSImage(data: data) else { throw ImageUtilsError.invalidImage }
         return try processImage(image, maxDimension: maxDimension, outputDirectory: outputDirectory)
         #endif
+    }
+
+    static func validateImageSource(at url: URL) throws {
+        // Security H1: Check file size BEFORE reading into memory.
+        let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
+        guard let fileSize = attrs[.size] as? Int,
+              fileSize > 0,
+              fileSize <= maxSourceImageBytes else {
+            throw ImageUtilsError.invalidImage
+        }
+
+        let options = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, options),
+              CGImageSourceGetType(source) != nil else {
+            throw ImageUtilsError.invalidImage
+        }
     }
 
     #if os(iOS)

@@ -34,6 +34,52 @@ final class ChatPeerIdentityCoordinator {
     }
 
     @MainActor
+    func hasUnreadMessages(for peerID: PeerID) -> Bool {
+        var noiseKeyPeerID: PeerID?
+        var nostrPeerID: PeerID?
+
+        if let peer = viewModel.unifiedPeerService.getPeer(by: peerID) {
+            noiseKeyPeerID = PeerID(hexData: peer.noisePublicKey)
+            if let nostrHex = peer.nostrPublicKey {
+                nostrPeerID = PeerID(nostr_: nostrHex)
+            }
+        }
+
+        let context = ChatUnreadPeerContext(
+            peerID: peerID,
+            noiseKeyPeerID: noiseKeyPeerID,
+            nostrPeerID: nostrPeerID,
+            nickname: viewModel.meshService.peerNickname(peerID: peerID)
+        )
+
+        return ChatUnreadStateResolver.hasUnreadMessages(
+            for: context,
+            unreadPrivateMessages: viewModel.unreadPrivateMessages,
+            privateChats: viewModel.privateChats
+        )
+    }
+
+    @MainActor
+    func toggleFavorite(peerID: PeerID) {
+        if let noisePublicKey = peerID.noiseKey {
+            toggleFavoriteForNoiseKey(noisePublicKey, peerID: peerID)
+            return
+        }
+
+        viewModel.unifiedPeerService.toggleFavorite(peerID)
+        viewModel.objectWillChange.send()
+    }
+
+    @MainActor
+    func isFavorite(peerID: PeerID) -> Bool {
+        if let noisePublicKey = peerID.noiseKey {
+            return FavoritesPersistenceService.shared.getFavoriteStatus(for: noisePublicKey)?.isFavorite ?? false
+        }
+
+        return viewModel.unifiedPeerService.getPeer(by: peerID)?.isFavorite ?? false
+    }
+
+    @MainActor
     func updatePrivateChatPeerIfNeeded() {
         guard let chatFingerprint = viewModel.selectedPrivateChatFingerprint,
               let currentPeerID = currentPeerID(forFingerprint: chatFingerprint) else {
@@ -375,5 +421,43 @@ private extension ChatPeerIdentityCoordinator {
             return .noiseVerified
         }
         return .noiseSecured
+    }
+
+    @MainActor
+    func toggleFavoriteForNoiseKey(_ noisePublicKey: Data, peerID: PeerID) {
+        if let ephemeralID = viewModel.unifiedPeerService.peers.first(where: { $0.noisePublicKey == noisePublicKey })?.peerID {
+            viewModel.unifiedPeerService.toggleFavorite(ephemeralID)
+            viewModel.objectWillChange.send()
+            return
+        }
+
+        let currentStatus = FavoritesPersistenceService.shared.getFavoriteStatus(for: noisePublicKey)
+        let fallbackNickname = viewModel.privateChats[peerID]?.first { $0.senderPeerID == peerID }?.sender
+        let plan = ChatFavoriteTogglePolicy.plan(
+            currentStatus: currentStatus.map(ChatFavoriteStatusSnapshot.init),
+            fallbackNickname: fallbackNickname,
+            bridgedNostrKey: viewModel.idBridge.getNostrPublicKey(for: noisePublicKey)
+        )
+
+        switch plan.persistenceAction {
+        case .add(let nickname, let nostrKey):
+            FavoritesPersistenceService.shared.addFavorite(
+                peerNoisePublicKey: noisePublicKey,
+                peerNostrPublicKey: nostrKey,
+                peerNickname: nickname
+            )
+
+        case .remove:
+            FavoritesPersistenceService.shared.removeFavorite(peerNoisePublicKey: noisePublicKey)
+        }
+
+        viewModel.objectWillChange.send()
+
+        if case .send(let isFavorite) = plan.notification {
+            viewModel.sendFavoriteNotificationViaNostr(
+                noisePublicKey: noisePublicKey,
+                isFavorite: isFavorite
+            )
+        }
     }
 }
