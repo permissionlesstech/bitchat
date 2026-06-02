@@ -129,6 +129,12 @@ enum TransportConfig {
     static let nostrGeohashSampleLimit: Int = 100
     static let nostrDMSubscribeLookbackSeconds: TimeInterval = 86400
 
+    // Nostr inbound event safety limits
+    static let nostrMaxInboundMessageBytes: Int = 256 * 1024
+    static let nostrMaxEventTags: Int = 64
+    static let nostrMaxEventTagValues: Int = 16
+    static let nostrMaxEventTagValueBytes: Int = 1024
+
     // Nostr helpers
     static let nostrShortKeyDisplayLength: Int = 8
     static let nostrConvKeyPrefixLength: Int = 16

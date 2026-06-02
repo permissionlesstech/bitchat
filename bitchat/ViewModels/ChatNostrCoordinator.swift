@@ -262,8 +262,10 @@ final class ChatNostrCoordinator {
         if viewModel.deduplicationService.hasProcessedNostrEvent(event.id) { return }
         viewModel.deduplicationService.recordNostrEvent(event.id)
 
-        let tagSummary = event.tags.map { "[" + $0.joined(separator: ",") + "]" }.joined(separator: ",")
-        SecureLogger.debug("GeoTeleport: recv pub=\(event.pubkey.prefix(8))… tags=\(tagSummary)", category: .session)
+        SecureLogger.debug(
+            "GeoTeleport: recv pub=\(event.pubkey.prefix(8))… tagCount=\(event.tags.count)",
+            category: .session
+        )
 
         if viewModel.identityManager.isNostrBlocked(pubkeyHexLowercased: event.pubkey) {
             return
