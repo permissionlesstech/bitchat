@@ -18,12 +18,17 @@ private func makeTestableViewModel() -> (viewModel: ChatViewModel, transport: Mo
     let idBridge = NostrIdentityBridge(keychain: keychainHelper)
     let identityManager = MockIdentityManager(keychain)
     let transport = MockTransport()
+    let torLifecycle = ChatViewModelTorLifecycle(
+        torEnforced: { true },
+        isAutoStartAllowed: { false }
+    )
 
     let viewModel = ChatViewModel(
         keychain: keychain,
         idBridge: idBridge,
         identityManager: identityManager,
-        transport: transport
+        transport: transport,
+        torLifecycle: torLifecycle
     )
 
     return (viewModel, transport)

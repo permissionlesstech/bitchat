@@ -90,6 +90,16 @@ import UIKit
 #endif
 import UniformTypeIdentifiers
 
+struct ChatViewModelTorLifecycle {
+    var torEnforced: @MainActor () -> Bool
+    var isAutoStartAllowed: @MainActor () -> Bool
+
+    static let live = ChatViewModelTorLifecycle(
+        torEnforced: { TorManager.shared.torEnforced },
+        isAutoStartAllowed: { TorManager.shared.isAutoStartAllowed() }
+    )
+}
+
 /// Manages the application state and business logic for BitChat.
 /// Acts as the primary coordinator between UI components and backend services,
 /// implementing the BitchatDelegate protocol to handle network events.
@@ -268,6 +278,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
     let idBridge: NostrIdentityBridge
     let identityManager: SecureIdentityStateManagerProtocol
     let ndrService: NdrNostrService
+    let torLifecycle: ChatViewModelTorLifecycle
     
     var nostrRelayManager: NostrRelayManager?
     private let userDefaults = UserDefaults.standard
@@ -397,14 +408,16 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
         keychain: KeychainManagerProtocol,
         idBridge: NostrIdentityBridge,
         identityManager: SecureIdentityStateManagerProtocol,
-        ndrService: NdrNostrService? = nil
+        ndrService: NdrNostrService? = nil,
+        torLifecycle: ChatViewModelTorLifecycle = .live
     ) {
         self.init(
             keychain: keychain,
             idBridge: idBridge,
             identityManager: identityManager,
             transport: BLEService(keychain: keychain, idBridge: idBridge, identityManager: identityManager),
-            ndrService: ndrService
+            ndrService: ndrService,
+            torLifecycle: torLifecycle
         )
     }
 
@@ -416,13 +429,15 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
         idBridge: NostrIdentityBridge,
         identityManager: SecureIdentityStateManagerProtocol,
         transport: Transport,
-        ndrService: NdrNostrService? = nil
+        ndrService: NdrNostrService? = nil,
+        torLifecycle: ChatViewModelTorLifecycle = .live
     ) {
         let resolvedNdrService = ndrService ?? NdrNostrService.shared
         self.keychain = keychain
         self.idBridge = idBridge
         self.identityManager = identityManager
         self.ndrService = resolvedNdrService
+        self.torLifecycle = torLifecycle
         self.meshService = transport
         self.publicMessagePipeline = PublicMessagePipeline()
         
@@ -502,12 +517,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, CommandContextProv
         }
 
         // Announce Tor status (geohash-only; do not show in mesh chat). Only when auto-start is allowed.
-        if TorManager.shared.torEnforced && !torStatusAnnounced && TorManager.shared.isAutoStartAllowed() {
+        if torLifecycle.torEnforced() && !torStatusAnnounced && torLifecycle.isAutoStartAllowed() {
             torStatusAnnounced = true
             addGeohashOnlySystemMessage(
                 String(localized: "system.tor.starting", comment: "System message when Tor is starting")
             )
-        } else if !TorManager.shared.torEnforced && !torStatusAnnounced {
+        } else if !torLifecycle.torEnforced() && !torStatusAnnounced {
             torStatusAnnounced = true
             addGeohashOnlySystemMessage(
                 String(localized: "system.tor.dev_bypass", comment: "System message when Tor bypass is enabled in development")

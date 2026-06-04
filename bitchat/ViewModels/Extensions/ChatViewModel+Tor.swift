@@ -15,7 +15,7 @@ extension ChatViewModel {
     
     @objc func handleTorWillStart() {
         Task { @MainActor in
-            if !self.torStatusAnnounced && TorManager.shared.torEnforced {
+            if !self.torStatusAnnounced && self.torLifecycle.torEnforced() {
                 self.torStatusAnnounced = true
                 // Post only in geohash channels (queue if not active)
                 self.addGeohashOnlySystemMessage(
@@ -44,7 +44,7 @@ extension ChatViewModel {
                     String(localized: "system.tor.restarted", comment: "System message when Tor has restarted")
                 )
                 self.torRestartPending = false
-            } else if TorManager.shared.torEnforced && !self.torInitialReadyAnnounced {
+            } else if self.torLifecycle.torEnforced() && !self.torInitialReadyAnnounced {
                 // Initial start completed
                 self.addGeohashOnlySystemMessage(
                     String(localized: "system.tor.started", comment: "System message when Tor has started")
