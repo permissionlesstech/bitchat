@@ -3,14 +3,21 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PACKAGE_DIR="$SCRIPT_DIR"
-SOURCE_DIR="${1:-${NDR_SOURCE_DIR:-$HOME/src/nostr-double-ratchet}}"
-RUST_ROOT="$SOURCE_DIR/rust"
+SOURCE_DIR="${1:-${NDR_SOURCE_DIR:-${ICP_SOURCE_DIR:-$HOME/src/iris-chat-rs}}}"
+CRATE_DIR="$SOURCE_DIR/protocol-ffi"
+CRATE_MANIFEST="$CRATE_DIR/Cargo.toml"
+BINDGEN_MANIFEST="$SOURCE_DIR/core/uniffi-bindgen/Cargo.toml"
 
 MACOS_MIN="${MACOSX_DEPLOYMENT_TARGET:-13.0}"
 IOS_MIN="${IPHONEOS_DEPLOYMENT_TARGET:-16.0}"
 
-if [[ ! -d "$RUST_ROOT" ]]; then
-    echo "error: expected nostr-double-ratchet checkout at $SOURCE_DIR" >&2
+if [[ ! -f "$CRATE_MANIFEST" ]]; then
+    echo "error: expected iris-chat-rs protocol-ffi crate at $CRATE_MANIFEST" >&2
+    exit 1
+fi
+
+if [[ ! -f "$BINDGEN_MANIFEST" ]]; then
+    echo "error: expected UniFFI bindgen helper at $BINDGEN_MANIFEST" >&2
     exit 1
 fi
 
@@ -27,20 +34,20 @@ trap cleanup EXIT
 
 mkdir -p "$BINDINGS_DIR" "$HEADERS_DIR"
 
-echo "==> Building ndr-ffi from $SOURCE_DIR"
+echo "==> Building ndr_ffi compatibility artifacts from $CRATE_DIR"
 echo "    macOS minimum: $MACOS_MIN"
 echo "    iOS minimum:   $IOS_MIN"
 
-cd "$RUST_ROOT"
+cd "$CRATE_DIR"
 
 echo "==> Generating Swift bindings"
 env \
     CARGO_TARGET_DIR="$TARGET_DIR" \
-    cargo build -p ndr-ffi --lib
+    cargo build --manifest-path "$CRATE_MANIFEST" --lib
 
 env \
     CARGO_TARGET_DIR="$TARGET_DIR" \
-    cargo run -p ndr-ffi --features bindgen-cli --bin uniffi-bindgen -- \
+    cargo run --manifest-path "$BINDGEN_MANIFEST" -- \
         generate \
         --library "$TARGET_DIR/debug/libndr_ffi.dylib" \
         --language swift \
@@ -65,7 +72,7 @@ for target in aarch64-apple-darwin x86_64-apple-darwin; do
         CFLAGS_x86_64_apple_darwin="-mmacosx-version-min=$MACOS_MIN" \
         CXXFLAGS_x86_64_apple_darwin="-mmacosx-version-min=$MACOS_MIN" \
         RUSTFLAGS="-C link-arg=-mmacosx-version-min=$MACOS_MIN -C panic=abort" \
-        cargo build -p ndr-ffi --lib --release --target "$target"
+        cargo build --manifest-path "$CRATE_MANIFEST" --lib --release --target "$target"
 done
 
 echo "==> Building iOS slices"
@@ -74,7 +81,7 @@ for target in aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios; do
         CARGO_TARGET_DIR="$TARGET_DIR" \
         IPHONEOS_DEPLOYMENT_TARGET="$IOS_MIN" \
         RUSTFLAGS="-C panic=abort" \
-        cargo build -p ndr-ffi --lib --release --target "$target"
+        cargo build --manifest-path "$CRATE_MANIFEST" --lib --release --target "$target"
 done
 
 MACOS_ARM64_LIB="$TARGET_DIR/aarch64-apple-darwin/release/libndr_ffi.a"

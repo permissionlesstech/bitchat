@@ -223,6 +223,10 @@ struct NostrTransportTests {
             recipientRelay.sentEvents.first(where: { $0.kind == 1060 }),
             "Recipient should publish a bootstrap message event after accepting sender invite"
         )
+        let recipientAppKeys = try #require(
+            recipientRelay.sentEvents.first(where: { isAppKeysEvent($0) }),
+            "Recipient should publish an AppKeys roster event"
+        )
         _ = senderNdr.processOutOfBandEventJson(recipientResponse)
         #expect(senderNdr.hasActiveSession(with: recipient.publicKeyHex))
 
@@ -260,6 +264,9 @@ struct NostrTransportTests {
         #expect(senderRelay.sentEvents.filter { $0.kind == 1060 }.isEmpty)
 
         senderNdr.processInboundRelayEvent(recipientBootstrap)
+        #expect(senderRelay.sentEvents.filter { $0.kind == 1060 }.isEmpty)
+
+        senderNdr.processInboundRelayEvent(recipientAppKeys)
         #expect(senderRelay.sentEvents.contains(where: { $0.kind == 1060 }))
     }
 
@@ -616,6 +623,12 @@ struct NostrTransportTests {
         let obj = try JSONSerialization.jsonObject(with: data, options: [])
         let dict = try #require(obj as? [String: Any], "Nostr event should be a JSON object")
         return try #require(dict["kind"] as? Int, "Nostr event should include kind")
+    }
+
+    private func isAppKeysEvent(_ event: NostrEvent) -> Bool {
+        event.kind == 30078 && event.tags.contains { tag in
+            tag.count >= 2 && tag[0] == "d" && tag[1] == "double-ratchet/app-keys"
+        }
     }
 }
 

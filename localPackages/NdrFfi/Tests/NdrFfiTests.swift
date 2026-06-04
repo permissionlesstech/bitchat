@@ -48,7 +48,7 @@ final class NdrFfiTests: XCTestCase {
 
         let events = try mgr.drainEvents()
         let inviteEventJson = try XCTUnwrap(
-            events.first(where: { $0.kind == "publish_signed" })?.eventJson,
+            events.first(where: { isInvitePublish($0) })?.eventJson,
             "Expected SessionManager to publish an invite on init"
         )
         XCTAssertEqual(try extractNostrKind(json: inviteEventJson), 30078)
@@ -77,7 +77,7 @@ final class NdrFfiTests: XCTestCase {
         _ = try bobMgr.drainEvents() // discard Bob init invite
 
         let aliceInviteEventJson = try XCTUnwrap(
-            aliceInitEvents.first(where: { $0.kind == "publish_signed" })?.eventJson,
+            aliceInitEvents.first(where: { isInvitePublish($0) })?.eventJson,
             "Expected Alice to publish an invite on init"
         )
         XCTAssertEqual(try extractNostrKind(json: aliceInviteEventJson), 30078)
@@ -119,7 +119,7 @@ final class NdrFfiTests: XCTestCase {
         try bobMgr.`init`()
 
         let aliceInvite = try XCTUnwrap(
-            try aliceMgr.drainEvents().first(where: { $0.kind == "publish_signed" })?.eventJson
+            try aliceMgr.drainEvents().first(where: { isInvitePublish($0) })?.eventJson
         )
         _ = try bobMgr.drainEvents() // discard Bob init invite
 
@@ -193,6 +193,27 @@ private func extractNostrKind(json: String) throws -> Int {
     guard let dict = obj as? [String: Any] else { throw NSError(domain: "NdrFfiTests", code: 1) }
     guard let kind = dict["kind"] as? Int else { throw NSError(domain: "NdrFfiTests", code: 2) }
     return kind
+}
+
+private func isInvitePublish(_ event: PubSubEvent) -> Bool {
+    guard event.kind == "publish_signed",
+          let json = event.eventJson,
+          (try? extractNostrKind(json: json)) == 30078,
+          let tags = try? extractNostrTags(json: json) else {
+        return false
+    }
+    return tags.contains { tag in
+        tag.count >= 2 && tag[0] == "l" && tag[1] == "double-ratchet/invites"
+    } || tags.contains { tag in
+        tag.count >= 2 && tag[0] == "d" && tag[1].hasPrefix("double-ratchet/invites/")
+    }
+}
+
+private func extractNostrTags(json: String) throws -> [[String]] {
+    let data = Data(json.utf8)
+    let obj = try JSONSerialization.jsonObject(with: data, options: [])
+    guard let dict = obj as? [String: Any] else { throw NSError(domain: "NdrFfiTests", code: 5) }
+    return dict["tags"] as? [[String]] ?? []
 }
 
 private func innerEventContent(json: String) throws -> String {
