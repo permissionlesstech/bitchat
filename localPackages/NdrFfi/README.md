@@ -1,13 +1,14 @@
 # NdrFfi
 
 Vendored Swift bindings and Apple XCFramework for the upstream
-`nostr-double-ratchet` `ndr-ffi` crate.
+`iris-chat-rs` `protocol-ffi` crate.
 
 ## Source Of Truth
 
 The generated files in this package come from the upstream
-`nostr-double-ratchet` checkout, specifically the Rust `ndr-ffi` crate and its
-UniFFI-generated Swift bindings.
+`iris-chat-rs` checkout, specifically the Rust `protocol-ffi` crate and its
+UniFFI-generated Swift bindings. The built library keeps the compatibility
+name `ndr_ffi`.
 
 The exact upstream revision used for the currently vendored artifacts is
 recorded in `VENDORED_FROM.md`.
@@ -15,11 +16,11 @@ recorded in `VENDORED_FROM.md`.
 Default expected upstream checkout:
 
 ```bash
-$HOME/src/nostr-double-ratchet
+$HOME/src/iris-chat-rs
 ```
 
 You can also point the build at a different checkout by passing a path or by
-setting `NDR_SOURCE_DIR`.
+setting `ICP_SOURCE_DIR`.
 
 ## Rebuild From Source
 
@@ -37,19 +38,19 @@ Example:
 ```bash
 rustup target add aarch64-apple-darwin aarch64-apple-ios aarch64-apple-ios-sim
 cd localPackages/NdrFfi
-./build-apple.sh ~/src/nostr-double-ratchet
+./build-apple.sh ~/src/iris-chat-rs
 ```
 
 Or:
 
 ```bash
 cd localPackages/NdrFfi
-NDR_SOURCE_DIR=/path/to/nostr-double-ratchet ./build-apple.sh
+ICP_SOURCE_DIR=/path/to/iris-chat-rs ./build-apple.sh
 ```
 
 The script:
 
-- builds the upstream `ndr-ffi` crate
+- builds the upstream `protocol-ffi` crate
 - regenerates `Sources/NdrFfi/NdrFfi.swift` via UniFFI
 - rebuilds the Apple XCFramework at `Frameworks/NdrFfi.xcframework`
 - bakes in the current Apple deployment targets used by `bitchat`

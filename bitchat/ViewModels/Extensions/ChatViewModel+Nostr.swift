@@ -582,7 +582,7 @@ extension ChatViewModel {
         
         SecureLogger.debug("🔑 Setting up Nostr subscription for pubkey: \(currentIdentity.publicKeyHex.prefix(16))...", category: .session)
 
-        // Configure nostr-double-ratchet (ndr-ffi) integration.
+        // Configure protocol-backed NdrFfi integration.
         // BitChat policy: invite/response handshake is exchanged out-of-band over BLE (mutual favorites),
         // so we only use Nostr here for kind 1060 message exchange and decryption.
         ndrService.configureIfNeeded(identity: currentIdentity)

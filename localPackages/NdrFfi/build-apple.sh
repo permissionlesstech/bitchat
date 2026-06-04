@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PACKAGE_DIR="$SCRIPT_DIR"
-SOURCE_DIR="${1:-${NDR_SOURCE_DIR:-${ICP_SOURCE_DIR:-$HOME/src/iris-chat-rs}}}"
+SOURCE_DIR="${1:-${ICP_SOURCE_DIR:-$HOME/src/iris-chat-rs}}"
 CRATE_DIR="$SOURCE_DIR/protocol-ffi"
 CRATE_MANIFEST="$CRATE_DIR/Cargo.toml"
 BINDGEN_MANIFEST="$SOURCE_DIR/core/uniffi-bindgen/Cargo.toml"

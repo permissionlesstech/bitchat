@@ -21,7 +21,7 @@ let package = Package(
             dependencies: ["ndr_ffiFFI"],
             path: "Sources/NdrFfi"
         ),
-        // Binary xcframework built from the ndr-ffi Rust crate
+        // Binary xcframework built from iris-chat-rs protocol-ffi
         .binaryTarget(
             name: "ndr_ffiFFI",
             path: "Frameworks/NdrFfi.xcframework"

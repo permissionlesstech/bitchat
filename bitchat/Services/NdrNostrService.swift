@@ -17,7 +17,7 @@ protocol NostrRelayManaging: AnyObject {
 
 extension NostrRelayManager: NostrRelayManaging {}
 
-/// Bridges `nostr-double-ratchet` (ndr-ffi) `SessionManagerHandle` with `NostrRelayManager`.
+/// Bridges the protocol-backed `NdrFfi` `SessionManagerHandle` with `NostrRelayManager`.
 ///
 /// The ndr session manager emits a stream of pub/sub actions we must execute externally:
 /// - `subscribe` / `unsubscribe`: Nostr filter subscriptions (for invite responses, sessions, etc)
