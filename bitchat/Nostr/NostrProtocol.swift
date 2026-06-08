@@ -569,6 +569,34 @@ struct NostrEvent: Codable {
         let data = try encoder.encode(self)
         return String(data: data, encoding: .utf8) ?? ""
     }
+
+    /// Validates that the event timestamp is within acceptable bounds.
+    /// - For ephemeral events (kind 20000-29999): strict ±1 hour window
+    /// - For gift wraps (kind 1059): relaxed ±24 hour window (NIP-17 uses randomized timestamps)
+    /// - For other events: only reject if >5 minutes in the future
+    /// - Returns: true if timestamp is acceptable, false otherwise
+    func hasValidTimestamp() -> Bool {
+        let eventDate = Date(timeIntervalSince1970: TimeInterval(created_at))
+        let now = Date()
+
+        // Ephemeral events (kind 20000-29999) should be recent
+        if kind >= 20000 && kind < 30000 {
+            let oneHourAgo = now.addingTimeInterval(-3600)
+            let oneHourFromNow = now.addingTimeInterval(3600)
+            return eventDate >= oneHourAgo && eventDate <= oneHourFromNow
+        }
+
+        // Gift wraps use randomized timestamps (NIP-17), allow wider window
+        if kind == 1059 {
+            let oneDayAgo = now.addingTimeInterval(-86400)
+            let oneDayFromNow = now.addingTimeInterval(86400)
+            return eventDate >= oneDayAgo && eventDate <= oneDayFromNow
+        }
+
+        // For all other events, only reject clearly invalid future timestamps
+        let fiveMinutesFromNow = now.addingTimeInterval(300)
+        return eventDate <= fiveMinutesFromNow
+    }
 }
 
 enum NostrError: Error {
