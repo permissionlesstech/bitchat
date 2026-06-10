@@ -6,7 +6,7 @@
 // For more information, see <https://unlicense.org>
 //
 
-enum NoiseSessionError: Error, Equatable {
+public enum NoiseSessionError: Error, Equatable {
     case invalidState
     case notEstablished
     case sessionNotFound

@@ -10,7 +10,7 @@ import CryptoKit
 import Foundation
 import Testing
 import BitFoundation
-@testable import bitchat
+@testable import Noise
 
 // MARK: - Test Vector Support
 
@@ -613,9 +613,7 @@ struct NoiseProtocolTests {
     
     private func loadTestVectors() throws -> [NoiseTestVector] {
         // Try to load from test bundle
-        let testBundle = Bundle(for: MockKeychain.self)
-        guard let url = testBundle.url(forResource: "NoiseTestVectors", withExtension: "json")
-        else {
+        guard let url = Bundle.module.url(forResource: "NoiseTestVectors", withExtension: "json") else {
             throw NSError(
                 domain: "NoiseTests", code: 1,
                 userInfo: [

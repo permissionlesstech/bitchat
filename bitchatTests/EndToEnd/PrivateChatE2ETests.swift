@@ -9,6 +9,7 @@
 import Testing
 import CryptoKit
 import struct Foundation.UUID
+import Noise
 @testable import BitFoundation // to avoid unnecessary public's
 @testable import bitchat
 

@@ -21,6 +21,8 @@ jobs:
             path: localPackages/BitLogger
           - name: BitFoundation
             path: localPackages/BitFoundation
+          - name: Noise
+            path: localPackages/Noise
 
     steps:
       - name: Checkout code

@@ -8,15 +8,15 @@
 
 import Foundation
 
-struct NoiseSecurityValidator {
+public struct NoiseSecurityValidator {
     
     /// Validate message size
-    static func validateMessageSize(_ data: Data) -> Bool {
+    public static func validateMessageSize(_ data: Data) -> Bool {
         return data.count <= NoiseSecurityConstants.maxMessageSize
     }
     
     /// Validate handshake message size
-    static func validateHandshakeMessageSize(_ data: Data) -> Bool {
+    public static func validateHandshakeMessageSize(_ data: Data) -> Bool {
         return data.count <= NoiseSecurityConstants.maxHandshakeMessageSize
     }
 }

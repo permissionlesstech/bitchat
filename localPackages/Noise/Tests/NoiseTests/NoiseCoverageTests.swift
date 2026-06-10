@@ -2,8 +2,7 @@ import CryptoKit
 import Foundation
 import Testing
 import BitFoundation
-
-@testable import bitchat
+@testable import Noise
 
 @Suite("Noise Coverage Tests")
 struct NoiseCoverageTests {
