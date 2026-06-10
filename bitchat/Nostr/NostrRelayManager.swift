@@ -1079,6 +1079,7 @@ private enum ParsedInbound {
     
     init?(_ message: URLSessionWebSocketTask.Message) {
         guard let data = message.data,
+              data.count <= TransportConfig.nostrMaxInboundMessageBytes,
               let array = try? JSONSerialization.jsonObject(with: data) as? [Any],
               array.count >= 2,
               let type = array[0] as? String else {

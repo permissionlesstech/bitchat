@@ -450,8 +450,10 @@ final class ChatNostrCoordinator {
         if context.hasProcessedNostrEvent(event.id) { return }
         context.recordProcessedNostrEvent(event.id)
 
-        let tagSummary = event.tags.map { "[" + $0.joined(separator: ",") + "]" }.joined(separator: ",")
-        SecureLogger.debug("GeoTeleport: recv pub=\(event.pubkey.prefix(8))… tags=\(tagSummary)", category: .session)
+        SecureLogger.debug(
+            "GeoTeleport: recv pub=\(event.pubkey.prefix(8))… tagCount=\(event.tags.count)",
+            category: .session
+        )
 
         if context.isNostrBlocked(pubkeyHexLowercased: event.pubkey) {
             return
