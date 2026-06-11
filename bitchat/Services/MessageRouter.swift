@@ -6,6 +6,9 @@ import Foundation
 @MainActor
 final class MessageRouter {
     private let transports: [Transport]
+    // Used to stamp our own Nostr identity onto favorite notifications so the
+    // recipient can learn our npub. Optional so tests can omit it.
+    private let idBridge: NostrIdentityBridge?
 
     // Outbox entry with timestamp for TTL-based eviction
     private struct QueuedMessage {
@@ -25,8 +28,9 @@ final class MessageRouter {
     // get a delivery ack (e.g. peer on an old client that doesn't ack).
     private static let maxSendAttempts = 8
 
-    init(transports: [Transport]) {
+    init(transports: [Transport], idBridge: NostrIdentityBridge? = nil) {
         self.transports = transports
+        self.idBridge = idBridge
 
         // Observe favorites changes to learn Nostr mapping and flush queued messages
         NotificationCenter.default.addObserver(
@@ -65,6 +69,11 @@ final class MessageRouter {
     // MARK: - Message Sending
 
     func sendPrivate(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) {
+        // Normalize to the short ID so the outbox is keyed consistently. Callers
+        // pass either a 16-hex short ID (active chat) or a 64-hex noise-key ID
+        // (e.g. favorite toggles); a peer reconnect flushes by short ID, so a
+        // mismatch would otherwise leave queued messages stranded.
+        let peerID = peerID.toShort()
         if let transport = connectedTransport(for: peerID) {
             // A live link is a strong delivery signal; trust it outright.
             SecureLogger.debug("Routing PM via \(type(of: transport)) (connected) to \(peerID.id.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
@@ -129,16 +138,22 @@ final class MessageRouter {
     }
 
     func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {
-        if let transport = connectedTransport(for: peerID) {
-            transport.sendFavoriteNotification(to: peerID, isFavorite: isFavorite)
-        } else if let transport = reachableTransport(for: peerID) {
-            transport.sendFavoriteNotification(to: peerID, isFavorite: isFavorite)
+        // Route favorites through the outbox (same `[FAVORITED]:<npub>` payload the
+        // transports built internally) so they survive a Noise handshake delay or
+        // offline queuing instead of being dropped when the peer is momentarily
+        // unreachable. The recipient parses the prefix and never displays it.
+        var content = isFavorite ? "[FAVORITED]" : "[UNFAVORITED]"
+        if let npub = try? idBridge?.getCurrentNostrIdentity()?.npub {
+            content += ":" + npub
         }
+        sendPrivate(content, to: peerID, recipientNickname: "", messageID: UUID().uuidString)
     }
 
     // MARK: - Outbox Management
 
     func flushOutbox(for peerID: PeerID) {
+        // Match the short-ID keying used when enqueuing in sendPrivate.
+        let peerID = peerID.toShort()
         guard let queued = outbox[peerID], !queued.isEmpty else { return }
         SecureLogger.debug("Flushing outbox for \(peerID.id.prefix(8))… count=\(queued.count)", category: .session)
 
