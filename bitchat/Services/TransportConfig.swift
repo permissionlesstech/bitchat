@@ -221,6 +221,12 @@ enum TransportConfig {
     // Weak-link cooldown after connection timeouts
     static let bleWeakLinkCooldownSeconds: TimeInterval = 30.0
     static let bleWeakLinkRSSICutoff: Int = -90
+    // Rediscovery ignore windows after a failed link, by failure kind:
+    // a connect attempt that timed out means the peer likely isn't reachable,
+    // so back off; a dropped established connection (walked out of range)
+    // usually returns, so only pause long enough for CoreBluetooth to settle.
+    static let bleTimeoutDiscoveryIgnoreSeconds: TimeInterval = 15.0
+    static let bleDisconnectDiscoveryIgnoreSeconds: TimeInterval = 3.0
 
     // Content hashing / formatting
     static let contentKeyPrefixLength: Int = 256

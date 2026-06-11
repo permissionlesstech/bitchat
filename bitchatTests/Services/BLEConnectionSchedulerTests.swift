@@ -110,6 +110,50 @@ struct BLEConnectionSchedulerTests {
     }
 
     @Test
+    func disconnectErrorOnlyBrieflyBlocksRediscovery() {
+        // A dropped established connection (walked out of range) gets a short
+        // settle window, not the full connect-timeout backoff.
+        let scheduler = BLEConnectionScheduler<String>()
+        let now = Date()
+        scheduler.recordDisconnectError(peripheralID: "p1", at: now)
+
+        let during = scheduler.handleDiscovery(
+            makeCandidate(id: "p1", rssi: -80, now: now.addingTimeInterval(1)),
+            connectedOrConnectingCount: 0,
+            existingState: nil,
+            peripheralState: .disconnected,
+            now: now.addingTimeInterval(1)
+        )
+        #expect(during == .ignore)
+
+        let afterWindow = now.addingTimeInterval(TransportConfig.bleDisconnectDiscoveryIgnoreSeconds + 1)
+        let after = scheduler.handleDiscovery(
+            makeCandidate(id: "p1", rssi: -80, now: afterWindow),
+            connectedOrConnectingCount: 0,
+            existingState: nil,
+            peripheralState: .disconnected,
+            now: afterWindow
+        )
+        #expect(after == .connectNow)
+    }
+
+    @Test
+    func connectTimeoutBlocksRediscoveryForFullWindow() {
+        let scheduler = BLEConnectionScheduler<String>()
+        let now = Date()
+        scheduler.recordConnectionTimeout(peripheralID: "p1", at: now)
+
+        let midWindow = scheduler.handleDiscovery(
+            makeCandidate(id: "p1", rssi: -80, now: now.addingTimeInterval(10)),
+            connectedOrConnectingCount: 0,
+            existingState: nil,
+            peripheralState: .disconnected,
+            now: now.addingTimeInterval(10)
+        )
+        #expect(midWindow == .ignore)
+    }
+
+    @Test
     func repeatedTimeoutsDoNotTightenGlobalRSSIThreshold() {
         // Flaky links are penalized per-peripheral only; timeouts from a few
         // distant peers must not blind us to every other edge-of-range peer.
