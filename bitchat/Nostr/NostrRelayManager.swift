@@ -777,13 +777,17 @@ final class NostrRelayManager: ObservableObject {
         for (id, messageString) in toSend {
             if self.subscriptions[relayUrl]?.contains(id) == true { continue }
             startPendingEOSETrackingIfNeeded(id: id)
-            connection.send(.string(messageString)) { [weak self] error in
+            connection.send(.string(messageString)) { [weak self, weak connection] error in
                 Task { @MainActor [weak self] in
                     guard let self else { return }
                     if let error = error {
                         // Keep the pending entry; the next (re)connect retries it.
                         SecureLogger.error("❌ Failed to send pending subscription to \(relayUrl): \(error)", category: .session)
                     } else {
+                        // A stale completion from a socket that has since been
+                        // replaced must not mark the subscription active, or
+                        // the next connection would skip replaying it.
+                        guard let connection, self.connections[relayUrl] === connection else { return }
                         self.subscriptions[relayUrl, default: []].insert(id)
                         self.pendingSubscriptions[relayUrl]?.removeValue(forKey: id)
                     }

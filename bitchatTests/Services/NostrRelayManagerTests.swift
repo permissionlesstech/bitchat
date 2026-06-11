@@ -892,6 +892,42 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertTrue(resubscribed)
     }
 
+    func test_staleSendCompletionFromDeadSocket_doesNotBlockReplayOnNextConnection() async {
+        let relayURL = "wss://stale-completion.example"
+        let context = makeContext(permission: .denied)
+
+        context.manager.subscribe(filter: makeFilter(), id: "stale-sub", relayUrls: [relayURL], handler: { _ in })
+        // The connection exists synchronously; its REQ flush lands on a later
+        // main-queue tick, so deferring completions here is race-free.
+        let connectionA = context.sessionFactory.latestConnection(for: relayURL)
+        XCTAssertNotNil(connectionA)
+        connectionA?.deferSendCompletions = true
+
+        let reqSent = await waitUntil {
+            connectionA?.sentStrings.contains { $0.contains("stale-sub") } == true
+        }
+        XCTAssertTrue(reqSent)
+
+        // Socket dies while the REQ's send completion is still in flight.
+        connectionA?.fail(error: NSError(domain: NSURLErrorDomain, code: NSURLErrorNetworkConnectionLost))
+        let disconnected = await waitUntil {
+            context.manager.relays.first(where: { $0.url == relayURL })?.isConnected == false
+        }
+        XCTAssertTrue(disconnected)
+
+        // The stale success completion must not mark the subscription active.
+        connectionA?.flushDeferredSendCompletions()
+        try? await Task.sleep(nanoseconds: 20_000_000)
+
+        context.scheduler.runNext()
+        let replayed = await waitUntil {
+            let connections = context.sessionFactory.connectionsByURL[relayURL] ?? []
+            return connections.count == 2 &&
+                connections.last?.sentStrings.contains { $0.contains("stale-sub") } == true
+        }
+        XCTAssertTrue(replayed)
+    }
+
     func test_permanentFailure_decaysAfterCooldownAndRetries() async {
         let relayURL = "wss://cooldown.example"
         let context = makeContext(permission: .denied)
@@ -1377,9 +1413,22 @@ private final class MockRelayConnection: NostrRelayConnectionProtocol {
         cancelCallCount += 1
     }
 
+    var deferSendCompletions = false
+    private var deferredSendCompletions: [(Error?) -> Void] = []
+
     func send(_ message: URLSessionWebSocketTask.Message, completionHandler: @escaping (Error?) -> Void) {
         sentMessages.append(message)
-        completionHandler(sendError)
+        if deferSendCompletions {
+            deferredSendCompletions.append(completionHandler)
+        } else {
+            completionHandler(sendError)
+        }
+    }
+
+    func flushDeferredSendCompletions() {
+        let pending = deferredSendCompletions
+        deferredSendCompletions = []
+        pending.forEach { $0(sendError) }
     }
 
     func receive(completionHandler: @escaping (Result<URLSessionWebSocketTask.Message, Error>) -> Void) {
