@@ -41,8 +41,6 @@ final class BLEConnectionScheduler<Peripheral> {
     private let candidateCap: Int
     private let weakLinkCooldownSeconds: TimeInterval
     private let weakLinkRSSICutoff: Int
-    private let recentTimeoutWindowSeconds: TimeInterval
-    private let recentTimeoutCountThreshold: Int
 
     private var lastGlobalConnectAttempt: Date = .distantPast
     private var candidates: [BLEConnectionCandidate<Peripheral>] = []
@@ -63,8 +61,6 @@ final class BLEConnectionScheduler<Peripheral> {
         candidateCap: Int = TransportConfig.bleConnectionCandidatesMax,
         weakLinkCooldownSeconds: TimeInterval = TransportConfig.bleWeakLinkCooldownSeconds,
         weakLinkRSSICutoff: Int = TransportConfig.bleWeakLinkRSSICutoff,
-        recentTimeoutWindowSeconds: TimeInterval = TransportConfig.bleRecentTimeoutWindowSeconds,
-        recentTimeoutCountThreshold: Int = TransportConfig.bleRecentTimeoutCountThreshold,
         dynamicRSSIThreshold: Int = TransportConfig.bleDynamicRSSIThresholdDefault
     ) {
         self.maxCentralLinks = maxCentralLinks
@@ -72,8 +68,6 @@ final class BLEConnectionScheduler<Peripheral> {
         self.candidateCap = candidateCap
         self.weakLinkCooldownSeconds = weakLinkCooldownSeconds
         self.weakLinkRSSICutoff = weakLinkRSSICutoff
-        self.recentTimeoutWindowSeconds = recentTimeoutWindowSeconds
-        self.recentTimeoutCountThreshold = recentTimeoutCountThreshold
         self.initialDynamicRSSIThreshold = dynamicRSSIThreshold
         self.dynamicRSSIThreshold = dynamicRSSIThreshold
     }
@@ -225,16 +219,12 @@ final class BLEConnectionScheduler<Peripheral> {
         }
 
         lastIsolatedAt = nil
+        // Flaky links are handled per-peripheral (weak-link cooldown, discovery
+        // ignore window, score bias) — never globally, so one flaky distant peer
+        // can't blind us to every other edge-of-range peer.
         var threshold = TransportConfig.bleDynamicRSSIThresholdDefault
         if connectedOrConnectingLinkCount >= maxCentralLinks || candidates.count >= candidateCap {
             threshold = TransportConfig.bleRSSIConnectedThreshold
-        }
-
-        let recentTimeouts = recentConnectTimeouts.filter {
-            now.timeIntervalSince($0.value) < recentTimeoutWindowSeconds
-        }.count
-        if recentTimeouts >= recentTimeoutCountThreshold {
-            threshold = max(threshold, TransportConfig.bleRSSIHighTimeoutThreshold)
         }
 
         dynamicRSSIThreshold = threshold

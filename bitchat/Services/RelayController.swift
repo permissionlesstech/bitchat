@@ -39,7 +39,12 @@ struct RelayController {
         }
 
         if isFragment {
-            let ttlLimit = min(ttlCap, TransportConfig.bleFragmentRelayTtlCap)
+            // Dense graphs clamp harder to contain full-fanout fragment floods;
+            // sparse graphs get full depth so media reaches as far as text.
+            let fragmentCap = degree >= highDegreeThreshold
+                ? TransportConfig.bleFragmentRelayTtlCapDense
+                : TransportConfig.bleFragmentRelayTtlCap
+            let ttlLimit = min(ttlCap, fragmentCap)
             guard ttlLimit > 1 else {
                 return RelayDecision(shouldRelay: false, newTTL: ttlLimit, delayMs: 0)
             }
@@ -50,10 +55,15 @@ struct RelayController {
 
         // TTL clamping for broadcast
         // - Dense graphs: keep lower but still allow multi-hop bridging
+        // - Thin chains (degree <= 2): every hop counts and flood cost is
+        //   minimal, so relay at full incoming depth
         // - Announces get a bit more headroom
         let ttlLimit: UInt8 = {
             if degree >= highDegreeThreshold {
                 return max(UInt8(2), min(ttlCap, UInt8(5)))
+            }
+            if degree <= 2 {
+                return ttlCap
             }
             let preferred = UInt8(isAnnounce ? 7 : 6)
             return max(UInt8(2), min(ttlCap, preferred))

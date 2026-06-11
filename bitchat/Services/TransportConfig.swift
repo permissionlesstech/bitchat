@@ -11,7 +11,10 @@ enum TransportConfig {
     static let bleMaxConcurrentTransfers: Int = 2           // Limit simultaneous large media sends
     static let bleFragmentRelayMinDelayMs: Int = 8          // Faster forwarding for media fragments
     static let bleFragmentRelayMaxDelayMs: Int = 25         // Upper jitter bound for fragment relays
-    static let bleFragmentRelayTtlCap: UInt8 = 5            // Clamp fragment TTL to contain floods
+    // Fragment relay TTL in sparse graphs; matches messageTTLDefault so media
+    // reaches as far as text. Dense graphs clamp harder in RelayController.
+    static let bleFragmentRelayTtlCap: UInt8 = 7
+    static let bleFragmentRelayTtlCapDense: UInt8 = 5       // Contain fragment floods in dense graphs
 
     // UI / Storage Caps
     static let privateChatCap: Int = 1337
@@ -90,19 +93,21 @@ enum TransportConfig {
     // BLE maintenance & thresholds
     static let bleMaintenanceInterval: TimeInterval = 5.0
     static let bleMaintenanceLeewaySeconds: Int = 1
-    static let bleIsolationRelaxThresholdSeconds: TimeInterval = 60
-    static let bleRecentTimeoutWindowSeconds: TimeInterval = 60
-    static let bleRecentTimeoutCountThreshold: Int = 3
-    static let bleRSSIIsolatedBase: Int = -90
-    static let bleRSSIIsolatedRelaxed: Int = -92
+    static let bleIsolationRelaxThresholdSeconds: TimeInterval = 30
+    // Isolated nodes accept the weakest usable links — a fringe connection
+    // beats no connection. Relaxed floor sits at CoreBluetooth's practical
+    // reporting limit so prolonged isolation gates on nothing but decode.
+    static let bleRSSIIsolatedBase: Int = -95
+    static let bleRSSIIsolatedRelaxed: Int = -100
     static let bleRSSIConnectedThreshold: Int = -85
-    static let bleRSSIHighTimeoutThreshold: Int = -80
     // How long without seeing traffic before we sanity-check the direct link
     // Lowered to make connected→reachable icon changes react faster when walking out of range
     static let blePeerInactivityTimeoutSeconds: TimeInterval = 8.0
-    // How long to retain a peer as "reachable" (not directly connected) since lastSeen
-    static let bleReachabilityRetentionVerifiedSeconds: TimeInterval = 21.0    // 21s for verified/favorites
-    static let bleReachabilityRetentionUnverifiedSeconds: TimeInterval = 21.0  // 21s for unknown/unverified
+    // How long to retain a peer as "reachable" (not directly connected) since lastSeen.
+    // Must comfortably exceed the worst-case dense announce interval (38s) plus a
+    // missed cycle, so duty-cycled nodes don't forget peers between announces.
+    static let bleReachabilityRetentionVerifiedSeconds: TimeInterval = 60.0    // verified/favorites
+    static let bleReachabilityRetentionUnverifiedSeconds: TimeInterval = 45.0  // unknown/unverified
     static let bleFragmentLifetimeSeconds: TimeInterval = 30.0
     static let bleIngressRecordLifetimeSeconds: TimeInterval = 3.0
     static let bleConnectTimeoutBackoffWindowSeconds: TimeInterval = 120.0
@@ -203,8 +208,10 @@ enum TransportConfig {
     static let bleSubscriptionRateLimitWindowSeconds: TimeInterval = 60.0   // Window for tracking subscription attempts
     static let bleSubscriptionRateLimitMaxAttempts: Int = 5                 // Max attempts before extended cooldown
 
-    // Store-and-forward for directed packets at relays
-    static let bleDirectedSpoolWindowSeconds: TimeInterval = 15.0
+    // Store-and-forward for directed packets at relays. Spooled packets retry
+    // on each maintenance flush until the window lapses; a longer window lets
+    // brief link gaps (walking between rooms, reconnect churn) heal themselves.
+    static let bleDirectedSpoolWindowSeconds: TimeInterval = 60.0
 
     // Log/UI debounce windows
     // Shorter debounce so UI reacts faster while still suppressing duplicate callbacks

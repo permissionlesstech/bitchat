@@ -95,6 +95,46 @@ struct RelayControllerTests {
     }
 
     @Test
+    func sparseChain_relaysAtFullIncomingDepth() async {
+        // Thin chains (degree <= 2) are exactly the topology that needs every
+        // hop, so no clamp below the incoming TTL is applied.
+        let decision = RelayController.decide(
+            ttl: 7,
+            senderIsSelf: false,
+            isEncrypted: false,
+            isDirectedEncrypted: false,
+            isFragment: false,
+            isDirectedFragment: false,
+            isHandshake: false,
+            isAnnounce: false,
+            degree: 2,
+            highDegreeThreshold: TransportConfig.bleHighDegreeThreshold
+        )
+
+        #expect(decision.shouldRelay)
+        #expect(decision.newTTL == 6)
+    }
+
+    @Test
+    func denseGraph_clampsFragmentTTLHarder() async {
+        let decision = RelayController.decide(
+            ttl: 10,
+            senderIsSelf: false,
+            isEncrypted: false,
+            isDirectedEncrypted: false,
+            isFragment: true,
+            isDirectedFragment: false,
+            isHandshake: false,
+            isAnnounce: false,
+            degree: TransportConfig.bleHighDegreeThreshold,
+            highDegreeThreshold: TransportConfig.bleHighDegreeThreshold
+        )
+
+        #expect(decision.shouldRelay)
+        #expect(decision.newTTL == TransportConfig.bleFragmentRelayTtlCapDense - 1)
+    }
+
+    @Test
     func denseGraph_capsTTL() async {
         let decision = RelayController.decide(
             ttl: 10,

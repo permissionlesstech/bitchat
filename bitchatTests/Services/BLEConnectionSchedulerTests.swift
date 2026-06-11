@@ -110,7 +110,9 @@ struct BLEConnectionSchedulerTests {
     }
 
     @Test
-    func rssiThresholdTightensAfterRepeatedRecentTimeouts() {
+    func repeatedTimeoutsDoNotTightenGlobalRSSIThreshold() {
+        // Flaky links are penalized per-peripheral only; timeouts from a few
+        // distant peers must not blind us to every other edge-of-range peer.
         let scheduler = BLEConnectionScheduler<String>()
         let now = Date()
         scheduler.recordConnectionTimeout(peripheralID: "p1", at: now)
@@ -123,8 +125,27 @@ struct BLEConnectionSchedulerTests {
             now: now.addingTimeInterval(1)
         )
 
-        #expect(threshold == TransportConfig.bleRSSIHighTimeoutThreshold)
-        #expect(scheduler.dynamicRSSIThreshold == TransportConfig.bleRSSIHighTimeoutThreshold)
+        #expect(threshold == TransportConfig.bleDynamicRSSIThresholdDefault)
+    }
+
+    @Test
+    func isolationRelaxesRSSIThresholdOverTime() {
+        let scheduler = BLEConnectionScheduler<String>()
+        let now = Date()
+
+        let initial = scheduler.updateRSSIThreshold(
+            connectedCount: 0,
+            connectedOrConnectingLinkCount: 0,
+            now: now
+        )
+        #expect(initial == TransportConfig.bleRSSIIsolatedBase)
+
+        let relaxed = scheduler.updateRSSIThreshold(
+            connectedCount: 0,
+            connectedOrConnectingLinkCount: 0,
+            now: now.addingTimeInterval(TransportConfig.bleIsolationRelaxThresholdSeconds + 1)
+        )
+        #expect(relaxed == TransportConfig.bleRSSIIsolatedRelaxed)
     }
 
     @Test

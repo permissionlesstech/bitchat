@@ -3275,6 +3275,13 @@ extension BLEService {
         // Update scanning duty-cycle based on connectivity
         updateScanningDutyCycle(connectedCount: connectedCount)
         updateRSSIThreshold(connectedCount: connectedCount)
+
+        // Drain the connection candidate queue. Weak-RSSI discoveries are
+        // enqueued rather than connected immediately, and the event-driven
+        // drains (disconnect/failure/timeout) never fire when we're idle —
+        // without this, an isolated node surrounded only by weak (distant)
+        // peers would queue them all and never connect to anyone.
+        tryConnectFromQueue()
         
         // Check peer connectivity every cycle for snappier UI updates
         checkPeerConnectivity()
