@@ -281,10 +281,10 @@ struct VerificationSheetView: View {
     @EnvironmentObject private var verificationModel: VerificationModel
     @Binding var isPresented: Bool
     @State private var showingScanner = false
-    @Environment(\.colorScheme) var colorScheme
+    @ThemedPalette private var palette
 
-    private var backgroundColor: Color { colorScheme == .dark ? Color.black : Color.white }
-    private var accentColor: Color { colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0) }
+    private var backgroundColor: Color { palette.background }
+    private var accentColor: Color { palette.primary }
     private var boxColor: Color { Color.gray.opacity(0.1) }
 
     var body: some View {

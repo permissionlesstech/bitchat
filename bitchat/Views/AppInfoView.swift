@@ -2,19 +2,13 @@ import SwiftUI
 
 struct AppInfoView: View {
     @Environment(\.dismiss) var dismiss
-    @Environment(\.colorScheme) var colorScheme
-    
-    private var backgroundColor: Color {
-        colorScheme == .dark ? Color.black : Color.white
-    }
-    
-    private var textColor: Color {
-        colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
-    }
-    
-    private var secondaryTextColor: Color {
-        colorScheme == .dark ? Color.green.opacity(0.8) : Color(red: 0, green: 0.5, blue: 0).opacity(0.8)
-    }
+    @ThemedPalette private var palette
+
+    private var backgroundColor: Color { palette.background }
+
+    private var textColor: Color { palette.primary }
+
+    private var secondaryTextColor: Color { palette.secondary }
     
     // MARK: - Constants
     private enum Strings {
@@ -201,12 +195,10 @@ struct AppInfoFeatureInfo {
 
 struct SectionHeader: View {
     let title: LocalizedStringKey
-    @Environment(\.colorScheme) var colorScheme
-    
-    private var textColor: Color {
-        colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
-    }
-    
+    @ThemedPalette private var palette
+
+    private var textColor: Color { palette.primary }
+
     init(_ title: LocalizedStringKey) {
         self.title = title
     }
@@ -221,16 +213,12 @@ struct SectionHeader: View {
 
 struct FeatureRow: View {
     let info: AppInfoFeatureInfo
-    @Environment(\.colorScheme) var colorScheme
-    
-    private var textColor: Color {
-        colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
-    }
-    
-    private var secondaryTextColor: Color {
-        colorScheme == .dark ? Color.green.opacity(0.8) : Color(red: 0, green: 0.5, blue: 0).opacity(0.8)
-    }
-    
+    @ThemedPalette private var palette
+
+    private var textColor: Color { palette.primary }
+
+    private var secondaryTextColor: Color { palette.secondary }
+
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: info.icon)

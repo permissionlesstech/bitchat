@@ -8,8 +8,8 @@ struct ContentHeaderView: View {
     @EnvironmentObject private var verificationModel: VerificationModel
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @EnvironmentObject private var peerListModel: PeerListModel
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ThemedPalette private var palette
 
     @Binding var showSidebar: Bool
     @Binding var showVerifySheet: Bool
@@ -20,15 +20,12 @@ struct ContentHeaderView: View {
     let headerHeight: CGFloat
     let headerPeerIconSize: CGFloat
     let headerPeerCountFontSize: CGFloat
-    let backgroundColor: Color
-    let textColor: Color
-    let secondaryTextColor: Color
 
     var body: some View {
         HStack(spacing: 0) {
             Text(verbatim: "bitchat/")
                 .font(.bitchatSystem(size: 18, weight: .medium, design: .monospaced))
-                .foregroundColor(textColor)
+                .foregroundColor(palette.primary)
                 .onTapGesture(count: 3) {
                     appChromeModel.panicClearAllData()
                 }
@@ -39,7 +36,7 @@ struct ContentHeaderView: View {
             HStack(spacing: 0) {
                 Text(verbatim: "@")
                     .font(.bitchatSystem(size: 14, design: .monospaced))
-                    .foregroundColor(secondaryTextColor)
+                    .foregroundColor(palette.secondary)
 
                 TextField(
                     "content.input.nickname_placeholder",
@@ -51,7 +48,7 @@ struct ContentHeaderView: View {
                 .textFieldStyle(.plain)
                 .font(.bitchatSystem(size: 14, design: .monospaced))
                 .frame(maxWidth: 80)
-                .foregroundColor(textColor)
+                .foregroundColor(palette.primary)
                 .focused(isNicknameFieldFocused)
                 .autocorrectionDisabled(true)
                 #if os(iOS)
@@ -140,7 +137,7 @@ struct ContentHeaderView: View {
                         case .mesh:
                             return Color(hue: 0.60, saturation: 0.85, brightness: 0.82)
                         case .location:
-                            return colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
+                            return palette.primary
                         }
                     }()
 
@@ -208,10 +205,7 @@ struct ContentHeaderView: View {
                 } else {
                     ContentLocationNotesUnavailableView(
                         showLocationNotes: $showLocationNotes,
-                        headerHeight: headerHeight,
-                        backgroundColor: backgroundColor,
-                        textColor: textColor,
-                        secondaryTextColor: secondaryTextColor
+                        headerHeight: headerHeight
                     )
                     .environmentObject(locationChannelsModel)
                 }
@@ -249,7 +243,7 @@ struct ContentHeaderView: View {
         } message: {
             Text("content.alert.screenshot.message")
         }
-        .background(backgroundColor.opacity(0.95))
+        .background(palette.background.opacity(0.95))
     }
 }
 
@@ -262,8 +256,7 @@ private extension ContentHeaderView {
         switch locationChannelsModel.selectedChannel {
         case .location:
             let count = peerListModel.visibleGeohashPeerCount
-            let standardGreen = colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
-            return (count, count > 0 ? standardGreen : Color.secondary)
+            return (count, count > 0 ? palette.primary : Color.secondary)
         case .mesh:
             let meshBlue = Color(hue: 0.60, saturation: 0.85, brightness: 0.82)
             let color: Color = peerListModel.connectedMeshPeerCount > 0 ? meshBlue : Color.secondary
@@ -274,13 +267,11 @@ private extension ContentHeaderView {
 
 private struct ContentLocationNotesUnavailableView: View {
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
+    @ThemedPalette private var palette
 
     @Binding var showLocationNotes: Bool
 
     let headerHeight: CGFloat
-    let backgroundColor: Color
-    let textColor: Color
-    let secondaryTextColor: Color
 
     var body: some View {
         VStack(spacing: 12) {
@@ -291,7 +282,7 @@ private struct ContentLocationNotesUnavailableView: View {
                 Button(action: { showLocationNotes = false }) {
                     Image(systemName: "xmark")
                         .font(.bitchatSystem(size: 13, weight: .semibold, design: .monospaced))
-                        .foregroundColor(textColor)
+                        .foregroundColor(palette.primary)
                         .frame(width: 32, height: 32)
                 }
                 .buttonStyle(.plain)
@@ -299,17 +290,17 @@ private struct ContentLocationNotesUnavailableView: View {
             }
             .frame(height: headerHeight)
             .padding(.horizontal, 12)
-            .background(backgroundColor.opacity(0.95))
+            .background(palette.background.opacity(0.95))
             Text("content.notes.location_unavailable")
                 .font(.bitchatSystem(size: 14, design: .monospaced))
-                .foregroundColor(secondaryTextColor)
+                .foregroundColor(palette.secondary)
             Button("content.location.enable") {
                 locationChannelsModel.enableAndRefresh()
             }
             .buttonStyle(.bordered)
             Spacer()
         }
-        .background(backgroundColor)
-        .foregroundColor(textColor)
+        .background(palette.background)
+        .foregroundColor(palette.primary)
     }
 }

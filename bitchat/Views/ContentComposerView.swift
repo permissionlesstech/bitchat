@@ -7,15 +7,13 @@ struct ContentComposerView: View {
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
     @Environment(\.colorScheme) private var colorScheme
+    @ThemedPalette private var palette
 
     @Binding var messageText: String
     var isTextFieldFocused: FocusState<Bool>.Binding
     @ObservedObject var voiceRecordingVM: VoiceRecordingViewModel
     @Binding var autocompleteDebounceTimer: Timer?
 
-    let backgroundColor: Color
-    let textColor: Color
-    let secondaryTextColor: Color
     let onSendMessage: () -> Void
 
     #if os(iOS)
@@ -36,7 +34,7 @@ struct ContentComposerView: View {
                             HStack {
                                 Text(suggestion)
                                     .font(.bitchatSystem(size: 11, design: .monospaced))
-                                    .foregroundColor(textColor)
+                                    .foregroundColor(palette.primary)
                                     .fontWeight(.medium)
                                 Spacer()
                             }
@@ -48,20 +46,15 @@ struct ContentComposerView: View {
                         .background(Color.gray.opacity(0.1))
                     }
                 }
-                .background(backgroundColor)
+                .background(palette.background)
                 .overlay(
                     RoundedRectangle(cornerRadius: 4)
-                        .stroke(secondaryTextColor.opacity(0.3), lineWidth: 1)
+                        .stroke(palette.secondary.opacity(0.3), lineWidth: 1)
                 )
                 .padding(.horizontal, 12)
             }
 
-            CommandSuggestionsView(
-                messageText: $messageText,
-                textColor: textColor,
-                backgroundColor: backgroundColor,
-                secondaryTextColor: secondaryTextColor
-            )
+            CommandSuggestionsView(messageText: $messageText)
 
             if voiceRecordingVM.state.isActive {
                 recordingIndicator
@@ -74,11 +67,11 @@ struct ContentComposerView: View {
                     prompt: Text(
                         String(localized: "content.input.message_placeholder", comment: "Placeholder shown in the chat composer")
                     )
-                    .foregroundColor(secondaryTextColor.opacity(0.6))
+                    .foregroundColor(palette.secondary.opacity(0.6))
                 )
                 .textFieldStyle(.plain)
                 .font(.bitchatSystem(size: 15, design: .monospaced))
-                .foregroundColor(textColor)
+                .foregroundColor(palette.primary)
                 .focused(isTextFieldFocused)
                 .autocorrectionDisabled(true)
                 #if os(iOS)
@@ -116,7 +109,7 @@ struct ContentComposerView: View {
         .padding(.horizontal, 6)
         .padding(.top, 6)
         .padding(.bottom, 8)
-        .background(backgroundColor.opacity(0.95))
+        .background(palette.background.opacity(0.95))
         .onDisappear {
             autocompleteDebounceTimer?.invalidate()
         }
@@ -154,7 +147,7 @@ private extension ContentComposerView {
     }
 
     var composerAccentColor: Color {
-        privateConversationModel.selectedPeerID != nil ? Color.orange : textColor
+        privateConversationModel.selectedPeerID != nil ? Color.orange : palette.primary
     }
 
     var attachmentButton: some View {

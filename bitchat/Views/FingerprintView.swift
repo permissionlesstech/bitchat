@@ -13,15 +13,11 @@ struct FingerprintView: View {
     @EnvironmentObject private var verificationModel: VerificationModel
     let peerID: PeerID
     @Environment(\.dismiss) var dismiss
-    @Environment(\.colorScheme) var colorScheme
-    
-    private var textColor: Color {
-        colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
-    }
-    
-    private var backgroundColor: Color {
-        colorScheme == .dark ? Color.black : Color.white
-    }
+    @ThemedPalette private var palette
+
+    private var textColor: Color { palette.primary }
+
+    private var backgroundColor: Color { palette.background }
 
     private enum Strings {
         static let title: LocalizedStringKey = "fingerprint.title"

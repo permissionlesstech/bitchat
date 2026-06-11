@@ -142,9 +142,6 @@ private struct ContentPeopleSheetHarness: View {
             isTextFieldFocused: $isTextFieldFocused,
             voiceRecordingVM: voiceRecordingVM,
             autocompleteDebounceTimer: $autocompleteDebounceTimer,
-            backgroundColor: .black,
-            textColor: .green,
-            secondaryTextColor: .gray,
             headerHeight: 44,
             onSendMessage: {},
             showImagePicker: $showImagePicker,
@@ -163,9 +160,6 @@ private struct ContentPeopleSheetHarness: View {
             isTextFieldFocused: $isTextFieldFocused,
             voiceRecordingVM: voiceRecordingVM,
             autocompleteDebounceTimer: $autocompleteDebounceTimer,
-            backgroundColor: .black,
-            textColor: .green,
-            secondaryTextColor: .gray,
             headerHeight: 44,
             onSendMessage: {},
             showMacImagePicker: $showMacImagePicker
@@ -335,8 +329,6 @@ struct ViewSmokeTests {
 
         _ = mount(
             MeshPeerList(
-                textColor: .green,
-                secondaryTextColor: .gray,
                 onTapPeer: { _ in },
                 onToggleFavorite: { _ in },
                 onShowFingerprint: { _ in }
@@ -344,8 +336,6 @@ struct ViewSmokeTests {
             .environmentObject(featureModels.peerListModel)
         )
         _ = MeshPeerList(
-            textColor: .green,
-            secondaryTextColor: .gray,
             onTapPeer: { _ in },
             onToggleFavorite: { _ in },
             onShowFingerprint: { _ in }
@@ -363,8 +353,6 @@ struct ViewSmokeTests {
 
         _ = mount(
             MeshPeerList(
-                textColor: .green,
-                secondaryTextColor: .gray,
                 onTapPeer: { _ in },
                 onToggleFavorite: { _ in },
                 onShowFingerprint: { _ in }
@@ -389,10 +377,7 @@ struct ViewSmokeTests {
                 messageText: Binding(
                     get: { messageText },
                     set: { messageText = $0 }
-                ),
-                textColor: .green,
-                backgroundColor: .black,
-                secondaryTextColor: .gray
+                )
             )
             .environmentObject(featureModels.privateConversationModel)
             .environmentObject(featureModels.locationChannelsModel)
@@ -539,8 +524,6 @@ struct ViewSmokeTests {
         let (viewModel, _, _) = makeSmokeViewModel()
         let featureModels = makeSmokeFeatureModels(for: viewModel)
         let geohashPeopleList = GeohashPeopleList(
-            textColor: .green,
-            secondaryTextColor: .gray,
             onTapPerson: {}
         )
         let truncatableMessage = BitchatMessage(

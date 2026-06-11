@@ -63,17 +63,7 @@ struct ContentView: View {
     @State private var windowCountPublic: Int = 300
     @State private var windowCountPrivate: [PeerID: Int] = [:]
 
-    private var backgroundColor: Color {
-        colorScheme == .dark ? Color.black : Color.white
-    }
-
-    private var textColor: Color {
-        colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
-    }
-
-    private var secondaryTextColor: Color {
-        colorScheme == .dark ? Color.green.opacity(0.8) : Color(red: 0, green: 0.5, blue: 0).opacity(0.8)
-    }
+    @ThemedPalette private var palette
 
     private var selectedPrivatePeerID: PeerID? {
         privateConversationModel.selectedPeerID
@@ -89,10 +79,7 @@ struct ContentView: View {
                 isNicknameFieldFocused: $isNicknameFieldFocused,
                 headerHeight: headerHeight,
                 headerPeerIconSize: headerPeerIconSize,
-                headerPeerCountFontSize: headerPeerCountFontSize,
-                backgroundColor: backgroundColor,
-                textColor: textColor,
-                secondaryTextColor: secondaryTextColor
+                headerPeerCountFontSize: headerPeerCountFontSize
             )
             .onAppear {
                 conversationUIModel.setCurrentColorScheme(colorScheme)
@@ -123,7 +110,7 @@ struct ContentView: View {
                         showSidebar: $showSidebar,
                         isTextFieldFocused: $isTextFieldFocused
                     )
-                    .background(backgroundColor)
+                    .background(palette.background)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .frame(width: geometry.size.width, height: geometry.size.height)
@@ -138,9 +125,6 @@ struct ContentView: View {
                     isTextFieldFocused: $isTextFieldFocused,
                     voiceRecordingVM: voiceRecordingVM,
                     autocompleteDebounceTimer: $autocompleteDebounceTimer,
-                    backgroundColor: backgroundColor,
-                    textColor: textColor,
-                    secondaryTextColor: secondaryTextColor,
                     onSendMessage: sendMessage,
                     showImagePicker: $showImagePicker,
                     imagePickerSourceType: $imagePickerSourceType
@@ -151,17 +135,14 @@ struct ContentView: View {
                     isTextFieldFocused: $isTextFieldFocused,
                     voiceRecordingVM: voiceRecordingVM,
                     autocompleteDebounceTimer: $autocompleteDebounceTimer,
-                    backgroundColor: backgroundColor,
-                    textColor: textColor,
-                    secondaryTextColor: secondaryTextColor,
                     onSendMessage: sendMessage,
                     showMacImagePicker: $showMacImagePicker
                 )
                 #endif
             }
         }
-        .background(backgroundColor)
-        .foregroundColor(textColor)
+        .background(palette.background)
+        .foregroundColor(palette.primary)
         #if os(macOS)
         .frame(minWidth: 600, minHeight: 400)
         #endif
@@ -194,9 +175,6 @@ struct ContentView: View {
                 isTextFieldFocused: $isTextFieldFocused,
                 voiceRecordingVM: voiceRecordingVM,
                 autocompleteDebounceTimer: $autocompleteDebounceTimer,
-                backgroundColor: backgroundColor,
-                textColor: textColor,
-                secondaryTextColor: secondaryTextColor,
                 headerHeight: headerHeight,
                 onSendMessage: sendMessage,
                 showImagePicker: $showImagePicker,
@@ -215,9 +193,6 @@ struct ContentView: View {
                 isTextFieldFocused: $isTextFieldFocused,
                 voiceRecordingVM: voiceRecordingVM,
                 autocompleteDebounceTimer: $autocompleteDebounceTimer,
-                backgroundColor: backgroundColor,
-                textColor: textColor,
-                secondaryTextColor: secondaryTextColor,
                 headerHeight: headerHeight,
                 onSendMessage: sendMessage,
                 showMacImagePicker: $showMacImagePicker

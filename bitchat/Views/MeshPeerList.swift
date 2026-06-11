@@ -3,8 +3,7 @@ import BitFoundation
 
 struct MeshPeerList: View {
     @EnvironmentObject private var peerListModel: PeerListModel
-    let textColor: Color
-    let secondaryTextColor: Color
+    @ThemedPalette private var palette
     let onTapPeer: (PeerID) -> Void
     let onToggleFavorite: (PeerID) -> Void
     let onShowFingerprint: (PeerID) -> Void
@@ -29,7 +28,7 @@ struct MeshPeerList: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text(Strings.noneNearby)
                     .font(.bitchatSystem(size: 14, design: .monospaced))
-                    .foregroundColor(secondaryTextColor)
+                    .foregroundColor(palette.secondary)
                     .padding(.horizontal)
                     .padding(.top, 12)
             }
@@ -64,7 +63,7 @@ struct MeshPeerList: View {
                             // Fallback icon for others (dimmed)
                             Image(systemName: "person")
                                 .font(.bitchatSystem(size: 10))
-                                .foregroundColor(secondaryTextColor)
+                                .foregroundColor(palette.secondary)
                         }
 
                         let (base, suffix) = peer.displayName.splitSuffix()
@@ -123,7 +122,7 @@ struct MeshPeerList: View {
                             Button(action: { onToggleFavorite(peer.peerID) }) {
                                 Image(systemName: peer.isFavorite ? "star.fill" : "star")
                                     .font(.bitchatSystem(size: 12))
-                                    .foregroundColor(peer.isFavorite ? .yellow : secondaryTextColor)
+                                    .foregroundColor(peer.isFavorite ? .yellow : palette.secondary)
                             }
                             .buttonStyle(.plain)
                         }

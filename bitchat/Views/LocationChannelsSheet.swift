@@ -9,11 +9,11 @@ struct LocationChannelsSheet: View {
     @Binding var isPresented: Bool
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @EnvironmentObject private var peerListModel: PeerListModel
-    @Environment(\.colorScheme) var colorScheme
+    @ThemedPalette private var palette
     @State private var customGeohash: String = ""
     @State private var customError: String? = nil
 
-    private var backgroundColor: Color { colorScheme == .dark ? .black : .white }
+    private var backgroundColor: Color { palette.background }
 
     private enum Strings {
         static let title: LocalizedStringKey = "location_channels.title"
@@ -247,7 +247,7 @@ struct LocationChannelsSheet: View {
                     Button(action: SystemSettings.location.open) {
                         Text(Strings.removeAccess)
                             .font(.bitchatSystem(size: 12, design: .monospaced))
-                            .foregroundColor(Color(red: 0.75, green: 0.1, blue: 0.1))
+                            .foregroundColor(palette.alertRed)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 6)
                             .background(Color.red.opacity(0.08))
@@ -270,9 +270,7 @@ struct LocationChannelsSheet: View {
             .frame(height: 1)
     }
 
-    private var dividerColor: Color {
-        colorScheme == .dark ? Color.white.opacity(0.12) : Color.black.opacity(0.08)
-    }
+    private var dividerColor: Color { palette.divider }
 
     private var customTeleportSection: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -492,12 +490,8 @@ extension LocationChannelsSheet {
         .cornerRadius(8)
     }
 
-    private var standardGreen: Color {
-        (colorScheme == .dark) ? Color.green : Color(red: 0, green: 0.5, blue: 0)
-    }
-    private var standardBlue: Color {
-        Color(red: 0.0, green: 0.478, blue: 1.0)
-    }
+    private var standardGreen: Color { palette.primary }
+    private var standardBlue: Color { palette.accentBlue }
 }
 
 private struct IRCToggleStyle: ToggleStyle {

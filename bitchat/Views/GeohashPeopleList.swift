@@ -2,8 +2,7 @@ import SwiftUI
 
 struct GeohashPeopleList: View {
     @EnvironmentObject private var peerListModel: PeerListModel
-    let textColor: Color
-    let secondaryTextColor: Color
+    @ThemedPalette private var palette
     let onTapPerson: () -> Void
     @Environment(\.colorScheme) var colorScheme
     @State private var orderedIDs: [String] = []
@@ -21,7 +20,7 @@ struct GeohashPeopleList: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text(Strings.noneNearby)
                     .font(.bitchatSystem(size: 14, design: .monospaced))
-                    .foregroundColor(secondaryTextColor)
+                    .foregroundColor(palette.secondary)
                     .padding(.horizontal)
                     .padding(.top, 12)
             }

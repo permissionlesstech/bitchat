@@ -10,13 +10,10 @@ import SwiftUI
 struct CommandSuggestionsView: View {
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
-    
+    @ThemedPalette private var palette
+
     @Binding var messageText: String
-    
-    let textColor: Color
-    let backgroundColor: Color
-    let secondaryTextColor: Color
-    
+
     private var filteredCommands: [CommandInfo] {
         guard messageText.hasPrefix("/") && !messageText.contains(" ") else { return [] }
         let isGeoPublic = locationChannelsModel.selectedChannel.isLocation
@@ -38,10 +35,10 @@ struct CommandSuggestionsView: View {
                 .background(Color.gray.opacity(0.1))
             }
         }
-        .background(backgroundColor)
+        .background(palette.background)
         .overlay(
             RoundedRectangle(cornerRadius: 4)
-                .stroke(secondaryTextColor.opacity(0.3), lineWidth: 1)
+                .stroke(palette.secondary.opacity(0.3), lineWidth: 1)
         )
     }
     
@@ -49,20 +46,20 @@ struct CommandSuggestionsView: View {
         HStack {
             Text(command.alias)
                 .font(.bitchatSystem(size: 11, design: .monospaced))
-                .foregroundColor(textColor)
+                .foregroundColor(palette.primary)
                 .fontWeight(.medium)
-            
+
             if let placeholder = command.placeholder {
                 Text(placeholder)
                     .font(.bitchatSystem(size: 10, design: .monospaced))
-                    .foregroundColor(secondaryTextColor.opacity(0.8))
+                    .foregroundColor(palette.secondary.opacity(0.8))
             }
 
             Spacer()
-            
+
             Text(command.description)
                 .font(.bitchatSystem(size: 10, design: .monospaced))
-                .foregroundColor(secondaryTextColor)
+                .foregroundColor(palette.secondary)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 3)
@@ -85,12 +82,7 @@ struct CommandSuggestionsView: View {
     )
     let locationChannelsModel = LocationChannelsModel()
     
-    CommandSuggestionsView(
-        messageText: $messageText,
-        textColor: .green,
-        backgroundColor: .primary,
-        secondaryTextColor: .secondary
-    )
-    .environmentObject(privateConversationModel)
-    .environmentObject(locationChannelsModel)
+    CommandSuggestionsView(messageText: $messageText)
+        .environmentObject(privateConversationModel)
+        .environmentObject(locationChannelsModel)
 }

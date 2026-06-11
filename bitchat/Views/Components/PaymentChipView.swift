@@ -11,6 +11,7 @@ import SwiftUI
 struct PaymentChipView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.openURL) private var openURL
+    @ThemedPalette private var palette
     
     enum PaymentType {
         case cashu(String)
@@ -54,9 +55,7 @@ struct PaymentChipView: View {
     
     let paymentType: PaymentType
     
-    private var fgColor: Color {
-        colorScheme == .dark ? Color.green : Color(red: 0, green: 0.5, blue: 0)
-    }
+    private var fgColor: Color { palette.primary }
     private var bgColor: Color {
         colorScheme == .dark ? Color.gray.opacity(0.18) : Color.gray.opacity(0.12)
     }
