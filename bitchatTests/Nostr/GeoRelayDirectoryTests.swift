@@ -55,6 +55,47 @@ final class GeoRelayDirectoryTests: XCTestCase {
         )
     }
 
+    func test_closestRelays_breaksDistanceTiesDeterministicallyByHost() {
+        // Same coordinates for all entries: selection must still be stable so
+        // publishers and subscribers using the same directory agree on relays.
+        let harness = makeHarness(
+            cacheCSV: """
+            relay url,lat,lon
+            zeta.example,10,10
+            alpha.example,10,10
+            mike.example,10,10
+            """
+        )
+        let directory = GeoRelayDirectory(dependencies: harness.dependencies)
+
+        XCTAssertEqual(
+            directory.closestRelays(toLat: 10, lon: 10, count: 2),
+            ["wss://alpha.example", "wss://mike.example"]
+        )
+    }
+
+    func test_fetchSuccess_postsDirectoryRefreshNotification() async {
+        let harness = makeHarness(fetchCSV: """
+        relay url,lat,lon
+        notify.example,1,2
+        """)
+        let directory = GeoRelayDirectory(dependencies: harness.dependencies)
+
+        var notified = 0
+        let observer = harness.notificationCenter.addObserver(
+            forName: .geoRelayDirectoryDidRefresh,
+            object: nil,
+            queue: .main
+        ) { _ in
+            notified += 1
+        }
+        defer { harness.notificationCenter.removeObserver(observer) }
+
+        directory.prefetchIfNeeded()
+        let refreshed = await waitUntil { notified == 1 }
+        XCTAssertTrue(refreshed)
+    }
+
     func test_loadLocalEntries_prefersCacheThenBundleThenWorkingDirectory() {
         let cacheHarness = makeHarness(
             cacheCSV: """

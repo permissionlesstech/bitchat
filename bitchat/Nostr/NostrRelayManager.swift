@@ -171,9 +171,10 @@ final class NostrRelayManager: ObservableObject {
     private struct EOSETracker {
         var pendingRelays: Set<String>
         var callback: () -> Void
-        var timer: Timer?
+        let epoch: Int
     }
     private var eoseTrackers: [String: EOSETracker] = [:]
+    private var eoseTrackerEpoch = 0
     private var pendingEOSECallbacks: [String: () -> Void] = [:]
     
     // Message queue for reliability
@@ -264,15 +265,18 @@ final class NostrRelayManager: ObservableObject {
             task.cancel(with: .goingAway, reason: nil)
         }
         connections.removeAll()
-        // Clear known subscriptions and any queued subs since connections are gone
+        // Sockets are gone, so per-relay subscription state is cleared — but
+        // durable intent (subscriptionRequestState, messageHandlers, parked
+        // EOSE callbacks) is kept so REQs replay when relays reconnect
+        // (e.g. background → foreground).
         subscriptions.removeAll()
         pendingSubscriptions.removeAll()
-        subscriptionRequestState.removeAll()
-        pendingEOSECallbacks.removeAll()
-        for (_, tracker) in eoseTrackers {
-            tracker.timer?.invalidate()
-        }
+        // Settle in-flight initial loads instead of leaving callers hanging.
+        let trackers = eoseTrackers
         eoseTrackers.removeAll()
+        for (_, tracker) in trackers {
+            tracker.callback()
+        }
         pendingTorConnectionURLs.removeAll()
         awaitingTorForConnections = false
         torReadyWaitAttempts = 0
@@ -516,7 +520,6 @@ final class NostrRelayManager: ObservableObject {
         subscribeCoalesce.removeValue(forKey: id)
         subscriptionRequestState.removeValue(forKey: id)
         pendingEOSECallbacks.removeValue(forKey: id)
-        eoseTrackers[id]?.timer?.invalidate()
         eoseTrackers.removeValue(forKey: id)
         for url in Array(pendingSubscriptions.keys) {
             pendingSubscriptions[url]?.removeValue(forKey: id)
@@ -630,20 +633,18 @@ final class NostrRelayManager: ObservableObject {
     }
 
     private func startEOSETracking(id: String, relayURLs: Set<String>, callback: @escaping () -> Void) {
-        eoseTrackers[id]?.timer?.invalidate()
-        var tracker = EOSETracker(pendingRelays: relayURLs, callback: callback, timer: nil)
+        eoseTrackerEpoch += 1
+        let epoch = eoseTrackerEpoch
+        eoseTrackers[id] = EOSETracker(pendingRelays: relayURLs, callback: callback, epoch: epoch)
         // Fallback timeout to avoid hanging if a relay never sends EOSE.
-        tracker.timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
-            Task { @MainActor in
+        dependencies.scheduleAfter(TransportConfig.nostrSubscriptionEOSEFallbackSeconds) { [weak self] in
+            Task { @MainActor [weak self] in
                 guard let self else { return }
-                if let tracker = self.eoseTrackers[id] {
-                    tracker.timer?.invalidate()
-                    self.eoseTrackers.removeValue(forKey: id)
-                    callback()
-                }
+                guard let tracker = self.eoseTrackers[id], tracker.epoch == epoch else { return }
+                self.eoseTrackers.removeValue(forKey: id)
+                tracker.callback()
             }
         }
-        eoseTrackers[id] = tracker
     }
 
     private func startPendingEOSETrackingIfNeeded(id: String) {
@@ -764,26 +765,31 @@ final class NostrRelayManager: ObservableObject {
         }
     }
 
-    /// Send any queued subscriptions for a relay that just connected.
+    /// Send queued subscriptions and replay durable ones for a relay that just
+    /// (re)connected. Relays drop subscriptions with the socket, so every
+    /// active subscription targeting this relay must be re-sent.
     private func flushPendingSubscriptions(for relayUrl: String) {
-        guard let map = pendingSubscriptions[relayUrl], !map.isEmpty else { return }
         guard let connection = connections[relayUrl] else { return }
-        for (id, messageString) in map {
+        var toSend = pendingSubscriptions[relayUrl] ?? [:]
+        for (id, state) in subscriptionRequestState where state.relayURLs.contains(relayUrl) && toSend[id] == nil {
+            toSend[id] = state.messageString
+        }
+        for (id, messageString) in toSend {
             if self.subscriptions[relayUrl]?.contains(id) == true { continue }
             startPendingEOSETrackingIfNeeded(id: id)
-            connection.send(.string(messageString)) { error in
-                if let error = error {
-                    SecureLogger.error("❌ Failed to send pending subscription to \(relayUrl): \(error)", category: .session)
-                } else {
-                    Task { @MainActor in
-                        var subs = self.subscriptions[relayUrl] ?? Set<String>()
-                        subs.insert(id)
-                        self.subscriptions[relayUrl] = subs
+            connection.send(.string(messageString)) { [weak self] error in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    if let error = error {
+                        // Keep the pending entry; the next (re)connect retries it.
+                        SecureLogger.error("❌ Failed to send pending subscription to \(relayUrl): \(error)", category: .session)
+                    } else {
+                        self.subscriptions[relayUrl, default: []].insert(id)
+                        self.pendingSubscriptions[relayUrl]?.removeValue(forKey: id)
                     }
                 }
             }
         }
-        pendingSubscriptions[relayUrl] = nil
     }
     
     private func receiveMessage(from task: NostrRelayConnectionProtocol, relayUrl: String) {
@@ -850,7 +856,6 @@ final class NostrRelayManager: ObservableObject {
             if var tracker = eoseTrackers[subId] {
                 tracker.pendingRelays.remove(relayUrl)
                 if tracker.pendingRelays.isEmpty {
-                    tracker.timer?.invalidate()
                     eoseTrackers.removeValue(forKey: subId)
                     tracker.callback()
                 } else {
@@ -924,17 +929,30 @@ final class NostrRelayManager: ObservableObject {
         isConnected = relays.contains { $0.isConnected }
     }
     
-    private func handleDisconnection(relayUrl: String, error: Error) {
-        // If networking is disallowed, do not schedule reconnection
-        if !dependencies.activationAllowed() {
-            connections.removeValue(forKey: relayUrl)
-            subscriptions.removeValue(forKey: relayUrl)
-            updateRelayStatus(relayUrl, isConnected: false, error: error)
-            return
+    /// A relay that drops before sending EOSE must not stall initial-load
+    /// callbacks; treat it as done and let the remaining relays (or the
+    /// fallback timeout) drive completion.
+    private func settleEOSETrackers(droppingRelay relayUrl: String) {
+        for (id, var tracker) in eoseTrackers where tracker.pendingRelays.contains(relayUrl) {
+            tracker.pendingRelays.remove(relayUrl)
+            if tracker.pendingRelays.isEmpty {
+                eoseTrackers.removeValue(forKey: id)
+                tracker.callback()
+            } else {
+                eoseTrackers[id] = tracker
+            }
         }
+    }
+
+    private func handleDisconnection(relayUrl: String, error: Error) {
         connections.removeValue(forKey: relayUrl)
         subscriptions.removeValue(forKey: relayUrl)
         updateRelayStatus(relayUrl, isConnected: false, error: error)
+        settleEOSETrackers(droppingRelay: relayUrl)
+        // If networking is disallowed, do not schedule reconnection
+        if !dependencies.activationAllowed() {
+            return
+        }
         
         // Check if this is a DNS or handshake error; treat as permanent
         let errorDescription = error.localizedDescription.lowercased()
@@ -1064,6 +1082,13 @@ final class NostrRelayManager: ObservableObject {
     // MARK: - Failure classification
     private func isPermanentlyFailed(_ url: String) -> Bool {
         guard let r = relays.first(where: { $0.url == url }) else { return false }
+        // Failures decay: after a cooldown the relay gets another chance, so a
+        // long network outage or transient relay trouble can't blacklist it
+        // for the rest of the process lifetime.
+        if let lastDisconnect = r.lastDisconnectedAt,
+           dependencies.now().timeIntervalSince(lastDisconnect) >= TransportConfig.nostrRelayFailureCooldownSeconds {
+            return false
+        }
         if r.reconnectAttempts >= maxReconnectAttempts { return true }
         if let ns = r.lastError as NSError?, ns.domain == NSURLErrorDomain {
             if ns.code == NSURLErrorBadServerResponse || ns.code == NSURLErrorCannotFindHost {

@@ -7,6 +7,11 @@ import UIKit
 import AppKit
 #endif
 
+extension Notification.Name {
+    /// Posted after the geo relay directory successfully refreshes its entries.
+    static let geoRelayDirectoryDidRefresh = Notification.Name("bitchat.geoRelayDirectoryDidRefresh")
+}
+
 /// Directory of online Nostr relays with approximate GPS locations, used for geohash routing.
 struct GeoRelayDirectoryDependencies {
     var userDefaults: UserDefaults
@@ -165,33 +170,16 @@ final class GeoRelayDirectory {
     }
 
     /// Returns up to `count` relay URLs (wss://) closest to the given coordinate.
+    /// Ties break by host so every device with the same directory picks the
+    /// same relay set — publishers and subscribers must agree on relays.
     func closestRelays(toLat lat: Double, lon: Double, count: Int = 5) -> [String] {
         guard !entries.isEmpty, count > 0 else { return [] }
 
-        if entries.count <= count {
-            return entries
-                .sorted { a, b in
-                    haversineKm(lat, lon, a.lat, a.lon) < haversineKm(lat, lon, b.lat, b.lon)
-                }
-                .map { "wss://\($0.host)" }
-        }
-
-        var best: [(entry: Entry, distance: Double)] = []
-        best.reserveCapacity(count)
-
-        for entry in entries {
-            let distance = haversineKm(lat, lon, entry.lat, entry.lon)
-            if best.count < count {
-                let idx = best.firstIndex { $0.distance > distance } ?? best.count
-                best.insert((entry, distance), at: idx)
-            } else if let worstDistance = best.last?.distance, distance < worstDistance {
-                let idx = best.firstIndex { $0.distance > distance } ?? best.count
-                best.insert((entry, distance), at: idx)
-                best.removeLast()
-            }
-        }
-
-        return best.map { "wss://\($0.entry.host)" }
+        return entries
+            .map { (entry: $0, distance: haversineKm(lat, lon, $0.lat, $0.lon)) }
+            .sorted { ($0.distance, $0.entry.host) < ($1.distance, $1.entry.host) }
+            .prefix(count)
+            .map { "wss://\($0.entry.host)" }
     }
 
     // MARK: - Remote Fetch
@@ -289,6 +277,8 @@ final class GeoRelayDirectory {
         isFetching = false
         retryAttempt = 0
         cancelRetry()
+        // Let waiters (e.g. location notes stuck in a "no relays" state) retry.
+        dependencies.notificationCenter.post(name: .geoRelayDirectoryDidRefresh, object: nil)
     }
 
     @MainActor

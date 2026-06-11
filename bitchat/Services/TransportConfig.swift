@@ -156,6 +156,11 @@ enum TransportConfig {
     // bootstrap deadline) to attempt before unblocking pending EOSE callers.
     static let nostrTorReadyMaxWaitAttempts: Int = 3
     static let nostrPendingSendQueueCap: Int = 200
+    // Fallback deadline for treating a subscription's initial fetch as complete
+    // when a relay never sends EOSE (generous to cover Tor circuit setup).
+    static let nostrSubscriptionEOSEFallbackSeconds: TimeInterval = 10.0
+    // After this long, a relay marked permanently failed gets another chance.
+    static let nostrRelayFailureCooldownSeconds: TimeInterval = 600.0
 
     // Geo relay directory
     static let geoRelayFetchIntervalSeconds: TimeInterval = 60 * 60 * 24

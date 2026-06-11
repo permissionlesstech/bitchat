@@ -1,4 +1,5 @@
 import Testing
+import Combine
 import Foundation
 @testable import bitchat
 
@@ -24,6 +25,41 @@ struct LocationNotesManagerTests {
         #expect(manager.state == .noRelays)
         #expect(manager.initialLoadComplete)
         #expect(manager.errorMessage == String(localized: "location_notes.error.no_relays"))
+    }
+
+    @Test
+    func noRelays_resubscribesWhenDirectoryRefreshes() async throws {
+        var relays: [String] = []
+        var subscribeCount = 0
+        let directorySubject = PassthroughSubject<Void, Never>()
+        let deps = LocationNotesDependencies(
+            relayLookup: { _, _ in relays },
+            subscribe: { _, _, _, _, _ in
+                subscribeCount += 1
+            },
+            unsubscribe: { _ in },
+            sendEvent: { _, _ in },
+            deriveIdentity: { _ in try NostrIdentity.generate() },
+            now: { Date() },
+            relayDirectoryUpdates: directorySubject.eraseToAnyPublisher()
+        )
+
+        let manager = LocationNotesManager(geohash: "u4pruydq", dependencies: deps)
+        #expect(manager.state == .noRelays)
+        #expect(subscribeCount == 0)
+
+        // Directory loads later (e.g. remote fetch finished after Tor came up).
+        relays = ["wss://relay.one"]
+        directorySubject.send(())
+
+        let deadline = Date().addingTimeInterval(1.0)
+        while manager.state == .noRelays && Date() < deadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        #expect(subscribeCount == 1)
+        #expect(manager.state == .loading)
+        #expect(manager.errorMessage == nil)
     }
 
     @Test

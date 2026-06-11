@@ -1,4 +1,5 @@
 import BitLogger
+import Combine
 import Foundation
 
 /// Dependencies for location notes, allowing tests to stub relay/identity behavior.
@@ -14,7 +15,9 @@ struct LocationNotesDependencies {
     var sendEvent: SendEvent
     var deriveIdentity: (_ geohash: String) throws -> NostrIdentity
     var now: () -> Date
-    
+    // Fires when the geo relay directory refreshes; used to retry after "no relays".
+    var relayDirectoryUpdates: AnyPublisher<Void, Never> = Empty(completeImmediately: false).eraseToAnyPublisher()
+
     private static let idBridge = NostrIdentityBridge()
 
     static let live = LocationNotesDependencies(
@@ -39,7 +42,11 @@ struct LocationNotesDependencies {
         deriveIdentity: { geohash in
             try idBridge.deriveIdentity(forGeohash: geohash)
         },
-        now: { Date() }
+        now: { Date() },
+        relayDirectoryUpdates: NotificationCenter.default
+            .publisher(for: .geoRelayDirectoryDidRefresh)
+            .map { _ in () }
+            .eraseToAnyPublisher()
     )
 }
 
@@ -77,6 +84,7 @@ final class LocationNotesManager: ObservableObject {
     @Published private(set) var errorMessage: String?
     private var subscriptionID: String?
     private var noteIDs = Set<String>() // O(1) duplicate detection
+    private var directoryUpdateCancellable: AnyCancellable?
     private let dependencies: LocationNotesDependencies
     private let maxNotesInMemory = 500 // Defensive cap (relay limit is 200)
 
@@ -101,6 +109,15 @@ final class LocationNotesManager: ObservableObject {
             SecureLogger.warning("LocationNotesManager: invalid geohash '\(norm)' (expected 8 valid base32 chars)", category: .session)
         }
         subscribe()
+        // The relay directory may load after init (remote fetch over Tor);
+        // retry automatically instead of staying stuck on "no relays".
+        directoryUpdateCancellable = dependencies.relayDirectoryUpdates
+            .sink { [weak self] in
+                Task { @MainActor [weak self] in
+                    guard let self, self.state == .noRelays else { return }
+                    self.subscribe()
+                }
+            }
     }
 
     func setGeohash(_ newGeohash: String) {
