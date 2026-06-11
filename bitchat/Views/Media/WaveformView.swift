@@ -6,6 +6,7 @@ struct WaveformView: View {
     let sendProgress: Double?
     let onSeek: ((Double) -> Void)?
     let isInteractive: Bool
+    @ThemedPalette private var palette
 
     private var clampedPlayback: Double {
         max(0, min(1, playbackProgress))
@@ -37,9 +38,9 @@ struct WaveformView: View {
                         let binPosition = Double(index) / Double(samples.count)
                         let color: Color
                         if binPosition <= clampedPlayback {
-                            color = Color.green
+                            color = palette.accent
                         } else if let send = clampedSend, binPosition <= send {
-                            color = Color.blue
+                            color = palette.accentBlue
                         } else {
                             color = Color.gray.opacity(0.35)
                         }

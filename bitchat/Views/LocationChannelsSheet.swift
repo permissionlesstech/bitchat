@@ -97,12 +97,12 @@ struct LocationChannelsSheet: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 12) {
                     Text(Strings.title)
-                        .font(.bitchatSystem(size: 18, design: .monospaced))
+                        .bitchatFont(size: 18)
                     Spacer()
                     closeButton
                 }
                 Text(Strings.description)
-                    .font(.bitchatSystem(size: 12, design: .monospaced))
+                    .bitchatFont(size: 12)
                     .foregroundColor(.secondary)
 
                 Group {
@@ -110,7 +110,7 @@ struct LocationChannelsSheet: View {
                     case .notDetermined:
                         Button(action: { locationChannelsModel.enableLocationChannels() }) {
                             Text(Strings.requestPermissions)
-                                .font(.bitchatSystem(size: 12, design: .monospaced))
+                                .bitchatFont(size: 12)
                                 .foregroundColor(standardGreen)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 6)
@@ -121,7 +121,7 @@ struct LocationChannelsSheet: View {
                     case .denied, .restricted:
                         VStack(alignment: .leading, spacing: 8) {
                             Text(Strings.permissionDenied)
-                                .font(.bitchatSystem(size: 12, design: .monospaced))
+                                .bitchatFont(size: 12)
                                 .foregroundColor(.secondary)
                             Button(Strings.openSettings, action: SystemSettings.location.open)
                             .buttonStyle(.plain)
@@ -136,7 +136,7 @@ struct LocationChannelsSheet: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(backgroundColor)
+            .themedSurface()
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             .navigationBarHidden(true)
@@ -147,7 +147,7 @@ struct LocationChannelsSheet: View {
         #if os(macOS)
         .frame(minWidth: 420, minHeight: 520)
         #endif
-        .background(backgroundColor)
+        .themedSheetBackground()
         .onAppear {
             // Refresh channels when opening
             if locationChannelsModel.permissionState == .authorized {
@@ -171,7 +171,7 @@ struct LocationChannelsSheet: View {
     private var closeButton: some View {
         Button(action: { isPresented = false }) {
             Image(systemName: "xmark")
-                .font(.bitchatSystem(size: 13, weight: .semibold, design: .monospaced))
+                .bitchatFont(size: 13, weight: .semibold)
                 .frame(width: 32, height: 32)
         }
         .buttonStyle(.plain)
@@ -223,7 +223,7 @@ struct LocationChannelsSheet: View {
                     HStack(spacing: 8) {
                         ProgressView()
                         Text(Strings.loadingNearby)
-                            .font(.bitchatSystem(size: 12, design: .monospaced))
+                            .bitchatFont(size: 12)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 10)
@@ -246,7 +246,7 @@ struct LocationChannelsSheet: View {
                         .padding(.top, 12)
                     Button(action: SystemSettings.location.open) {
                         Text(Strings.removeAccess)
-                            .font(.bitchatSystem(size: 12, design: .monospaced))
+                            .bitchatFont(size: 12)
                             .foregroundColor(palette.alertRed)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 6)
@@ -259,9 +259,9 @@ struct LocationChannelsSheet: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, 6)
-            .background(backgroundColor)
+            .themedSurface()
         }
-        .background(backgroundColor)
+        .themedSurface()
     }
 
     private var sectionDivider: some View {
@@ -276,7 +276,7 @@ struct LocationChannelsSheet: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 2) {
                 Text(verbatim: "#")
-                    .font(.bitchatSystem(size: 14, design: .monospaced))
+                    .bitchatFont(size: 14)
                     .foregroundColor(.secondary)
                 TextField("geohash", text: $customGeohash)
                     #if os(iOS)
@@ -284,7 +284,7 @@ struct LocationChannelsSheet: View {
                     .autocorrectionDisabled(true)
                     .keyboardType(.asciiCapable)
                     #endif
-                    .font(.bitchatSystem(size: 14, design: .monospaced))
+                    .bitchatFont(size: 14)
                     .onChange(of: customGeohash) { newValue in
                         let allowed = Set("0123456789bcdefghjkmnpqrstuvwxyz")
                         let filtered = newValue
@@ -310,13 +310,13 @@ struct LocationChannelsSheet: View {
                 }) {
                     HStack(spacing: 6) {
                         Text(Strings.teleport)
-                            .font(.bitchatSystem(size: 14, design: .monospaced))
+                            .bitchatFont(size: 14)
                         Image(systemName: "face.dashed")
                             .font(.bitchatSystem(size: 14))
                     }
                 }
                 .buttonStyle(.plain)
-                .font(.bitchatSystem(size: 14, design: .monospaced))
+                .bitchatFont(size: 14)
                 .padding(.vertical, 6)
                 .padding(.horizontal, 10)
                 .background(Color.secondary.opacity(0.12))
@@ -326,7 +326,7 @@ struct LocationChannelsSheet: View {
             }
             if let err = customError {
                 Text(err)
-                    .font(.bitchatSystem(size: 12, design: .monospaced))
+                    .bitchatFont(size: 12)
                     .foregroundColor(.red)
             }
         }
@@ -335,7 +335,7 @@ struct LocationChannelsSheet: View {
     private func bookmarkedSection(_ entries: [String]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(Strings.bookmarked)
-                .font(.bitchatSystem(size: 12, design: .monospaced))
+                .bitchatFont(size: 12)
                 .foregroundColor(.secondary)
             LazyVStack(spacing: 0) {
                 ForEach(Array(entries.enumerated()), id: \.offset) { index, gh in
@@ -407,18 +407,18 @@ struct LocationChannelsSheet: View {
                 let parts = splitTitleAndCount(title)
                 HStack(spacing: 4) {
                     Text(parts.base)
-                            .font(.bitchatSystem(size: 14, design: .monospaced))
+                            .bitchatFont(size: 14)
                             .fontWeight(titleBold ? .bold : .regular)
                             .foregroundColor(titleColor ?? Color.primary)
                         if let count = parts.countSuffix, !count.isEmpty {
                             Text(count)
-                                .font(.bitchatSystem(size: 11, design: .monospaced))
+                                .bitchatFont(size: 11)
                                 .foregroundColor(.secondary)
                         }
                     }
                 let subtitleFull = Strings.subtitle(prefix: subtitlePrefix, name: subtitleName)
                 Text(subtitleFull)
-                    .font(.bitchatSystem(size: 12, design: .monospaced))
+                    .bitchatFont(size: 12)
                     .foregroundColor(.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -426,7 +426,7 @@ struct LocationChannelsSheet: View {
                 Spacer()
                 if isSelected {
                     Text(verbatim: "✔︎")
-                        .font(.bitchatSystem(size: 16, design: .monospaced))
+                        .bitchatFont(size: 16)
                         .foregroundColor(standardGreen)
                 }
                 trailingAccessory()
@@ -476,14 +476,14 @@ extension LocationChannelsSheet {
             Toggle(isOn: torToggleBinding) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(Strings.torTitle)
-                        .font(.bitchatSystem(size: 12, weight: .semibold, design: .monospaced))
+                        .bitchatFont(size: 12, weight: .semibold)
                         .foregroundColor(.primary)
                     Text(Strings.torSubtitle)
-                        .font(.bitchatSystem(size: 11, design: .monospaced))
+                        .bitchatFont(size: 11)
                         .foregroundColor(.secondary)
                 }
             }
-            .toggleStyle(IRCToggleStyle(accent: standardGreen, onLabel: Strings.toggleOn, offLabel: Strings.toggleOff))
+            .toggleStyle(IRCToggleStyle(accent: palette.accent, onLabel: Strings.toggleOn, offLabel: Strings.toggleOff))
         }
         .padding(12)
         .background(Color.secondary.opacity(0.12))
@@ -506,7 +506,7 @@ private struct IRCToggleStyle: ToggleStyle {
                 Spacer()
                 Text(configuration.isOn ? onLabel : offLabel)
                     .textCase(.uppercase)
-                    .font(.bitchatSystem(size: 12, weight: .semibold, design: .monospaced))
+                    .bitchatFont(size: 12, weight: .semibold)
                     .foregroundColor(configuration.isOn ? accent : .secondary)
                     .padding(.vertical, 4)
                     .padding(.horizontal, 10)

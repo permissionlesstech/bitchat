@@ -41,6 +41,10 @@ final class ConversationUIModel: ObservableObject {
         chatViewModel.currentColorScheme = colorScheme
     }
 
+    func setCurrentTheme(_ theme: AppTheme) {
+        chatViewModel.currentTheme = theme
+    }
+
     func sendMessage(_ message: String) {
         chatViewModel.sendMessage(message)
     }
@@ -76,12 +80,12 @@ final class ConversationUIModel: ObservableObject {
         chatViewModel.completeNickname(nickname, in: &text)
     }
 
-    func formatMessage(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
-        chatViewModel.formatMessageAsText(message, colorScheme: colorScheme)
+    func formatMessage(_ message: BitchatMessage, colorScheme: ColorScheme, theme: AppTheme? = nil) -> AttributedString {
+        chatViewModel.formatMessageAsText(message, colorScheme: colorScheme, theme: theme)
     }
 
-    func formatMessageHeader(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
-        chatViewModel.formatMessageHeader(message, colorScheme: colorScheme)
+    func formatMessageHeader(_ message: BitchatMessage, colorScheme: ColorScheme, theme: AppTheme? = nil) -> AttributedString {
+        chatViewModel.formatMessageHeader(message, colorScheme: colorScheme, theme: theme)
     }
 
     func mediaAttachment(for message: BitchatMessage) -> BitchatMessage.Media? {

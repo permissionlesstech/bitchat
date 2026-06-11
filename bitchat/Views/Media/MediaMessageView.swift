@@ -10,6 +10,7 @@ import BitFoundation
 
 struct MediaMessageView: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.appTheme) private var theme
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
     let message: BitchatMessage
     let media: BitchatMessage.Media
@@ -36,7 +37,7 @@ struct MediaMessageView: View {
 
         VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .center, spacing: 4) {
-                Text(conversationUIModel.formatMessageHeader(message, colorScheme: colorScheme))
+                Text(conversationUIModel.formatMessageHeader(message, colorScheme: colorScheme, theme: theme))
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if message.isPrivate && conversationUIModel.isSentByCurrentUser(message),

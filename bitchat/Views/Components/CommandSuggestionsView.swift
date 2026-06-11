@@ -24,41 +24,42 @@ struct CommandSuggestionsView: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(filteredCommands) { command in
-                Button {
-                    messageText = command.alias + " "
-                } label: {
-                    buttonRow(for: command)
+        // Render nothing when there are no matches: a zero-height view would
+        // still receive the composer VStack's spacing and push the input row
+        // off-center.
+        if !filteredCommands.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(filteredCommands) { command in
+                    Button {
+                        messageText = command.alias + " "
+                    } label: {
+                        buttonRow(for: command)
+                    }
+                    .buttonStyle(.plain)
+                    .background(Color.gray.opacity(0.1))
                 }
-                .buttonStyle(.plain)
-                .background(Color.gray.opacity(0.1))
             }
+            .themedOverlayPanel()
         }
-        .background(palette.background)
-        .overlay(
-            RoundedRectangle(cornerRadius: 4)
-                .stroke(palette.secondary.opacity(0.3), lineWidth: 1)
-        )
     }
     
     private func buttonRow(for command: CommandInfo) -> some View {
         HStack {
             Text(command.alias)
-                .font(.bitchatSystem(size: 11, design: .monospaced))
+                .bitchatFont(size: 11)
                 .foregroundColor(palette.primary)
                 .fontWeight(.medium)
 
             if let placeholder = command.placeholder {
                 Text(placeholder)
-                    .font(.bitchatSystem(size: 10, design: .monospaced))
+                    .bitchatFont(size: 10)
                     .foregroundColor(palette.secondary.opacity(0.8))
             }
 
             Spacer()
 
             Text(command.description)
-                .font(.bitchatSystem(size: 10, design: .monospaced))
+                .bitchatFont(size: 10)
                 .foregroundColor(palette.secondary)
         }
         .padding(.horizontal, 12)

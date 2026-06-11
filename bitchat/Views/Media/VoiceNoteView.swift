@@ -8,6 +8,7 @@ struct VoiceNoteView: View {
     private let onCancel: (() -> Void)?
 
     @Environment(\.colorScheme) private var colorScheme
+    @ThemedPalette private var palette
     @StateObject private var playback: VoiceNotePlaybackController
     @State private var waveform: [Float] = []
 
@@ -31,7 +32,7 @@ struct VoiceNoteView: View {
     }
 
     private var borderColor: Color {
-        colorScheme == .dark ? Color.green.opacity(0.3) : Color.green.opacity(0.2)
+        colorScheme == .dark ? palette.accent.opacity(0.3) : palette.accent.opacity(0.2)
     }
 
     private var playbackLabel: String {
@@ -46,7 +47,7 @@ struct VoiceNoteView: View {
                 Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill")
                     .foregroundColor(.white)
                     .frame(width: 36, height: 36)
-                    .background(Circle().fill(Color.green))
+                    .background(Circle().fill(palette.accent))
             }
             .buttonStyle(.plain)
 
@@ -61,7 +62,7 @@ struct VoiceNoteView: View {
             )
 
             Text(playbackLabel)
-                .font(.bitchatSystem(size: 13, design: .monospaced))
+                .bitchatFont(size: 13)
                 .foregroundColor(Color.secondary)
 
             if let onCancel = onCancel, isSending {

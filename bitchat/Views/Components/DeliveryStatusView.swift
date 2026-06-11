@@ -99,7 +99,7 @@ struct DeliveryStatusView: View {
                 Image(systemName: "checkmark")
                     .font(.bitchatSystem(size: 10))
                 Text(verbatim: "\(reached)/\(total)")
-                    .font(.bitchatSystem(size: 10, design: .monospaced))
+                    .bitchatFont(size: 10)
             }
             .foregroundColor(secondaryTextColor.opacity(0.6))
             .help(Strings.deliveredToMembers(reached, total))

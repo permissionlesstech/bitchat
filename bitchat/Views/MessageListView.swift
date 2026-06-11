@@ -21,6 +21,7 @@ struct MessageListView: View {
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.appTheme) private var theme
 
     let privatePeer: PeerID?
     @Binding var isAtBottom: Bool
@@ -222,7 +223,7 @@ private extension MessageListView {
 
     @ViewBuilder
     func systemMessageRow(_ message: BitchatMessage) -> some View {
-        Text(conversationUIModel.formatMessage(message, colorScheme: colorScheme))
+        Text(conversationUIModel.formatMessage(message, colorScheme: colorScheme, theme: theme))
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
     }

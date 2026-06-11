@@ -27,7 +27,7 @@ struct MeshPeerList: View {
         if peerListModel.meshRows.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 Text(Strings.noneNearby)
-                    .font(.bitchatSystem(size: 14, design: .monospaced))
+                    .bitchatFont(size: 14)
                     .foregroundColor(palette.secondary)
                     .padding(.horizontal)
                     .padding(.top, 12)
@@ -69,12 +69,12 @@ struct MeshPeerList: View {
                         let (base, suffix) = peer.displayName.splitSuffix()
                         HStack(spacing: 0) {
                             Text(base)
-                                .font(.bitchatSystem(size: 14, design: .monospaced))
+                                .bitchatFont(size: 14)
                                 .foregroundColor(baseColor)
                             if !suffix.isEmpty {
                                 let suffixColor = isMe ? Color.orange.opacity(0.6) : baseColor.opacity(0.6)
                                 Text(suffix)
-                                    .font(.bitchatSystem(size: 14, design: .monospaced))
+                                    .bitchatFont(size: 14)
                                     .foregroundColor(suffixColor)
                             }
                         }

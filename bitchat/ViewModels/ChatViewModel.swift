@@ -139,6 +139,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     }
     private var visibleMessagesCache: [BitchatMessage]?
     @Published var currentColorScheme: ColorScheme = .light
+    @Published var currentTheme: AppTheme = .matrix
     @Published var isConnected = false
     @Published var nickname: String = "" {
         didSet {
@@ -1257,13 +1258,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     // MARK: - Message Formatting
 
     @MainActor
-    func formatMessageAsText(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
-        messageFormatter.formatMessageAsText(message, colorScheme: colorScheme)
+    func formatMessageAsText(_ message: BitchatMessage, colorScheme: ColorScheme, theme: AppTheme? = nil) -> AttributedString {
+        messageFormatter.formatMessageAsText(message, colorScheme: colorScheme, theme: theme ?? currentTheme)
     }
 
     @MainActor
-    func formatMessageHeader(_ message: BitchatMessage, colorScheme: ColorScheme) -> AttributedString {
-        messageFormatter.formatMessageHeader(message, colorScheme: colorScheme)
+    func formatMessageHeader(_ message: BitchatMessage, colorScheme: ColorScheme, theme: AppTheme? = nil) -> AttributedString {
+        messageFormatter.formatMessageHeader(message, colorScheme: colorScheme, theme: theme ?? currentTheme)
     }
 
     // MARK: - Noise Protocol Support

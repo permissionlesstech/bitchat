@@ -98,7 +98,7 @@ struct ContentPeopleSheetView: View {
                 }
             }
         }
-        .background(palette.background)
+        .themedSheetBackground()
         .foregroundColor(palette.primary)
         #if os(macOS)
         .frame(minWidth: 420, minHeight: 520)
@@ -150,7 +150,7 @@ private struct ContentPeopleListView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 12) {
                     Text(peopleSheetTitle)
-                        .font(.bitchatSystem(size: 18, design: .monospaced))
+                        .bitchatFont(size: 18)
                         .foregroundColor(palette.primary)
                     Spacer()
                     if case .mesh = locationChannelsModel.selectedChannel {
@@ -172,7 +172,7 @@ private struct ContentPeopleListView: View {
                         }
                     }) {
                         Image(systemName: "xmark")
-                            .font(.bitchatSystem(size: 12, weight: .semibold, design: .monospaced))
+                            .bitchatFont(size: 12, weight: .semibold)
                             .frame(width: 32, height: 32)
                     }
                     .buttonStyle(.plain)
@@ -188,9 +188,9 @@ private struct ContentPeopleListView: View {
                     let subtitleColor: Color = {
                         switch locationChannelsModel.selectedChannel {
                         case .mesh:
-                            return Color.blue
+                            return palette.accentBlue
                         case .location:
-                            return Color.green
+                            return palette.locationAccent
                         }
                     }()
 
@@ -200,17 +200,17 @@ private struct ContentPeopleListView: View {
                         Text(activeText)
                             .foregroundColor(.secondary)
                     }
-                    .font(.bitchatSystem(size: 12, design: .monospaced))
+                    .bitchatFont(size: 12)
                 } else {
                     Text(activeText)
-                        .font(.bitchatSystem(size: 12, design: .monospaced))
+                        .bitchatFont(size: 12)
                         .foregroundColor(.secondary)
                 }
             }
             .padding(.horizontal, 16)
             .padding(.top, 16)
             .padding(.bottom, 12)
-            .background(palette.background)
+            .themedSurface()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 6) {
@@ -285,6 +285,7 @@ private struct ContentPrivateChatSheetView: View {
     var isTextFieldFocused: FocusState<Bool>.Binding
     @ObservedObject var voiceRecordingVM: VoiceRecordingViewModel
     @Binding var autocompleteDebounceTimer: Timer?
+    @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
 
     let headerHeight: CGFloat
@@ -352,7 +353,7 @@ private struct ContentPrivateChatSheetView: View {
                         }
                     }) {
                         Image(systemName: "xmark")
-                            .font(.bitchatSystem(size: 12, weight: .semibold, design: .monospaced))
+                            .bitchatFont(size: 12, weight: .semibold)
                             .frame(width: 32, height: 32)
                     }
                     .buttonStyle(.plain)
@@ -362,7 +363,7 @@ private struct ContentPrivateChatSheetView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 10)
                 .padding(.bottom, 12)
-                .background(palette.background)
+                .themedSurface()
             }
 
             MessageListView(
@@ -377,10 +378,12 @@ private struct ContentPrivateChatSheetView: View {
                 showSidebar: $showSidebar,
                 isTextFieldFocused: isTextFieldFocused
             )
-            .background(palette.background)
+            .themedSurface()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            Divider()
+            if !theme.usesGlassChrome {
+                Divider()
+            }
 
             #if os(iOS)
             ContentComposerView(
@@ -403,7 +406,7 @@ private struct ContentPrivateChatSheetView: View {
             )
             #endif
         }
-        .background(palette.background)
+        .themedSheetBackground()
         .foregroundColor(palette.primary)
         .highPriorityGesture(
             DragGesture(minimumDistance: 25, coordinateSpace: .local)
@@ -453,7 +456,7 @@ private struct ContentPrivateHeaderInfoButton: View {
                 }
 
                 Text(headerState.displayName)
-                    .font(.bitchatSystem(size: 16, weight: .medium, design: .monospaced))
+                    .bitchatFont(size: 16, weight: .medium)
                     .foregroundColor(palette.primary)
 
                 if let encryptionStatus = headerState.encryptionStatus,

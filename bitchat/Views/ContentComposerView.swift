@@ -6,7 +6,7 @@ import UIKit
 struct ContentComposerView: View {
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
 
     @Binding var messageText: String
@@ -33,7 +33,7 @@ struct ContentComposerView: View {
                         }) {
                             HStack {
                                 Text(suggestion)
-                                    .font(.bitchatSystem(size: 11, design: .monospaced))
+                                    .bitchatFont(size: 11)
                                     .foregroundColor(palette.primary)
                                     .fontWeight(.medium)
                                 Spacer()
@@ -46,11 +46,7 @@ struct ContentComposerView: View {
                         .background(Color.gray.opacity(0.1))
                     }
                 }
-                .background(palette.background)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4)
-                        .stroke(palette.secondary.opacity(0.3), lineWidth: 1)
-                )
+                .themedOverlayPanel()
                 .padding(.horizontal, 12)
             }
 
@@ -70,7 +66,7 @@ struct ContentComposerView: View {
                     .foregroundColor(palette.secondary.opacity(0.6))
                 )
                 .textFieldStyle(.plain)
-                .font(.bitchatSystem(size: 15, design: .monospaced))
+                .bitchatFont(size: 15)
                 .foregroundColor(palette.primary)
                 .focused(isTextFieldFocused)
                 .autocorrectionDisabled(true)
@@ -79,12 +75,9 @@ struct ContentComposerView: View {
                 #endif
                 .submitLabel(.send)
                 .onSubmit(onSendMessage)
-                .padding(.vertical, 4)
+                .padding(.vertical, theme.usesGlassChrome ? 8 : 4)
                 .padding(.horizontal, 6)
-                .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(colorScheme == .dark ? Color.black.opacity(0.35) : Color.white.opacity(0.7))
-                )
+                .themedInputBackground()
                 .modifier(FocusEffectDisabledModifier())
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .onChange(of: messageText) { newValue in
@@ -107,9 +100,9 @@ struct ContentComposerView: View {
             }
         }
         .padding(.horizontal, 6)
-        .padding(.top, 6)
+        .padding(.top, theme.usesGlassChrome ? 8 : 6)
         .padding(.bottom, 8)
-        .background(palette.background.opacity(0.95))
+        .themedChromePanel(edge: .bottom)
         .onDisappear {
             autocompleteDebounceTimer?.invalidate()
         }
@@ -127,7 +120,7 @@ private extension ContentComposerView {
                     "recording \(voiceRecordingVM.formattedDuration(for: context.date))",
                     comment: "Voice note recording duration indicator"
                 )
-                .font(.bitchatSystem(size: 13, design: .monospaced))
+                .bitchatFont(size: 13)
                 .foregroundColor(.red)
             }
             Spacer()
@@ -147,7 +140,7 @@ private extension ContentComposerView {
     }
 
     var composerAccentColor: Color {
-        privateConversationModel.selectedPeerID != nil ? Color.orange : palette.primary
+        privateConversationModel.selectedPeerID != nil ? Color.orange : palette.accent
     }
 
     var attachmentButton: some View {

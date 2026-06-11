@@ -21,7 +21,7 @@ struct MyQRView: View {
     var body: some View {
         VStack(spacing: 12) {
             Text(Strings.title)
-                .font(.bitchatSystem(size: 16, weight: .bold, design: .monospaced))
+                .bitchatFont(size: 16, weight: .bold)
 
             VStack(spacing: 10) {
                 QRCodeImage(data: qrString, size: 240)
@@ -29,7 +29,7 @@ struct MyQRView: View {
 
                 // Non-scrolling, fully visible URL (wraps across lines)
                 Text(qrString)
-                    .font(.bitchatSystem(size: 11, design: .monospaced))
+                    .bitchatFont(size: 11)
                     .textSelection(.enabled)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
@@ -69,7 +69,7 @@ struct QRCodeImage: View {
                     .frame(width: size, height: size)
                     .overlay(
                         Text(Strings.unavailable)
-                            .font(.bitchatSystem(size: 12, design: .monospaced))
+                            .bitchatFont(size: 12)
                             .foregroundColor(.gray)
                     )
             }
@@ -150,7 +150,7 @@ struct QRScanView: View {
             .clipShape(RoundedRectangle(cornerRadius: 8))
             #else
             Text(Strings.pastePrompt)
-                .font(.bitchatSystem(size: 14, weight: .medium, design: .monospaced))
+                .bitchatFont(size: 14, weight: .medium)
             TextEditor(text: $input)
                 .frame(height: 100)
                 .border(Color.gray.opacity(0.4))
@@ -284,7 +284,7 @@ struct VerificationSheetView: View {
     @ThemedPalette private var palette
 
     private var backgroundColor: Color { palette.background }
-    private var accentColor: Color { palette.primary }
+    private var accentColor: Color { palette.accent }
     private var boxColor: Color { Color.gray.opacity(0.1) }
 
     var body: some View {
@@ -292,7 +292,7 @@ struct VerificationSheetView: View {
             // Top header (always at top)
             HStack {
                 Text("verification.sheet.title")
-                    .font(.bitchatSystem(size: 14, weight: .bold, design: .monospaced))
+                    .bitchatFont(size: 14, weight: .bold)
                     .foregroundColor(accentColor)
                 Spacer()
                 Button(action: {
@@ -316,7 +316,7 @@ struct VerificationSheetView: View {
                 if showingScanner {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("verification.scan.prompt_friend")
-                            .font(.bitchatSystem(size: 16, weight: .bold, design: .monospaced))
+                            .bitchatFont(size: 16, weight: .bold)
                             .frame(maxWidth: .infinity)
                             .multilineTextAlignment(.center)
                             .foregroundColor(accentColor)
@@ -350,13 +350,13 @@ struct VerificationSheetView: View {
                 if showingScanner {
                     Button(action: { showingScanner = false }) {
                         Label("show my qr", systemImage: "qrcode")
-                            .font(.bitchatSystem(size: 13, design: .monospaced))
+                            .bitchatFont(size: 13)
                     }
                     .buttonStyle(.bordered)
                 } else {
                     Button(action: { showingScanner = true }) {
                         Label("scan someone else's qr", systemImage: "camera.viewfinder")
-                            .font(.bitchatSystem(size: 13, weight: .medium, design: .monospaced))
+                            .bitchatFont(size: 13, weight: .medium)
                     }
                     .buttonStyle(.bordered)
                     .tint(.gray)
@@ -367,7 +367,7 @@ struct VerificationSheetView: View {
                    verificationModel.isVerified(peerID: peerID) {
                     Button(action: { verificationModel.unverifyFingerprint(for: peerID) }) {
                         Label("remove verification", systemImage: "minus.circle")
-                            .font(.bitchatSystem(size: 12, design: .monospaced))
+                            .bitchatFont(size: 12)
                     }
                     .buttonStyle(.bordered)
                     .tint(.gray)
@@ -376,7 +376,7 @@ struct VerificationSheetView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
         }
-        .background(backgroundColor)
+        .themedSheetBackground()
         .onDisappear { showingScanner = false }
     }
 }
