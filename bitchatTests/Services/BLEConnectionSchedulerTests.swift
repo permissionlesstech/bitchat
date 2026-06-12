@@ -138,6 +138,40 @@ struct BLEConnectionSchedulerTests {
     }
 
     @Test
+    func disconnectSettleWindowAppliesToQueuedCandidates() {
+        // A candidate can already be queued when its peripheral drops (weak
+        // adverts are enqueued even while connected). The post-disconnect
+        // queue drain must honor the settle window, not reconnect instantly.
+        let scheduler = BLEConnectionScheduler<String>()
+        let now = Date()
+        scheduler.enqueue(makeCandidate(id: "p1", rssi: -85, now: now))
+        scheduler.recordDisconnectError(peripheralID: "p1", at: now)
+
+        let during = scheduler.nextCandidate(
+            connectedOrConnectingCount: 0,
+            isAlreadyConnectingOrConnected: { _ in false },
+            now: now.addingTimeInterval(0.1)
+        )
+        guard case .retryAfter(let delay) = during else {
+            Issue.record("Expected retryAfter during settle window, got \(during)")
+            return
+        }
+        #expect(delay > 0)
+        #expect(scheduler.candidateCount == 1)
+
+        let after = scheduler.nextCandidate(
+            connectedOrConnectingCount: 0,
+            isAlreadyConnectingOrConnected: { _ in false },
+            now: now.addingTimeInterval(TransportConfig.bleDisconnectDiscoveryIgnoreSeconds + 1)
+        )
+        guard case .connect(let candidate) = after else {
+            Issue.record("Expected connect after settle window, got \(after)")
+            return
+        }
+        #expect(candidate.peripheralID == "p1")
+    }
+
+    @Test
     func connectTimeoutBlocksRediscoveryForFullWindow() {
         let scheduler = BLEConnectionScheduler<String>()
         let now = Date()

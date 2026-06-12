@@ -167,6 +167,11 @@ final class BLEConnectionScheduler<Peripheral> {
                 return .retryAfter(delay)
             }
 
+            if let delay = disconnectSettleDelay(for: candidate, now: now) {
+                enqueue(candidate)
+                return .retryAfter(delay)
+            }
+
             if isAlreadyConnectingOrConnected(candidate.peripheralID) {
                 continue
             }
@@ -259,6 +264,20 @@ final class BLEConnectionScheduler<Peripheral> {
         guard elapsed < weakLinkCooldownSeconds && candidate.rssi <= weakLinkRSSICutoff else { return nil }
         let remaining = weakLinkCooldownSeconds - elapsed
         return min(max(2.0, remaining), 15.0)
+    }
+
+    // The disconnect settle window must hold on the queue path too: a stale
+    // candidate enqueued while the peripheral was still connected would
+    // otherwise reconnect immediately via the post-disconnect queue drain,
+    // bypassing the window and recreating reconnect/cancel thrash.
+    private func disconnectSettleDelay(
+        for candidate: BLEConnectionCandidate<Peripheral>,
+        now: Date
+    ) -> TimeInterval? {
+        guard let lastDisconnect = recentDisconnects[candidate.peripheralID] else { return nil }
+        let remaining = TransportConfig.bleDisconnectDiscoveryIgnoreSeconds - now.timeIntervalSince(lastDisconnect)
+        guard remaining > 0 else { return nil }
+        return remaining + 0.05
     }
 
     private func score(_ candidate: BLEConnectionCandidate<Peripheral>, now: Date) -> Int {
