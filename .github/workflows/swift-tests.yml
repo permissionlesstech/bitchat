@@ -41,14 +41,50 @@ jobs:
             ${{ runner.os }}-${{ matrix.name }}-${{ hashFiles(format('{0}/**/Package.resolved', matrix.path)) }}
             ${{ runner.os }}-${{ matrix.name }}-
 
+      - name: Build tests
+        # Built separately so the hang watchdog below times only test
+        # execution: a cold-cache coverage build on a slow runner can
+        # legitimately take several minutes, and is already bounded by the
+        # 15-minute job timeout.
+        run: swift build --build-tests --enable-code-coverage --package-path ${{ matrix.path }}
+
       - name: Run Tests
         # Perf benchmarks are excluded here and run in their own serial step
         # below: measuring while parallel test processes contend for cores
         # produces noisy numbers, and the XCTest measure machinery has hung
-        # intermittently under parallel workers on loaded runners.
+        # intermittently under parallel workers on loaded runners. Excluded
+        # via --skip (not just the env guard): every app run since the
+        # baselines landed timed out at the 15-minute job limit with the
+        # baseline tests dispatched into the parallel phase.
+        #
+        # The watchdog samples any still-running test processes after 5
+        # minutes (the suite passes in seconds when healthy; the build is
+        # done by this step) and kills the run, so a hang fails fast with
+        # stacks in the log instead of a silent timeout.
         env:
           BITCHAT_SKIP_PERF_BASELINES: "1"
-        run: swift test --parallel --quiet --enable-code-coverage --package-path ${{ matrix.path }}
+        run: |
+          swift test --skip-build --parallel --quiet --enable-code-coverage \
+            --skip PerformanceBaselineTests \
+            --package-path ${{ matrix.path }} &
+          test_pid=$!
+          (
+            sleep 300
+            if kill -0 "$test_pid" 2>/dev/null; then
+              echo "::group::Tests still running after 5 minutes — sampling before kill"
+              for pid in $(pgrep -if 'swiftpm-testing|xctest|PackageTests' || true); do
+                echo "--- sample of pid $pid ---"
+                sample "$pid" 5 2>/dev/null || true
+              done
+              echo "::endgroup::"
+              pkill -KILL -P "$test_pid" 2>/dev/null || true
+              kill -KILL "$test_pid" 2>/dev/null || true
+            fi
+          ) &
+          watchdog_pid=$!
+          wait "$test_pid" && status=0 || status=$?
+          kill "$watchdog_pid" 2>/dev/null || true
+          exit "$status"
 
       # Benchmarks run serially on an otherwise idle runner for stable
       # numbers; BITCHAT_PERF_LOG captures the PERF[...] lines for the gate.

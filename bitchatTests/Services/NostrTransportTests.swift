@@ -310,6 +310,15 @@ struct NostrTransportTests {
         withExtendedLifetime(transport) {}
     }
 
+    // These thread-safety tests must hammer from the dispatch pool
+    // (concurrentPerform), NOT a task group: transport calls block in
+    // queue.sync, and a 100-task group runs them on the Swift Concurrency
+    // cooperative pool — one thread per core, just 3 on CI runners. Parking
+    // every cooperative thread in a blocking sync violates the forward
+    // progress contract and wedged dispatch on the CI runners' macOS,
+    // deadlocking the whole app suite into the 15-minute job timeout
+    // (watchdog stacks: NostrTransport.isPeerReachable syncs holding all
+    // pool threads). Blocking is legal on dispatch worker threads.
     @Test("Concurrent read receipt enqueue does not crash")
     @MainActor
     func concurrentReadReceiptEnqueue() async throws {
@@ -318,9 +327,9 @@ struct NostrTransportTests {
         let transport = NostrTransport(keychain: keychain, idBridge: idBridge)
         let iterations = 100
 
-        await withTaskGroup(of: Void.self) { group in
-            for i in 0..<iterations {
-                group.addTask {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            DispatchQueue.global().async {
+                DispatchQueue.concurrentPerform(iterations: iterations) { i in
                     let receipt = ReadReceipt(
                         originalMessageID: UUID().uuidString,
                         readerID: PeerID(str: String(format: "%016x", i)),
@@ -329,8 +338,10 @@ struct NostrTransportTests {
                     let peerID = PeerID(str: String(format: "%016x", i))
                     transport.sendReadReceipt(receipt, to: peerID)
                 }
+                continuation.resume()
             }
         }
+        withExtendedLifetime(transport) {}
     }
 
     @Test("isPeerReachable is thread safe")
@@ -341,18 +352,16 @@ struct NostrTransportTests {
         let transport = NostrTransport(keychain: keychain, idBridge: idBridge)
         let iterations = 100
 
-        await withTaskGroup(of: Bool.self) { group in
-            for i in 0..<iterations {
-                group.addTask {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            DispatchQueue.global().async {
+                DispatchQueue.concurrentPerform(iterations: iterations) { i in
                     let peerID = PeerID(str: String(format: "%016x", i))
-                    return transport.isPeerReachable(peerID)
+                    #expect(transport.isPeerReachable(peerID) == false)
                 }
-            }
-
-            for await result in group {
-                #expect(result == false)
+                continuation.resume()
             }
         }
+        withExtendedLifetime(transport) {}
     }
 
     @MainActor
