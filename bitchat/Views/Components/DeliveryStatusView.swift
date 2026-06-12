@@ -44,6 +44,10 @@ struct DeliveryStatusView: View {
             )
         }
 
+        static var carried: String {
+            String(localized: "content.delivery.carried", defaultValue: "Carried by a friend who may meet them", comment: "Tooltip for messages handed to a courier for physical delivery")
+        }
+
         static func deliveredToMembers(_ reached: Int, _ total: Int) -> String {
             String(
                 format: String(localized: "content.delivery.delivered_members", comment: "Tooltip for partially delivered messages"),
@@ -68,6 +72,12 @@ struct DeliveryStatusView: View {
                 .font(.bitchatSystem(size: 10))
                 .foregroundColor(secondaryTextColor.opacity(0.6))
             
+        case .carried:
+            Image(systemName: "figure.walk")
+                .font(.bitchatSystem(size: 10))
+                .foregroundColor(secondaryTextColor.opacity(0.8))
+                .help(Strings.carried)
+
         case .delivered(let nickname, _):
             HStack(spacing: -2) {
                 Image(systemName: "checkmark")
@@ -111,6 +121,7 @@ struct DeliveryStatusView: View {
     let statuses: [DeliveryStatus] = [
         .sending,
         .sent,
+        .carried,
         .delivered(to: "John Doe", at: Date()),
         .read(by: "Jane Doe", at: Date()),
         .failed(reason: "Offline"),

@@ -11,17 +11,20 @@ import struct Foundation.Date
 public enum DeliveryStatus: Codable, Equatable, Hashable {
     case sending
     case sent  // Left our device
+    case carried  // Sealed envelope handed to a courier; best-effort physical delivery
     case delivered(to: String, at: Date)  // Confirmed by recipient
     case read(by: String, at: Date)  // Seen by recipient
     case failed(reason: String)
     case partiallyDelivered(reached: Int, total: Int)  // For rooms
-    
+
     public var displayText: String {
         switch self {
         case .sending:
             return "Sending..."
         case .sent:
             return "Sent"
+        case .carried:
+            return "Carried by a friend"
         case .delivered(let nickname, _):
             return "Delivered to \(nickname)"
         case .read(let nickname, _):

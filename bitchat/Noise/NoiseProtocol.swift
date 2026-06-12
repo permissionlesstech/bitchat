@@ -93,6 +93,7 @@ enum NoisePattern {
     case XX  // Most versatile, mutual authentication
     case IK  // Initiator knows responder's static key
     case NK  // Anonymous initiator
+    case X   // One-way: single message to a known static key (no response)
 }
 
 enum NoiseRole {
@@ -594,7 +595,7 @@ final class NoiseHandshakeState {
         switch pattern {
         case .XX:
             break // No pre-message keys
-        case .IK, .NK:
+        case .IK, .NK, .X:
             if role == .initiator, let remoteStatic = remoteStaticPublic {
                 symmetricState.mixHash(remoteStatic.rawRepresentation)
             } else if role == .responder, let localStatic = localStaticPublic {
@@ -897,6 +898,7 @@ extension NoisePattern {
         case .XX: return "XX"
         case .IK: return "IK"
         case .NK: return "NK"
+        case .X: return "X"
         }
     }
     
@@ -917,6 +919,10 @@ extension NoisePattern {
             return [
                 [.e, .es],      // -> e, es
                 [.e, .ee]       // <- e, ee
+            ]
+        case .X:
+            return [
+                [.e, .es, .s, .ss] // -> e, es, s, ss (single one-way message)
             ]
         }
     }

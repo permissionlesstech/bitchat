@@ -355,9 +355,10 @@ private extension ChatLifecycleCoordinator {
         case .failed: return 1
         case .sending: return 2
         case .sent: return 3
-        case .partiallyDelivered: return 4
-        case .delivered: return 5
-        case .read: return 6
+        case .carried: return 4
+        case .partiallyDelivered: return 5
+        case .delivered: return 6
+        case .read: return 7
         }
     }
 }
