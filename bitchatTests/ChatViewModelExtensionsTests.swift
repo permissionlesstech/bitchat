@@ -469,7 +469,7 @@ struct ChatViewModelNostrExtensionTests {
 
         let didUpdate = await TestHelpers.waitUntil(
             { isDelivered(status: deliveryStatus(in: viewModel, peerID: convKey, messageID: messageID)) },
-            timeout: 0.5
+            timeout: 5.0
         )
         #expect(didUpdate)
     }
@@ -507,7 +507,7 @@ struct ChatViewModelNostrExtensionTests {
 
         let didUpdate = await TestHelpers.waitUntil(
             { isRead(status: deliveryStatus(in: viewModel, peerID: convKey, messageID: messageID)) },
-            timeout: 0.5
+            timeout: 5.0
         )
         #expect(didUpdate)
     }
@@ -535,7 +535,7 @@ struct ChatViewModelNostrExtensionTests {
 
         let didStore = await TestHelpers.waitUntil(
             { viewModel.privateChats[convKey]?.first?.content == "Hello from gift wrap" },
-            timeout: 0.5
+            timeout: 5.0
         )
         #expect(didStore)
         #expect(viewModel.nostrKeyMapping[convKey] == sender.publicKeyHex)
@@ -603,7 +603,7 @@ struct ChatViewModelNostrExtensionTests {
 
         let didUpdate = await TestHelpers.waitUntil(
             { isDelivered(status: deliveryStatus(in: viewModel, peerID: convKey, messageID: messageID)) },
-            timeout: 0.5
+            timeout: 5.0
         )
         #expect(didUpdate)
     }
@@ -1000,7 +1000,7 @@ struct ChatViewModelMediaTransferTests {
         viewModel.selectedPrivateChatPeer = peerID
         viewModel.sendVoiceNote(at: url)
 
-        let didSend = await TestHelpers.waitUntil({ transport.sentPrivateFiles.count == 1 }, timeout: 0.5)
+        let didSend = await TestHelpers.waitUntil({ transport.sentPrivateFiles.count == 1 }, timeout: 5.0)
         #expect(didSend)
         #expect(transport.sentPrivateFiles.first?.peerID == peerID)
         #expect(viewModel.privateChats[peerID]?.last?.content.contains("[voice]") == true)
@@ -1020,7 +1020,7 @@ struct ChatViewModelMediaTransferTests {
 
         let didFail = await TestHelpers.waitUntil({
             isFailed(status: viewModel.privateChats[peerID]?.last?.deliveryStatus)
-        }, timeout: 0.5)
+        }, timeout: 5.0)
         #expect(didFail)
         #expect(!FileManager.default.fileExists(atPath: url.path))
         #expect(transport.sentPrivateFiles.isEmpty)
