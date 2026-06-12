@@ -13,15 +13,21 @@ enum BLEFanoutSelector {
         centralIDs: [String],
         ingressLink: BLEIngressLinkID?,
         excludedLinks: Set<BLEIngressLinkID> = [],
+        peripheralPeerBindings: [String: PeerID] = [:],
+        centralPeerBindings: [String: PeerID] = [:],
         directedPeerHint: PeerID?,
         packetType: UInt8,
         messageID: String
     ) -> BLEFanoutSelection {
-        let allowed = allowedLinks(
-            peripheralIDs: peripheralIDs,
-            centralIDs: centralIDs,
-            ingressLink: ingressLink,
-            excludedLinks: excludedLinks
+        let allowed = collapseDuplicateLinksPerPeer(
+            allowedLinks(
+                peripheralIDs: peripheralIDs,
+                centralIDs: centralIDs,
+                ingressLink: ingressLink,
+                excludedLinks: excludedLinks
+            ),
+            peripheralPeerBindings: peripheralPeerBindings,
+            centralPeerBindings: centralPeerBindings
         )
 
         guard shouldSubset(packetType: packetType, directedPeerHint: directedPeerHint) else {
@@ -63,6 +69,43 @@ enum BLEFanoutSelector {
         allowedCentralIDs.removeAll { blockedLinks.contains(.central($0)) }
 
         return (allowedPeripheralIDs, allowedCentralIDs)
+    }
+
+    // Dual-role pairs hold two live links (we-as-central writing to their
+    // peripheral, and they-as-central subscribed to ours). Sending the same
+    // packet down both doubles airtime for nothing — the receiver's assembler
+    // and deduplicator just discard the copy. Keep one link per bound peer,
+    // preferring the peripheral (write) side: it has per-link flow control
+    // via canSendWriteWithoutResponse, while notifications share the
+    // peripheral manager's update queue across all centrals. Links with no
+    // bound peer yet (pre-announce) pass through untouched.
+    private static func collapseDuplicateLinksPerPeer(
+        _ links: (peripheralIDs: [String], centralIDs: [String]),
+        peripheralPeerBindings: [String: PeerID],
+        centralPeerBindings: [String: PeerID]
+    ) -> (peripheralIDs: [String], centralIDs: [String]) {
+        guard !peripheralPeerBindings.isEmpty || !centralPeerBindings.isEmpty else {
+            return links
+        }
+
+        var seenPeers = Set<PeerID>()
+        var keptPeripheralIDs: [String] = []
+        for id in links.peripheralIDs {
+            if let peer = peripheralPeerBindings[id], !seenPeers.insert(peer).inserted {
+                continue
+            }
+            keptPeripheralIDs.append(id)
+        }
+
+        var keptCentralIDs: [String] = []
+        for id in links.centralIDs {
+            if let peer = centralPeerBindings[id], !seenPeers.insert(peer).inserted {
+                continue
+            }
+            keptCentralIDs.append(id)
+        }
+
+        return (keptPeripheralIDs, keptCentralIDs)
     }
 
     private static func shouldSubset(packetType: UInt8, directedPeerHint: PeerID?) -> Bool {

@@ -79,6 +79,47 @@ struct BLEFanoutSelectorTests {
     }
 
     @Test
+    func dualLinkPeerRelaysOnSingleLinkPreferringPeripheral() {
+        // A dual-role pair holds two live links to the same peer; relays must
+        // not transmit the same packet down both. The peripheral (write) link
+        // wins because it has per-link flow control.
+        let peer = PeerID(str: "1122334455667788")
+        let selection = BLEFanoutSelector.selectLinks(
+            peripheralIDs: ["p1"],
+            centralIDs: ["c1"],
+            ingressLink: nil,
+            peripheralPeerBindings: ["p1": peer],
+            centralPeerBindings: ["c1": peer],
+            directedPeerHint: nil,
+            packetType: MessageType.fragment.rawValue,
+            messageID: "message-1"
+        )
+
+        #expect(selection.peripheralIDs == Set(["p1"]))
+        #expect(selection.centralIDs.isEmpty)
+    }
+
+    @Test
+    func unboundLinksSurviveDuplicatePeerCollapse() {
+        // Links whose peer is not yet known (pre-announce) must keep
+        // receiving broadcasts alongside a deduplicated bound pair.
+        let peer = PeerID(str: "1122334455667788")
+        let selection = BLEFanoutSelector.selectLinks(
+            peripheralIDs: ["p1"],
+            centralIDs: ["c-bound", "c-unbound"],
+            ingressLink: nil,
+            peripheralPeerBindings: ["p1": peer],
+            centralPeerBindings: ["c-bound": peer],
+            directedPeerHint: nil,
+            packetType: MessageType.fragment.rawValue,
+            messageID: "message-1"
+        )
+
+        #expect(selection.peripheralIDs == Set(["p1"]))
+        #expect(selection.centralIDs == Set(["c-unbound"]))
+    }
+
+    @Test
     func broadcastWithTwoLinksKeepsBothAfterIngressExclusion() {
         let selection = BLEFanoutSelector.selectLinks(
             peripheralIDs: ["p1", "p2"],

@@ -966,6 +966,9 @@ final class BLEService: NSObject {
         let subscribedCentrals = characteristic == nil ? [] : snapshotSubscribedCentrals().centrals
         let connectedPeripheralIDs = connectedStates.map { $0.peripheral.identifier.uuidString }
         let centralIDs = subscribedCentrals.map { $0.identifier.uuidString }
+        let peripheralPeerBindings = Dictionary(uniqueKeysWithValues: connectedStates.compactMap { state in
+            state.peerID.map { (state.peripheral.identifier.uuidString, $0) }
+        })
         let plan = BLEOutboundLinkPlanner.plan(
             packet: packet,
             dataCount: data.count,
@@ -975,6 +978,8 @@ final class BLEService: NSObject {
             centralNotifyLimits: subscribedCentrals.map { $0.maximumUpdateValueLength },
             ingressRecord: ingressRecord,
             excludedLinks: excludedPeerLinks,
+            peripheralPeerBindings: peripheralPeerBindings,
+            centralPeerBindings: snapshotSubscribedCentrals().peerIDsByCentralUUID,
             directedOnlyPeer: directedOnlyPeer
         )
 

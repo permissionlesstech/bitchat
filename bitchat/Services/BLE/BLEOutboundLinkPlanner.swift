@@ -18,6 +18,8 @@ enum BLEOutboundLinkPlanner {
         centralNotifyLimits: [Int],
         ingressRecord: BLEIngressLinkRecord?,
         excludedLinks: Set<BLEIngressLinkID>,
+        peripheralPeerBindings: [String: PeerID] = [:],
+        centralPeerBindings: [String: PeerID] = [:],
         directedOnlyPeer: PeerID?
     ) -> BLEOutboundLinkPlan {
         if let minLimit = minimumLinkLimit(
@@ -39,6 +41,8 @@ enum BLEOutboundLinkPlanner {
             centralIDs: centralIDs,
             ingressLink: ingressRecord?.link,
             excludedLinks: excludedLinks,
+            peripheralPeerBindings: peripheralPeerBindings,
+            centralPeerBindings: centralPeerBindings,
             directedPeerHint: directedPeerHint,
             packetType: packet.type,
             messageID: BLEOutboundPacketPolicy.messageID(for: packet)
