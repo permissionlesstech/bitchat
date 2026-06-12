@@ -41,6 +41,13 @@ jobs:
             ${{ runner.os }}-${{ matrix.name }}-${{ hashFiles(format('{0}/**/Package.resolved', matrix.path)) }}
             ${{ runner.os }}-${{ matrix.name }}-
 
+      - name: Build tests
+        # Built separately so the hang watchdog below times only test
+        # execution: a cold-cache coverage build on a slow runner can
+        # legitimately take several minutes, and is already bounded by the
+        # 15-minute job timeout.
+        run: swift build --build-tests --enable-code-coverage --package-path ${{ matrix.path }}
+
       - name: Run Tests
         # Perf benchmarks are excluded here and run in their own serial step
         # below: measuring while parallel test processes contend for cores
@@ -50,20 +57,21 @@ jobs:
         # baselines landed timed out at the 15-minute job limit with the
         # baseline tests dispatched into the parallel phase.
         #
-        # The watchdog samples any still-running test processes after 10
-        # minutes and kills the run, so a hang fails fast with stacks in the
-        # log instead of a silent timeout.
+        # The watchdog samples any still-running test processes after 5
+        # minutes (the suite passes in seconds when healthy; the build is
+        # done by this step) and kills the run, so a hang fails fast with
+        # stacks in the log instead of a silent timeout.
         env:
           BITCHAT_SKIP_PERF_BASELINES: "1"
         run: |
-          swift test --parallel --quiet --enable-code-coverage \
+          swift test --skip-build --parallel --quiet --enable-code-coverage \
             --skip PerformanceBaselineTests \
             --package-path ${{ matrix.path }} &
           test_pid=$!
           (
-            sleep 600
+            sleep 300
             if kill -0 "$test_pid" 2>/dev/null; then
-              echo "::group::Tests still running after 10 minutes — sampling before kill"
+              echo "::group::Tests still running after 5 minutes — sampling before kill"
               for pid in $(pgrep -if 'swiftpm-testing|xctest|PackageTests' || true); do
                 echo "--- sample of pid $pid ---"
                 sample "$pid" 5 2>/dev/null || true
