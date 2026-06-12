@@ -255,9 +255,8 @@ final class MessageFormattingEngine {
         isSelf: Bool,
         isMentioned: Bool
     ) -> AttributedString {
-        // For very long content without special tokens, use plain formatting
-        let containsCashu = containsCashuToken(content)
-        if (content.count > 4000 || content.hasVeryLongToken(threshold: 1024)) && !containsCashu {
+        // For very long content, use plain formatting to avoid expensive regex and detector work.
+        if content.isOversizedForRichFormatting() {
             return formatPlainContent(content, baseColor: baseColor, isSelf: isSelf)
         }
 
