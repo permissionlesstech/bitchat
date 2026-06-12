@@ -41,7 +41,13 @@ final class FavoritesPersistenceService: ObservableObject {
     /// unchanged. Tests that need their own instance keep injecting a mock
     /// via `init(keychain:)`.
     private nonisolated static func makeDefaultKeychain() -> KeychainManagerProtocol {
-        TestEnvironment.isRunningTests ? PreviewKeychainManager() : KeychainManager()
+        // PreviewKeychainManager lives in _PreviewHelpers, a development
+        // asset excluded from archive builds — release code must not
+        // reference it. Tests always run Debug, so the guard is lossless.
+        #if DEBUG
+        if TestEnvironment.isRunningTests { return PreviewKeychainManager() }
+        #endif
+        return KeychainManager()
     }
 
     init(keychain: KeychainManagerProtocol = FavoritesPersistenceService.makeDefaultKeychain()) {

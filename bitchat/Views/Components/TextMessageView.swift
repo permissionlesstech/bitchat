@@ -81,6 +81,10 @@ struct TextMessageView: View {
     }
 }
 
+// Wrapped in #if DEBUG because the preview depends on _PreviewHelpers
+// (PreviewKeychainManager, BitchatMessage.preview), a development asset
+// excluded from archive builds.
+#if DEBUG
 #Preview {
     let keychain = PreviewKeychainManager()
     let viewModel = ChatViewModel(
@@ -117,3 +121,4 @@ struct TextMessageView: View {
     }
     .environmentObject(conversationUIModel)
 }
+#endif
