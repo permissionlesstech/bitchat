@@ -65,13 +65,23 @@ extension ChatViewModel: ChatPeerListContext {
 final class ChatPeerListCoordinator: @unchecked Sendable {
     private unowned let context: any ChatPeerListContext
     private var recentlySeenPeers: Set<PeerID> = []
+    // The "bitchatters nearby" notification only fires on the transition from
+    // an empty mesh to a populated one — joining peers while already meshed
+    // are visible in the app and must not notify. Set back to true only after
+    // a confirmed-empty reset, so brief link flaps stay silent.
+    private var meshWasEmpty = true
     private var lastNetworkNotificationTime = Date.distantPast
     private var networkResetTimer: Timer?
     private var networkEmptyTimer: Timer?
     private let networkResetGraceSeconds = TransportConfig.networkResetGraceSeconds
+    private let notificationCooldownSeconds: TimeInterval
 
-    init(context: any ChatPeerListContext) {
+    init(
+        context: any ChatPeerListContext,
+        notificationCooldownSeconds: TimeInterval = TransportConfig.networkNotificationCooldownSeconds
+    ) {
         self.context = context
+        self.notificationCooldownSeconds = notificationCooldownSeconds
     }
 
     deinit {
@@ -121,11 +131,18 @@ private extension ChatPeerListCoordinator {
         invalidateNetworkEmptyTimer()
 
         let newPeers = meshPeerSet.subtracting(recentlySeenPeers)
-        guard !newPeers.isEmpty else { return }
+        // Record every sighted peer even when no notification fires. A peer
+        // first seen during the cooldown (or while already meshed) must not
+        // still count as "new" at some later peer-list event — that re-fired
+        // the notification while devices sat idle and connected.
+        recentlySeenPeers.formUnion(meshPeerSet)
 
-        let cooldown = TransportConfig.networkNotificationCooldownSeconds
-        if Date().timeIntervalSince(lastNetworkNotificationTime) >= cooldown {
-            recentlySeenPeers.formUnion(newPeers)
+        let cameFromEmpty = meshWasEmpty
+        meshWasEmpty = false
+
+        guard cameFromEmpty, !newPeers.isEmpty else { return }
+
+        if Date().timeIntervalSince(lastNetworkNotificationTime) >= notificationCooldownSeconds {
             lastNetworkNotificationTime = Date()
             context.notifyNetworkAvailable(peerCount: meshPeers.count)
             SecureLogger.info(
@@ -185,6 +202,7 @@ private extension ChatPeerListCoordinator {
 
         if activeMeshPeerCount == 0 {
             recentlySeenPeers.removeAll()
+            meshWasEmpty = true
             SecureLogger.debug("⏱️ Network notification window reset after quiet period", category: .session)
         } else {
             SecureLogger.debug(
@@ -225,6 +243,7 @@ private extension ChatPeerListCoordinator {
 
         if activeMeshPeerCount == 0 {
             recentlySeenPeers.removeAll()
+            meshWasEmpty = true
             SecureLogger.debug("⏳ Mesh empty — notification state reset after confirmation", category: .session)
         } else {
             SecureLogger.debug(

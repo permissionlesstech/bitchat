@@ -202,6 +202,52 @@ struct ChatPeerListCoordinatorContextTests {
     }
 
     @Test @MainActor
+    func didUpdatePeerList_peerJoiningExistingMeshDoesNotNotify() async {
+        // Cooldown zero so this proves the empty-transition gate alone — a
+        // new peer joining while already meshed must stay silent even with
+        // the cooldown long expired (the sitting-idle re-notify bug).
+        let context = MockChatPeerListContext()
+        let coordinator = ChatPeerListCoordinator(context: context, notificationCooldownSeconds: 0)
+        let peerA = PeerID(str: "0011223344556677")
+        let peerB = PeerID(str: "8899aabbccddeeff")
+        context.connectedMeshPeers = [peerA, peerB]
+
+        coordinator.didUpdatePeerList([peerA])
+        await drainMainActorTasks()
+        #expect(context.networkAvailableNotifications == [1])
+
+        // peerB arrives while peerA is still connected: no notification.
+        coordinator.didUpdatePeerList([peerA, peerB])
+        await drainMainActorTasks()
+        #expect(context.networkAvailableNotifications == [1])
+
+        // Repeat events while idle keep staying silent.
+        coordinator.didUpdatePeerList([peerA, peerB])
+        await drainMainActorTasks()
+        #expect(context.networkAvailableNotifications == [1])
+    }
+
+    @Test @MainActor
+    func didUpdatePeerList_briefMeshFlapDoesNotRenotify() async {
+        let context = MockChatPeerListContext()
+        let coordinator = ChatPeerListCoordinator(context: context, notificationCooldownSeconds: 0)
+        let peerA = PeerID(str: "0011223344556677")
+        context.connectedMeshPeers = [peerA]
+
+        coordinator.didUpdatePeerList([peerA])
+        await drainMainActorTasks()
+        #expect(context.networkAvailableNotifications == [1])
+
+        // Link flap: empty list, then the peer returns before the 30s empty
+        // confirmation fires — silent.
+        coordinator.didUpdatePeerList([])
+        await drainMainActorTasks()
+        coordinator.didUpdatePeerList([peerA])
+        await drainMainActorTasks()
+        #expect(context.networkAvailableNotifications == [1])
+    }
+
+    @Test @MainActor
     func didUpdatePeerList_meshInactivePeersNeverNotify() async {
         let context = MockChatPeerListContext()
         let coordinator = ChatPeerListCoordinator(context: context)
