@@ -105,6 +105,23 @@ private extension ChatViewModelBootstrapper {
                 )
             }
         }
+        // A message with no reachable transport that was handed to a courier
+        // shows a distinct "carried" state instead of sitting in "sending"
+        // forever. Never downgrade a confirmed receipt: the courier copy can
+        // race direct delivery when the peer reappears.
+        viewModel.messageRouter.onMessageCarried = { [weak viewModel] messageID, peerID in
+            guard let viewModel else { return }
+            switch viewModel.conversations.deliveryStatus(forMessageID: messageID) {
+            case .delivered, .read:
+                break
+            default:
+                SecureLogger.debug(
+                    "📦 Message \(messageID.prefix(8))… for \(peerID.id.prefix(8))… handed to courier → marked carried",
+                    category: .session
+                )
+                viewModel.conversations.setDeliveryStatus(.carried, forMessageID: messageID)
+            }
+        }
         viewModel.commandProcessor.contextProvider = viewModel
         viewModel.commandProcessor.meshService = viewModel.meshService
         viewModel.participantTracker.configure(context: viewModel)

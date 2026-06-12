@@ -209,7 +209,7 @@ final class PrivateChatManager: ObservableObject {
                     case .read, .delivered:
                         externalReceipts.insert(message.id)
                         sentReadReceipts.insert(message.id)
-                    case .failed, .partiallyDelivered, .sending, .sent:
+                    case .failed, .partiallyDelivered, .sending, .sent, .carried:
                         break
                     }
                 }

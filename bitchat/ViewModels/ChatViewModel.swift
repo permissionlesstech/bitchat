@@ -1142,6 +1142,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         // Clear persistent favorites from keychain
         FavoritesPersistenceService.shared.clearAllFavorites()
 
+        // Drop courier mail carried for third parties (memory and disk)
+        CourierStore.shared.wipe()
+
         // Identity manager has cleared persisted identity data above
 
         // Clear autocomplete state
