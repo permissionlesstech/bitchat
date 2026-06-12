@@ -151,38 +151,68 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     // Thread safety
     private let queue = DispatchQueue(label: "bitchat.identity.state", attributes: .concurrent)
     
-    // Debouncing for keychain saves
-    private var saveTimer: Timer?
-    private let saveDebounceInterval: TimeInterval = 2.0  // Save at most once every 2 seconds
+    // Pending-save coalescing flag. Reads/writes are serialized on `queue`.
+    // Persistence is done with a fire-and-forget `queue.async(.barrier)` rather
+    // than a retained DispatchSourceTimer: a lingering, never-cancelled timer
+    // keeps the dispatch machinery alive and prevents the unit-test process from
+    // exiting. (The original code used Timer.scheduledTimer on a GCD queue with
+    // no run loop, so saves never actually fired.)
     private var pendingSave = false
-    
+
     // Encryption key
     private let encryptionKey: SymmetricKey
+    /// True when `encryptionKey` is a throwaway generated this session because the
+    /// persisted key could not be read (device locked / access denied). In that
+    /// state we must NOT persist (it would overwrite the real cache with data the
+    /// next launch can't decrypt) and must NOT delete the existing cache.
+    private let encryptionKeyIsEphemeral: Bool
     
     init(_ keychain: KeychainManagerProtocol) {
         self.keychain = keychain
-        
-        // Generate or retrieve encryption key from keychain
+
+        // Retrieve (or, only on genuine first run, generate) the cache
+        // encryption key. We MUST distinguish "key doesn't exist yet" from a
+        // transient failure (device locked / access denied): the legacy
+        // getIdentityKey(forKey:) collapses both to nil, and generating+saving a
+        // new key deletes the existing one first — permanently orphaning the
+        // encrypted cache on a launch that merely couldn't read the key.
         let loadedKey: SymmetricKey
-        
-        // Try to load from keychain
-        if let keyData = keychain.getIdentityKey(forKey: encryptionKeyName) {
+        let keyIsEphemeral: Bool
+
+        switch keychain.getIdentityKeyWithResult(forKey: encryptionKeyName) {
+        case .success(let keyData):
             loadedKey = SymmetricKey(data: keyData)
+            keyIsEphemeral = false
             SecureLogger.logKeyOperation(.load, keyType: "identity cache encryption key", success: true)
-        }
-        // Generate new key if needed
-        else {
-            loadedKey = SymmetricKey(size: .bits256)
-            let keyData = loadedKey.withUnsafeBytes { Data($0) }
-            // Save to keychain
+
+        case .itemNotFound:
+            // Genuine first run: generate and persist a new key.
+            let newKey = SymmetricKey(size: .bits256)
+            let keyData = newKey.withUnsafeBytes { Data($0) }
             let saved = keychain.saveIdentityKey(keyData, forKey: encryptionKeyName)
+            loadedKey = newKey
+            // If even the save failed, treat the key as ephemeral so we don't
+            // later try to persist a cache the next launch can't read.
+            keyIsEphemeral = !saved
             SecureLogger.logKeyOperation(.generate, keyType: "identity cache encryption key", success: saved)
+
+        case .deviceLocked, .authenticationFailed, .accessDenied, .otherError:
+            // Transient/critical read failure. Do NOT overwrite the persisted
+            // key. Use a session-only ephemeral key; the real key and cache are
+            // left intact for a healthy launch.
+            SecureLogger.warning("Identity cache key unavailable; using ephemeral key for this session (not persisting)", category: .security)
+            loadedKey = SymmetricKey(size: .bits256)
+            keyIsEphemeral = true
         }
-        
+
         self.encryptionKey = loadedKey
-        
-        // Load identity cache on init
-        loadIdentityCache()
+        self.encryptionKeyIsEphemeral = keyIsEphemeral
+
+        // Only read the persisted cache when we hold the real key; with an
+        // ephemeral key the decrypt would fail and discard the real cache.
+        if !keyIsEphemeral {
+            loadIdentityCache()
+        }
     }
     
     deinit {
@@ -211,23 +241,28 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
         }
     }
     
+    /// Persists the cache. Always invoked on `queue` under a barrier (its callers
+    /// run inside `queue.async(.barrier)`), so it simply marks the cache dirty
+    /// and persists it on the same serialized context — no timer, nothing left
+    /// scheduled to keep the process alive.
     private func saveIdentityCache() {
-        // Mark that we need to save
         pendingSave = true
-        
-        // Cancel any existing timer
-        saveTimer?.invalidate()
-        
-        // Schedule a new save after the debounce interval
-        saveTimer = Timer.scheduledTimer(withTimeInterval: saveDebounceInterval, repeats: false) { [weak self] _ in
-            self?.performSave()
-        }
+        performSave()
     }
-    
+
+    /// Writes the cache to the keychain. Must run on `queue` with exclusive
+    /// (barrier) access.
     private func performSave() {
         guard pendingSave else { return }
         pendingSave = false
-        
+
+        // Never persist under an ephemeral key — it would overwrite the real
+        // cache with data the next launch cannot decrypt.
+        guard !encryptionKeyIsEphemeral else {
+            SecureLogger.debug("Skipping identity cache save (ephemeral key this session)", category: .security)
+            return
+        }
+
         do {
             let data = try JSONEncoder().encode(cache)
             let sealedBox = try AES.GCM.seal(data, using: encryptionKey)
@@ -239,10 +274,14 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
             SecureLogger.error(error, context: "Failed to save identity cache", category: .security)
         }
     }
-    
-    // Force immediate save (for app termination)
+
+    // Force immediate save (for app termination / lifecycle events). Mutations
+    // already persist synchronously via saveIdentityCache, so this is normally a
+    // no-op (performSave early-returns when nothing is pending). Runs directly on
+    // the caller's thread — deliberately NOT a `queue.sync(barrier)`, which is
+    // reachable from `deinit` and from async tests on the swift-concurrency
+    // cooperative pool where a blocking barrier-sync can starve/deadlock it.
     func forceSave() {
-        saveTimer?.invalidate()
         performSave()
     }
     

@@ -594,6 +594,22 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
         }
     }
 
+    /// Removes all persisted location state and resets the in-memory view.
+    /// Used by the panic wipe — selected channel, teleport set and bookmarks
+    /// (which reveal where the user has been) must not survive on device.
+    func panicWipe() {
+        storage.removeObject(forKey: selectedChannelKey)
+        storage.removeObject(forKey: teleportedStoreKey)
+        storage.removeObject(forKey: bookmarksKey)
+        storage.removeObject(forKey: bookmarkNamesKey)
+        teleportedSet.removeAll()
+        bookmarkMembership.removeAll()
+        bookmarks = []
+        bookmarkNames = [:]
+        teleported = false
+        selectedChannel = .mesh
+    }
+
     private static func normalizeGeohash(_ s: String) -> String {
         let allowed = Set("0123456789bcdefghjkmnpqrstuvwxyz")
         return s

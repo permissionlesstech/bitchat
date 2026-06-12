@@ -14,23 +14,29 @@ import BitFoundation
 struct BLEServiceCoreTests {
 
     @Test
-    func duplicatePacket_isDeduped() async {
+    func duplicatePacket_isDeduped() async throws {
         let ble = makeService()
         let delegate = PublicCaptureDelegate()
         ble.delegate = delegate
 
+        // Public messages must carry a valid signature from the claimed sender;
+        // sign the packet and preseed the sender's signing key so the receiver
+        // can verify it (production `sendMessage` signs public broadcasts too).
+        let signer = NoiseEncryptionService(keychain: MockKeychain())
         let sender = PeerID(str: "1122334455667788")
         let timestamp = UInt64(Date().timeIntervalSince1970 * 1000)
-        let packet = makePublicPacket(content: "Hello", sender: sender, timestamp: timestamp)
+        let unsigned = makePublicPacket(content: "Hello", sender: sender, timestamp: timestamp)
+        let packet = try #require(signer.signPacket(unsigned), "Failed to sign public message")
+        let signingKey = signer.getSigningPublicKeyData()
 
-        ble._test_handlePacket(packet, fromPeerID: sender)
+        ble._test_handlePacket(packet, fromPeerID: sender, signingPublicKey: signingKey)
         let receivedFirst = await TestHelpers.waitUntil(
             { delegate.publicMessagesSnapshot().count == 1 },
             timeout: TestConstants.defaultTimeout
         )
         #expect(receivedFirst)
 
-        ble._test_handlePacket(packet, fromPeerID: sender)
+        ble._test_handlePacket(packet, fromPeerID: sender, signingPublicKey: signingKey)
         let receivedDuplicate = await TestHelpers.waitUntil(
             { delegate.publicMessagesSnapshot().count > 1 },
             timeout: TestConstants.shortTimeout

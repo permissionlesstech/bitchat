@@ -1129,6 +1129,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         userDefaults.removeObject(forKey: "bitchat.noiseIdentityKey")
         userDefaults.removeObject(forKey: "bitchat.messageRetentionKey")
 
+        // Wipe persisted location state (selected channel, teleport set,
+        // bookmarks). For an activist-safety wipe, where the user has been is
+        // exactly the data an adversary inspecting the device wants.
+        LocationStateManager.shared.panicWipe()
+
         // Reset nickname to anonymous
         nickname = "anon\(Int.random(in: 1000...9999))"
         saveNickname()
@@ -1175,15 +1180,25 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         // No need to force UserDefaults synchronization
 
         // Reinitialize Nostr with new identity
-        // This will generate new Nostr keys derived from new Noise keys
-        Task { @MainActor in
-            // Small delay to ensure cleanup completes
-            try? await Task.sleep(nanoseconds: TransportConfig.uiAsyncShortSleepNs) // 0.1 seconds
+        // This will generate new Nostr keys derived from new Noise keys.
+        // Skipped under tests: connecting the shared relay singleton starts
+        // real network/reconnect work that never completes and would keep the
+        // test process alive (the singleton, unlike a discardable instance, is
+        // never deallocated to cancel it).
+        if !TestEnvironment.isRunningTests {
+            Task { @MainActor in
+                // Small delay to ensure cleanup completes
+                try? await Task.sleep(nanoseconds: TransportConfig.uiAsyncShortSleepNs) // 0.1 seconds
 
-            // Reinitialize Nostr relay manager with new identity
-            nostrRelayManager = NostrRelayManager()
-            setupNostrMessageHandling()
-            nostrRelayManager?.connect()
+                // Reinitialize Nostr relay manager with new identity. Reuse the
+                // shared singleton — every other component (NostrTransport, geohash
+                // subscriptions, AppRuntime observers) is bound to `.shared`, so
+                // creating a fresh instance here would split relay state and leave
+                // sends running against a disconnected manager.
+                nostrRelayManager = NostrRelayManager.shared
+                setupNostrMessageHandling()
+                nostrRelayManager?.connect()
+            }
         }
 
         // Delete ALL media files (incoming and outgoing) in background
