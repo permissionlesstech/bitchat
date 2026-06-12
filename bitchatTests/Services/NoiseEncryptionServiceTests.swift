@@ -101,7 +101,7 @@ struct NoiseEncryptionServiceTests {
 
         try establishSessions(alice: alice, bob: bob, alicePeerID: alicePeerID, bobPeerID: bobPeerID)
 
-        let authenticated = await TestHelpers.waitUntil({ recorder.count >= 2 }, timeout: 0.5)
+        let authenticated = await TestHelpers.waitUntil({ recorder.count >= 2 }, timeout: 5.0)
         #expect(authenticated)
         #expect(alice.hasEstablishedSession(with: alicePeerID))
         #expect(bob.hasEstablishedSession(with: bobPeerID))

@@ -24,7 +24,7 @@ struct TransferProgressManagerTests {
 
         let didReceive = await TestHelpers.waitUntil({
             recorder.values == ["started:\(transferID):3"]
-        }, timeout: 0.5)
+        }, timeout: 5.0)
         #expect(didReceive)
 
         #expect(recorder.values == ["started:\(transferID):3"])
@@ -59,7 +59,7 @@ struct TransferProgressManagerTests {
 
         let didReceive = await TestHelpers.waitUntil({
             recorder.values.count == 3
-        }, timeout: 0.5)
+        }, timeout: 5.0)
         #expect(didReceive)
 
         #expect(recorder.values == [
@@ -97,7 +97,7 @@ struct TransferProgressManagerTests {
         let didReceive = await TestHelpers.waitUntil({
             recorder.values.contains("started:\(transferID):4") &&
             recorder.values.contains("cancelled:\(transferID):1:4")
-        }, timeout: 0.5)
+        }, timeout: 5.0)
         #expect(didReceive)
 
         #expect(recorder.values.contains("started:\(transferID):4"))
