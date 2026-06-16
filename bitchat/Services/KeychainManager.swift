@@ -15,7 +15,14 @@ final class KeychainManager: KeychainManagerProtocol {
     // Use consistent service name for all keychain items
     private let service = BitchatApp.bundleID
     private let appGroup = "group.\(BitchatApp.bundleID)"
-    
+
+    // Keychain items are bound to this device and never synced or restored to another device.
+    private let accessibleAttribute = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+
+    init() {
+        migrateAccessibilityToThisDeviceOnly()
+    }
+
     // MARK: - Identity Keys
     
     func saveIdentityKey(_ keyData: Data, forKey key: String) -> Bool {
@@ -62,7 +69,7 @@ final class KeychainManager: KeychainManagerProtocol {
             kSecAttrAccount as String: key,
             kSecValueData as String: data,
             kSecAttrService as String: service,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked,
+            kSecAttrAccessible as String: accessibleAttribute,
             kSecAttrLabel as String: "bitchat-\(key)"
         ]
         #if os(macOS)
@@ -210,8 +217,35 @@ final class KeychainManager: KeychainManagerProtocol {
         }
     }
 
+    // MARK: - Migration
+
+    /// One-time migration: upgrade existing items from `kSecAttrAccessibleWhenUnlocked`
+    /// to `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`. Idempotent; runs once.
+    private func migrateAccessibilityToThisDeviceOnly() {
+        let migrationKey = "keychain.accessibilityMigratedToThisDeviceOnly"
+        guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
+
+        let attributes: [String: Any] = [kSecAttrAccessible as String: accessibleAttribute]
+        func migrate(addAccessGroup: Bool) {
+            var query: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: service,
+                kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked
+            ]
+            if addAccessGroup { query[kSecAttrAccessGroup as String] = appGroup }
+            _ = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        }
+
+        #if os(iOS)
+        migrate(addAccessGroup: true)
+        #endif
+        migrate(addAccessGroup: false)
+
+        UserDefaults.standard.set(true, forKey: migrationKey)
+    }
+
     // MARK: - Generic Operations
-    
+
     private func save(_ value: String, forKey key: String) -> Bool {
         guard let data = value.data(using: .utf8) else { return false }
         return saveData(data, forKey: key)
@@ -227,7 +261,7 @@ final class KeychainManager: KeychainManagerProtocol {
             kSecAttrAccount as String: key,
             kSecValueData as String: data,
             kSecAttrService as String: service,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked,
+            kSecAttrAccessible as String: accessibleAttribute,
             kSecAttrLabel as String: "bitchat-\(key)"
         ]
         #if os(macOS)
