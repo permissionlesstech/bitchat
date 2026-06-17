@@ -281,6 +281,7 @@ final class NostrRelayManager: ObservableObject {
             task.cancel(with: .goingAway, reason: nil)
         }
         connections.removeAll()
+        markRelaySocketsClosed(resetState: false)
         // Sockets are gone, so per-relay subscription state is cleared — but
         // durable intent (subscriptionRequestState, messageHandlers, parked
         // EOSE callbacks) is kept so REQs replay when relays reconnect
@@ -297,6 +298,60 @@ final class NostrRelayManager: ObservableObject {
         awaitingTorForConnections = false
         torReadyWaitAttempts = 0
         updateConnectionStatus()
+    }
+
+    /// Panic wipe reset: close sockets and drop every user/session-specific
+    /// relay intent without invoking old callbacks. Unlike `disconnect()`, this
+    /// must not preserve subscription replay state because geohash DM handlers
+    /// can capture pre-wipe Nostr private keys.
+    func resetForPanicWipe() {
+        connectionGeneration &+= 1
+        for (_, task) in connections {
+            task.cancel(with: .goingAway, reason: nil)
+        }
+        connections.removeAll()
+        markRelaySocketsClosed(resetState: true)
+        subscriptions.removeAll()
+        pendingSubscriptions.removeAll()
+        messageHandlers.removeAll()
+        subscriptionRequestState.removeAll()
+        subscribeCoalesce.removeAll()
+        eoseTrackers.removeAll()
+        pendingEOSECallbacks.removeAll()
+        pendingTorConnectionURLs.removeAll()
+        awaitingTorForConnections = false
+        torReadyWaitAttempts = 0
+        recentInboundEventKeys.removeAll()
+        recentInboundEventKeyOrder.removeAll()
+        duplicateInboundEventDropCount = 0
+        duplicateInboundEventDropCountBySubscription.removeAll()
+        inboundEventLogCount = 0
+        Self.pendingGiftWrapIDs.removeAll()
+
+        messageQueueLock.lock()
+        messageQueue.removeAll()
+        pendingSendDropCount = 0
+        messageQueueLock.unlock()
+
+        updateConnectionStatus()
+    }
+
+    private func markRelaySocketsClosed(resetState: Bool) {
+        let now = dependencies.now()
+        for index in relays.indices {
+            relays[index].isConnected = false
+            relays[index].nextReconnectTime = nil
+            if resetState {
+                relays[index].lastError = nil
+                relays[index].lastConnectedAt = nil
+                relays[index].lastDisconnectedAt = nil
+                relays[index].messagesSent = 0
+                relays[index].messagesReceived = 0
+                relays[index].reconnectAttempts = 0
+            } else {
+                relays[index].lastDisconnectedAt = now
+            }
+        }
     }
     
     /// Ensure connections exist to the given relay URLs (idempotent).
@@ -1168,6 +1223,18 @@ final class NostrRelayManager: ObservableObject {
     func debugPendingSubscriptionIDs(for relayUrl: String) -> Set<String> {
         guard let map = pendingSubscriptions[relayUrl] else { return [] }
         return Set(map.keys)
+    }
+
+    var debugMessageHandlerCount: Int {
+        messageHandlers.count
+    }
+
+    var debugSubscriptionRequestCount: Int {
+        subscriptionRequestState.count
+    }
+
+    var debugPendingEOSECallbackCount: Int {
+        pendingEOSECallbacks.count
     }
 
     var debugDuplicateInboundEventDropCount: Int {

@@ -21,9 +21,16 @@ struct FragmentationTests {
         let capture = CaptureDelegate()
         ble.delegate = capture
 
-        // Construct a big packet (3KB) from a remote sender (not our own ID)
+        // Construct a big SIGNED public packet (3KB) from a remote sender. Public
+        // messages must carry a valid signature, so the reassembled packet is
+        // signed and the sender's signing key is preseeded into the registry.
+        let signer = NoiseEncryptionService(keychain: MockKeychain())
+        let signingKey = signer.getSigningPublicKeyData()
         let remoteShortID = PeerID(str: "1122334455667788")
-        let original = makeLargePublicPacket(senderShortHex: remoteShortID, size: 3_000)
+        let original = try #require(
+            signer.signPacket(makeLargePublicPacket(senderShortHex: remoteShortID, size: 3_000)),
+            "Failed to sign public packet"
+        )
 
         // Use a small fragment size to ensure multiple pieces
         let fragments = fragmentPacket(original, fragmentSize: 400)
@@ -36,7 +43,7 @@ struct FragmentationTests {
             if i > 0 {
                 try await Task.sleep(for: .milliseconds(5))
             }
-            ble._test_handlePacket(fragment, fromPeerID: remoteShortID)
+            ble._test_handlePacket(fragment, fromPeerID: remoteShortID, signingPublicKey: signingKey)
         }
 
         // Wait for delegate callback with proper timeout
@@ -52,8 +59,13 @@ struct FragmentationTests {
         let capture = CaptureDelegate()
         ble.delegate = capture
 
+        let signer = NoiseEncryptionService(keychain: MockKeychain())
+        let signingKey = signer.getSigningPublicKeyData()
         let remoteShortID = PeerID(str: "A1B2C3D4E5F60708")
-        let original = makeLargePublicPacket(senderShortHex: remoteShortID, size: 2048)
+        let original = try #require(
+            signer.signPacket(makeLargePublicPacket(senderShortHex: remoteShortID, size: 2048)),
+            "Failed to sign public packet"
+        )
         var frags = fragmentPacket(original, fragmentSize: 300)
 
         // Duplicate one fragment
@@ -66,7 +78,7 @@ struct FragmentationTests {
             if i > 0 {
                 try await Task.sleep(for: .milliseconds(5))
             }
-            ble._test_handlePacket(fragment, fromPeerID: remoteShortID)
+            ble._test_handlePacket(fragment, fromPeerID: remoteShortID, signingPublicKey: signingKey)
         }
 
         // Wait for delegate callback with proper timeout

@@ -14,7 +14,10 @@ struct BLEReceivePipelineTests {
         let context = BLEReceivePipeline.context(for: packet, localPeerID: local)
 
         #expect(context.senderID == sender)
-        #expect(context.messageID == "\(sender)-1234-\(MessageType.message.rawValue)")
+        // The message ID includes a payload digest so distinct packets sharing a
+        // sender/timestamp(ms)/type are not collapsed as duplicates.
+        let digest = packet.payload.sha256Hash().prefix(4).hexEncodedString()
+        #expect(context.messageID == "\(sender)-1234-\(MessageType.message.rawValue)-\(digest)")
         #expect(context.messageType == .message)
         #expect(context.shouldDeduplicate)
         #expect(context.logsHandlingDetails)

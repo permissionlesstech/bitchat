@@ -44,7 +44,11 @@ final class NetworkActivationService: ObservableObject {
     private let permissionProvider: () -> LocationChannelManager.PermissionState
     private let mutualFavoritesProvider: () -> Set<Data>
     private let torController: NetworkActivationTorControlling
-    private let relayController: NetworkActivationRelayControlling
+    // Resolved lazily: NostrRelayManager.init() reads NetworkActivationService.shared
+    // (via its live dependencies), so capturing NostrRelayManager.shared here would
+    // re-enter whichever singleton's dispatch_once started first and trap at launch.
+    private lazy var relayController: NetworkActivationRelayControlling = relayControllerProvider()
+    private let relayControllerProvider: () -> NetworkActivationRelayControlling
     private let proxyController: NetworkActivationProxyControlling
     private let notificationCenter: NotificationCenter
 
@@ -55,7 +59,7 @@ final class NetworkActivationService: ObservableObject {
         permissionProvider = { LocationChannelManager.shared.permissionState }
         mutualFavoritesProvider = { FavoritesPersistenceService.shared.mutualFavorites }
         torController = TorManager.shared
-        relayController = NostrRelayManager.shared
+        relayControllerProvider = { NostrRelayManager.shared }
         proxyController = TorURLSession.shared
         notificationCenter = .default
     }
@@ -77,7 +81,7 @@ final class NetworkActivationService: ObservableObject {
         self.permissionProvider = permissionProvider
         self.mutualFavoritesProvider = mutualFavoritesProvider
         self.torController = torController
-        self.relayController = relayController
+        self.relayControllerProvider = { relayController }
         self.proxyController = proxyController
         self.notificationCenter = notificationCenter
     }

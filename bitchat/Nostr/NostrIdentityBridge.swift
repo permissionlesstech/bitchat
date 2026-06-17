@@ -82,6 +82,13 @@ final class NostrIdentityBridge {
         }
 
         deviceSeedCache = nil
+        // Also drop the in-memory derived per-geohash identities. These hold the
+        // actual secp256k1 private keys; if left cached, post-panic geohash
+        // messages would still be signed with pre-panic keys (linkable across the
+        // wipe) until the app is force-quit.
+        cacheLock.lock()
+        derivedIdentityCache.removeAll()
+        cacheLock.unlock()
     }
 
     // MARK: - Per-Geohash Identities (Location Channels)

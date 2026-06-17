@@ -12,7 +12,13 @@ struct BLEReceivedPacketContext: Equatable {
 struct BLEReceivePipeline {
     static func context(for packet: BitchatPacket, localPeerID: PeerID) -> BLEReceivedPacketContext {
         let senderID = PeerID(hexData: packet.senderID)
-        let messageID = "\(senderID)-\(packet.timestamp)-\(packet.type)"
+        // Include a payload digest so that distinct packets sharing the same
+        // sender/timestamp(ms)/type are not collapsed as duplicates. The
+        // post-handshake flush sends queued messages, delivery and read receipts
+        // back-to-back within a single millisecond; without the digest every
+        // packet after the first would be silently dropped.
+        let digestPrefix = packet.payload.sha256Hash().prefix(4).hexEncodedString()
+        let messageID = "\(senderID)-\(packet.timestamp)-\(packet.type)-\(digestPrefix)"
         let messageType = MessageType(rawValue: packet.type)
         let allowSelfSyncReplay = packet.ttl == 0 && senderID == localPeerID
         let shouldDeduplicate = messageType != .fragment && !allowSelfSyncReplay

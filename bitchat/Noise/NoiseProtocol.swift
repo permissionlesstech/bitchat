@@ -323,6 +323,13 @@ final class NoiseCipherState {
                 throw NoiseError.replayDetected
             }
             
+            // The 4-byte nonce prefix has been stripped, so the remaining bytes
+            // must still hold at least the 16-byte Poly1305 tag. The up-front
+            // `ciphertext.count >= 16` guard is not sufficient here (it counts
+            // the nonce), and `prefix(count - 16)` would trap on a short payload.
+            guard actualCiphertext.count >= 16 else {
+                throw NoiseError.invalidCiphertext
+            }
             // Split ciphertext and tag
             encryptedData = actualCiphertext.prefix(actualCiphertext.count - 16)
             tag = actualCiphertext.suffix(16)

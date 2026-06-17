@@ -1328,6 +1328,68 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertEqual(context.manager.debugPendingSubscriptionCount(for: relayURL), 0)
     }
 
+    func test_resetForPanicWipe_dropsSessionRelayStateWithoutFiringCallbacks() async throws {
+        let relayURL = "wss://panic-reset.example"
+        let context = makeContext(permission: .denied, userTorEnabled: true, torEnforced: true, torIsReady: false)
+        let event = try makeSignedEvent(content: "queued before panic")
+        var handledEvents = 0
+        var eoseCount = 0
+
+        context.manager.subscribe(
+            filter: makeFilter(),
+            id: "panic-sub",
+            relayUrls: [relayURL],
+            handler: { _ in handledEvents += 1 },
+            onEOSE: { eoseCount += 1 }
+        )
+        context.manager.sendEvent(event, to: [relayURL])
+
+        XCTAssertEqual(context.manager.debugMessageHandlerCount, 1)
+        XCTAssertEqual(context.manager.debugSubscriptionRequestCount, 1)
+        XCTAssertEqual(context.manager.debugPendingSubscriptionCount(for: relayURL), 1)
+        XCTAssertEqual(context.manager.debugPendingEOSECallbackCount, 1)
+        XCTAssertEqual(context.manager.debugPendingMessageQueueCount, 1)
+        XCTAssertTrue(context.sessionFactory.requestedURLs.isEmpty)
+
+        context.manager.resetForPanicWipe()
+
+        XCTAssertEqual(context.manager.debugMessageHandlerCount, 0)
+        XCTAssertEqual(context.manager.debugSubscriptionRequestCount, 0)
+        XCTAssertEqual(context.manager.debugPendingSubscriptionCount(for: relayURL), 0)
+        XCTAssertEqual(context.manager.debugPendingEOSECallbackCount, 0)
+        XCTAssertEqual(context.manager.debugPendingMessageQueueCount, 0)
+        XCTAssertEqual(handledEvents, 0)
+        XCTAssertEqual(eoseCount, 0)
+
+        // Stale Tor wait and fallback callbacks from the pre-wipe generation
+        // must not resurrect connections or settle callbacks after reset.
+        context.torWaiter.resolve(true)
+        context.scheduler.runNext()
+        try? await Task.sleep(nanoseconds: 20_000_000)
+
+        XCTAssertTrue(context.sessionFactory.requestedURLs.isEmpty)
+        XCTAssertEqual(eoseCount, 0)
+    }
+
+    func test_resetForPanicWipe_marksConnectedRelaysDisconnected() async {
+        let relayURL = "wss://panic-connected.example"
+        let context = makeContext(permission: .denied)
+
+        context.manager.ensureConnections(to: [relayURL])
+        let connected = await waitUntil {
+            context.manager.isConnected &&
+                context.manager.relays.first(where: { $0.url == relayURL })?.isConnected == true
+        }
+        XCTAssertTrue(connected)
+
+        context.manager.resetForPanicWipe()
+
+        XCTAssertFalse(context.manager.isConnected)
+        XCTAssertEqual(context.manager.relays.first(where: { $0.url == relayURL })?.isConnected, false)
+        XCTAssertEqual(context.manager.relays.first(where: { $0.url == relayURL })?.reconnectAttempts, 0)
+        XCTAssertNil(context.manager.relays.first(where: { $0.url == relayURL })?.lastError)
+    }
+
     func test_reconnectBackoff_appliesJitterWithinConfiguredBounds() async {
         let relayURL = "wss://jitter-bounds.example"
         // Pin the jitter source to the extremes and the midpoint of [0, 1).

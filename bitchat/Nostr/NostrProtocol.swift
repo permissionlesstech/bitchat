@@ -39,22 +39,23 @@ struct NostrProtocol {
             content: content
         )
         
-        // 2. Create ephemeral key for this message
-        let ephemeralKey = try P256K.Schnorr.PrivateKey()
-        // Created ephemeral key for seal
-        
-        // 3. Seal the rumor (encrypt to recipient)
+        // 2. Seal the rumor (encrypt to recipient) and sign it with the SENDER'S
+        //    real identity key. NIP-17 requires the seal be signed by the sender
+        //    so the recipient can authenticate who sent the message; signing with
+        //    a throwaway key leaves DMs forgeable/impersonatable.
+        let senderKey = try senderIdentity.schnorrSigningKey()
         let sealedEvent = try createSeal(
             rumor: rumor,
             recipientPubkey: recipientPubkey,
-            senderKey: ephemeralKey
+            senderKey: senderKey
         )
-        
-        // 4. Gift wrap the sealed event (encrypt to recipient again)
+
+        // 3. Gift wrap the sealed event with a throwaway ephemeral key (the wrap
+        //    layer hides the sender's identity from relays; createGiftWrap mints
+        //    its own ephemeral key internally).
         let giftWrap = try createGiftWrap(
             seal: sealedEvent,
-            recipientPubkey: recipientPubkey,
-            senderKey: ephemeralKey
+            recipientPubkey: recipientPubkey
         )
         
         // Created gift wrap
@@ -84,7 +85,15 @@ struct NostrProtocol {
             throw error
         }
         
-        // 2. Open the seal
+        // 2. Authenticate the seal. The seal MUST be signed by the sender's real
+        //    identity key (NIP-17); without this check a DM is forgeable by anyone
+        //    who knows the recipient's npub. Verify the seal's own signature.
+        guard seal.isValidSignature() else {
+            SecureLogger.error("❌ Rejecting DM: seal signature is missing or invalid", category: .session)
+            throw NostrError.invalidEvent
+        }
+
+        // 3. Open the seal
         let rumor: NostrEvent
         do {
             rumor = try openSeal(
@@ -96,9 +105,62 @@ struct NostrProtocol {
             SecureLogger.error("❌ Failed to open seal: \(error)", category: .session)
             throw error
         }
-        
-        return (content: rumor.content, senderPubkey: rumor.pubkey, timestamp: rumor.created_at)
+
+        // 4. The sender claimed inside the rumor must match the key that actually
+        //    signed the seal, otherwise the sender field is unauthenticated and
+        //    spoofable.
+        guard seal.pubkey == rumor.pubkey else {
+            SecureLogger.error("❌ Rejecting DM: rumor pubkey does not match seal signer", category: .session)
+            throw NostrError.invalidEvent
+        }
+
+        // Return the seal signer's pubkey as the authenticated sender.
+        return (content: rumor.content, senderPubkey: seal.pubkey, timestamp: rumor.created_at)
     }
+
+    #if DEBUG
+    static func createPrivateMessageWithInvalidSealSignatureForTesting(
+        content: String,
+        recipientPubkey: String,
+        senderIdentity: NostrIdentity
+    ) throws -> NostrEvent {
+        let rumor = NostrEvent(
+            pubkey: senderIdentity.publicKeyHex,
+            createdAt: Date(),
+            kind: .dm,
+            tags: [],
+            content: content
+        )
+        var seal = try createSeal(
+            rumor: rumor,
+            recipientPubkey: recipientPubkey,
+            senderKey: senderIdentity.schnorrSigningKey()
+        )
+        seal.sig = String(repeating: "0", count: 128)
+        return try createGiftWrap(seal: seal, recipientPubkey: recipientPubkey)
+    }
+
+    static func createPrivateMessageWithMismatchedSealRumorPubkeyForTesting(
+        content: String,
+        recipientPubkey: String,
+        rumorIdentity: NostrIdentity,
+        sealSignerIdentity: NostrIdentity
+    ) throws -> NostrEvent {
+        let rumor = NostrEvent(
+            pubkey: rumorIdentity.publicKeyHex,
+            createdAt: Date(),
+            kind: .dm,
+            tags: [],
+            content: content
+        )
+        let seal = try createSeal(
+            rumor: rumor,
+            recipientPubkey: recipientPubkey,
+            senderKey: sealSignerIdentity.schnorrSigningKey()
+        )
+        return try createGiftWrap(seal: seal, recipientPubkey: recipientPubkey)
+    }
+    #endif
 
     /// Create a geohash-scoped ephemeral public message (kind 20000)
     static func createEphemeralGeohashEvent(
@@ -195,10 +257,9 @@ struct NostrProtocol {
     
     private static func createGiftWrap(
         seal: NostrEvent,
-        recipientPubkey: String,
-        senderKey: P256K.Schnorr.PrivateKey  // This is the ephemeral key used for the seal
+        recipientPubkey: String
     ) throws -> NostrEvent {
-        
+
         let sealJSON = try seal.jsonString()
         
         // Create new ephemeral key for gift wrap

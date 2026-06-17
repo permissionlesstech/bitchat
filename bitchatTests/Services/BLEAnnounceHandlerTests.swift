@@ -173,7 +173,10 @@ struct BLEAnnounceHandlerTests {
         #expect(recorder.uiEventDeliveries.count == 1)
         #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == false)
         #expect(recorder.uiEventDeliveries.first?.scheduleInitialSync == false)
-        #expect(recorder.persistedIdentities.count == 1)
+        // Identity persistence MUST NOT occur for unverified announces:
+        // persisting would let an attacker who replays a victim's noisePublicKey
+        // overwrite the victim's stored signing key/nickname (identity poisoning).
+        #expect(recorder.persistedIdentities.isEmpty)
         #expect(recorder.trackedPackets.count == 1)
         #expect(recorder.announceBacks == 1)
     }

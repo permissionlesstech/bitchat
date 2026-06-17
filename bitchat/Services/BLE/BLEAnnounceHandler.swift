@@ -168,8 +168,13 @@ final class BLEAnnounceHandler {
             env.updateTopology(peerID, neighbors)
         }
 
-        // Persist cryptographic identity and signing key for robust offline verification
-        env.persistIdentity(announcement)
+        // Persist cryptographic identity and signing key for robust offline
+        // verification — only for verified announces. Persisting unverified
+        // announces would let an attacker who replays a victim's noisePublicKey
+        // overwrite the victim's stored signing key/nickname (identity poisoning).
+        if verifiedAnnounce {
+            env.persistIdentity(announcement)
+        }
 
         let announceBackID = "announce-back-\(peerID)"
         let shouldSendBack = !env.dedupContains(announceBackID)

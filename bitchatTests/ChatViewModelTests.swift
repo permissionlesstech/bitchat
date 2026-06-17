@@ -1042,6 +1042,38 @@ struct ChatViewModelPanicTests {
         #expect(viewModel.unreadPrivateMessages.isEmpty)
         #expect(viewModel.selectedPrivateChatPeer == nil)
     }
+
+    @Test @MainActor
+    func panicClearAllData_resetsLiveGeohashAndNostrState() async throws {
+        let (viewModel, _) = makeTestableViewModel()
+        let geohash = "u4pruy"
+        let channel = GeohashChannel(level: .city, geohash: geohash)
+        let identity = try NostrIdentity.generate()
+        let pubkey = String(repeating: "ab", count: 32)
+        let peerID = PeerID(nostr: pubkey)
+
+        viewModel.activeChannel = .location(channel)
+        viewModel.setGeoChatSubscriptionID("geo-\(geohash)")
+        viewModel.setGeoDmSubscriptionID("geo-dm-\(geohash)")
+        viewModel.addGeoSamplingSub("geo-sample-\(geohash)", forGeohash: geohash)
+        viewModel.cachedGeohashIdentity = (geohash, identity)
+        viewModel.registerNostrKeyMapping(pubkey, for: peerID)
+        viewModel.currentGeohash = geohash
+        viewModel.geoNicknames = [pubkey: "alice"]
+        viewModel.teleportedGeo = [pubkey]
+
+        viewModel.panicClearAllData()
+
+        #expect(viewModel.activeChannel == .mesh)
+        #expect(viewModel.geoSubscriptionID == nil)
+        #expect(viewModel.geoDmSubscriptionID == nil)
+        #expect(viewModel.geoSamplingSubs.isEmpty)
+        #expect(viewModel.cachedGeohashIdentity == nil)
+        #expect(viewModel.nostrKeyMapping.isEmpty)
+        #expect(viewModel.currentGeohash == nil)
+        #expect(viewModel.geoNicknames.isEmpty)
+        #expect(viewModel.teleportedGeo.isEmpty)
+    }
 }
 
 // MARK: - Service Lifecycle Tests
