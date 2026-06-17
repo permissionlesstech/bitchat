@@ -1065,6 +1065,9 @@ final class BLEService: NSObject {
 
     // Directed send helper (unicast to a specific peerID) without altering packet contents
     private func sendPacketDirected(_ packet: BitchatPacket, to peerID: PeerID) {
+        #if DEBUG
+        _test_onOutboundPacket?(packet)
+        #endif
         guard let data = packet.toBinaryData(padding: false) else { return }
         sendOnAllLinks(packet: packet, data: data, pad: false, directedOnlyPeer: peerID)
     }
@@ -2491,33 +2494,39 @@ extension BLEService {
 
     /// Seal `content` to the recipient's static key (one-way Noise X) and hand
     /// the envelope to the given couriers for physical delivery. Returns false
-    /// when no courier is connected; sealing and sending happen asynchronously.
+    /// when no courier is connected, the payload cannot be built, or sealing
+    /// fails; link writes are queued asynchronously after the envelope is ready.
     func sendCourierMessage(_ content: String, messageID: String, recipientNoiseKey: Data, via couriers: [PeerID]) -> Bool {
         let connected = couriers.filter { isPeerConnected($0) }
         guard !connected.isEmpty,
               let typedPayload = BLENoisePayloadFactory.privateMessage(content: content, messageID: messageID) else {
             return false
         }
+
+        let payload: Data
+        do {
+            let now = Date()
+            let sealed = try noiseService.sealCourierPayload(typedPayload, recipientStaticKey: recipientNoiseKey)
+            let envelope = CourierEnvelope(
+                recipientTag: CourierEnvelope.recipientTag(
+                    noiseStaticKey: recipientNoiseKey,
+                    epochDay: CourierEnvelope.epochDay(for: now)
+                ),
+                expiry: UInt64((now.timeIntervalSince1970 + CourierEnvelope.maxLifetimeSeconds) * 1000),
+                ciphertext: sealed
+            )
+            guard let encoded = envelope.encode() else { return false }
+            payload = encoded
+        } catch {
+            SecureLogger.error("Failed to seal courier envelope: \(error)", category: .encryption)
+            return false
+        }
+
         messageQueue.async { [weak self] in
             guard let self else { return }
-            do {
-                let now = Date()
-                let sealed = try self.noiseService.sealCourierPayload(typedPayload, recipientStaticKey: recipientNoiseKey)
-                let envelope = CourierEnvelope(
-                    recipientTag: CourierEnvelope.recipientTag(
-                        noiseStaticKey: recipientNoiseKey,
-                        epochDay: CourierEnvelope.epochDay(for: now)
-                    ),
-                    expiry: UInt64((now.timeIntervalSince1970 + CourierEnvelope.maxLifetimeSeconds) * 1000),
-                    ciphertext: sealed
-                )
-                guard let payload = envelope.encode() else { return }
-                for courier in connected {
-                    SecureLogger.debug("📦 Depositing courier envelope with \(courier.id.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
-                    self.broadcastPacket(self.makeCourierPacket(payload, to: courier))
-                }
-            } catch {
-                SecureLogger.error("Failed to seal courier envelope: \(error)", category: .encryption)
+            for courier in connected {
+                SecureLogger.debug("📦 Depositing courier envelope with \(courier.id.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
+                self.sendPacketDirected(self.makeCourierPacket(payload, to: courier), to: courier)
             }
         }
         return true
@@ -2605,7 +2614,7 @@ extension BLEService {
         SecureLogger.debug("📦 Handing over \(envelopes.count) courier envelope(s) to \(peerID.id.prefix(8))…", category: .session)
         for envelope in envelopes {
             guard let payload = envelope.encode() else { continue }
-            broadcastPacket(makeCourierPacket(payload, to: peerID))
+            sendPacketDirected(makeCourierPacket(payload, to: peerID), to: peerID)
         }
     }
 
@@ -3159,21 +3168,14 @@ extension BLEService {
     }
     
     private func handleAnnounce(_ packet: BitchatPacket, from peerID: PeerID) {
-        announceHandler.handle(packet, from: peerID)
+        let result = announceHandler.handle(packet, from: peerID)
 
         // Courier handover: an announce is the moment we learn a peer's Noise
         // static key, so check whether we're carrying mail addressed to them.
-        // Re-run the preflight so handover only follows announces that pass
-        // the key<->peerID binding check (mirrors the handler's own gate).
-        guard !courierStore.isEmpty else { return }
-        if case .accept(let acceptance) = BLEAnnouncePreflightPolicy.evaluate(
-            packet: packet,
-            from: peerID,
-            localPeerID: myPeerID,
-            now: Date()
-        ) {
-            deliverCourierMail(to: peerID, noiseKey: acceptance.announcement.noisePublicKey)
-        }
+        guard !courierStore.isEmpty,
+              let result,
+              result.isVerified else { return }
+        deliverCourierMail(to: result.peerID, noiseKey: result.announcement.noisePublicKey)
     }
 
     /// Builds the announce handler environment. All queue hops stay here so

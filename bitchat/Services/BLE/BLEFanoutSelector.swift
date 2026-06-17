@@ -19,13 +19,35 @@ enum BLEFanoutSelector {
         packetType: UInt8,
         messageID: String
     ) -> BLEFanoutSelection {
+        let rawAllowed = allowedLinks(
+            peripheralIDs: peripheralIDs,
+            centralIDs: centralIDs,
+            ingressLink: ingressLink,
+            excludedLinks: excludedLinks
+        )
+
+        if let directedPeerHint,
+           let directedSelection = directLinks(
+               to: directedPeerHint,
+               links: rawAllowed,
+               peripheralPeerBindings: peripheralPeerBindings,
+               centralPeerBindings: centralPeerBindings
+           ) {
+            return directedSelection
+        }
+        if let directedPeerHint,
+           hasBoundLink(
+               to: directedPeerHint,
+               peripheralIDs: peripheralIDs,
+               centralIDs: centralIDs,
+               peripheralPeerBindings: peripheralPeerBindings,
+               centralPeerBindings: centralPeerBindings
+           ) {
+            return BLEFanoutSelection(peripheralIDs: [], centralIDs: [])
+        }
+
         let allowed = collapseDuplicateLinksPerPeer(
-            allowedLinks(
-                peripheralIDs: peripheralIDs,
-                centralIDs: centralIDs,
-                ingressLink: ingressLink,
-                excludedLinks: excludedLinks
-            ),
+            rawAllowed,
             peripheralPeerBindings: peripheralPeerBindings,
             centralPeerBindings: centralPeerBindings
         )
@@ -69,6 +91,42 @@ enum BLEFanoutSelector {
         allowedCentralIDs.removeAll { blockedLinks.contains(.central($0)) }
 
         return (allowedPeripheralIDs, allowedCentralIDs)
+    }
+
+    private static func directLinks(
+        to peerID: PeerID,
+        links: (peripheralIDs: [String], centralIDs: [String]),
+        peripheralPeerBindings: [String: PeerID],
+        centralPeerBindings: [String: PeerID]
+    ) -> BLEFanoutSelection? {
+        let directLinks = collapseDuplicateLinksPerPeer(
+            (
+                peripheralIDs: links.peripheralIDs.filter { peripheralPeerBindings[$0] == peerID },
+                centralIDs: links.centralIDs.filter { centralPeerBindings[$0] == peerID }
+            ),
+            peripheralPeerBindings: peripheralPeerBindings,
+            centralPeerBindings: centralPeerBindings
+        )
+
+        guard !directLinks.peripheralIDs.isEmpty || !directLinks.centralIDs.isEmpty else {
+            return nil
+        }
+
+        return BLEFanoutSelection(
+            peripheralIDs: Set(directLinks.peripheralIDs),
+            centralIDs: Set(directLinks.centralIDs)
+        )
+    }
+
+    private static func hasBoundLink(
+        to peerID: PeerID,
+        peripheralIDs: [String],
+        centralIDs: [String],
+        peripheralPeerBindings: [String: PeerID],
+        centralPeerBindings: [String: PeerID]
+    ) -> Bool {
+        peripheralIDs.contains { peripheralPeerBindings[$0] == peerID }
+            || centralIDs.contains { centralPeerBindings[$0] == peerID }
     }
 
     // Dual-role pairs hold two live links (we-as-central writing to their

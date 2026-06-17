@@ -20,6 +20,79 @@ struct BLEFanoutSelectorTests {
     }
 
     @Test
+    func directedSendUsesOnlyBoundPeripheralLinkWhenAvailable() {
+        let target = PeerID(str: "1122334455667788")
+        let bystander = PeerID(str: "8877665544332211")
+        let selection = BLEFanoutSelector.selectLinks(
+            peripheralIDs: ["target-p", "bystander-p"],
+            centralIDs: ["target-c", "bystander-c"],
+            ingressLink: nil,
+            peripheralPeerBindings: [
+                "target-p": target,
+                "bystander-p": bystander
+            ],
+            centralPeerBindings: [
+                "target-c": target,
+                "bystander-c": bystander
+            ],
+            directedPeerHint: target,
+            packetType: MessageType.courierEnvelope.rawValue,
+            messageID: "message-1"
+        )
+
+        #expect(selection.peripheralIDs == Set(["target-p"]))
+        #expect(selection.centralIDs.isEmpty)
+    }
+
+    @Test
+    func directedSendUsesBoundCentralLinkWhenNoPeripheralLinkExists() {
+        let target = PeerID(str: "1122334455667788")
+        let bystander = PeerID(str: "8877665544332211")
+        let selection = BLEFanoutSelector.selectLinks(
+            peripheralIDs: ["bystander-p"],
+            centralIDs: ["target-c", "bystander-c"],
+            ingressLink: nil,
+            peripheralPeerBindings: [
+                "bystander-p": bystander
+            ],
+            centralPeerBindings: [
+                "target-c": target,
+                "bystander-c": bystander
+            ],
+            directedPeerHint: target,
+            packetType: MessageType.courierEnvelope.rawValue,
+            messageID: "message-1"
+        )
+
+        #expect(selection.peripheralIDs.isEmpty)
+        #expect(selection.centralIDs == Set(["target-c"]))
+    }
+
+    @Test
+    func directedSendToKnownPeerDoesNotFallBackWhenOnlyDirectLinkIsExcluded() {
+        let target = PeerID(str: "1122334455667788")
+        let bystander = PeerID(str: "8877665544332211")
+        let selection = BLEFanoutSelector.selectLinks(
+            peripheralIDs: ["bystander-p"],
+            centralIDs: ["target-c", "bystander-c"],
+            ingressLink: .central("target-c"),
+            peripheralPeerBindings: [
+                "bystander-p": bystander
+            ],
+            centralPeerBindings: [
+                "target-c": target,
+                "bystander-c": bystander
+            ],
+            directedPeerHint: target,
+            packetType: MessageType.courierEnvelope.rawValue,
+            messageID: "message-1"
+        )
+
+        #expect(selection.peripheralIDs.isEmpty)
+        #expect(selection.centralIDs.isEmpty)
+    }
+
+    @Test
     func directedSendExcludesAllLinksToIngressPeer() {
         let selection = BLEFanoutSelector.selectLinks(
             peripheralIDs: ["p1", "p2"],

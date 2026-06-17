@@ -33,6 +33,11 @@ struct CourierEndToEndTests {
             lock.lock(); defer { lock.unlock() }
             return packets.first { $0.type == type.rawValue }
         }
+
+        func count(ofType type: MessageType) -> Int {
+            lock.lock(); defer { lock.unlock() }
+            return packets.filter { $0.type == type.rawValue }.count
+        }
     }
 
     private final class NoiseCaptureDelegate: BitchatDelegate {
@@ -139,7 +144,7 @@ struct CourierEndToEndTests {
         )
         #expect(announced)
         let announcePacket = try #require(bobOut.first(ofType: .announce))
-        carol._test_handlePacket(announcePacket, fromPeerID: bob.myPeerID)
+        carol._test_handlePacket(announcePacket, fromPeerID: bob.myPeerID, preseedPeer: false)
 
         let handedOver = await TestHelpers.waitUntil(
             { carolOut.first(ofType: .courierEnvelope) != nil },
@@ -165,6 +170,90 @@ struct CourierEndToEndTests {
         let message = try #require(PrivateMessagePacket.decode(from: delivered.payload))
         #expect(message.messageID == "courier-msg-1")
         #expect(message.content == "the camp moved north")
+    }
+
+    @Test func unverifiedAnnounceDoesNotTriggerCourierHandover() async throws {
+        let alice = makeService()
+        let carol = makeService()
+        let bob = makeService()
+        carol.courierDepositPolicy = { _ in true }
+
+        let aliceOut = PacketTap()
+        alice._test_onOutboundPacket = aliceOut.record
+        let carolOut = PacketTap()
+        carol._test_onOutboundPacket = carolOut.record
+        let bobOut = PacketTap()
+        bob._test_onOutboundPacket = bobOut.record
+
+        preseedConnectedPeer(carol, in: alice)
+
+        #expect(alice.sendCourierMessage(
+            "hold until verified",
+            messageID: "courier-msg-unverified-announce",
+            recipientNoiseKey: bob.noiseStaticPublicKeyData(),
+            via: [carol.myPeerID]
+        ))
+        let deposited = await TestHelpers.waitUntil(
+            { aliceOut.first(ofType: .courierEnvelope) != nil },
+            timeout: TestConstants.defaultTimeout
+        )
+        #expect(deposited)
+        let depositPacket = try #require(aliceOut.first(ofType: .courierEnvelope))
+
+        carol._test_handlePacket(depositPacket, fromPeerID: alice.myPeerID)
+        let carried = await TestHelpers.waitUntil(
+            { !carol.courierStore.isEmpty },
+            timeout: TestConstants.defaultTimeout
+        )
+        #expect(carried)
+
+        let forgedAnnounce = try makeUnsignedAnnounce(from: bob)
+        carol._test_handlePacket(forgedAnnounce, fromPeerID: bob.myPeerID, preseedPeer: false)
+
+        let leakedOnUnverifiedAnnounce = await TestHelpers.waitUntil(
+            { carolOut.count(ofType: .courierEnvelope) > 0 },
+            timeout: TestConstants.shortTimeout
+        )
+        #expect(!leakedOnUnverifiedAnnounce)
+        #expect(!carol.courierStore.isEmpty)
+
+        bob.sendBroadcastAnnounce()
+        let announced = await TestHelpers.waitUntil(
+            { bobOut.first(ofType: .announce) != nil },
+            timeout: TestConstants.defaultTimeout
+        )
+        #expect(announced)
+        let verifiedAnnounce = try #require(bobOut.first(ofType: .announce))
+        carol._test_handlePacket(verifiedAnnounce, fromPeerID: bob.myPeerID, preseedPeer: false)
+
+        let handedOver = await TestHelpers.waitUntil(
+            { carolOut.count(ofType: .courierEnvelope) == 1 },
+            timeout: TestConstants.defaultTimeout
+        )
+        #expect(handedOver)
+        #expect(carol.courierStore.isEmpty)
+    }
+
+    @Test func sendCourierMessageRejectsInvalidRecipientKeyBeforeQueueing() async throws {
+        let alice = makeService()
+        let carol = makeService()
+        preseedConnectedPeer(carol, in: alice)
+
+        let aliceOut = PacketTap()
+        alice._test_onOutboundPacket = aliceOut.record
+
+        #expect(!alice.sendCourierMessage(
+            "this cannot be sealed",
+            messageID: "courier-msg-invalid-key",
+            recipientNoiseKey: Data(repeating: 0x01, count: 8),
+            via: [carol.myPeerID]
+        ))
+
+        let queuedPacket = await TestHelpers.waitUntil(
+            { aliceOut.first(ofType: .courierEnvelope) != nil },
+            timeout: TestConstants.shortTimeout
+        )
+        #expect(!queuedPacket)
     }
 
     @Test func depositFromUntrustedPeerIsRejected() async throws {
@@ -201,6 +290,26 @@ struct CourierEndToEndTests {
             timeout: TestConstants.shortTimeout
         )
         #expect(!stored)
+    }
+
+    private func makeUnsignedAnnounce(from service: BLEService) throws -> BitchatPacket {
+        let announcement = AnnouncementPacket(
+            nickname: "Unsigned",
+            noisePublicKey: service.noiseStaticPublicKeyData(),
+            signingPublicKey: service.noiseSigningPublicKeyData(),
+            directNeighbors: nil
+        )
+        let payload = try #require(announcement.encode())
+
+        return BitchatPacket(
+            type: MessageType.announce.rawValue,
+            senderID: Data(hexString: service.myPeerID.id) ?? Data(),
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: payload,
+            signature: nil,
+            ttl: TransportConfig.messageTTLDefault
+        )
     }
 }
 

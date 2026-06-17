@@ -98,8 +98,12 @@ struct BLEAnnounceHandlerTests {
         recorder.upsertResult = BLEPeerAnnounceUpdate(isNewPeer: true, wasDisconnected: false, previousNickname: nil)
         let handler = makeHandler(recorder: recorder, now: now)
 
-        handler.handle(packet, from: peerID)
+        let result = handler.handle(packet, from: peerID)
 
+        #expect(result?.peerID == peerID)
+        #expect(result?.announcement.noisePublicKey == noiseKey)
+        #expect(result?.isDirectAnnounce == true)
+        #expect(result?.isVerified == true)
         #expect(recorder.verifySignatureCalls.count == 1)
         #expect(recorder.verifySignatureCalls.first?.signingPublicKey == Data(repeating: 0x99, count: 32))
         #expect(recorder.barrierCount == 1)
@@ -161,8 +165,11 @@ struct BLEAnnounceHandlerTests {
         let recorder = Recorder()
         let handler = makeHandler(recorder: recorder, now: now)
 
-        handler.handle(packet, from: peerID)
+        let result = handler.handle(packet, from: peerID)
 
+        #expect(result?.peerID == peerID)
+        #expect(result?.announcement.noisePublicKey == noiseKey)
+        #expect(result?.isVerified == false)
         #expect(recorder.verifySignatureCalls.isEmpty)
         #expect(recorder.barrierCount == 1)
         #expect(recorder.upsertCalls.isEmpty)
@@ -197,8 +204,9 @@ struct BLEAnnounceHandlerTests {
         recorder.signatureValid = false
         let handler = makeHandler(recorder: recorder, now: now)
 
-        handler.handle(packet, from: peerID)
+        let result = handler.handle(packet, from: peerID)
 
+        #expect(result?.isVerified == false)
         #expect(recorder.verifySignatureCalls.count == 1)
         #expect(recorder.upsertCalls.isEmpty)
         #expect(recorder.uiEventDeliveries.count == 1)
@@ -222,8 +230,9 @@ struct BLEAnnounceHandlerTests {
         let recorder = Recorder()
         let handler = makeHandler(recorder: recorder, now: now)
 
-        handler.handle(packet, from: peerID)
+        let result = handler.handle(packet, from: peerID)
 
+        #expect(result == nil)
         expectNoSideEffects(recorder)
     }
 
@@ -242,8 +251,9 @@ struct BLEAnnounceHandlerTests {
         let recorder = Recorder()
         let handler = makeHandler(recorder: recorder, localPeerID: peerID, now: now)
 
-        handler.handle(packet, from: peerID)
+        let result = handler.handle(packet, from: peerID)
 
+        #expect(result == nil)
         expectNoSideEffects(recorder)
     }
 
@@ -263,8 +273,9 @@ struct BLEAnnounceHandlerTests {
         let recorder = Recorder()
         let handler = makeHandler(recorder: recorder, now: now)
 
-        handler.handle(packet, from: peerID)
+        let result = handler.handle(packet, from: peerID)
 
+        #expect(result == nil)
         expectNoSideEffects(recorder)
     }
 
@@ -311,8 +322,10 @@ struct BLEAnnounceHandlerTests {
         recorder.upsertResult = BLEPeerAnnounceUpdate(isNewPeer: true, wasDisconnected: false, previousNickname: nil)
         let handler = makeHandler(recorder: recorder, now: now)
 
-        handler.handle(packet, from: peerID)
+        let result = handler.handle(packet, from: peerID)
 
+        #expect(result?.isDirectAnnounce == false)
+        #expect(result?.isVerified == true)
         #expect(recorder.upsertCalls.count == 1)
         #expect(recorder.upsertCalls.first?.isConnected == false)
         #expect(recorder.uiEventDeliveries.count == 1)
@@ -384,8 +397,9 @@ struct BLEAnnounceHandlerTests {
         recorder.existingNoisePublicKey = Data(repeating: 0xAA, count: 32)
         let handler = makeHandler(recorder: recorder, now: now)
 
-        handler.handle(packet, from: peerID)
+        let result = handler.handle(packet, from: peerID)
 
+        #expect(result?.isVerified == false)
         #expect(recorder.upsertCalls.isEmpty)
         #expect(recorder.uiEventDeliveries.count == 1)
         #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == false)
