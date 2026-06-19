@@ -3104,7 +3104,7 @@ extension BLEService {
             handleFileTransfer(packet, from: senderID)
 
         case .courierEnvelope:
-            handleCourierEnvelope(packet, from: senderID)
+            handleCourierEnvelope(packet, from: peerID)
 
         case .leave:
             handleLeave(packet, from: senderID)

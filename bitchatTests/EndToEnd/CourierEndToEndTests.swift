@@ -292,6 +292,49 @@ struct CourierEndToEndTests {
         #expect(!stored)
     }
 
+    @Test func courierDepositTrustUsesIngressPeerNotClaimedSender() async throws {
+        let alice = makeService()
+        let carol = makeService()
+        let mallory = makeService()
+        preseedConnectedPeer(alice, in: carol)
+        preseedConnectedPeer(mallory, in: carol)
+
+        let trustedAliceKey = Data(hexString: alice.myPeerID.id) ?? Data()
+        carol.courierDepositPolicy = { depositorKey in
+            depositorKey == trustedAliceKey
+        }
+
+        let aliceNoise = NoiseEncryptionService(keychain: MockKeychain())
+        let bobKey = NoiseEncryptionService(keychain: MockKeychain()).getStaticPublicKeyData()
+        let typedPayload = try #require(BLENoisePayloadFactory.privateMessage(content: "spoofed", messageID: "m-spoof"))
+        let sealed = try aliceNoise.sealCourierPayload(typedPayload, recipientStaticKey: bobKey)
+        let now = Date()
+        let envelope = CourierEnvelope(
+            recipientTag: CourierEnvelope.recipientTag(
+                noiseStaticKey: bobKey,
+                epochDay: CourierEnvelope.epochDay(for: now)
+            ),
+            expiry: UInt64((now.timeIntervalSince1970 + 3600) * 1000),
+            ciphertext: sealed
+        )
+        let packet = BitchatPacket(
+            type: MessageType.courierEnvelope.rawValue,
+            senderID: Data(hexString: alice.myPeerID.id) ?? Data(),
+            recipientID: Data(hexString: carol.myPeerID.id),
+            timestamp: UInt64(now.timeIntervalSince1970 * 1000),
+            payload: try #require(envelope.encode()),
+            signature: nil,
+            ttl: 1
+        )
+
+        carol._test_handlePacket(packet, fromPeerID: mallory.myPeerID, preseedPeer: false)
+        let stored = await TestHelpers.waitUntil(
+            { !carol.courierStore.isEmpty },
+            timeout: TestConstants.shortTimeout
+        )
+        #expect(!stored)
+    }
+
     private func makeUnsignedAnnounce(from service: BLEService) throws -> BitchatPacket {
         let announcement = AnnouncementPacket(
             nickname: "Unsigned",
