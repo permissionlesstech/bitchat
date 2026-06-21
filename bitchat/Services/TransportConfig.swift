@@ -73,6 +73,9 @@ enum TransportConfig {
     static let uiSenderRateBucketRefillPerSec: Double = 1.0
     static let uiContentRateBucketCapacity: Double = 3
     static let uiContentRateBucketRefillPerSec: Double = 0.5
+    static let uiSenderRateBucketMaxEntries: Int = 2000
+    static let uiContentRateBucketMaxEntries: Int = 2000
+    static let uiRateBucketIdleTTL: TimeInterval = 10 * 60
 
     // UI sleeps/delays
     static let uiStartupInitialDelaySeconds: TimeInterval = 1.0
