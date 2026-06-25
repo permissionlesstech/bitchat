@@ -167,6 +167,16 @@ final class GossipSyncManager {
         return packet.timestamp >= cutoffMs
     }
 
+    private func normalizedSyncTypes(_ types: SyncTypeFlags?) -> SyncTypeFlags {
+        guard let types, !types.isEmpty else { return .publicMessages }
+        return types
+    }
+
+    private func isAtOrAfterMinimumTimestamp(_ packet: BitchatPacket, sinceTimestamp: UInt64?) -> Bool {
+        guard let sinceTimestamp else { return true }
+        return packet.timestamp >= sinceTimestamp
+    }
+
     private func _onPublicPacketSeen(_ packet: BitchatPacket) {
         guard let messageType = MessageType(rawValue: packet.type) else { return }
         let isBroadcastRecipient: Bool = {
@@ -218,8 +228,8 @@ final class GossipSyncManager {
         }
     }
 
-    private func sendRequestSync(for types: SyncTypeFlags) {
-        let payload = buildGcsPayload(for: types)
+    func sendRequestSync(for types: SyncTypeFlags? = nil, sinceTimestamp: UInt64? = nil) {
+        let payload = buildGcsPayload(for: types, sinceTimestamp: sinceTimestamp)
         let pkt = BitchatPacket(
             type: MessageType.requestSync.rawValue,
             senderID: Data(hexString: myPeerID.id) ?? Data(),
@@ -233,11 +243,11 @@ final class GossipSyncManager {
         delegate?.sendPacket(signed)
     }
 
-    private func sendRequestSync(to peerID: PeerID, types: SyncTypeFlags) {
+    func sendRequestSync(to peerID: PeerID, types: SyncTypeFlags? = nil, sinceTimestamp: UInt64? = nil) {
         // Register the request for RSR validation
         requestSyncManager.registerRequest(to: peerID)
         
-        let payload = buildGcsPayload(for: types)
+        let payload = buildGcsPayload(for: types, sinceTimestamp: sinceTimestamp)
         var recipient = Data()
         var temp = peerID.id
         while temp.count >= 2 && recipient.count < 8 {
@@ -265,7 +275,8 @@ final class GossipSyncManager {
     }
 
     private func _handleRequestSync(from peerID: PeerID, request: RequestSyncPacket) {
-        let requestedTypes = (request.types ?? .publicMessages)
+        let requestedTypes = normalizedSyncTypes(request.types)
+        let sinceTimestamp = request.sinceTimestamp
         // Decode GCS into sorted set and prepare membership checker
         let sorted = GCSFilter.decodeToSortedSet(p: request.p, m: request.m, data: request.data)
         func mightContain(_ id: Data) -> Bool {
@@ -276,7 +287,7 @@ final class GossipSyncManager {
         if requestedTypes.contains(.announce) {
             for (_, pair) in latestAnnouncementByPeer {
                 let (idHex, pkt) = pair
-                guard isPacketFresh(pkt) else { continue }
+                guard isPacketFresh(pkt), isAtOrAfterMinimumTimestamp(pkt, sinceTimestamp: sinceTimestamp) else { continue }
                 let idBytes = Data(hexString: idHex) ?? Data()
                 if !mightContain(idBytes) {
                     var toSend = pkt
@@ -290,6 +301,7 @@ final class GossipSyncManager {
         if requestedTypes.contains(.message) {
             let toSendMsgs = messages.allPackets(isFresh: isPacketFresh)
             for pkt in toSendMsgs {
+                guard isAtOrAfterMinimumTimestamp(pkt, sinceTimestamp: sinceTimestamp) else { continue }
                 let idBytes = PacketIdUtil.computeId(pkt)
                 if !mightContain(idBytes) {
                     var toSend = pkt
@@ -303,6 +315,7 @@ final class GossipSyncManager {
         if requestedTypes.contains(.fragment) {
             let frags = fragments.allPackets(isFresh: isPacketFresh)
             for pkt in frags {
+                guard isAtOrAfterMinimumTimestamp(pkt, sinceTimestamp: sinceTimestamp) else { continue }
                 let idBytes = PacketIdUtil.computeId(pkt)
                 if !mightContain(idBytes) {
                     var toSend = pkt
@@ -316,6 +329,7 @@ final class GossipSyncManager {
         if requestedTypes.contains(.fileTransfer) {
             let files = fileTransfers.allPackets(isFresh: isPacketFresh)
             for pkt in files {
+                guard isAtOrAfterMinimumTimestamp(pkt, sinceTimestamp: sinceTimestamp) else { continue }
                 let idBytes = PacketIdUtil.computeId(pkt)
                 if !mightContain(idBytes) {
                     var toSend = pkt
@@ -328,25 +342,33 @@ final class GossipSyncManager {
     }
 
     // Build REQUEST_SYNC payload using current candidates and GCS params
-    private func buildGcsPayload(for types: SyncTypeFlags) -> Data {
+    private func buildGcsPayload(for types: SyncTypeFlags?, sinceTimestamp: UInt64? = nil) -> Data {
+        let requestedTypes = normalizedSyncTypes(types)
+        let encodedTypes = types.flatMap { $0.isEmpty ? nil : $0 }
         var candidates: [BitchatPacket] = []
-        if types.contains(.announce) {
-            for (_, pair) in latestAnnouncementByPeer where isPacketFresh(pair.packet) {
+        if requestedTypes.contains(.announce) {
+            for (_, pair) in latestAnnouncementByPeer where isPacketFresh(pair.packet) && isAtOrAfterMinimumTimestamp(pair.packet, sinceTimestamp: sinceTimestamp) {
                 candidates.append(pair.packet)
             }
         }
-        if types.contains(.message) {
-            candidates.append(contentsOf: messages.allPackets(isFresh: isPacketFresh))
+        if requestedTypes.contains(.message) {
+            candidates.append(contentsOf: messages.allPackets(isFresh: isPacketFresh).filter {
+                isAtOrAfterMinimumTimestamp($0, sinceTimestamp: sinceTimestamp)
+            })
         }
-        if types.contains(.fragment) {
-            candidates.append(contentsOf: fragments.allPackets(isFresh: isPacketFresh))
+        if requestedTypes.contains(.fragment) {
+            candidates.append(contentsOf: fragments.allPackets(isFresh: isPacketFresh).filter {
+                isAtOrAfterMinimumTimestamp($0, sinceTimestamp: sinceTimestamp)
+            })
         }
-        if types.contains(.fileTransfer) {
-            candidates.append(contentsOf: fileTransfers.allPackets(isFresh: isPacketFresh))
+        if requestedTypes.contains(.fileTransfer) {
+            candidates.append(contentsOf: fileTransfers.allPackets(isFresh: isPacketFresh).filter {
+                isAtOrAfterMinimumTimestamp($0, sinceTimestamp: sinceTimestamp)
+            })
         }
         if candidates.isEmpty {
             let p = GCSFilter.deriveP(targetFpr: config.gcsTargetFpr)
-            let req = RequestSyncPacket(p: p, m: 1, data: Data(), types: types)
+            let req = RequestSyncPacket(p: p, m: 1, data: Data(), types: encodedTypes, sinceTimestamp: sinceTimestamp)
             return req.encode()
         }
 
@@ -356,21 +378,21 @@ final class GossipSyncManager {
         let p = GCSFilter.deriveP(targetFpr: config.gcsTargetFpr)
         let nMax = GCSFilter.estimateMaxElements(sizeBytes: config.gcsMaxBytes, p: p)
         let cap: Int
-        if types == .fragment {
+        if requestedTypes == .fragment {
             cap = max(1, config.fragmentCapacity)
-        } else if types == .fileTransfer {
+        } else if requestedTypes == .fileTransfer {
             cap = max(1, config.fileTransferCapacity)
         } else {
             cap = max(1, config.seenCapacity)
         }
         let takeN = min(candidates.count, min(nMax, cap))
         if takeN <= 0 {
-            let req = RequestSyncPacket(p: p, m: 1, data: Data(), types: types)
+            let req = RequestSyncPacket(p: p, m: 1, data: Data(), types: encodedTypes, sinceTimestamp: sinceTimestamp)
             return req.encode()
         }
         let ids: [Data] = candidates.prefix(takeN).map { PacketIdUtil.computeId($0) }
         let params = GCSFilter.buildFilter(ids: ids, maxBytes: config.gcsMaxBytes, targetFpr: config.gcsTargetFpr)
-        let req = RequestSyncPacket(p: params.p, m: params.m, data: params.data, types: types)
+        let req = RequestSyncPacket(p: params.p, m: params.m, data: params.data, types: encodedTypes, sinceTimestamp: sinceTimestamp)
         return req.encode()
     }
 
@@ -459,6 +481,12 @@ extension GossipSyncManager {
     func _messageCount(for peerID: PeerID) -> Int {
         queue.sync {
             messages.allPackets { _ in true }.filter { PeerID(hexData: $0.senderID) == peerID }.count
+        }
+    }
+
+    func _buildGcsPayloadSynchronously(for types: SyncTypeFlags? = nil, sinceTimestamp: UInt64? = nil) -> Data {
+        queue.sync {
+            buildGcsPayload(for: types, sinceTimestamp: sinceTimestamp)
         }
     }
 }

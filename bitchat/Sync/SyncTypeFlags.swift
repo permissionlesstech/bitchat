@@ -1,8 +1,8 @@
 import BitFoundation
 import Foundation
 
-/// Bitfield describing which message types are covered by a REQUEST_SYNC round.
-/// Matches the Android mapping (bit index -> message type).
+/// Internal bitfield describing which message types are covered by a REQUEST_SYNC round.
+/// The wire TLV uses raw `MessageType` bytes, matching Android's wantedTypes format.
 struct SyncTypeFlags: OptionSet {
     let rawValue: UInt64
 
@@ -80,26 +80,37 @@ struct SyncTypeFlags: OptionSet {
     }
 
     func toData() -> Data? {
-        guard rawValue != 0 else { return nil }
-        var value = rawValue
-        var bytes: [UInt8] = []
-        while value > 0 && bytes.count < 8 {
-            bytes.append(UInt8(value & 0xFF))
-            value >>= 8
-        }
-        while let last = bytes.last, last == 0 {
-            bytes.removeLast()
-        }
-        guard !bytes.isEmpty, bytes.count <= 8 else { return nil }
+        let bytes = toMessageTypes().map(\.rawValue)
+        guard !bytes.isEmpty else { return nil }
         return Data(bytes)
     }
 
     static func decode(_ data: Data) -> SyncTypeFlags? {
+        guard !data.isEmpty else { return nil }
+
+        // Prior experimental iOS builds encoded announce+message as the
+        // bitfield byte 0x03. Android's upgraded wire format uses the same
+        // value for LEAVE, which this sync manager does not store, so prefer
+        // the legacy interpretation for the single-byte ambiguous case.
+        if data.count == 1 && data[0] == 0x03 {
+            return .publicMessages
+        }
+
+        let types = data.compactMap { MessageType(rawValue: $0) }
+        if !types.isEmpty {
+            return SyncTypeFlags(messageTypes: types)
+        }
+
+        return decodeLegacyBitfield(data)
+    }
+
+    private static func decodeLegacyBitfield(_ data: Data) -> SyncTypeFlags? {
         guard (1...8).contains(data.count) else { return nil }
         var raw: UInt64 = 0
         for (index, byte) in data.enumerated() {
             raw |= UInt64(byte) << UInt64(index * 8)
         }
-        return SyncTypeFlags(rawValue: raw)
+        let flags = SyncTypeFlags(rawValue: raw)
+        return flags.isEmpty ? nil : flags
     }
 }
