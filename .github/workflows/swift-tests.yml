@@ -29,9 +29,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Set up Swift
-        uses: swift-actions/setup-swift@v2
-
       - name: Compute Swift cache salt
         id: swift_cache_salt
         run: |
