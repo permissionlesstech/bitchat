@@ -279,6 +279,107 @@ struct GossipSyncManagerTests {
         #expect(sentPackets.count == 1)
         #expect(sentPackets[0].type == MessageType.fragment.rawValue)
     }
+
+    @Test func handleRequestSyncHonorsSinceTimestamp() async throws {
+        var config = GossipSyncManager.Config()
+        config.seenCapacity = 5
+        config.fragmentCapacity = 0
+        config.fileTransferCapacity = 0
+        config.messageSyncIntervalSeconds = 0
+        config.fragmentSyncIntervalSeconds = 0
+        config.fileTransferSyncIntervalSeconds = 0
+
+        let requestSyncManager = RequestSyncManager()
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: requestSyncManager)
+        let delegate = RecordingDelegate()
+        manager.delegate = delegate
+
+        let sender = try #require(Data(hexString: "aabbccddeeff0011"))
+        let threshold = UInt64(Date().timeIntervalSince1970 * 1000)
+
+        let oldMessage = BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: sender,
+            recipientID: nil,
+            timestamp: threshold - 1,
+            payload: Data([0x10]),
+            signature: nil,
+            ttl: 1
+        )
+
+        let freshMessage = BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: sender,
+            recipientID: nil,
+            timestamp: threshold,
+            payload: Data([0x20]),
+            signature: nil,
+            ttl: 1
+        )
+
+        manager.onPublicPacketSeen(oldMessage)
+        manager.onPublicPacketSeen(freshMessage)
+
+        let peer = PeerID(str: "FFFFFFFFFFFFFFFF")
+        let request = RequestSyncPacket(p: 4, m: 1, data: Data(), types: .message, sinceTimestamp: threshold)
+        manager.handleRequestSync(from: peer, request: request)
+
+        try await TestHelpers.waitFor({ delegate.packets.count == 1 }, timeout: TestConstants.shortTimeout)
+        let sentPacket = try #require(delegate.packets.first)
+        #expect(sentPacket.payload == Data([0x20]))
+    }
+
+    @Test func buildGcsPayloadHonorsSinceTimestamp() throws {
+        var config = GossipSyncManager.Config()
+        config.seenCapacity = 5
+        config.fragmentCapacity = 0
+        config.fileTransferCapacity = 0
+        config.messageSyncIntervalSeconds = 0
+        config.fragmentSyncIntervalSeconds = 0
+        config.fileTransferSyncIntervalSeconds = 0
+        config.gcsTargetFpr = 0.000001
+
+        let requestSyncManager = RequestSyncManager()
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: requestSyncManager)
+
+        let sender = try #require(Data(hexString: "1122334455667788"))
+        let threshold = UInt64(Date().timeIntervalSince1970 * 1000)
+
+        let oldMessage = BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: sender,
+            recipientID: nil,
+            timestamp: threshold - 1,
+            payload: Data([0xA0]),
+            signature: nil,
+            ttl: 1
+        )
+
+        let freshMessage = BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: sender,
+            recipientID: nil,
+            timestamp: threshold + 1,
+            payload: Data([0xB0]),
+            signature: nil,
+            ttl: 1
+        )
+
+        manager.onPublicPacketSeen(oldMessage)
+        manager.onPublicPacketSeen(freshMessage)
+        manager._performMaintenanceSynchronously()
+
+        let payload = manager._buildGcsPayloadSynchronously(for: .message, sinceTimestamp: threshold)
+        let request = try #require(RequestSyncPacket.decode(from: payload))
+        let sorted = GCSFilter.decodeToSortedSet(p: request.p, m: request.m, data: request.data)
+        let oldBucket = GCSFilter.bucket(for: PacketIdUtil.computeId(oldMessage), modulus: request.m)
+        let freshBucket = GCSFilter.bucket(for: PacketIdUtil.computeId(freshMessage), modulus: request.m)
+
+        #expect(request.types?.contains(.message) == true)
+        #expect(request.sinceTimestamp == threshold)
+        #expect(GCSFilter.contains(sortedValues: sorted, candidate: freshBucket))
+        #expect(GCSFilter.contains(sortedValues: sorted, candidate: oldBucket) == false)
+    }
 }
 
 private final class RecordingDelegate: GossipSyncManager.Delegate {

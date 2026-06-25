@@ -4,6 +4,9 @@ import Foundation
 //  - 0x01: P (uint8) — Golomb-Rice parameter
 //  - 0x02: M (uint32, big-endian) — hash range (N * 2^P)
 //  - 0x03: data (opaque) — GR bitstream bytes (MSB-first)
+//  - 0x04: wanted types — raw MessageType bytes
+//  - 0x05: minimum timestamp (uint64, big-endian) — epoch milliseconds
+//  - 0x06: fragment id filter (utf8)
 struct RequestSyncPacket {
     let p: Int
     let m: UInt32
