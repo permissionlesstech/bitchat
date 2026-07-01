@@ -111,6 +111,116 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertTrue(connected)
     }
 
+    func test_connect_whenTorAlreadyReady_waitsForEgressVerificationBeforeCreatingSessions() async {
+        // Tor is bootstrapped, but the egress self-check has no fresh verdict:
+        // the ready path must still queue behind the async egress gate instead
+        // of opening sockets directly.
+        let context = makeContext(
+            permission: .authorized,
+            userTorEnabled: true,
+            torEnforced: true,
+            torIsReady: true,
+            torEgressVerified: false
+        )
+
+        context.manager.connect()
+
+        XCTAssertTrue(context.sessionFactory.requestedURLs.isEmpty)
+        XCTAssertEqual(context.torWaiter.awaitCallCount, 1)
+
+        // Egress verification succeeds (awaitEgressReady returned true, which
+        // implies the verifier now holds a fresh cached verdict).
+        context.torEgressVerified.value = true
+        context.torWaiter.resolve(true)
+
+        let connectedAfterVerification = await waitUntil {
+            context.sessionFactory.requestedURLs.count == self.expectedDefaultRelayCount &&
+            context.manager.relays.allSatisfy(\.isConnected)
+        }
+        XCTAssertTrue(connectedAfterVerification)
+    }
+
+    func test_reconnect_requeuesBehindEgressGateWhenVerificationLapses() async {
+        // Reconnect backoff timers call connectToRelay directly; when the
+        // cached egress verification has lapsed by then, the reconnect must go
+        // back through the gate rather than opening a socket.
+        let relayURL = "wss://egress-reconnect.example"
+        let context = makeContext(
+            permission: .denied,
+            userTorEnabled: true,
+            torEnforced: true,
+            torIsReady: true,
+            torEgressVerified: true
+        )
+
+        context.manager.ensureConnections(to: [relayURL])
+        let connected = await waitUntil {
+            context.manager.relays.first(where: { $0.url == relayURL })?.isConnected == true
+        }
+        XCTAssertTrue(connected)
+        XCTAssertEqual(context.sessionFactory.requestedURLs.count, 1)
+
+        // The socket drops and the cached verification expires meanwhile.
+        context.torEgressVerified.value = false
+        context.sessionFactory.latestConnection(for: relayURL)?
+            .fail(error: NSError(domain: NSURLErrorDomain, code: NSURLErrorTimedOut))
+        let reconnectScheduled = await waitUntil { context.scheduler.scheduled.count == 1 }
+        XCTAssertTrue(reconnectScheduled)
+
+        context.scheduler.runNext()
+        let queuedBehindGate = await waitUntil { context.torWaiter.awaitCallCount == 1 }
+        XCTAssertTrue(queuedBehindGate)
+        // No new socket until the egress gate passes.
+        XCTAssertEqual(context.sessionFactory.requestedURLs.count, 1)
+
+        context.torEgressVerified.value = true
+        context.torWaiter.resolve(true)
+
+        let reconnected = await waitUntil {
+            context.sessionFactory.requestedURLs.count == 2 &&
+            context.manager.relays.first(where: { $0.url == relayURL })?.isConnected == true
+        }
+        XCTAssertTrue(reconnected)
+    }
+
+    func test_connect_egressGateExhaustionSchedulesBoundedRetryAndRecovers() async {
+        // A persistent unverified egress exhausts the wait attempts; a bounded
+        // low-frequency retry must then recover automatically once
+        // verification succeeds (e.g. transient canary outage ends).
+        let relayURL = "wss://egress-gate-retry.example"
+        let context = makeContext(
+            permission: .denied,
+            userTorEnabled: true,
+            torEnforced: true,
+            torIsReady: true,
+            torEgressVerified: false
+        )
+
+        context.manager.ensureConnections(to: [relayURL])
+        for _ in 0..<TransportConfig.nostrTorReadyMaxWaitAttempts {
+            context.torWaiter.resolve(false)
+        }
+
+        // Fail-closed, with a single bounded-cadence retry scheduled.
+        XCTAssertTrue(context.sessionFactory.requestedURLs.isEmpty)
+        XCTAssertEqual(context.scheduler.scheduled.count, 1)
+        XCTAssertEqual(context.scheduler.scheduled.first?.delay, TransportConfig.nostrTorGateRetrySeconds)
+
+        // The outage ends before the retry fires.
+        let attemptsBefore = context.torWaiter.awaitCallCount
+        context.scheduler.runNext()
+        let regated = await waitUntil { context.torWaiter.awaitCallCount == attemptsBefore + 1 }
+        XCTAssertTrue(regated)
+
+        context.torEgressVerified.value = true
+        context.torWaiter.resolve(true)
+
+        let recovered = await waitUntil {
+            context.manager.relays.first(where: { $0.url == relayURL })?.isConnected == true
+        }
+        XCTAssertTrue(recovered)
+    }
+
     func test_subscribe_unblocksDeferredEOSEWhenTorWaitAttemptsExhausted() async {
         let relayURL = "wss://tor-eose-unblock.example"
         let context = makeContext(permission: .denied, userTorEnabled: true, torEnforced: true, torIsReady: false)
@@ -1449,6 +1559,7 @@ final class NostrRelayManagerTests: XCTestCase {
         userTorEnabled: Bool = false,
         torEnforced: Bool = false,
         torIsReady: Bool = true,
+        torEgressVerified: Bool = true,
         torIsForeground: Bool = true,
         jitterUnit: @escaping () -> Double = { 0.5 } // 0.5 -> jitter factor 1.0 (no jitter)
     ) -> RelayManagerTestContext {
@@ -1458,6 +1569,7 @@ final class NostrRelayManagerTests: XCTestCase {
         let scheduler = MockRelayScheduler()
         let clock = MutableClock(now: Date(timeIntervalSince1970: 1_700_000_000))
         let torWaiter = MockTorWaiter(isReady: torIsReady)
+        let torEgressVerifiedFlag = MutableBool(value: torEgressVerified)
         let torForeground = MutableBool(value: torIsForeground)
         let activationFlag = MutableBool(value: activationAllowed)
         let manager = NostrRelayManager(
@@ -1470,6 +1582,7 @@ final class NostrRelayManagerTests: XCTestCase {
                 locationPermissionPublisher: permissionSubject.eraseToAnyPublisher(),
                 torEnforced: { torEnforced },
                 torIsReady: { torWaiter.isReady },
+                torEgressVerified: { torEgressVerifiedFlag.value },
                 torIsForeground: { torForeground.value },
                 awaitTorReady: torWaiter.await(completion:),
                 makeSession: { sessionFactory },
@@ -1489,6 +1602,7 @@ final class NostrRelayManagerTests: XCTestCase {
             clock: clock,
             activationAllowed: activationFlag,
             torWaiter: torWaiter,
+            torEgressVerified: torEgressVerifiedFlag,
             torForeground: torForeground
         )
     }
@@ -1543,6 +1657,7 @@ private struct RelayManagerTestContext {
     let clock: MutableClock
     let activationAllowed: MutableBool
     let torWaiter: MockTorWaiter
+    let torEgressVerified: MutableBool
     let torForeground: MutableBool
 }
 

@@ -83,34 +83,117 @@ struct TorEgressVerifierTests {
         #expect(await v.verify() == true)
     }
 
-    @Test("unreachable allows (session stays fail-closed) but does not cache a Tor verification")
-    func unreachableAllowsButNotCached() async {
+    @Test("unreachable refuses: an unverified egress must not proceed (fail-closed)")
+    func unreachableRefuses() async {
         let h = Harness()
         h.setResult(.unreachable("down"))
         let v = makeVerifier(h, ttl: 300, minRetry: 0)
 
-        #expect(await v.verify() == true)
-        // Not a verified state: once it turns into a real leak, we must refuse.
-        h.setResult(.notTor)
         #expect(await v.verify() == false)
+        #expect(v.hasFreshVerification == false)
     }
 
-    @Test("minRetryInterval throttles re-probing when not verified")
+    @Test("unreachable-then-reachable recovers via retry")
+    func unreachableRecoversWhenCanaryReturns() async {
+        let h = Harness()
+        h.setResult(.unreachable("down"))
+        let v = makeVerifier(h, ttl: 300, minRetry: 5)
+
+        #expect(await v.verify() == false)
+        #expect(h.probeCount == 1)
+
+        // Canary comes back; the next probe (after the retry throttle window)
+        // verifies and allows again.
+        h.setResult(.verifiedTor)
+        h.advance(5)
+        #expect(await v.verify() == true)
+        #expect(h.probeCount == 2)
+        #expect(v.hasFreshVerification == true)
+    }
+
+    @Test("cached verifiedTor within TTL allows during a canary blip without re-probing")
+    func cachedVerifiedAllowsDuringCanaryBlip() async {
+        let h = Harness()
+        h.setResult(.verifiedTor)
+        let v = makeVerifier(h, ttl: 300, minRetry: 0)
+
+        #expect(await v.verify() == true)
+        #expect(h.probeCount == 1)
+
+        // The canary goes down inside the TTL window: the cached positive
+        // verdict is authoritative, no probe runs, traffic stays allowed.
+        h.setResult(.unreachable("down"))
+        h.advance(100)
+        #expect(await v.verify() == true)
+        #expect(h.probeCount == 1)
+        #expect(v.hasFreshVerification == true)
+    }
+
+    @Test("TTL expiry + unreachable refuses until a probe succeeds again")
+    func expiredCacheWithUnreachableRefuses() async {
+        let h = Harness()
+        h.setResult(.verifiedTor)
+        let v = makeVerifier(h, ttl: 300, minRetry: 0)
+
+        #expect(await v.verify() == true)
+
+        // Past the TTL the old verdict no longer stands: an unreachable canary
+        // means unverified egress, so connection opens are refused.
+        h.setResult(.unreachable("down"))
+        h.advance(301)
+        #expect(v.hasFreshVerification == false)
+        #expect(await v.verify() == false)
+        #expect(h.probeCount == 2)
+
+        // A subsequent successful probe restores service.
+        h.setResult(.verifiedTor)
+        #expect(await v.verify() == true)
+        #expect(v.hasFreshVerification == true)
+    }
+
+    @Test("minRetryInterval bounds re-probing while unverified (no canary hammering)")
     func throttleReprobe() async {
         let h = Harness()
         h.setResult(.unreachable("down"))
         let v = makeVerifier(h, ttl: 300, minRetry: 5)
 
-        #expect(await v.verify() == true)
+        #expect(await v.verify() == false)
         #expect(h.probeCount == 1)
-        // Within minRetry window: reuse last decision, no new probe.
+        // Within minRetry window: reuse last (refusing) decision, no new probe.
         h.advance(1)
-        #expect(await v.verify() == true)
+        #expect(await v.verify() == false)
         #expect(h.probeCount == 1)
         // After the window: re-probe.
         h.advance(5)
-        #expect(await v.verify() == true)
+        #expect(await v.verify() == false)
         #expect(h.probeCount == 2)
+    }
+
+    @Test("invalidate clears the synchronous cache snapshot")
+    func invalidateClearsSnapshot() async {
+        let h = Harness()
+        h.setResult(.verifiedTor)
+        let v = makeVerifier(h, ttl: 300)
+
+        #expect(await v.verify() == true)
+        #expect(v.hasFreshVerification == true)
+        await v.invalidate()
+        #expect(v.hasFreshVerification == false)
+    }
+
+    @Test("notTor drops any cached verification snapshot")
+    func notTorClearsSnapshot() async {
+        let h = Harness()
+        h.setResult(.verifiedTor)
+        let v = makeVerifier(h, ttl: 300, minRetry: 0)
+
+        #expect(await v.verify() == true)
+        #expect(v.hasFreshVerification == true)
+
+        h.setResult(.notTor)
+        h.advance(301)
+        #expect(await v.verify() == false)
+        #expect(v.hasFreshVerification == false)
     }
 
     @Test("invalidate forces a fresh probe")

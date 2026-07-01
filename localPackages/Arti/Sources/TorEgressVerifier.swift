@@ -15,16 +15,34 @@ import Foundation
 /// connections are opened under enforced Tor, it performs a canary request whose
 /// response positively reports whether the egress hit the network via Tor.
 ///
-/// Policy (`verify()` return value):
+/// Policy (`verify()` return value) — fail-closed on unverified egress:
 ///   - `.verifiedTor`   → allow, and cache the positive result for `ttl`.
-///   - `.notTor`        → REFUSE. The canary reached the internet but the exit
-///                        is NOT a Tor node: a real leak. Never allow relays.
-///   - `.unreachable`   → allow-with-warning. The canary itself failed (endpoint
-///                        down / circuit not built). This does NOT egress direct:
-///                        the relay session is independently fail-closed, so the
-///                        worst case is that relay connections also fail. We do
-///                        not hard-block here to avoid taking Nostr fully offline
-///                        whenever the single canary host is unavailable.
+///   - `.notTor`        → REFUSE, and drop any cached verification. The canary
+///                        reached the internet but the exit is NOT a Tor node:
+///                        a real leak. Never allow relays.
+///   - `.unreachable`   → REFUSE (egress unverified). The canary itself failed
+///                        (endpoint down / circuit not built), so we cannot tell
+///                        whether the platform honored the SOCKS proxy — the
+///                        exact ambiguity this verifier exists to resolve.
+///                        Unverified traffic must not proceed on the
+///                        enforced-Tor path.
+///
+/// TTL / retry semantics:
+///   - A `verifiedTor` verdict allows connection *opens* for `ttl` without
+///     re-probing, so a brief canary blip inside the TTL window does not take
+///     relays offline (a fresh positive verdict is authoritative for the
+///     window). Already-open sockets are never torn down by verification —
+///     they were opened under a verified egress and the proxied session is
+///     fail-closed by construction.
+///   - After TTL expiry (or `invalidate()` on Tor restart/dormant/shutdown),
+///     the next `verify()` re-probes; while the canary stays `.unreachable`,
+///     new connection opens are refused until a probe succeeds again.
+///   - Probe cadence is bounded: at most one probe per `minRetryInterval`
+///     (callers within the window reuse the last decision), and concurrent
+///     `verify()` calls share one in-flight probe. Recovery from a transient
+///     canary outage is automatic: callers that keep retrying (relay connect
+///     gate, GeoRelayDirectory backoff) re-probe and succeed once the canary
+///     is reachable again.
 ///
 /// The probe is injectable so the policy/caching logic is unit-tested without a
 /// live network (see `TorEgressVerifierTests`).
@@ -51,6 +69,29 @@ public actor TorEgressVerifier {
     private var lastResult: ProbeResult?
     private var inFlight: Task<Bool, Never>?
 
+    /// Lock-protected mirror of "verified within TTL" so synchronous gates
+    /// (e.g. `NostrRelayManager`'s connect path) can consult the cache without
+    /// awaiting the actor.
+    private let verifiedSnapshot = VerifiedSnapshot()
+
+    private final class VerifiedSnapshot: @unchecked Sendable {
+        private let lock = NSLock()
+        private var verifiedUntil: Date?
+
+        func update(_ until: Date?) {
+            lock.lock()
+            verifiedUntil = until
+            lock.unlock()
+        }
+
+        func isFresh(at date: Date) -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            guard let verifiedUntil else { return false }
+            return date < verifiedUntil
+        }
+    }
+
     public init(
         ttl: TimeInterval,
         minRetryInterval: TimeInterval = 5.0,
@@ -69,14 +110,23 @@ public actor TorEgressVerifier {
         lastVerifiedAt = nil
         lastProbeAt = nil
         lastResult = nil
+        verifiedSnapshot.update(nil)
     }
 
     /// The most recent probe outcome, for diagnostics/tests.
     public func lastProbeResult() -> ProbeResult? { lastResult }
 
-    /// Returns `true` when it is safe to open relay connections through the
-    /// proxied session, `false` only when a non-Tor egress was positively
-    /// detected. See the type doc for the full policy.
+    /// Synchronous view of the cache: `true` while a `verifiedTor` verdict is
+    /// within its TTL. Callers that get `false` must route through the async
+    /// `verify()` gate (which probes) before opening connections.
+    public nonisolated var hasFreshVerification: Bool {
+        verifiedSnapshot.isFresh(at: now())
+    }
+
+    /// Returns `true` only when the proxied egress is verified to exit via Tor
+    /// (a fresh probe or a cached `verifiedTor` verdict within TTL). Returns
+    /// `false` when a non-Tor egress was positively detected *or* when the
+    /// egress could not be verified. See the type doc for the full policy.
     public func verify() async -> Bool {
         if isFreshlyVerified() { return true }
         // Throttle re-probes when the last attempt did not verify.
@@ -102,8 +152,9 @@ public actor TorEgressVerifier {
     private func decision(for result: ProbeResult) -> Bool {
         switch result {
         case .verifiedTor: return true
-        case .unreachable: return true
-        case .notTor: return false
+        // Fail closed: both a positively detected leak and an unverifiable
+        // egress refuse connections. Only a fresh `verifiedTor` allows.
+        case .unreachable, .notTor: return false
         }
     }
 
@@ -114,21 +165,24 @@ public actor TorEgressVerifier {
         switch result {
         case .verifiedTor:
             lastVerifiedAt = now()
+            verifiedSnapshot.update(now().addingTimeInterval(ttl))
             return true
         case .notTor:
             lastVerifiedAt = nil
+            verifiedSnapshot.update(nil)
             SecureLogger.error(
                 "🧅 Tor egress self-check FAILED: request exited via a NON-Tor address — refusing relay connections (possible IP leak)",
                 category: .session
             )
             return false
         case .unreachable(let why):
-            lastVerifiedAt = nil
+            // Note: a probe only runs when no fresh cached verdict exists, so
+            // there is no still-valid cache to preserve or drop here.
             SecureLogger.warning(
-                "🧅 Tor egress self-check could not complete (\(why)); relay session remains fail-closed via SOCKS proxy",
+                "🧅 Tor egress self-check could not complete (\(why)) — egress UNVERIFIED; refusing relay connections until the canary succeeds (bounded retry)",
                 category: .session
             )
-            return true
+            return false
         }
     }
 }

@@ -171,6 +171,10 @@ enum TransportConfig {
     // How many consecutive Tor-readiness waits (each bounded by TorManager's
     // bootstrap deadline) to attempt before unblocking pending EOSE callers.
     static let nostrTorReadyMaxWaitAttempts: Int = 3
+    // After Tor-gate wait attempts are exhausted (Tor never ready, or egress
+    // self-check unverified), retry the whole gate at this bounded cadence so
+    // a transient failure (e.g. canary outage) recovers without user action.
+    static let nostrTorGateRetrySeconds: TimeInterval = 30.0
     static let nostrPendingSendQueueCap: Int = 200
     // Sample interval for the send-queue overflow warning (first + every Nth
     // dropped event). Drops are ephemeral presence/geo traffic — log-only.

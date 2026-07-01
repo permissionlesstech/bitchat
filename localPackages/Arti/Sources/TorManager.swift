@@ -133,11 +133,21 @@ public final class TorManager: ObservableObject {
         return await MainActor.run(body: { self.networkPermitted })
     }
 
+    /// Synchronous, cached view of the egress gate: `true` while a positive
+    /// egress verification is within its TTL (or when Tor is not enforced).
+    /// When this is `false`, callers must route through `awaitEgressReady()`
+    /// (which probes) before opening any connection — never connect directly.
+    public var isEgressVerified: Bool {
+        guard torEnforced else { return true }
+        return egressVerifier.hasFreshVerification
+    }
+
     /// Like `awaitReady`, but additionally requires that a canary request
     /// through the proxied session positively verifies Tor egress. Returns
-    /// `false` if Tor never became ready, or if the egress self-check
-    /// positively detected a non-Tor (direct) egress. Callers must fail closed
-    /// on `false` — never fall back to a direct connection.
+    /// `false` if Tor never became ready, or if the egress self-check could
+    /// not positively verify a Tor exit (non-Tor egress detected, or canary
+    /// unreachable → unverified). Callers must fail closed on `false` — never
+    /// fall back to a direct connection.
     nonisolated
     public func awaitEgressReady(timeout: TimeInterval = 75.0) async -> Bool {
         let ready = await awaitReady(timeout: timeout)
