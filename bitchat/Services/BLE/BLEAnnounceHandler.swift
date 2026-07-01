@@ -59,9 +59,8 @@ struct BLEAnnounceHandlerEnvironment {
     let scheduleAfterglow: (TimeInterval) -> Void
 }
 
-/// Orchestrates inbound announce packets: preflight validation, signature
-/// trust, registry/topology updates, identity persistence, UI notification,
-/// gossip tracking, and the reciprocal announce response.
+/// Outcome of an accepted announce, surfaced so the service can run
+/// follow-up work (e.g. courier handover) that keys off the announce.
 struct BLEAnnounceHandlingResult {
     let peerID: PeerID
     let announcement: AnnouncementPacket
@@ -69,6 +68,9 @@ struct BLEAnnounceHandlingResult {
     let isVerified: Bool
 }
 
+/// Orchestrates inbound announce packets: preflight validation, signature
+/// trust, registry/topology updates, identity persistence, UI notification,
+/// gossip tracking, and the reciprocal announce response.
 final class BLEAnnounceHandler {
     private let environment: BLEAnnounceHandlerEnvironment
 

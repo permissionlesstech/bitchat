@@ -38,6 +38,11 @@ struct CourierEndToEndTests {
             lock.lock(); defer { lock.unlock() }
             return packets.filter { $0.type == type.rawValue }.count
         }
+
+        func all(ofType type: MessageType) -> [BitchatPacket] {
+            lock.lock(); defer { lock.unlock() }
+            return packets.filter { $0.type == type.rawValue }
+        }
     }
 
     private final class NoiseCaptureDelegate: BitchatDelegate {
@@ -225,6 +230,87 @@ struct CourierEndToEndTests {
         #expect(announced)
         let verifiedAnnounce = try #require(bobOut.first(ofType: .announce))
         carol._test_handlePacket(verifiedAnnounce, fromPeerID: bob.myPeerID, preseedPeer: false)
+
+        let handedOver = await TestHelpers.waitUntil(
+            { carolOut.count(ofType: .courierEnvelope) == 1 },
+            timeout: TestConstants.defaultTimeout
+        )
+        #expect(handedOver)
+        #expect(carol.courierStore.isEmpty)
+    }
+
+    @Test func relayedAnnounceDoesNotTriggerCourierHandover() async throws {
+        let alice = makeService()
+        let carol = makeService()
+        let bob = makeService()
+        carol.courierDepositPolicy = { _ in true }
+
+        let aliceOut = PacketTap()
+        alice._test_onOutboundPacket = aliceOut.record
+        let carolOut = PacketTap()
+        carol._test_onOutboundPacket = carolOut.record
+        let bobOut = PacketTap()
+        bob._test_onOutboundPacket = bobOut.record
+
+        preseedConnectedPeer(carol, in: alice)
+
+        #expect(alice.sendCourierMessage(
+            "hold for a direct encounter",
+            messageID: "courier-msg-relayed-announce",
+            recipientNoiseKey: bob.noiseStaticPublicKeyData(),
+            via: [carol.myPeerID]
+        ))
+        let deposited = await TestHelpers.waitUntil(
+            { aliceOut.first(ofType: .courierEnvelope) != nil },
+            timeout: TestConstants.defaultTimeout
+        )
+        #expect(deposited)
+        let depositPacket = try #require(aliceOut.first(ofType: .courierEnvelope))
+
+        carol._test_handlePacket(depositPacket, fromPeerID: alice.myPeerID)
+        let carried = await TestHelpers.waitUntil(
+            { !carol.courierStore.isEmpty },
+            timeout: TestConstants.defaultTimeout
+        )
+        #expect(carried)
+
+        bob.sendBroadcastAnnounce()
+        let announced = await TestHelpers.waitUntil(
+            { bobOut.first(ofType: .announce) != nil },
+            timeout: TestConstants.defaultTimeout
+        )
+        #expect(announced)
+        let directAnnounce = try #require(bobOut.first(ofType: .announce))
+
+        // A relayed copy has a decremented TTL but a still-valid signature
+        // (TTL is excluded from announce signatures). Envelopes are removed
+        // from the store optimistically, so handover must wait for a direct
+        // encounter instead of chasing a multi-hop path.
+        var relayedAnnounce = directAnnounce
+        relayedAnnounce.ttl = directAnnounce.ttl - 1
+        carol._test_handlePacket(relayedAnnounce, fromPeerID: bob.myPeerID, preseedPeer: false)
+
+        let leakedOnRelayedAnnounce = await TestHelpers.waitUntil(
+            { carolOut.count(ofType: .courierEnvelope) > 0 },
+            timeout: TestConstants.shortTimeout
+        )
+        #expect(!leakedOnRelayedAnnounce)
+        #expect(!carol.courierStore.isEmpty)
+
+        // The relayed copy consumed the original announce's dedup key
+        // (sender/timestamp/payload — TTL excluded), so the direct handover
+        // needs a fresh announce. Wait out the 1s announce throttle first.
+        try await Task.sleep(nanoseconds: 1_100_000_000)
+        bob.sendBroadcastAnnounce()
+        let reannounced = await TestHelpers.waitUntil(
+            { bobOut.all(ofType: .announce).contains { $0.timestamp != directAnnounce.timestamp } },
+            timeout: TestConstants.defaultTimeout
+        )
+        #expect(reannounced)
+        let freshAnnounce = try #require(
+            bobOut.all(ofType: .announce).first { $0.timestamp != directAnnounce.timestamp }
+        )
+        carol._test_handlePacket(freshAnnounce, fromPeerID: bob.myPeerID, preseedPeer: false)
 
         let handedOver = await TestHelpers.waitUntil(
             { carolOut.count(ofType: .courierEnvelope) == 1 },

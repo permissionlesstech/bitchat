@@ -54,9 +54,11 @@ final class CourierStore {
     private let fileURL: URL?
     private let now: () -> Date
 
-    init(persistsToDisk: Bool = true, now: @escaping () -> Date = Date.init) {
+    /// - Parameter fileURL: Overrides the on-disk location (tests). Ignored
+    ///   when `persistsToDisk` is false.
+    init(persistsToDisk: Bool = true, fileURL: URL? = nil, now: @escaping () -> Date = Date.init) {
         self.now = now
-        self.fileURL = persistsToDisk ? Self.defaultFileURL() : nil
+        self.fileURL = persistsToDisk ? (fileURL ?? Self.defaultFileURL()) : nil
         loadFromDisk()
     }
 

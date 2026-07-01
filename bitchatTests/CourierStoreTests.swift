@@ -158,16 +158,19 @@ struct CourierStoreTests {
     // MARK: - Persistence
 
     @Test func persistsAndReloadsAcrossInstances() throws {
-        // Uses the real on-disk location; clean up around the test.
-        let first = CourierStore(persistsToDisk: true, now: { Self.baseDate })
-        defer { first.wipe() }
-        first.wipe()
+        // Isolated on-disk location so the test never touches the real store.
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("courier-store-tests-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("envelopes.json")
+        defer { try? FileManager.default.removeItem(at: fileURL.deletingLastPathComponent()) }
+
+        let first = CourierStore(persistsToDisk: true, fileURL: fileURL, now: { Self.baseDate })
 
         let recipientKey = Data(repeating: 0xE0, count: 32)
         let envelope = makeEnvelope(recipientKey: recipientKey)
         #expect(first.deposit(envelope, from: depositorA))
 
-        let second = CourierStore(persistsToDisk: true, now: { Self.baseDate })
+        let second = CourierStore(persistsToDisk: true, fileURL: fileURL, now: { Self.baseDate })
         #expect(second.takeEnvelopes(for: recipientKey) == [envelope])
     }
 }

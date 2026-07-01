@@ -3172,9 +3172,13 @@ extension BLEService {
 
         // Courier handover: an announce is the moment we learn a peer's Noise
         // static key, so check whether we're carrying mail addressed to them.
+        // Direct announces only: envelopes are removed from the store
+        // optimistically, so handover must ride an established link rather
+        // than a speculative multi-hop send toward a relayed announce.
         guard !courierStore.isEmpty,
               let result,
-              result.isVerified else { return }
+              result.isVerified,
+              result.isDirectAnnounce else { return }
         deliverCourierMail(to: result.peerID, noiseKey: result.announcement.noisePublicKey)
     }
 
