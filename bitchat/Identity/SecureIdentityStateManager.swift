@@ -153,11 +153,21 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     private let queue = DispatchQueue(label: "bitchat.identity.state", attributes: .concurrent)
     
     // Pending-save coalescing flag. Reads/writes are serialized on `queue`.
-    // Persistence is done with a fire-and-forget `queue.async(.barrier)` rather
-    // than a retained DispatchSourceTimer: a lingering, never-cancelled timer
-    // keeps the dispatch machinery alive and prevents the unit-test process from
-    // exiting. (The original code used Timer.scheduledTimer on a GCD queue with
-    // no run loop, so saves never actually fired.)
+    //
+    // Persistence is SYNCHRONOUS: every mutating API runs its mutate + encrypt
+    // + keychain write inside `queue.sync(flags: .barrier)`, so when the call
+    // returns the write is already complete and NOTHING is left scheduled on
+    // the queue. This is deliberate — a retained DispatchSourceTimer (the
+    // original design) kept the dispatch machinery alive and prevented the
+    // unit-test process from exiting, and fire-and-forget `queue.async(.barrier)`
+    // (a later design) left a backlog of instrumented barrier saves still
+    // draining when LLVM's `--enable-code-coverage` `atexit` handler dumped
+    // `.profraw`, deadlocking the process at teardown on the constrained CI
+    // runner. Synchronous persistence has zero outstanding dispatch at exit, so
+    // neither failure mode is possible. `pendingSave` is now effectively always
+    // false after any mutation (saveIdentityCache persists inline and clears
+    // it); it remains only as a belt-and-suspenders flag read by `forceSave`
+    // and `deinit`.
     private var pendingSave = false
 
     // Encryption key
@@ -217,15 +227,11 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     }
     
     deinit {
-        // Do NOT dispatch onto `queue` here. `deinit` can itself run *on*
-        // `queue` (fire-and-forget saves capture `self`), and the object is
-        // being deallocated: a `queue.sync` would deadlock, and a
-        // `queue.async` schedules work that resurrects `self` and may never
-        // drain before process exit — at teardown libdispatch/swift-testing
-        // then wait on that outstanding barrier work and the process wedges
-        // (observed as a CI teardown hang once crypto identities moved into
-        // the persisted cache, so far more test-created managers persist on
-        // deinit).
+        // Do NOT dispatch onto `queue` here. `deinit` can run on any thread
+        // (including one draining `queue`), and the object is being
+        // deallocated: a `queue.sync` risks a re-entrant same-queue wait
+        // (deadlock) and a `queue.async` schedules work that resurrects `self`
+        // and may not drain before process exit.
         //
         // A flush here is redundant anyway: every mutating API already
         // persists inline within its own barrier, so the keychain is already
@@ -261,11 +267,11 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
         }
     }
     
-    /// Persists the cache. Always invoked on `queue` under a barrier (its callers
-    /// run inside `queue.async(.barrier)`), so `cache` is read while serialized.
-    /// The encode + keychain write are done here (already on the exclusive
-    /// barrier context), so no separate hop is scheduled and nothing is left to
-    /// keep the process alive.
+    /// Persists the cache. Always invoked on `queue` under a barrier (its
+    /// callers run inside `queue.sync(flags: .barrier)`), so `cache` is read
+    /// while serialized. The encode + keychain write are done here (already on
+    /// the exclusive barrier context), synchronously, so no separate hop is
+    /// scheduled and nothing is left to keep the process alive.
     private func saveIdentityCache() {
         pendingSave = true
         // On the barrier context already: snapshot is trivially consistent.
@@ -349,7 +355,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     ///   - signingPublicKey: Optional Ed25519 signing public key for authenticating public messages
     ///   - claimedNickname: Optional latest claimed nickname to persist into social identity
     func upsertCryptographicIdentity(fingerprint: String, noisePublicKey: Data, signingPublicKey: Data?, claimedNickname: String? = nil) {
-        queue.async(flags: .barrier) {
+        queue.sync(flags: .barrier) {
             let now = Date()
             if var existing = self.cache.cryptographicIdentities[fingerprint] {
                 if let pinnedSigningKey = existing.signingPublicKey,
@@ -427,7 +433,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     }
     
     func updateSocialIdentity(_ identity: SocialIdentity) {
-        queue.async(flags: .barrier) {
+        queue.sync(flags: .barrier) {
             let previousClaimedNickname = self.cache.socialIdentities[identity.fingerprint]?.claimedNickname
             self.cache.socialIdentities[identity.fingerprint] = identity
             
@@ -463,7 +469,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     }
     
     func setFavorite(_ fingerprint: String, isFavorite: Bool) {
-        queue.async(flags: .barrier) {
+        queue.sync(flags: .barrier) {
             if var identity = self.cache.socialIdentities[fingerprint] {
                 identity.isFavorite = isFavorite
                 self.cache.socialIdentities[fingerprint] = identity
@@ -501,7 +507,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     func setBlocked(_ fingerprint: String, isBlocked: Bool) {
         SecureLogger.info("User \(isBlocked ? "blocked" : "unblocked"): \(fingerprint)", category: .security)
         
-        queue.async(flags: .barrier) {
+        queue.sync(flags: .barrier) {
             if var identity = self.cache.socialIdentities[fingerprint] {
                 identity.isBlocked = isBlocked
                 if isBlocked {
@@ -535,7 +541,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     
     func setNostrBlocked(_ pubkeyHexLowercased: String, isBlocked: Bool) {
         let key = pubkeyHexLowercased.lowercased()
-        queue.async(flags: .barrier) {
+        queue.sync(flags: .barrier) {
             if isBlocked {
                 self.cache.blockedNostrPubkeys.insert(key)
             } else {
@@ -552,7 +558,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     // MARK: - Ephemeral Session Management
     
     func registerEphemeralSession(peerID: PeerID, handshakeState: HandshakeState = .none) {
-        queue.async(flags: .barrier) {
+        queue.sync(flags: .barrier) {
             self.ephemeralSessions[peerID] = EphemeralIdentity(
                 peerID: peerID,
                 sessionStart: Date(),
@@ -562,7 +568,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     }
     
     func updateHandshakeState(peerID: PeerID, state: HandshakeState) {
-        queue.async(flags: .barrier) {
+        queue.sync(flags: .barrier) {
             self.ephemeralSessions[peerID]?.handshakeState = state
             
             // If handshake completed, update last interaction
@@ -578,7 +584,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     func clearAllIdentityData() {
         SecureLogger.warning("Clearing all identity data", category: .security)
         
-        queue.async(flags: .barrier) {
+        queue.sync(flags: .barrier) {
             self.cache = IdentityCache()
             self.ephemeralSessions.removeAll()
 
@@ -589,7 +595,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     }
     
     func removeEphemeralSession(peerID: PeerID) {
-        queue.async(flags: .barrier) {
+        queue.sync(flags: .barrier) {
             self.ephemeralSessions.removeValue(forKey: peerID)
         }
     }
@@ -599,7 +605,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     func setVerified(fingerprint: String, verified: Bool) {
         SecureLogger.info("Fingerprint \(verified ? "verified" : "unverified"): \(fingerprint)", category: .security)
         
-        queue.async(flags: .barrier) {
+        queue.sync(flags: .barrier) {
             if verified {
                 self.cache.verifiedFingerprints.insert(fingerprint)
             } else {
