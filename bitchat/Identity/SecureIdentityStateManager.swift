@@ -243,20 +243,26 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     }
     
     /// Persists the cache. Always invoked on `queue` under a barrier (its callers
-    /// run inside `queue.async(.barrier)`), so it simply marks the cache dirty
-    /// and persists it on the same serialized context — no timer, nothing left
-    /// scheduled to keep the process alive.
+    /// run inside `queue.async(.barrier)`), so `cache` is read while serialized.
+    /// The encode + keychain write are done here (already on the exclusive
+    /// barrier context), so no separate hop is scheduled and nothing is left to
+    /// keep the process alive.
     private func saveIdentityCache() {
         pendingSave = true
-        performSave()
+        // On the barrier context already: snapshot is trivially consistent.
+        persist(snapshot: cache)
+        pendingSave = false
     }
 
-    /// Writes the cache to the keychain. Must run on `queue` with exclusive
-    /// (barrier) access.
-    private func performSave() {
-        guard pendingSave else { return }
-        pendingSave = false
-
+    /// Encodes, seals, and writes a *snapshot* of the cache to the keychain.
+    ///
+    /// Takes the cache by value so callers can capture a consistent snapshot
+    /// under `queue` and then encode without holding it. Reading `cache`
+    /// concurrently with a barrier writer would be a data race on the
+    /// dictionary storage, which — because `JSONEncoder` walks that storage —
+    /// can spin forever (observed as a CI test-suite hang), so the snapshot
+    /// must be taken on `queue`, never off it.
+    private func persist(snapshot: IdentityCache) {
         // Never persist under an ephemeral key — it would overwrite the real
         // cache with data the next launch cannot decrypt.
         guard !encryptionKeyIsEphemeral else {
@@ -265,7 +271,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
         }
 
         do {
-            let data = try JSONEncoder().encode(cache)
+            let data = try JSONEncoder().encode(snapshot)
             let sealedBox = try AES.GCM.seal(data, using: encryptionKey)
             let saved = keychain.saveIdentityKey(sealedBox.combined!, forKey: cacheKey)
             if saved {
@@ -276,14 +282,26 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
         }
     }
 
-    // Force immediate save (for app termination / lifecycle events). Mutations
-    // already persist synchronously via saveIdentityCache, so this is normally a
-    // no-op (performSave early-returns when nothing is pending). Runs directly on
-    // the caller's thread — deliberately NOT a `queue.sync(barrier)`, which is
-    // reachable from `deinit` and from async tests on the swift-concurrency
-    // cooperative pool where a blocking barrier-sync can starve/deadlock it.
+    // Force a flush (for app termination / lifecycle events). Every mutating
+    // API already persists inline inside its own barrier via
+    // `saveIdentityCache`, so by the time this is called the keychain is
+    // already up to date and this is normally a no-op; it exists as a
+    // belt-and-suspenders flush of any `pendingSave` left set.
+    //
+    // The snapshot + persist run inside a `queue.async(flags: .barrier)`:
+    // reading `cache` on the barrier context is race-free (a plain off-queue
+    // read races in-flight barrier writers — JSONEncoder walking a
+    // concurrently-mutated dictionary can spin forever, which surfaced as a CI
+    // hang). It is deliberately `async`, NOT `sync`: `forceSave` is reachable
+    // from `deinit`, and the final release can itself run *on* `queue` (the
+    // fire-and-forget saves capture `self`), so a `queue.sync` here would be a
+    // re-entrant same-queue wait and deadlock (SIGTRAP).
     func forceSave() {
-        performSave()
+        queue.async(flags: .barrier) { [weak self] in
+            guard let self, self.pendingSave else { return }
+            self.pendingSave = false
+            self.persist(snapshot: self.cache)
+        }
     }
     
     // MARK: - Social Identity Management

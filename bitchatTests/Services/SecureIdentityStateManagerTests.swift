@@ -173,6 +173,55 @@ final class SecureIdentityStateManagerTests: XCTestCase {
         XCTAssertEqual(reloaded.getSocialIdentity(for: fingerprint)?.claimedNickname, "victim")
     }
 
+    func test_concurrentUpsertsAndForceSaveDoNotRaceOrHang() {
+        // Regression guard for a data race between a barrier writer mutating
+        // `cache` and `forceSave` encoding it off-queue: JSONEncoder walking a
+        // dictionary being concurrently mutated can spin forever (observed as
+        // a CI suite hang, killed at the watchdog timeout). forceSave must
+        // snapshot `cache` on `queue` before encoding.
+        //
+        // forceSave is funnelled through a single serial actor: the guard is
+        // for the manager's own `cache` race, and MockKeychain is not itself
+        // thread-safe (production forceSave is not called concurrently). The
+        // interleaving with the concurrent barrier writers is what matters.
+        let manager = SecureIdentityStateManager(LockedKeychain())
+        let noiseKeys = (0..<32).map { Data(repeating: UInt8($0), count: 32) }
+        let forceSaveQueue = DispatchQueue(label: "test.forceSave.serial")
+
+        let group = DispatchGroup()
+        for (index, noiseKey) in noiseKeys.enumerated() {
+            group.enter()
+            DispatchQueue.global().async {
+                let fingerprint = noiseKey.sha256Fingerprint()
+                for iteration in 0..<20 {
+                    manager.upsertCryptographicIdentity(
+                        fingerprint: fingerprint,
+                        noisePublicKey: noiseKey,
+                        signingPublicKey: Data(repeating: UInt8(index), count: 32),
+                        claimedNickname: "peer-\(index)-\(iteration)"
+                    )
+                    // Interleave a serialized off-queue save with the in-flight
+                    // barrier writes from all the other threads.
+                    forceSaveQueue.async { manager.forceSave() }
+                }
+                group.leave()
+            }
+        }
+
+        let completed = group.wait(timeout: .now() + 20)
+        XCTAssertEqual(completed, .success, "concurrent upsert/forceSave workload hung")
+        forceSaveQueue.sync {} // drain outstanding saves
+
+        // The pins landed and are readable (also fences pending barrier writes).
+        for (index, noiseKey) in noiseKeys.enumerated() {
+            let peerID = PeerID(publicKey: noiseKey)
+            XCTAssertEqual(
+                manager.getCryptoIdentitiesByPeerIDPrefix(peerID).first?.signingPublicKey,
+                Data(repeating: UInt8(index), count: 32)
+            )
+        }
+    }
+
     func test_setBlocked_clearsFavoriteState() async {
         let manager = SecureIdentityStateManager(MockKeychain())
         let fingerprint = String(repeating: "ab", count: 32)
@@ -520,6 +569,70 @@ final class SecureIdentityStateManagerTests: XCTestCase {
             try? await Task.sleep(nanoseconds: 10_000_000)
         }
         return condition()
+    }
+}
+
+/// Thread-safe in-memory keychain for the concurrent stress test. MockKeychain
+/// itself is not synchronized (production keychain access is serialized), so a
+/// dedicated lock-guarded double is used so the test exercises the manager's
+/// `cache` race rather than crashing on the double's own unsynchronized dict.
+private final class LockedKeychain: KeychainManagerProtocol {
+    private let lock = NSLock()
+    private var storage: [String: Data] = [:]
+    private var serviceStorage: [String: [String: Data]] = [:]
+
+    private func sync<T>(_ body: () -> T) -> T {
+        lock.lock(); defer { lock.unlock() }
+        return body()
+    }
+
+    func saveIdentityKey(_ keyData: Data, forKey key: String) -> Bool {
+        sync { storage[key] = keyData; return true }
+    }
+
+    func getIdentityKey(forKey key: String) -> Data? {
+        sync { storage[key] }
+    }
+
+    func deleteIdentityKey(forKey key: String) -> Bool {
+        sync { storage.removeValue(forKey: key); return true }
+    }
+
+    func deleteAllKeychainData() -> Bool {
+        sync { storage.removeAll(); serviceStorage.removeAll(); return true }
+    }
+
+    func secureClear(_ data: inout Data) { data = Data() }
+    func secureClear(_ string: inout String) { string = "" }
+
+    func verifyIdentityKeyExists() -> Bool {
+        sync { storage["identity_noiseStaticKey"] != nil }
+    }
+
+    func getIdentityKeyWithResult(forKey key: String) -> KeychainReadResult {
+        sync {
+            if let data = storage[key] { return .success(data) }
+            return .itemNotFound
+        }
+    }
+
+    func saveIdentityKeyWithResult(_ keyData: Data, forKey key: String) -> KeychainSaveResult {
+        sync { storage[key] = keyData; return .success }
+    }
+
+    func save(key: String, data: Data, service: String, accessible: CFString?) {
+        sync {
+            if serviceStorage[service] == nil { serviceStorage[service] = [:] }
+            serviceStorage[service]?[key] = data
+        }
+    }
+
+    func load(key: String, service: String) -> Data? {
+        sync { serviceStorage[service]?[key] }
+    }
+
+    func delete(key: String, service: String) {
+        sync { serviceStorage[service]?.removeValue(forKey: key) }
     }
 }
 
