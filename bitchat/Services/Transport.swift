@@ -95,6 +95,12 @@ protocol Transport: AnyObject {
     func sendFilePrivate(_ packet: BitchatFilePacket, to peerID: PeerID, transferId: String)
     func cancelTransfer(_ transferId: String)
 
+    // Courier store-and-forward (mesh transports only): seal a message to the
+    // recipient's static key and hand it to connected couriers for physical
+    // delivery while the recipient is offline. Returns false when the
+    // transport cannot courier (no connected courier, or unsupported).
+    func sendCourierMessage(_ content: String, messageID: String, recipientNoiseKey: Data, via couriers: [PeerID]) -> Bool
+
     // QR verification (optional for transports)
     func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data)
     func sendVerifyResponse(to peerID: PeerID, noiseKeyHex: String, nonceA: Data)
@@ -120,6 +126,7 @@ extension Transport {
 
     func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {}
     func sendVerifyResponse(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {}
+    func sendCourierMessage(_ content: String, messageID: String, recipientNoiseKey: Data, via couriers: [PeerID]) -> Bool { false }
     func sendFileBroadcast(_ packet: BitchatFilePacket, transferId: String) {}
     func sendFilePrivate(_ packet: BitchatFilePacket, to peerID: PeerID, transferId: String) {}
     func cancelTransfer(_ transferId: String) {}

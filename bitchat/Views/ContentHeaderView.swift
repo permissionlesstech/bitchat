@@ -22,6 +22,9 @@ struct ContentHeaderView: View {
     let headerPeerIconSize: CGFloat
     let headerPeerCountFontSize: CGFloat
 
+    /// Courier envelopes this device is carrying for offline third parties.
+    @State private var carriedMailCount = 0
+
     var body: some View {
         HStack(spacing: 0) {
             Text(verbatim: "bitchat/")
@@ -78,6 +81,23 @@ struct ContentHeaderView: View {
             }()
 
             HStack(spacing: 2) {
+                if carriedMailCount > 0 {
+                    Image(systemName: "figure.walk")
+                        .font(.bitchatSystem(size: 12))
+                        .foregroundColor(palette.secondary.opacity(0.8))
+                        .headerTapTarget()
+                        .accessibilityLabel(
+                            String(
+                                format: String(localized: "content.accessibility.carrying_mail", defaultValue: "Carrying %lld sealed messages for friends", comment: "Accessibility label for the courier mail indicator"),
+                                locale: .current,
+                                carriedMailCount
+                            )
+                        )
+                        .help(
+                            String(localized: "content.header.carrying_mail", defaultValue: "Carrying sealed messages for friends to deliver", comment: "Tooltip for the courier mail indicator")
+                        )
+                }
+
                 if appChromeModel.hasUnreadPrivateMessages {
                     Button(action: { appChromeModel.openMostRelevantPrivateChat() }) {
                         Image(systemName: "envelope.fill")
@@ -192,6 +212,9 @@ struct ContentHeaderView: View {
         }
         .frame(height: headerHeight)
         .padding(.horizontal, 12)
+        .onReceive(CourierStore.shared.$carriedCount) { count in
+            carriedMailCount = count
+        }
         .sheet(isPresented: $appChromeModel.isLocationChannelsSheetPresented) {
             LocationChannelsSheet(isPresented: $appChromeModel.isLocationChannelsSheetPresented)
                 .environmentObject(locationChannelsModel)

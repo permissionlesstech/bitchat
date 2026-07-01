@@ -46,6 +46,20 @@ final class BLEService: NSObject {
     
     // 4. Efficient Message Deduplication
     private let messageDeduplicator = MessageDeduplicator()
+
+    // Courier store-and-forward: envelopes this device carries for offline
+    // third parties, and the trust gate for accepting deposits. Injectable
+    // for tests; main-actor policy because favorites live on the main actor.
+    var courierStore: CourierStore = .shared
+    var courierDepositPolicy: @MainActor (Data) -> Bool = { depositorNoiseKey in
+        FavoritesPersistenceService.shared.isMutualFavorite(depositorNoiseKey)
+    }
+
+    #if DEBUG
+    // Test-only tap on the outbound pipeline so multi-node tests can ferry
+    // packets between in-process service instances.
+    var _test_onOutboundPacket: ((BitchatPacket) -> Void)?
+    #endif
     private var selfBroadcastTracker = BLESelfBroadcastTracker()
     private let meshTopology = MeshTopologyTracker()
     
@@ -888,6 +902,10 @@ final class BLEService: NSObject {
         } else {
             packetToSend = packet
         }
+
+        #if DEBUG
+        _test_onOutboundPacket?(packetToSend)
+        #endif
         
         // Encode once using a small per-type padding policy, then delegate by type
         let padForBLE = BLEOutboundPacketPolicy.padsBLEFrame(for: packetToSend.type)
@@ -1047,6 +1065,9 @@ final class BLEService: NSObject {
 
     // Directed send helper (unicast to a specific peerID) without altering packet contents
     private func sendPacketDirected(_ packet: BitchatPacket, to peerID: PeerID) {
+        #if DEBUG
+        _test_onOutboundPacket?(packet)
+        #endif
         guard let data = packet.toBinaryData(padding: false) else { return }
         sendOnAllLinks(packet: packet, data: data, pad: false, directedOnlyPeer: peerID)
     }
@@ -2468,7 +2489,135 @@ extension BLEService {
             ttl: messageTTL
         )
     }
-    
+
+    // MARK: Courier Store-and-Forward
+
+    /// Seal `content` to the recipient's static key (one-way Noise X) and hand
+    /// the envelope to the given couriers for physical delivery. Returns false
+    /// when no courier is connected, the payload cannot be built, or sealing
+    /// fails; link writes are queued asynchronously after the envelope is ready.
+    func sendCourierMessage(_ content: String, messageID: String, recipientNoiseKey: Data, via couriers: [PeerID]) -> Bool {
+        let connected = couriers.filter { isPeerConnected($0) }
+        guard !connected.isEmpty,
+              let typedPayload = BLENoisePayloadFactory.privateMessage(content: content, messageID: messageID) else {
+            return false
+        }
+
+        let payload: Data
+        do {
+            let now = Date()
+            let sealed = try noiseService.sealCourierPayload(typedPayload, recipientStaticKey: recipientNoiseKey)
+            let envelope = CourierEnvelope(
+                recipientTag: CourierEnvelope.recipientTag(
+                    noiseStaticKey: recipientNoiseKey,
+                    epochDay: CourierEnvelope.epochDay(for: now)
+                ),
+                expiry: UInt64((now.timeIntervalSince1970 + CourierEnvelope.maxLifetimeSeconds) * 1000),
+                ciphertext: sealed
+            )
+            guard let encoded = envelope.encode() else { return false }
+            payload = encoded
+        } catch {
+            SecureLogger.error("Failed to seal courier envelope: \(error)", category: .encryption)
+            return false
+        }
+
+        messageQueue.async { [weak self] in
+            guard let self else { return }
+            for courier in connected {
+                SecureLogger.debug("📦 Depositing courier envelope with \(courier.id.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
+                self.sendPacketDirected(self.makeCourierPacket(payload, to: courier), to: courier)
+            }
+        }
+        return true
+    }
+
+    private func makeCourierPacket(_ payload: Data, to peerID: PeerID) -> BitchatPacket {
+        BitchatPacket(
+            type: MessageType.courierEnvelope.rawValue,
+            senderID: myPeerIDData,
+            recipientID: Data(hexString: peerID.id),
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: payload,
+            signature: nil,
+            ttl: messageTTL
+        )
+    }
+
+    /// Handles both courier roles for an incoming envelope addressed to us:
+    /// recipient (the rotating tag matches our static key → open and deliver)
+    /// or courier (a trusted peer is depositing mail for someone else → store).
+    private func handleCourierEnvelope(_ packet: BitchatPacket, from peerID: PeerID) {
+        // Directed packets only; envelopes addressed elsewhere ride the
+        // generic relay path untouched.
+        guard packet.recipientID == myPeerIDData else { return }
+        guard let envelope = CourierEnvelope.decode(packet.payload), !envelope.isExpired else { return }
+
+        let myKey = noiseService.getStaticPublicKeyData()
+        if CourierEnvelope.candidateTags(noiseStaticKey: myKey, around: Date()).contains(envelope.recipientTag) {
+            openCourierEnvelope(envelope)
+        } else {
+            acceptCourierDeposit(envelope, from: peerID)
+        }
+    }
+
+    private func openCourierEnvelope(_ envelope: CourierEnvelope) {
+        do {
+            let (typedPayload, senderStaticKey) = try noiseService.openCourierPayload(envelope.ciphertext)
+            guard let typeRaw = typedPayload.first,
+                  let payloadType = NoisePayloadType(rawValue: typeRaw),
+                  payloadType == .privateMessage else {
+                SecureLogger.warning("⚠️ Courier envelope carried unsupported payload type", category: .session)
+                return
+            }
+            // Mesh peer IDs are derived from Noise static keys, so the sender
+            // resolves to the same DM thread whether or not they're present.
+            let senderPeerID = PeerID(publicKey: senderStaticKey)
+            let payload = Data(typedPayload.dropFirst())
+            SecureLogger.debug("📦 Opened courier envelope from \(senderPeerID.id.prefix(8))…", category: .session)
+            notifyUI { [weak self] in
+                self?.deliverTransportEvent(.noisePayloadReceived(
+                    peerID: senderPeerID,
+                    type: payloadType,
+                    payload: payload,
+                    timestamp: Date()
+                ))
+            }
+        } catch {
+            // Tag collision or stale key: not addressed to us after all.
+            SecureLogger.debug("📦 Courier envelope failed to open: \(error)", category: .encryption)
+        }
+    }
+
+    private func acceptCourierDeposit(_ envelope: CourierEnvelope, from peerID: PeerID) {
+        guard let depositorKey = collectionsQueue.sync(execute: { peerRegistry.info(for: peerID)?.noisePublicKey }) else {
+            SecureLogger.debug("📦 Courier deposit from unknown peer \(peerID.id.prefix(8))… rejected", category: .session)
+            return
+        }
+        let store = courierStore
+        let policy = courierDepositPolicy
+        Task { @MainActor in
+            guard policy(depositorKey) else {
+                SecureLogger.debug("📦 Courier deposit from \(peerID.id.prefix(8))… rejected (not a mutual favorite)", category: .session)
+                return
+            }
+            if store.deposit(envelope, from: depositorKey) {
+                SecureLogger.debug("📦 Carrying courier envelope deposited by \(peerID.id.prefix(8))…", category: .session)
+            }
+        }
+    }
+
+    /// Hand over any carried envelopes addressed to a peer we just heard from.
+    private func deliverCourierMail(to peerID: PeerID, noiseKey: Data) {
+        let envelopes = courierStore.takeEnvelopes(for: noiseKey)
+        guard !envelopes.isEmpty else { return }
+        SecureLogger.debug("📦 Handing over \(envelopes.count) courier envelope(s) to \(peerID.id.prefix(8))…", category: .session)
+        for envelope in envelopes {
+            guard let payload = envelope.encode() else { continue }
+            sendPacketDirected(makeCourierPacket(payload, to: peerID), to: peerID)
+        }
+    }
+
     // MARK: Link capability snapshots (thread-safe via bleQueue)
 
     private func readLinkState<T>(_ body: (BLELinkStateStore) -> T) -> T {
@@ -2953,7 +3102,10 @@ extension BLEService {
             
         case .fileTransfer:
             handleFileTransfer(packet, from: senderID)
-            
+
+        case .courierEnvelope:
+            handleCourierEnvelope(packet, from: peerID)
+
         case .leave:
             handleLeave(packet, from: senderID)
             
@@ -3016,7 +3168,18 @@ extension BLEService {
     }
     
     private func handleAnnounce(_ packet: BitchatPacket, from peerID: PeerID) {
-        announceHandler.handle(packet, from: peerID)
+        let result = announceHandler.handle(packet, from: peerID)
+
+        // Courier handover: an announce is the moment we learn a peer's Noise
+        // static key, so check whether we're carrying mail addressed to them.
+        // Direct announces only: envelopes are removed from the store
+        // optimistically, so handover must ride an established link rather
+        // than a speculative multi-hop send toward a relayed announce.
+        guard !courierStore.isEmpty,
+              let result,
+              result.isVerified,
+              result.isDirectAnnounce else { return }
+        deliverCourierMail(to: result.peerID, noiseKey: result.announcement.noisePublicKey)
     }
 
     /// Builds the announce handler environment. All queue hops stay here so

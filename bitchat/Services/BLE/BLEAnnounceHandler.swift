@@ -59,6 +59,15 @@ struct BLEAnnounceHandlerEnvironment {
     let scheduleAfterglow: (TimeInterval) -> Void
 }
 
+/// Outcome of an accepted announce, surfaced so the service can run
+/// follow-up work (e.g. courier handover) that keys off the announce.
+struct BLEAnnounceHandlingResult {
+    let peerID: PeerID
+    let announcement: AnnouncementPacket
+    let isDirectAnnounce: Bool
+    let isVerified: Bool
+}
+
 /// Orchestrates inbound announce packets: preflight validation, signature
 /// trust, registry/topology updates, identity persistence, UI notification,
 /// gossip tracking, and the reciprocal announce response.
@@ -69,7 +78,8 @@ final class BLEAnnounceHandler {
         self.environment = environment
     }
 
-    func handle(_ packet: BitchatPacket, from peerID: PeerID) {
+    @discardableResult
+    func handle(_ packet: BitchatPacket, from peerID: PeerID) -> BLEAnnounceHandlingResult? {
         let env = environment
         let now = env.now()
         let preflight = BLEAnnouncePreflightPolicy.evaluate(
@@ -85,15 +95,15 @@ final class BLEAnnounceHandler {
             announcement = acceptance.announcement
         case .reject(.malformed):
             SecureLogger.error("❌ Failed to decode announce packet from \(peerID.id.prefix(8))…", category: .session)
-            return
+            return nil
         case .reject(.senderMismatch(let derivedFromKey)):
             SecureLogger.warning("⚠️ Announce sender mismatch: derived \(derivedFromKey.id.prefix(8))… vs packet \(peerID.id.prefix(8))…", category: .security)
-            return
+            return nil
         case .reject(.selfAnnounce):
-            return
+            return nil
         case .reject(.stale(let ageSeconds)):
             SecureLogger.debug("⏰ Ignoring stale announce from \(peerID.id.prefix(8))… (age: \(ageSeconds)s)", category: .session)
-            return
+            return nil
         }
 
         // Suppress announce logs to reduce noise
@@ -210,5 +220,12 @@ final class BLEAnnounceHandler {
             let delay = Double.random(in: 0.3...0.6)
             env.scheduleAfterglow(delay)
         }
+
+        return BLEAnnounceHandlingResult(
+            peerID: peerID,
+            announcement: announcement,
+            isDirectAnnounce: isDirectAnnounce,
+            isVerified: verifiedAnnounce
+        )
     }
 }

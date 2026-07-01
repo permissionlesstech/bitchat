@@ -428,12 +428,13 @@ struct ChatViewModelDeliveryStatusTests {
     @Test @MainActor
     func statusRank_orderingIsCorrect() async {
         // This tests the implicit ordering used in refreshVisibleMessages
-        // failed < sending < sent < partiallyDelivered < delivered < read
+        // failed < sending < sent < carried < partiallyDelivered < delivered < read
 
         let statuses: [DeliveryStatus] = [
             .failed(reason: "test"),
             .sending,
             .sent,
+            .carried,
             .partiallyDelivered(reached: 1, total: 3),
             .delivered(to: "B", at: Date()),
             .read(by: "C", at: Date())
@@ -446,9 +447,10 @@ struct ChatViewModelDeliveryStatusTests {
             case .failed: #expect(index == 0)
             case .sending: #expect(index == 1)
             case .sent: #expect(index == 2)
-            case .partiallyDelivered: #expect(index == 3)
-            case .delivered: #expect(index == 4)
-            case .read: #expect(index == 5)
+            case .carried: #expect(index == 3)
+            case .partiallyDelivered: #expect(index == 4)
+            case .delivered: #expect(index == 5)
+            case .read: #expect(index == 6)
             }
         }
     }

@@ -369,6 +369,49 @@ final class NoiseEncryptionService {
     func getPeerPublicKeyData(_ peerID: PeerID) -> Data? {
         return sessionManager.getRemoteStaticKey(for: peerID)?.rawRepresentation
     }
+
+    // MARK: - Courier Envelopes (one-way Noise X)
+
+    /// Domain separation for courier envelopes so X-pattern transcripts can
+    /// never be confused with interactive XX handshakes.
+    private static let courierPrologue = Data("bitchat-courier-v1".utf8)
+
+    /// Encrypt a payload to a peer's known static key without an interactive
+    /// handshake (Noise X pattern). Used for store-and-forward envelopes
+    /// carried by couriers while the recipient is offline.
+    /// - Warning: One-way messages have no forward secrecy: a later compromise
+    ///   of the recipient's static key exposes envelopes captured in transit.
+    ///   Use established sessions whenever the peer is reachable.
+    func sealCourierPayload(_ payload: Data, recipientStaticKey: Data) throws -> Data {
+        let remoteKey = try NoiseHandshakeState.validatePublicKey(recipientStaticKey)
+        let handshake = NoiseHandshakeState(
+            role: .initiator,
+            pattern: .X,
+            keychain: keychain,
+            localStaticKey: staticIdentityKey,
+            remoteStaticKey: remoteKey,
+            prologue: Self.courierPrologue
+        )
+        return try handshake.writeMessage(payload: payload)
+    }
+
+    /// Decrypt a courier envelope addressed to our static key. Returns the
+    /// payload and the sender's authenticated static public key (the `ss`
+    /// DH in the X pattern binds the sender's identity to the ciphertext).
+    func openCourierPayload(_ envelopeCiphertext: Data) throws -> (payload: Data, senderStaticKey: Data) {
+        let handshake = NoiseHandshakeState(
+            role: .responder,
+            pattern: .X,
+            keychain: keychain,
+            localStaticKey: staticIdentityKey,
+            prologue: Self.courierPrologue
+        )
+        let payload = try handshake.readMessage(envelopeCiphertext)
+        guard let senderKey = handshake.getRemoteStaticPublicKey() else {
+            throw NoiseError.missingKeys
+        }
+        return (payload: payload, senderStaticKey: senderKey.rawRepresentation)
+    }
     
     /// Clear persistent identity (for panic mode)
     func clearPersistentIdentity() {
