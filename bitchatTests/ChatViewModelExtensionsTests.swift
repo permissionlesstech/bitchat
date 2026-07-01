@@ -352,31 +352,11 @@ struct ChatViewModelNostrExtensionTests {
         #expect(!viewModel.messages.contains { $0.content == "Blocked" })
     }
 
-    @Test @MainActor
-    func handleNostrEvent_rejectsInvalidSignature() async throws {
-        let (viewModel, _) = makeTestableViewModel()
-        let geohash = "u4pruydq"
-        let identity = try NostrIdentity.generate()
-
-        viewModel.switchLocationChannel(to: .location(GeohashChannel(level: .city, geohash: geohash)))
-
-        let event = NostrEvent(
-            pubkey: identity.publicKeyHex,
-            createdAt: Date(),
-            kind: .ephemeralEvent,
-            tags: [["g", geohash]],
-            content: "Valid"
-        )
-        var signed = try event.sign(with: identity.schnorrSigningKey())
-        signed.id = "deadbeef"
-
-        viewModel.handleNostrEvent(signed)
-
-        try? await Task.sleep(nanoseconds: 100_000_000)
-        viewModel.publicMessagePipeline.flushIfNeeded()
-
-        #expect(!viewModel.messages.contains { $0.content == "Tampered" })
-    }
+    // NOTE: Tampered-signature rejection is enforced once, off the main
+    // actor, at the relay boundary (events only reach the inbound pipeline
+    // after verification) — see NostrRelayManagerTests
+    // `test_receiveEvent_invalidSignatureDoesNotPoisonDuplicateCache` and
+    // `test_receiveGiftWrap_tamperedSignatureIsDroppedAndDoesNotPoisonDedup`.
 
     @Test @MainActor
     func subscribeGiftWrap_rejectsOversizedEmbeddedPacket() async throws {
@@ -565,9 +545,14 @@ struct ChatViewModelNostrExtensionTests {
 
         viewModel.handleGiftWrap(giftWrap, id: recipient)
 
-        try? await Task.sleep(nanoseconds: 50_000_000)
+        // Gift-wrap decryption runs off the main actor; wait for the ack
+        // (sent even for blocked senders) to know processing finished.
+        let didAck = await TestHelpers.waitUntil(
+            { viewModel.sentGeoDeliveryAcks.contains(messageID) },
+            timeout: 5.0
+        )
+        #expect(didAck)
         #expect(viewModel.privateChats[convKey] == nil)
-        #expect(viewModel.sentGeoDeliveryAcks.contains(messageID))
     }
 
     @Test @MainActor

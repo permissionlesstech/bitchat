@@ -75,15 +75,17 @@ extension ChatViewModel: NostrInboundPipelineContext {
     }
 }
 
-/// The inbound Nostr hot path: raw relay events in, chat messages / Noise
-/// payloads out. Pure transformation plus dedup — no relay lifecycle.
+/// The inbound Nostr hot path: verified relay events in, chat messages /
+/// Noise payloads out. Pure transformation plus dedup — no relay lifecycle.
 ///
-/// Ordering is deliberate and performance-critical: cheap rejects (kind,
-/// dedup lookup) run BEFORE Schnorr signature verification because duplicates
-/// dominate real relay traffic; events are recorded only AFTER verification so
-/// a forged-signature copy can never poison the dedup set; gift-wrap
-/// verification for the account mailbox runs off-main with an atomic
-/// main-actor check-and-record.
+/// Every event arriving here already had its Schnorr signature verified
+/// exactly once, off the main actor, by `NostrRelayManager`'s serial inbound
+/// pipeline (which records events into its own dedup cache only AFTER
+/// verification, so forged copies can't suppress genuine events). This
+/// pipeline therefore never re-verifies; it keeps its own event-ID dedup
+/// (cheap main-actor lookups) and moves NIP-17 gift-wrap decryption — two
+/// ECDH+ChaCha layers — off the main actor with an atomic main-actor
+/// check-and-record.
 final class NostrInboundPipeline {
     private weak var context: (any NostrInboundPipelineContext)?
     private let presence: GeoPresenceTracker
@@ -97,17 +99,15 @@ final class NostrInboundPipeline {
     @MainActor
     func subscribeNostrEvent(_ event: NostrEvent) {
         guard let context else { return }
-        // Cheap rejects (kind, dedup lookup) before Schnorr verification —
-        // duplicates dominate real traffic and must not pay for crypto.
-        // Only verified events are recorded, so a forged-signature copy can
-        // never poison the dedup set and suppress the genuine event.
+        // Cheap rejects (kind, dedup lookup) — duplicates dominate real
+        // traffic. The signature was already verified (exactly once, off the
+        // main actor) by NostrRelayManager before delivery.
         guard (event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue
             || event.kind == NostrProtocol.EventKind.geohashPresence.rawValue),
               !context.hasProcessedNostrEvent(event.id)
         else {
             return
         }
-        guard event.isValidSignature() else { return }
 
         context.recordProcessedNostrEvent(event.id)
 
@@ -176,15 +176,14 @@ final class NostrInboundPipeline {
     @MainActor
     func handleNostrEvent(_ event: NostrEvent) {
         guard let context else { return }
-        // Cheap rejects (kind, dedup lookup) before Schnorr verification —
-        // duplicates dominate real traffic and must not pay for crypto.
+        // Cheap rejects (kind, dedup lookup) — the signature was already
+        // verified (exactly once, off the main actor) by NostrRelayManager.
         guard (event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue
             || event.kind == NostrProtocol.EventKind.geohashPresence.rawValue)
         else {
             return
         }
         if context.hasProcessedNostrEvent(event.id) { return }
-        guard event.isValidSignature() else { return }
         context.recordProcessedNostrEvent(event.id)
 
         // Sampled: fires for every geo event and floods dev logs in busy geohashes.
@@ -264,104 +263,102 @@ final class NostrInboundPipeline {
     @MainActor
     func subscribeGiftWrap(_ giftWrap: NostrEvent, id: NostrIdentity) {
         guard let context else { return }
-        // Dedup lookup before Schnorr verification; record only after it passes.
+        // Cheap dedup pre-check only; processGeohashGiftWrap does the
+        // authoritative main-actor check-and-record before the off-main
+        // NIP-17 unwrap. The outer signature was already verified (exactly
+        // once, off the main actor) by NostrRelayManager.
         guard !context.hasProcessedNostrEvent(giftWrap.id) else { return }
-        guard giftWrap.isValidSignature() else { return }
-        context.recordProcessedNostrEvent(giftWrap.id)
 
-        guard let (content, senderPubkey, rumorTs) = try? NostrProtocol.decryptPrivateMessage(
-            giftWrap: giftWrap,
-            recipientIdentity: id
-        ),
-        let packet = Self.decodeEmbeddedBitChatPacket(from: content),
-        packet.type == MessageType.noiseEncrypted.rawValue,
-        let noisePayload = NoisePayload.decode(packet.payload)
-        else {
-            return
-        }
-
-        let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTs))
-        let convKey = PeerID(nostr_: senderPubkey)
-        context.registerNostrKeyMapping(senderPubkey, for: convKey)
-
-        switch noisePayload.type {
-        case .privateMessage:
-            context.handlePrivateMessage(
-                noisePayload,
-                senderPubkey: senderPubkey,
-                convKey: convKey,
-                id: id,
-                messageTimestamp: messageTimestamp
-            )
-        case .delivered:
-            context.handleDelivered(noisePayload, senderPubkey: senderPubkey, convKey: convKey)
-        case .readReceipt:
-            context.handleReadReceipt(noisePayload, senderPubkey: senderPubkey, convKey: convKey)
-        case .verifyChallenge, .verifyResponse:
-            break
+        Task.detached(priority: .userInitiated) { [weak self] in
+            await self?.processGeohashGiftWrap(giftWrap, id: id, verbose: false)
         }
     }
 
     @MainActor
     func handleGiftWrap(_ giftWrap: NostrEvent, id: NostrIdentity) {
         guard let context else { return }
-        // Dedup lookup before Schnorr verification; record only after it passes.
+        // Cheap dedup pre-check only; see subscribeGiftWrap.
         if context.hasProcessedNostrEvent(giftWrap.id) {
             return
         }
-        guard giftWrap.isValidSignature() else { return }
-        context.recordProcessedNostrEvent(giftWrap.id)
+
+        Task.detached(priority: .userInitiated) { [weak self] in
+            await self?.processGeohashGiftWrap(giftWrap, id: id, verbose: true)
+        }
+    }
+
+    /// Geohash-DM gift wrap ingest. The NIP-17 unwrap (two ECDH+ChaCha
+    /// layers) runs off the main actor; results hop back for state updates.
+    /// `verbose` keeps `handleGiftWrap`'s decrypt logging without adding it
+    /// to the sampling path.
+    private func processGeohashGiftWrap(_ giftWrap: NostrEvent, id: NostrIdentity, verbose: Bool) async {
+        guard let context else { return }
+        // Authoritative check-and-record, atomic on the main actor so two
+        // concurrent detached tasks can't both process the same event.
+        let alreadyProcessed: Bool = await MainActor.run {
+            if context.hasProcessedNostrEvent(giftWrap.id) { return true }
+            context.recordProcessedNostrEvent(giftWrap.id)
+            return false
+        }
+        if alreadyProcessed { return }
 
         guard let (content, senderPubkey, rumorTs) = try? NostrProtocol.decryptPrivateMessage(
             giftWrap: giftWrap,
             recipientIdentity: id
         ) else {
-            SecureLogger.warning("GeoDM: failed decrypt giftWrap id=\(giftWrap.id.prefix(8))…", category: .session)
+            if verbose {
+                SecureLogger.warning("GeoDM: failed decrypt giftWrap id=\(giftWrap.id.prefix(8))…", category: .session)
+            }
             return
         }
 
-        SecureLogger.debug(
-            "GeoDM: decrypted gift-wrap id=\(giftWrap.id.prefix(16))... from=\(senderPubkey.prefix(8))...",
-            category: .session
-        )
-
-        guard let packet = Self.decodeEmbeddedBitChatPacket(from: content),
-              packet.type == MessageType.noiseEncrypted.rawValue,
-              let payload = NoisePayload.decode(packet.payload)
-        else {
-            return
-        }
-
-        let convKey = PeerID(nostr_: senderPubkey)
-        context.registerNostrKeyMapping(senderPubkey, for: convKey)
-
-        switch payload.type {
-        case .privateMessage:
-            let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTs))
-            context.handlePrivateMessage(
-                payload,
-                senderPubkey: senderPubkey,
-                convKey: convKey,
-                id: id,
-                messageTimestamp: messageTimestamp
+        if verbose {
+            SecureLogger.debug(
+                "GeoDM: decrypted gift-wrap id=\(giftWrap.id.prefix(16))... from=\(senderPubkey.prefix(8))...",
+                category: .session
             )
-        case .delivered:
-            context.handleDelivered(payload, senderPubkey: senderPubkey, convKey: convKey)
-        case .readReceipt:
-            context.handleReadReceipt(payload, senderPubkey: senderPubkey, convKey: convKey)
-        case .verifyChallenge, .verifyResponse:
-            break
+        }
+
+        await MainActor.run {
+            guard let packet = Self.decodeEmbeddedBitChatPacket(from: content),
+                  packet.type == MessageType.noiseEncrypted.rawValue,
+                  let payload = NoisePayload.decode(packet.payload)
+            else {
+                return
+            }
+
+            let convKey = PeerID(nostr_: senderPubkey)
+            context.registerNostrKeyMapping(senderPubkey, for: convKey)
+
+            switch payload.type {
+            case .privateMessage:
+                let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTs))
+                context.handlePrivateMessage(
+                    payload,
+                    senderPubkey: senderPubkey,
+                    convKey: convKey,
+                    id: id,
+                    messageTimestamp: messageTimestamp
+                )
+            case .delivered:
+                context.handleDelivered(payload, senderPubkey: senderPubkey, convKey: convKey)
+            case .readReceipt:
+                context.handleReadReceipt(payload, senderPubkey: senderPubkey, convKey: convKey)
+            case .verifyChallenge, .verifyResponse:
+                break
+            }
         }
     }
 
     @MainActor
     func handleNostrMessage(_ giftWrap: NostrEvent) {
         guard let context else { return }
-        // Cheap dedup pre-check only; Schnorr verification runs off-main in
-        // processNostrMessage, which then does the authoritative
-        // check-and-record. Recording stays after verification so a
-        // forged-signature copy can never poison the dedup set and suppress
-        // the genuine event.
+        // Cheap dedup pre-check only; processNostrMessage does the
+        // authoritative check-and-record before the off-main NIP-17 unwrap.
+        // The outer signature was already verified (exactly once, off the
+        // main actor) by NostrRelayManager, and only verified events are
+        // recorded, so a forged-signature copy can never poison the dedup
+        // set and suppress the genuine event.
         if context.hasProcessedNostrEvent(giftWrap.id) { return }
 
         Task.detached(priority: .userInitiated) { [weak self] in
@@ -370,7 +367,6 @@ final class NostrInboundPipeline {
     }
 
     func processNostrMessage(_ giftWrap: NostrEvent) async {
-        guard giftWrap.isValidSignature() else { return }
         guard let context else { return }
         // Authoritative check-and-record, atomic on the main actor so two
         // concurrent detached tasks can't both process the same event.

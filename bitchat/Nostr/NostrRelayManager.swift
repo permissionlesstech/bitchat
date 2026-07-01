@@ -212,9 +212,24 @@ final class NostrRelayManager: ObservableObject {
     
     // Bump generation to invalidate scheduled reconnects when we reset/disconnect
     private var connectionGeneration: Int = 0
-    
+
+    // Serial off-main inbound pipeline: raw socket frames are parsed and
+    // Schnorr-verified in arrival order OFF the main actor (this is the single
+    // signature verification for the whole inbound path — downstream handlers
+    // receive only verified events), then hop back to the main actor for dedup
+    // recording and handler dispatch. A single consumer task preserves
+    // per-subscription arrival order.
+    private struct InboundFrame {
+        let message: URLSessionWebSocketTask.Message
+        let relayUrl: String
+    }
+    private let inboundContinuation: AsyncStream<InboundFrame>.Continuation
+    private var inboundTask: Task<Void, Never>?
+
     init() {
         self.dependencies = .live()
+        let (inboundStream, inboundContinuation) = AsyncStream<InboundFrame>.makeStream()
+        self.inboundContinuation = inboundContinuation
         hasMutualFavorites = dependencies.hasMutualFavorites()
         hasLocationPermission = dependencies.hasLocationPermission()
         applyDefaultRelayPolicy(force: true)
@@ -238,10 +253,13 @@ final class NostrRelayManager: ObservableObject {
                 self.applyDefaultRelayPolicy()
             }
             .store(in: &cancellables)
+        startInboundPipeline(consuming: inboundStream)
     }
 
     internal init(dependencies: NostrRelayManagerDependencies) {
         self.dependencies = dependencies
+        let (inboundStream, inboundContinuation) = AsyncStream<InboundFrame>.makeStream()
+        self.inboundContinuation = inboundContinuation
         hasMutualFavorites = dependencies.hasMutualFavorites()
         hasLocationPermission = dependencies.hasLocationPermission()
         applyDefaultRelayPolicy(force: true)
@@ -265,8 +283,56 @@ final class NostrRelayManager: ObservableObject {
                 self.applyDefaultRelayPolicy()
             }
             .store(in: &cancellables)
+        startInboundPipeline(consuming: inboundStream)
     }
-    
+
+    deinit {
+        inboundContinuation.finish()
+        inboundTask?.cancel()
+    }
+
+    /// Starts the single consumer task behind `inboundContinuation`.
+    ///
+    /// Ordering is deliberate and security/performance-critical:
+    /// 1. `precheckInboundEvent` (main hop): per-relay stats plus a cheap
+    ///    duplicate LOOKUP — duplicate fan-in from multiple relays dominates
+    ///    real traffic and must never pay for Schnorr verification.
+    /// 2. `isValidSignature()` runs here, off the main actor — the ONLY
+    ///    signature verification on the inbound path (JSON re-serialization +
+    ///    SHA-256 + secp256k1 Schnorr per event).
+    /// 3. `deliverVerifiedInboundEvent` (main hop): authoritative
+    ///    check-and-RECORD plus handler dispatch. Recording only after
+    ///    verification means a forged-signature copy can never poison the
+    ///    dedup cache and suppress the genuine event.
+    private func startInboundPipeline(consuming stream: AsyncStream<InboundFrame>) {
+        inboundTask = Task.detached(priority: .userInitiated) { [weak self] in
+            for await frame in stream {
+                guard let parsed = ParsedInbound(frame.message) else { continue }
+                guard let self else { return }
+                switch parsed {
+                case .event(let subId, let event):
+                    guard await self.precheckInboundEvent(
+                        subscriptionID: subId,
+                        eventID: event.id,
+                        relayUrl: frame.relayUrl
+                    ) else {
+                        continue
+                    }
+                    guard event.isValidSignature() else {
+                        SecureLogger.warning(
+                            "⚠️ Dropped invalid Nostr event id=\(event.id.prefix(16))… sub=\(subId) relay=\(frame.relayUrl)",
+                            category: .session
+                        )
+                        continue
+                    }
+                    await self.deliverVerifiedInboundEvent(subscriptionID: subId, event: event, from: frame.relayUrl)
+                case .eose, .ok, .notice:
+                    await self.handleParsedMessage(parsed, from: frame.relayUrl)
+                }
+            }
+        }
+    }
+
     /// Connect to all configured relays
     func connect() {
         // Global network policy gate
@@ -958,14 +1024,10 @@ final class NostrRelayManager: ObservableObject {
             
             switch result {
             case .success(let message):
-                // Parse off-main to reduce UI jank, then hop back for state updates
-                Task.detached(priority: .utility) {
-                    guard let parsed = ParsedInbound(message) else { return }
-                    await MainActor.run {
-                        self.handleParsedMessage(parsed, from: relayUrl)
-                    }
-                }
-                
+                // Hand the raw frame to the serial inbound pipeline: parsing
+                // and signature verification run off-main, in arrival order.
+                self.inboundContinuation.yield(InboundFrame(message: message, relayUrl: relayUrl))
+
                 // Continue receiving
                 Task { @MainActor in
                     self.receiveMessage(from: task, relayUrl: relayUrl)
@@ -983,35 +1045,55 @@ final class NostrRelayManager: ObservableObject {
     // Note: declared at file scope below to avoid MainActor isolation inside this class
     // and keep parsing off the main actor.
 
-    // Handle parsed message on MainActor (state updates and handlers)
+    /// First main-actor hop for an inbound EVENT: per-relay stats plus a cheap
+    /// duplicate LOOKUP (no recording) so duplicate fan-in from multiple
+    /// relays never pays for Schnorr verification. Recording happens only
+    /// after the signature verifies (`deliverVerifiedInboundEvent`), so a
+    /// forged-signature copy can never poison the dedup cache and suppress
+    /// the genuine event.
+    private func precheckInboundEvent(subscriptionID: String, eventID: String, relayUrl: String) -> Bool {
+        if let index = relays.firstIndex(where: { $0.url == relayUrl }) {
+            relays[index].messagesReceived += 1
+        }
+        guard !eventID.isEmpty else { return true }
+        let key = InboundEventKey(subscriptionID: subscriptionID, eventID: eventID)
+        if recentInboundEventKeys.contains(key) {
+            recordDuplicateInboundEventDrop(subscriptionID: subscriptionID)
+            return false
+        }
+        return true
+    }
+
+    /// Second main-actor hop, after off-main signature verification:
+    /// authoritative check-and-record (the serial pipeline means the same
+    /// event is never in flight twice, but the record must stay atomic with
+    /// delivery) and handler dispatch.
+    private func deliverVerifiedInboundEvent(subscriptionID subId: String, event: NostrEvent, from relayUrl: String) {
+        guard shouldDeliverInboundEvent(subscriptionID: subId, eventID: event.id) else {
+            return
+        }
+        if event.kind != 1059 {
+            // Per-event logging floods dev builds in busy geohashes; sample it.
+            inboundEventLogCount += 1
+            if inboundEventLogCount == 1 || inboundEventLogCount.isMultiple(of: TransportConfig.nostrInboundEventLogInterval) {
+                SecureLogger.debug("📥 Event #\(inboundEventLogCount) kind=\(event.kind) id=\(event.id.prefix(16))… relay=\(relayUrl)", category: .session)
+            }
+        }
+        if let handler = self.messageHandlers[subId] {
+            handler(event)
+        } else {
+            SecureLogger.warning("⚠️ No handler for subscription \(subId)", category: .session)
+        }
+    }
+
+    // Handle parsed non-EVENT messages on MainActor (state updates and handlers)
     private func handleParsedMessage(_ parsed: ParsedInbound, from relayUrl: String) {
         switch parsed {
-        case .event(let subId, let event):
-            if let index = self.relays.firstIndex(where: { $0.url == relayUrl }) {
-                self.relays[index].messagesReceived += 1
-            }
-            guard event.isValidSignature() else {
-                SecureLogger.warning(
-                    "⚠️ Dropped invalid Nostr event id=\(event.id.prefix(16))… sub=\(subId) relay=\(relayUrl)",
-                    category: .session
-                )
-                return
-            }
-            guard shouldDeliverInboundEvent(subscriptionID: subId, eventID: event.id) else {
-                return
-            }
-            if event.kind != 1059 {
-                // Per-event logging floods dev builds in busy geohashes; sample it.
-                inboundEventLogCount += 1
-                if inboundEventLogCount == 1 || inboundEventLogCount.isMultiple(of: TransportConfig.nostrInboundEventLogInterval) {
-                    SecureLogger.debug("📥 Event #\(inboundEventLogCount) kind=\(event.kind) id=\(event.id.prefix(16))… relay=\(relayUrl)", category: .session)
-                }
-            }
-            if let handler = self.messageHandlers[subId] {
-                handler(event)
-            } else {
-                SecureLogger.warning("⚠️ No handler for subscription \(subId)", category: .session)
-            }
+        case .event:
+            // Events flow through the serial inbound pipeline (precheck →
+            // off-main signature verification → deliverVerifiedInboundEvent)
+            // and never reach this fallback.
+            assertionFailure("inbound EVENT bypassed the verified pipeline")
         case .eose(let subId):
             if var tracker = eoseTrackers[subId] {
                 tracker.pendingRelays.remove(relayUrl)
