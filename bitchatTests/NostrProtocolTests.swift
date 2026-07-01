@@ -289,6 +289,159 @@ struct NostrProtocolTests {
         #expect(object["limit"] as? Int == 42)
     }
 
+    // MARK: - Padding (v3 envelope)
+
+    @Test func paddedLengthMatchesNIP44Buckets() {
+        // Vectors from the NIP-44 reference test suite (calc_padded_len).
+        let vectors: [(Int, Int)] = [
+            (1, 32), (16, 32), (32, 32), (33, 64), (37, 64), (45, 64), (49, 64),
+            (64, 64), (65, 96), (100, 128), (111, 128), (200, 224), (250, 256),
+            (320, 320), (383, 384), (384, 384), (400, 448), (500, 512),
+            (512, 512), (515, 640), (700, 768), (800, 896), (900, 1024),
+            (1020, 1024), (65535, 65536)
+        ]
+        for (unpadded, expected) in vectors {
+            #expect(
+                NIP44Padding.paddedLength(for: unpadded) == expected,
+                "paddedLength(for: \(unpadded)) should be \(expected)"
+            )
+        }
+    }
+
+    @Test func padUnpadRoundTrip() throws {
+        for length in [1, 2, 31, 32, 33, 100, 320, 1020, 4096, 65535] {
+            let plaintext = Data((0..<length).map { _ in UInt8.random(in: .min ... .max) })
+            let padded = try NIP44Padding.pad(plaintext)
+            #expect(padded.count == 2 + NIP44Padding.paddedLength(for: length))
+            let unpadded = try NIP44Padding.unpad(padded)
+            #expect(unpadded == plaintext)
+        }
+    }
+
+    @Test func padHidesExactLengthWithinBucket() throws {
+        // Two plaintexts of different length in the same bucket must produce
+        // identically sized padded payloads (and thus ciphertexts).
+        let short = try NIP44Padding.pad(Data(repeating: 0x41, count: 65))
+        let long = try NIP44Padding.pad(Data(repeating: 0x42, count: 96))
+        #expect(short.count == long.count)
+    }
+
+    @Test func padRejectsOutOfRangePlaintexts() {
+        #expect(throws: (any Error).self) { try NIP44Padding.pad(Data()) }
+        #expect(throws: (any Error).self) { try NIP44Padding.pad(Data(count: 65536)) }
+    }
+
+    @Test func unpadRejectsTamperedLengthPrefix() throws {
+        var padded = try NIP44Padding.pad(Data(repeating: 0x41, count: 40))
+
+        // Claimed length larger than the actual payload
+        var tooLong = padded
+        tooLong[tooLong.startIndex] = 0xFF
+        tooLong[tooLong.startIndex + 1] = 0xFF
+        #expect(throws: NostrError.invalidCiphertext) { try NIP44Padding.unpad(tooLong) }
+
+        // Claimed length of zero
+        var zero = padded
+        zero[zero.startIndex] = 0x00
+        zero[zero.startIndex + 1] = 0x00
+        #expect(throws: NostrError.invalidCiphertext) { try NIP44Padding.unpad(zero) }
+
+        // Claimed length whose bucket does not match the payload size
+        // (payload is bucket 64; a claimed length of 20 expects bucket 32)
+        var wrongBucket = padded
+        wrongBucket[wrongBucket.startIndex] = 0x00
+        wrongBucket[wrongBucket.startIndex + 1] = 0x14
+        #expect(throws: NostrError.invalidCiphertext) { try NIP44Padding.unpad(wrongBucket) }
+
+        // Truncated payloads
+        #expect(throws: NostrError.invalidCiphertext) { try NIP44Padding.unpad(Data()) }
+        #expect(throws: NostrError.invalidCiphertext) { try NIP44Padding.unpad(Data([0x00])) }
+        padded.removeLast()
+        #expect(throws: NostrError.invalidCiphertext) { try NIP44Padding.unpad(padded) }
+
+        // Works on Data slices with non-zero startIndex
+        let sliced = try (Data([0xAB]) + NIP44Padding.pad(Data(repeating: 0x41, count: 40))).dropFirst()
+        #expect(try NIP44Padding.unpad(sliced) == Data(repeating: 0x41, count: 40))
+    }
+
+    @Test func paddedEnvelopeRoundTrip_v3() throws {
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let plaintext = "padded envelope test"
+
+        let ciphertext = try NostrProtocol.encrypt(
+            plaintext: plaintext,
+            recipientPubkey: recipient.publicKeyHex,
+            senderKey: sender.schnorrSigningKey(),
+            padded: true
+        )
+        #expect(ciphertext.hasPrefix("v3:"))
+
+        let decrypted = try NostrProtocol.decrypt(
+            ciphertext: ciphertext,
+            senderPubkey: sender.publicKeyHex,
+            recipientKey: recipient.schnorrSigningKey()
+        )
+        #expect(decrypted == plaintext)
+    }
+
+    @Test func legacyUnpaddedEnvelopeStillDecrypts_v2() throws {
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let plaintext = "legacy v2 envelope"
+
+        // What deployed clients send today.
+        let ciphertext = try NostrProtocol.encrypt(
+            plaintext: plaintext,
+            recipientPubkey: recipient.publicKeyHex,
+            senderKey: sender.schnorrSigningKey(),
+            padded: false
+        )
+        #expect(ciphertext.hasPrefix("v2:"))
+
+        let decrypted = try NostrProtocol.decrypt(
+            ciphertext: ciphertext,
+            senderPubkey: sender.publicKeyHex,
+            recipientKey: recipient.schnorrSigningKey()
+        )
+        #expect(decrypted == plaintext)
+    }
+
+    @Test func outgoingMessagesStillUseV2UntilRolloutFlagFlips() throws {
+        // Deployed clients reject anything that is not "v2:", so the padded
+        // envelope must stay off by default until decrypt-side support is
+        // widely shipped (see NostrProtocol.sendPaddedEnvelope).
+        #expect(NostrProtocol.sendPaddedEnvelope == false)
+
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let giftWrap = try NostrProtocol.createPrivateMessage(
+            content: "default envelope",
+            recipientPubkey: recipient.publicKeyHex,
+            senderIdentity: sender
+        )
+        #expect(giftWrap.content.hasPrefix("v2:"))
+    }
+
+    @Test func decryptRejectsUnknownEnvelopeVersion() throws {
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let ciphertext = try NostrProtocol.encrypt(
+            plaintext: "test",
+            recipientPubkey: recipient.publicKeyHex,
+            senderKey: sender.schnorrSigningKey(),
+            padded: false
+        )
+        let mutated = "v9:" + ciphertext.dropFirst(3)
+        #expect(throws: NostrError.invalidCiphertext) {
+            _ = try NostrProtocol.decrypt(
+                ciphertext: mutated,
+                senderPubkey: sender.publicKeyHex,
+                recipientKey: recipient.schnorrSigningKey()
+            )
+        }
+    }
+
     // MARK: - Helpers
     private static func base64URLDecode(_ s: String) -> Data? {
         var str = s.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
