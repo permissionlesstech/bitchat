@@ -4,6 +4,33 @@ import BitFoundation
 @testable import bitchat
 
 final class SecureIdentityStateManagerTests: XCTestCase {
+    func test_manyManagersDeinitDoNotWedgeTeardown() {
+        // Teardown-hang guard: create many managers that mutate (scheduling
+        // fire-and-forget barrier saves) and then go out of scope, triggering
+        // deinit. A previous version dispatched forceSave() onto the private
+        // queue from deinit; at process teardown libdispatch/swift-testing
+        // waited on that outstanding barrier work and the process wedged
+        // (CI-only, killed at the watchdog). deinit must not schedule anything
+        // on `queue`. If this leaked scheduled work, a real CI run would hang;
+        // here we at least assert the whole workload completes promptly.
+        let iterations = 200
+        let start = Date()
+        for i in 0..<iterations {
+            autoreleasepool {
+                let manager = SecureIdentityStateManager(MockKeychain())
+                manager.upsertCryptographicIdentity(
+                    fingerprint: Data(repeating: UInt8(i & 0xFF), count: 32).sha256Fingerprint(),
+                    noisePublicKey: Data(repeating: UInt8(i & 0xFF), count: 32),
+                    signingPublicKey: Data(repeating: UInt8((i + 1) & 0xFF), count: 32),
+                    claimedNickname: "peer-\(i)"
+                )
+                // Drop `manager` -> deinit. Must not enqueue work on `queue`.
+            }
+        }
+        let elapsed = Date().timeIntervalSince(start)
+        XCTAssertLessThan(elapsed, 15, "manager churn/teardown took too long (possible deinit dispatch hang)")
+    }
+
     func test_upsertCryptographicIdentity_withoutClaimedNicknameDoesNotCreateSocialIdentity() async {
         let manager = SecureIdentityStateManager(MockKeychain())
         let fingerprint = String(repeating: "aa", count: 32)

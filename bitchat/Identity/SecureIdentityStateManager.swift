@@ -217,7 +217,26 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     }
     
     deinit {
-        forceSave()
+        // Do NOT dispatch onto `queue` here. `deinit` can itself run *on*
+        // `queue` (fire-and-forget saves capture `self`), and the object is
+        // being deallocated: a `queue.sync` would deadlock, and a
+        // `queue.async` schedules work that resurrects `self` and may never
+        // drain before process exit — at teardown libdispatch/swift-testing
+        // then wait on that outstanding barrier work and the process wedges
+        // (observed as a CI teardown hang once crypto identities moved into
+        // the persisted cache, so far more test-created managers persist on
+        // deinit).
+        //
+        // A flush here is redundant anyway: every mutating API already
+        // persists inline within its own barrier, so the keychain is already
+        // up to date. As a queue-free best-effort belt-and-suspenders, only
+        // flush if something is still pending. This is a direct read of
+        // in-hand state — safe because a deallocating object has no other
+        // live references, so nothing can be mutating `cache` concurrently.
+        if pendingSave {
+            pendingSave = false
+            persist(snapshot: cache)
+        }
     }
     
     // MARK: - Secure Loading/Saving
@@ -282,25 +301,25 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
         }
     }
 
-    // Force a flush (for app termination / lifecycle events). Every mutating
+    // Force a flush (for app-termination / lifecycle events — NOT from
+    // `deinit`, which persists inline; see the deinit note). Every mutating
     // API already persists inline inside its own barrier via
     // `saveIdentityCache`, so by the time this is called the keychain is
     // already up to date and this is normally a no-op; it exists as a
     // belt-and-suspenders flush of any `pendingSave` left set.
     //
-    // The snapshot + persist run inside a `queue.async(flags: .barrier)`:
-    // reading `cache` on the barrier context is race-free (a plain off-queue
-    // read races in-flight barrier writers — JSONEncoder walking a
-    // concurrently-mutated dictionary can spin forever, which surfaced as a CI
-    // hang). It is deliberately `async`, NOT `sync`: `forceSave` is reachable
-    // from `deinit`, and the final release can itself run *on* `queue` (the
-    // fire-and-forget saves capture `self`), so a `queue.sync` here would be a
-    // re-entrant same-queue wait and deadlock (SIGTRAP).
+    // Runs synchronously inside a `queue.sync(flags: .barrier)`: the barrier
+    // makes the `cache` read race-free (a plain off-queue read races in-flight
+    // barrier writers — JSONEncoder walking a concurrently-mutated dictionary
+    // can spin forever, which surfaced as a CI hang), and being synchronous it
+    // leaves nothing scheduled to keep the process alive at teardown. Safe
+    // against re-entrant deadlock because this is never invoked from `deinit`
+    // (the only path that can run *on* `queue`).
     func forceSave() {
-        queue.async(flags: .barrier) { [weak self] in
-            guard let self, self.pendingSave else { return }
-            self.pendingSave = false
-            self.persist(snapshot: self.cache)
+        queue.sync(flags: .barrier) {
+            guard pendingSave else { return }
+            pendingSave = false
+            persist(snapshot: cache)
         }
     }
     
