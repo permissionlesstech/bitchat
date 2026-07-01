@@ -29,17 +29,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Set up Swift
-        uses: swift-actions/setup-swift@v2
+      # Use the Xcode-bundled Swift toolchain: it always matches the SDK on
+      # the runner image. A standalone swift.org toolchain (setup-swift) broke
+      # whenever the image's Xcode moved ahead of it ("this SDK is not
+      # supported by the compiler").
+      - name: Note toolchain version (cache key)
+        id: swift-version
+        run: echo "version=$(swift --version 2>/dev/null | head -1 | shasum | cut -c1-12)" >> "$GITHUB_OUTPUT"
 
       - name: Cache build artifacts
         uses: actions/cache@v4
         with:
           path: ${{ matrix.path }}/.build
-          key: ${{ runner.os }}-${{ matrix.name }}-${{ hashFiles(format('{0}/**/*.swift', matrix.path), format('{0}/**/Package.resolved', matrix.path)) }}
+          key: ${{ runner.os }}-${{ steps.swift-version.outputs.version }}-${{ matrix.name }}-${{ hashFiles(format('{0}/**/*.swift', matrix.path), format('{0}/**/Package.resolved', matrix.path)) }}
           restore-keys: |
-            ${{ runner.os }}-${{ matrix.name }}-${{ hashFiles(format('{0}/**/Package.resolved', matrix.path)) }}
-            ${{ runner.os }}-${{ matrix.name }}-
+            ${{ runner.os }}-${{ steps.swift-version.outputs.version }}-${{ matrix.name }}-${{ hashFiles(format('{0}/**/Package.resolved', matrix.path)) }}
+            ${{ runner.os }}-${{ steps.swift-version.outputs.version }}-${{ matrix.name }}-
 
       - name: Build tests
         # Built separately so the hang watchdog below times only test
