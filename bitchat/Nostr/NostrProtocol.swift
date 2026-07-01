@@ -328,52 +328,85 @@ struct NostrProtocol {
         return try NostrEvent(from: rumorDict)
     }
     
-    // MARK: - Encryption (NIP-44 v2)
-    
-    private static func encrypt(
+    // MARK: - Encryption (NIP-44 v2/v3)
+
+    /// Whether outgoing DMs use the padded "v3:" envelope.
+    ///
+    /// TWO-PHASE ROLLOUT — DO NOT FLIP YET. Deployed clients hard-reject any
+    /// ciphertext that does not start with "v2:" (`decrypt` below, as shipped,
+    /// throws `invalidCiphertext` on unknown version prefixes), and the "v2:"
+    /// payload is the raw UTF-8 rumor JSON, so a padded payload cannot be
+    /// smuggled inside "v2:" without breaking old receivers either. Enabling
+    /// this today would strand every client in the field.
+    ///
+    /// Phase 1 (this change): ship decrypt-side support for "v3:" everywhere.
+    /// Phase 2 (future release, once phase-1 clients are widely deployed):
+    /// set this to true so outgoing DMs stop leaking plaintext length to
+    /// relays.
+    static let sendPaddedEnvelope = false
+
+    /// Internal (rather than private) so tests can exercise both envelope
+    /// versions directly.
+    static func encrypt(
         plaintext: String,
         recipientPubkey: String,
-        senderKey: P256K.Schnorr.PrivateKey
+        senderKey: P256K.Schnorr.PrivateKey,
+        padded: Bool = NostrProtocol.sendPaddedEnvelope
     ) throws -> String {
-        
+
         guard let recipientPubkeyData = Data(hexString: recipientPubkey) else {
             throw NostrError.invalidPublicKey
         }
-        
-        // Encrypting message (NIP-44 v2: XChaCha20-Poly1305, versioned)
-        
+
+        // Encrypting message (XChaCha20-Poly1305, versioned envelope)
+
         // Derive shared secret
         let sharedSecret = try deriveSharedSecret(
             privateKey: senderKey,
             publicKey: recipientPubkeyData
         )
-        // Derive NIP-44 v2 symmetric key (HKDF-SHA256 with label in info)
+        // Derive NIP-44 v2 symmetric key (HKDF-SHA256 with label in info).
+        // The v3 envelope deliberately reuses the same key derivation; it only
+        // changes the payload framing (length prefix + padding).
         let key = try deriveNIP44V2Key(from: sharedSecret)
-        
+
         // 24-byte random nonce for XChaCha20-Poly1305
         var nonce24 = Data(count: 24)
         _ = nonce24.withUnsafeMutableBytes { ptr in
             SecRandomCopyBytes(kSecRandomDefault, 24, ptr.baseAddress!)
         }
-        
+
+        // v2 payload: raw UTF-8 plaintext (length leaks to relays)
+        // v3 payload: NIP-44 style [2-byte BE length][plaintext][zero padding]
         let pt = Data(plaintext.utf8)
-        let sealed = try XChaCha20Poly1305Compat.seal(plaintext: pt, key: key, nonce24: nonce24)
-        
-        // v2: base64url(nonce24 || ciphertext || tag)
+        let payload = padded ? try NIP44Padding.pad(pt) : pt
+        let sealed = try XChaCha20Poly1305Compat.seal(plaintext: payload, key: key, nonce24: nonce24)
+
+        // version prefix + base64url(nonce24 || ciphertext || tag)
         var combined = Data()
         combined.append(nonce24)
         combined.append(sealed.ciphertext)
         combined.append(sealed.tag)
-        return "v2:" + Base64URLCoding.encode(combined)
+        return (padded ? "v3:" : "v2:") + Base64URLCoding.encode(combined)
     }
-    
-    private static func decrypt(
+
+    /// Internal (rather than private) so tests can exercise both envelope
+    /// versions directly.
+    static func decrypt(
         ciphertext: String,
         senderPubkey: String,
         recipientKey: P256K.Schnorr.PrivateKey
     ) throws -> String {
-        // Expect NIP-44 v2 format
-        guard ciphertext.hasPrefix("v2:") else { throw NostrError.invalidCiphertext }
+        // Accept both the legacy unpadded "v2:" envelope and the padded "v3:"
+        // envelope (see `sendPaddedEnvelope` for the rollout plan).
+        let isPadded: Bool
+        if ciphertext.hasPrefix("v2:") {
+            isPadded = false
+        } else if ciphertext.hasPrefix("v3:") {
+            isPadded = true
+        } else {
+            throw NostrError.invalidCiphertext
+        }
         let encoded = String(ciphertext.dropFirst(3))
         guard let data = Base64URLCoding.decode(encoded),
               data.count > (24 + 16),
@@ -399,18 +432,23 @@ struct NostrProtocol {
         }
 
         // If 32 bytes (x-only) try both parities, otherwise single try
+        let payload: Data
         if senderPubkeyData.count == 32 {
             let even = Data([0x02]) + senderPubkeyData
             if let pt = try? attemptDecrypt(using: even) {
-                return String(data: pt, encoding: .utf8) ?? ""
+                payload = pt
+            } else {
+                let odd = Data([0x03]) + senderPubkeyData
+                payload = try attemptDecrypt(using: odd)
             }
-            let odd = Data([0x03]) + senderPubkeyData
-            let pt = try attemptDecrypt(using: odd)
-            return String(data: pt, encoding: .utf8) ?? ""
         } else {
-            let pt = try attemptDecrypt(using: senderPubkeyData)
-            return String(data: pt, encoding: .utf8) ?? ""
+            payload = try attemptDecrypt(using: senderPubkeyData)
         }
+
+        // The AEAD tag has already authenticated the payload; unpadding
+        // failures here mean a malformed sender, not a wrong key.
+        let plaintextData = isPadded ? try NIP44Padding.unpad(payload) : payload
+        return String(data: plaintextData, encoding: .utf8) ?? ""
     }
     
     private static func deriveSharedSecret(
@@ -639,6 +677,60 @@ enum NostrError: Error {
     case invalidCiphertext
     case signingFailed
     case encryptionFailed
+}
+
+// MARK: - NIP-44 style padding (v3 envelope payload framing)
+
+/// Payload framing for the padded "v3:" envelope, modeled on NIP-44 v2:
+/// `[2-byte big-endian plaintext length][plaintext][zero padding]`, where the
+/// total is padded to `paddedLength(for:)` — power-of-two-derived buckets with
+/// a 32-byte minimum — so ciphertext length no longer reveals exact plaintext
+/// length to relays.
+enum NIP44Padding {
+    static let minPaddedLength = 32
+    static let maxPlaintextLength = 65535
+
+    /// NIP-44's calc_padded_len: pad to 32 bytes minimum, then to a chunk
+    /// granularity of max(32, nextPowerOfTwo/8).
+    static func paddedLength(for unpaddedLength: Int) -> Int {
+        guard unpaddedLength > minPaddedLength else { return minPaddedLength }
+        // Smallest power of two strictly greater than (unpaddedLength - 1).
+        let nextPower = 1 << (Int.bitWidth - (unpaddedLength - 1).leadingZeroBitCount)
+        let chunk = nextPower <= 256 ? 32 : nextPower / 8
+        return chunk * ((unpaddedLength - 1) / chunk + 1)
+    }
+
+    /// Prefix plaintext with its 2-byte big-endian length and zero-pad to the
+    /// bucketed length. Rejects empty plaintexts and plaintexts that do not
+    /// fit the 16-bit length prefix.
+    static func pad(_ plaintext: Data) throws -> Data {
+        let length = plaintext.count
+        guard length >= 1, length <= maxPlaintextLength else {
+            throw NostrError.encryptionFailed
+        }
+        let padded = paddedLength(for: length)
+        var result = Data(capacity: 2 + padded)
+        result.append(UInt8(length >> 8))
+        result.append(UInt8(length & 0xFF))
+        result.append(plaintext)
+        result.append(Data(count: padded - length))
+        return result
+    }
+
+    /// Read the 2-byte length prefix, validate the total padded size matches
+    /// it exactly, and return the plaintext. Throws on any inconsistency so a
+    /// malformed (already-authenticated) payload can never over- or
+    /// under-read.
+    static func unpad(_ padded: Data) throws -> Data {
+        guard padded.count >= 2 else { throw NostrError.invalidCiphertext }
+        let start = padded.startIndex
+        let length = Int(padded[start]) << 8 | Int(padded[start + 1])
+        guard length >= 1,
+              padded.count == 2 + paddedLength(for: length) else {
+            throw NostrError.invalidCiphertext
+        }
+        return padded.subdata(in: (start + 2)..<(start + 2 + length))
+    }
 }
 
 // MARK: - NIP-44 v2 helpers (XChaCha20-Poly1305)

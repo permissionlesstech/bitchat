@@ -8,12 +8,44 @@
 
 import struct Foundation.Data
 
+/// Lowercase hex digits used by `hexEncodedString()`.
+private let hexDigits: [UInt8] = Array("0123456789abcdef".utf8)
+
+/// Maps an ASCII byte to its hex nibble value, or nil for non-hex characters.
+/// Accepts both lowercase and uppercase hex digits.
+@inline(__always)
+private func hexNibble(_ ascii: UInt8) -> UInt8? {
+    switch ascii {
+    case UInt8(ascii: "0")...UInt8(ascii: "9"):
+        return ascii - UInt8(ascii: "0")
+    case UInt8(ascii: "a")...UInt8(ascii: "f"):
+        return ascii - UInt8(ascii: "a") + 10
+    case UInt8(ascii: "A")...UInt8(ascii: "F"):
+        return ascii - UInt8(ascii: "A") + 10
+    default:
+        return nil
+    }
+}
+
 public extension Data {
+    /// Lowercase hex representation of the bytes.
+    ///
+    /// Lookup-table based: this sits on the hot BLE receive path (it is called
+    /// several times per received packet via `PeerID(hexData:)`), where the
+    /// previous per-byte `String(format: "%02x", _)` implementation spent most
+    /// of its time re-parsing the format string through Foundation.
     func hexEncodedString() -> String {
-        if self.isEmpty {
+        if isEmpty {
             return ""
         }
-        return self.map { String(format: "%02x", $0) }.joined()
+        var output = [UInt8](repeating: 0, count: count * 2)
+        var i = 0
+        for byte in self {
+            output[i] = hexDigits[Int(byte >> 4)]
+            output[i + 1] = hexDigits[Int(byte & 0x0F)]
+            i += 2
+        }
+        return String(decoding: output, as: UTF8.self)
     }
 
     /// Initialize Data from a hex string.
@@ -28,28 +60,28 @@ public extension Data {
             hex = String(hex.dropFirst(2))
         }
 
+        let ascii = Array(hex.utf8)
+
         // Reject odd-length strings
-        guard hex.count % 2 == 0 else {
+        guard ascii.count % 2 == 0 else {
             return nil
         }
 
-        // Reject empty strings
-        guard !hex.isEmpty else {
+        // Accept empty strings
+        guard !ascii.isEmpty else {
             self = Data()
             return
         }
 
-        let len = hex.count / 2
-        var data = Data(capacity: len)
-        var index = hex.startIndex
-
-        for _ in 0..<len {
-            let nextIndex = hex.index(index, offsetBy: 2)
-            guard let byte = UInt8(String(hex[index..<nextIndex]), radix: 16) else {
+        var data = Data(capacity: ascii.count / 2)
+        var index = 0
+        while index < ascii.count {
+            guard let high = hexNibble(ascii[index]),
+                  let low = hexNibble(ascii[index + 1]) else {
                 return nil
             }
-            data.append(byte)
-            index = nextIndex
+            data.append((high << 4) | low)
+            index += 2
         }
 
         self = data
