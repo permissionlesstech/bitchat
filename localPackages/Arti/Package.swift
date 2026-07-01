@@ -30,6 +30,7 @@ let package = Package(
                 "TorManager.swift",
                 "TorURLSession.swift",
                 "TorNotifications.swift",
+                "TorEgressVerifier.swift",
             ],
             linkerSettings: [
                 .linkedLibrary("resolv"),

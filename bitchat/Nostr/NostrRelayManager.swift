@@ -86,7 +86,10 @@ private extension NostrRelayManagerDependencies {
             torIsForeground: { TorManager.shared.isForeground() },
             awaitTorReady: { completion in
                 Task.detached {
-                    let ready = await TorManager.shared.awaitReady()
+                    // Require both Tor bootstrap AND a positive egress self-check
+                    // so relay sockets never open unless traffic is proven to
+                    // route through Tor (fail-closed).
+                    let ready = await TorManager.shared.awaitEgressReady()
                     await MainActor.run {
                         completion(ready)
                     }

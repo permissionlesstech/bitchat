@@ -59,6 +59,14 @@ public final class TorManager: ObservableObject {
     private var socksReady: Bool = false { didSet { recomputeReady() } }
     private var restarting: Bool = false
 
+    /// Runtime egress self-check: proves the proxied session actually exits via
+    /// Tor before relay connections are opened (defense-in-depth against a
+    /// platform silently ignoring the SOCKS proxy). Cached for a few minutes.
+    public let egressVerifier = TorEgressVerifier(
+        ttl: 300,
+        probe: TorEgressVerifier.liveProbe()
+    )
+
     // Whether the app must enforce Tor for all connections (fail-closed).
     public var torEnforced: Bool {
         #if BITCHAT_DEV_ALLOW_CLEARNET
@@ -123,6 +131,22 @@ public final class TorManager: ObservableObject {
             if await MainActor.run(body: { self.networkPermitted }) { return true }
         }
         return await MainActor.run(body: { self.networkPermitted })
+    }
+
+    /// Like `awaitReady`, but additionally requires that a canary request
+    /// through the proxied session positively verifies Tor egress. Returns
+    /// `false` if Tor never became ready, or if the egress self-check
+    /// positively detected a non-Tor (direct) egress. Callers must fail closed
+    /// on `false` — never fall back to a direct connection.
+    nonisolated
+    public func awaitEgressReady(timeout: TimeInterval = 75.0) async -> Bool {
+        let ready = await awaitReady(timeout: timeout)
+        guard ready else { return false }
+        // Clearnet dev builds don't route through Tor, so the canary would
+        // (correctly) report non-Tor; skip it there.
+        let enforced = await MainActor.run { self.torEnforced }
+        guard enforced else { return true }
+        return await egressVerifier.verify()
     }
 
     // MARK: - Filesystem
@@ -325,6 +349,8 @@ public final class TorManager: ObservableObject {
             self.socksReady = false
             self.isStarting = false
         }
+        // Force a fresh egress self-check once Tor comes back.
+        Task { await egressVerifier.invalidate() }
     }
 
     public func shutdownCompletely() {
@@ -353,6 +379,7 @@ public final class TorManager: ObservableObject {
                 // Note: Don't clear startedAt here - it will be set fresh on next startIfNeeded()
                 // Clearing it here races with startup and defeats the grace period
             }
+            await self.egressVerifier.invalidate()
         }
     }
 
@@ -368,6 +395,8 @@ public final class TorManager: ObservableObject {
             self.isDormant = false
             self.lastRestartAt = Date()
         }
+        // New Arti instance means new circuits; re-verify egress after restart.
+        await egressVerifier.invalidate()
 
         _ = arti_stop()
 
