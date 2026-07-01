@@ -1,0 +1,51 @@
+# SwiftLint configuration for BitChat.
+#
+# Intentionally pragmatic: rules that would flood the existing codebase are
+# disabled so the lint signal stays actionable; re-enable them individually as
+# files get cleaned up. Not wired into CI yet — run locally with `swiftlint`
+# from the repo root.
+
+included:
+  - bitchat
+  - bitchatTests
+  - localPackages/BitFoundation/Sources
+  - localPackages/BitFoundation/Tests
+  - localPackages/BitLogger/Sources
+
+excluded:
+  - .build
+  - localPackages/Arti
+  - localPackages/BitFoundation/.build
+  - localPackages/BitLogger/.build
+
+disabled_rules:
+  # Style/volume rules that currently produce noise across the codebase.
+  - line_length
+  - identifier_name
+  - type_name
+  - type_body_length
+  - cyclomatic_complexity
+  - function_parameter_count
+  - large_tuple
+  - nesting
+  - todo
+  - trailing_comma
+  - opening_brace
+  - statement_position
+  - for_where
+  - redundant_string_enum_value
+  - non_optional_string_data_conversion
+  # Common in tests (force casts/tries on fixtures).
+  - force_cast
+  - force_try
+
+file_length:
+  warning: 600
+  # BLEService.swift is currently ~3,500 lines; the error threshold sits above
+  # today's maximum so the codebase passes as-is and only future growth of the
+  # largest files trips it.
+  error: 4000
+
+function_body_length:
+  warning: 100
+  error: 200
