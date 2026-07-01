@@ -87,6 +87,14 @@ enum TransportConfig {
     static let nostrMaxEventTags: Int = 64
     static let nostrMaxEventTagValues: Int = 16
     static let nostrMaxEventTagValueBytes: Int = 1024
+    // Bounded per-relay inbound frame buffer. Each relay connection owns its
+    // own serial verify pipeline; if a relay floods faster than its Schnorr
+    // verification drains, the oldest buffered frames for THAT relay are
+    // dropped (bufferingNewest) so one relay can neither exhaust memory nor
+    // stall other relays. Nostr inbound is already best-effort (relays are
+    // redundant and events replay), so dropping a flooding relay's backlog is
+    // safe.
+    static let nostrInboundPerRelayBufferCap: Int = 256
 
     // Conversation store diagnostics (field observability)
     // Sample interval for the periodic store-audit "OK" heartbeat line
