@@ -213,23 +213,34 @@ final class NostrRelayManager: ObservableObject {
     // Bump generation to invalidate scheduled reconnects when we reset/disconnect
     private var connectionGeneration: Int = 0
 
-    // Serial off-main inbound pipeline: raw socket frames are parsed and
+    // Per-relay off-main inbound pipeline: raw socket frames are parsed and
     // Schnorr-verified in arrival order OFF the main actor (this is the single
     // signature verification for the whole inbound path — downstream handlers
     // receive only verified events), then hop back to the main actor for dedup
-    // recording and handler dispatch. A single consumer task preserves
-    // per-subscription arrival order.
-    private struct InboundFrame {
-        let message: URLSessionWebSocketTask.Message
-        let relayUrl: String
-    }
-    private let inboundContinuation: AsyncStream<InboundFrame>.Continuation
-    private var inboundTask: Task<Void, Never>?
+    // recording and handler dispatch.
+    //
+    // Each relay connection owns its OWN AsyncStream + consumer task, so N
+    // relays verify in parallel while every relay's frames stay in arrival
+    // order (a single subscription's events for a relay all arrive on that
+    // relay's socket, so per-relay ordering preserves per-subscription
+    // ordering). A burst of EVENT frames from one busy/malicious relay only
+    // blocks that relay's own verification backlog — DMs, OKs, EOSEs, and
+    // events from every other relay keep flowing on their own pipelines.
+    //
+    // Each stream is bounded (`.bufferingNewest`) so a relay flooding faster
+    // than its verification drains sheds its own oldest frames instead of
+    // growing memory without bound; it can never starve other relays.
+    //
+    // Continuations live in a lock-guarded, `Sendable` router (see
+    // `InboundFrameRouter` at file scope) so the raw socket receive callback
+    // (which is NOT main-actor isolated) can route a frame to the right relay
+    // stream without a per-frame main hop, while the main actor owns pipeline
+    // creation/teardown. The expensive work (Schnorr verify) is what runs
+    // off-main; the yield stays cheap.
+    private let inboundRouter = InboundFrameRouter()
 
     init() {
         self.dependencies = .live()
-        let (inboundStream, inboundContinuation) = AsyncStream<InboundFrame>.makeStream()
-        self.inboundContinuation = inboundContinuation
         hasMutualFavorites = dependencies.hasMutualFavorites()
         hasLocationPermission = dependencies.hasLocationPermission()
         applyDefaultRelayPolicy(force: true)
@@ -253,13 +264,10 @@ final class NostrRelayManager: ObservableObject {
                 self.applyDefaultRelayPolicy()
             }
             .store(in: &cancellables)
-        startInboundPipeline(consuming: inboundStream)
     }
 
     internal init(dependencies: NostrRelayManagerDependencies) {
         self.dependencies = dependencies
-        let (inboundStream, inboundContinuation) = AsyncStream<InboundFrame>.makeStream()
-        self.inboundContinuation = inboundContinuation
         hasMutualFavorites = dependencies.hasMutualFavorites()
         hasLocationPermission = dependencies.hasLocationPermission()
         applyDefaultRelayPolicy(force: true)
@@ -283,17 +291,16 @@ final class NostrRelayManager: ObservableObject {
                 self.applyDefaultRelayPolicy()
             }
             .store(in: &cancellables)
-        startInboundPipeline(consuming: inboundStream)
     }
 
     deinit {
-        inboundContinuation.finish()
-        inboundTask?.cancel()
+        inboundRouter.finishAll()
     }
 
-    /// Starts the single consumer task behind `inboundContinuation`.
+    /// Ensure a serial off-main consumer pipeline exists for a relay. Called on
+    /// the main actor when a socket is (re)armed for receiving. Idempotent.
     ///
-    /// Ordering is deliberate and security/performance-critical:
+    /// Ordering within the relay is deliberate and security/performance-critical:
     /// 1. `precheckInboundEvent` (main hop): per-relay stats plus a cheap
     ///    duplicate LOOKUP — duplicate fan-in from multiple relays dominates
     ///    real traffic and must never pay for Schnorr verification.
@@ -304,33 +311,49 @@ final class NostrRelayManager: ObservableObject {
     ///    check-and-RECORD plus handler dispatch. Recording only after
     ///    verification means a forged-signature copy can never poison the
     ///    dedup cache and suppress the genuine event.
-    private func startInboundPipeline(consuming stream: AsyncStream<InboundFrame>) {
-        inboundTask = Task.detached(priority: .userInitiated) { [weak self] in
-            for await frame in stream {
-                guard let parsed = ParsedInbound(frame.message) else { continue }
-                guard let self else { return }
-                switch parsed {
-                case .event(let subId, let event):
-                    guard await self.precheckInboundEvent(
-                        subscriptionID: subId,
-                        eventID: event.id,
-                        relayUrl: frame.relayUrl
-                    ) else {
-                        continue
+    private func ensureRelayInboundPipeline(for relayUrl: String) {
+        let started = inboundRouter.startPipeline(for: relayUrl) { [weak self] stream in
+            Task.detached(priority: .userInitiated) {
+                for await frame in stream {
+                    guard let parsed = ParsedInbound(frame.message) else { continue }
+                    guard let self else { return }
+                    switch parsed {
+                    case .event(let subId, let event):
+                        guard await self.precheckInboundEvent(
+                            subscriptionID: subId,
+                            eventID: event.id,
+                            relayUrl: relayUrl
+                        ) else {
+                            continue
+                        }
+                        guard event.isValidSignature() else {
+                            SecureLogger.warning(
+                                "⚠️ Dropped invalid Nostr event id=\(event.id.prefix(16))… sub=\(subId) relay=\(relayUrl)",
+                                category: .session
+                            )
+                            continue
+                        }
+                        await self.deliverVerifiedInboundEvent(subscriptionID: subId, event: event, from: relayUrl)
+                    case .eose, .ok, .notice:
+                        await self.handleParsedMessage(parsed, from: relayUrl)
                     }
-                    guard event.isValidSignature() else {
-                        SecureLogger.warning(
-                            "⚠️ Dropped invalid Nostr event id=\(event.id.prefix(16))… sub=\(subId) relay=\(frame.relayUrl)",
-                            category: .session
-                        )
-                        continue
-                    }
-                    await self.deliverVerifiedInboundEvent(subscriptionID: subId, event: event, from: frame.relayUrl)
-                case .eose, .ok, .notice:
-                    await self.handleParsedMessage(parsed, from: frame.relayUrl)
                 }
             }
         }
+        if started {
+            SecureLogger.debug("🧵 Started inbound verify pipeline for \(relayUrl)", category: .session)
+        }
+    }
+
+    /// Tear down a relay's inbound pipeline (socket gone or state wiped). The
+    /// consumer drains any already-buffered frames before finishing, so
+    /// in-flight verified events are still delivered.
+    private func teardownRelayInboundPipeline(for relayUrl: String) {
+        inboundRouter.finishPipeline(for: relayUrl)
+    }
+
+    private func teardownAllRelayInboundPipelines() {
+        inboundRouter.finishAll()
     }
 
     /// Connect to all configured relays
@@ -347,6 +370,8 @@ final class NostrRelayManager: ObservableObject {
             task.cancel(with: .goingAway, reason: nil)
         }
         connections.removeAll()
+        // Sockets are gone; drop every relay's inbound verify pipeline.
+        teardownAllRelayInboundPipelines()
         markRelaySocketsClosed(resetState: false)
         // Sockets are gone, so per-relay subscription state is cleared — but
         // durable intent (subscriptionRequestState, messageHandlers, parked
@@ -376,6 +401,7 @@ final class NostrRelayManager: ObservableObject {
             task.cancel(with: .goingAway, reason: nil)
         }
         connections.removeAll()
+        teardownAllRelayInboundPipelines()
         markRelaySocketsClosed(resetState: true)
         subscriptions.removeAll()
         pendingSubscriptions.removeAll()
@@ -626,6 +652,7 @@ final class NostrRelayManager: ObservableObject {
                     connection.cancel(with: .goingAway, reason: nil)
                 }
                 connections.removeValue(forKey: url)
+                teardownRelayInboundPipeline(for: url)
                 subscriptions.removeValue(forKey: url)
                 pendingSubscriptions.removeValue(forKey: url)
             }
@@ -965,7 +992,11 @@ final class NostrRelayManager: ObservableObject {
         
         connections[urlString] = task
         task.resume()
-        
+
+        // Bring up this relay's own serial verify pipeline before arming the
+        // socket, so inbound frames have somewhere to land.
+        ensureRelayInboundPipeline(for: urlString)
+
         // Start receiving messages
         receiveMessage(from: task, relayUrl: urlString)
         
@@ -1024,9 +1055,12 @@ final class NostrRelayManager: ObservableObject {
             
             switch result {
             case .success(let message):
-                // Hand the raw frame to the serial inbound pipeline: parsing
-                // and signature verification run off-main, in arrival order.
-                self.inboundContinuation.yield(InboundFrame(message: message, relayUrl: relayUrl))
+                // Hand the raw frame to this relay's serial inbound pipeline:
+                // parsing and signature verification run off-main, in arrival
+                // order, independently of every other relay's pipeline. Routing
+                // through the lock-guarded router keeps this off the main actor
+                // (no per-frame main hop).
+                self.inboundRouter.yield(InboundFrame(message: message), to: relayUrl)
 
                 // Continue receiving
                 Task { @MainActor in
@@ -1188,6 +1222,7 @@ final class NostrRelayManager: ObservableObject {
 
     private func handleDisconnection(relayUrl: String, error: Error) {
         connections.removeValue(forKey: relayUrl)
+        teardownRelayInboundPipeline(for: relayUrl)
         subscriptions.removeValue(forKey: relayUrl)
         updateRelayStatus(relayUrl, isConnected: false, error: error)
         settleEOSETrackers(droppingRelay: relayUrl)
@@ -1276,8 +1311,9 @@ final class NostrRelayManager: ObservableObject {
         if let connection = connections[normalizedRelayUrl] {
             connection.cancel(with: .goingAway, reason: nil)
             connections.removeValue(forKey: normalizedRelayUrl)
+            teardownRelayInboundPipeline(for: normalizedRelayUrl)
         }
-        
+
         // Attempt immediate reconnection
         connectToRelay(normalizedRelayUrl)
     }
@@ -1369,6 +1405,75 @@ final class NostrRelayManager: ObservableObject {
 }
 
 // MARK: - Off-main inbound parsing helpers (file scope, non-isolated)
+
+/// A single raw socket frame awaiting off-main parse + Schnorr verification.
+private struct InboundFrame: Sendable {
+    let message: URLSessionWebSocketTask.Message
+}
+
+/// Lock-guarded registry of per-relay inbound streams.
+///
+/// The raw WebSocket receive callback is not main-actor isolated, so it needs a
+/// `Sendable` path to route a frame to the correct relay's stream without a
+/// per-frame hop onto the main actor. Pipeline lifecycle (start/finish) is
+/// driven from the main actor; frame delivery (`yield`) can come from any
+/// thread. All access is serialized by a single lock — contention is negligible
+/// because the guarded critical section is only a dictionary lookup + yield.
+private final class InboundFrameRouter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuations: [String: AsyncStream<InboundFrame>.Continuation] = [:]
+    private var tasks: [String: Task<Void, Never>] = [:]
+
+    /// Start a relay's stream + consumer if one does not already exist.
+    /// Returns true when a new pipeline was created. The bounded
+    /// `.bufferingNewest` policy makes a single relay shed its OWN oldest
+    /// frames under a flood, never other relays' frames and never memory.
+    func startPipeline(
+        for relayUrl: String,
+        makeConsumer: (AsyncStream<InboundFrame>) -> Task<Void, Never>
+    ) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if continuations[relayUrl] != nil { return false }
+        let (stream, continuation) = AsyncStream<InboundFrame>.makeStream(
+            bufferingPolicy: .bufferingNewest(TransportConfig.nostrInboundPerRelayBufferCap)
+        )
+        continuations[relayUrl] = continuation
+        tasks[relayUrl] = makeConsumer(stream)
+        return true
+    }
+
+    /// Route a frame to a relay's stream. No-op if the relay has no live
+    /// pipeline (socket already torn down) — the frame is simply dropped, which
+    /// is safe for best-effort Nostr inbound.
+    func yield(_ frame: InboundFrame, to relayUrl: String) {
+        lock.lock()
+        let continuation = continuations[relayUrl]
+        lock.unlock()
+        continuation?.yield(frame)
+    }
+
+    /// Finish a relay's stream. The consumer drains any already-buffered frames
+    /// before exiting, so in-flight verified events are still delivered.
+    func finishPipeline(for relayUrl: String) {
+        lock.lock()
+        let continuation = continuations.removeValue(forKey: relayUrl)
+        tasks.removeValue(forKey: relayUrl)
+        lock.unlock()
+        continuation?.finish()
+    }
+
+    func finishAll() {
+        lock.lock()
+        let allContinuations = continuations
+        continuations.removeAll()
+        tasks.removeAll()
+        lock.unlock()
+        for continuation in allContinuations.values {
+            continuation.finish()
+        }
+    }
+}
 
 private enum ParsedInbound {
     case event(subId: String, event: NostrEvent)

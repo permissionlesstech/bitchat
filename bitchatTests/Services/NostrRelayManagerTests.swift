@@ -767,9 +767,9 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertEqual(context.manager.debugDuplicateInboundEventDropCount, 0)
     }
 
-    /// Signature verification moved off-main into a single serial consumer;
+    /// Signature verification runs off-main in a per-relay serial consumer;
     /// several frames buffered on one socket must still be delivered to the
-    /// handler in arrival order.
+    /// handler in that relay's arrival order.
     func test_receiveEvent_deliversBackToBackEventsInArrivalOrder() async throws {
         let relayURL = "wss://ordered.example"
         let context = makeContext(permission: .denied)
@@ -793,6 +793,64 @@ final class NostrRelayManagerTests: XCTestCase {
         }
         XCTAssertTrue(allDelivered)
         XCTAssertEqual(receivedIDs, events.map(\.id))
+    }
+
+    /// Each relay owns its own off-main verify pipeline, so a large backlog of
+    /// EVENT frames on one relay must NOT head-of-line-block a frame that
+    /// arrives on a different relay. Under the previous single global consumer,
+    /// relay B's single event (emitted after relay A's whole burst) could only
+    /// be delivered once every frame in A's backlog had been Schnorr-verified;
+    /// with per-relay pipelines B verifies concurrently and lands before A's
+    /// backlog drains.
+    func test_receiveEvent_busyRelayDoesNotBlockOtherRelayDelivery() async throws {
+        let busyRelayURL = "wss://busy-relay.example"
+        let quietRelayURL = "wss://quiet-relay.example"
+        let context = makeContext(permission: .denied)
+
+        // Distinct subscriptions per relay so dedup never coalesces A vs. B.
+        let busyEvents = try (0..<200).map { try makeSignedEvent(content: "busy-\($0)") }
+        let quietEvent = try makeSignedEvent(content: "quiet")
+
+        var busyDeliveredCount = 0
+        var quietDeliveredAfterBusyCount = -1 // busy-count observed when B lands
+
+        context.manager.subscribe(filter: makeFilter(), id: "busy", relayUrls: [busyRelayURL]) { _ in
+            busyDeliveredCount += 1
+        }
+        context.manager.subscribe(filter: makeFilter(), id: "quiet", relayUrls: [quietRelayURL]) { _ in
+            if quietDeliveredAfterBusyCount < 0 {
+                quietDeliveredAfterBusyCount = busyDeliveredCount
+            }
+        }
+        let subscribed = await waitUntil {
+            context.sessionFactory.latestConnection(for: busyRelayURL)?.sentStrings.count == 1 &&
+            context.sessionFactory.latestConnection(for: quietRelayURL)?.sentStrings.count == 1
+        }
+        XCTAssertTrue(subscribed)
+
+        // Flood relay A first, then emit a single frame on relay B.
+        for event in busyEvents {
+            try context.sessionFactory.latestConnection(for: busyRelayURL)?.emitEventMessage(subscriptionID: "busy", event: event)
+        }
+        try context.sessionFactory.latestConnection(for: quietRelayURL)?.emitEventMessage(subscriptionID: "quiet", event: quietEvent)
+
+        let quietDelivered = await waitUntil(timeout: 5.0) { quietDeliveredAfterBusyCount >= 0 }
+        XCTAssertTrue(quietDelivered, "relay B's event was never delivered")
+
+        // The signal: B did not have to wait for A's entire backlog. If the two
+        // pipelines were globally serialized, B could only land after all 200 of
+        // A's frames, so busyDeliveredCount would be 200 when B arrived.
+        XCTAssertLessThan(
+            quietDeliveredAfterBusyCount,
+            busyEvents.count,
+            "relay B was head-of-line blocked behind relay A's backlog"
+        )
+
+        // Both relays still drain fully and in order.
+        let allDelivered = await waitUntil(timeout: 5.0) {
+            busyDeliveredCount == busyEvents.count
+        }
+        XCTAssertTrue(allDelivered)
     }
 
     func test_receiveEvent_withoutHandlerStillTracksReceivedCount() async throws {

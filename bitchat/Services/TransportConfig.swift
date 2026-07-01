@@ -55,6 +55,14 @@ enum TransportConfig {
     static let nostrDuplicateEventLogInterval: Int = 50
     // Sample interval for per-event debug logs on the inbound hot path.
     static let nostrInboundEventLogInterval: Int = 100
+    // Bounded per-relay inbound frame buffer. Each relay connection owns its
+    // own serial verify pipeline; if a relay floods faster than its Schnorr
+    // verification drains, the oldest buffered frames for THAT relay are
+    // dropped (bufferingNewest) so one relay can neither exhaust memory nor
+    // stall other relays. Nostr inbound is already best-effort (relays are
+    // redundant and events replay), so dropping a flooding relay's backlog is
+    // safe.
+    static let nostrInboundPerRelayBufferCap: Int = 256
 
     // Conversation store diagnostics (field observability)
     // Sample interval for the periodic store-audit "OK" heartbeat line
