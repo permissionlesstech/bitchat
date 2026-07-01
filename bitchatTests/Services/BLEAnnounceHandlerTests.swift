@@ -6,9 +6,10 @@ import Testing
 struct BLEAnnounceHandlerTests {
     private final class Recorder {
         var existingNoisePublicKey: Data?
+        var existingSigningPublicKey: Data?
         var signatureValid = true
         var linkState: (hasPeripheral: Bool, hasCentral: Bool) = (false, false)
-        var upsertResult = BLEPeerAnnounceUpdate(isNewPeer: false, wasDisconnected: false, previousNickname: nil)
+        var upsertResult: BLEPeerAnnounceUpdate? = BLEPeerAnnounceUpdate(isNewPeer: false, wasDisconnected: false, previousNickname: nil)
         var dedupSeenIDs: Set<String> = []
         var shouldEmitReconnectLogResult = true
 
@@ -35,7 +36,7 @@ struct BLEAnnounceHandlerTests {
             localPeerID: { localPeerID },
             messageTTL: TransportConfig.messageTTLDefault,
             now: { now },
-            existingNoisePublicKey: { _ in recorder.existingNoisePublicKey },
+            existingPeerKeys: { _ in (recorder.existingNoisePublicKey, recorder.existingSigningPublicKey) },
             verifySignature: { packet, signingPublicKey in
                 recorder.verifySignatureCalls.append((packet, signingPublicKey))
                 return recorder.signatureValid
@@ -369,6 +370,88 @@ struct BLEAnnounceHandlerTests {
     }
 
     @Test
+    func matchingPinnedSigningKeyIsAccepted() throws {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let noiseKey = Data(repeating: 0x9A, count: 32)
+        let peerID = PeerID(publicKey: noiseKey)
+        let packet = try makeAnnouncePacket(
+            noisePublicKey: noiseKey,
+            peerID: peerID,
+            timestamp: timestamp(now),
+            signature: Data(repeating: 0xEE, count: 64)
+        )
+
+        let recorder = Recorder()
+        recorder.existingNoisePublicKey = noiseKey
+        // Matches the signing key encoded by makeAnnouncePacket.
+        recorder.existingSigningPublicKey = Data(repeating: 0x99, count: 32)
+        let handler = makeHandler(recorder: recorder, now: now)
+
+        handler.handle(packet, from: peerID)
+
+        #expect(recorder.upsertCalls.count == 1)
+        #expect(recorder.persistedIdentities.count == 1)
+    }
+
+    @Test
+    func signingKeyMismatchWithPinnedKeySkipsUpsertAndIdentityPersistence() throws {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let noiseKey = Data(repeating: 0x9B, count: 32)
+        let peerID = PeerID(publicKey: noiseKey)
+        // Attacker announce: victim's noiseKey/peerID, attacker's signing key
+        // (0x99 from makeAnnouncePacket) with a "valid" self-signature.
+        let packet = try makeAnnouncePacket(
+            noisePublicKey: noiseKey,
+            peerID: peerID,
+            timestamp: timestamp(now),
+            signature: Data(repeating: 0xEE, count: 64)
+        )
+
+        let recorder = Recorder()
+        recorder.existingNoisePublicKey = noiseKey
+        recorder.existingSigningPublicKey = Data(repeating: 0x42, count: 32) // victim's pinned key
+        recorder.signatureValid = true
+        let handler = makeHandler(recorder: recorder, now: now)
+
+        handler.handle(packet, from: peerID)
+
+        #expect(recorder.upsertCalls.isEmpty)
+        #expect(recorder.persistedIdentities.isEmpty)
+        #expect(recorder.topologyUpdates.isEmpty)
+        #expect(recorder.uiEventDeliveries.count == 1)
+        #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == false)
+    }
+
+    @Test
+    func registryPinRejectionSkipsTopologyAndIdentityPersistence() throws {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let noiseKey = Data(repeating: 0x9C, count: 32)
+        let peerID = PeerID(publicKey: noiseKey)
+        let packet = try makeAnnouncePacket(
+            noisePublicKey: noiseKey,
+            peerID: peerID,
+            timestamp: timestamp(now),
+            signature: Data(repeating: 0xEE, count: 64),
+            directNeighbors: [Data(repeating: 0xAB, count: 8)]
+        )
+
+        // Pre-barrier trust check sees no pinned key (e.g. concurrent race),
+        // but the registry itself refuses to replace its pinned signing key.
+        let recorder = Recorder()
+        recorder.upsertResult = nil
+        let handler = makeHandler(recorder: recorder, now: now)
+
+        handler.handle(packet, from: peerID)
+
+        #expect(recorder.upsertCalls.count == 1)
+        #expect(recorder.persistedIdentities.isEmpty)
+        #expect(recorder.topologyUpdates.isEmpty)
+        #expect(recorder.uiEventDeliveries.count == 1)
+        #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == false)
+        #expect(recorder.afterglowDelays.isEmpty)
+    }
+
+    @Test
     func keyMismatchWithExistingPeerKeepsAnnounceUnverified() throws {
         let now = Date(timeIntervalSince1970: 1_000)
         let noiseKey = Data(repeating: 0x99, count: 32)
@@ -389,6 +472,106 @@ struct BLEAnnounceHandlerTests {
         #expect(recorder.upsertCalls.isEmpty)
         #expect(recorder.uiEventDeliveries.count == 1)
         #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == false)
+    }
+
+    @Test
+    func attackerReplayingVictimNoiseKeyWithOwnSigningKeyIsRejectedEndToEnd() throws {
+        // Real crypto: the attacker crafts a fully self-consistent announce
+        // (victim's noiseKey/peerID, attacker's signing key and nickname,
+        // valid packet signature made with the attacker's key). Without
+        // signing-key pinning this used to overwrite the victim's registry
+        // entry and persisted identity.
+        let victim = NoiseEncryptionService(keychain: MockKeychain())
+        let attacker = NoiseEncryptionService(keychain: MockKeychain())
+        let victimNoiseKey = victim.getStaticPublicKeyData()
+        let peerID = PeerID(publicKey: victimNoiseKey)
+        let now = Date()
+
+        final class RegistryBox {
+            var registry = BLEPeerRegistry()
+            var persistedIdentities: [AnnouncementPacket] = []
+        }
+        let box = RegistryBox()
+
+        let environment = BLEAnnounceHandlerEnvironment(
+            localPeerID: { PeerID(str: "0102030405060708") },
+            messageTTL: TransportConfig.messageTTLDefault,
+            now: { now },
+            existingPeerKeys: { peerID in
+                let info = box.registry.info(for: peerID)
+                return (info?.noisePublicKey, info?.signingPublicKey)
+            },
+            verifySignature: { packet, signingPublicKey in
+                victim.verifyPacketSignature(packet, publicKey: signingPublicKey)
+            },
+            linkState: { _ in (hasPeripheral: true, hasCentral: false) },
+            withRegistryBarrier: { body in body() },
+            upsertVerifiedAnnounce: { peerID, announcement, isConnected, now in
+                box.registry.upsertVerifiedAnnounce(
+                    peerID: peerID,
+                    nickname: announcement.nickname,
+                    noisePublicKey: announcement.noisePublicKey,
+                    signingPublicKey: announcement.signingPublicKey,
+                    isConnected: isConnected,
+                    now: now
+                )
+            },
+            shouldEmitReconnectLog: { _, _ in false },
+            updateTopology: { _, _ in },
+            persistIdentity: { announcement in
+                box.persistedIdentities.append(announcement)
+            },
+            dedupContains: { _ in true },
+            dedupMarkProcessed: { _ in },
+            deliverAnnounceUIEvents: { _, _, _ in },
+            trackPacketSeen: { _ in },
+            sendAnnounceBack: {},
+            scheduleAfterglow: { _ in }
+        )
+        let handler = BLEAnnounceHandler(environment: environment)
+
+        func makeSignedAnnounce(nickname: String, signer: NoiseEncryptionService) throws -> BitchatPacket {
+            let announcement = AnnouncementPacket(
+                nickname: nickname,
+                noisePublicKey: victimNoiseKey,
+                signingPublicKey: signer.getSigningPublicKeyData(),
+                directNeighbors: nil
+            )
+            let payload = try #require(announcement.encode())
+            let packet = BitchatPacket(
+                type: MessageType.announce.rawValue,
+                senderID: Data(hexString: peerID.id) ?? Data(),
+                recipientID: nil,
+                timestamp: UInt64(now.timeIntervalSince1970 * 1000),
+                payload: payload,
+                signature: nil,
+                ttl: TransportConfig.messageTTLDefault
+            )
+            return try #require(signer.signPacket(packet))
+        }
+
+        // Legitimate announce from the victim is accepted and pinned.
+        let victimAnnounce = try makeSignedAnnounce(nickname: "victim", signer: victim)
+        handler.handle(victimAnnounce, from: peerID)
+
+        #expect(box.registry.info(for: peerID)?.nickname == "victim")
+        #expect(box.registry.info(for: peerID)?.signingPublicKey == victim.getSigningPublicKeyData())
+        #expect(box.persistedIdentities.count == 1)
+
+        // Attacker announce with a valid self-signature must be rejected.
+        let attackerAnnounce = try makeSignedAnnounce(nickname: "attacker", signer: attacker)
+        handler.handle(attackerAnnounce, from: peerID)
+
+        #expect(box.registry.info(for: peerID)?.nickname == "victim")
+        #expect(box.registry.info(for: peerID)?.signingPublicKey == victim.getSigningPublicKeyData())
+        #expect(box.persistedIdentities.count == 1)
+
+        // The victim's subsequent announces (same pinned key) still work.
+        let victimRename = try makeSignedAnnounce(nickname: "victim-renamed", signer: victim)
+        handler.handle(victimRename, from: peerID)
+
+        #expect(box.registry.info(for: peerID)?.nickname == "victim-renamed")
+        #expect(box.persistedIdentities.count == 2)
     }
 
     private func expectNoSideEffects(_ recorder: Recorder) {
