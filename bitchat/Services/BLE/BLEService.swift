@@ -3035,6 +3035,15 @@ extension BLEService {
                     return (info?.noisePublicKey, info?.signingPublicKey)
                 }
             },
+            persistedSigningPublicKey: { [weak self] peerID in
+                // Same synchronous identity-manager read pattern as
+                // signedSenderDisplayName(for:from:); the manager serializes
+                // access on its own internal queue.
+                guard let self = self else { return nil }
+                return self.identityManager.getCryptoIdentitiesByPeerIDPrefix(peerID)
+                    .compactMap { $0.signingPublicKey }
+                    .first
+            },
             verifySignature: { [weak self] packet, signingPublicKey in
                 self?.noiseService.verifyPacketSignature(packet, publicKey: signingPublicKey) ?? false
             },

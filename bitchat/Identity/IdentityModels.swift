@@ -141,22 +141,44 @@ enum TrustLevel: String, Codable {
 struct IdentityCache: Codable {
     // Fingerprint -> Social mapping
     var socialIdentities: [String: SocialIdentity] = [:]
-    
+
     // Nickname -> [Fingerprints] reverse index
     // Multiple fingerprints can claim same nickname
     var nicknameIndex: [String: Set<String>] = [:]
-    
+
     // Verified fingerprints (cryptographic proof)
     var verifiedFingerprints: Set<String> = []
-    
+
     // Last interaction timestamps (privacy: optional)
-    var lastInteractions: [String: Date] = [:] 
-    
+    var lastInteractions: [String: Date] = [:]
+
     // Blocked Nostr pubkeys (lowercased hex) for geohash chats
     var blockedNostrPubkeys: Set<String> = []
-    
+
+    // Fingerprint -> Cryptographic identity (noise + pinned signing key).
+    // Persisting the signing-key pin is security-critical: it must survive
+    // app restarts so an attacker cannot replay a known peer's
+    // noiseKey/peerID with their own signing key and be treated as first
+    // contact (TOFU downgrade).
+    var cryptographicIdentities: [String: CryptographicIdentity] = [:]
+
     // Schema version for future migrations
     var version: Int = 1
+
+    init() {}
+
+    // Custom decoding so caches written by older builds (without
+    // `cryptographicIdentities`) still load instead of being discarded.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        socialIdentities = try container.decodeIfPresent([String: SocialIdentity].self, forKey: .socialIdentities) ?? [:]
+        nicknameIndex = try container.decodeIfPresent([String: Set<String>].self, forKey: .nicknameIndex) ?? [:]
+        verifiedFingerprints = try container.decodeIfPresent(Set<String>.self, forKey: .verifiedFingerprints) ?? []
+        lastInteractions = try container.decodeIfPresent([String: Date].self, forKey: .lastInteractions) ?? [:]
+        blockedNostrPubkeys = try container.decodeIfPresent(Set<String>.self, forKey: .blockedNostrPubkeys) ?? []
+        cryptographicIdentities = try container.decodeIfPresent([String: CryptographicIdentity].self, forKey: .cryptographicIdentities) ?? [:]
+        version = try container.decodeIfPresent(Int.self, forKey: .version) ?? 1
+    }
 }
 
 //

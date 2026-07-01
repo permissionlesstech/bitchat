@@ -145,7 +145,8 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     
     // In-memory state
     private var ephemeralSessions: [PeerID: EphemeralIdentity] = [:]
-    private var cryptographicIdentities: [String: CryptographicIdentity] = [:]
+    // Cryptographic identities (including pinned signing keys) live inside
+    // `cache` so they persist across app restarts; see IdentityCache.
     private var cache: IdentityCache = IdentityCache()
     
     // Thread safety
@@ -296,6 +297,15 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     // MARK: - Cryptographic Identities
 
     /// Insert or update a cryptographic identity and optionally persist its signing key and claimed nickname.
+    ///
+    /// TOFU signing-key pinning: once a signing key has been persisted for a
+    /// fingerprint, an update carrying a *different* signing key is refused in
+    /// full (including the claimed-nickname update) and security-logged. This
+    /// mirrors `BLEPeerRegistry.upsertVerifiedAnnounce` — without it, an
+    /// attacker replaying a victim's noiseKey/peerID with their own signing
+    /// key could overwrite the victim's persisted identity while the victim is
+    /// offline or after an app restart. Recovering from a legitimate signing
+    /// re-key requires a new noise identity or explicit user re-verification.
     /// - Parameters:
     ///   - fingerprint: SHA-256 hex of the Noise static public key
     ///   - noisePublicKey: Noise static public key data
@@ -304,7 +314,13 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     func upsertCryptographicIdentity(fingerprint: String, noisePublicKey: Data, signingPublicKey: Data?, claimedNickname: String? = nil) {
         queue.async(flags: .barrier) {
             let now = Date()
-            if var existing = self.cryptographicIdentities[fingerprint] {
+            if var existing = self.cache.cryptographicIdentities[fingerprint] {
+                if let pinnedSigningKey = existing.signingPublicKey,
+                   let announcedSigningKey = signingPublicKey,
+                   pinnedSigningKey != announcedSigningKey {
+                    SecureLogger.warning("🚨 Refusing to replace pinned signing key for \(fingerprint.prefix(8))… (possible impersonation attempt)", category: .security)
+                    return
+                }
                 // Update keys if changed
                 if existing.publicKey != noisePublicKey {
                     existing = CryptographicIdentity(
@@ -314,7 +330,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
                         firstSeen: existing.firstSeen,
                         lastHandshake: now
                     )
-                    self.cryptographicIdentities[fingerprint] = existing
+                    self.cache.cryptographicIdentities[fingerprint] = existing
                 } else {
                     // Update signing key and lastHandshake
                     existing.signingPublicKey = signingPublicKey ?? existing.signingPublicKey
@@ -325,7 +341,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
                         firstSeen: existing.firstSeen,
                         lastHandshake: now
                     )
-                    self.cryptographicIdentities[fingerprint] = updated
+                    self.cache.cryptographicIdentities[fingerprint] = updated
                 }
                 // Persist updated state (already assigned in branches above)
             } else {
@@ -337,7 +353,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
                     firstSeen: now,
                     lastHandshake: now
                 )
-                self.cryptographicIdentities[fingerprint] = entry
+                self.cache.cryptographicIdentities[fingerprint] = entry
             }
 
             // Optionally persist claimed nickname into social identity
@@ -369,7 +385,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
         queue.sync {
             // Defensive: ensure hex and correct length
             guard peerID.isShort else { return [] }
-            return cryptographicIdentities.values.filter { $0.fingerprint.hasPrefix(peerID.id) }
+            return cache.cryptographicIdentities.values.filter { $0.fingerprint.hasPrefix(peerID.id) }
         }
     }
     
@@ -528,8 +544,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
         queue.async(flags: .barrier) {
             self.cache = IdentityCache()
             self.ephemeralSessions.removeAll()
-            self.cryptographicIdentities.removeAll()
-            
+
             // Delete from keychain
             let deleted = self.keychain.deleteIdentityKey(forKey: self.cacheKey)
             SecureLogger.logKeyOperation(.delete, keyType: "identity cache", success: deleted)

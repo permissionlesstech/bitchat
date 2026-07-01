@@ -17,6 +17,11 @@ struct BLEAnnounceHandlerEnvironment {
     /// Noise and signing public keys already recorded for the peer, if any
     /// (single registry read so both come from one consistent snapshot).
     let existingPeerKeys: (PeerID) -> (noisePublicKey: Data?, signingPublicKey: Data?)
+    /// Signing key from the persisted cryptographic identity for the peer, if
+    /// any. Registry pins do not survive app restarts or offline-peer
+    /// eviction; this fallback keeps the TOFU signing-key pin effective for
+    /// returning peers.
+    let persistedSigningPublicKey: (PeerID) -> Data?
     /// Verifies the packet signature against the announced signing key.
     let verifySignature: (_ packet: BitchatPacket, _ signingPublicKey: Data) -> Bool
     /// Direct link state for the peer (BLE-queue read).
@@ -102,7 +107,16 @@ final class BLEAnnounceHandler {
         // Suppress announce logs to reduce noise
 
         // Precompute signature verification outside barrier to reduce contention
-        let existingPeerKeys = env.existingPeerKeys(peerID)
+        var existingPeerKeys = env.existingPeerKeys(peerID)
+        if existingPeerKeys.signingPublicKey == nil {
+            // The registry entry (and its signing-key pin) is dropped on app
+            // restart and offline-peer eviction, but the persisted
+            // cryptographic identity survives both. Fall back to it so a
+            // returning peer is not treated as first contact — otherwise an
+            // attacker could replay the peer's noiseKey/peerID with their own
+            // signing key and re-pin the identity (TOFU downgrade).
+            existingPeerKeys.signingPublicKey = env.persistedSigningPublicKey(peerID)
+        }
         let hasSignature = packet.signature != nil
         let signatureValid: Bool
         if hasSignature {
