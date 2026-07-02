@@ -61,6 +61,11 @@ struct NostrRelayManagerDependencies {
     var locationPermissionPublisher: AnyPublisher<LocationChannelManager.PermissionState, Never>
     var torEnforced: () -> Bool
     var torIsReady: () -> Bool
+    /// Synchronous cached egress-gate check: `true` only while a positive Tor
+    /// egress verification is within its TTL (or Tor is not enforced). When
+    /// `false`, connections must be queued behind `awaitTorReady`, which runs
+    /// the async egress self-check.
+    var torEgressVerified: () -> Bool
     var torIsForeground: () -> Bool
     var awaitTorReady: (@escaping (Bool) -> Void) -> Void
     var makeSession: () -> NostrRelaySessionProtocol
@@ -83,10 +88,14 @@ private extension NostrRelayManagerDependencies {
             locationPermissionPublisher: LocationChannelManager.shared.$permissionState.eraseToAnyPublisher(),
             torEnforced: { TorManager.shared.torEnforced },
             torIsReady: { TorManager.shared.isReady },
+            torEgressVerified: { TorManager.shared.isEgressVerified },
             torIsForeground: { TorManager.shared.isForeground() },
             awaitTorReady: { completion in
                 Task.detached {
-                    let ready = await TorManager.shared.awaitReady()
+                    // Require both Tor bootstrap AND a positive egress self-check
+                    // so relay sockets never open unless traffic is proven to
+                    // route through Tor (fail-closed).
+                    let ready = await TorManager.shared.awaitEgressReady()
                     await MainActor.run {
                         completion(ready)
                     }
@@ -625,8 +634,14 @@ final class NostrRelayManager: ObservableObject {
     
     // MARK: - Private Methods
 
+    /// Every path that opens a relay socket funnels through this check (initial
+    /// connect, reconnect backoff timers, subscription-triggered connects,
+    /// manual retry). It must hold connections back when Tor isn't bootstrapped
+    /// OR when the runtime egress self-check has no fresh positive verdict —
+    /// otherwise the already-bootstrapped path would open sockets without ever
+    /// running the egress canary.
     private var shouldWaitForTorBeforeConnecting: Bool {
-        shouldUseTor && !dependencies.torIsReady()
+        shouldUseTor && (!dependencies.torIsReady() || !dependencies.torEgressVerified())
     }
 
     private func connectToRelays(_ relayUrls: [String], shouldLog: Bool = false) {
@@ -674,22 +689,44 @@ final class NostrRelayManager: ObservableObject {
             guard ready else {
                 self.torReadyWaitAttempts += 1
                 if self.torReadyWaitAttempts < TransportConfig.nostrTorReadyMaxWaitAttempts {
-                    SecureLogger.warning("Tor not ready; re-queueing \(pending.count) relay connection(s) (attempt \(self.torReadyWaitAttempts))", category: .session)
+                    SecureLogger.warning("Tor not ready or egress unverified; re-queueing \(pending.count) relay connection(s) (attempt \(self.torReadyWaitAttempts))", category: .session)
                     self.queueConnectionsUntilTorReady(pending)
                 } else {
                     // Still fail-closed (no network), but unblock any callers
                     // waiting on EOSE so the UI doesn't hang indefinitely.
-                    // Queued subscriptions/sends are kept and flush if a later
-                    // trigger (e.g. app foreground) brings Tor up.
-                    SecureLogger.error("❌ Tor not ready after \(self.torReadyWaitAttempts) wait(s); aborting relay connections (fail-closed)", category: .session)
+                    // Queued subscriptions/sends are kept; a bounded-cadence
+                    // retry (below) re-enters the gate so a transient failure
+                    // (Tor stall, canary outage keeping the egress unverified)
+                    // recovers automatically, and any later trigger (e.g. app
+                    // foreground) also re-enters it.
+                    SecureLogger.error("❌ Tor not ready or egress unverified after \(self.torReadyWaitAttempts) wait(s); relays stay closed (fail-closed), retrying in \(Int(TransportConfig.nostrTorGateRetrySeconds))s", category: .session)
                     self.torReadyWaitAttempts = 0
                     self.unblockPendingEOSECallbacks(reason: "tor-unavailable")
+                    self.scheduleTorGateRetry(pending)
                 }
                 return
             }
 
             self.torReadyWaitAttempts = 0
             self.connectToRelays(pending, shouldLog: true)
+        }
+    }
+
+    /// After the Tor-gate wait attempts are exhausted, keep a low-frequency
+    /// retry alive so the gate re-opens without an external trigger once the
+    /// transient failure clears. Bounded cadence: one wait cycle per
+    /// `nostrTorGateRetrySeconds`; the egress verifier additionally throttles
+    /// actual canary probes to one per its `minRetryInterval`.
+    private func scheduleTorGateRetry(_ relayUrls: [String]) {
+        guard !relayUrls.isEmpty else { return }
+        let generation = connectionGeneration
+        dependencies.scheduleAfter(TransportConfig.nostrTorGateRetrySeconds) { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                // Void after disconnect/reset: those paths bump the generation.
+                guard generation == self.connectionGeneration else { return }
+                self.queueConnectionsUntilTorReady(relayUrls)
+            }
         }
     }
 

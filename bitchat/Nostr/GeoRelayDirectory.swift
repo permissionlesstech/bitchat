@@ -54,7 +54,7 @@ private extension GeoRelayDirectoryDependencies {
             refreshCheckInterval: TransportConfig.geoRelayRefreshCheckIntervalSeconds,
             retryInitialSeconds: TransportConfig.geoRelayRetryInitialSeconds,
             retryMaxSeconds: TransportConfig.geoRelayRetryMaxSeconds,
-            awaitTorReady: { await TorManager.shared.awaitReady() },
+            awaitTorReady: { await TorManager.shared.awaitEgressReady() },
             makeFetchData: {
                 let session = TorURLSession.shared.session
                 return { request in
