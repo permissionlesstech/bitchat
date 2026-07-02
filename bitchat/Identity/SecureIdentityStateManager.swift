@@ -347,8 +347,11 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     /// mirrors `BLEPeerRegistry.upsertVerifiedAnnounce` — without it, an
     /// attacker replaying a victim's noiseKey/peerID with their own signing
     /// key could overwrite the victim's persisted identity while the victim is
-    /// offline or after an app restart. Recovering from a legitimate signing
-    /// re-key requires a new noise identity or explicit user re-verification.
+    /// offline or after an app restart. The refusal is permanent: there is
+    /// currently no targeted in-app way to reset the pin (`setVerified` does
+    /// not touch it). Recovering from a legitimate signing re-key requires the
+    /// peer to establish a new noise identity (new peerID) or the local user
+    /// to wipe all identity data (`clearAllIdentityData`, e.g. panic wipe).
     /// - Parameters:
     ///   - fingerprint: SHA-256 hex of the Noise static public key
     ///   - noisePublicKey: Noise static public key data
