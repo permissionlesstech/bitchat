@@ -639,11 +639,15 @@ final class NostrRelayManagerTests: XCTestCase {
         try context.sessionFactory.latestConnection(for: firstRelayURL)?.emitEventMessage(subscriptionID: "events", event: event)
         try context.sessionFactory.latestConnection(for: secondRelayURL)?.emitEventMessage(subscriptionID: "events", event: event)
 
-        let countedOnBothRelays = await waitUntil {
+        // Wait on the DELIVERY-side state: handler dispatch and the duplicate
+        // drop both land on the second main hop, after off-main verification.
+        let settled = await waitUntil {
             context.manager.relays.first(where: { $0.url == firstRelayURL })?.messagesReceived == 1 &&
-            context.manager.relays.first(where: { $0.url == secondRelayURL })?.messagesReceived == 1
+            context.manager.relays.first(where: { $0.url == secondRelayURL })?.messagesReceived == 1 &&
+            receivedIDs == [event.id] &&
+            context.manager.debugDuplicateInboundEventDropCount == 1
         }
-        XCTAssertTrue(countedOnBothRelays)
+        XCTAssertTrue(settled)
         XCTAssertEqual(receivedIDs, [event.id])
         XCTAssertEqual(context.manager.debugDuplicateInboundEventDropCount, 1)
         XCTAssertEqual(context.manager.debugDuplicateInboundEventDropCount(forSubscriptionID: "events"), 1)
@@ -676,12 +680,17 @@ final class NostrRelayManagerTests: XCTestCase {
             )
         }
 
-        let countedOnEveryRelay = await waitUntil {
+        // Wait on the DELIVERY-side state: the winner's handler dispatch and
+        // the losers' duplicate drops both land on the second main hop, after
+        // off-main verification — messagesReceived (first hop) settles sooner.
+        let settled = await waitUntil {
             relayURLs.allSatisfy { relayURL in
                 context.manager.relays.first(where: { $0.url == relayURL })?.messagesReceived == 1
-            }
+            } &&
+            receivedIDs == [event.id] &&
+            context.manager.debugDuplicateInboundEventDropCount == relayURLs.count - 1
         }
-        XCTAssertTrue(countedOnEveryRelay)
+        XCTAssertTrue(settled)
         XCTAssertEqual(receivedIDs, [event.id])
         XCTAssertEqual(context.manager.debugDuplicateInboundEventDropCount, relayURLs.count - 1)
         XCTAssertEqual(
@@ -714,11 +723,15 @@ final class NostrRelayManagerTests: XCTestCase {
         try context.sessionFactory.latestConnection(for: firstRelayURL)?.emitEventMessage(subscriptionID: "events", event: invalidEvent)
         try context.sessionFactory.latestConnection(for: secondRelayURL)?.emitEventMessage(subscriptionID: "events", event: event)
 
-        let countedOnBothRelays = await waitUntil {
+        // Wait on the DELIVERY-side state (second main hop, after off-main
+        // verification), not just messagesReceived (first main hop) — the
+        // handler only fires after verify + a second hop.
+        let genuineDelivered = await waitUntil {
             context.manager.relays.first(where: { $0.url == firstRelayURL })?.messagesReceived == 1 &&
-            context.manager.relays.first(where: { $0.url == secondRelayURL })?.messagesReceived == 1
+            context.manager.relays.first(where: { $0.url == secondRelayURL })?.messagesReceived == 1 &&
+            receivedIDs == [event.id]
         }
-        XCTAssertTrue(countedOnBothRelays)
+        XCTAssertTrue(genuineDelivered)
         XCTAssertEqual(receivedIDs, [event.id])
         XCTAssertEqual(context.manager.debugDuplicateInboundEventDropCount, 0)
         XCTAssertEqual(context.manager.debugDuplicateInboundEventDropCount(forSubscriptionID: "events"), 0)
@@ -758,11 +771,15 @@ final class NostrRelayManagerTests: XCTestCase {
         try context.sessionFactory.latestConnection(for: firstRelayURL)?.emitEventMessage(subscriptionID: "gift-wraps", event: tampered)
         try context.sessionFactory.latestConnection(for: secondRelayURL)?.emitEventMessage(subscriptionID: "gift-wraps", event: giftWrap)
 
-        let countedOnBothRelays = await waitUntil {
+        // Wait on the DELIVERY-side state (second main hop, after off-main
+        // verification), not just messagesReceived (first main hop) — the
+        // handler only fires after verify + a second hop.
+        let genuineDelivered = await waitUntil {
             context.manager.relays.first(where: { $0.url == firstRelayURL })?.messagesReceived == 1 &&
-            context.manager.relays.first(where: { $0.url == secondRelayURL })?.messagesReceived == 1
+            context.manager.relays.first(where: { $0.url == secondRelayURL })?.messagesReceived == 1 &&
+            receivedIDs == [giftWrap.id]
         }
-        XCTAssertTrue(countedOnBothRelays)
+        XCTAssertTrue(genuineDelivered)
         XCTAssertEqual(receivedIDs, [giftWrap.id])
         XCTAssertEqual(context.manager.debugDuplicateInboundEventDropCount, 0)
     }

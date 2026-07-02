@@ -91,6 +91,22 @@ final class NostrInboundPipeline {
     private let presence: GeoPresenceTracker
     private var geoEventLogCount = 0
 
+    /// Monotonic panic-wipe generation for this pipeline. A panic wipe clears
+    /// relay handlers so no NEW events flow, but a detached decrypt task
+    /// spawned just BEFORE the wipe — which strongly captures a pre-wipe Nostr
+    /// private key and ciphertext — survives it. Spawn sites capture this
+    /// value; the task compares it at its main-actor hops and drops its result
+    /// (no delivery; the captured identity and plaintext die with the task)
+    /// if `invalidateInFlightDecrypts()` bumped it in between.
+    @MainActor private(set) var wipeGeneration: UInt64 = 0
+
+    /// Called from `ChatViewModel.panicClearAllData()` so plaintext decrypted
+    /// with pre-wipe keys can never land in post-wipe state.
+    @MainActor
+    func invalidateInFlightDecrypts() {
+        wipeGeneration &+= 1
+    }
+
     init(context: any NostrInboundPipelineContext, presence: GeoPresenceTracker) {
         self.context = context
         self.presence = presence
@@ -269,8 +285,13 @@ final class NostrInboundPipeline {
         // once, off the main actor) by NostrRelayManager.
         guard !context.hasProcessedNostrEvent(giftWrap.id) else { return }
 
+        // Capture the wipe generation at spawn, alongside the per-geohash
+        // identity (private key) the detached task strongly captures. A panic
+        // wipe between spawn and delivery bumps the generation, and the task
+        // drops its result instead of delivering plaintext post-wipe.
+        let wipeGeneration = self.wipeGeneration
         Task.detached(priority: .userInitiated) { [weak self] in
-            await self?.processGeohashGiftWrap(giftWrap, id: id, verbose: false)
+            await self?.processGeohashGiftWrap(giftWrap, id: id, verbose: false, wipeGeneration: wipeGeneration)
         }
     }
 
@@ -282,8 +303,10 @@ final class NostrInboundPipeline {
             return
         }
 
+        // Spawn-time wipe-generation capture; see subscribeGiftWrap.
+        let wipeGeneration = self.wipeGeneration
         Task.detached(priority: .userInitiated) { [weak self] in
-            await self?.processGeohashGiftWrap(giftWrap, id: id, verbose: true)
+            await self?.processGeohashGiftWrap(giftWrap, id: id, verbose: true, wipeGeneration: wipeGeneration)
         }
     }
 
@@ -291,11 +314,24 @@ final class NostrInboundPipeline {
     /// layers) runs off the main actor; results hop back for state updates.
     /// `verbose` keeps `handleGiftWrap`'s decrypt logging without adding it
     /// to the sampling path.
-    private func processGeohashGiftWrap(_ giftWrap: NostrEvent, id: NostrIdentity, verbose: Bool) async {
+    ///
+    /// `wipeGeneration` is this pipeline's generation captured at spawn (the
+    /// moment the pre-wipe `id` was captured); a mismatch at either main-actor
+    /// hop means a panic wipe happened in between, so the task bails without
+    /// decrypting (first hop) or without delivering the plaintext (second
+    /// hop) — the captured identity and any decrypted material are simply
+    /// dropped with the task.
+    private func processGeohashGiftWrap(
+        _ giftWrap: NostrEvent,
+        id: NostrIdentity,
+        verbose: Bool,
+        wipeGeneration: UInt64
+    ) async {
         guard let context else { return }
         // Authoritative check-and-record, atomic on the main actor so two
         // concurrent detached tasks can't both process the same event.
         let alreadyProcessed: Bool = await MainActor.run {
+            guard self.wipeGeneration == wipeGeneration else { return true }
             if context.hasProcessedNostrEvent(giftWrap.id) { return true }
             context.recordProcessedNostrEvent(giftWrap.id)
             return false
@@ -320,6 +356,10 @@ final class NostrInboundPipeline {
         }
 
         await MainActor.run {
+            // A panic wipe during the off-main decrypt must not let the
+            // pre-wipe plaintext reach post-wipe state; drop it here, atomic
+            // with the wipe on the main actor.
+            guard self.wipeGeneration == wipeGeneration else { return }
             guard let packet = Self.decodeEmbeddedBitChatPacket(from: content),
                   packet.type == MessageType.noiseEncrypted.rawValue,
                   let payload = NoisePayload.decode(packet.payload)
@@ -376,8 +416,13 @@ final class NostrInboundPipeline {
             return false
         }
         if alreadyProcessed { return }
-        let currentIdentity: NostrIdentity? = await MainActor.run {
-            context.currentNostrIdentity()
+        // Fetch the identity and the wipe generation in ONE main-actor hop:
+        // the generation then vouches for exactly this identity. A wipe after
+        // this point bumps the generation and the delivery hop below drops
+        // the decrypted result (same guard as processGeohashGiftWrap; this
+        // account-mailbox path had the identical hazard).
+        let (currentIdentity, wipeGeneration): (NostrIdentity?, UInt64) = await MainActor.run {
+            (context.currentNostrIdentity(), self.wipeGeneration)
         }
         guard let currentIdentity else { return }
 
@@ -409,6 +454,9 @@ final class NostrInboundPipeline {
                    let payload = NoisePayload.decode(packet.payload) {
                     let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTimestamp))
                     await MainActor.run {
+                        // Drop pre-wipe plaintext if a panic wipe landed
+                        // during the off-main decrypt (see above).
+                        guard self.wipeGeneration == wipeGeneration else { return }
                         context.registerNostrKeyMapping(senderPubkey, for: targetPeerID)
 
                         switch payload.type {

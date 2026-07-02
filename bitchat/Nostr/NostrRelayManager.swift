@@ -48,7 +48,14 @@ private struct URLSessionAdapter: NostrRelaySessionProtocol {
     let base: URLSession
 
     func webSocketTask(with url: URL) -> NostrRelayConnectionProtocol {
-        URLSessionWebSocketTaskAdapter(base: base.webSocketTask(with: url))
+        let task = base.webSocketTask(with: url)
+        // Byte bound per inbound frame; without it the per-relay buffer cap
+        // (nostrInboundPerRelayBufferCap) bounds FRAMES but not BYTES, and a
+        // hostile relay could pile up cap × 1 MiB (URLSession default) per
+        // connection. See TransportConfig.nostrInboundMaxFrameBytes for the
+        // sizing rationale. Oversized frames fail the receive with an error.
+        task.maximumMessageSize = TransportConfig.nostrInboundMaxFrameBytes
+        return URLSessionWebSocketTaskAdapter(base: task)
     }
 }
 
@@ -106,7 +113,10 @@ private extension NostrRelayManagerDependencies {
 @MainActor
 final class NostrRelayManager: ObservableObject {
     static let shared = NostrRelayManager()
-    // Track gift-wraps (kind 1059) we initiated so we can log OK acks at info
+    // Track gift-wraps (kind 1059) we initiated so we can log OK acks at info.
+    // Entries are removed only on OK acks (or panic wipe); relays that never
+    // ack leave entries behind for the process lifetime. Observability-only
+    // state, bounded in practice by outbound DM volume.
     private(set) static var pendingGiftWrapIDs = Set<String>()
     static func registerPendingGiftWrap(id: String) {
         pendingGiftWrapIDs.insert(id)
@@ -1427,7 +1437,9 @@ private final class InboundFrameRouter: @unchecked Sendable {
     /// Start a relay's stream + consumer if one does not already exist.
     /// Returns true when a new pipeline was created. The bounded
     /// `.bufferingNewest` policy makes a single relay shed its OWN oldest
-    /// frames under a flood, never other relays' frames and never memory.
+    /// frames under a flood, never other relays' frames. Buffered memory per
+    /// relay is bounded (not eliminated) at the frame cap times the per-frame
+    /// byte cap (`maximumMessageSize`) — see TransportConfig.
     func startPipeline(
         for relayUrl: String,
         makeConsumer: (AsyncStream<InboundFrame>) -> Task<Void, Never>

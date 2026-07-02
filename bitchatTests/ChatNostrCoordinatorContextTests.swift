@@ -405,6 +405,45 @@ struct ChatNostrCoordinatorContextTests {
         #expect(context.handledPrivateMessages.count == 1)
     }
 
+    @Test @MainActor
+    func handleGiftWrap_panicWipeAfterSpawnDropsDecryptedResult() async throws {
+        let context = MockChatNostrContext()
+        let coordinator = ChatNostrCoordinator(context: context)
+
+        let recipient = try NostrIdentity.generate()
+        let sender = try NostrIdentity.generate()
+        let embedded = try #require(NostrEmbeddedBitChat.encodePMForNostrNoRecipient(
+            content: "pre-wipe secret",
+            messageID: "gm-wipe-1",
+            senderPeerID: PeerID(str: "aabbccddeeff0011")
+        ))
+        let giftWrap = try NostrProtocol.createPrivateMessage(
+            content: embedded,
+            recipientPubkey: recipient.publicKeyHex,
+            senderIdentity: sender
+        )
+
+        // Spawn the detached decrypt (it strongly captures the pre-wipe
+        // identity), then panic-wipe in the SAME main-actor turn — guaranteed
+        // to land before the task's first main-actor hop.
+        coordinator.inbound.handleGiftWrap(giftWrap, id: recipient)
+        coordinator.inbound.invalidateInFlightDecrypts()
+
+        // Give the detached task ample time to have delivered if the wipe
+        // guard were broken.
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        await drainMainQueue()
+
+        #expect(context.handledPrivateMessages.isEmpty)
+        #expect(context.recordedNostrEventIDs.isEmpty)
+
+        // The pipeline itself stays usable: a gift wrap spawned AFTER the
+        // wipe (new generation) still decrypts and delivers.
+        coordinator.inbound.handleGiftWrap(giftWrap, id: recipient)
+        let delivered = await TestHelpers.waitUntil({ context.handledPrivateMessages.count == 1 })
+        #expect(delivered)
+    }
+
     // NOTE: Inbound Schnorr signature verification (and the forged-copy
     // dedup-poisoning invariant) is enforced once, off the main actor, at the
     // relay boundary — see NostrRelayManagerTests
