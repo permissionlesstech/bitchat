@@ -44,6 +44,20 @@ import Foundation
 ///     gate, GeoRelayDirectory backoff) re-probe and succeed once the canary
 ///     is reachable again.
 ///
+/// Liveness:
+///   - Every probe is hard-bounded by `probeTimeout` via an independent async
+///     watchdog. The proxied session sets `waitsForConnectivity = true`, which
+///     can defer the per-request timer indefinitely, leaving the request
+///     bounded only by the default 7-day resource timeout — without the
+///     watchdog a hung canary would wedge every subsequent `verify()` caller.
+///     On timeout the probe task is cancelled (cooperatively cancelling the
+///     underlying `URLSessionTask`), the verdict is the fail-closed
+///     `.unreachable`, and the in-flight slot is cleared so the next
+///     `verify()` (after the retry throttle) starts a fresh probe.
+///   - `invalidate()` cancels any in-flight probe and clears all cached state
+///     (including the retry throttle), so a Tor restart/dormant/shutdown
+///     genuinely resets the verifier: a hung probe cannot survive it.
+///
 /// The probe is injectable so the policy/caching logic is unit-tested without a
 /// live network (see `TorEgressVerifierTests`).
 public actor TorEgressVerifier {
@@ -56,6 +70,11 @@ public actor TorEgressVerifier {
         case unreachable(String)
     }
 
+    /// Hard upper bound for a single canary probe, enforced independently of
+    /// URLSession timers (see the "Liveness" section of the type doc). Matches
+    /// the live probe's per-request timeout.
+    public static let defaultProbeTimeout: TimeInterval = 20
+
     private let probe: @Sendable () async -> ProbeResult
     private let now: @Sendable () -> Date
     private let ttl: TimeInterval
@@ -63,11 +82,18 @@ public actor TorEgressVerifier {
     /// persistent `.unreachable` cannot hammer the canary endpoint on every
     /// reconnect burst.
     private let minRetryInterval: TimeInterval
+    /// Outer wall-clock bound on a single probe (watchdog; fail-closed).
+    private let probeTimeout: TimeInterval
 
     private var lastVerifiedAt: Date?
     private var lastProbeAt: Date?
     private var lastResult: ProbeResult?
     private var inFlight: Task<Bool, Never>?
+    /// Bumped whenever a new probe starts or `invalidate()` runs. A completing
+    /// probe only records its outcome (cache/throttle) and clears `inFlight`
+    /// if its generation is still current, so a cancelled/superseded probe
+    /// cannot clobber state owned by a fresh one (actor-reentrancy safety).
+    private var probeGeneration = 0
 
     /// Lock-protected mirror of "verified within TTL" so synchronous gates
     /// (e.g. `NostrRelayManager`'s connect path) can consult the cache without
@@ -95,18 +121,26 @@ public actor TorEgressVerifier {
     public init(
         ttl: TimeInterval,
         minRetryInterval: TimeInterval = 5.0,
+        probeTimeout: TimeInterval = TorEgressVerifier.defaultProbeTimeout,
         now: @escaping @Sendable () -> Date = Date.init,
         probe: @escaping @Sendable () async -> ProbeResult
     ) {
         self.ttl = ttl
         self.minRetryInterval = minRetryInterval
+        self.probeTimeout = probeTimeout
         self.now = now
         self.probe = probe
     }
 
     /// Drop any cached verification (e.g. after a Tor restart or when the
-    /// network path changes). The next `verify()` re-probes.
+    /// network path changes) AND cancel any in-flight probe. The next
+    /// `verify()` starts a fresh probe — it neither joins the cancelled one
+    /// nor is throttled by its outcome, so a probe hung from before a Tor
+    /// restart cannot wedge callers after it.
     public func invalidate() {
+        probeGeneration += 1
+        inFlight?.cancel()
+        inFlight = nil
         lastVerifiedAt = nil
         lastProbeAt = nil
         lastResult = nil
@@ -137,10 +171,15 @@ public actor TorEgressVerifier {
         }
         if let inFlight { return await inFlight.value }
 
-        let task = Task<Bool, Never> { await self.runProbe() }
+        probeGeneration += 1
+        let generation = probeGeneration
+        let task = Task<Bool, Never> { await self.runProbe(generation: generation) }
         inFlight = task
         let allowed = await task.value
-        inFlight = nil
+        // Only clear the slot if this probe is still the current one: an
+        // `invalidate()` while we were suspended has already cleared it and a
+        // newer probe may occupy it (do not clobber the fresh task).
+        if probeGeneration == generation { inFlight = nil }
         return allowed
     }
 
@@ -158,8 +197,13 @@ public actor TorEgressVerifier {
         }
     }
 
-    private func runProbe() async -> Bool {
-        let result = await probe()
+    private func runProbe(generation: Int) async -> Bool {
+        let result = await boundedProbe()
+        // Superseded by `invalidate()` (Tor restart/dormant/shutdown) while the
+        // probe ran: its verdict predates the reset, so discard it — recording
+        // it would re-seed the throttle/cache that invalidate() just cleared.
+        // Fail closed for the callers that were awaiting this probe.
+        guard generation == probeGeneration else { return false }
         lastProbeAt = now()
         lastResult = result
         switch result {
@@ -185,6 +229,95 @@ public actor TorEgressVerifier {
             return false
         }
     }
+
+    /// Runs the injected probe raced against `probeTimeout`, guaranteeing a
+    /// result in bounded time regardless of URLSession timer behavior (the
+    /// proxied session's `waitsForConnectivity` can defer the per-request
+    /// timeout indefinitely). Whichever side loses the race is cancelled:
+    /// - on timeout, the probe task is cancelled (URLSession's async APIs
+    ///   cancel the underlying `URLSessionTask` cooperatively) and the result
+    ///   is the fail-closed `.unreachable`;
+    /// - on completion, the watchdog's sleep is cancelled so no timer lingers.
+    /// Cancelling the enclosing task (`invalidate()`) resolves immediately as
+    /// `.unreachable` and cancels both sides.
+    ///
+    /// `nonisolated` so the race body never re-enters the actor; it touches
+    /// only immutable `Sendable` state.
+    nonisolated private func boundedProbe() async -> ProbeResult {
+        let probe = self.probe
+        let timeout = self.probeTimeout
+        let race = ProbeRace()
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<ProbeResult, Never>) in
+                race.install(continuation)
+                let probeTask = Task { race.finish(await probe()) }
+                let watchdog = Task {
+                    try? await Task.sleep(nanoseconds: UInt64(max(0, timeout) * 1_000_000_000))
+                    guard !Task.isCancelled else { return }
+                    race.finish(.unreachable("probe timed out after \(Int(timeout))s"))
+                }
+                race.register(probeTask: probeTask, watchdog: watchdog)
+            }
+        } onCancel: {
+            race.finish(.unreachable("probe cancelled"))
+        }
+    }
+
+    /// Resolve-once rendezvous for the probe/watchdog race. Lock-protected
+    /// (never held across an await); the first `finish()` wins, resumes the
+    /// continuation exactly once, and cancels both tasks.
+    private final class ProbeRace: @unchecked Sendable {
+        private let lock = NSLock()
+        private var continuation: CheckedContinuation<ProbeResult, Never>?
+        private var pendingResult: ProbeResult?
+        private var resolved = false
+        private var probeTask: Task<Void, Never>?
+        private var watchdog: Task<Void, Never>?
+
+        func install(_ continuation: CheckedContinuation<ProbeResult, Never>) {
+            lock.lock()
+            if let result = pendingResult {
+                // finish() ran before the continuation existed (e.g. the
+                // enclosing task was already cancelled): resolve immediately.
+                pendingResult = nil
+                lock.unlock()
+                continuation.resume(returning: result)
+                return
+            }
+            self.continuation = continuation
+            lock.unlock()
+        }
+
+        func register(probeTask: Task<Void, Never>, watchdog: Task<Void, Never>) {
+            lock.lock()
+            if resolved {
+                lock.unlock()
+                probeTask.cancel()
+                watchdog.cancel()
+                return
+            }
+            self.probeTask = probeTask
+            self.watchdog = watchdog
+            lock.unlock()
+        }
+
+        func finish(_ result: ProbeResult) {
+            lock.lock()
+            guard !resolved else { lock.unlock(); return }
+            resolved = true
+            let continuation = self.continuation
+            self.continuation = nil
+            if continuation == nil { pendingResult = result }
+            let probeTask = self.probeTask
+            let watchdog = self.watchdog
+            self.probeTask = nil
+            self.watchdog = nil
+            lock.unlock()
+            probeTask?.cancel()
+            watchdog?.cancel()
+            continuation?.resume(returning: result)
+        }
+    }
 }
 
 // MARK: - Live probe
@@ -198,9 +331,13 @@ public extension TorEgressVerifier {
     ///
     /// Follow-up (see PR): make the canary endpoint configurable and add an
     /// onion-service canary so verification does not depend on a single host.
+    /// Note: the per-request `timeoutInterval` below is best-effort only — the
+    /// proxied session's `waitsForConnectivity` can defer it. The authoritative
+    /// bound is the verifier's `probeTimeout` watchdog, whose cancellation
+    /// propagates into `session.data(for:)` and cancels the URLSessionTask.
     static func liveProbe(
         endpoint: URL = URL(string: "https://check.torproject.org/api/ip")!,
-        timeout: TimeInterval = 20
+        timeout: TimeInterval = TorEgressVerifier.defaultProbeTimeout
     ) -> @Sendable () async -> ProbeResult {
         return {
             var request = URLRequest(url: endpoint)
