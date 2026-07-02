@@ -382,10 +382,12 @@ struct ChatNostrCoordinatorContextTests {
 
         coordinator.inbound.handleGiftWrap(giftWrap, id: recipient)
 
+        // The NIP-17 unwrap runs off the main actor; wait for the hop back.
         let convKey = PeerID(nostr_: sender.publicKeyHex)
+        let routed = await TestHelpers.waitUntil({ context.handledPrivateMessages.count == 1 })
+        #expect(routed)
         #expect(context.recordedNostrEventIDs == [giftWrap.id])
         #expect(context.nostrKeyMapping[convKey] == sender.publicKeyHex)
-        #expect(context.handledPrivateMessages.count == 1)
         #expect(context.handledPrivateMessages.first?.senderPubkey == sender.publicKeyHex)
         #expect(context.handledPrivateMessages.first?.convKey == convKey)
 
@@ -398,30 +400,76 @@ struct ChatNostrCoordinatorContextTests {
 
         // The same gift wrap is dropped on replay.
         coordinator.inbound.handleGiftWrap(giftWrap, id: recipient)
+        await drainMainQueue()
         #expect(context.recordedNostrEventIDs == [giftWrap.id])
         #expect(context.handledPrivateMessages.count == 1)
     }
 
     @Test @MainActor
-    func processNostrMessage_invalidSignatureDoesNotPoisonDedup() async throws {
+    func handleGiftWrap_panicWipeAfterSpawnDropsDecryptedResult() async throws {
         let context = MockChatNostrContext()
         let coordinator = ChatNostrCoordinator(context: context)
 
         let recipient = try NostrIdentity.generate()
         let sender = try NostrIdentity.generate()
+        let embedded = try #require(NostrEmbeddedBitChat.encodePMForNostrNoRecipient(
+            content: "pre-wipe secret",
+            messageID: "gm-wipe-1",
+            senderPeerID: PeerID(str: "aabbccddeeff0011")
+        ))
+        let giftWrap = try NostrProtocol.createPrivateMessage(
+            content: embedded,
+            recipientPubkey: recipient.publicKeyHex,
+            senderIdentity: sender
+        )
+
+        // Spawn the detached decrypt (it strongly captures the pre-wipe
+        // identity), then panic-wipe in the SAME main-actor turn — guaranteed
+        // to land before the task's first main-actor hop.
+        coordinator.inbound.handleGiftWrap(giftWrap, id: recipient)
+        coordinator.inbound.invalidateInFlightDecrypts()
+
+        // Give the detached task ample time to have delivered if the wipe
+        // guard were broken.
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        await drainMainQueue()
+
+        #expect(context.handledPrivateMessages.isEmpty)
+        #expect(context.recordedNostrEventIDs.isEmpty)
+
+        // The pipeline itself stays usable: a gift wrap spawned AFTER the
+        // wipe (new generation) still decrypts and delivers.
+        coordinator.inbound.handleGiftWrap(giftWrap, id: recipient)
+        let delivered = await TestHelpers.waitUntil({ context.handledPrivateMessages.count == 1 })
+        #expect(delivered)
+    }
+
+    // NOTE: Inbound Schnorr signature verification (and the forged-copy
+    // dedup-poisoning invariant) is enforced once, off the main actor, at the
+    // relay boundary — see NostrRelayManagerTests
+    // `test_receiveEvent_invalidSignatureDoesNotPoisonDuplicateCache` and
+    // `test_receiveGiftWrap_tamperedSignatureIsDroppedAndDoesNotPoisonDedup`.
+    // The inbound pipeline only ever sees verified events.
+
+    @Test @MainActor
+    func processNostrMessage_duplicateDeliveryProcessesOnce() async throws {
+        let context = MockChatNostrContext()
+        let coordinator = ChatNostrCoordinator(context: context)
+
+        let recipient = try NostrIdentity.generate()
+        let sender = try NostrIdentity.generate()
+        context.nostrIdentity = recipient
         let giftWrap = try NostrProtocol.createPrivateMessage(
             content: "verify:noop",
             recipientPubkey: recipient.publicKeyHex,
             senderIdentity: sender
         )
-        var invalidGiftWrap = giftWrap
-        invalidGiftWrap.sig = String(repeating: "0", count: 128)
 
-        // A forged-signature copy is rejected WITHOUT entering the dedup set...
-        await coordinator.inbound.processNostrMessage(invalidGiftWrap)
-        #expect(context.recordedNostrEventIDs.isEmpty)
+        // Fan-in of the same (already verified) gift wrap from several relays
+        // records and processes exactly once.
+        await coordinator.inbound.processNostrMessage(giftWrap)
+        #expect(context.recordedNostrEventIDs == [giftWrap.id])
 
-        // ...so the genuine event with the same ID still processes and records.
         await coordinator.inbound.processNostrMessage(giftWrap)
         #expect(context.recordedNostrEventIDs == [giftWrap.id])
     }

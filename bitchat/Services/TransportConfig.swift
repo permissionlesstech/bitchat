@@ -55,6 +55,26 @@ enum TransportConfig {
     static let nostrDuplicateEventLogInterval: Int = 50
     // Sample interval for per-event debug logs on the inbound hot path.
     static let nostrInboundEventLogInterval: Int = 100
+    // Bounded per-relay inbound frame buffer. Each relay connection owns its
+    // own serial verify pipeline; if a relay floods faster than its Schnorr
+    // verification drains, the oldest buffered frames for THAT relay are
+    // dropped (bufferingNewest) so one relay cannot stall other relays.
+    // Nostr inbound is already best-effort (relays are redundant and events
+    // replay), so dropping a flooding relay's backlog is safe. Together with
+    // nostrInboundMaxFrameBytes this caps buffered inbound bytes at
+    // cap × maxFrameBytes (128 MiB) per hostile relay — bounded, not zero.
+    static let nostrInboundPerRelayBufferCap: Int = 256
+    // Hard per-frame byte bound, applied as URLSessionWebSocketTask
+    // .maximumMessageSize (oversized frames fail the receive instead of
+    // buffering). BitChat's legitimate Nostr traffic is small: geohash chat /
+    // presence events (kind 20000/20001), kind-1 notes, and NIP-17
+    // gift-wrapped DMs carrying text payloads or receipts are all a few KiB,
+    // and most public relays reject events beyond ~64–256 KiB anyway. 512 KiB
+    // leaves an order-of-magnitude margin over anything we produce or expect
+    // while halving the URLSession default (1 MiB), so a hostile relay's
+    // worst-case buffered pile-up per connection is
+    // nostrInboundPerRelayBufferCap × 512 KiB = 128 MiB instead of 256 MiB.
+    static let nostrInboundMaxFrameBytes: Int = 512 * 1024
 
     // Conversation store diagnostics (field observability)
     // Sample interval for the periodic store-audit "OK" heartbeat line
