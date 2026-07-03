@@ -71,12 +71,7 @@ final class ChatMessageFormatter {
             let content = message.content
             let nsContent = content as NSString
             let nsLen = nsContent.length
-            let containsCashuEarly: Bool = {
-                let regex = Patterns.quickCashuPresence
-                return regex.numberOfMatches(in: content, options: [], range: NSRange(location: 0, length: nsLen)) > 0
-            }()
-
-            if (content.count > 4000 || content.hasVeryLongToken(threshold: 1024)) && !containsCashuEarly {
+            if content.isOversizedForRichFormatting() {
                 var plainStyle = AttributeContainer()
                 plainStyle.foregroundColor = baseColor
                 plainStyle.font = isSelf

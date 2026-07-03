@@ -21,6 +21,19 @@ extension String {
         return current >= threshold
     }
 
+    // Detect if message content should be collapsed to avoid expensive unbounded layout.
+    func isLongForDisplay(
+        lengthThreshold: Int = TransportConfig.uiLongMessageLengthThreshold,
+        tokenThreshold: Int = TransportConfig.uiVeryLongTokenThreshold
+    ) -> Bool {
+        count > lengthThreshold || hasVeryLongToken(threshold: tokenThreshold)
+    }
+
+    // Detect if message content should use plain formatting to avoid expensive regex parsing.
+    func isOversizedForRichFormatting(lengthThreshold: Int = 4000, tokenThreshold: Int = 1024) -> Bool {
+        count > lengthThreshold || hasVeryLongToken(threshold: tokenThreshold)
+    }
+
     // Extract up to `max` Cashu tokens (cashuA/cashuB). Allow dot '.' and shorter lengths.
     func extractCashuLinks(max: Int = 3) -> [String] {
         let regex = MessageFormattingEngine.Patterns.cashu
