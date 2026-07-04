@@ -5015,6 +5015,162 @@
         }
       }
     },
+    "app_info.legend.blocked" : {
+      "comment" : "Legend entry for the nosign glyph",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "blocked"
+          }
+        }
+      }
+    },
+    "app_info.legend.encrypted" : {
+      "comment" : "Legend entry for the lock glyph",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "end-to-end encrypted session"
+          }
+        }
+      }
+    },
+    "app_info.legend.encryption_failed" : {
+      "comment" : "Legend entry for the failed-encryption lock-slash glyph",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "encryption failed — messages not secured"
+          }
+        }
+      }
+    },
+    "app_info.legend.favorite" : {
+      "comment" : "Legend entry for the star glyph",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favorite — enables offline messages via nostr when mutual"
+          }
+        }
+      }
+    },
+    "app_info.legend.location_nearby" : {
+      "comment" : "Legend entry for the map pin glyph",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "physically in this location channel's area"
+          }
+        }
+      }
+    },
+    "app_info.legend.mesh_connected" : {
+      "comment" : "Legend entry for the antenna glyph",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "connected directly over bluetooth"
+          }
+        }
+      }
+    },
+    "app_info.legend.mesh_relayed" : {
+      "comment" : "Legend entry for the relayed-mesh glyph",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "reachable through the mesh, relayed by others"
+          }
+        }
+      }
+    },
+    "app_info.legend.nostr" : {
+      "comment" : "Legend entry for the globe glyph",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "reachable over the internet (nostr) — mutual favorites only"
+          }
+        }
+      }
+    },
+    "app_info.legend.offline" : {
+      "comment" : "Legend entry for the offline person glyph",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "offline — not currently reachable"
+          }
+        }
+      }
+    },
+    "app_info.legend.teleported" : {
+      "comment" : "Legend entry for the teleported glyph",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "teleported — joined the channel from somewhere else"
+          }
+        }
+      }
+    },
+    "app_info.legend.title" : {
+      "comment" : "Section header for the symbols legend in app info",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "symbols"
+          }
+        }
+      }
+    },
+    "app_info.legend.unread" : {
+      "comment" : "Legend entry for the envelope glyph",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "unread private messages"
+          }
+        }
+      }
+    },
+    "app_info.legend.verified" : {
+      "comment" : "Legend entry for the verified seal glyph",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "identity verified"
+          }
+        }
+      }
+    },
     "app_info.privacy.ephemeral.description" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -23657,6 +23813,42 @@
         }
       }
     },
+    "geohash_people.state.nearby" : {
+      "comment" : "State label for someone physically in the location channel's area",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "in this area"
+          }
+        }
+      }
+    },
+    "geohash_people.state.teleported" : {
+      "comment" : "State label for someone who joined the location channel from elsewhere",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "teleported from elsewhere"
+          }
+        }
+      }
+    },
+    "geohash_people.state.you" : {
+      "comment" : "State label marking your own row in the people list",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "you"
+          }
+        }
+      }
+    },
     "geohash_people.tooltip.blocked" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -31227,6 +31419,78 @@
         }
       }
     },
+    "mesh_peers.accessibility.open_dm_hint" : {
+      "comment" : "Accessibility hint on a peer row explaining activation opens a private chat",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "opens a private chat"
+          }
+        }
+      }
+    },
+    "mesh_peers.action.fingerprint" : {
+      "comment" : "Context menu action that shows a peer's fingerprint/verification screen",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "show fingerprint"
+          }
+        }
+      }
+    },
+    "mesh_peers.state.blocked" : {
+      "comment" : "State label for a blocked peer",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "blocked"
+          }
+        }
+      }
+    },
+    "mesh_peers.state.favorite" : {
+      "comment" : "State label for a favorited peer",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favorite"
+          }
+        }
+      }
+    },
+    "mesh_peers.state.offline" : {
+      "comment" : "State label for a peer that is not currently reachable",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "offline"
+          }
+        }
+      }
+    },
+    "mesh_peers.state.unread" : {
+      "comment" : "State label for a peer with unread private messages",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "new messages"
+          }
+        }
+      }
+    },
     "mesh_peers.tooltip.new_messages" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -33550,6 +33814,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "無法發送到位置頻道"
+          }
+        }
+      }
+    },
+    "system.mesh.blocked" : {
+      "comment" : "System message shown when a mesh peer is blocked",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "blocked %@"
+          }
+        }
+      }
+    },
+    "system.mesh.unblocked" : {
+      "comment" : "System message shown when a mesh peer is unblocked",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "unblocked %@"
           }
         }
       }

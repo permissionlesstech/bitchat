@@ -134,6 +134,7 @@ private struct ContentPeopleListView: View {
     @EnvironmentObject private var appChromeModel: AppChromeModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
     @EnvironmentObject private var verificationModel: VerificationModel
+    @EnvironmentObject private var conversationUIModel: ConversationUIModel
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @EnvironmentObject private var peerListModel: PeerListModel
     @Environment(\.dismiss) private var dismiss
@@ -231,6 +232,13 @@ private struct ContentPeopleListView: View {
                             },
                             onShowFingerprint: { peerID in
                                 appChromeModel.showFingerprint(for: peerID)
+                            },
+                            onToggleBlock: { peer in
+                                if peer.isBlocked {
+                                    conversationUIModel.unblock(peerID: peer.peerID, displayName: peer.displayName)
+                                } else {
+                                    conversationUIModel.block(peerID: peer.peerID, displayName: peer.displayName)
+                                }
                             }
                         )
                     }
@@ -452,7 +460,10 @@ private struct ContentPrivateHeaderInfoButton: View {
                         .foregroundColor(.purple)
                         .accessibilityLabel(String(localized: "content.accessibility.available_nostr", comment: "Accessibility label for Nostr-available peer indicator"))
                 case .offline:
-                    EmptyView()
+                    // Absence of a glyph was the only offline signal; say it.
+                    Text("mesh_peers.state.offline")
+                        .bitchatFont(size: 11)
+                        .foregroundColor(.secondary)
                 }
 
                 Text(headerState.displayName)

@@ -41,6 +41,44 @@ struct UnifiedPeerServiceTests {
 
         #expect(service.isBlocked(peerID))
     }
+
+    @Test @MainActor
+    func setBlocked_persistsByFingerprintAndToggles() async {
+        let transport = MockTransport()
+        let identity = TestIdentityManager()
+        let idBridge = NostrIdentityBridge(keychain: MockKeychainHelper())
+        let service = UnifiedPeerService(meshService: transport, idBridge: idBridge, identityManager: identity)
+
+        let peerID = PeerID(str: "00000000000000EE")
+        let fingerprint = "fp-target"
+        transport.peerFingerprints[peerID] = fingerprint
+
+        // Blocking resolves and persists by the peer's fingerprint.
+        let resolved = service.setBlocked(peerID, blocked: true)
+        #expect(resolved == fingerprint)
+        #expect(identity.isBlocked(fingerprint: fingerprint))
+        #expect(service.isBlocked(peerID))
+
+        // Unblocking clears it against the same identity.
+        let unresolved = service.setBlocked(peerID, blocked: false)
+        #expect(unresolved == fingerprint)
+        #expect(!identity.isBlocked(fingerprint: fingerprint))
+        #expect(!service.isBlocked(peerID))
+    }
+
+    @Test @MainActor
+    func setBlocked_unknownIdentityReturnsNil() async {
+        let transport = MockTransport()
+        let identity = TestIdentityManager()
+        let idBridge = NostrIdentityBridge(keychain: MockKeychainHelper())
+        let service = UnifiedPeerService(meshService: transport, idBridge: idBridge, identityManager: identity)
+
+        // No fingerprint resolvable for this peer (offline & unknown).
+        let peerID = PeerID(str: "00000000000000FF")
+
+        #expect(service.setBlocked(peerID, blocked: true) == nil)
+        #expect(!service.isBlocked(peerID))
+    }
 }
 
 private final class TestIdentityManager: SecureIdentityStateManagerProtocol {
