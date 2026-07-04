@@ -20,6 +20,20 @@ struct BlockRevealImageView: View {
     @State private var platformImage: PlatformImage?
     @State private var aspectRatio: CGFloat = 1
     @State private var isBlurred: Bool = false
+    @State private var showDeleteConfirmation = false
+
+    private enum Strings {
+        static let tapToReveal = String(localized: "media.image.tap_to_reveal", comment: "Caption on a blurred incoming image inviting a tap to reveal it")
+        static let open = String(localized: "media.image.action.open", comment: "Context menu action that opens an image full screen")
+        static let hide = String(localized: "media.image.action.hide", comment: "Context menu action that re-blurs a revealed image")
+        static let delete = String(localized: "media.image.action.delete", comment: "Context menu action that deletes a received image")
+        static let deleteConfirmTitle = String(localized: "media.image.delete_confirm_title", comment: "Title of the confirmation dialog before deleting a received image")
+        static let deleteConfirmMessage = String(localized: "media.image.delete_confirm_message", comment: "Body of the confirmation dialog before deleting a received image")
+        static let hiddenImage = String(localized: "media.image.accessibility.hidden", comment: "Accessibility label for a blurred incoming image")
+        static let revealedImage = String(localized: "media.image.accessibility.revealed", comment: "Accessibility label for a revealed image")
+        static let sendingImage = String(localized: "media.image.accessibility.sending", comment: "Accessibility label for an image that is still sending")
+        static let cancelSend = String(localized: "media.accessibility.cancel_send", comment: "Accessibility label for the cancel button on an in-flight media send")
+    }
 
     init(
         url: URL,
@@ -69,9 +83,13 @@ struct BlockRevealImageView: View {
                             RoundedRectangle(cornerRadius: 16, style: .continuous)
                                 .fill(Color.black.opacity(0.35))
                                 .overlay(
-                                    Image(systemName: "eye.slash.fill")
-                                        .font(.bitchatSystem(size: 24, weight: .semibold))
-                                        .foregroundColor(.white.opacity(0.85))
+                                    VStack(spacing: 6) {
+                                        Image(systemName: "eye.slash.fill")
+                                            .font(.bitchatSystem(size: 24, weight: .semibold))
+                                        Text(verbatim: Strings.tapToReveal)
+                                            .font(.bitchatSystem(size: 12, weight: .medium, design: .monospaced))
+                                    }
+                                    .foregroundColor(.white.opacity(0.85))
                                 )
                         }
                     }
@@ -95,6 +113,7 @@ struct BlockRevealImageView: View {
                         .padding(8)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(Strings.cancelSend)
             }
         }
         .onAppear {
@@ -106,6 +125,62 @@ struct BlockRevealImageView: View {
             loadImage()
         }
         .gesture(mainGesture)
+        .contextMenu {
+            if !isSending {
+                if isBlurred {
+                    Button(Strings.open) {
+                        withAnimation(.easeOut(duration: 0.2)) { isBlurred = false }
+                    }
+                } else {
+                    Button(Strings.open) { onOpen?() }
+                    Button(Strings.hide) {
+                        withAnimation(.easeInOut(duration: 0.2)) { isBlurred = true }
+                    }
+                }
+                if onDelete != nil {
+                    Button(Strings.delete, role: .destructive) {
+                        showDeleteConfirmation = true
+                    }
+                }
+            }
+        }
+        .confirmationDialog(
+            Strings.deleteConfirmTitle,
+            isPresented: $showDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(Strings.delete, role: .destructive) {
+                onDelete?()
+            }
+            Button("common.cancel", role: .cancel) {}
+        } message: {
+            Text(verbatim: Strings.deleteConfirmMessage)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabelText)
+        .accessibilityAddTraits(isSending ? [] : .isButton)
+        .accessibilityActions {
+            if !isSending {
+                if isBlurred {
+                    Button(Strings.open) {
+                        withAnimation(.easeOut(duration: 0.2)) { isBlurred = false }
+                    }
+                } else {
+                    Button(Strings.open) { onOpen?() }
+                    Button(Strings.hide) {
+                        withAnimation(.easeInOut(duration: 0.2)) { isBlurred = true }
+                    }
+                }
+                if onDelete != nil {
+                    Button(Strings.delete) { showDeleteConfirmation = true }
+                }
+            }
+        }
+    }
+
+    private var accessibilityLabelText: String {
+        if isSending { return Strings.sendingImage }
+        return isBlurred ? Strings.hiddenImage : Strings.revealedImage
     }
 
     private func loadImage() {
@@ -123,11 +198,11 @@ struct BlockRevealImageView: View {
         }
     }
 
+    // Double-tap used to permanently delete the image — the most ingrained
+    // photo gesture on mobile, racing the reveal tap, with no confirmation
+    // and no way to get the file back. Delete now lives in the context menu
+    // behind a confirmation; taps only reveal and open.
     private var mainGesture: some Gesture {
-        let doubleTap = TapGesture(count: 2).onEnded {
-            guard !isSending else { return }
-            onDelete?()
-        }
         let singleTap = TapGesture().onEnded {
             guard !isSending else { return }
             if isBlurred {
@@ -149,7 +224,7 @@ struct BlockRevealImageView: View {
                 }
             }
         }
-        return doubleTap.exclusively(before: singleTap).simultaneously(with: swipe)
+        return singleTap.simultaneously(with: swipe)
     }
 }
 

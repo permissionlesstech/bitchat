@@ -31227,6 +31227,150 @@
         }
       }
     },
+    "media.accessibility.cancel_send" : {
+      "comment" : "Accessibility label for the cancel button on an in-flight media send",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cancel sending"
+          }
+        }
+      }
+    },
+    "media.image.accessibility.hidden" : {
+      "comment" : "Accessibility label for a blurred incoming image",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hidden image — tap to reveal"
+          }
+        }
+      }
+    },
+    "media.image.accessibility.revealed" : {
+      "comment" : "Accessibility label for a revealed image",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "image — tap to open full screen"
+          }
+        }
+      }
+    },
+    "media.image.accessibility.sending" : {
+      "comment" : "Accessibility label for an image that is still sending",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sending image"
+          }
+        }
+      }
+    },
+    "media.image.action.delete" : {
+      "comment" : "Context menu action that deletes a received image",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "delete image"
+          }
+        }
+      }
+    },
+    "media.image.action.hide" : {
+      "comment" : "Context menu action that re-blurs a revealed image",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hide image"
+          }
+        }
+      }
+    },
+    "media.image.action.open" : {
+      "comment" : "Context menu action that opens an image full screen",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "open image"
+          }
+        }
+      }
+    },
+    "media.image.delete_confirm_message" : {
+      "comment" : "Body of the confirmation dialog before deleting a received image",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "this cannot be undone — the sender may not be in range to send it again."
+          }
+        }
+      }
+    },
+    "media.image.delete_confirm_title" : {
+      "comment" : "Title of the confirmation dialog before deleting a received image",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "delete this image?"
+          }
+        }
+      }
+    },
+    "media.image.tap_to_reveal" : {
+      "comment" : "Caption on a blurred incoming image inviting a tap to reveal it",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tap to reveal"
+          }
+        }
+      }
+    },
+    "media.voice.accessibility.pause" : {
+      "comment" : "Accessibility label for pausing voice note playback",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pause voice note"
+          }
+        }
+      }
+    },
+    "media.voice.accessibility.play" : {
+      "comment" : "Accessibility label for playing a voice note",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "play voice note"
+          }
+        }
+      }
+    },
     "mesh_peers.tooltip.new_messages" : {
       "extractionState" : "manual",
       "localizations" : {
