@@ -47,6 +47,16 @@ struct MediaMessageView: View {
                 }
             }
 
+            // Failure reason stays visible without a tap — the status glyph's
+            // .help() tooltip does not exist on iOS.
+            if message.isPrivate && conversationUIModel.isSentByCurrentUser(message),
+               let status = deliveryStatus, case .failed = status {
+                Text(verbatim: status.bitchatDescription)
+                    .bitchatFont(size: 11)
+                    .foregroundColor(Color.red.opacity(0.9))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             Group {
                 switch media {
                 case .voice(let url):
