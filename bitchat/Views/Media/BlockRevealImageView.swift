@@ -178,7 +178,7 @@ struct BlockRevealImageView: View {
                     }
                 }
                 if onDelete != nil {
-                    Button(Strings.delete) { showDeleteConfirmation = true }
+                    Button(Strings.delete, role: .destructive) { showDeleteConfirmation = true }
                 }
             }
         }
