@@ -363,8 +363,10 @@ private struct ContentPrivateChatSheetView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 10)
                 .padding(.bottom, 12)
-                .themedSurface()
+                // Orange tint before themedSurface so it layers in front of the
+                // (opaque, in matrix) themed background rather than behind it.
                 .background(Color.orange.opacity(0.06))
+                .themedSurface()
             }
 
             MessageListView(
