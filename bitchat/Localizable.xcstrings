@@ -8953,6 +8953,18 @@
         }
       }
     },
+    "content.accessibility.delivery_detail_hint" : {
+      "comment" : "Accessibility hint for the delivery status glyph explaining a tap reveals details",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tap to show delivery details"
+          }
+        }
+      }
+    },
     "content.accessibility.encryption_status" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -16676,6 +16688,30 @@
         }
       }
     },
+    "content.delivery.reason.not_delivered" : {
+      "comment" : "Failure reason shown when the router gave up delivering a message",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "not delivered"
+          }
+        }
+      }
+    },
+    "content.delivery.reason.encryption_failed" : {
+      "comment" : "Failure reason shown when a message could not be encrypted for the peer",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "encryption failed"
+          }
+        }
+      }
+    },
     "content.delivery.reason.self" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -17388,6 +17424,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "同伴不可達"
+          }
+        }
+      }
+    },
+    "content.delivery.sending" : {
+      "comment" : "Delivery status description while a private message is being sent",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sending..."
+          }
+        }
+      }
+    },
+    "content.delivery.sent" : {
+      "comment" : "Delivery status description for a sent but not yet confirmed private message",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sent — no delivery confirmation yet"
           }
         }
       }
