@@ -38,6 +38,14 @@ struct TextMessageView: View {
             HStack(alignment: .top, spacing: 0) {
                 let isLong = (message.content.count > TransportConfig.uiLongMessageLengthThreshold || message.content.hasVeryLongToken(threshold: TransportConfig.uiVeryLongTokenThreshold)) && cashuLinks.isEmpty
                 let isExpanded = expandedMessageIDs.contains(message.id)
+                if message.isPrivate && message.sender != "system" {
+                    Image(systemName: "lock.fill")
+                        .font(.bitchatSystem(size: 8))
+                        .foregroundColor(Color.orange.opacity(0.75))
+                        .padding(.top, 5)
+                        .padding(.trailing, 4)
+                        .accessibilityHidden(true)
+                }
                 Text(conversationUIModel.formatMessage(message, colorScheme: colorScheme, theme: theme))
                     .fixedSize(horizontal: false, vertical: true)
                     .lineLimit(isLong && !isExpanded ? TransportConfig.uiLongMessageLineLimit : nil)

@@ -364,6 +364,7 @@ private struct ContentPrivateChatSheetView: View {
                 .padding(.top, 10)
                 .padding(.bottom, 12)
                 .themedSurface()
+                .background(Color.orange.opacity(0.06))
             }
 
             MessageListView(
@@ -384,6 +385,8 @@ private struct ContentPrivateChatSheetView: View {
             if !theme.usesGlassChrome {
                 Divider()
             }
+
+            privacyCaption
 
             #if os(iOS)
             ContentComposerView(
@@ -420,6 +423,33 @@ private struct ContentPrivateChatSheetView: View {
                     }
                 }
         )
+    }
+
+    /// Persistent one-line reminder that this composer feeds a private
+    /// conversation — the DM sheet otherwise renders identically to the
+    /// public timeline. Claims end-to-end encryption only once the session
+    /// is actually secured.
+    private var privacyCaption: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "lock.fill")
+                .font(.bitchatSystem(size: 9))
+            Text(verbatim: privacyCaptionText)
+                .bitchatFont(size: 11, weight: .medium)
+        }
+        .foregroundColor(Color.orange)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 4)
+        .background(Color.orange.opacity(0.08))
+        .accessibilityElement(children: .combine)
+    }
+
+    private var privacyCaptionText: String {
+        switch privateConversationModel.selectedHeaderState?.encryptionStatus {
+        case .noiseSecured, .noiseVerified:
+            return String(localized: "content.private.caption_encrypted", comment: "Caption above the private chat composer once the session is end-to-end encrypted")
+        default:
+            return String(localized: "content.private.caption", comment: "Caption above the private chat composer before encryption is established")
+        }
     }
 }
 

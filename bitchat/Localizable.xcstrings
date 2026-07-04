@@ -17750,6 +17750,66 @@
         }
       }
     },
+    "content.input.placeholder.location" : {
+      "comment" : "Composer placeholder for a public geohash channel, naming it",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "message #%@ — public"
+          }
+        }
+      }
+    },
+    "content.input.placeholder.mesh" : {
+      "comment" : "Composer placeholder for the public mesh channel",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "message #mesh — public, nearby"
+          }
+        }
+      }
+    },
+    "content.input.placeholder.private" : {
+      "comment" : "Composer placeholder inside a private chat, naming the conversation partner",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "message @%@ — private"
+          }
+        }
+      }
+    },
+    "content.private.caption" : {
+      "comment" : "Caption above the private chat composer before encryption is established",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "private conversation"
+          }
+        }
+      }
+    },
+    "content.private.caption_encrypted" : {
+      "comment" : "Caption above the private chat composer once the session is end-to-end encrypted",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "private · end-to-end encrypted"
+          }
+        }
+      }
+    },
     "content.input.message_placeholder" : {
       "extractionState" : "manual",
       "localizations" : {
