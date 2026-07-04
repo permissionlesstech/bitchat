@@ -160,7 +160,13 @@ struct BlockRevealImageView: View {
         .accessibilityLabel(accessibilityLabelText)
         .accessibilityAddTraits(isSending ? [] : .isButton)
         .accessibilityActions {
-            if !isSending {
+            if isSending {
+                // children: .ignore collapses the visible cancel button, so
+                // expose it as an action while the send is in flight.
+                if let onCancel {
+                    Button(Strings.cancelSend, action: onCancel)
+                }
+            } else {
                 if isBlurred {
                     Button(Strings.open) {
                         withAnimation(.easeOut(duration: 0.2)) { isBlurred = false }
