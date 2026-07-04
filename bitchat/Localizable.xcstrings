@@ -9132,6 +9132,18 @@
         }
       }
     },
+    "content.accessibility.jump_to_latest" : {
+      "comment" : "Accessibility label for the jump to latest messages button",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "jump to latest messages"
+          }
+        }
+      }
+    },
     "content.accessibility.location_channels" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -12559,6 +12571,18 @@
         }
       }
     },
+    "content.actions.resend" : {
+      "comment" : "Context menu action that resends a failed private message",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "resend"
+          }
+        }
+      }
+    },
     "content.actions.slap" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -14166,6 +14190,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "注意"
+          }
+        }
+      }
+    },
+    "content.clear.confirm_action" : {
+      "comment" : "Destructive confirmation button that clears the current chat",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "clear chat"
+          }
+        }
+      }
+    },
+    "content.clear.confirm_title" : {
+      "comment" : "Title of the confirmation dialog shown before clearing the current chat",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "clear this chat?"
           }
         }
       }
@@ -17392,6 +17440,54 @@
         }
       }
     },
+    "content.empty.location_intro" : {
+      "comment" : "First line of an empty geohash timeline naming the channel",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "you're in #%@ — a public location channel over the internet"
+          }
+        }
+      }
+    },
+    "content.empty.mesh_intro" : {
+      "comment" : "First line of the empty mesh timeline explaining what the mesh channel is",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "you're on #mesh — reaches people within bluetooth range"
+          }
+        }
+      }
+    },
+    "content.empty.mesh_waiting" : {
+      "comment" : "Second line of the empty mesh timeline saying no peers are in range yet",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nobody in range yet... messages appear here"
+          }
+        }
+      }
+    },
+    "content.empty.switch_hint" : {
+      "comment" : "Empty timeline hint pointing at the channel switcher and the help screen",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tap the channel name above to switch · tap bitchat/ for help"
+          }
+        }
+      }
+    },
     "content.header.people" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -18104,6 +18200,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "暱稱"
+          }
+        }
+      }
+    },
+    "content.jump.new_count" : {
+      "comment" : "Count of messages that arrived while scrolled up, shown in the jump-to-latest pill",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld new"
           }
         }
       }
