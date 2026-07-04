@@ -444,12 +444,20 @@ private struct ContentPrivateChatSheetView: View {
     }
 
     private var privacyCaptionText: String {
-        switch privateConversationModel.selectedHeaderState?.encryptionStatus {
-        case .noiseSecured, .noiseVerified:
+        // Geohash DMs are NIP-17 gift-wrapped — always end-to-end encrypted,
+        // even though they carry no Noise session status. Mesh DMs earn the
+        // "encrypted" claim only once the Noise handshake has secured.
+        let isGeoDM = privateConversationModel.selectedPeerID?.isGeoDM == true
+        let noiseSecured: Bool = {
+            switch privateConversationModel.selectedHeaderState?.encryptionStatus {
+            case .noiseSecured, .noiseVerified: return true
+            default: return false
+            }
+        }()
+        if isGeoDM || noiseSecured {
             return String(localized: "content.private.caption_encrypted", comment: "Caption above the private chat composer once the session is end-to-end encrypted")
-        default:
-            return String(localized: "content.private.caption", comment: "Caption above the private chat composer before encryption is established")
         }
+        return String(localized: "content.private.caption", comment: "Caption above the private chat composer before encryption is established")
     }
 }
 

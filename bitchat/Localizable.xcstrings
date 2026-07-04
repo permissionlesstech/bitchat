@@ -17781,7 +17781,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "message @%@ — private"
+            "value" : "message %@ — private"
           }
         }
       }
