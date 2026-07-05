@@ -49,6 +49,14 @@ final class ConversationUIModel: ObservableObject {
         chatViewModel.sendMessage(message)
     }
 
+    /// Resends a failed private message through the normal send path,
+    /// removing the failed original so the re-submission replaces it
+    /// instead of stacking a duplicate under the red bubble.
+    func resendFailedPrivateMessage(_ message: BitchatMessage) {
+        chatViewModel.removePrivateMessage(withID: message.id)
+        chatViewModel.sendMessage(message.content)
+    }
+
     func clearCurrentConversation() {
         chatViewModel.sendMessage("/clear")
     }

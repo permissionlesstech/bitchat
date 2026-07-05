@@ -134,7 +134,7 @@ struct MessageListView: View {
                                 }
                                 if isResendableFailedMessage(message) {
                                     Button("content.actions.resend") {
-                                        conversationUIModel.sendMessage(message.content)
+                                        conversationUIModel.resendFailedPrivateMessage(message)
                                     }
                                 }
                                 if showsUserActions {
@@ -316,7 +316,8 @@ private extension MessageListView {
     }
 
     /// A failed private text message of our own can be resent through the
-    /// normal send path (the context menu re-submits its content).
+    /// normal send path (the context menu removes the failed original and
+    /// re-submits its content).
     func isResendableFailedMessage(_ message: BitchatMessage) -> Bool {
         guard message.isPrivate,
               conversationUIModel.isSentByCurrentUser(message),
