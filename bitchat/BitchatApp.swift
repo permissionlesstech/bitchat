@@ -71,7 +71,7 @@ struct BitchatApp: App {
 final class AppDelegate: NSObject, UIApplicationDelegate {
     weak var runtime: AppRuntime?
 
-    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         true
     }
 

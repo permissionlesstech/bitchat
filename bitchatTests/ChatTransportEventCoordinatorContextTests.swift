@@ -259,7 +259,7 @@ struct ChatTransportEventCoordinatorContextTests {
         context.privateChats[peerID] = [
             makeMessage(id: "theirs-1", isPrivate: true, senderPeerID: peerID),
             makeMessage(id: "mine-1", sender: "me", isPrivate: true, senderPeerID: context.myPeerID),
-            makeMessage(id: "theirs-2", isPrivate: true, senderPeerID: peerID),
+            makeMessage(id: "theirs-2", isPrivate: true, senderPeerID: peerID)
         ]
         coordinator.didDisconnectFromPeer(peerID)
         await drainMainActorTasks()
@@ -282,7 +282,7 @@ struct ChatTransportEventCoordinatorContextTests {
         context.unreadPrivateMessages = [peerID]
         context.privateChats[peerID] = [
             makeMessage(id: "m1", isPrivate: true, senderPeerID: peerID),
-            makeMessage(id: "mine", sender: "me", isPrivate: true, senderPeerID: context.myPeerID),
+            makeMessage(id: "mine", sender: "me", isPrivate: true, senderPeerID: context.myPeerID)
         ]
 
         coordinator.didDisconnectFromPeer(peerID)

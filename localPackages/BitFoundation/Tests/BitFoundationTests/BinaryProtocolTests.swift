@@ -46,7 +46,8 @@ struct BinaryProtocolTests {
         // Verify recipient
         #expect(decodedPacket.recipientID != nil)
         let decodedRecipientID = decodedPacket.recipientID?.trimmingNullBytes()
-        // TODO: Check if this is intended that the decoding only gets the first 8
+        // Recipient IDs are a fixed 8-byte wire field: encode pads or truncates
+        // to BinaryProtocol.recipientIDSize, so only the first 8 bytes survive.
         #expect(String(data: decodedRecipientID!, encoding: .utf8) == "abcdef01")
     }
     
@@ -294,7 +295,7 @@ struct BinaryProtocolTests {
     @Test("Create a large, compressible payload above current threshold (2048B)")
     func payloadCompression() throws {
         let repeatedString = String(repeating: "This is a test message. ", count: 200)
-        let largePayload = repeatedString.data(using: .utf8)!
+        let largePayload = Data(repeatedString.utf8)
         
         let packet = TestHelpers.createTestPacket(payload: largePayload)
         
@@ -314,7 +315,7 @@ struct BinaryProtocolTests {
     
     @Test("Small payloads should not be compressed")
     func smallPayloadNoCompression() throws {
-        let smallPayload = "Hi".data(using: .utf8)!
+        let smallPayload = Data("Hi".utf8)
         let packet = TestHelpers.createTestPacket(payload: smallPayload)
         let encodedData = try #require(BinaryProtocol.encode(packet), "Failed to encode small packet")
         let decodedPacket = try #require(BinaryProtocol.decode(encodedData), "Failed to decode small packet")
@@ -362,7 +363,7 @@ struct BinaryProtocolTests {
         var encodedSizes = Set<Int>()
         
         for payload in payloads {
-            let packet = TestHelpers.createTestPacket(payload: payload.data(using: .utf8)!)
+            let packet = TestHelpers.createTestPacket(payload: Data(payload.utf8))
             let encodedData = try #require(BinaryProtocol.encode(packet), "Failed to encode packet")
             
             // Verify padding creates standard block sizes up to configured limit (no 4096 bucket currently)

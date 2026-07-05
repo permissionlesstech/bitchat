@@ -111,7 +111,7 @@ final class NotificationService {
 
     func requestAuthorization() {
         guard !isRunningTests else { return }
-        authorizer.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+        authorizer.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
             if granted {
                 // Permission granted
             } else {

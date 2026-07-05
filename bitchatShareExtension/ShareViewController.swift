@@ -84,7 +84,7 @@ final class ShareViewController: UIViewController {
                 self.loadFirstPlainText(from: providers) { text in
                     if let t = text, !t.isEmpty {
                         // Treat as URL if parseable http(s), else plain text
-                        if let u = URL(string: t), ["http","https"].contains(u.scheme?.lowercased() ?? "") {
+                        if let u = URL(string: t), ["http", "https"].contains(u.scheme?.lowercased() ?? "") {
                             self.saveAndFinish(url: u, title: item.attributedTitle?.string)
                         } else {
                             self.saveAndFinish(text: t)

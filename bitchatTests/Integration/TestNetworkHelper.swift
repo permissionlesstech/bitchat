@@ -121,4 +121,3 @@ final class TestNetworkHelper {
         _ = try manager2.handleIncomingHandshake(from: peer1ID, message: msg3)
     }
 }
-

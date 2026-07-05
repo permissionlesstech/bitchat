@@ -214,10 +214,10 @@ struct ChatLifecycleCoordinatorContextTests {
         // Same message under both keys: the read copy must win over sent.
         context.privateChats[peerID] = [
             makePrivateMessage(id: "m1", timestamp: t1, deliveryStatus: .sent),
-            makePrivateMessage(id: "m2", timestamp: t2),
+            makePrivateMessage(id: "m2", timestamp: t2)
         ]
         context.privateChats[stablePeerID] = [
-            makePrivateMessage(id: "m1", timestamp: t1, deliveryStatus: .read(by: "alice", at: t2)),
+            makePrivateMessage(id: "m1", timestamp: t1, deliveryStatus: .read(by: "alice", at: t2))
         ]
 
         let merged = coordinator.getPrivateChatMessages(for: peerID)
@@ -245,7 +245,7 @@ struct ChatLifecycleCoordinatorContextTests {
             makePrivateMessage(id: "m1", senderPeerID: convKey),
             makePrivateMessage(id: "already-acked", senderPeerID: convKey),
             makePrivateMessage(id: "relay", senderPeerID: convKey, isRelay: true),
-            makePrivateMessage(id: "mine", sender: "me", senderPeerID: context.myPeerID),
+            makePrivateMessage(id: "mine", sender: "me", senderPeerID: context.myPeerID)
         ]
 
         coordinator.markPrivateMessagesAsRead(from: convKey)
@@ -339,7 +339,7 @@ struct ChatLifecycleCoordinatorContextTests {
         )
         context.privateChats[peerID] = [
             makePrivateMessage(id: "in-1", senderPeerID: peerID),
-            makePrivateMessage(id: "in-relay", senderPeerID: peerID, isRelay: true),
+            makePrivateMessage(id: "in-relay", senderPeerID: peerID, isRelay: true)
         ]
 
         coordinator.markPrivateMessagesAsRead(from: peerID)
