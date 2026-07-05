@@ -35,42 +35,52 @@ struct MediaMessageView: View {
         let isFromMe = conversationUIModel.isMediaMessageFromCurrentUser(message)
         let cancelAction: (() -> Void)? = state.canCancel ? { conversationUIModel.cancelMediaSend(messageID: message.id) } : nil
 
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(alignment: .center, spacing: 4) {
-                Text(conversationUIModel.formatMessageHeader(message, colorScheme: colorScheme, theme: theme))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                if message.isPrivate && conversationUIModel.isSentByCurrentUser(message),
-                   let status = deliveryStatus {
-                    DeliveryStatusView(status: status)
-                        .padding(.leading, 4)
-                }
+        HStack(alignment: .top, spacing: 0) {
+            if message.isPrivate {
+                Image(systemName: "lock.fill")
+                    .font(.bitchatSystem(size: 8))
+                    .foregroundColor(Color.orange.opacity(0.75))
+                    .padding(.top, 5)
+                    .padding(.trailing, 4)
+                    .accessibilityHidden(true)
             }
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .center, spacing: 4) {
+                    Text(conversationUIModel.formatMessageHeader(message, colorScheme: colorScheme, theme: theme))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if message.isPrivate && conversationUIModel.isSentByCurrentUser(message),
+                       let status = deliveryStatus {
+                        DeliveryStatusView(status: status)
+                            .padding(.leading, 4)
+                    }
+                }
 
-            Group {
-                switch media {
-                case .voice(let url):
-                    VoiceNoteView(
-                        url: url,
-                        isSending: state.isSending,
-                        sendProgress: state.progress,
-                        onCancel: cancelAction
-                    )
-                case .image(let url):
-                    BlockRevealImageView(
-                        url: url,
-                        revealProgress: state.progress,
-                        isSending: state.isSending,
-                        onCancel: cancelAction,
-                        initiallyBlurred: !isFromMe,
-                        onOpen: {
-                            if !state.isSending {
-                                imagePreviewURL = url
-                            }
-                        },
-                        onDelete: !isFromMe ? { conversationUIModel.deleteMediaMessage(messageID: message.id) } : nil
-                    )
-                    .frame(maxWidth: 280)
+                Group {
+                    switch media {
+                    case .voice(let url):
+                        VoiceNoteView(
+                            url: url,
+                            isSending: state.isSending,
+                            sendProgress: state.progress,
+                            onCancel: cancelAction
+                        )
+                    case .image(let url):
+                        BlockRevealImageView(
+                            url: url,
+                            revealProgress: state.progress,
+                            isSending: state.isSending,
+                            onCancel: cancelAction,
+                            initiallyBlurred: !isFromMe,
+                            onOpen: {
+                                if !state.isSending {
+                                    imagePreviewURL = url
+                                }
+                            },
+                            onDelete: !isFromMe ? { conversationUIModel.deleteMediaMessage(messageID: message.id) } : nil
+                        )
+                        .frame(maxWidth: 280)
+                    }
                 }
             }
         }

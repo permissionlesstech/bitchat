@@ -38,7 +38,7 @@ struct TextMessageView: View {
             HStack(alignment: .top, spacing: 0) {
                 let isLong = (message.content.count > TransportConfig.uiLongMessageLengthThreshold || message.content.hasVeryLongToken(threshold: TransportConfig.uiVeryLongTokenThreshold)) && cashuLinks.isEmpty
                 let isExpanded = expandedMessageIDs.contains(message.id)
-                if message.isPrivate && message.sender != "system" {
+                if message.isPrivate {
                     Image(systemName: "lock.fill")
                         .font(.bitchatSystem(size: 8))
                         .foregroundColor(Color.orange.opacity(0.75))

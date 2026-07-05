@@ -365,7 +365,10 @@ private struct ContentPrivateChatSheetView: View {
                 .padding(.bottom, 12)
                 // Orange tint before themedSurface so it layers in front of the
                 // (opaque, in matrix) themed background rather than behind it.
-                .background(Color.orange.opacity(0.06))
+                // Glass has no opaque backing — themedSurface is a no-op there,
+                // so the wash needs more opacity to read over the backdrop
+                // gradient's blue/purple glows.
+                .background(Color.orange.opacity(theme.usesGlassChrome ? 0.14 : 0.06))
                 .themedSurface()
             }
 
