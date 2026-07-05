@@ -31258,7 +31258,31 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "hidden image — tap to reveal"
+            "value" : "hidden image"
+          }
+        }
+      }
+    },
+    "media.image.accessibility.hint.open" : {
+      "comment" : "Accessibility hint for a revealed image; activating it opens the image full screen",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "opens the image full screen"
+          }
+        }
+      }
+    },
+    "media.image.accessibility.hint.reveal" : {
+      "comment" : "Accessibility hint for a blurred image; activating it reveals the image",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "reveals the image"
           }
         }
       }
@@ -31270,7 +31294,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "image — tap to open full screen"
+            "value" : "image"
           }
         }
       }
@@ -31319,6 +31343,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "open image"
+          }
+        }
+      }
+    },
+    "media.image.action.reveal" : {
+      "comment" : "Context menu action that reveals a blurred image",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "reveal image"
           }
         }
       }
