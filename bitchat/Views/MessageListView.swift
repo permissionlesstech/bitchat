@@ -298,6 +298,13 @@ private extension MessageListView {
             .fixedSize(horizontal: false, vertical: true)
     }
 
+    /// Messages the unseen counters may book as "new": rows that render as
+    /// human messages. System lines render as narration and whitespace-only
+    /// content never renders at all, so neither belongs in the pill count.
+    func unseenEligibleCount(in messages: [BitchatMessage]) -> Int {
+        messages.filter { $0.sender != "system" && !$0.content.trimmed.isEmpty }.count
+    }
+
     /// Updates the unseen-count baseline for the current context and returns
     /// how many messages were appended since the last observation. A context
     /// change (timeline swapped wholesale) re-baselines and reports zero, so
@@ -472,7 +479,7 @@ private extension MessageListView {
     func scrollToBottom(on proxy: ScrollViewProxy) {
         isAtBottom = true
         unseenCount = 0
-        lastSeenMessageCount = conversationMessages(for: privatePeer).count
+        lastSeenMessageCount = unseenEligibleCount(in: conversationMessages(for: privatePeer))
         unseenBaselineKey = currentContextKey
         if let targetPeerID {
             proxy.scrollTo(targetPeerID, anchor: .bottom)
@@ -498,7 +505,7 @@ private extension MessageListView {
     func onMessagesChange(proxy: ScrollViewProxy) {
         guard privatePeer == nil else { return }
         let messages = publicChatModel.messages
-        let appendedCount = rebaselinedAppendedCount(newCount: messages.count)
+        let appendedCount = rebaselinedAppendedCount(newCount: unseenEligibleCount(in: messages))
         guard let lastMsg = messages.last else {
             // Timeline emptied (e.g. /clear): nothing below to jump to.
             unseenCount = 0
@@ -542,7 +549,7 @@ private extension MessageListView {
     func onPrivateChatsChange(proxy: ScrollViewProxy) {
         guard let peerID = privatePeer else { return }
         let messages = privateInboxModel.messages(for: peerID)
-        let appendedCount = rebaselinedAppendedCount(newCount: messages.count)
+        let appendedCount = rebaselinedAppendedCount(newCount: unseenEligibleCount(in: messages))
         guard let lastMsg = messages.last else {
             // Timeline emptied (e.g. /clear): nothing below to jump to.
             unseenCount = 0
