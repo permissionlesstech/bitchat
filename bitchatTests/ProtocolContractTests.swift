@@ -50,14 +50,19 @@ private final class DefaultTransportProbe: Transport {
 struct ProtocolContractTests {
     @Test
     func commandInfo_exposesAliasesPlaceholdersAndGeoVariants() {
-        #expect(CommandInfo.message.id == "dm")
-        #expect(CommandInfo.message.alias == "/dm")
+        // Aliases must match what CommandProcessor actually accepts —
+        // the suggestion panel is the only command-discovery surface.
+        #expect(CommandInfo.message.id == "msg")
+        #expect(CommandInfo.message.alias == "/msg")
         #expect(CommandInfo.message.placeholder != nil)
         #expect(CommandInfo.clear.placeholder == nil)
         #expect(CommandInfo.favorite.description.isEmpty == false)
-        #expect(CommandInfo.all(isGeoPublic: false, isGeoDM: false).contains(.favorite) == false)
-        #expect(CommandInfo.all(isGeoPublic: true, isGeoDM: false).contains(.favorite))
-        #expect(CommandInfo.all(isGeoPublic: false, isGeoDM: true).contains(.unfavorite))
+        #expect(CommandInfo.all(isGeoPublic: false, isGeoDM: false).contains(.help))
+        // Favorites are rejected by the processor in geohash contexts, so
+        // they are suggested only in mesh.
+        #expect(CommandInfo.all(isGeoPublic: false, isGeoDM: false).contains(.favorite))
+        #expect(CommandInfo.all(isGeoPublic: true, isGeoDM: false).contains(.favorite) == false)
+        #expect(CommandInfo.all(isGeoPublic: false, isGeoDM: true).contains(.unfavorite) == false)
     }
 
     @Test
