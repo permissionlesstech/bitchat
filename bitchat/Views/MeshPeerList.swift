@@ -146,7 +146,6 @@ struct MeshPeerList: View {
                                     .foregroundColor(peer.isFavorite ? .yellow : palette.secondary)
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel(peer.isFavorite ? Strings.removeFavorite : Strings.addFavorite)
                         }
                     }
                     .padding(.horizontal)
