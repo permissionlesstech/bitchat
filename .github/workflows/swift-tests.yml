@@ -145,3 +145,18 @@ jobs:
             ARCHS=arm64 \
             CODE_SIGNING_ALLOWED=NO \
             build
+
+  # Advisory only: SwiftLint reports style violations without ever failing the
+  # build. Runs in a pinned container (no Xcode plugin, no pbxproj changes) so
+  # it can never break the documented xcodebuild path or block a merge.
+  lint:
+    name: SwiftLint (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: ghcr.io/realm/swiftlint:0.65.0   # pinned tag; bump deliberately, never a floating tag
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run SwiftLint
+        run: swiftlint lint --reporter github-actions-logging
