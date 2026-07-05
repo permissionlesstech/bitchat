@@ -1005,8 +1005,20 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
 
     @MainActor
     private func setMeshPeerBlocked(_ peerID: PeerID, blocked: Bool, displayName: String) {
-        guard unifiedPeerService.setBlocked(peerID, blocked: blocked) != nil else { return }
-        addSystemMessage(
+        guard unifiedPeerService.setBlocked(peerID, blocked: blocked) != nil else {
+            addCommandOutput(
+                String(
+                    format: String(
+                        localized: blocked ? "system.mesh.block_failed" : "system.mesh.unblock_failed",
+                        comment: "System message shown when a mesh peer cannot be blocked or unblocked"
+                    ),
+                    locale: .current,
+                    displayName
+                )
+            )
+            return
+        }
+        addCommandOutput(
             String(
                 format: String(
                     localized: blocked ? "system.mesh.blocked" : "system.mesh.unblocked",

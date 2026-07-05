@@ -33830,6 +33830,18 @@
         }
       }
     },
+    "system.mesh.block_failed" : {
+      "comment" : "System message shown when a mesh peer cannot be blocked",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cannot block %@: not found or unable to verify identity"
+          }
+        }
+      }
+    },
     "system.mesh.blocked" : {
       "comment" : "System message shown when a mesh peer is blocked",
       "extractionState" : "manual",
@@ -33837,7 +33849,19 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "blocked %@"
+            "value" : "blocked %@. you will no longer receive messages from them"
+          }
+        }
+      }
+    },
+    "system.mesh.unblock_failed" : {
+      "comment" : "System message shown when a mesh peer cannot be unblocked",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cannot unblock %@: not found"
           }
         }
       }
