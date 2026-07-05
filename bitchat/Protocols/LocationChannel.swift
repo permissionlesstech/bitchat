@@ -18,7 +18,7 @@ enum GeohashChannelLevel: CaseIterable, Codable, Equatable {
         case .city: return 5
         case .province: return 4
         case .region: return 2
-    }
+        }
     }
 
     var displayName: String {
