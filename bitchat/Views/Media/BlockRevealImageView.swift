@@ -129,7 +129,9 @@ struct BlockRevealImageView: View {
         }
         .gesture(mainGesture)
         .contextMenu {
-            if !isSending {
+            if isSending {
+                cancelSendAction
+            } else {
                 imageActions
             }
         }
@@ -153,12 +155,17 @@ struct BlockRevealImageView: View {
             if isSending {
                 // children: .ignore collapses the visible cancel button, so
                 // expose it as an action while the send is in flight.
-                if let onCancel {
-                    Button(Strings.cancelSend, action: onCancel)
-                }
+                cancelSendAction
             } else {
                 imageActions
             }
+        }
+    }
+
+    @ViewBuilder
+    private var cancelSendAction: some View {
+        if let onCancel {
+            Button(Strings.cancelSend, action: onCancel)
         }
     }
 
