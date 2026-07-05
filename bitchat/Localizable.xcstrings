@@ -16712,6 +16712,30 @@
         }
       }
     },
+    "content.delivery.reason.voice_too_large" : {
+      "comment" : "Failure reason shown when a voice note exceeds the size limit",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "voice note too large"
+          }
+        }
+      }
+    },
+    "content.delivery.reason.voice_send_failed" : {
+      "comment" : "Failure reason shown when a voice note could not be sent",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "voice note failed to send"
+          }
+        }
+      }
+    },
     "content.delivery.reason.self" : {
       "extractionState" : "manual",
       "localizations" : {
