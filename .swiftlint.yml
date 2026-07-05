@@ -1,3 +1,13 @@
+# Build artifacts and generated sources; keeps local `swiftlint` runs clean
+# (CI checkouts are fresh, so this only matters in a working tree).
+excluded:
+  - .build
+  - .swiftpm
+  - .DerivedData
+  - DerivedData
+  - build
+  - localPackages/*/.build
+
 disabled_rules:
   - line_length
   - type_name
