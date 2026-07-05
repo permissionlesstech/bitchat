@@ -1435,7 +1435,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
 
     /// Processes IRC-style commands starting with '/'.
     /// - Parameter command: The full command string including the leading slash
-    /// - Note: Supports commands like /nick, /msg, /who, /slap, /clear, /help
+    /// - Note: Supports commands like /msg, /who, /slap, /clear, /help
     @MainActor
     func handleCommand(_ command: String) {
         let result = commandProcessor.process(command)
@@ -1443,13 +1443,26 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         switch result {
         case .success(let message):
             if let msg = message {
-                addSystemMessage(msg)
+                addCommandOutput(msg)
             }
         case .error(let message):
-            addSystemMessage(message)
+            addCommandOutput(message)
         case .handled:
             // Command was handled, no message needed
             break
+        }
+    }
+
+    /// Command output belongs in the conversation where the user typed the
+    /// command; the public timeline is invisible while a DM is open. The DM
+    /// selection is read *after* processing so commands that switch chats
+    /// (`/msg`) print into the conversation they just opened.
+    @MainActor
+    private func addCommandOutput(_ content: String) {
+        if let peerID = selectedPrivateChatPeer {
+            addLocalPrivateSystemMessage(content, to: peerID)
+        } else {
+            addSystemMessage(content)
         }
     }
 
