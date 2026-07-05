@@ -301,7 +301,7 @@ final class PerformanceBaselineTests: XCTestCase {
             ("@carol#a1b2 did you see this? https://example.com/threads/42", ["carol"]),
             ("checking in from the harbor #bitchat #mesh", nil),
             ("@bob#0042 ping me when you get this", ["bob#0042"]),
-            ("long form update with a link https://news.example.org/articles/2026/06/mesh-networks and a tag #geohash", nil),
+            ("long form update with a link https://news.example.org/articles/2026/06/mesh-networks and a tag #geohash", nil)
         ]
         let batches: [[BitchatMessage]] = (0..<batchCount).map { batch in
             (0..<batchSize).map { i in
@@ -547,7 +547,7 @@ final class PerformanceBaselineTests: XCTestCase {
             "anyone near the station?",
             "@bob#0042 are you on mesh too?",
             "check this out https://example.com/p/123 #bitchat",
-            "teleport check, who's local?",
+            "teleport check, who's local?"
         ]
         return try (0..<count).map { i in
             try NostrProtocol.createEphemeralGeohashEvent(

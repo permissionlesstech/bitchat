@@ -21,7 +21,7 @@ let package = Package(
         .target(
             name: "BitFoundation",
             dependencies: [
-                .product(name: "BitLogger", package: "BitLogger"),
+                .product(name: "BitLogger", package: "BitLogger")
             ],
             path: "Sources"
         ),

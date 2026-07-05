@@ -172,7 +172,7 @@ struct NoiseCoverageTests {
             Data(),
             Data(repeating: 0x00, count: 32),
             Data([0x01] + Array(repeating: 0x00, count: 31)),
-            Data(repeating: 0xFF, count: 32),
+            Data(repeating: 0xFF, count: 32)
         ]
 
         for invalidKey in invalidKeys {

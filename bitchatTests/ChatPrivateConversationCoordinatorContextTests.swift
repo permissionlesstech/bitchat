@@ -352,7 +352,7 @@ struct ChatPrivateConversationCoordinatorContextTests {
         context.displayNamesByPubkey[senderPubkey] = "alice#1234"
         context.privateChats[convKey] = [
             makeIncomingMessage(id: "mine-1", sender: "me"),
-            makeIncomingMessage(id: "mine-2", sender: "me"),
+            makeIncomingMessage(id: "mine-2", sender: "me")
         ]
 
         coordinator.handleDelivered(
