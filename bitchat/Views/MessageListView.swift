@@ -105,14 +105,19 @@ struct MessageListView: View {
                             .contextMenu {
                                 let showsUserActions = message.sender != "system" && !conversationUIModel.isSentByCurrentUser(message)
                                 if showsUserActions {
-                                    Button("content.actions.mention") {
-                                        insertMention(message.sender)
-                                    }
-                                    if let peerID = message.senderPeerID {
-                                        Button("content.actions.direct_message") {
-                                            privateConversationModel.openConversation(for: peerID)
-                                            withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
-                                                showSidebar = true
+                                    // Mention and DM are redundant inside a 1:1 conversation:
+                                    // mentioning the only other participant is noise, and "DM"
+                                    // would just reopen the conversation that is already open.
+                                    if privatePeer == nil {
+                                        Button("content.actions.mention") {
+                                            insertMention(message.sender)
+                                        }
+                                        if let peerID = message.senderPeerID {
+                                            Button("content.actions.direct_message") {
+                                                privateConversationModel.openConversation(for: peerID)
+                                                withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                                                    showSidebar = true
+                                                }
                                             }
                                         }
                                     }
