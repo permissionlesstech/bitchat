@@ -21,6 +21,7 @@ struct BlockRevealImageView: View {
     @State private var aspectRatio: CGFloat = 1
     @State private var isBlurred: Bool = false
     @State private var showDeleteConfirmation = false
+    @State private var loadFailed = false
 
     private enum Strings {
         static let tapToReveal = String(localized: "media.image.tap_to_reveal", comment: "Caption on a blurred incoming image inviting a tap to reveal it")
@@ -35,6 +36,7 @@ struct BlockRevealImageView: View {
         static let revealHint = String(localized: "media.image.accessibility.hint.reveal", comment: "Accessibility hint for a blurred image; activating it reveals the image")
         static let openHint = String(localized: "media.image.accessibility.hint.open", comment: "Accessibility hint for a revealed image; activating it opens the image full screen")
         static let sendingImage = String(localized: "media.image.accessibility.sending", comment: "Accessibility label for an image that is still sending")
+        static let unavailableImage = String(localized: "media.image.accessibility.unavailable", comment: "Accessibility label for an image whose file could not be loaded")
         static let cancelSend = String(localized: "media.accessibility.cancel_send", comment: "Accessibility label for the cancel button on an in-flight media send")
     }
 
@@ -100,10 +102,16 @@ struct BlockRevealImageView: View {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(Color.gray.opacity(0.2))
                     .frame(height: 200)
-                    .overlay(
-                        ProgressView()
-                            .progressViewStyle(.circular)
-                    )
+                    .overlay {
+                        if loadFailed {
+                            Image(systemName: "photo")
+                                .font(.bitchatSystem(size: 24, weight: .semibold))
+                                .foregroundColor(.secondary)
+                        } else {
+                            ProgressView()
+                                .progressViewStyle(.circular)
+                        }
+                    }
             }
 
             if let onCancel = onCancel, isSending {
@@ -150,7 +158,7 @@ struct BlockRevealImageView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabelText)
         .accessibilityHint(accessibilityHintText)
-        .accessibilityAddTraits(isSending ? [] : .isButton)
+        .accessibilityAddTraits(isSending || loadFailed ? [] : .isButton)
         .accessibilityActions {
             if isSending {
                 // children: .ignore collapses the visible cancel button, so
@@ -171,14 +179,18 @@ struct BlockRevealImageView: View {
 
     @ViewBuilder
     private var imageActions: some View {
-        if isBlurred {
-            Button(Strings.reveal) {
-                withAnimation(.easeOut(duration: 0.2)) { isBlurred = false }
-            }
-        } else {
-            Button(Strings.open) { onOpen?() }
-            Button(Strings.hide) {
-                withAnimation(.easeInOut(duration: 0.2)) { isBlurred = true }
+        // Open/reveal/hide would act on a file that failed to load, so only
+        // offer delete (when available) to let users clean up the attachment.
+        if !loadFailed {
+            if isBlurred {
+                Button(Strings.reveal) {
+                    withAnimation(.easeOut(duration: 0.2)) { isBlurred = false }
+                }
+            } else {
+                Button(Strings.open) { onOpen?() }
+                Button(Strings.hide) {
+                    withAnimation(.easeInOut(duration: 0.2)) { isBlurred = true }
+                }
             }
         }
         if onDelete != nil {
@@ -188,25 +200,30 @@ struct BlockRevealImageView: View {
 
     private var accessibilityLabelText: String {
         if isSending { return Strings.sendingImage }
+        if loadFailed { return Strings.unavailableImage }
         return isBlurred ? Strings.hiddenImage : Strings.revealedImage
     }
 
     private var accessibilityHintText: String {
-        if isSending { return "" }
+        if isSending || loadFailed { return "" }
         return isBlurred ? Strings.revealHint : Strings.openHint
     }
 
     private func loadImage() {
+        loadFailed = false
         DispatchQueue.global(qos: .userInitiated).async {
             #if os(iOS)
-            guard let image = UIImage(contentsOfFile: url.path) else { return }
+            let image = UIImage(contentsOfFile: url.path)
             #else
-            guard let image = NSImage(contentsOf: url) else { return }
+            let image = NSImage(contentsOf: url)
             #endif
-            let ratio = image.size.height > 0 ? image.size.width / image.size.height : 1
             DispatchQueue.main.async {
+                guard let image else {
+                    self.loadFailed = true
+                    return
+                }
                 self.platformImage = image
-                self.aspectRatio = ratio
+                self.aspectRatio = image.size.height > 0 ? image.size.width / image.size.height : 1
             }
         }
     }
@@ -217,7 +234,7 @@ struct BlockRevealImageView: View {
     // behind a confirmation; taps only reveal and open.
     private var mainGesture: some Gesture {
         let singleTap = TapGesture().onEnded {
-            guard !isSending else { return }
+            guard !isSending, !loadFailed else { return }
             if isBlurred {
                 withAnimation(.easeOut(duration: 0.2)) {
                     isBlurred = false
@@ -227,7 +244,7 @@ struct BlockRevealImageView: View {
             }
         }
         let swipe = DragGesture(minimumDistance: 20, coordinateSpace: .local).onEnded { value in
-            guard !isSending else { return }
+            guard !isSending, !loadFailed else { return }
             let horizontal = value.translation.width
             let vertical = value.translation.height
             guard abs(horizontal) > abs(vertical), abs(horizontal) > 40 else { return }

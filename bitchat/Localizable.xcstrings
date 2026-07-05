@@ -36968,6 +36968,18 @@
           }
         }
       }
+    },
+    "media.image.accessibility.unavailable" : {
+      "comment" : "Accessibility label for an image whose file could not be loaded",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "image unavailable"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"
