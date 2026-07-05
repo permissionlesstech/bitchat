@@ -263,6 +263,59 @@ struct ChatViewModelCommandTests {
             #expect(transport.sentPrivateMessages.isEmpty)
         }
     }
+
+    @Test @MainActor
+    func handleCommand_outputRoutesToOpenPrivateChat() async {
+        let (viewModel, transport) = makeTestableViewModel()
+        let peerID = PeerID(str: "0000000000000002")
+        transport.simulateConnect(peerID, nickname: "Alice")
+        viewModel.selectedPrivateChatPeer = peerID
+
+        viewModel.handleCommand("/help")
+
+        #expect(viewModel.privateChats[peerID]?.last?.content == CommandProcessor.helpText)
+        #expect(!viewModel.messages.contains { $0.content == CommandProcessor.helpText })
+    }
+
+    @Test @MainActor
+    func handleCommand_errorRoutesToOpenPrivateChat() async {
+        let (viewModel, transport) = makeTestableViewModel()
+        let peerID = PeerID(str: "0000000000000002")
+        transport.simulateConnect(peerID, nickname: "Alice")
+        viewModel.selectedPrivateChatPeer = peerID
+
+        viewModel.handleCommand("/bogus")
+
+        let dmContents = viewModel.privateChats[peerID]?.map(\.content) ?? []
+        #expect(dmContents.contains { $0.hasPrefix("unknown command: /bogus") })
+        #expect(!viewModel.messages.contains { $0.content.hasPrefix("unknown command: /bogus") })
+    }
+
+    @Test @MainActor
+    func handleCommand_outputRoutesToPublicTimelineWithoutOpenDM() async {
+        let (viewModel, _) = makeTestableViewModel()
+
+        viewModel.handleCommand("/bogus")
+
+        #expect(viewModel.messages.last?.content.hasPrefix("unknown command: /bogus") == true)
+    }
+
+    @Test @MainActor
+    func handleCommand_msgSuccessLandsInNewlyOpenedChat() async {
+        let (viewModel, transport) = makeTestableViewModel()
+        let peerID = PeerID(str: "0000000000000002")
+        transport.simulateConnect(peerID, nickname: "Alice")
+        let resolved = await TestHelpers.waitUntil({
+            viewModel.getPeerIDForNickname("Alice") == peerID
+        }, timeout: TestConstants.defaultTimeout)
+        #expect(resolved)
+
+        viewModel.handleCommand("/msg Alice")
+
+        #expect(viewModel.selectedPrivateChatPeer == peerID)
+        #expect(viewModel.privateChats[peerID]?.last?.content == "started private chat with Alice")
+        #expect(!viewModel.messages.contains { $0.content == "started private chat with Alice" })
+    }
 }
 
 // MARK: - Composer Tests

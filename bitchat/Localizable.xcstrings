@@ -14863,6 +14863,18 @@
         }
       }
     },
+    "content.commands.help" : {
+      "comment" : "Description of the /help command in the suggestions panel",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "show available commands"
+          }
+        }
+      }
+    },
     "content.commands.hug" : {
       "extractionState" : "manual",
       "localizations" : {
