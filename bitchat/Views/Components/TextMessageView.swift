@@ -109,6 +109,12 @@ struct TextMessageView: View {
                 .padding(.leading, 2)
             }
         }
+        // Collapse the revealed caption when the status advances (e.g.
+        // sending → sent → delivered) so a detail opened for one state
+        // doesn't linger and silently morph into another.
+        .onChange(of: deliveryStatus) { _ in
+            showDeliveryDetail = false
+        }
     }
 }
 
