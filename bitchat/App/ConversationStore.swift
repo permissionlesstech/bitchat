@@ -417,6 +417,14 @@ final class ConversationStore: ObservableObject {
         }
     }
 
+    /// Erases the persisted last-active conversation. Called from the panic
+    /// wipe so a restored DM/channel pointer cannot survive an emergency clear.
+    /// The store owns its injected `storage`, so the key is removed through it
+    /// (never by reaching into `.standard`), and `lastActiveKey` stays private.
+    func clearPersistedLastActive() {
+        storage.removeObject(forKey: lastActiveKey)
+    }
+
     /// Decides what to present at launch from the value persisted last
     /// session. Pure aside from reading the init snapshot: performs no
     /// selection mutation and never writes `activeChannel`, so it cannot race

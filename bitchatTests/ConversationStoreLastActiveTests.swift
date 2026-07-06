@@ -87,6 +87,31 @@ final class ConversationStoreLastActiveTests: XCTestCase {
         )
     }
 
+    func test_clearPersistedLastActiveErasesRestoreRecord() {
+        // #1064 panic wipe: clearing the persisted last-active pointer means a
+        // wiped DM/channel cannot be restored on the next launch.
+        let storage = makeStorage()
+
+        // A DM is persisted and would otherwise restore.
+        let session = ConversationStore(storage: storage)
+        session.setSelectedPrivatePeer(peerID)
+        XCTAssertEqual(
+            ConversationStore(storage: storage)
+                .restoreLastActiveConversation(isPeerResolvable: { _ in true }),
+            .restoredDirectChat(peerID)
+        )
+
+        // The panic path erases the pointer through the store's own storage.
+        session.clearPersistedLastActive()
+
+        // The next launch has nothing to restore and falls back to the list.
+        XCTAssertEqual(
+            ConversationStore(storage: storage)
+                .restoreLastActiveConversation(isPeerResolvable: { _ in true }),
+            .conversationList
+        )
+    }
+
     func test_firstLaunchPresentsConversationList() {
         let storage = makeStorage()
 

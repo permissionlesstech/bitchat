@@ -1177,6 +1177,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         // single-writer ConversationStore; the derived `messages` view and
         // the legacy mirror empty with it)
         conversations.clearAll()
+        // Also erase the persisted last-active pointer (#1064) so a wiped
+        // DM/channel cannot be restored on the next launch.
+        conversations.clearPersistedLastActive()
         pendingGeohashSystemMessages.removeAll()
 
         // Delete all keychain data (including Noise and Nostr keys)
