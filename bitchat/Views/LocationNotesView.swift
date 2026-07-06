@@ -119,12 +119,12 @@ struct LocationNotesView: View {
             }
             Text(Strings.description)
                 .bitchatFont(size: 12)
-                .foregroundColor(.secondary)
+                .foregroundColor(palette.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             if manager.state == .noRelays {
                 Text(Strings.relaysPaused)
                     .bitchatFont(size: 11)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(palette.secondary)
             }
         }
         .padding(.horizontal, 16)
@@ -173,7 +173,7 @@ struct LocationNotesView: View {
                 if !ts.isEmpty {
                     Text(ts)
                         .bitchatFont(size: 11)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(palette.secondary)
                 }
                 Spacer()
             }
@@ -190,7 +190,7 @@ struct LocationNotesView: View {
                 .bitchatFont(size: 13, weight: .semibold)
             Text(Strings.relaysRetryHint)
                 .bitchatFont(size: 12)
-                .foregroundColor(.secondary)
+                .foregroundColor(palette.secondary)
             Button(Strings.retry) { manager.refresh() }
                 .bitchatFont(size: 12)
                 .buttonStyle(.plain)
@@ -203,7 +203,7 @@ struct LocationNotesView: View {
             ProgressView()
             Text(Strings.loadingNotes)
                 .bitchatFont(size: 12)
-                .foregroundColor(.secondary)
+                .foregroundColor(palette.secondary)
             Spacer()
         }
         .padding(.vertical, 8)
@@ -215,7 +215,7 @@ struct LocationNotesView: View {
                 .bitchatFont(size: 13, weight: .semibold)
             Text(Strings.emptySubtitle)
                 .bitchatFont(size: 12)
-                .foregroundColor(.secondary)
+                .foregroundColor(palette.secondary)
         }
         .padding(.vertical, 6)
     }

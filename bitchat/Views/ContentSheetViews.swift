@@ -198,13 +198,13 @@ private struct ContentPeopleListView: View {
                         Text(subtitle)
                             .foregroundColor(subtitleColor)
                         Text(activeText)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(palette.secondary)
                     }
                     .bitchatFont(size: 12)
                 } else {
                     Text(activeText)
                         .bitchatFont(size: 12)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(palette.secondary)
                 }
             }
             .padding(.horizontal, 16)
@@ -363,7 +363,9 @@ private struct ContentPrivateChatSheetView: View {
                         }
                     }
                 }
-                .frame(height: headerHeight)
+                // minHeight so scaled text at accessibility sizes grows the
+                // bar instead of clipping inside it.
+                .frame(minHeight: headerHeight)
                 .padding(.horizontal, 16)
                 .padding(.top, 10)
                 .padding(.bottom, 12)
@@ -508,7 +510,7 @@ private struct ContentPrivateHeaderInfoButton: View {
                     // Absence of a glyph was the only offline signal; say it.
                     Text("mesh_peers.state.offline")
                         .bitchatFont(size: 11)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(palette.secondary)
                 }
 
                 Text(headerState.displayName)
@@ -555,6 +557,6 @@ private struct ContentPrivateHeaderInfoButton: View {
         .accessibilityHint(
             String(localized: "content.accessibility.view_fingerprint_hint", comment: "Accessibility hint for viewing encryption fingerprint")
         )
-        .frame(height: headerHeight)
+        .frame(minHeight: headerHeight)
     }
 }

@@ -207,7 +207,9 @@ struct ContentHeaderView: View {
                     .environmentObject(verificationModel)
             }
         }
-        .frame(height: headerHeight)
+        // minHeight, not height: headerLineLimit allows two lines at
+        // accessibility text sizes, which a fixed single-line height clips.
+        .frame(minHeight: headerHeight)
         .padding(.horizontal, 12)
         .sheet(isPresented: $appChromeModel.isLocationChannelsSheetPresented) {
             LocationChannelsSheet(isPresented: $appChromeModel.isLocationChannelsSheetPresented)
@@ -298,10 +300,10 @@ private extension ContentHeaderView {
         switch locationChannelsModel.selectedChannel {
         case .location:
             let count = peerListModel.visibleGeohashPeerCount
-            return (count, count > 0 ? palette.locationAccent : Color.secondary)
+            return (count, count > 0 ? palette.locationAccent : palette.secondary)
         case .mesh:
             let meshBlue = Color(hue: 0.60, saturation: 0.85, brightness: 0.82)
-            let color: Color = peerListModel.connectedMeshPeerCount > 0 ? meshBlue : Color.secondary
+            let color: Color = peerListModel.connectedMeshPeerCount > 0 ? meshBlue : palette.secondary
             return (peerListModel.reachableMeshPeerCount, color)
         }
     }
@@ -324,7 +326,7 @@ private struct ContentLocationNotesUnavailableView: View {
                 SheetCloseButton { showLocationNotes = false }
                     .foregroundColor(palette.primary)
             }
-            .frame(height: headerHeight)
+            .frame(minHeight: headerHeight)
             .padding(.horizontal, 12)
             .themedChromePanel(edge: .top)
             Text("content.notes.location_unavailable")

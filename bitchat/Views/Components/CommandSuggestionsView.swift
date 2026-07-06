@@ -54,7 +54,6 @@ struct CommandSuggestionsView: View {
                         buttonRow(for: command)
                     }
                     .buttonStyle(.plain)
-                    .background(Color.gray.opacity(0.1))
                 }
             }
             .themedOverlayPanel()

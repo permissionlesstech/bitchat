@@ -80,7 +80,7 @@ struct FingerprintView: View {
                     Spacer()
                 }
                 .padding()
-                .background(Color.gray.opacity(0.1))
+                .background(palette.secondary.opacity(0.1))
                 .cornerRadius(8)
                 
                 // Their fingerprint
@@ -98,7 +98,7 @@ struct FingerprintView: View {
                             .fixedSize(horizontal: false, vertical: true)
                             .padding()
                             .frame(maxWidth: .infinity)
-                            .background(Color.gray.opacity(0.1))
+                            .background(palette.secondary.opacity(0.1))
                             .cornerRadius(8)
                             .contextMenu {
                                 Button(Strings.copy) {
@@ -132,7 +132,7 @@ struct FingerprintView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .padding()
                         .frame(maxWidth: .infinity)
-                        .background(Color.gray.opacity(0.1))
+                        .background(palette.secondary.opacity(0.1))
                         .cornerRadius(8)
                         .contextMenu {
                             Button(Strings.copy) {

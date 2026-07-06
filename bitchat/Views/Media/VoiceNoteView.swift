@@ -28,7 +28,9 @@ struct VoiceNoteView: View {
     }
 
     private var backgroundColor: Color {
-        colorScheme == .dark ? Color.black.opacity(0.6) : Color.white
+        // Palette-based and slightly translucent so the card doesn't sit as
+        // an opaque white/black box over the glass gradient.
+        palette.background.opacity(colorScheme == .dark ? 0.6 : 0.7)
     }
 
     private var borderColor: Color {
@@ -69,7 +71,7 @@ struct VoiceNoteView: View {
 
             Text(playbackLabel)
                 .bitchatFont(size: 13)
-                .foregroundColor(Color.secondary)
+                .foregroundColor(palette.secondary)
 
             if let onCancel = onCancel, isSending {
                 Button(action: onCancel) {

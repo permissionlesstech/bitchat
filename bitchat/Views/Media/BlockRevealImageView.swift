@@ -9,6 +9,7 @@ private typealias PlatformImage = NSImage
 #endif
 
 struct BlockRevealImageView: View {
+    @ThemedPalette private var palette
     private let url: URL
     private let revealProgress: Double?
     private let isSending: Bool
@@ -92,7 +93,9 @@ struct BlockRevealImageView: View {
                                         Image(systemName: "eye.slash.fill")
                                             .font(.bitchatSystem(size: 24, weight: .semibold))
                                         Text(verbatim: Strings.tapToReveal)
-                                            .font(.bitchatSystem(size: 12, weight: .medium, design: .monospaced))
+                                            // Themed: monospaced under matrix,
+                                            // system under liquid glass.
+                                            .bitchatFont(size: 12, weight: .medium)
                                     }
                                     .foregroundColor(.white.opacity(0.85))
                                 )
@@ -100,13 +103,13 @@ struct BlockRevealImageView: View {
                     }
             } else {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.gray.opacity(0.2))
+                    .fill(palette.secondary.opacity(0.2))
                     .frame(height: 200)
                     .overlay {
                         if loadFailed {
                             Image(systemName: "photo")
                                 .font(.bitchatSystem(size: 24, weight: .semibold))
-                                .foregroundColor(.secondary)
+                                .foregroundColor(palette.secondary)
                         } else {
                             ProgressView()
                                 .progressViewStyle(.circular)

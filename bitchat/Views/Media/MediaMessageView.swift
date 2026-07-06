@@ -11,6 +11,7 @@ import BitFoundation
 struct MediaMessageView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.appTheme) private var theme
+    @ThemedPalette private var palette
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
     let message: BitchatMessage
     let media: BitchatMessage.Media
@@ -83,7 +84,7 @@ struct MediaMessageView: View {
                     } else if showDeliveryDetail {
                         Text(verbatim: status.bitchatDescription)
                             .bitchatFont(size: 11)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(palette.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }

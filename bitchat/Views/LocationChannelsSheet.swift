@@ -106,7 +106,7 @@ struct LocationChannelsSheet: View {
                 }
                 Text(Strings.description)
                     .bitchatFont(size: 12)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(palette.secondary)
 
                 Group {
                     switch locationChannelsModel.permissionState {
@@ -125,7 +125,7 @@ struct LocationChannelsSheet: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(Strings.permissionDenied)
                                 .bitchatFont(size: 12)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(palette.secondary)
                             Button(Strings.openSettings, action: SystemSettings.location.open)
                             .buttonStyle(.plain)
                         }
@@ -277,7 +277,7 @@ struct LocationChannelsSheet: View {
             HStack(spacing: 2) {
                 Text(verbatim: "#")
                     .bitchatFont(size: 14)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(palette.secondary)
                 TextField("geohash", text: $customGeohash)
                     #if os(iOS)
                     .textInputAutocapitalization(.never)
@@ -319,7 +319,7 @@ struct LocationChannelsSheet: View {
                 .bitchatFont(size: 14)
                 .padding(.vertical, 6)
                 .padding(.horizontal, 10)
-                .background(Color.secondary.opacity(0.12))
+                .background(palette.secondary.opacity(0.12))
                 .cornerRadius(6)
                 .opacity(isValid ? 1.0 : 0.4)
                 .disabled(!isValid)
@@ -336,7 +336,7 @@ struct LocationChannelsSheet: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(Strings.bookmarked)
                 .bitchatFont(size: 12)
-                .foregroundColor(.secondary)
+                .foregroundColor(palette.secondary)
             LazyVStack(spacing: 0) {
                 ForEach(Array(entries.enumerated()), id: \.offset) { index, gh in
                     let level = levelForLength(gh.count)
@@ -414,17 +414,17 @@ struct LocationChannelsSheet: View {
                     Text(parts.base)
                             .bitchatFont(size: 14)
                             .fontWeight(titleBold ? .bold : .regular)
-                            .foregroundColor(titleColor ?? Color.primary)
+                            .foregroundColor(titleColor ?? palette.primary)
                         if let count = parts.countSuffix, !count.isEmpty {
                             Text(count)
                                 .bitchatFont(size: 11)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(palette.secondary)
                         }
                     }
                 let subtitleFull = Strings.subtitle(prefix: subtitlePrefix, name: subtitleName)
                 Text(subtitleFull)
                     .bitchatFont(size: 12)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(palette.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 }
@@ -495,16 +495,16 @@ extension LocationChannelsSheet {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(Strings.torTitle)
                         .bitchatFont(size: 12, weight: .semibold)
-                        .foregroundColor(.primary)
+                        .foregroundColor(palette.primary)
                     Text(Strings.torSubtitle)
                         .bitchatFont(size: 11)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(palette.secondary)
                 }
             }
             .toggleStyle(IRCToggleStyle(accent: palette.accent, onLabel: Strings.toggleOn, offLabel: Strings.toggleOff))
         }
         .padding(12)
-        .background(Color.secondary.opacity(0.12))
+        .background(palette.secondary.opacity(0.12))
         .cornerRadius(8)
     }
 

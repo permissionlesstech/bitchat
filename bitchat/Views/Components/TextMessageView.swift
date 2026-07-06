@@ -12,6 +12,7 @@ import BitFoundation
 struct TextMessageView: View {
     @Environment(\.colorScheme) private var colorScheme: ColorScheme
     @Environment(\.appTheme) private var theme
+    @ThemedPalette private var palette
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
 
     let message: BitchatMessage
@@ -86,7 +87,7 @@ struct TextMessageView: View {
                 } else if showDeliveryDetail {
                     Text(verbatim: status.bitchatDescription)
                         .bitchatFont(size: 11)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(palette.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 2)
                 }
@@ -101,7 +102,7 @@ struct TextMessageView: View {
                     else { expandedMessageIDs.insert(message.id) }
                 }
                 .bitchatFont(size: 11, weight: .medium)
-                .foregroundColor(Color.blue)
+                .foregroundColor(palette.accentBlue)
                 .padding(.top, 4)
             }
 

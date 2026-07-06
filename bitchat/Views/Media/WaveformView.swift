@@ -42,7 +42,7 @@ struct WaveformView: View {
                         } else if let send = clampedSend, binPosition <= send {
                             color = palette.accentBlue
                         } else {
-                            color = Color.gray.opacity(0.35)
+                            color = palette.secondary.opacity(0.35)
                         }
                         context.fill(Path(rect), with: .color(color))
                     }

@@ -44,7 +44,6 @@ struct ContentComposerView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .buttonStyle(.plain)
-                        .background(Color.gray.opacity(0.1))
                     }
                 }
                 .themedOverlayPanel()
