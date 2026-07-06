@@ -6,6 +6,7 @@ import UIKit
 struct ContentComposerView: View {
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
+    @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
 
@@ -60,10 +61,8 @@ struct ContentComposerView: View {
                 TextField(
                     "",
                     text: $messageText,
-                    prompt: Text(
-                        String(localized: "content.input.message_placeholder", comment: "Placeholder shown in the chat composer")
-                    )
-                    .foregroundColor(palette.secondary.opacity(0.6))
+                    prompt: Text(placeholderText)
+                        .foregroundColor(palette.secondary.opacity(0.6))
                 )
                 .textFieldStyle(.plain)
                 .bitchatFont(size: 15)
@@ -110,6 +109,33 @@ struct ContentComposerView: View {
 }
 
 private extension ContentComposerView {
+    /// States where a message will land: the DM partner's name for private
+    /// chats, the channel (and its public nature) otherwise — so a stressed
+    /// user never has to guess who can read what they're typing.
+    var placeholderText: String {
+        if let header = privateConversationModel.selectedHeaderState {
+            // A geohash-DM display name already carries its own "#geohash/@name"
+            // form, so it must not get another "@" prefix; a mesh nickname does.
+            let isGeoDM = privateConversationModel.selectedPeerID?.isGeoDM == true
+            let target = isGeoDM ? header.displayName : "@\(header.displayName)"
+            return String(
+                format: String(localized: "content.input.placeholder.private", comment: "Composer placeholder inside a private chat, naming the conversation partner"),
+                locale: .current,
+                target
+            )
+        }
+        switch locationChannelsModel.selectedChannel {
+        case .mesh:
+            return String(localized: "content.input.placeholder.mesh", comment: "Composer placeholder for the public mesh channel")
+        case .location(let channel):
+            return String(
+                format: String(localized: "content.input.placeholder.location", comment: "Composer placeholder for a public geohash channel, naming it"),
+                locale: .current,
+                channel.geohash
+            )
+        }
+    }
+
     var recordingIndicator: some View {
         HStack(spacing: 12) {
             Image(systemName: "waveform.circle.fill")
