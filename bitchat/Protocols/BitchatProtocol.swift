@@ -18,7 +18,7 @@
 /// - Efficient binary message encoding
 /// - Message fragmentation for large payloads
 /// - TTL-based routing for mesh networks
-/// - Privacy features like padding and timing obfuscation
+/// - Privacy features: message padding and randomized relay jitter
 /// - Integration points for end-to-end encryption
 ///
 /// ## Protocol Design
@@ -38,18 +38,20 @@
 /// 7. **Decoding**: Binary data parsed back to message objects
 ///
 /// ## Security Considerations
-/// - Message padding obscures actual content length
-/// - Timing obfuscation prevents traffic analysis
+/// - Message padding (to 256/512/1024/2048-byte blocks) obscures actual content length
+/// - Randomized relay jitter reduces the traffic-analysis signal; there is no
+///   cover traffic or per-message timing obfuscation
 /// - Integration with Noise Protocol for E2E encryption
 /// - No persistent identifiers in protocol headers
 ///
 /// ## Message Types
 /// - **Announce/Leave**: Peer presence notifications
-/// - **Message**: User chat messages (broadcast or directed)
+/// - **Message**: Public chat messages
 /// - **Fragment**: Multi-part message handling
-/// - **Delivery/Read**: Message acknowledgments
-/// - **Noise**: Encrypted channel establishment
-/// - **Version**: Protocol version negotiation
+/// - **NoiseHandshake/NoiseEncrypted**: Encrypted channel establishment and
+///   all private payloads (messages, delivery acks, read receipts)
+/// - **CourierEnvelope**: Sealed store-and-forward mail
+/// - **RequestSync/FileTransfer**: Gossip history sync and media transfer
 ///
 /// ## Future Extensions
 /// The protocol is designed to be extensible:
