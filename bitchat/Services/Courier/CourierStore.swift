@@ -165,9 +165,18 @@ final class CourierStore {
             if envelopes.count >= Limits.maxEnvelopes {
                 // Oldest-first eviction, shedding verified-tier mail before
                 // favorites' so open couriering can't crowd out trusted mail.
-                let victim = envelopes.firstIndex(where: { $0.tier == .verified }) ?? envelopes.startIndex
-                let evicted = envelopes.remove(at: victim)
-                SecureLogger.debug("📦 Courier store full - evicted \(evicted.tier.rawValue) envelope stored at \(evicted.storedAt)", category: .session)
+                // A verified deposit never displaces a favorite: when only
+                // favorite mail is stored, it is rejected instead.
+                if let victim = envelopes.firstIndex(where: { $0.tier == .verified }) {
+                    let evicted = envelopes.remove(at: victim)
+                    SecureLogger.debug("📦 Courier store full - evicted verified envelope stored at \(evicted.storedAt)", category: .session)
+                } else if tier == .favorite {
+                    let evicted = envelopes.removeFirst()
+                    SecureLogger.debug("📦 Courier store full - evicted favorite envelope stored at \(evicted.storedAt)", category: .session)
+                } else {
+                    SecureLogger.debug("📦 Courier deposit rejected: store full of favorite-tier mail", category: .session)
+                    return false
+                }
             }
 
             envelopes.append(StoredEnvelope(

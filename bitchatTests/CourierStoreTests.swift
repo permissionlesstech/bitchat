@@ -231,6 +231,24 @@ struct CourierStoreTests {
         #expect(store.takeEnvelopes(for: favoriteRecipient).count == 1)
     }
 
+    @Test func verifiedDepositIsRejectedWhenStoreIsFullOfFavorites() {
+        let store = makeStore()
+        var depositorByte: UInt8 = 10
+        var count = 0
+        while count < CourierStore.Limits.maxEnvelopes {
+            let depositor = Data(repeating: depositorByte, count: 32)
+            for _ in 0..<CourierStore.Limits.maxPerFavoriteDepositor where count < CourierStore.Limits.maxEnvelopes {
+                #expect(store.deposit(makeEnvelope(), from: depositor, tier: .favorite))
+                count += 1
+            }
+            depositorByte += 1
+        }
+        // A verified deposit must not displace favorite-tier mail.
+        #expect(!store.deposit(makeEnvelope(), from: Data(repeating: 0xEE, count: 32), tier: .verified))
+        // A favorite deposit still can (oldest-favorite eviction).
+        #expect(store.deposit(makeEnvelope(), from: Data(repeating: 0xEF, count: 32), tier: .favorite))
+    }
+
     // MARK: - Spray-and-wait
 
     @Test func sprayHalvesBudgetAndSkipsIneligibleCouriers() {

@@ -194,15 +194,204 @@ struct GossipSyncManagerTests {
 
         manager._performMaintenanceSynchronously(now: Date())
 
+        // One request per due schedule so each type group gets the full
+        // filter capacity: publicMessages, fragment, and fileTransfer.
         let sentPackets = delegate.packets
-        #expect(sentPackets.count == 1)
+        #expect(sentPackets.count == 3)
         let decoded = sentPackets.compactMap { RequestSyncPacket.decode(from: $0.payload) }
-        #expect(decoded.count == 1)
-        let types = try #require(decoded.first?.types)
-        #expect(types.contains(.announce))
-        #expect(types.contains(.message))
-        #expect(types.contains(.fragment))
-        #expect(types.contains(.fileTransfer))
+        #expect(decoded.count == 3)
+        let allTypes = decoded.compactMap(\.types).reduce(SyncTypeFlags(rawValue: 0)) { $0.union($1) }
+        #expect(allTypes.contains(.announce))
+        #expect(allTypes.contains(.message))
+        #expect(allTypes.contains(.fragment))
+        #expect(allTypes.contains(.fileTransfer))
+        #expect(decoded.contains { $0.types == .publicMessages })
+        #expect(decoded.contains { $0.types == .fragment })
+        #expect(decoded.contains { $0.types == .fileTransfer })
+    }
+
+    @Test func truncatedFilterCarriesSinceCursor() throws {
+        var config = GossipSyncManager.Config()
+        config.seenCapacity = 100
+        config.gcsMaxBytes = 32 // caps the filter at 28 IDs (256 bits / 9 bits per element)
+        config.messageSyncIntervalSeconds = 1
+        config.fragmentSyncIntervalSeconds = 0
+        config.fileTransferSyncIntervalSeconds = 0
+        config.maintenanceIntervalSeconds = 0
+
+        let requestSyncManager = RequestSyncManager()
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: requestSyncManager)
+        let delegate = RecordingDelegate()
+        manager.delegate = delegate
+
+        let sender = try #require(Data(hexString: "1122334455667788"))
+        let baseTimestamp = UInt64(Date().timeIntervalSince1970 * 1000)
+        let totalMessages = 40
+        for i in 0..<totalMessages {
+            let packet = BitchatPacket(
+                type: MessageType.message.rawValue,
+                senderID: sender,
+                recipientID: nil,
+                timestamp: baseTimestamp + UInt64(i),
+                payload: Data([UInt8(truncatingIfNeeded: i)]),
+                signature: nil,
+                ttl: 1
+            )
+            manager.onPublicPacketSeen(packet)
+        }
+
+        manager._performMaintenanceSynchronously(now: Date())
+
+        let packet = try #require(delegate.packets.first)
+        let request = try #require(RequestSyncPacket.decode(from: packet.payload))
+        // The store (40) exceeds what the tiny filter can cover, so a cursor
+        // must be present. It points at the oldest timestamp the filter
+        // actually encodes: the filter covers the newest ~28, and byte-budget
+        // trimming can only shrink that further, so the cursor sits at or
+        // above baseTimestamp + 12 (= 40 - 28) and below the newest message.
+        let since = try #require(request.sinceTimestamp)
+        #expect(since >= baseTimestamp + 12)
+        #expect(since < baseTimestamp + UInt64(totalMessages))
+    }
+
+    @Test func fullCoverageFilterOmitsSinceCursor() throws {
+        var config = GossipSyncManager.Config()
+        config.seenCapacity = 100
+        config.messageSyncIntervalSeconds = 1
+        config.fragmentSyncIntervalSeconds = 0
+        config.fileTransferSyncIntervalSeconds = 0
+        config.maintenanceIntervalSeconds = 0
+
+        let requestSyncManager = RequestSyncManager()
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: requestSyncManager)
+        let delegate = RecordingDelegate()
+        manager.delegate = delegate
+
+        let sender = try #require(Data(hexString: "1122334455667788"))
+        let packet = BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: sender,
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: Data([0x01]),
+            signature: nil,
+            ttl: 1
+        )
+        manager.onPublicPacketSeen(packet)
+
+        manager._performMaintenanceSynchronously(now: Date())
+
+        let sent = try #require(delegate.packets.first)
+        let request = try #require(RequestSyncPacket.decode(from: sent.payload))
+        #expect(request.sinceTimestamp == nil)
+    }
+
+    @Test func handleRequestSyncHonorsSinceCursorButAlwaysSendsAnnounces() async throws {
+        var config = GossipSyncManager.Config()
+        config.seenCapacity = 5
+        config.messageSyncIntervalSeconds = 0
+        config.fragmentSyncIntervalSeconds = 0
+        config.fileTransferSyncIntervalSeconds = 0
+
+        let requestSyncManager = RequestSyncManager()
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: requestSyncManager)
+        let delegate = RecordingDelegate()
+        manager.delegate = delegate
+
+        let sender = try #require(Data(hexString: "aabbccddeeff0011"))
+        let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
+
+        // Announce older than the cursor: must still be sent (identity is
+        // needed to verify everything else).
+        let announcePacket = BitchatPacket(
+            type: MessageType.announce.rawValue,
+            senderID: sender,
+            recipientID: nil,
+            timestamp: nowMs - 50_000,
+            payload: Data(),
+            signature: nil,
+            ttl: 1
+        )
+        let oldMessage = BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: sender,
+            recipientID: nil,
+            timestamp: nowMs - 60_000,
+            payload: Data([0x01]),
+            signature: nil,
+            ttl: 1
+        )
+        let newMessage = BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: sender,
+            recipientID: nil,
+            timestamp: nowMs,
+            payload: Data([0x02]),
+            signature: nil,
+            ttl: 1
+        )
+
+        manager.onPublicPacketSeen(announcePacket)
+        manager.onPublicPacketSeen(oldMessage)
+        manager.onPublicPacketSeen(newMessage)
+
+        let peer = PeerID(str: "FFFFFFFFFFFFFFFF")
+        let request = RequestSyncPacket(
+            p: 7,
+            m: 1,
+            data: Data(),
+            types: .publicMessages,
+            sinceTimestamp: nowMs - 30_000
+        )
+        manager.handleRequestSync(from: peer, request: request)
+
+        try await TestHelpers.waitFor({ delegate.packets.count == 2 }, timeout: TestConstants.shortTimeout)
+        // Barrier: flush the sync queue so a late third packet would be visible.
+        manager._performMaintenanceSynchronously(now: Date())
+        let sentPackets = delegate.packets
+        #expect(sentPackets.count == 2)
+        #expect(sentPackets.contains { $0.type == MessageType.announce.rawValue })
+        let sentMessages = sentPackets.filter { $0.type == MessageType.message.rawValue }
+        #expect(sentMessages.count == 1)
+        #expect(sentMessages.first?.payload == Data([0x02]))
+        #expect(sentPackets.allSatisfy { $0.isRSR })
+    }
+
+    @Test func handleRequestSyncIsRateLimitedPerPeer() async throws {
+        var config = GossipSyncManager.Config()
+        config.seenCapacity = 5
+        config.messageSyncIntervalSeconds = 0
+        config.fragmentSyncIntervalSeconds = 0
+        config.fileTransferSyncIntervalSeconds = 0
+        config.responseRateLimitMaxResponses = 1
+        config.responseRateLimitWindowSeconds = 60
+
+        let requestSyncManager = RequestSyncManager()
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: requestSyncManager)
+        let delegate = RecordingDelegate()
+        manager.delegate = delegate
+
+        let sender = try #require(Data(hexString: "aabbccddeeff0011"))
+        let messagePacket = BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: sender,
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: Data([0x10]),
+            signature: nil,
+            ttl: 1
+        )
+        manager.onPublicPacketSeen(messagePacket)
+
+        let peer = PeerID(str: "FFFFFFFFFFFFFFFF")
+        let request = RequestSyncPacket(p: 7, m: 1, data: Data(), types: .message)
+        manager.handleRequestSync(from: peer, request: request)
+        manager.handleRequestSync(from: peer, request: request)
+
+        try await TestHelpers.waitFor({ delegate.packets.count >= 1 }, timeout: TestConstants.shortTimeout)
+        // Barrier: both requests have been processed once this returns.
+        manager._performMaintenanceSynchronously(now: Date())
+        #expect(delegate.packets.count == 1)
     }
 
     @Test func initialSyncCoalescesEnabledTypes() async throws {

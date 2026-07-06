@@ -35,6 +35,14 @@ struct BLERouteForwardingPolicy {
         routingPeer: (Data) -> PeerID?,
         isPeerConnected: (PeerID) -> Bool
     ) -> BLERouteForwardingPlan {
+        // REQUEST_SYNC is link-local: never forward it, on the flood path or
+        // the source-routed path. A crafted request with a route and TTL
+        // headroom must not be able to fan a full-store replay out to the next
+        // hop. Suppressing here also short-circuits the flood relay.
+        if packet.type == MessageType.requestSync.rawValue {
+            return .suppressFloodRelay
+        }
+
         if PeerID(hexData: packet.recipientID) == localPeerID {
             return .suppressFloodRelay
         }

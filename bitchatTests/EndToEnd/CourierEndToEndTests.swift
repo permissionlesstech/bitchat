@@ -134,7 +134,7 @@ struct CourierEndToEndTests {
         let depositPacket = try #require(aliceOut.first(ofType: .courierEnvelope))
 
         // 2. Ferry the deposit to Carol; she carries it (opaque to her).
-        carol._test_handlePacket(depositPacket, fromPeerID: alice.myPeerID)
+        carol._test_handlePacket(depositPacket, fromPeerID: alice.myPeerID, signingPublicKey: alice.noiseSigningPublicKeyData())
         let carried = await TestHelpers.waitUntil(
             { !carol.courierStore.isEmpty },
             timeout: TestConstants.defaultTimeout
@@ -215,7 +215,7 @@ struct CourierEndToEndTests {
         #expect(deposited)
         let depositPacket = try #require(aliceOut.first(ofType: .courierEnvelope))
 
-        carol._test_handlePacket(depositPacket, fromPeerID: alice.myPeerID)
+        carol._test_handlePacket(depositPacket, fromPeerID: alice.myPeerID, signingPublicKey: alice.noiseSigningPublicKeyData())
         let carried = await TestHelpers.waitUntil(
             { !carol.courierStore.isEmpty },
             timeout: TestConstants.defaultTimeout
@@ -278,7 +278,7 @@ struct CourierEndToEndTests {
         #expect(deposited)
         let depositPacket = try #require(aliceOut.first(ofType: .courierEnvelope))
 
-        carol._test_handlePacket(depositPacket, fromPeerID: alice.myPeerID)
+        carol._test_handlePacket(depositPacket, fromPeerID: alice.myPeerID, signingPublicKey: alice.noiseSigningPublicKeyData())
         let carried = await TestHelpers.waitUntil(
             { !carol.courierStore.isEmpty },
             timeout: TestConstants.defaultTimeout
@@ -340,7 +340,7 @@ struct CourierEndToEndTests {
         #expect(deposited)
         let depositPacket = try #require(aliceOut.first(ofType: .courierEnvelope))
 
-        carol._test_handlePacket(depositPacket, fromPeerID: alice.myPeerID)
+        carol._test_handlePacket(depositPacket, fromPeerID: alice.myPeerID, signingPublicKey: alice.noiseSigningPublicKeyData())
         let carried = await TestHelpers.waitUntil(
             { !carol.courierStore.isEmpty },
             timeout: TestConstants.defaultTimeout
@@ -456,6 +456,45 @@ struct CourierEndToEndTests {
             ciphertext: sealed
         )
         let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
+        let unsigned = BitchatPacket(
+            type: MessageType.courierEnvelope.rawValue,
+            senderID: Data(hexString: alicePeerID.id) ?? Data(),
+            recipientID: Data(hexString: carol.myPeerID.id),
+            timestamp: UInt64(now.timeIntervalSince1970 * 1000),
+            payload: try #require(envelope.encode()),
+            signature: nil,
+            ttl: 1
+        )
+        let packet = try #require(alice.signPacket(unsigned))
+
+        carol._test_handlePacket(packet, fromPeerID: alicePeerID, signingPublicKey: alice.getSigningPublicKeyData())
+        let stored = await TestHelpers.waitUntil(
+            { !carol.courierStore.isEmpty },
+            timeout: TestConstants.shortTimeout
+        )
+        #expect(!stored)
+    }
+
+    @Test func unsignedDepositIsRejected() async throws {
+        let carol = makeService()
+        carol.courierDepositPolicy = { _, _ in .favorite }
+
+        let alice = NoiseEncryptionService(keychain: MockKeychain())
+        let bobKey = NoiseEncryptionService(keychain: MockKeychain()).getStaticPublicKeyData()
+        let typedPayload = try #require(BLENoisePayloadFactory.privateMessage(content: "x", messageID: "m-unsigned"))
+        let sealed = try alice.sealCourierPayload(typedPayload, recipientStaticKey: bobKey)
+        let now = Date()
+        let envelope = CourierEnvelope(
+            recipientTag: CourierEnvelope.recipientTag(
+                noiseStaticKey: bobKey,
+                epochDay: CourierEnvelope.epochDay(for: now)
+            ),
+            expiry: UInt64((now.timeIntervalSince1970 + 3600) * 1000),
+            ciphertext: sealed
+        )
+        let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
+        // Correct sender, willing policy — but no packet signature: the
+        // courier cannot authenticate the depositor, so it must not carry.
         let packet = BitchatPacket(
             type: MessageType.courierEnvelope.rawValue,
             senderID: Data(hexString: alicePeerID.id) ?? Data(),
@@ -466,7 +505,7 @@ struct CourierEndToEndTests {
             ttl: 1
         )
 
-        carol._test_handlePacket(packet, fromPeerID: alicePeerID)
+        carol._test_handlePacket(packet, fromPeerID: alicePeerID, signingPublicKey: alice.getSigningPublicKeyData())
         let stored = await TestHelpers.waitUntil(
             { !carol.courierStore.isEmpty },
             timeout: TestConstants.shortTimeout

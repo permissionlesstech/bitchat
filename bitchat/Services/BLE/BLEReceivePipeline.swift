@@ -57,6 +57,7 @@ struct BLEReceivePipeline {
             isDirectedFragment: packet.type == MessageType.fragment.rawValue && packet.recipientID != nil,
             isHandshake: packet.type == MessageType.noiseHandshake.rawValue,
             isAnnounce: packet.type == MessageType.announce.rawValue,
+            isRequestSync: packet.type == MessageType.requestSync.rawValue,
             degree: degree,
             highDegreeThreshold: highDegreeThreshold
         )

@@ -135,6 +135,25 @@ struct RelayControllerTests {
     }
 
     @Test
+    func requestSync_neverRelaysEvenWithTTLHeadroom() async {
+        let decision = RelayController.decide(
+            ttl: 7,
+            senderIsSelf: false,
+            isEncrypted: false,
+            isDirectedEncrypted: false,
+            isFragment: false,
+            isDirectedFragment: false,
+            isHandshake: false,
+            isAnnounce: false,
+            isRequestSync: true,
+            degree: 3,
+            highDegreeThreshold: TransportConfig.bleHighDegreeThreshold
+        )
+
+        #expect(!decision.shouldRelay)
+    }
+
+    @Test
     func denseGraph_capsTTL() async {
         let decision = RelayController.decide(
             ttl: 10,

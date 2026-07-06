@@ -288,7 +288,9 @@ final class BLEService: NSObject {
             fileTransferCapacity: TransportConfig.syncFileTransferCapacity,
             fragmentSyncIntervalSeconds: TransportConfig.syncFragmentIntervalSeconds,
             fileTransferSyncIntervalSeconds: TransportConfig.syncFileTransferIntervalSeconds,
-            messageSyncIntervalSeconds: TransportConfig.syncMessageIntervalSeconds
+            messageSyncIntervalSeconds: TransportConfig.syncMessageIntervalSeconds,
+            responseRateLimitMaxResponses: TransportConfig.syncResponseRateLimitMaxResponses,
+            responseRateLimitWindowSeconds: TransportConfig.syncResponseRateLimitWindowSeconds
         )
 
         // Only real Bluetooth sessions archive to disk; unit tests stay hermetic.
@@ -2542,7 +2544,7 @@ extension BLEService {
     }
 
     private func makeCourierPacket(_ payload: Data, to peerID: PeerID) -> BitchatPacket {
-        BitchatPacket(
+        let packet = BitchatPacket(
             type: MessageType.courierEnvelope.rawValue,
             senderID: myPeerIDData,
             recipientID: Data(hexString: peerID.id),
@@ -2551,6 +2553,10 @@ extension BLEService {
             signature: nil,
             ttl: messageTTL
         )
+        // Signed so a courier can authenticate the depositor before carrying
+        // mail under their quota. Handover to the recipient doesn't need the
+        // packet signature — the inner Noise X seal authenticates the sender.
+        return noiseService.signPacket(packet) ?? packet
     }
 
     /// Handles both courier roles for an incoming envelope addressed to us:
@@ -2566,7 +2572,7 @@ extension BLEService {
         if CourierEnvelope.candidateTags(noiseStaticKey: myKey, around: Date()).contains(envelope.recipientTag) {
             openCourierEnvelope(envelope)
         } else {
-            acceptCourierDeposit(envelope, from: peerID)
+            acceptCourierDeposit(envelope, from: peerID, packet: packet)
         }
     }
 
@@ -2611,10 +2617,24 @@ extension BLEService {
         }
     }
 
-    private func acceptCourierDeposit(_ envelope: CourierEnvelope, from peerID: PeerID) {
+    private func acceptCourierDeposit(_ envelope: CourierEnvelope, from peerID: PeerID, packet: BitchatPacket) {
+        // A deposit must come from its depositor over the direct link: the
+        // claimed sender has to be the ingress peer, and the packet signature
+        // has to verify against that peer's announced signing key. Otherwise
+        // an untrusted sender could route an envelope through any trusted
+        // neighbor and have us carry it under the neighbor's quota.
+        guard PeerID(hexData: packet.senderID) == peerID else {
+            SecureLogger.debug("📦 Courier deposit rejected: relayed envelope claims sender \(PeerID(hexData: packet.senderID).id.prefix(8))… but arrived from \(peerID.id.prefix(8))…", category: .security)
+            return
+        }
         let depositorInfo = collectionsQueue.sync { peerRegistry.info(for: peerID) }
         guard let depositorKey = depositorInfo?.noisePublicKey else {
             SecureLogger.debug("📦 Courier deposit from unknown peer \(peerID.id.prefix(8))… rejected", category: .session)
+            return
+        }
+        guard let signingKey = depositorInfo?.signingPublicKey,
+              noiseService.verifyPacketSignature(packet, publicKey: signingKey) else {
+            SecureLogger.debug("📦 Courier deposit from \(peerID.id.prefix(8))… rejected (missing/invalid signature)", category: .security)
             return
         }
         let isVerifiedPeer = depositorInfo?.isVerifiedNickname ?? false
@@ -3356,6 +3376,26 @@ extension BLEService {
 
     // Handle REQUEST_SYNC: decode payload and respond with missing packets via sync manager
     private func handleRequestSync(_ packet: BitchatPacket, from peerID: PeerID) {
+        // REQUEST_SYNC is link-local by design (always sent with ttl 0): a
+        // nonzero TTL means a crafted or relayed request, and answering one
+        // would let a single small packet fan a full store replay out of
+        // every node it reaches.
+        guard packet.ttl == 0 else {
+            if logRateLimiter.shouldLog(key: "sync-ttl:\(peerID.id)") {
+                SecureLogger.warning("🚫 Dropping REQUEST_SYNC with nonzero TTL from \(peerID.id.prefix(8))…", category: .security)
+            }
+            return
+        }
+        // A response can replay the entire gossip store, so require proof the
+        // requester owns the claimed sender ID: the request must verify
+        // against the signing key from that peer's announce.
+        let signingKey = collectionsQueue.sync { peerRegistry.info(for: peerID)?.signingPublicKey }
+        guard let signingKey, noiseService.verifyPacketSignature(packet, publicKey: signingKey) else {
+            if logRateLimiter.shouldLog(key: "sync-sig:\(peerID.id)") {
+                SecureLogger.warning("🚫 Dropping REQUEST_SYNC without verifiable signature from \(peerID.id.prefix(8))…", category: .security)
+            }
+            return
+        }
         guard let req = RequestSyncPacket.decode(from: packet.payload) else {
             SecureLogger.warning("⚠️ Malformed REQUEST_SYNC from \(peerID.id.prefix(8))…", category: .session)
             return

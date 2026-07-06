@@ -112,6 +112,36 @@ struct BLERouteForwardingPolicyTests {
         #expect(plan.nextHop == nil)
     }
 
+    @Test("REQUEST_SYNC is never route-forwarded even with a route and TTL headroom")
+    func requestSyncNeverRouteForwarded() {
+        let previous = peer("1111111111111111")
+        let local = peer("2222222222222222")
+        let nextHop = peer("3333333333333333")
+        let destination = peer("4444444444444444")
+        var packet = makePacket(
+            sender: previous,
+            recipient: destination,
+            ttl: 7,
+            route: [routeData(local), routeData(nextHop)]
+        )
+        packet = BitchatPacket(
+            type: MessageType.requestSync.rawValue,
+            senderID: packet.senderID,
+            recipientID: packet.recipientID,
+            timestamp: packet.timestamp,
+            payload: packet.payload,
+            signature: nil,
+            ttl: packet.ttl,
+            route: packet.route
+        )
+
+        let plan = forwardingPlan(packet, local: local, connected: [nextHop])
+
+        #expect(plan.shouldSuppressFloodRelay)
+        #expect(plan.forwardPacket == nil)
+        #expect(plan.nextHop == nil)
+    }
+
     private func forwardingPlan(
         _ packet: BitchatPacket,
         local: PeerID,

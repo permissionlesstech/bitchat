@@ -278,6 +278,8 @@ enum TransportConfig {
     static let syncFragmentIntervalSeconds: TimeInterval = 30.0
     static let syncFileTransferIntervalSeconds: TimeInterval = 60.0
     static let syncMessageIntervalSeconds: TimeInterval = 15.0
+    static let syncResponseRateLimitMaxResponses: Int = 8
+    static let syncResponseRateLimitWindowSeconds: TimeInterval = 30.0
 
     // Courier store-and-forward
     // Initial spray-and-wait budget per deposited envelope: each courier may
