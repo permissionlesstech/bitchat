@@ -185,7 +185,7 @@ final class AppRuntime: ObservableObject {
         favorites: FavoritesPersistenceService
     ) -> Bool {
         isDirectChatRestorable(peerID, isPeerFavorited: {
-            favorites.getFavoriteStatus(forPeerID: $0.toShort()) != nil
+            favorites.getFavoriteStatus(forPeerID: $0.toShort())?.isFavorite ?? false
         })
     }
 

@@ -85,7 +85,7 @@ struct ContentPeopleSheetView: View {
                 }
             }
             .navigationDestination(isPresented: Binding(
-                get: { appChromeModel.showingFingerprintFor != nil && (showSidebar || privateConversationModel.selectedPeerID != nil) },
+                get: { appChromeModel.showingFingerprintFor != nil && (showSidebar || privateConversationModel.selectedPeerID != nil || appChromeModel.presentsConversationListOnLaunch) },
                 set: { isPresented in
                     if !isPresented {
                         appChromeModel.clearFingerprint()
@@ -105,7 +105,7 @@ struct ContentPeopleSheetView: View {
         #endif
         #if os(iOS)
         .fullScreenCover(isPresented: Binding(
-            get: { showImagePicker && (showSidebar || privateConversationModel.selectedPeerID != nil) },
+            get: { showImagePicker && (showSidebar || privateConversationModel.selectedPeerID != nil || appChromeModel.presentsConversationListOnLaunch) },
             set: { newValue in
                 if !newValue {
                     showImagePicker = false

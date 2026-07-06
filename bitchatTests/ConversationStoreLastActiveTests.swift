@@ -183,6 +183,27 @@ final class ConversationStoreLastActiveTests: XCTestCase {
         )
     }
 
+    func test_production_unfavoritedPeerWhoStillFavoritesUsIsNotRestorable() {
+        // removeFavorite RETAINS a record (isFavorite: false, theyFavoritedUs:
+        // true) when the peer still favorites us. The resolver must key on
+        // isFavorite, not mere record existence — otherwise a DM to a peer we
+        // deliberately unfavorited reopens on restart, contradicting the
+        // "is a persisted favorite" contract. Regression for Codex P2 review.
+        let favorites = FavoritesPersistenceService(keychain: MockKeychain())
+        let noiseKey = Data((0..<32).map(UInt8.init))
+        favorites.addFavorite(peerNoisePublicKey: noiseKey, peerNickname: "Alice")
+        favorites.updatePeerFavoritedUs(peerNoisePublicKey: noiseKey, favorited: true)
+        favorites.removeFavorite(peerNoisePublicKey: noiseKey)
+
+        let fullHexPeer = PeerID(str: noiseKey.hexEncodedString())
+        // The record survives (they still favorite us) but isFavorite is false.
+        XCTAssertNotNil(favorites.getFavoriteStatus(forPeerID: fullHexPeer.toShort()))
+        XCTAssertFalse(favorites.getFavoriteStatus(forPeerID: fullHexPeer.toShort())!.isFavorite)
+        XCTAssertFalse(
+            AppRuntime.isDirectChatRestorable(fullHexPeer, favorites: favorites)
+        )
+    }
+
     // MARK: - Helpers
 
     private func makeStorage() -> UserDefaults {
