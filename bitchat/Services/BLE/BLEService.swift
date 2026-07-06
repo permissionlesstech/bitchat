@@ -619,6 +619,12 @@ final class BLEService: NSObject {
         }
     }
 
+    /// Capabilities the peer advertised in its last verified announce.
+    /// Empty for peers that predate the capabilities TLV.
+    func peerCapabilities(_ peerID: PeerID) -> PeerCapabilities {
+        collectionsQueue.sync { peerRegistry.capabilities(for: peerID) }
+    }
+
     func getPeerNicknames() -> [PeerID: String] {
         return collectionsQueue.sync {
             peerRegistry.displayNicknames(selfNickname: myNickname)
@@ -1261,7 +1267,8 @@ final class BLEService: NSObject {
             nickname: myNickname,
             noisePublicKey: noisePub,
             signingPublicKey: signingPub,
-            directNeighbors: connectedPeerIDs
+            directNeighbors: connectedPeerIDs,
+            capabilities: PeerCapabilities.localSupported
         )
         
         guard let payload = announcement.encode() else {
@@ -3315,7 +3322,8 @@ extension BLEService {
                     noisePublicKey: announcement.noisePublicKey,
                     signingPublicKey: announcement.signingPublicKey,
                     isConnected: isConnected,
-                    now: now
+                    now: now,
+                    capabilities: announcement.capabilities ?? []
                 ) ?? BLEPeerAnnounceUpdate(isNewPeer: false, wasDisconnected: false, previousNickname: nil)
             },
             shouldEmitReconnectLog: { [weak self] peerID, now in

@@ -1,3 +1,4 @@
+import BitFoundation
 import Foundation
 import Testing
 
@@ -106,6 +107,42 @@ struct PacketsTests {
 
         let decoded = try #require(AnnouncementPacket.decode(from: encoded))
         #expect(decoded.directNeighbors == nil)
+    }
+
+    @Test
+    func announcementPacketRoundTripsCapabilities() throws {
+        let capabilities: PeerCapabilities = [.prekeys, .board, .meshDiagnostics]
+        let packet = AnnouncementPacket(
+            nickname: "alice",
+            noisePublicKey: Data(repeating: 0x11, count: 32),
+            signingPublicKey: Data(repeating: 0x22, count: 32),
+            directNeighbors: nil,
+            capabilities: capabilities
+        )
+
+        let encoded = try #require(packet.encode())
+        let decoded = try #require(AnnouncementPacket.decode(from: encoded))
+        #expect(decoded.capabilities == capabilities)
+    }
+
+    @Test
+    func announcementPacketWithoutCapabilitiesDecodesNilAndUnknownBitsSurvive() throws {
+        let legacy = try #require(
+            AnnouncementPacket(
+                nickname: "alice",
+                noisePublicKey: Data(repeating: 0x11, count: 32),
+                signingPublicKey: Data(repeating: 0x22, count: 32),
+                directNeighbors: nil
+            ).encode()
+        )
+        // The TLV is emitted only when capabilities are set, so legacy peers
+        // (and this packet) decode as nil rather than empty.
+        #expect(try #require(AnnouncementPacket.decode(from: legacy)).capabilities == nil)
+
+        var withFutureBits = legacy
+        withFutureBits.append(makeTLV(type: 0x05, value: Data([0x80, 0x01])))
+        let decoded = try #require(AnnouncementPacket.decode(from: withFutureBits))
+        #expect(decoded.capabilities?.rawValue == 0x0180)
     }
 
     @Test
