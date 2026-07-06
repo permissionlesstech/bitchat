@@ -40,6 +40,13 @@ final class BoardStore {
         /// Retention for a tombstone whose post we never saw: we cannot know
         /// the original expiry, so cap at the max post lifetime.
         static let orphanTombstoneLifetimeMs = BoardWireConstants.maxLifetimeMs
+        /// Orphan tombstones name posts nobody here has seen, so their volume
+        /// is entirely sender-controlled; cap them like posts.
+        static let maxOrphanTombstones = 100
+        static let maxOrphanTombstonesPerAuthor = 5
+        /// Allowance for clock skew between peers when judging received
+        /// timestamps against local time.
+        static let clockSkewMs: UInt64 = 60 * 60 * 1000
     }
 
     private struct StoredPost {
@@ -53,6 +60,9 @@ final class BoardStore {
         let packet: BitchatPacket
         let rawPacket: Data
         let retainUntil: UInt64
+        /// True when no matching post was known at ingest time; only these
+        /// count against the orphan caps.
+        let isOrphan: Bool
     }
 
     /// On-disk entry: the raw signed packet, plus the retention deadline for
@@ -161,6 +171,14 @@ final class BoardStore {
 
     private func ingestPostLocked(_ post: BoardPostPacket, packet: BitchatPacket, rawPacket: Data, nowMs: UInt64) -> BoardIngestResult {
         guard post.expiresAt > nowMs else { return .rejected }
+        // Receive-time sanity (this is the single chokepoint for radio, sync,
+        // and disk restores): the decoder only enforces the createdAt to
+        // expiresAt span, so a forged future createdAt would sort ahead of
+        // honest posts and hold a store slot without ever pruning.
+        guard post.createdAt <= nowMs &+ Limits.clockSkewMs,
+              post.expiresAt <= nowMs &+ BoardWireConstants.maxLifetimeMs &+ Limits.clockSkewMs else {
+            return .rejected
+        }
         if tombstones.contains(where: { $0.tombstone.postID == post.postID && $0.tombstone.authorSigningKey == post.authorSigningKey }) {
             return .rejected
         }
@@ -191,9 +209,16 @@ final class BoardStore {
     ) -> BoardIngestResult {
         guard !tombstones.contains(where: { $0.tombstone.postID == tombstone.postID }) else { return .duplicate }
 
-        // Cap so a doctored file cannot pin a tombstone past any legal expiry.
-        let maxRetain = tombstone.deletedAt &+ Limits.orphanTombstoneLifetimeMs
+        // Cap retention by both the claimed deletion time (so a doctored file
+        // cannot pin a tombstone past any legal expiry) and the receive time:
+        // deletedAt is sender-chosen, so a far-future value must not retain
+        // the tombstone longer than any post still able to arrive could live.
+        let maxRetain = min(
+            tombstone.deletedAt &+ Limits.orphanTombstoneLifetimeMs,
+            nowMs &+ Limits.orphanTombstoneLifetimeMs &+ Limits.clockSkewMs
+        )
         let retainUntil: UInt64
+        let isOrphan: Bool
         if let index = posts.firstIndex(where: { $0.post.postID == tombstone.postID }) {
             let target = posts[index].post
             // Only the author's key can delete: the tombstone signature was
@@ -201,20 +226,48 @@ final class BoardStore {
             // require that key to be the post's author key.
             guard target.authorSigningKey == tombstone.authorSigningKey else { return .rejected }
             retainUntil = target.expiresAt
+            isOrphan = false
             posts.remove(at: index)
             publishSnapshotLocked()
         } else if let retainUntilOverride {
             // Restored from disk: the post is long gone, so trust the
             // retention deadline recorded when the delete was first applied.
+            // Orphans were already capped when first ingested off the air.
             retainUntil = min(retainUntilOverride, maxRetain)
+            isOrphan = false
         } else {
             // Post unknown (tombstone raced ahead); keep it around so the
             // post is suppressed if it arrives later.
             retainUntil = maxRetain
+            isOrphan = true
         }
         guard retainUntil > nowMs else { return .rejected }
-        tombstones.append(StoredTombstone(tombstone: tombstone, packet: packet, rawPacket: rawPacket, retainUntil: retainUntil))
+        tombstones.append(StoredTombstone(tombstone: tombstone, packet: packet, rawPacket: rawPacket, retainUntil: retainUntil, isOrphan: isOrphan))
+        if isOrphan {
+            enforceOrphanTombstoneCapsLocked(author: tombstone.authorSigningKey)
+        }
+        // Like posts, a locally evicted tombstone stays valid mesh-wide.
         return .accepted
+    }
+
+    /// Orphan tombstones reference posts we never saw, so a peer can mint
+    /// unlimited valid ones for random IDs; bound them per author and
+    /// globally, evicting the oldest received first (array order).
+    private func enforceOrphanTombstoneCapsLocked(author: Data) {
+        let authorOrphans = tombstones.filter { $0.isOrphan && $0.tombstone.authorSigningKey == author }
+        if authorOrphans.count > Limits.maxOrphanTombstonesPerAuthor {
+            removeTombstonesLocked(authorOrphans.prefix(authorOrphans.count - Limits.maxOrphanTombstonesPerAuthor))
+        }
+        let orphans = tombstones.filter(\.isOrphan)
+        if orphans.count > Limits.maxOrphanTombstones {
+            removeTombstonesLocked(orphans.prefix(orphans.count - Limits.maxOrphanTombstones))
+        }
+    }
+
+    private func removeTombstonesLocked(_ victims: ArraySlice<StoredTombstone>) {
+        guard !victims.isEmpty else { return }
+        let victimIDs = Set(victims.map { $0.tombstone.postID })
+        tombstones.removeAll { victimIDs.contains($0.tombstone.postID) }
     }
 
     private func evictOldestLocked(from candidates: [StoredPost], keep: Int) {

@@ -119,6 +119,40 @@ struct BoardStoreTests {
         #expect(store.posts(forGeohash: "9q8yy").isEmpty)
     }
 
+    // MARK: - Receive-time timestamp policy
+
+    @Test func rejectsPostCreatedBeyondClockSkew() throws {
+        let clock = MutableClock(now: baseDate)
+        let store = makeStore(clock: clock)
+        let author = Curve25519.Signing.PrivateKey()
+        let entry = try makePost(author: author, createdAt: baseMs + BoardStore.Limits.clockSkewMs + 60 * 1000)
+
+        #expect(store.ingest(entry.wire, packet: entry.packet) == .rejected)
+        #expect(store.posts(forGeohash: "9q8yy").isEmpty)
+    }
+
+    @Test func acceptsPostCreatedWithinClockSkew() throws {
+        let clock = MutableClock(now: baseDate)
+        let store = makeStore(clock: clock)
+        let author = Curve25519.Signing.PrivateKey()
+        let entry = try makePost(author: author, createdAt: baseMs + BoardStore.Limits.clockSkewMs - 60 * 1000)
+
+        #expect(store.ingest(entry.wire, packet: entry.packet) == .accepted)
+        #expect(store.posts(forGeohash: "9q8yy").count == 1)
+    }
+
+    @Test func rejectsPostExpiringTooFarInTheFuture() throws {
+        // Builds the wire directly, bypassing the decoder's span check, to
+        // exercise the ingest-level expiresAt bound on its own.
+        let clock = MutableClock(now: baseDate)
+        let store = makeStore(clock: clock)
+        let author = Curve25519.Signing.PrivateKey()
+        let entry = try makePost(author: author, createdAt: baseMs, lifetimeMs: 30 * 24 * 60 * 60 * 1000)
+
+        #expect(store.ingest(entry.wire, packet: entry.packet) == .rejected)
+        #expect(store.posts(forGeohash: "9q8yy").isEmpty)
+    }
+
     // MARK: - Caps and eviction
 
     @Test func perAuthorCapEvictsOldest() throws {
@@ -226,6 +260,80 @@ struct BoardStoreTests {
         #expect(store.ingest(tombstone.wire, packet: tombstone.packet) == .accepted)
         #expect(store.ingest(entry.wire, packet: entry.packet) == .rejected)
         #expect(store.posts(forGeohash: "9q8yy").isEmpty)
+    }
+
+    @Test func orphanTombstoneRetentionIsBoundedByReceiveTime() throws {
+        let clock = MutableClock(now: baseDate)
+        let store = makeStore(clock: clock)
+        let author = Curve25519.Signing.PrivateKey()
+        let entry = try makePost(author: author, createdAt: baseMs) // never ingested
+
+        // Attacker-chosen far-future deletedAt must not extend retention.
+        let farFuture = baseMs + 365 * 24 * 60 * 60 * 1000
+        let tombstone = try makeTombstone(for: entry.post, author: author, deletedAt: farFuture)
+        #expect(store.ingest(tombstone.wire, packet: tombstone.packet) == .accepted)
+        #expect(store.syncCandidates().count == 1)
+
+        // No post can outlive 7 days from receipt, so neither may an orphan
+        // tombstone (plus skew allowance).
+        clock.now = baseDate.addingTimeInterval(8 * 24 * 60 * 60)
+        #expect(store.syncCandidates().isEmpty)
+    }
+
+    @Test func orphanTombstonePerAuthorCapEvictsOldest() throws {
+        let clock = MutableClock(now: baseDate)
+        let store = makeStore(clock: clock)
+        let author = Curve25519.Signing.PrivateKey()
+
+        var unseenPosts: [(wire: BoardWire, packet: BitchatPacket, post: BoardPostPacket)] = []
+        for index in 0..<(BoardStore.Limits.maxOrphanTombstonesPerAuthor + 1) {
+            let entry = try makePost(author: author, createdAt: baseMs + UInt64(index))
+            unseenPosts.append(entry)
+            let tombstone = try makeTombstone(for: entry.post, author: author, deletedAt: baseMs + 1000)
+            #expect(store.ingest(tombstone.wire, packet: tombstone.packet) == .accepted)
+        }
+
+        #expect(store.syncCandidates().count == BoardStore.Limits.maxOrphanTombstonesPerAuthor)
+        // The oldest orphan was evicted, so its post is no longer suppressed…
+        #expect(store.ingest(unseenPosts[0].wire, packet: unseenPosts[0].packet) == .accepted)
+        // …while the surviving orphans still suppress theirs.
+        #expect(store.ingest(unseenPosts[1].wire, packet: unseenPosts[1].packet) == .rejected)
+    }
+
+    @Test func orphanTombstoneGlobalCapEvictsOldest() throws {
+        let clock = MutableClock(now: baseDate)
+        let store = makeStore(clock: clock)
+
+        var author = Curve25519.Signing.PrivateKey()
+        for index in 0..<(BoardStore.Limits.maxOrphanTombstones + 1) {
+            if index % BoardStore.Limits.maxOrphanTombstonesPerAuthor == 0 {
+                author = Curve25519.Signing.PrivateKey()
+            }
+            let entry = try makePost(author: author, createdAt: baseMs + UInt64(index))
+            let tombstone = try makeTombstone(for: entry.post, author: author, deletedAt: baseMs + 1000)
+            #expect(store.ingest(tombstone.wire, packet: tombstone.packet) == .accepted)
+        }
+
+        #expect(store.syncCandidates().count == BoardStore.Limits.maxOrphanTombstones)
+    }
+
+    @Test func matchedTombstonesAreExemptFromOrphanCaps() throws {
+        let clock = MutableClock(now: baseDate)
+        let store = makeStore(clock: clock)
+        let author = Curve25519.Signing.PrivateKey()
+
+        // Post-then-delete more times than the per-author orphan cap; every
+        // tombstone matched a live post, so none may be evicted.
+        let cycles = BoardStore.Limits.maxOrphanTombstonesPerAuthor + 2
+        for index in 0..<cycles {
+            let entry = try makePost(author: author, createdAt: baseMs + UInt64(index) * 1000)
+            #expect(store.ingest(entry.wire, packet: entry.packet) == .accepted)
+            let tombstone = try makeTombstone(for: entry.post, author: author, deletedAt: baseMs + UInt64(index) * 1000 + 1)
+            #expect(store.ingest(tombstone.wire, packet: tombstone.packet) == .accepted)
+        }
+
+        #expect(store.posts(forGeohash: "9q8yy").isEmpty)
+        #expect(store.syncCandidates().count == cycles)
     }
 
     // MARK: - Persistence and wipe
