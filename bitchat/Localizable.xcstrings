@@ -5142,7 +5142,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "symbols"
+            "value" : "SYMBOLS"
           }
         }
       }
@@ -5178,7 +5178,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "network"
+            "value" : "NETWORK"
           }
         }
       }

@@ -239,6 +239,27 @@ struct AppInfoView: View {
                 .foregroundColor(textColor)
             }
 
+            // Network diagnostics
+            if topologyProvider != nil {
+                VStack(alignment: .leading, spacing: 16) {
+                    SectionHeader(Strings.Network.title)
+
+                    Button {
+                        showTopology = true
+                    } label: {
+                        HStack(spacing: 0) {
+                            FeatureRow(info: Strings.Network.topology)
+                            Image(systemName: "chevron.right")
+                                .font(.bitchatSystem(size: 12))
+                                .foregroundColor(secondaryTextColor)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint(Text("app_info.network.topology.hint"))
+                }
+            }
+
             // Features
             VStack(alignment: .leading, spacing: 16) {
                 SectionHeader(Strings.Features.title)
@@ -275,27 +296,6 @@ struct AppInfoView: View {
                         Spacer()
                     }
                     .accessibilityElement(children: .combine)
-                }
-            }
-
-            // Network diagnostics
-            if topologyProvider != nil {
-                VStack(alignment: .leading, spacing: 16) {
-                    SectionHeader(Strings.Network.title)
-
-                    Button {
-                        showTopology = true
-                    } label: {
-                        HStack(spacing: 0) {
-                            FeatureRow(info: Strings.Network.topology)
-                            Image(systemName: "chevron.right")
-                                .font(.bitchatSystem(size: 12))
-                                .foregroundColor(secondaryTextColor)
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityHint(Text("app_info.network.topology.hint"))
                 }
             }
 
