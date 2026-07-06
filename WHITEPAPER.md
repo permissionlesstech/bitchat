@@ -1,309 +1,141 @@
-# BitChat Protocol Whitepaper
+# bitchat Protocol Whitepaper
 
-**Version 1.1**
+**Version 2.0**
 
-**Date: July 25, 2025**
+**Date: July 6, 2026**
 
 ---
 
 ## Abstract
 
-BitChat is a decentralized, peer-to-peer messaging application designed for secure, private, and censorship-resistant communication over ephemeral, ad-hoc networks. This whitepaper details the BitChat Protocol Stack, a layered architecture that combines a modern cryptographic foundation with a flexible application protocol. At its core, BitChat leverages the Noise Protocol Framework (specifically, the `XX` pattern) to establish mutually authenticated, end-to-end encrypted sessions between peers. This document provides a technical specification of the identity management, session lifecycle, message framing, and security considerations that underpin the BitChat network.
+bitchat is a decentralized, peer-to-peer messaging application for secure, private, censorship-resistant communication that works with or without the internet. Nearby devices form an ad-hoc Bluetooth Low Energy (BLE) mesh; distant peers are reached over the Nostr protocol when a connection exists. A layered store-and-forward stack — a persistent sender outbox, opportunistic couriers with a spray-and-wait copy budget, gossip-synced public history, and Nostr relay mailboxes — delivers messages to peers who are out of range at send time. This document describes the protocol and its delivery guarantees as implemented.
 
 ---
 
-## 1. Introduction
+## 1. Design Goals
 
-In an era of centralized communication platforms, BitChat offers a resilient alternative by operating without central servers. It is designed for scenarios where internet connectivity is unavailable or untrustworthy, such as protests, natural disasters, or remote areas. Communication occurs directly between devices over transports like Bluetooth Low Energy (BLE).
+* **Confidentiality:** all private communication is end-to-end encrypted; intermediate nodes and couriers carry only opaque ciphertext.
+* **Authentication:** peers are identified by cryptographic keys; announcements are signed and verified.
+* **Resilience:** the network functions in lossy, low-bandwidth, partitioned environments with churning membership.
+* **Eventual delivery:** a message to an out-of-range peer should still arrive — relayed by the mesh, carried by a moving person, or resting on an internet relay — within a bounded retention window.
+* **Ephemerality by default:** no plaintext message content is ever written to disk. Everything the store-and-forward stack persists is either sealed ciphertext or already-public broadcast traffic, and all of it dies with the panic wipe.
 
-The design goals of the BitChat Protocol are:
+## 2. Architecture Overview
 
-*   **Confidentiality:** All communication must be unreadable to third parties.
-*   **Authentication:** Users must be able to verify the identity of their correspondents.
-*   **Integrity:** Messages cannot be tampered with in transit.
-*   **Forward Secrecy:** The compromise of long-term identity keys must not compromise past session keys.
-*   **Deniability:** It should be difficult to cryptographically prove that a specific user sent a particular message.
-*   **Resilience:** The protocol must function reliably in lossy, low-bandwidth environments.
+Two transports implement a common `Transport` interface and are coordinated by a `MessageRouter`:
 
-This paper specifies the technical details of the protocol designed to meet these goals.
+* **BLE mesh** — every device is simultaneously a GATT central and peripheral, relaying packets in a controlled flood. No infrastructure, pairing, or accounts.
+* **Nostr** — private messages to mutual favorites travel as NIP-17 gift-wrapped events over public relays (over Tor where enabled), bridging separate meshes through the internet.
 
----
+The router prefers a live mesh link, falls back to Nostr, and engages the courier system when neither can deliver promptly.
 
-## 2. Protocol Stack
+## 3. Identity
 
-The BitChat Protocol is a four-layer stack. This layered approach separates concerns, allowing for modularity and future extensibility.
+Each device holds two long-term key pairs in the Keychain:
 
-```mermaid
-graph TD
-    A[Application Layer] --> B[Session Layer];
-    B --> C[Encryption Layer];
-    C --> D[Transport Layer];
+* a **Curve25519 static key** for Noise key agreement — its SHA-256 fingerprint is the peer's stable identity, and
+* an **Ed25519 signing key** for packet signatures.
 
-    subgraph "BitChat Application"
-        A
-    end
+On the mesh, peers appear under short ephemeral IDs derived per session; favoriting pins the full Noise public key so identity survives across sessions. Mutual favorites also exchange Nostr public keys for the internet path. Optional QR verification binds a nickname to a fingerprint in person.
 
-    subgraph "Message Framing & State"
-        B
-    end
+## 4. BLE Mesh Layer
 
-    subgraph "Noise Protocol Framework"
-        C
-    end
+### 4.1 Packet Format
 
-    subgraph "BLE, Wi-Fi Direct, etc."
-        D
-    end
+A compact binary header (version, type, TTL, timestamp, flags) is followed by an 8-byte sender ID, an optional 8-byte recipient ID, the payload, and an optional Ed25519 signature. Version 2 packets may carry an explicit source route. Signatures exclude the TTL byte so relays can decrement it without invalidating them. Packets other than fragments are padded toward uniform sizes.
 
-    style A fill:#cde4ff
-    style B fill:#b5d8ff
-    style C fill:#9ac2ff
-    style D fill:#7eadff
-```
+### 4.2 Flood Control
 
-*   **Application Layer:** Defines the structure of user-facing messages (`BitchatMessage`), acknowledgments (`DeliveryAck`), and other application-level data.
-*   **Session Layer:** Manages the overall communication packet (`BitchatPacket`). This includes routing information (TTL), message typing, fragmentation, and serialization into a compact binary format.
-*   **Encryption Layer:** Establishes and manages secure channels using the Noise Protocol Framework. It is responsible for the cryptographic handshake, session management, and transport message encryption/decryption.
-*   **Transport Layer:** The underlying physical medium used for data transmission, such as Bluetooth Low Energy (BLE). This layer is abstracted away from the core protocol.
+Relaying is a deterministic controlled flood tuned by local connection degree:
 
----
+* **TTL:** packets originate with TTL 7. Relays clamp: dense graphs (≥ 6 links) cap broadcast TTL at 5; thin chains (≤ 2 links) relay at full incoming depth.
+* **Deduplication:** an LRU seen-set (1000 entries, 5-minute expiry) keyed by sender, timestamp, type, and a payload digest drops duplicates. A scheduled relay is cancelled when a duplicate arrives first from another relay.
+* **Jitter:** relays wait a random 10–220 ms (wider when dense) so duplicate suppression wins often.
+* **Fanout subsetting:** broadcast messages are re-sent to a deterministic, message-ID-seeded subset of links (~log₂ of degree) rather than all of them; announces, fragments, and sync packets use full fanout. The ingress link is always excluded (split horizon).
+* **Directed traffic** (handshakes, private messages, courier envelopes) relays deterministically with TTL − 1 and tight jitter, and is never subset.
 
-## 3. Identity and Key Management
+### 4.3 Routing
 
-A peer's identity in BitChat is defined by two persistent cryptographic key pairs, which are generated on first launch and stored securely in the device's Keychain.
+Announcements carry up to 10 direct-neighbor IDs, giving each node a shallow topology map (60 s freshness). When a bidirectionally-confirmed path exists, packets are source-routed along it; otherwise — and whenever a route fails — delivery falls back to flooding.
 
-1.  **Noise Static Key Pair (`Curve25519`):** This is the long-term identity key used for the Noise Protocol handshake. The public part of this key is shared with peers to establish secure sessions.
-2.  **Signing Key Pair (`Ed25519`):** This key is used to sign announcements and other protocol messages where non-repudiation is required, such as binding a public key to a nickname.
+### 4.4 Fragmentation
 
-### 3.1. Fingerprint
+Packets exceeding the link MTU split into ~469-byte fragments (8-byte fragment ID, index/total header) that relay independently and reassemble at each receiving node (128 concurrent assemblies, 30 s timeout, 1 MiB cap).
 
-A user's unique, verifiable fingerprint is the **SHA-256 hash** of their **Noise static public key**. This provides a user-friendly and secure way to verify an identity out-of-band (e.g., by reading it aloud or scanning a QR code).
+### 4.5 Presence
 
-`Fingerprint = SHA256(StaticPublicKey_Curve25519)`
+Signed announcements propagate multi-hop: every 4 s while isolated, backing off to ~15–30 s (jittered) when connected. A verified announce retains a peer as *reachable* for 60 s after last contact. Connection scheduling is RSSI-gated with duty-cycled scanning to bound battery drain.
 
-### 3.2. Identity Management
+## 5. Encryption
 
-The `SecureIdentityStateManager` class is responsible for managing all cryptographic identity material and social metadata (petnames, trust levels, etc.). It uses an in-memory cache for performance and persists this cache to the Keychain after encrypting it with a separate AES-GCM key.
+### 5.1 Live Sessions: Noise XX
 
----
+Connected peers establish sessions with the Noise `XX` pattern (Curve25519 / ChaCha20-Poly1305 / SHA-256), providing mutual authentication and forward secrecy. All private payloads — messages, delivery acks, read receipts — ride inside the session as typed ciphertext. Intermediate relays see only opaque `noiseEncrypted` packets.
 
-## 4. The Social Trust Layer
+### 5.2 Offline Seals: Noise X
 
-Beyond cryptographic identity, BitChat incorporates a social trust layer, allowing users to manage their relationships with peers. This functionality is handled by the `SecureIdentityStateManager`.
+Courier envelopes are sealed to the recipient's *static* key with the one-way Noise `X` pattern; the sender's identity is authenticated inside the ciphertext. **This path has no forward secrecy** — compromise of the recipient's static key exposes sealed-but-undelivered mail. A prekey scheme is future work.
 
-### 4.1. Peer Verification
+### 5.3 Nostr Path
 
-While the Noise handshake cryptographically authenticates a peer's key, it doesn't confirm the real-world identity of the person holding the device. To solve this, users can perform out-of-band (OOB) verification by comparing fingerprints. Once a user confirms that a peer's fingerprint matches the one they expect, they can mark that peer as "verified". This status is stored locally and displayed in the UI, providing a strong assurance of identity for future conversations.
+Private messages to mutual favorites are wrapped per NIP-17/NIP-59: a rumor (kind 14) sealed (kind 13) and gift-wrapped (kind 1059) under a throwaway ephemeral key, so relays learn neither sender nor content.
 
-### 4.2. Favorites and Blocking
+## 6. Store and Forward
 
-To improve the user experience and provide control over interactions, the protocol supports:
-*   **Favorites:** Users can mark trusted or frequently contacted peers as "favorites". This is a local designation that can be used by the application to prioritize notifications or display peers more prominently.
-*   **Blocking:** Users can block peers. When a peer is blocked, the application will discard any incoming packets from that peer's fingerprint at the earliest possible stage, effectively silencing them without notifying the blocked peer.
+Four mechanisms cover the "recipient is not here right now" problem. All persisted state is wiped by panic mode.
 
----
+### 6.1 Sender Outbox
 
-## 5. The Noise Protocol Layer
+Private messages without a prompt route are retained per peer (100 messages/peer, 24 h TTL) and re-sent on reconnect events until a delivery or read ack clears them, or a resend cap (8 attempts) drops them with visible failure. The outbox persists to disk sealed under a ChaChaPoly key held only in the Keychain, so queued mail survives an app kill without ever storing plaintext.
 
-BitChat implements the Noise Protocol Framework to provide strong, authenticated end-to-end encryption.
+### 6.2 Couriers
 
-### 5.1. Protocol Name
+When no transport can deliver promptly, the message is sealed (§5.2) into a **courier envelope** and handed to up to 3 connected peers who may physically encounter the recipient:
 
-The specific Noise protocol implemented is:
+* **Opaque addressing.** The only routing information is a 16-byte rotating recipient tag — an HMAC of the recipient's static key and the UTC day — computable solely by parties who already know that key. Couriers learn neither sender, recipient, nor content, and tags do not correlate across days.
+* **Trust tiers.** Mutual favorites may deposit 5 envelopes each; any peer with a signature-verified announce may deposit 2, into a bounded pool (20 of 40 slots) that can never crowd out favorites' mail. Envelopes are capped at 16 KiB and 24 h; overflow evicts oldest verified-tier mail first.
+* **Deposit retry.** Queued messages are re-deposited whenever a new eligible courier connects, until 3 distinct couriers carry the message or it expires.
+* **Spray and wait.** Envelopes carry a copy budget (initially 4, capped at 8). A courier meeting another eligible courier hands over half its remaining budget, so mail diffuses through a moving crowd instead of riding one person. Budgets, spray history, and carried mail persist across app restarts (iOS file protection).
+* **Handover.** On a verified *direct* announce from the recipient, matching envelopes are delivered over the live link and removed. On a verified *relayed* announce, a copy floods toward the recipient as a directed packet while the carried original stays put, throttled to one attempt per envelope per 10 minutes.
+* Receivers dedup by message ID, so redundant copies and the retained outbox original are harmless. Couriered mail from blocked senders is dropped at decryption time.
 
-**`Noise_XX_25519_ChaChaPoly_SHA256`**
+### 6.3 Public History (Gossip Sync)
 
-*   **`XX` Pattern:** This handshake pattern provides mutual authentication and forward secrecy. It does not require either party to know the other's static public key before the handshake begins. The keys are exchanged and authenticated during the three-part handshake. This is ideal for a decentralized P2P environment.
-*   **`25519`:** The Diffie-Hellman function used is Curve25519.
-*   **`ChaChaPoly`:** The AEAD (Authenticated Encryption with Associated Data) cipher is ChaCha20-Poly1305.
-*   **`SHA256`:** The hash function used for all cryptographic hashing operations is SHA-256.
-
-### 5.2. The `XX` Handshake
-
-The `XX` handshake consists of three messages exchanged between an Initiator and a Responder to establish a shared secret and derive transport encryption keys.
-
-```mermaid
-sequenceDiagram
-    participant I as Initiator
-    participant R as Responder
-
-    Note over I, R: Pre-computation: h = SHA256(protocol_name)
-
-    I->>R: -> e
-    Note right of I: I generates ephemeral key `e_i`.<br/>h = SHA256(h + e_i.pub)
-
-    R->>I: <- e, ee, s, es
-    Note left of R: R generates ephemeral key `e_r`.<br/>h = SHA256(h + e_r.pub)<br/>MixKey(DH(e_i, e_r))<br/>R sends static key `s_r`, encrypted.<br/>h = SHA256(h + ciphertext)<br/>MixKey(DH(e_i, s_r))
-
-    I->>R: -> s, se
-    Note right of I: I decrypts and verifies `s_r`.<br/>I sends static key `s_i`, encrypted.<br/>h = SHA256(h + ciphertext)<br/>MixKey(DH(s_i, e_r))
-
-    Note over I, R: Handshake complete. Transport keys derived.
-```
-
-**Handshake Flow:**
-
-1.  **Initiator -> Responder:** The initiator generates a new ephemeral key pair (`e_i`) and sends the public part to the responder.
-2.  **Responder -> Initiator:** The responder receives the initiator's ephemeral public key. It then generates its own ephemeral key pair (`e_r`), performs a DH exchange with the initiator's ephemeral key (`ee`), sends its own static public key (`s_r`) encrypted with the resulting symmetric key, and performs another DH exchange between the initiator's ephemeral key and its own static key (`es`).
-3.  **Initiator -> Responder:** The initiator receives the responder's message, decrypts the responder's static key, and authenticates it. The initiator then sends its own static key (`s_i`) encrypted and performs a final DH exchange between its static key and the responder's ephemeral key (`se`).
-
-Upon completion, both parties share a set of symmetric keys for bidirectional transport message encryption. The final handshake hash is used for channel binding.
-
-### 5.3. Session Management
-
-The `NoiseSessionManager` class manages all active Noise sessions. It handles:
-*   Creating sessions for new peers.
-*   Coordinating the handshake process to prevent race conditions.
-*   Storing the resulting transport ciphers (`sendCipher`, `receiveCipher`).
-*   Periodically checking if sessions need to be re-keyed for enhanced security.
-
----
-
-## 6. The BitChat Session and Application Protocol
-
-Once a Noise session is established, peers exchange `BitchatPacket` structures, which are encrypted as the payload of Noise transport messages.
-
-### 6.1. Binary Packet Format (`BitchatPacket`)
-
-To minimize bandwidth, `BitchatPacket`s are serialized into a compact binary format. The structure is designed to be fixed-size where possible to resist traffic analysis.
-
-| Field           | Size (bytes) | Description                                                                                             |
-|-----------------|--------------|---------------------------------------------------------------------------------------------------------|
-| **Header**      | **13**       | **Fixed-size header**                                                                                   |
-| Version         | 1            | Protocol version (currently `1`).                                                                       |
-| Type            | 1            | Message type (e.g., `message`, `deliveryAck`, `noiseHandshakeInit`). See `MessageType` enum.            |
-| TTL             | 1            | Time-To-Live for mesh network routing. Decremented at each hop.                                         |
-| Timestamp       | 8            | `UInt64` millisecond timestamp of packet creation.                                                      |
-| Flags           | 1            | Bitmask for optional fields (`hasRecipient`, `hasSignature`, `isCompressed`).                           |
-| Payload Length  | 2            | `UInt16` length of the payload field.                                                                   |
-| **Variable**    | **...**      | **Variable-size fields**                                                                                |
-| Sender ID       | 8            | 8-byte truncated peer ID of the sender.                                                                 |
-| Recipient ID    | 8 (optional) | 8-byte truncated peer ID of the recipient. Present if `hasRecipient` flag is set. Broadcast if `0xFF..FF`. |
-| Payload         | Variable     | The actual content of the packet, as defined by the `Type` field.                                       |
-| Signature       | 64 (optional)| `Ed25519` signature of the packet. Present if `hasSignature` flag is set.                               |
+Public broadcast messages are cached (1000 packets) and reconciled between peers every ~15 s using compact GCS filters: each side advertises what it holds, the other returns what is missing. Messages stay sync-able for **6 hours** and the cache persists to disk, so a device that walks between two partitions — or relaunches later — serves the room's recent history to whoever missed it. Fragments and file transfers keep a short 15-minute window.
 
-**Padding:** All packets are padded to the next standard block size (256, 512, 1024, or 2048 bytes) using a PKCS#7-style scheme to obscure the true message length from network observers.
+### 6.4 Nostr Mailboxes
 
-```mermaid
----
-config:
-  theme: dark
----
----
-title: "BitchatPacket"
----
-packet
-+8: "Version"
-+8: "Type"
-+8: "TTL"
-+64: "Timestamp"
-+8: "Flags"
-+16: "Payload Length"
-+64: "Sender ID"
-+64: "Recipient ID (optional)"
-+48: "Payload (variable)"
-+64: "Signature (optional)"
-```
-_A representation of the sizes of the fields in `BitchatPacket`_
+Gift-wrapped messages rest on Nostr relays; clients re-subscribe with a 24-hour lookback on reconnect, covering the both-devices-offline case for mutual favorites whenever either side touches the internet.
 
-### 6.2. Application Message Format (`BitchatMessage`)
+### 6.5 Delivery Metrics
 
-For packets of type `message`, the payload is a binary-serialized `BitchatMessage` containing the chat content.
+Bare local counters (deposits, handovers, sprays, opens, outbox flushes and drops — no identities, message IDs, or timestamps) let delivery behavior be measured on-device. They never leave the device and are cleared by the panic wipe.
 
-| Field               | Size (bytes) | Description                                                              |
-|---------------------|--------------|--------------------------------------------------------------------------|
-| Flags               | 1            | Bitmask for optional fields (`isRelay`, `isPrivate`, `hasOriginalSender`). |
-| Timestamp           | 8            | `UInt64` millisecond timestamp of message creation.                      |
-| ID                  | 1 + len      | `UUID` string for the message.                                           |
-| Sender              | 1 + len      | Nickname of the sender.                                                  |
-| Content             | 2 + len      | The UTF-8 encoded message content.                                       |
-| Original Sender     | 1 + len (opt)| Nickname of the original sender if the message is a relay.               |
-| Recipient Nickname  | 1 + len (opt)| Nickname of the recipient for private messages.                          |
+## 7. Application Layer
 
-```mermaid
----
-config:
-  theme: dark
----
----
-title: "BitchatMessage"
----
-packet
-+8: "Flags"
-+64: "Timestamp"
-+24: "ID (variable)"
-+32: "Sender (variable)"
-+32: "Content (variable)"
-+32: "Original Sender (variable) (optional)"
-+32: "Recipient Nickname (variable) (optional)"
-```
-_A representation of the sizes of the fields in `BitchatMessage`_
-
----
-
-## 7. Message Routing and Propagation
-
-BitChat operates as a decentralized mesh network, meaning there are no central servers to route messages. Packets are propagated through the network from peer to peer. The protocol supports several modes of message delivery.
-
-### 7.1. Direct Connection
-
-This is the simplest case. If Peer A and Peer B are directly connected, they can exchange packets after establishing a mutually authenticated Noise session. All packets are encrypted using the transport ciphers derived from the handshake.
-
-### 7.2. Efficient Gossip with Bloom Filters
-
-To send messages to peers that are not directly connected, BitChat employs a "flooding" or "gossip" protocol. When a peer receives a packet that is not destined for it, it acts as a relay. To prevent infinite routing loops and minimize memory usage, the protocol uses an `OptimizedBloomFilter` to track recently seen packet IDs.
-
-The logic is as follows:
-
-1.  A peer receives a packet.
-2.  It checks the Bloom filter to see if the packet's ID has likely been seen before. If so, the packet is discarded. Bloom filters can have false positives (though they are rare), but they guarantee no false negatives. This means that while some packets may be incorrectly discarded due to false positives, the gossip protocol's redundancy ensures these packets will eventually be received through subsequent exchanges with other peers.
-3.  If the packet is new, its ID is added to the Bloom filter.
-4.  The peer decrements the packet's Time-To-Live (TTL) field.
-5.  If the TTL is greater than zero, the peer re-broadcasts the packet to all of its connected peers, *except* for the peer from which it received the packet.
-
-This mechanism allows packets to "flood" through the network efficiently, maximizing the chance of reaching their destination while using minimal resources to prevent loops.
-
-### 7.3. Time-To-Live (TTL)
-
-Every `BitchatPacket` contains an 8-bit TTL field. This value is set by the originating peer and is decremented by one at each relay hop. If a peer receives a packet and decrements its TTL to 0, it will process the packet (if it is the recipient) but will not relay it further. This is a crucial mechanism to prevent packets from circulating endlessly in the mesh.
-
-### 7.4. Private vs. Broadcast Messages
-
-The routing logic respects the confidentiality of private messages:
-
-*   **Private Messages:** A packet with a specific `recipientID` is a private message. Relay nodes forward the entire, encrypted Noise message without being able to access the inner `BitchatPacket` or its payload. Only the final recipient, who shares the correct Noise session keys with the sender, can decrypt the packet.
-*   **Broadcast Messages:** A packet with the special broadcast `recipientID` (`0xFFFFFFFFFFFFFFFF`) is intended for all peers. Any peer that receives and decrypts a broadcast message will process its content. It will still be relayed according to the flooding algorithm to ensure it reaches the entire network.
-
-### 7.5. Message Reliability and Lifecycle
-
-To function in unreliable, lossy networks, the protocol includes features to track the lifecycle of a message and ensure its delivery.
-
-*   **Delivery Acknowledgments (`DeliveryAck`):** When a private message reaches its final destination, the recipient's device sends a `DeliveryAck` packet back to the original sender. This acknowledgment contains the ID of the original message.
-*   **Read Receipts (`ReadReceipt`):** After a message is displayed on the recipient's screen, the application can send a `ReadReceipt`, also containing the original message ID, to inform the sender that the message has been seen.
-*   **Message Retry Service:** Senders maintain a `MessageRetryService` which tracks outgoing messages. If a `DeliveryAck` is not received for a message within a certain time window, the service will automatically re-send the message, creating a more resilient user experience.
-
-### 7.6. Fragmentation
-
-Transport layers like BLE have a Maximum Transmission Unit (MTU) that limits the size of a single packet. To handle messages larger than this limit, BitChat implements a fragmentation protocol.
-
-*   **`fragmentStart`:** A packet with this type marks the beginning of a fragmented message. It contains metadata about the total size and number of fragments.
-*   **`fragmentContinue`:** These packets carry the intermediate chunks of the message data.
-*   **`fragmentEnd`:** This packet carries the final chunk of the message and signals the receiver to begin reassembly.
-
-Receiving peers collect all fragments and reassemble them in the correct order before passing the complete message up to the application layer.
-
----
+* **Public chat** — signed broadcast messages within the mesh, backed by the gossip-synced history above.
+* **Private chat** — end-to-end encrypted messages with delivery and read receipts, over mesh, courier, or Nostr.
+* **Location channels** — geohash-scoped public rooms carried over Nostr relays for regional chat beyond radio range.
+* **Favorites** — the mutual-trust relationship that unlocks Nostr delivery and the larger courier quota.
+* **Media** — files and images fragment over the mesh (1 MiB cap, explicit accept before anything touches disk); couriers carry text only.
+* **Panic wipe** — clears identity keys, favorites, carried courier mail, the sealed outbox, archived public history, and metrics.
 
 ## 8. Security Considerations
 
-*   **Replay Attacks:** The Noise transport messages include a nonce that is incremented for each message. The `NoiseCipherState` implements a sliding window replay protection mechanism to detect and discard replayed or out-of-order messages.
-*   **Denial of Service:** The `NoiseRateLimiter` is implemented to prevent resource exhaustion from rapid, repeated handshake attempts from a single peer.
-*   **Key-Compromise Impersonation:** The `XX` pattern authenticates both parties, preventing an attacker from impersonating one party to the other.
-*   **Identity Binding:** While the Noise handshake authenticates the cryptographic keys, binding those keys to a human-readable nickname is handled at the application layer. Users must verify fingerprints out-of-band to prevent man-in-the-middle attacks.
-*   **Traffic Analysis:** The use of fixed-size padding for all packets helps to obscure the exact nature and content of the communication, making it harder for a network-level adversary to infer information based on message size.
+* **Relay nodes** cannot read private traffic; they forward padded, opaque ciphertext.
+* **Couriers** are quota-bounded mailbags. A malicious courier can drop mail (redundant copies and deposit retry mitigate this) but cannot read it, link it across days, or amplify it — copy budgets are capped and every envelope is validated against size and lifetime policy on deposit.
+* **Flooding abuse** is bounded by TTL clamps, deduplication, per-depositor quotas, connect-rate limits, and announce-rate limiting.
+* **Replay** of public broadcasts is bounded by the 6-hour acceptance window plus deduplication; private payloads are protected by Noise nonces.
+* **Metadata.** BLE proximity is inherently observable; ephemeral IDs and daily-rotating courier tags limit long-term correlation. Nostr traffic can ride Tor.
+* **No forward secrecy for sealed mail** (§5.2) is the main cryptographic trade-off of the offline path.
+
+## 9. Future Work
+
+* Prekey-based forward secrecy for courier envelopes.
+* Couriered media beyond the 16 KiB text cap.
+* Probabilistic relay and edge-of-network TTL boosting for very dense and very sparse graphs.
+* Multi-hop courier routing informed by encounter history.
 
 ---
 
-## 9. Conclusion
-
-The BitChat Protocol provides a robust and secure foundation for decentralized, peer-to-peer communication. By layering a flexible application protocol on top of the well-regarded Noise Protocol Framework, it achieves strong confidentiality, authentication, and forward secrecy. The use of a compact binary format and thoughtful security considerations like rate limiting and traffic analysis resistance make it suitable for use in challenging network environments.
+*This document describes the protocol as implemented in the current release. The implementation is free and unencumbered software released into the public domain.*

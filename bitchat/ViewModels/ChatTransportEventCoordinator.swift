@@ -57,6 +57,8 @@ protocol ChatTransportEventContext: AnyObject {
 
     // MARK: Routing & acknowledgements
     func flushRouterOutbox(for peerID: PeerID)
+    /// Offer queued mail for *other* peers to this newly connected courier.
+    func retryCourierDeposits(via peerID: PeerID)
     func sendMeshDeliveryAck(for messageID: String, to peerID: PeerID)
 
     // MARK: Delivery status
@@ -101,6 +103,10 @@ extension ChatViewModel: ChatTransportEventContext {
 
     func flushRouterOutbox(for peerID: PeerID) {
         messageRouter.flushOutbox(for: peerID)
+    }
+
+    func retryCourierDeposits(via peerID: PeerID) {
+        messageRouter.courierBecameAvailable(peerID)
     }
 
     func sendMeshDeliveryAck(for messageID: String, to peerID: PeerID) {
@@ -208,6 +214,7 @@ final class ChatTransportEventCoordinator {
             }
 
             context.flushRouterOutbox(for: peerID)
+            context.retryCourierDeposits(via: peerID)
         }
     }
 

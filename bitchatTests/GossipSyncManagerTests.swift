@@ -279,6 +279,79 @@ struct GossipSyncManagerTests {
         #expect(sentPackets.count == 1)
         #expect(sentPackets[0].type == MessageType.fragment.rawValue)
     }
+
+    // MARK: - Archive persistence
+
+    @Test func publicMessagesRestoreFromArchiveAcrossRestart() async throws {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("gossip-archive-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+
+        let senderID = try #require(Data(hexString: "1122334455667788"))
+        let packet = BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: senderID,
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: Data([0x01, 0x02]),
+            signature: nil,
+            ttl: 1
+        )
+
+        let first = GossipSyncManager(
+            myPeerID: myPeerID,
+            requestSyncManager: RequestSyncManager(),
+            archive: GossipMessageArchive(fileURL: fileURL)
+        )
+        first.onPublicPacketSeen(packet)
+        // Maintenance persists the dirty store to disk.
+        first._performMaintenanceSynchronously(now: Date())
+        #expect(FileManager.default.fileExists(atPath: fileURL.path))
+
+        // "App restart": a fresh manager over the same archive re-serves it.
+        let second = GossipSyncManager(
+            myPeerID: myPeerID,
+            requestSyncManager: RequestSyncManager(),
+            archive: GossipMessageArchive(fileURL: fileURL)
+        )
+        let restored = await TestHelpers.waitUntil(
+            { second._messageCount(for: PeerID(hexData: senderID)) == 1 },
+            timeout: TestConstants.shortTimeout
+        )
+        #expect(restored)
+    }
+
+    @Test func archiveDropsMessagesOlderThanPublicWindow() throws {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("gossip-archive-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+
+        var config = GossipSyncManager.Config()
+        config.publicMessageMaxAgeSeconds = 60
+
+        let senderID = try #require(Data(hexString: "1122334455667788"))
+        let stale = BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: senderID,
+            recipientID: nil,
+            timestamp: UInt64((Date().timeIntervalSince1970 - 120) * 1000),
+            payload: Data([0x01]),
+            signature: nil,
+            ttl: 1
+        )
+        let archive = GossipMessageArchive(fileURL: fileURL)
+        archive.save([stale.toBinaryData(padding: false)!])
+
+        let manager = GossipSyncManager(
+            myPeerID: myPeerID,
+            config: config,
+            requestSyncManager: RequestSyncManager(),
+            archive: archive
+        )
+        manager._performMaintenanceSynchronously(now: Date())
+        #expect(manager._messageCount(for: PeerID(hexData: senderID)) == 0)
+    }
+
 }
 
 private final class RecordingDelegate: GossipSyncManager.Delegate {

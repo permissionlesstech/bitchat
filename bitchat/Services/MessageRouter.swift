@@ -7,7 +7,9 @@ import Foundation
 struct CourierDirectory {
     /// Noise static key for a peer we can address while they're offline.
     var noiseKey: (PeerID) -> Data?
-    /// Whether a peer (by Noise static key) may carry our mail.
+    /// Whether a peer (by Noise static key) is a mutual favorite — the
+    /// preferred courier tier. Verified non-favorites are the fallback tier,
+    /// read off the transport snapshot.
     var isTrustedCourier: (Data) -> Bool
 
     @MainActor
@@ -30,9 +32,13 @@ struct CourierDirectory {
 /// Routes messages using available transports (Mesh, Nostr, etc.)
 @MainActor
 final class MessageRouter {
+    typealias QueuedMessage = MessageOutboxStore.QueuedMessage
+
     private let transports: [Transport]
     private let now: () -> Date
     private let courierDirectory: CourierDirectory
+    private let outboxStore: MessageOutboxStore?
+    private let metrics: StoreAndForwardMetrics?
 
     /// Invoked whenever a retained private message is dropped without a
     /// delivery ack (attempt cap, TTL expiry, or per-peer overflow eviction)
@@ -41,19 +47,10 @@ final class MessageRouter {
     var onMessageDropped: ((_ messageID: String, _ peerID: PeerID) -> Void)?
 
     /// Invoked when a message with no reachable transport was handed to at
-    /// least one courier (a connected mutual favorite who will physically
-    /// carry the sealed envelope). Delivery stays best-effort: the outbox
-    /// retains the message until an ack arrives.
+    /// least one courier (a connected peer who will physically carry the
+    /// sealed envelope). Delivery stays best-effort: the outbox retains the
+    /// message until an ack arrives.
     var onMessageCarried: ((_ messageID: String, _ peerID: PeerID) -> Void)?
-
-    // Outbox entry with timestamp for TTL-based eviction
-    private struct QueuedMessage {
-        let content: String
-        let nickname: String
-        let messageID: String
-        let timestamp: Date
-        var sendAttempts: Int = 0
-    }
 
     private var outbox: [PeerID: [QueuedMessage]] = [:]
 
@@ -69,11 +66,16 @@ final class MessageRouter {
     init(
         transports: [Transport],
         now: @escaping () -> Date = Date.init,
-        courierDirectory: CourierDirectory? = nil
+        courierDirectory: CourierDirectory? = nil,
+        outboxStore: MessageOutboxStore? = nil,
+        metrics: StoreAndForwardMetrics? = nil
     ) {
         self.transports = transports
         self.now = now
         self.courierDirectory = courierDirectory ?? .favoritesBacked()
+        self.outboxStore = outboxStore
+        self.metrics = metrics
+        self.outbox = outboxStore?.load() ?? [:]
 
         // Observe favorites changes to learn Nostr mapping and flush queued messages
         NotificationCenter.default.addObserver(
@@ -134,50 +136,137 @@ final class MessageRouter {
             // may never come. Double delivery is harmless — receivers dedup
             // by message ID, and delivered/read acks never downgrade.
             if !transport.canDeliverPromptly(to: peerID) {
-                attemptCourierDeposit(content: content, messageID: messageID, for: peerID)
+                attemptCourierDeposit(messageID: messageID, for: peerID)
             }
         } else {
             var unsent = message
             unsent.sendAttempts = 0
             enqueue(unsent, for: peerID)
             SecureLogger.debug("Queued PM for \(peerID.id.prefix(8))… (no reachable transport) id=\(messageID.prefix(8))… queue=\(outbox[peerID]?.count ?? 0)", category: .session)
-            attemptCourierDeposit(content: content, messageID: messageID, for: peerID)
+            attemptCourierDeposit(messageID: messageID, for: peerID)
         }
     }
+
+    // MARK: - Couriers
 
     /// Last resort when no transport can deliver promptly — the peer is
     /// unreachable, or only reachable through a send queue waiting on
     /// internet: seal the message to their known static key and hand it to
-    /// connected mutual favorites who may physically encounter them. The
-    /// queued copy above stays retained, so direct delivery still wins if
-    /// the peer reappears first (receivers dedup by message ID).
-    private func attemptCourierDeposit(content: String, messageID: String, for peerID: PeerID) {
-        guard let recipientKey = courierDirectory.noiseKey(peerID) else { return }
+    /// connected couriers who may physically encounter them. Mutual favorites
+    /// are preferred; signature-verified strangers fill remaining slots so a
+    /// crowd without favorites can still carry mail (envelopes are opaque
+    /// either way). The queued copy stays retained, so direct delivery still
+    /// wins if the peer reappears first (receivers dedup by message ID).
+    private func attemptCourierDeposit(messageID: String, for peerID: PeerID) {
+        guard let recipientKey = courierDirectory.noiseKey(peerID),
+              let entry = queuedMessage(messageID, for: peerID) else { return }
+        let remainingSlots = Self.maxCouriersPerMessage - entry.depositedCourierKeys.count
+        guard remainingSlots > 0 else { return }
+
         for transport in transports {
-            let couriers = transport.currentPeerSnapshots()
-                .filter { snapshot in
-                    guard snapshot.isConnected,
-                          let key = snapshot.noisePublicKey,
-                          key != recipientKey else { return false }
-                    return courierDirectory.isTrustedCourier(key)
-                }
-                .prefix(Self.maxCouriersPerMessage)
-                .map(\.peerID)
+            let couriers = eligibleCouriers(
+                on: transport,
+                recipientKey: recipientKey,
+                excluding: entry.depositedCourierKeys,
+                limit: remainingSlots
+            )
             guard !couriers.isEmpty else { continue }
-            if transport.sendCourierMessage(content, messageID: messageID, recipientNoiseKey: recipientKey, via: Array(couriers)) {
+            if transport.sendCourierMessage(entry.content, messageID: messageID, recipientNoiseKey: recipientKey, via: couriers.map(\.peerID)) {
                 SecureLogger.debug("📦 PM \(messageID.prefix(8))… handed to \(couriers.count) courier(s) for \(peerID.id.prefix(8))…", category: .session)
+                recordCourierDeposit(messageID: messageID, for: peerID, courierKeys: couriers.map(\.noiseKey))
                 onMessageCarried?(messageID, peerID)
                 return
             }
         }
     }
 
+    /// A courier candidate just connected: hand them any queued mail they are
+    /// not already carrying. This is what turns couriering from "a favorite
+    /// happened to be around at send time" into eventual spread — deposits
+    /// retry as eligible peers appear, until each message rides with
+    /// `maxCouriersPerMessage` distinct couriers or expires.
+    func courierBecameAvailable(_ peerID: PeerID) {
+        for transport in transports {
+            guard transport.isPeerConnected(peerID),
+                  let snapshot = transport.currentPeerSnapshots().first(where: { $0.peerID == peerID && $0.isConnected }),
+                  let courierKey = snapshot.noisePublicKey,
+                  courierDirectory.isTrustedCourier(courierKey) || snapshot.isVerified else { continue }
+
+            let currentDate = now()
+            for (recipient, queue) in outbox {
+                // Mail *to* this peer flushes directly on connect.
+                guard recipient != peerID,
+                      let recipientKey = courierDirectory.noiseKey(recipient),
+                      recipientKey != courierKey else { continue }
+                for message in queue {
+                    guard message.depositedCourierKeys.count < Self.maxCouriersPerMessage,
+                          !message.depositedCourierKeys.contains(courierKey),
+                          currentDate.timeIntervalSince(message.timestamp) <= Self.messageTTLSeconds else { continue }
+                    if transport.sendCourierMessage(message.content, messageID: message.messageID, recipientNoiseKey: recipientKey, via: [peerID]) {
+                        SecureLogger.debug("📦 Deposit retry: PM \(message.messageID.prefix(8))… handed to \(peerID.id.prefix(8))… for \(recipient.id.prefix(8))…", category: .session)
+                        recordCourierDeposit(messageID: message.messageID, for: recipient, courierKeys: [courierKey])
+                        onMessageCarried?(message.messageID, recipient)
+                    }
+                }
+            }
+            return
+        }
+    }
+
+    private struct CourierCandidate {
+        let peerID: PeerID
+        let noiseKey: Data
+    }
+
+    private func eligibleCouriers(
+        on transport: Transport,
+        recipientKey: Data,
+        excluding excludedKeys: Set<Data>,
+        limit: Int
+    ) -> [CourierCandidate] {
+        guard limit > 0 else { return [] }
+        let candidates = transport.currentPeerSnapshots().compactMap { snapshot -> (CourierCandidate, isFavorite: Bool)? in
+            guard snapshot.isConnected,
+                  let key = snapshot.noisePublicKey,
+                  key != recipientKey,
+                  !excludedKeys.contains(key) else { return nil }
+            let isFavorite = courierDirectory.isTrustedCourier(key)
+            guard isFavorite || snapshot.isVerified else { return nil }
+            return (CourierCandidate(peerID: snapshot.peerID, noiseKey: key), isFavorite)
+        }
+        return candidates
+            .sorted { $0.isFavorite && !$1.isFavorite }
+            .prefix(limit)
+            .map(\.0)
+    }
+
+    private func queuedMessage(_ messageID: String, for peerID: PeerID) -> QueuedMessage? {
+        outbox[peerID]?.first { $0.messageID == messageID }
+    }
+
+    private func recordCourierDeposit(messageID: String, for peerID: PeerID, courierKeys: [Data]) {
+        metrics?.record(.courierDeposited)
+        guard var queue = outbox[peerID],
+              let index = queue.firstIndex(where: { $0.messageID == messageID }) else { return }
+        queue[index].depositedCourierKeys.formUnion(courierKeys)
+        outbox[peerID] = queue
+        persistOutbox()
+    }
+
+    // MARK: - Outbox Management
+
     /// A delivery or read ack confirms receipt; stop retaining the message.
     func markDelivered(_ messageID: String) {
+        var cleared = false
         for (peerID, queue) in outbox {
             let filtered = queue.filter { $0.messageID != messageID }
             guard filtered.count != queue.count else { continue }
             outbox[peerID] = filtered.isEmpty ? nil : filtered
+            cleared = true
+        }
+        if cleared {
+            metrics?.record(.outboxDelivered)
+            persistOutbox()
         }
     }
 
@@ -191,9 +280,26 @@ final class MessageRouter {
         if queue.count > Self.maxMessagesPerPeer {
             let evicted = queue.removeFirst()
             SecureLogger.warning("📤 Outbox overflow for \(peerID.id.prefix(8))… - evicted oldest message: \(evicted.messageID.prefix(8))…", category: .session)
-            onMessageDropped?(evicted.messageID, peerID)
+            dropMessage(evicted.messageID, for: peerID)
         }
         outbox[peerID] = queue
+        metrics?.record(.outboxQueued)
+        persistOutbox()
+    }
+
+    private func dropMessage(_ messageID: String, for peerID: PeerID) {
+        metrics?.record(.outboxDropped)
+        onMessageDropped?(messageID, peerID)
+    }
+
+    private func persistOutbox() {
+        outboxStore?.save(outbox)
+    }
+
+    /// Panic wipe: forget queued mail on disk and in memory.
+    func wipeOutbox() {
+        outbox.removeAll()
+        outboxStore?.wipe()
     }
 
     func sendReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {
@@ -220,8 +326,6 @@ final class MessageRouter {
         }
     }
 
-    // MARK: - Outbox Management
-
     func flushOutbox(for peerID: PeerID) {
         guard let queued = outbox[peerID], !queued.isEmpty else { return }
         SecureLogger.debug("Flushing outbox for \(peerID.id.prefix(8))… count=\(queued.count)", category: .session)
@@ -233,7 +337,7 @@ final class MessageRouter {
             // Skip expired messages (TTL exceeded)
             if now.timeIntervalSince(message.timestamp) > Self.messageTTLSeconds {
                 SecureLogger.debug("⏰ Expired queued message for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))… (age: \(Int(now.timeIntervalSince(message.timestamp)))s)", category: .session)
-                onMessageDropped?(message.messageID, peerID)
+                dropMessage(message.messageID, for: peerID)
                 continue
             }
 
@@ -241,16 +345,18 @@ final class MessageRouter {
                 // Live link: send and stop retaining.
                 SecureLogger.debug("Outbox -> \(type(of: transport)) (connected) for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))…", category: .session)
                 transport.sendPrivateMessage(message.content, to: peerID, recipientNickname: message.nickname, messageID: message.messageID)
+                metrics?.record(.outboxResent)
             } else if let transport = reachableTransport(for: peerID) {
                 // Weak signal: send but keep retaining until an ack clears it,
                 // bounded by attempt count for peers that never ack.
                 guard message.sendAttempts < Self.maxSendAttempts else {
                     SecureLogger.warning("📤 Dropping unacked PM for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))… after \(message.sendAttempts) attempts", category: .session)
-                    onMessageDropped?(message.messageID, peerID)
+                    dropMessage(message.messageID, for: peerID)
                     continue
                 }
                 SecureLogger.debug("Outbox -> \(type(of: transport)) (reachable) for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))…", category: .session)
                 transport.sendPrivateMessage(message.content, to: peerID, recipientNickname: message.nickname, messageID: message.messageID)
+                metrics?.record(.outboxResent)
                 var retained = message
                 retained.sendAttempts += 1
                 remaining.append(retained)
@@ -264,6 +370,7 @@ final class MessageRouter {
         } else {
             outbox[peerID] = remaining
         }
+        persistOutbox()
     }
 
     func flushAllOutbox() {
@@ -273,6 +380,7 @@ final class MessageRouter {
     /// Periodically clean up expired messages from all outboxes
     func cleanupExpiredMessages() {
         let now = now()
+        var droppedAny = false
         for peerID in Array(outbox.keys) {
             var expiredMessageIDs: [String] = []
             outbox[peerID]?.removeAll { message in
@@ -285,8 +393,12 @@ final class MessageRouter {
             }
             for messageID in expiredMessageIDs {
                 SecureLogger.debug("⏰ Expired queued message for \(peerID.id.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
-                onMessageDropped?(messageID, peerID)
+                dropMessage(messageID, for: peerID)
+                droppedAny = true
             }
+        }
+        if droppedAny {
+            persistOutbox()
         }
     }
 }

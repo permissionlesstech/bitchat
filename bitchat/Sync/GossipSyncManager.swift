@@ -64,7 +64,10 @@ final class GossipSyncManager {
         var seenCapacity: Int = 1000          // max packets per sync (cap across types)
         var gcsMaxBytes: Int = 400           // filter size budget (128..1024)
         var gcsTargetFpr: Double = 0.01      // 1%
-        var maxMessageAgeSeconds: TimeInterval = 900  // 15 min - discard older messages
+        var maxMessageAgeSeconds: TimeInterval = 900  // 15 min - fragments/files/announces
+        // Whole public messages stay sync-able much longer so devices carry
+        // the room's recent history between partitions and across restarts.
+        var publicMessageMaxAgeSeconds: TimeInterval = 900
         var maintenanceIntervalSeconds: TimeInterval = 30.0
         var stalePeerCleanupIntervalSeconds: TimeInterval = 60.0
         var stalePeerTimeoutSeconds: TimeInterval = 60.0
@@ -78,6 +81,7 @@ final class GossipSyncManager {
     private let myPeerID: PeerID
     private let config: Config
     private let requestSyncManager: RequestSyncManager
+    private let archive: GossipMessageArchive?
     weak var delegate: Delegate?
 
     // Storage: broadcast packets by type, and latest announce per sender
@@ -85,6 +89,7 @@ final class GossipSyncManager {
     private var fragments = PacketStore()
     private var fileTransfers = PacketStore()
     private var latestAnnouncementByPeer: [PeerID: (id: String, packet: BitchatPacket)] = [:]
+    private var archiveDirty = false
 
     // Timer
     private var periodicTimer: DispatchSourceTimer?
@@ -92,10 +97,11 @@ final class GossipSyncManager {
     private var lastStalePeerCleanup: Date = .distantPast
     private var syncSchedules: [SyncSchedule] = []
 
-    init(myPeerID: PeerID, config: Config = Config(), requestSyncManager: RequestSyncManager) {
+    init(myPeerID: PeerID, config: Config = Config(), requestSyncManager: RequestSyncManager, archive: GossipMessageArchive? = nil) {
         self.myPeerID = myPeerID
         self.config = config
         self.requestSyncManager = requestSyncManager
+        self.archive = archive
         var schedules: [SyncSchedule] = []
         if config.seenCapacity > 0 && config.messageSyncIntervalSeconds > 0 {
             schedules.append(SyncSchedule(types: .publicMessages, interval: config.messageSyncIntervalSeconds, lastSent: .distantPast))
@@ -107,6 +113,12 @@ final class GossipSyncManager {
             schedules.append(SyncSchedule(types: .fileTransfer, interval: config.fileTransferSyncIntervalSeconds, lastSent: .distantPast))
         }
         syncSchedules = schedules
+
+        if archive != nil {
+            queue.async { [weak self] in
+                self?.restoreArchivedMessages()
+            }
+        }
     }
 
     func start() {
@@ -146,10 +158,15 @@ final class GossipSyncManager {
         }
     }
 
-    // Helper to check if a packet is within the age threshold
+    // Helper to check if a packet is within the age threshold. Whole public
+    // messages get the long town-crier window; fragments, file transfers and
+    // announces keep the short one.
     private func isPacketFresh(_ packet: BitchatPacket) -> Bool {
+        let maxAgeSeconds = packet.type == MessageType.message.rawValue
+            ? config.publicMessageMaxAgeSeconds
+            : config.maxMessageAgeSeconds
         let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
-        let ageThresholdMs = UInt64(config.maxMessageAgeSeconds * 1000)
+        let ageThresholdMs = UInt64(maxAgeSeconds * 1000)
 
         // If current time is less than threshold, accept all (handle clock issues gracefully)
         guard nowMs >= ageThresholdMs else { return true }
@@ -190,6 +207,7 @@ final class GossipSyncManager {
             guard isPacketFresh(packet) else { return }
             let idHex = PacketIdUtil.computeId(packet).hexEncodedString()
             messages.insert(idHex: idHex, packet: packet, capacity: max(1, config.seenCapacity))
+            archiveDirty = true
         case .fragment:
             guard isBroadcastRecipient else { return }
             guard isPacketFresh(packet) else { return }
@@ -381,14 +399,55 @@ final class GossipSyncManager {
             isPacketFresh(pair.packet)
         }
 
+        let messageCountBefore = messages.packets.count
         messages.removeExpired(isFresh: isPacketFresh)
+        if messages.packets.count != messageCountBefore {
+            archiveDirty = true
+        }
         fragments.removeExpired(isFresh: isPacketFresh)
         fileTransfers.removeExpired(isFresh: isPacketFresh)
+    }
+
+    // MARK: - Archive (public message persistence)
+
+    /// Rebuild the public message store from disk on launch, dropping
+    /// anything that aged out while the app was dead.
+    private func restoreArchivedMessages() {
+        guard let archive else { return }
+        var restored = 0
+        for data in archive.load() {
+            guard let packet = BitchatPacket.from(data),
+                  packet.type == MessageType.message.rawValue,
+                  isPacketFresh(packet) else { continue }
+            let idHex = PacketIdUtil.computeId(packet).hexEncodedString()
+            messages.insert(idHex: idHex, packet: packet, capacity: max(1, config.seenCapacity))
+            restored += 1
+        }
+        if restored > 0 {
+            SecureLogger.debug("Restored \(restored) archived public message(s) for gossip sync", category: .sync)
+            archiveDirty = true
+        }
+    }
+
+    private func persistArchiveIfDirty() {
+        guard archiveDirty, let archive else { return }
+        archiveDirty = false
+        let packets = messages.allPackets(isFresh: isPacketFresh)
+            .compactMap { $0.toBinaryData(padding: false) }
+        archive.save(packets)
+    }
+
+    /// Flush the archive outside the maintenance cadence (app backgrounding).
+    func persistNow() {
+        queue.async { [weak self] in
+            self?.persistArchiveIfDirty()
+        }
     }
 
     private func performPeriodicMaintenance(now: Date = Date()) {
         cleanupExpiredMessages()
         cleanupStaleAnnouncementsIfNeeded(now: now)
+        persistArchiveIfDirty()
         requestSyncManager.cleanup() // Cleanup expired sync requests
         
         var dueTypes: SyncTypeFlags = []
@@ -436,7 +495,11 @@ final class GossipSyncManager {
 
     private func removeState(for peerID: PeerID) {
         _ = latestAnnouncementByPeer.removeValue(forKey: peerID)
+        let messageCountBefore = messages.packets.count
         messages.remove { PeerID(hexData: $0.senderID) == peerID }
+        if messages.packets.count != messageCountBefore {
+            archiveDirty = true
+        }
         fragments.remove { PeerID(hexData: $0.senderID) == peerID }
         fileTransfers.remove { PeerID(hexData: $0.senderID) == peerID }
     }

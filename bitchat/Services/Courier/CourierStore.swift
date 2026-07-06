@@ -11,13 +11,22 @@ import BitLogger
 import Combine
 import Foundation
 
+/// Trust level of a courier deposit, decided by the caller's policy.
+/// Favorites get the larger quota and are never evicted to make room for
+/// verified-tier mail; verified (signature-verified announce, not a mutual
+/// favorite) get a small quota so a crowd of strangers can still carry mail.
+enum CourierDepositTier: String, Codable {
+    case favorite
+    case verified
+}
+
 /// Holds courier envelopes this device is carrying for offline third parties.
 ///
-/// Envelopes are opaque ciphertext deposited by mutual favorites; this store
-/// never learns sender, recipient, or content. Strict quotas keep the device
-/// from becoming a public mailbag: bounded count, bounded per-depositor
-/// count, bounded size, and a 24-hour lifetime aligned with the outbox
-/// retention policy. Carried mail is included in the panic wipe.
+/// Envelopes are opaque ciphertext; this store never learns sender,
+/// recipient, or content. Strict quotas keep the device from becoming a
+/// public mailbag: bounded count, bounded per-depositor count by trust tier,
+/// bounded size, and a 24-hour lifetime aligned with the outbox retention
+/// policy. Carried mail is included in the panic wipe.
 final class CourierStore {
     struct StoredEnvelope: Codable, Equatable {
         let recipientTag: Data
@@ -25,15 +34,63 @@ final class CourierStore {
         let ciphertext: Data
         let depositorNoiseKey: Data
         let storedAt: Date
+        var tier: CourierDepositTier
+        /// Remaining spray-and-wait budget (1 = carry-only).
+        var copies: UInt8
+        /// Couriers this envelope was already sprayed to, so a repeat announce
+        /// from the same peer doesn't burn budget on a copy they already hold.
+        var sprayedTo: Set<Data>
+        /// Last speculative multi-hop handover toward a relayed announce.
+        var lastRemoteHandoverAt: Date?
 
         var envelope: CourierEnvelope {
-            CourierEnvelope(recipientTag: recipientTag, expiry: expiry, ciphertext: ciphertext)
+            CourierEnvelope(recipientTag: recipientTag, expiry: expiry, ciphertext: ciphertext, copies: copies)
+        }
+
+        init(
+            recipientTag: Data,
+            expiry: UInt64,
+            ciphertext: Data,
+            depositorNoiseKey: Data,
+            storedAt: Date,
+            tier: CourierDepositTier,
+            copies: UInt8,
+            sprayedTo: Set<Data> = [],
+            lastRemoteHandoverAt: Date? = nil
+        ) {
+            self.recipientTag = recipientTag
+            self.expiry = expiry
+            self.ciphertext = ciphertext
+            self.depositorNoiseKey = depositorNoiseKey
+            self.storedAt = storedAt
+            self.tier = tier
+            self.copies = copies
+            self.sprayedTo = sprayedTo
+            self.lastRemoteHandoverAt = lastRemoteHandoverAt
+        }
+
+        // Files written before tiers/spray lack the newer fields; treat that
+        // mail as favorite-tier carry-only, which is what it was.
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            recipientTag = try container.decode(Data.self, forKey: .recipientTag)
+            expiry = try container.decode(UInt64.self, forKey: .expiry)
+            ciphertext = try container.decode(Data.self, forKey: .ciphertext)
+            depositorNoiseKey = try container.decode(Data.self, forKey: .depositorNoiseKey)
+            storedAt = try container.decode(Date.self, forKey: .storedAt)
+            tier = try container.decodeIfPresent(CourierDepositTier.self, forKey: .tier) ?? .favorite
+            copies = try container.decodeIfPresent(UInt8.self, forKey: .copies) ?? 1
+            sprayedTo = try container.decodeIfPresent(Set<Data>.self, forKey: .sprayedTo) ?? []
+            lastRemoteHandoverAt = try container.decodeIfPresent(Date.self, forKey: .lastRemoteHandoverAt)
         }
     }
 
     enum Limits {
-        static let maxEnvelopes = 20
-        static let maxPerDepositor = 5
+        static let maxEnvelopes = 40
+        /// Verified-tier mail can never crowd out favorites' share.
+        static let maxVerifiedEnvelopes = 20
+        static let maxPerFavoriteDepositor = 5
+        static let maxPerVerifiedDepositor = 2
         /// Slack on top of the 24h lifetime for depositor clock skew.
         static let maxExpirySlack: TimeInterval = 60 * 60
     }
@@ -65,10 +122,11 @@ final class CourierStore {
     // MARK: - Depositing (courier side)
 
     /// Accept an envelope from a depositor. Returns false when quotas or
-    /// validity checks reject it. Trust policy (mutual favorite) is the
-    /// caller's responsibility; this store only enforces resource bounds.
+    /// validity checks reject it. Trust policy (which tier a depositor gets,
+    /// if any) is the caller's responsibility; this store only enforces
+    /// resource bounds.
     @discardableResult
-    func deposit(_ envelope: CourierEnvelope, from depositorNoiseKey: Data) -> Bool {
+    func deposit(_ envelope: CourierEnvelope, from depositorNoiseKey: Data, tier: CourierDepositTier = .favorite) -> Bool {
         let date = now()
         guard envelope.recipientTag.count == CourierEnvelope.tagLength,
               !envelope.ciphertext.isEmpty,
@@ -86,18 +144,30 @@ final class CourierStore {
         return queue.sync {
             pruneExpiredLocked(at: date)
 
-            // Identical ciphertext is the same envelope; accept idempotently.
-            if envelopes.contains(where: { $0.ciphertext == envelope.ciphertext }) {
+            // Identical ciphertext is the same envelope; accept idempotently,
+            // keeping the larger spray budget (bounded by maxCopies either way).
+            if let existing = envelopes.firstIndex(where: { $0.ciphertext == envelope.ciphertext }) {
+                envelopes[existing].copies = max(envelopes[existing].copies, envelope.copies)
+                persistLocked()
                 return true
             }
-            guard envelopes.filter({ $0.depositorNoiseKey == depositorNoiseKey }).count < Limits.maxPerDepositor else {
-                SecureLogger.debug("📦 Courier deposit rejected: per-depositor quota reached", category: .session)
+
+            let perDepositorLimit = tier == .favorite ? Limits.maxPerFavoriteDepositor : Limits.maxPerVerifiedDepositor
+            guard envelopes.filter({ $0.depositorNoiseKey == depositorNoiseKey }).count < perDepositorLimit else {
+                SecureLogger.debug("📦 Courier deposit rejected: per-depositor quota reached (\(tier.rawValue))", category: .session)
+                return false
+            }
+            if tier == .verified,
+               envelopes.filter({ $0.tier == .verified }).count >= Limits.maxVerifiedEnvelopes {
+                SecureLogger.debug("📦 Courier deposit rejected: verified-tier pool full", category: .session)
                 return false
             }
             if envelopes.count >= Limits.maxEnvelopes {
-                // Oldest-first eviction, matching outbox overflow behavior.
-                let evicted = envelopes.removeFirst()
-                SecureLogger.debug("📦 Courier store full - evicted envelope stored at \(evicted.storedAt)", category: .session)
+                // Oldest-first eviction, shedding verified-tier mail before
+                // favorites' so open couriering can't crowd out trusted mail.
+                let victim = envelopes.firstIndex(where: { $0.tier == .verified }) ?? envelopes.startIndex
+                let evicted = envelopes.remove(at: victim)
+                SecureLogger.debug("📦 Courier store full - evicted \(evicted.tier.rawValue) envelope stored at \(evicted.storedAt)", category: .session)
             }
 
             envelopes.append(StoredEnvelope(
@@ -105,7 +175,9 @@ final class CourierStore {
                 expiry: envelope.expiry,
                 ciphertext: envelope.ciphertext,
                 depositorNoiseKey: depositorNoiseKey,
-                storedAt: date
+                storedAt: date,
+                tier: tier,
+                copies: envelope.copies
             ))
             persistLocked()
             return true
@@ -128,6 +200,58 @@ final class CourierStore {
             envelopes.removeAll { stored in matched.contains(stored) }
             persistLocked()
             return matched.map(\.envelope)
+        }
+    }
+
+    /// Envelopes addressed to a recipient we heard from via a *relayed*
+    /// announce. Non-destructive: a multi-hop send is speculative, so the
+    /// envelope stays carried until a direct handover or expiry. The per-
+    /// envelope cooldown keeps repeated announces from re-flooding the mesh.
+    func envelopesForRemoteHandover(recipientNoiseKey: Data, cooldown: TimeInterval) -> [CourierEnvelope] {
+        let date = now()
+        let candidates = CourierEnvelope.candidateTags(noiseStaticKey: recipientNoiseKey, around: date)
+        return queue.sync {
+            pruneExpiredLocked(at: date)
+            var matched: [CourierEnvelope] = []
+            for index in envelopes.indices where candidates.contains(envelopes[index].recipientTag) {
+                if let last = envelopes[index].lastRemoteHandoverAt,
+                   date.timeIntervalSince(last) < cooldown {
+                    continue
+                }
+                envelopes[index].lastRemoteHandoverAt = date
+                // The delivered copy carries no spray budget.
+                matched.append(envelopes[index].envelope.withCopies(1))
+            }
+            if !matched.isEmpty { persistLocked() }
+            return matched
+        }
+    }
+
+    // MARK: - Spray-and-wait (on encountering another courier)
+
+    /// Envelopes to re-deposit with a courier we just encountered, each with
+    /// half its remaining budget (binary spray). Skips envelopes the courier
+    /// deposited, envelopes addressed to them (those ride the handover path),
+    /// carry-only envelopes, and couriers already sprayed.
+    func takeSprayCopies(for courierNoiseKey: Data) -> [CourierEnvelope] {
+        let date = now()
+        let courierTags = CourierEnvelope.candidateTags(noiseStaticKey: courierNoiseKey, around: date)
+        return queue.sync {
+            pruneExpiredLocked(at: date)
+            var sprayed: [CourierEnvelope] = []
+            for index in envelopes.indices {
+                let stored = envelopes[index]
+                guard stored.copies > 1,
+                      stored.depositorNoiseKey != courierNoiseKey,
+                      !stored.sprayedTo.contains(courierNoiseKey),
+                      !courierTags.contains(stored.recipientTag) else { continue }
+                let given = stored.copies / 2
+                envelopes[index].copies = stored.copies - given
+                envelopes[index].sprayedTo.insert(courierNoiseKey)
+                sprayed.append(stored.envelope.withCopies(given))
+            }
+            if !sprayed.isEmpty { persistLocked() }
+            return sprayed
         }
     }
 

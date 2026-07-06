@@ -24,23 +24,37 @@ public struct CourierEnvelope: Equatable {
     public let expiry: UInt64
     /// Opaque one-way Noise X ciphertext (sender identity rides inside).
     public let ciphertext: Data
+    /// Spray-and-wait copy budget: how many redundant copies of this envelope
+    /// the holder may still hand to other couriers (binary split on each
+    /// spray). 1 means carry-only — deliver to the recipient, never re-spray.
+    public let copies: UInt8
 
     public static let tagLength = 16
     /// Couriered messages are text-sized; media transfers are out of scope.
     public static let maxCiphertextBytes = 16 * 1024
     /// Matches the outbox retention policy in MessageRouter.
     public static let maxLifetimeSeconds: TimeInterval = 24 * 60 * 60
+    /// Cap on the copy budget a depositor can claim, so a malicious envelope
+    /// cannot turn the courier network into an amplifier.
+    public static let maxCopies: UInt8 = 8
 
     private enum TLVType: UInt8 {
         case recipientTag = 0x01
         case expiry = 0x02
         case ciphertext = 0x03
+        case copies = 0x04
     }
 
-    public init(recipientTag: Data, expiry: UInt64, ciphertext: Data) {
+    public init(recipientTag: Data, expiry: UInt64, ciphertext: Data, copies: UInt8 = 1) {
         self.recipientTag = recipientTag
         self.expiry = expiry
         self.ciphertext = ciphertext
+        self.copies = min(max(copies, 1), Self.maxCopies)
+    }
+
+    /// The same envelope with a different remaining copy budget.
+    public func withCopies(_ copies: UInt8) -> CourierEnvelope {
+        CourierEnvelope(recipientTag: recipientTag, expiry: expiry, ciphertext: ciphertext, copies: copies)
     }
 
     public var isExpired: Bool {
@@ -75,6 +89,14 @@ public struct CourierEnvelope: Equatable {
         appendBE(UInt16(ciphertext.count), into: &encoded)
         encoded.append(ciphertext)
 
+        // Omitted when 1 so carry-only envelopes stay byte-identical to the
+        // pre-spray wire format (old clients skip the TLV as unknown anyway).
+        if copies > 1 {
+            encoded.append(TLVType.copies.rawValue)
+            appendBE(UInt16(1), into: &encoded)
+            encoded.append(copies)
+        }
+
         return encoded
     }
 
@@ -85,6 +107,7 @@ public struct CourierEnvelope: Equatable {
         var recipientTag: Data?
         var expiry: UInt64?
         var ciphertext: Data?
+        var copies: UInt8 = 1
 
         while cursor < end {
             let typeRaw = data[cursor]
@@ -107,6 +130,9 @@ public struct CourierEnvelope: Equatable {
             case .ciphertext:
                 guard length > 0, length <= maxCiphertextBytes else { return nil }
                 ciphertext = Data(value)
+            case .copies:
+                guard length == 1 else { return nil }
+                copies = value.first ?? 1
             case nil:
                 // Unknown TLV: skip for forward compatibility.
                 continue
@@ -114,7 +140,7 @@ public struct CourierEnvelope: Equatable {
         }
 
         guard let recipientTag, let expiry, let ciphertext else { return nil }
-        return CourierEnvelope(recipientTag: recipientTag, expiry: expiry, ciphertext: ciphertext)
+        return CourierEnvelope(recipientTag: recipientTag, expiry: expiry, ciphertext: ciphertext, copies: copies)
     }
 
     // MARK: - Recipient Tags

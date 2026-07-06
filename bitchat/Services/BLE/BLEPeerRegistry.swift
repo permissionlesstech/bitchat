@@ -125,7 +125,8 @@ struct BLEPeerRegistry {
                 nickname: resolvedNames[info.peerID] ?? info.nickname,
                 isConnected: info.isConnected,
                 noisePublicKey: info.noisePublicKey,
-                lastSeen: info.lastSeen
+                lastSeen: info.lastSeen,
+                isVerified: info.isVerifiedNickname
             )
         }
     }

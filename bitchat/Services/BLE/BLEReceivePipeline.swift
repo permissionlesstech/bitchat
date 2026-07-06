@@ -48,7 +48,11 @@ struct BLEReceivePipeline {
             senderIsSelf: senderID == localPeerID,
             recipientIsSelf: PeerID(hexData: packet.recipientID) == localPeerID,
             isEncrypted: packet.type == MessageType.noiseEncrypted.rawValue,
-            isDirectedEncrypted: packet.type == MessageType.noiseEncrypted.rawValue && packet.recipientID != nil,
+            // Courier envelopes are directed opaque ciphertext like DMs; a
+            // remote handover toward a relayed announce rides this same
+            // deterministic relay treatment instead of the broadcast clamp.
+            isDirectedEncrypted: (packet.type == MessageType.noiseEncrypted.rawValue
+                || packet.type == MessageType.courierEnvelope.rawValue) && packet.recipientID != nil,
             isFragment: packet.type == MessageType.fragment.rawValue,
             isDirectedFragment: packet.type == MessageType.fragment.rawValue && packet.recipientID != nil,
             isHandshake: packet.type == MessageType.noiseHandshake.rawValue,

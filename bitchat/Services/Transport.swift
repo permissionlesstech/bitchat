@@ -11,6 +11,24 @@ struct TransportPeerSnapshot: Equatable, Hashable {
     let isConnected: Bool
     let noisePublicKey: Data?
     let lastSeen: Date
+    /// Whether the peer's announce was signature-verified (courier tier gate).
+    let isVerified: Bool
+
+    init(
+        peerID: PeerID,
+        nickname: String,
+        isConnected: Bool,
+        noisePublicKey: Data?,
+        lastSeen: Date,
+        isVerified: Bool = false
+    ) {
+        self.peerID = peerID
+        self.nickname = nickname
+        self.isConnected = isConnected
+        self.noisePublicKey = noisePublicKey
+        self.lastSeen = lastSeen
+        self.isVerified = isVerified
+    }
 }
 
 enum TransportEvent: @unchecked Sendable {

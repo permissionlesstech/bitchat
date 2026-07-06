@@ -262,7 +262,14 @@ enum TransportConfig {
     static let syncSeenCapacity: Int = 1000
     static let syncGCSMaxBytes: Int = 400
     static let syncGCSTargetFpr: Double = 0.01
+    // Fragments and file transfers keep the short window; whole public
+    // messages get hours so a phone walking between partitions carries the
+    // room's recent history with it (see syncPublicMessageMaxAgeSeconds).
     static let syncMaxMessageAgeSeconds: TimeInterval = 900
+    // How far back public broadcast messages stay sync-able. Must not exceed
+    // the receive-side acceptance window (BLEPublicMessagePolicy uses this
+    // same constant) or served packets would be dropped as stale.
+    static let syncPublicMessageMaxAgeSeconds: TimeInterval = 6 * 60 * 60
     static let syncMaintenanceIntervalSeconds: TimeInterval = 30.0
     static let syncStalePeerCleanupIntervalSeconds: TimeInterval = 60.0
     static let syncStalePeerTimeoutSeconds: TimeInterval = 60.0
@@ -271,4 +278,13 @@ enum TransportConfig {
     static let syncFragmentIntervalSeconds: TimeInterval = 30.0
     static let syncFileTransferIntervalSeconds: TimeInterval = 60.0
     static let syncMessageIntervalSeconds: TimeInterval = 15.0
+
+    // Courier store-and-forward
+    // Initial spray-and-wait budget per deposited envelope: each courier may
+    // hand half its remaining copies to another courier on encounter, so a
+    // message diffuses through a moving crowd instead of riding one person.
+    static let courierInitialCopies: UInt8 = 4
+    // Cooldown between speculative multi-hop handovers of the same envelope
+    // toward a recipient heard only via relayed announces.
+    static let courierRemoteHandoverCooldownSeconds: TimeInterval = 10 * 60
 }

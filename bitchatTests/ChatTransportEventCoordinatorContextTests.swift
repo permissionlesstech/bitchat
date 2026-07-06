@@ -121,9 +121,11 @@ private final class MockChatTransportEventContext: ChatTransportEventContext {
 
     // Routing & acknowledgements
     private(set) var flushedOutboxPeerIDs: [PeerID] = []
+    private(set) var courierRetryPeerIDs: [PeerID] = []
     private(set) var meshDeliveryAcks: [(messageID: String, peerID: PeerID)] = []
 
     func flushRouterOutbox(for peerID: PeerID) { flushedOutboxPeerIDs.append(peerID) }
+    func retryCourierDeposits(via peerID: PeerID) { courierRetryPeerIDs.append(peerID) }
     func sendMeshDeliveryAck(for messageID: String, to peerID: PeerID) {
         meshDeliveryAcks.append((messageID, peerID))
     }

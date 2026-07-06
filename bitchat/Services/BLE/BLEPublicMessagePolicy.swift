@@ -27,8 +27,15 @@ enum BLEPublicMessagePolicy {
         }
 
         let isBroadcast = BLEPacketFreshnessPolicy.isBroadcastRecipient(packet.recipientID)
+        // Acceptance window matches the gossip-sync serving window: a peer
+        // walking between partitions carries hours of public history, so the
+        // receive side must not drop what sync legitimately serves.
         if isBroadcast,
-           BLEPacketFreshnessPolicy.isStale(timestampMilliseconds: packet.timestamp, now: now) {
+           BLEPacketFreshnessPolicy.isStale(
+               timestampMilliseconds: packet.timestamp,
+               now: now,
+               maxAgeSeconds: TransportConfig.syncPublicMessageMaxAgeSeconds
+           ) {
             return .reject(.staleBroadcast(ageSeconds: BLEPacketFreshnessPolicy.ageSeconds(
                 timestampMilliseconds: packet.timestamp,
                 now: now

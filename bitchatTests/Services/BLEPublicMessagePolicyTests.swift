@@ -36,11 +36,13 @@ struct BLEPublicMessagePolicyTests {
 
     @Test
     func staleBroadcastIsRejectedWithAge() {
-        let now = Date(timeIntervalSince1970: 1_000)
+        // The acceptance window matches the gossip public-history window.
+        let staleAge = TransportConfig.syncPublicMessageMaxAgeSeconds + 1
+        let now = Date(timeIntervalSince1970: 1_000_000)
         let sender = PeerID(str: "8877665544332211")
         let packet = makePacket(
             sender: sender,
-            timestamp: UInt64((now.timeIntervalSince1970 - 901) * 1000),
+            timestamp: UInt64((now.timeIntervalSince1970 - staleAge) * 1000),
             recipientID: nil
         )
 
@@ -51,7 +53,7 @@ struct BLEPublicMessagePolicyTests {
             now: now
         )
 
-        #expect(decision == .reject(.staleBroadcast(ageSeconds: 901)))
+        #expect(decision == .reject(.staleBroadcast(ageSeconds: staleAge)))
     }
 
     @Test

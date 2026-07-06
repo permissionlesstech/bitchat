@@ -20,6 +20,38 @@ struct CourierEnvelopeTests {
         CourierEnvelope(recipientTag: tag, expiry: expiry, ciphertext: ciphertext)
     }
 
+    // MARK: - Spray copies
+
+    @Test func copiesRoundTrip() throws {
+        let envelope = makeEnvelope().withCopies(4)
+        let encoded = try #require(envelope.encode())
+        let decoded = try #require(CourierEnvelope.decode(encoded))
+        #expect(decoded.copies == 4)
+        #expect(decoded == envelope)
+    }
+
+    @Test func carryOnlyEnvelopeEncodesIdenticallyToLegacyFormat() throws {
+        // copies == 1 must be byte-identical to the pre-spray wire format so
+        // old and new clients dedup the same envelope the same way.
+        let envelope = makeEnvelope()
+        #expect(envelope.copies == 1)
+        let encoded = try #require(envelope.encode())
+        let withExplicitOne = try #require(envelope.withCopies(1).encode())
+        #expect(encoded == withExplicitOne)
+        #expect(!encoded.contains(0x04) || CourierEnvelope.decode(encoded)?.copies == 1)
+    }
+
+    @Test func decodeWithoutCopiesTLVDefaultsToCarryOnly() throws {
+        let encoded = try #require(makeEnvelope().encode())
+        let decoded = try #require(CourierEnvelope.decode(encoded))
+        #expect(decoded.copies == 1)
+    }
+
+    @Test func copiesAreClampedToPolicyBounds() {
+        #expect(makeEnvelope().withCopies(0).copies == 1)
+        #expect(makeEnvelope().withCopies(200).copies == CourierEnvelope.maxCopies)
+    }
+
     // MARK: - Codec
 
     @Test func roundTrip() throws {

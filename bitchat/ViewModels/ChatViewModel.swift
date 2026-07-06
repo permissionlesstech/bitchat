@@ -764,15 +764,19 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         locationPresenceStore: LocationPresenceStore? = nil,
         locationManager: LocationChannelManager = .shared
     ) {
+        let meshService = BLEService(keychain: keychain, idBridge: idBridge, identityManager: identityManager)
+        meshService.sfMetrics = .shared
         self.init(
             keychain: keychain,
             idBridge: idBridge,
             identityManager: identityManager,
-            transport: BLEService(keychain: keychain, idBridge: idBridge, identityManager: identityManager),
+            transport: meshService,
             conversations: conversations,
             peerIdentityStore: peerIdentityStore ?? PeerIdentityStore(),
             locationPresenceStore: locationPresenceStore ?? LocationPresenceStore(),
-            locationManager: locationManager
+            locationManager: locationManager,
+            outboxStore: MessageOutboxStore(keychain: keychain),
+            sfMetrics: .shared
         )
     }
 
@@ -788,7 +792,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         peerIdentityStore: PeerIdentityStore? = nil,
         locationPresenceStore: LocationPresenceStore? = nil,
         locationManager: LocationChannelManager = .shared,
-        readReceiptsDefaults: UserDefaults? = nil
+        readReceiptsDefaults: UserDefaults? = nil,
+        outboxStore: MessageOutboxStore? = nil,
+        sfMetrics: StoreAndForwardMetrics? = nil
     ) {
         let conversations = conversations ?? ConversationStore()
         let peerIdentityStore = peerIdentityStore ?? PeerIdentityStore()
@@ -797,7 +803,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
             keychain: keychain,
             idBridge: idBridge,
             identityManager: identityManager,
-            meshService: transport
+            meshService: transport,
+            outboxStore: outboxStore,
+            sfMetrics: sfMetrics
         )
 
         self.keychain = keychain
@@ -1189,8 +1197,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         // Clear persistent favorites from keychain
         FavoritesPersistenceService.shared.clearAllFavorites()
 
-        // Drop courier mail carried for third parties (memory and disk)
+        // Drop courier mail carried for third parties (memory and disk),
+        // our own queued outbox, the carried public history, and the
+        // counters describing all of it
         CourierStore.shared.wipe()
+        messageRouter.wipeOutbox()
+        GossipMessageArchive.wipeDefault()
+        StoreAndForwardMetrics.shared.reset()
 
         // Identity manager has cleared persisted identity data above
 
