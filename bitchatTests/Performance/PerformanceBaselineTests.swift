@@ -611,6 +611,7 @@ private final class PerfNostrContext: ChatNostrContext {
 
     private(set) var handledPublicMessageCount = 0
     func handlePublicMessage(_ message: BitchatMessage) { handledPublicMessageCount += 1 }
+    func handlePublicMessage(_ message: BitchatMessage, powBits: Int) { handledPublicMessageCount += 1 }
     func checkForMentions(_ message: BitchatMessage) {}
     func sendHapticFeedback(for message: BitchatMessage) {}
     func parseMentions(from content: String) -> [String] {
