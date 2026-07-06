@@ -89,11 +89,11 @@ final class LocationNotesManager: ObservableObject {
     private let maxNotesInMemory = 500 // Defensive cap (relay limit is 200)
 
     private enum Strings {
-        static let noRelays = String(localized: "location_notes.error.no_relays", comment: "Shown when no geo relays are available near the selected location")
+        static let noRelays = String(localized: "location_notes.error.no_relays", defaultValue: "no geo relays available near this location. try again soon.", comment: "Shown when no geo relays are available near the selected location")
 
         static func failedToSend(_ detail: String) -> String {
             String(
-                format: String(localized: "location_notes.error.failed_to_send", comment: "Shown when a location note fails to send"),
+                format: String(localized: "location_notes.error.failed_to_send", defaultValue: "failed to send note. %@", comment: "Shown when a location note fails to send"),
                 locale: .current,
                 detail
             )

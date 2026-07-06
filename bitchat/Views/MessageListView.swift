@@ -109,11 +109,11 @@ struct MessageListView: View {
                                     // mentioning the only other participant is noise, and "DM"
                                     // would just reopen the conversation that is already open.
                                     if privatePeer == nil {
-                                        Button("content.actions.mention") {
+                                        Button(String(localized: "content.actions.mention", defaultValue: "mention")) {
                                             insertMention(message.sender)
                                         }
                                         if let peerID = message.senderPeerID {
-                                            Button("content.actions.direct_message") {
+                                            Button(String(localized: "content.actions.direct_message", defaultValue: "direct message")) {
                                                 privateConversationModel.openConversation(for: peerID)
                                                 withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
                                                     showSidebar = true
@@ -121,14 +121,14 @@ struct MessageListView: View {
                                             }
                                         }
                                     }
-                                    Button("content.actions.hug") {
+                                    Button(String(localized: "content.actions.hug", defaultValue: "hug")) {
                                         conversationUIModel.sendHug(to: message.sender)
                                     }
-                                    Button("content.actions.slap") {
+                                    Button(String(localized: "content.actions.slap", defaultValue: "slap")) {
                                         conversationUIModel.sendSlap(to: message.sender)
                                     }
                                 }
-                                Button("content.message.copy") {
+                                Button(String(localized: "content.message.copy", defaultValue: "copy message")) {
                                     #if os(iOS)
                                     UIPasteboard.general.string = message.content
                                     #else
@@ -138,12 +138,12 @@ struct MessageListView: View {
                                     #endif
                                 }
                                 if isResendableFailedMessage(message) {
-                                    Button("content.actions.resend") {
+                                    Button(String(localized: "content.actions.resend", defaultValue: "resend")) {
                                         conversationUIModel.resendFailedPrivateMessage(message)
                                     }
                                 }
                                 if showsUserActions {
-                                    Button("content.actions.block", role: .destructive) {
+                                    Button(String(localized: "content.actions.block", defaultValue: "block"), role: .destructive) {
                                         conversationUIModel.block(peerID: message.senderPeerID, displayName: message.sender)
                                     }
                                 }
@@ -165,14 +165,14 @@ struct MessageListView: View {
                 showClearConfirmation = true
             }
             .confirmationDialog(
-                "content.clear.confirm_title",
+                String(localized: "content.clear.confirm_title", defaultValue: "clear this chat?"),
                 isPresented: $showClearConfirmation,
                 titleVisibility: .visible
             ) {
-                Button("content.clear.confirm_action", role: .destructive) {
+                Button(String(localized: "content.clear.confirm_action", defaultValue: "clear chat"), role: .destructive) {
                     conversationUIModel.clearCurrentConversation()
                 }
-                Button("common.cancel", role: .cancel) {}
+                Button(String(localized: "common.cancel", defaultValue: "cancel"), role: .cancel) {}
             }
             .onAppear {
                 scrollToBottom(on: proxy)
@@ -190,17 +190,17 @@ struct MessageListView: View {
                 onSelectedChannelChange(newChannel, proxy: proxy)
             }
             .confirmationDialog(
-                selectedMessageSender.map { "@\($0)" } ?? String(localized: "content.actions.title", comment: "Fallback title for the message action sheet"),
+                selectedMessageSender.map { "@\($0)" } ?? String(localized: "content.actions.title", defaultValue: "actions", comment: "Fallback title for the message action sheet"),
                 isPresented: $showMessageActions,
                 titleVisibility: .visible
             ) {
-                Button("content.actions.mention") {
+                Button(String(localized: "content.actions.mention", defaultValue: "mention")) {
                     if let sender = selectedMessageSender {
                         insertMention(sender)
                     }
                 }
 
-                Button("content.actions.direct_message") {
+                Button(String(localized: "content.actions.direct_message", defaultValue: "direct message")) {
                     if let peerID = selectedMessageSenderID {
                         privateConversationModel.openConversation(for: peerID)
                         withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
@@ -209,23 +209,23 @@ struct MessageListView: View {
                     }
                 }
 
-                Button("content.actions.hug") {
+                Button(String(localized: "content.actions.hug", defaultValue: "hug")) {
                     if let sender = selectedMessageSender {
                         conversationUIModel.sendHug(to: sender)
                     }
                 }
 
-                Button("content.actions.slap") {
+                Button(String(localized: "content.actions.slap", defaultValue: "slap")) {
                     if let sender = selectedMessageSender {
                         conversationUIModel.sendSlap(to: sender)
                     }
                 }
 
-                Button("content.actions.block", role: .destructive) {
+                Button(String(localized: "content.actions.block", defaultValue: "block"), role: .destructive) {
                     conversationUIModel.block(peerID: selectedMessageSenderID, displayName: selectedMessageSender)
                 }
 
-                Button("common.cancel", role: .cancel) {}
+                Button(String(localized: "common.cancel", defaultValue: "cancel"), role: .cancel) {}
             }
             .onAppear {
                 // Also check when view appears
@@ -277,18 +277,18 @@ private extension MessageListView {
         VStack(alignment: .leading, spacing: 6) {
             switch locationChannelsModel.selectedChannel {
             case .mesh:
-                emptyStateLine(String(localized: "content.empty.mesh_intro", comment: "First line of the empty mesh timeline explaining what the mesh channel is"))
-                emptyStateLine(String(localized: "content.empty.mesh_waiting", comment: "Second line of the empty mesh timeline saying no peers are in range yet"))
-                emptyStateLine(String(localized: "content.empty.switch_hint", comment: "Empty timeline hint pointing at the channel switcher and the help screen"))
+                emptyStateLine(String(localized: "content.empty.mesh_intro", defaultValue: "you're on #mesh — reaches people within bluetooth range", comment: "First line of the empty mesh timeline explaining what the mesh channel is"))
+                emptyStateLine(String(localized: "content.empty.mesh_waiting", defaultValue: "nobody in range yet... messages appear here", comment: "Second line of the empty mesh timeline saying no peers are in range yet"))
+                emptyStateLine(String(localized: "content.empty.switch_hint", defaultValue: "tap the channel name above to switch · tap bitchat/ for help", comment: "Empty timeline hint pointing at the channel switcher and the help screen"))
             case .location(let channel):
                 emptyStateLine(
                     String(
-                        format: String(localized: "content.empty.location_intro", comment: "First line of an empty geohash timeline naming the channel"),
+                        format: String(localized: "content.empty.location_intro", defaultValue: "you're in #%@ — a public location channel over the internet", comment: "First line of an empty geohash timeline naming the channel"),
                         locale: .current,
                         channel.geohash
                     )
                 )
-                emptyStateLine(String(localized: "content.empty.switch_hint", comment: "Empty timeline hint pointing at the channel switcher and the help screen"))
+                emptyStateLine(String(localized: "content.empty.switch_hint", defaultValue: "tap the channel name above to switch · tap bitchat/ for help", comment: "Empty timeline hint pointing at the channel switcher and the help screen"))
             }
         }
         .padding(.horizontal, 12)
@@ -368,7 +368,7 @@ private extension MessageListView {
                 if unseenCount > 0 {
                     Text(
                         String(
-                            format: String(localized: "content.jump.new_count", comment: "Count of messages that arrived while scrolled up, shown in the jump-to-latest pill"),
+                            format: String(localized: "content.jump.new_count", defaultValue: "%lld new", comment: "Count of messages that arrived while scrolled up, shown in the jump-to-latest pill"),
                             locale: .current,
                             unseenCount
                         )
@@ -389,10 +389,10 @@ private extension MessageListView {
     }
 
     var jumpToLatestAccessibilityLabel: String {
-        let base = String(localized: "content.accessibility.jump_to_latest", comment: "Accessibility label for the jump to latest messages button")
+        let base = String(localized: "content.accessibility.jump_to_latest", defaultValue: "jump to latest messages", comment: "Accessibility label for the jump to latest messages button")
         guard unseenCount > 0 else { return base }
         let count = String(
-            format: String(localized: "content.jump.new_count", comment: "Count of messages that arrived while scrolled up, shown in the jump-to-latest pill"),
+            format: String(localized: "content.jump.new_count", defaultValue: "%lld new", comment: "Count of messages that arrived while scrolled up, shown in the jump-to-latest pill"),
             locale: .current,
             unseenCount
         )

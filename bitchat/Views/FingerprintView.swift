@@ -30,7 +30,7 @@ struct FingerprintView: View {
         static let verifiedMessage: LocalizedStringKey = "fingerprint.message.verified"
         static func verifyHint(_ nickname: String) -> String {
             String(
-                format: String(localized: "fingerprint.message.verify_hint", comment: "Instruction to compare fingerprints with a named peer"),
+                format: String(localized: "fingerprint.message.verify_hint", defaultValue: "compare these fingerprints with %@ using a secure channel.", comment: "Instruction to compare fingerprints with a named peer"),
                 locale: .current,
                 nickname
             )
@@ -40,13 +40,13 @@ struct FingerprintView: View {
         static let vouchedBadge: LocalizedStringKey = "fingerprint.badge.vouched"
         static func vouchedBy(_ count: Int) -> String {
             String(
-                format: String(localized: "fingerprint.message.vouched_by", comment: "How many people the user verified have vouched for this peer"),
+                format: String(localized: "fingerprint.message.vouched_by", defaultValue: "vouched for by %#@people@ you verified", comment: "How many people the user verified have vouched for this peer"),
                 locale: .current,
                 count
             )
         }
         static func unknownPeer() -> String {
-            String(localized: "common.unknown", comment: "Label for an unknown peer")
+            String(localized: "common.unknown", defaultValue: "unknown", comment: "Label for an unknown peer")
         }
     }
     

@@ -238,7 +238,7 @@ final class ChatPrivateConversationCoordinator {
             let nickname = context.peerNickname(for: peerID) ?? "user"
             context.addSystemMessage(
                 String(
-                    format: String(localized: "system.dm.blocked_recipient", comment: "System message when attempting to message a blocked user"),
+                    format: String(localized: "system.dm.blocked_recipient", defaultValue: "cannot send message to %@: person is blocked.", comment: "System message when attempting to message a blocked user"),
                     locale: .current,
                     nickname
                 )
@@ -298,7 +298,7 @@ final class ChatPrivateConversationCoordinator {
         } else {
             context.setPrivateDeliveryStatus(
                 .failed(
-                    reason: String(localized: "content.delivery.reason.unreachable", comment: "Failure reason when a peer is unreachable")
+                    reason: String(localized: "content.delivery.reason.unreachable", defaultValue: "peer not reachable", comment: "Failure reason when a peer is unreachable")
                 ),
                 forMessageID: messageID,
                 peerID: peerID
@@ -306,7 +306,7 @@ final class ChatPrivateConversationCoordinator {
             let name = recipientNickname ?? "user"
             context.addSystemMessage(
                 String(
-                    format: String(localized: "system.dm.unreachable", comment: "System message when a recipient is unreachable"),
+                    format: String(localized: "system.dm.unreachable", defaultValue: "cannot send message to %@ - peer is not reachable via mesh or nostr.", comment: "System message when a recipient is unreachable"),
                     locale: .current,
                     name
                 )
@@ -317,7 +317,7 @@ final class ChatPrivateConversationCoordinator {
     func sendGeohashDM(_ content: String, to peerID: PeerID) {
         guard case .location(let channel) = context.activeChannel else {
             context.addSystemMessage(
-                String(localized: "system.location.not_in_channel", comment: "System message when attempting to send without being in a location channel")
+                String(localized: "system.location.not_in_channel", defaultValue: "cannot send: not in a location channel", comment: "System message when attempting to send without being in a location channel")
             )
             return
         }
@@ -341,7 +341,7 @@ final class ChatPrivateConversationCoordinator {
         guard let recipientHex = context.nostrKeyMapping[peerID] else {
             context.setPrivateDeliveryStatus(
                 .failed(
-                    reason: String(localized: "content.delivery.reason.unknown_recipient", comment: "Failure reason when the recipient is unknown")
+                    reason: String(localized: "content.delivery.reason.unknown_recipient", defaultValue: "unknown recipient", comment: "Failure reason when the recipient is unknown")
                 ),
                 forMessageID: messageID,
                 peerID: peerID
@@ -352,13 +352,13 @@ final class ChatPrivateConversationCoordinator {
         if context.isNostrBlocked(pubkeyHexLowercased: recipientHex) {
             context.setPrivateDeliveryStatus(
                 .failed(
-                    reason: String(localized: "content.delivery.reason.blocked", comment: "Failure reason when the user is blocked")
+                    reason: String(localized: "content.delivery.reason.blocked", defaultValue: "user is blocked", comment: "Failure reason when the user is blocked")
                 ),
                 forMessageID: messageID,
                 peerID: peerID
             )
             context.addSystemMessage(
-                String(localized: "system.dm.blocked_generic", comment: "System message when sending fails because user is blocked")
+                String(localized: "system.dm.blocked_generic", defaultValue: "cannot send message: person is blocked.", comment: "System message when sending fails because user is blocked")
             )
             return
         }
@@ -368,7 +368,7 @@ final class ChatPrivateConversationCoordinator {
             if recipientHex.lowercased() == identity.publicKeyHex.lowercased() {
                 context.setPrivateDeliveryStatus(
                     .failed(
-                        reason: String(localized: "content.delivery.reason.self", comment: "Failure reason when attempting to message yourself")
+                        reason: String(localized: "content.delivery.reason.self", defaultValue: "cannot message yourself", comment: "Failure reason when attempting to message yourself")
                     ),
                     forMessageID: messageID,
                     peerID: peerID
@@ -390,7 +390,7 @@ final class ChatPrivateConversationCoordinator {
         } catch {
             context.setPrivateDeliveryStatus(
                 .failed(
-                    reason: String(localized: "content.delivery.reason.send_error", comment: "Failure reason for a generic send error")
+                    reason: String(localized: "content.delivery.reason.send_error", defaultValue: "send error", comment: "Failure reason for a generic send error")
                 ),
                 forMessageID: messageID,
                 peerID: peerID

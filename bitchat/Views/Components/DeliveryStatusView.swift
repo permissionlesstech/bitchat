@@ -16,32 +16,32 @@ extension DeliveryStatus {
     var bitchatDescription: String {
         switch self {
         case .sending:
-            return String(localized: "content.delivery.sending", comment: "Delivery status description while a private message is being sent")
+            return String(localized: "content.delivery.sending", defaultValue: "sending...", comment: "Delivery status description while a private message is being sent")
         case .sent:
-            return String(localized: "content.delivery.sent", comment: "Delivery status description for a sent but not yet confirmed private message")
+            return String(localized: "content.delivery.sent", defaultValue: "sent — no delivery confirmation yet", comment: "Delivery status description for a sent but not yet confirmed private message")
         case .carried:
             return String(localized: "content.delivery.carried", defaultValue: "Carried by a friend who may meet them", comment: "Delivery status description for messages handed to a courier for physical delivery")
         case .delivered(let nickname, _):
             return String(
-                format: String(localized: "content.delivery.delivered_to", comment: "Tooltip for delivered private messages"),
+                format: String(localized: "content.delivery.delivered_to", defaultValue: "delivered to %@", comment: "Tooltip for delivered private messages"),
                 locale: .current,
                 nickname
             )
         case .read(let nickname, _):
             return String(
-                format: String(localized: "content.delivery.read_by", comment: "Tooltip for read private messages"),
+                format: String(localized: "content.delivery.read_by", defaultValue: "read by %@", comment: "Tooltip for read private messages"),
                 locale: .current,
                 nickname
             )
         case .failed(let reason):
             return String(
-                format: String(localized: "content.delivery.failed", comment: "Tooltip for failed message delivery"),
+                format: String(localized: "content.delivery.failed", defaultValue: "failed: %@", comment: "Tooltip for failed message delivery"),
                 locale: .current,
                 reason
             )
         case .partiallyDelivered(let reached, let total):
             return String(
-                format: String(localized: "content.delivery.delivered_members", comment: "Tooltip for partially delivered messages"),
+                format: String(localized: "content.delivery.delivered_members", defaultValue: "delivered to %1$d of %2$d members", comment: "Tooltip for partially delivered messages"),
                 locale: .current,
                 reached,
                 total

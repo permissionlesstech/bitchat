@@ -25,20 +25,20 @@ struct BlockRevealImageView: View {
     @State private var loadFailed = false
 
     private enum Strings {
-        static let tapToReveal = String(localized: "media.image.tap_to_reveal", comment: "Caption on a blurred incoming image inviting a tap to reveal it")
-        static let open = String(localized: "media.image.action.open", comment: "Context menu action that opens an image full screen")
-        static let reveal = String(localized: "media.image.action.reveal", comment: "Context menu action that reveals a blurred image")
-        static let hide = String(localized: "media.image.action.hide", comment: "Context menu action that re-blurs a revealed image")
-        static let delete = String(localized: "media.image.action.delete", comment: "Context menu action that deletes a received image")
-        static let deleteConfirmTitle = String(localized: "media.image.delete_confirm_title", comment: "Title of the confirmation dialog before deleting a received image")
-        static let deleteConfirmMessage = String(localized: "media.image.delete_confirm_message", comment: "Body of the confirmation dialog before deleting a received image")
-        static let hiddenImage = String(localized: "media.image.accessibility.hidden", comment: "Accessibility label for a blurred incoming image")
-        static let revealedImage = String(localized: "media.image.accessibility.revealed", comment: "Accessibility label for a revealed image")
-        static let revealHint = String(localized: "media.image.accessibility.hint.reveal", comment: "Accessibility hint for a blurred image; activating it reveals the image")
-        static let openHint = String(localized: "media.image.accessibility.hint.open", comment: "Accessibility hint for a revealed image; activating it opens the image full screen")
-        static let sendingImage = String(localized: "media.image.accessibility.sending", comment: "Accessibility label for an image that is still sending")
-        static let unavailableImage = String(localized: "media.image.accessibility.unavailable", comment: "Accessibility label for an image whose file could not be loaded")
-        static let cancelSend = String(localized: "media.accessibility.cancel_send", comment: "Accessibility label for the cancel button on an in-flight media send")
+        static let tapToReveal = String(localized: "media.image.tap_to_reveal", defaultValue: "tap to reveal", comment: "Caption on a blurred incoming image inviting a tap to reveal it")
+        static let open = String(localized: "media.image.action.open", defaultValue: "open image", comment: "Context menu action that opens an image full screen")
+        static let reveal = String(localized: "media.image.action.reveal", defaultValue: "reveal image", comment: "Context menu action that reveals a blurred image")
+        static let hide = String(localized: "media.image.action.hide", defaultValue: "hide image", comment: "Context menu action that re-blurs a revealed image")
+        static let delete = String(localized: "media.image.action.delete", defaultValue: "delete image", comment: "Context menu action that deletes a received image")
+        static let deleteConfirmTitle = String(localized: "media.image.delete_confirm_title", defaultValue: "delete this image?", comment: "Title of the confirmation dialog before deleting a received image")
+        static let deleteConfirmMessage = String(localized: "media.image.delete_confirm_message", defaultValue: "this cannot be undone — the sender may not be in range to send it again.", comment: "Body of the confirmation dialog before deleting a received image")
+        static let hiddenImage = String(localized: "media.image.accessibility.hidden", defaultValue: "hidden image", comment: "Accessibility label for a blurred incoming image")
+        static let revealedImage = String(localized: "media.image.accessibility.revealed", defaultValue: "image", comment: "Accessibility label for a revealed image")
+        static let revealHint = String(localized: "media.image.accessibility.hint.reveal", defaultValue: "reveals the image", comment: "Accessibility hint for a blurred image; activating it reveals the image")
+        static let openHint = String(localized: "media.image.accessibility.hint.open", defaultValue: "opens the image full screen", comment: "Accessibility hint for a revealed image; activating it opens the image full screen")
+        static let sendingImage = String(localized: "media.image.accessibility.sending", defaultValue: "sending image", comment: "Accessibility label for an image that is still sending")
+        static let unavailableImage = String(localized: "media.image.accessibility.unavailable", defaultValue: "image unavailable", comment: "Accessibility label for an image whose file could not be loaded")
+        static let cancelSend = String(localized: "media.accessibility.cancel_send", defaultValue: "cancel sending", comment: "Accessibility label for the cancel button on an in-flight media send")
     }
 
     init(
@@ -154,7 +154,7 @@ struct BlockRevealImageView: View {
             Button(Strings.delete, role: .destructive) {
                 onDelete?()
             }
-            Button("common.cancel", role: .cancel) {}
+            Button(String(localized: "common.cancel", defaultValue: "cancel"), role: .cancel) {}
         } message: {
             Text(verbatim: Strings.deleteConfirmMessage)
         }

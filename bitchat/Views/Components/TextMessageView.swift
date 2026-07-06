@@ -69,7 +69,7 @@ struct TextMessageView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityHint(
-                        String(localized: "content.accessibility.delivery_detail_hint", comment: "Accessibility hint for the delivery status glyph explaining a tap reveals details")
+                        String(localized: "content.accessibility.delivery_detail_hint", defaultValue: "tap to show delivery details", comment: "Accessibility hint for the delivery status glyph explaining a tap reveals details")
                     )
                 }
             }

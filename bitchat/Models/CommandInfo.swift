@@ -36,11 +36,11 @@ enum CommandInfo: String, Identifiable {
     var placeholder: String? {
         switch self {
         case .block, .hug, .message, .slap, .unblock, .favorite, .unfavorite, .ping, .trace:
-            return "<" + String(localized: "content.input.nickname_placeholder") + ">"
+            return "<" + String(localized: "content.input.nickname_placeholder", defaultValue: "nickname") + ">"
         case .group:
-            return "<" + String(localized: "content.input.group_placeholder") + ">"
+            return "<" + String(localized: "content.input.group_placeholder", defaultValue: "create|invite|leave|list") + ">"
         case .pay:
-            return "<" + String(localized: "content.input.token_placeholder") + ">"
+            return "<" + String(localized: "content.input.token_placeholder", defaultValue: "token") + ">"
         case .clear, .help, .who:
             return nil
         }
@@ -48,20 +48,20 @@ enum CommandInfo: String, Identifiable {
 
     var description: String {
         switch self {
-        case .block:        String(localized: "content.commands.block")
-        case .clear:        String(localized: "content.commands.clear")
-        case .group:        String(localized: "content.commands.group")
-        case .help:         String(localized: "content.commands.help")
-        case .hug:          String(localized: "content.commands.hug")
-        case .message:      String(localized: "content.commands.message")
-        case .pay:          String(localized: "content.commands.pay")
-        case .slap:         String(localized: "content.commands.slap")
-        case .unblock:      String(localized: "content.commands.unblock")
-        case .who:          String(localized: "content.commands.who")
-        case .favorite:     String(localized: "content.commands.favorite")
-        case .unfavorite:   String(localized: "content.commands.unfavorite")
-        case .ping:         String(localized: "content.commands.ping")
-        case .trace:        String(localized: "content.commands.trace")
+        case .block:        String(localized: "content.commands.block", defaultValue: "block or list blocked peers")
+        case .clear:        String(localized: "content.commands.clear", defaultValue: "clear chat messages")
+        case .group:        String(localized: "content.commands.group", defaultValue: "create or manage private groups")
+        case .help:         String(localized: "content.commands.help", defaultValue: "show available commands")
+        case .hug:          String(localized: "content.commands.hug", defaultValue: "send someone a warm hug")
+        case .message:      String(localized: "content.commands.message", defaultValue: "send private message")
+        case .pay:          String(localized: "content.commands.pay", defaultValue: "send a cashu ecash token in this chat")
+        case .slap:         String(localized: "content.commands.slap", defaultValue: "slap someone with a trout")
+        case .unblock:      String(localized: "content.commands.unblock", defaultValue: "unblock a peer")
+        case .who:          String(localized: "content.commands.who", defaultValue: "see who's online")
+        case .favorite:     String(localized: "content.commands.favorite", defaultValue: "add to favorites")
+        case .unfavorite:   String(localized: "content.commands.unfavorite", defaultValue: "remove from favorites")
+        case .ping:         String(localized: "content.commands.ping", defaultValue: "measure round-trip time to a mesh peer")
+        case .trace:        String(localized: "content.commands.trace", defaultValue: "estimate the mesh path to a peer")
         }
     }
 
