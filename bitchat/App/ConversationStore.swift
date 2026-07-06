@@ -351,6 +351,11 @@ final class ConversationStore: ObservableObject {
     private let storage: UserDefaults
     private let lastActiveKey = "conversation.lastActive"
 
+    /// True for the duration of a panic wipe. Suppresses `persistLastActive()`
+    /// so the selection/channel resets the wipe performs cannot re-write the
+    /// pointer we are about to remove.
+    private var isPanicWiping = false
+
     /// Snapshot of the persisted value read once at init, before any launch
     /// writer (e.g. `GeoChannelCoordinator` re-applying the location channel)
     /// can overwrite the key. Restore decisions read this, never the disk.
@@ -404,6 +409,9 @@ final class ConversationStore: ObservableObject {
     /// single-writer selection paths on every switch; an open DM wins over
     /// the active channel.
     private func persistLastActive() {
+        // Panic wipe suppresses last-active persistence so the selection/channel
+        // resets that follow it can't re-write the pointer being cleared.
+        guard !isPanicWiping else { return }
         let record: LastActiveRecord
         if let peerID = selectedPrivatePeerID {
             record = LastActiveRecord(kind: .direct, peerID: peerID.id)
@@ -423,6 +431,17 @@ final class ConversationStore: ObservableObject {
     /// (never by reaching into `.standard`), and `lastActiveKey` stays private.
     func clearPersistedLastActive() {
         storage.removeObject(forKey: lastActiveKey)
+    }
+
+    /// Begins a panic wipe: suppress last-active persistence so the selection/channel
+    /// resets that follow cannot re-write the pointer we're about to remove.
+    func beginPanicWipe() { isPanicWiping = true }
+
+    /// Finishes a panic wipe: remove the persisted pointer and re-enable persistence.
+    /// MUST be called AFTER all selection/channel state has been reset.
+    func finishPanicWipe() {
+        clearPersistedLastActive()
+        isPanicWiping = false
     }
 
     /// Decides what to present at launch from the value persisted last

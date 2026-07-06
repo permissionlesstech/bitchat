@@ -112,6 +112,48 @@ final class ConversationStoreLastActiveTests: XCTestCase {
         )
     }
 
+    func test_panicWipeOrderLeavesNoRestoreRecord() {
+        // #1064 panic wipe, FULL ORDER: `clearPersistedLastActive()` alone is
+        // insufficient because `panicClearAllData()` also runs
+        // `selectedPrivateChatPeer = nil` and `activeChannel = .mesh` AFTER it —
+        // both route through the store's setters, whose guarded `persistLastActive()`
+        // re-writes a `.mesh` record on a real state change, resurrecting the
+        // pointer. The begin/finish suppression window fixes that. This test
+        // mirrors panicClearAllData's exact order against a single store:
+        //   beginPanicWipe → setSelectedPrivatePeer(nil) → setActiveChannel(.mesh) → finishPanicWipe
+        // Without the fix (i.e. without begin/finish), those selection/channel
+        // resets re-persist a `.mesh` record — here `setSelectedPrivatePeer(nil)`
+        // is the real state change that writes it (the store's default channel
+        // is already `.mesh`, so `setActiveChannel(.mesh)` is the second trigger
+        // whenever panic runs from a non-mesh channel). Either way the pointer
+        // survives as `.mesh` and the next launch would `.deferToChannelRestore`
+        // instead of `.conversationList`.
+        let storage = makeStorage()
+
+        // The user is in a DM: a `.direct` record is persisted and would restore.
+        let session = ConversationStore(storage: storage)
+        session.setSelectedPrivatePeer(peerID)
+        XCTAssertEqual(
+            ConversationStore(storage: storage)
+                .restoreLastActiveConversation(isPeerResolvable: { _ in true }),
+            .restoredDirectChat(peerID)
+        )
+
+        // Reproduce panicClearAllData's order on the SAME store.
+        session.beginPanicWipe()
+        session.setSelectedPrivatePeer(nil)   // re-persist trigger #1 (suppressed)
+        session.setActiveChannel(.mesh)       // re-persist trigger #2 (suppressed)
+        session.finishPanicWipe()             // removes the pointer once
+
+        // A fresh store on the SAME storage finds NO record and falls back to
+        // the conversation list — the pointer is truly absent, not `.mesh`.
+        XCTAssertEqual(
+            ConversationStore(storage: storage)
+                .restoreLastActiveConversation(isPeerResolvable: { _ in true }),
+            .conversationList
+        )
+    }
+
     func test_firstLaunchPresentsConversationList() {
         let storage = makeStorage()
 

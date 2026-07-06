@@ -1177,9 +1177,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         // single-writer ConversationStore; the derived `messages` view and
         // the legacy mirror empty with it)
         conversations.clearAll()
-        // Also erase the persisted last-active pointer (#1064) so a wiped
-        // DM/channel cannot be restored on the next launch.
-        conversations.clearPersistedLastActive()
+        // Begin suppressing last-active persistence (#1064). The selection and
+        // channel resets below route through the store's setters, which would
+        // otherwise re-persist a `.mesh` pointer; the wipe is finished (and the
+        // pointer removed once) at the very end of this method.
+        conversations.beginPanicWipe()
         pendingGeohashSystemMessages.removeAll()
 
         // Delete all keychain data (including Noise and Nostr keys)
@@ -1306,6 +1308,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
             Self.clearAppSwitcherSnapshots()
             #endif
         }
+
+        // Finish the panic wipe (#1064): must run AFTER `selectedPrivateChatPeer
+        // = nil` / `activeChannel = .mesh` above so no setter re-persists the
+        // pointer. Removes the last-active key once and re-enables persistence,
+        // leaving the key ABSENT so next launch hits the conversation-list
+        // first-launch fallback.
+        conversations.finishPanicWipe()
 
         // Force immediate UI update for panic mode
         // UI updates immediately - no flushing needed
