@@ -9,6 +9,15 @@ import Testing
 /// Ordering note: mutations use barrier blocks on the manager's concurrent
 /// queue and reads use `queue.sync`, so a read submitted after a mutation
 /// always observes it — no polling needed.
+///
+/// `@MainActor` matches production (the manager's vouch API is driven by the
+/// main-actor `ChatVouchCoordinator`) and keeps the blocking `queue.sync`
+/// reads off the Swift Concurrency cooperative pool. Left nonisolated, Swift
+/// Testing runs these tests in parallel on that pool, and on CI's few-core
+/// runners every pool thread ended up parked in `queue.sync` behind a pending
+/// `queue.async(.barrier)` write that never got a dispatch worker — a
+/// process-wide deadlock (watchdog SIGKILL, exit 137).
+@MainActor
 struct SecureIdentityStateManagerVouchTests {
     private let voucher = String(repeating: "0a", count: 32)
     private let vouchee = String(repeating: "0b", count: 32)

@@ -150,6 +150,17 @@ final class VerificationModel: ObservableObject {
                 self?.objectWillChange.send()
             }
             .store(in: &cancellables)
+
+        // Vouch state changes (ChatVouchCoordinator.notifyPeerTrustChanged)
+        // are signalled via this notification rather than a published
+        // property, so an open fingerprint sheet refreshes its vouched badge
+        // live when a vouch batch is accepted.
+        NotificationCenter.default.publisher(for: Notification.Name("peerStatusUpdated"))
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
     }
 
     private func resolveDisplayName(for peerID: PeerID, statusPeerID: PeerID) -> String {
