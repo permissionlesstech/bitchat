@@ -225,6 +225,10 @@ private final class MockChatPrivateConversationContext: ChatPrivateConversationC
         favoriteRelationshipsByNoiseKey[noiseKey]
     }
 
+    func favoriteRelationship(forPeerID peerID: PeerID) -> FavoritesPersistenceService.FavoriteRelationship? {
+        favoriteRelationshipsByNoiseKey.first(where: { PeerID(publicKey: $0.key) == peerID })?.value
+    }
+
     func updatePeerFavoritedUs(noiseKey: Data, favorited: Bool, nickname: String, nostrPublicKey: String?) {
         peerFavoritedUsUpdates.append((noiseKey, favorited, nickname, nostrPublicKey))
     }
@@ -630,6 +634,32 @@ struct ChatPrivateConversationCoordinatorContextTests {
         #expect(context.routedPrivateMessages.map(\.content) == ["hello bob"])
         #expect(context.privateChats[peerID]?.first?.deliveryStatus == .sent)
         #expect(context.privateChats[peerID]?.first?.recipientNickname == "bob")
+        #expect(context.systemMessages.isEmpty)
+    }
+
+    /// Same as above, but the conversation is keyed by the SHORT mesh ID —
+    /// the DM window was opened while the peer was on mesh, then they went
+    /// out of range. The favorite must resolve via the derived short ID and
+    /// route over Nostr instead of failing "peer not reachable".
+    @Test @MainActor
+    func sendPrivateMessage_routesViaNostrWhenMeshKeyedPeerGoesOffline() async {
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+        let noiseKey = Data(repeating: 0xCE, count: 32)
+        let shortID = PeerID(publicKey: noiseKey)
+        context.favoriteRelationshipsByNoiseKey[noiseKey] = makeFavoriteRelationship(
+            noiseKey: noiseKey,
+            nostrPublicKey: "npub1bob",
+            nickname: "bob",
+            isFavorite: true,
+            theyFavoritedUs: true
+        )
+
+        coordinator.sendPrivateMessage("hello again", to: shortID)
+
+        #expect(context.routedPrivateMessages.map(\.content) == ["hello again"])
+        #expect(context.privateChats[shortID]?.first?.deliveryStatus == .sent)
+        #expect(context.privateChats[shortID]?.first?.recipientNickname == "bob")
         #expect(context.systemMessages.isEmpty)
     }
 

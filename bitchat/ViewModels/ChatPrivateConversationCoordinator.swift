@@ -100,6 +100,9 @@ protocol ChatPrivateConversationContext: AnyObject {
     // MARK: Favorites & notifications
     /// The persisted favorite relationship for the peer's Noise static key, if any.
     func favoriteRelationship(forNoiseKey noiseKey: Data) -> FavoritesPersistenceService.FavoriteRelationship?
+    /// The persisted favorite relationship resolved from a short 16-hex mesh
+    /// peer ID (matched against the IDs derived from stored noise keys).
+    func favoriteRelationship(forPeerID peerID: PeerID) -> FavoritesPersistenceService.FavoriteRelationship?
     /// Persists that the peer favorited/unfavorited us (favorites store write).
     func updatePeerFavoritedUs(noiseKey: Data, favorited: Bool, nickname: String, nostrPublicKey: String?)
     /// Posts the incoming-private-message local notification.
@@ -196,6 +199,10 @@ extension ChatViewModel: ChatPrivateConversationContext {
         FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey)
     }
 
+    // `favoriteRelationship(forPeerID:)` is shared with
+    // `ChatPeerIdentityContext`; its witness lives in
+    // `ChatPeerIdentityCoordinator.swift`.
+
     func updatePeerFavoritedUs(noiseKey: Data, favorited: Bool, nickname: String, nostrPublicKey: String?) {
         FavoritesPersistenceService.shared.updatePeerFavoritedUs(
             peerNoisePublicKey: noiseKey,
@@ -244,10 +251,15 @@ final class ChatPrivateConversationCoordinator {
             return
         }
 
-        guard let noiseKey = Data(hexString: peerID.id) else { return }
+        // Resolve the favorite behind this conversation. It may be keyed by
+        // the full 64-hex noise-key ID (offline favorite row) or the short
+        // 16-hex mesh ID — the raw hex bytes of a short ID are a routing ID,
+        // never a noise key, so they must not be used as a favorites key.
+        let noiseKey = peerID.noiseKey ?? context.noisePublicKey(for: peerID)
         let isConnected = context.isPeerConnected(peerID)
         let isReachable = context.isPeerReachable(peerID)
-        let favoriteStatus = context.favoriteRelationship(forNoiseKey: noiseKey)
+        let favoriteStatus = noiseKey.flatMap { context.favoriteRelationship(forNoiseKey: $0) }
+            ?? context.favoriteRelationship(forPeerID: peerID)
         let isMutualFavorite = favoriteStatus?.isMutual ?? false
         let hasNostrKey = favoriteStatus?.peerNostrPublicKey != nil
 
