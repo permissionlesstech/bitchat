@@ -1205,6 +1205,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         GossipMessageArchive.wipeDefault()
         StoreAndForwardMetrics.shared.reset()
 
+        // Drop cached peers' prekey bundles (who we could write to is
+        // metadata too). Our own prekey privates are keychain-backed and go
+        // with deleteAllKeychainData above plus the identity reset below.
+        PrekeyBundleStore.shared.wipe()
+
         // Identity manager has cleared persisted identity data above
 
         // Clear autocomplete state

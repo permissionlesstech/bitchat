@@ -42,9 +42,11 @@ final class CourierStore {
         var sprayedTo: Set<Data>
         /// Last speculative multi-hop handover toward a relayed announce.
         var lastRemoteHandoverAt: Date?
+        /// Prekey-sealed (envelope v2) discriminator; nil for static-sealed v1.
+        let prekeyID: UInt32?
 
         var envelope: CourierEnvelope {
-            CourierEnvelope(recipientTag: recipientTag, expiry: expiry, ciphertext: ciphertext, copies: copies)
+            CourierEnvelope(recipientTag: recipientTag, expiry: expiry, ciphertext: ciphertext, copies: copies, prekeyID: prekeyID)
         }
 
         init(
@@ -56,7 +58,8 @@ final class CourierStore {
             tier: CourierDepositTier,
             copies: UInt8,
             sprayedTo: Set<Data> = [],
-            lastRemoteHandoverAt: Date? = nil
+            lastRemoteHandoverAt: Date? = nil,
+            prekeyID: UInt32? = nil
         ) {
             self.recipientTag = recipientTag
             self.expiry = expiry
@@ -67,6 +70,7 @@ final class CourierStore {
             self.copies = copies
             self.sprayedTo = sprayedTo
             self.lastRemoteHandoverAt = lastRemoteHandoverAt
+            self.prekeyID = prekeyID
         }
 
         // Files written before tiers/spray lack the newer fields; treat that
@@ -82,6 +86,7 @@ final class CourierStore {
             copies = try container.decodeIfPresent(UInt8.self, forKey: .copies) ?? 1
             sprayedTo = try container.decodeIfPresent(Set<Data>.self, forKey: .sprayedTo) ?? []
             lastRemoteHandoverAt = try container.decodeIfPresent(Date.self, forKey: .lastRemoteHandoverAt)
+            prekeyID = try container.decodeIfPresent(UInt32.self, forKey: .prekeyID)
         }
     }
 
@@ -186,7 +191,8 @@ final class CourierStore {
                 depositorNoiseKey: depositorNoiseKey,
                 storedAt: date,
                 tier: tier,
-                copies: envelope.copies
+                copies: envelope.copies,
+                prekeyID: envelope.prekeyID
             ))
             persistLocked()
             return true

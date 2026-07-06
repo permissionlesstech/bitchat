@@ -139,6 +139,7 @@ struct GossipSyncManagerTests {
         config.messageSyncIntervalSeconds = 1
         config.fragmentSyncIntervalSeconds = 1
         config.fileTransferSyncIntervalSeconds = 1
+        config.prekeyBundleSyncIntervalSeconds = 1
         config.maintenanceIntervalSeconds = 0
 
         let requestSyncManager = RequestSyncManager()
@@ -195,19 +196,22 @@ struct GossipSyncManagerTests {
         manager._performMaintenanceSynchronously(now: Date())
 
         // One request per due schedule so each type group gets the full
-        // filter capacity: publicMessages, fragment, and fileTransfer.
+        // filter capacity: publicMessages, fragment, fileTransfer, and
+        // prekeyBundle.
         let sentPackets = delegate.packets
-        #expect(sentPackets.count == 3)
+        #expect(sentPackets.count == 4)
         let decoded = sentPackets.compactMap { RequestSyncPacket.decode(from: $0.payload) }
-        #expect(decoded.count == 3)
+        #expect(decoded.count == 4)
         let allTypes = decoded.compactMap(\.types).reduce(SyncTypeFlags(rawValue: 0)) { $0.union($1) }
         #expect(allTypes.contains(.announce))
         #expect(allTypes.contains(.message))
         #expect(allTypes.contains(.fragment))
         #expect(allTypes.contains(.fileTransfer))
+        #expect(allTypes.contains(.prekeyBundle))
         #expect(decoded.contains { $0.types == .publicMessages })
         #expect(decoded.contains { $0.types == .fragment })
         #expect(decoded.contains { $0.types == .fileTransfer })
+        #expect(decoded.contains { $0.types == .prekeyBundle })
     }
 
     @Test func truncatedFilterCarriesSinceCursor() throws {
@@ -292,6 +296,7 @@ struct GossipSyncManagerTests {
         config.messageSyncIntervalSeconds = 0
         config.fragmentSyncIntervalSeconds = 0
         config.fileTransferSyncIntervalSeconds = 0
+        config.prekeyBundleSyncIntervalSeconds = 0
 
         let requestSyncManager = RequestSyncManager()
         let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: requestSyncManager)
@@ -363,6 +368,7 @@ struct GossipSyncManagerTests {
         config.messageSyncIntervalSeconds = 0
         config.fragmentSyncIntervalSeconds = 0
         config.fileTransferSyncIntervalSeconds = 0
+        config.prekeyBundleSyncIntervalSeconds = 0
         config.responseRateLimitMaxResponses = 1
         config.responseRateLimitWindowSeconds = 60
 
@@ -417,6 +423,7 @@ struct GossipSyncManagerTests {
         #expect(types.contains(.message))
         #expect(types.contains(.fragment))
         #expect(types.contains(.fileTransfer))
+        #expect(types.contains(.prekeyBundle))
     }
 
     @Test func handleRequestSyncHonorsTypeFilter() async throws {
@@ -467,6 +474,49 @@ struct GossipSyncManagerTests {
         let sentPackets = delegate.packets
         #expect(sentPackets.count == 1)
         #expect(sentPackets[0].type == MessageType.fragment.rawValue)
+    }
+
+    @Test func prekeyBundlesServeSyncAndSurviveStalePeerCleanup() async throws {
+        var config = GossipSyncManager.Config()
+        config.messageSyncIntervalSeconds = 0
+        config.fragmentSyncIntervalSeconds = 0
+        config.fileTransferSyncIntervalSeconds = 0
+        config.prekeyBundleSyncIntervalSeconds = 0
+        config.stalePeerCleanupIntervalSeconds = 0
+        config.stalePeerTimeoutSeconds = 5
+
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: RequestSyncManager())
+        let delegate = RecordingDelegate()
+        manager.delegate = delegate
+
+        let sender = try #require(Data(hexString: "aabbccddeeff0011"))
+        let senderPeer = PeerID(hexData: sender)
+        let bundlePacket = BitchatPacket(
+            type: MessageType.prekeyBundle.rawValue,
+            senderID: sender,
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: Data([0x01]),
+            signature: nil,
+            ttl: 1
+        )
+        manager.onPublicPacketSeen(bundlePacket)
+        manager._performMaintenanceSynchronously(now: Date())
+        #expect(manager._hasPrekeyBundle(for: senderPeer))
+
+        // Bundles outlive the owner's announce: a leave plus stale cleanup
+        // must not drop them (they exist to reach offline owners).
+        manager.removeAnnouncementForPeer(senderPeer)
+        manager._performMaintenanceSynchronously(now: Date().addingTimeInterval(config.stalePeerTimeoutSeconds + 1))
+        #expect(manager._hasPrekeyBundle(for: senderPeer))
+
+        // And a .prekeyBundle sync request is answered with the stored packet.
+        let request = RequestSyncPacket(p: 7, m: 1, data: Data(), types: .prekeyBundle)
+        manager.handleRequestSync(from: PeerID(str: "FFFFFFFFFFFFFFFF"), request: request)
+        try await TestHelpers.waitFor({ delegate.packets.count == 1 }, timeout: TestConstants.shortTimeout)
+        let served = try #require(delegate.packets.first)
+        #expect(served.type == MessageType.prekeyBundle.rawValue)
+        #expect(served.isRSR)
     }
 
     // MARK: - Archive persistence

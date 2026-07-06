@@ -16,14 +16,17 @@ public enum MessageType: UInt8 {
     case leave = 0x03           // "I'm leaving"
     case courierEnvelope = 0x04 // Store-and-forward envelope carried by a trusted peer
     case requestSync = 0x21     // GCS filter-based sync request (local-only)
-    
+
     // Noise encryption
     case noiseHandshake = 0x10  // Handshake (init or response determined by payload)
     case noiseEncrypted = 0x11  // All encrypted payloads (messages, receipts, etc.)
-    
+
     // Fragmentation (simplified)
     case fragment = 0x20        // Single fragment type for large messages
     case fileTransfer = 0x22    // Binary file/audio/image payloads
+
+    // 0x23, 0x25-0x28 reserved for in-flight protocol work.
+    case prekeyBundle = 0x24    // Signed batch of one-time prekeys (gossiped)
     
     public var description: String {
         switch self {
@@ -36,6 +39,7 @@ public enum MessageType: UInt8 {
         case .noiseEncrypted: return "noiseEncrypted"
         case .fragment: return "fragment"
         case .fileTransfer: return "fileTransfer"
+        case .prekeyBundle: return "prekeyBundle"
         }
     }
 }
