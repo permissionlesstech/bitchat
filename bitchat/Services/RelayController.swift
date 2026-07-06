@@ -18,9 +18,16 @@ struct RelayController {
                        isDirectedFragment: Bool,
                        isHandshake: Bool,
                        isAnnounce: Bool,
+                       isRequestSync: Bool = false,
                        degree: Int,
                        highDegreeThreshold: Int) -> RelayDecision {
         let ttlCap = min(ttl, TransportConfig.messageTTLDefault)
+
+        // REQUEST_SYNC is link-local: never relay it, even when a peer crafts
+        // one with TTL headroom to turn every reachable node into a responder.
+        if isRequestSync {
+            return RelayDecision(shouldRelay: false, newTTL: ttlCap, delayMs: 0)
+        }
 
         // Suppress obvious non-relays
         if ttlCap <= 1 || senderIsSelf || recipientIsSelf {

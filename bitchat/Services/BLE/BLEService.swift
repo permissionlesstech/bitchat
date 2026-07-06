@@ -282,7 +282,9 @@ final class BLEService: NSObject {
             fileTransferCapacity: TransportConfig.syncFileTransferCapacity,
             fragmentSyncIntervalSeconds: TransportConfig.syncFragmentIntervalSeconds,
             fileTransferSyncIntervalSeconds: TransportConfig.syncFileTransferIntervalSeconds,
-            messageSyncIntervalSeconds: TransportConfig.syncMessageIntervalSeconds
+            messageSyncIntervalSeconds: TransportConfig.syncMessageIntervalSeconds,
+            responseRateLimitMaxResponses: TransportConfig.syncResponseRateLimitMaxResponses,
+            responseRateLimitWindowSeconds: TransportConfig.syncResponseRateLimitWindowSeconds
         )
         
         let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: requestSyncManager)
@@ -3287,6 +3289,26 @@ extension BLEService {
 
     // Handle REQUEST_SYNC: decode payload and respond with missing packets via sync manager
     private func handleRequestSync(_ packet: BitchatPacket, from peerID: PeerID) {
+        // REQUEST_SYNC is link-local by design (always sent with ttl 0): a
+        // nonzero TTL means a crafted or relayed request, and answering one
+        // would let a single small packet fan a full store replay out of
+        // every node it reaches.
+        guard packet.ttl == 0 else {
+            if logRateLimiter.shouldLog(key: "sync-ttl:\(peerID.id)") {
+                SecureLogger.warning("🚫 Dropping REQUEST_SYNC with nonzero TTL from \(peerID.id.prefix(8))…", category: .security)
+            }
+            return
+        }
+        // A response can replay the entire gossip store, so require proof the
+        // requester owns the claimed sender ID: the request must verify
+        // against the signing key from that peer's announce.
+        let signingKey = collectionsQueue.sync { peerRegistry.info(for: peerID)?.signingPublicKey }
+        guard let signingKey, noiseService.verifyPacketSignature(packet, publicKey: signingKey) else {
+            if logRateLimiter.shouldLog(key: "sync-sig:\(peerID.id)") {
+                SecureLogger.warning("🚫 Dropping REQUEST_SYNC without verifiable signature from \(peerID.id.prefix(8))…", category: .security)
+            }
+            return
+        }
         guard let req = RequestSyncPacket.decode(from: packet.payload) else {
             SecureLogger.warning("⚠️ Malformed REQUEST_SYNC from \(peerID.id.prefix(8))…", category: .session)
             return
