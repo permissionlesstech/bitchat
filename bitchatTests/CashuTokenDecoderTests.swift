@@ -188,6 +188,50 @@ struct CashuTokenDecoderTests {
         #expect(info?.mintHost == nil)
     }
 
+    // MARK: - Strict Mode (used by the /pay SEND path)
+
+    @Test func strictAcceptsValidV3WithPositiveAmount() {
+        let token = makeV3Token(entries: [("https://mint.example.com", [2, 8])])
+        let info = CashuTokenDecoder.decode(token, strict: true)
+        #expect(info?.version == "A")
+        #expect(info?.amount == 10)
+    }
+
+    @Test func strictAcceptsValidDefiniteLengthV4() {
+        let token = makeV4Token(amounts: [1, 4, 16])
+        let info = CashuTokenDecoder.decode(token, strict: true)
+        #expect(info?.version == "B")
+        #expect(info?.amount == 21)
+    }
+
+    @Test func strictRejectsUnwalkableV4() {
+        // Valid base64, but not CBOR we can walk: permissive mode returns a
+        // generic chip, strict mode refuses it.
+        let token = "cashuB" + base64URL(Data([0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x01, 0x02]))
+        #expect(CashuTokenDecoder.decode(token)?.version == "B")
+        #expect(CashuTokenDecoder.decode(token, strict: true) == nil)
+    }
+
+    @Test func strictRejectsTruncatedV4() {
+        let token = makeV4Token(amounts: [1, 4, 16])
+        // Lop off the tail of the base64 payload — CBOR can no longer be walked.
+        let truncated = String(token.prefix(token.count - 12))
+        #expect(CashuTokenDecoder.decode(truncated, strict: true) == nil)
+    }
+
+    @Test func strictRejectsAmountlessToken() {
+        // A well-formed V3 token that carries no positive proof amount.
+        let json: [String: Any] = [
+            "token": [[
+                "mint": "https://mint.example.com",
+                "proofs": [["amount": 0, "id": "x", "secret": "s", "C": "c"] as [String: Any]]
+            ] as [String: Any]]
+        ]
+        let token = "cashuA" + base64URL(try! JSONSerialization.data(withJSONObject: json))
+        #expect(CashuTokenDecoder.decode(token)?.amount == nil)
+        #expect(CashuTokenDecoder.decode(token, strict: true) == nil)
+    }
+
     // MARK: - URI Form and Normalization
 
     @Test func uriFormsDecode() {

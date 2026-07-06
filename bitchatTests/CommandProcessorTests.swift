@@ -442,6 +442,45 @@ struct CommandProcessorTests {
         #expect(context.sentPrivateMessages.isEmpty)
     }
 
+    @MainActor
+    @Test func payRejectsTruncatedOrJunkV4Token() {
+        let context = MockCommandContextProvider()
+        context.selectedPrivateChatPeer = PeerID(str: "abcd1234abcd1234")
+        let processor = makePayProcessor(context: context)
+
+        // Truncated V4 (definite-length CBOR can no longer be walked) and
+        // pure base64 junk under the cashuB prefix must both be refused.
+        let truncatedV4 = String(Self.validV4Token.prefix(Self.validV4Token.count - 12))
+        let junkV4 = "cashuB" + String(repeating: "Q", count: 40)
+        for bad in ["/pay \(truncatedV4)", "/pay \(junkV4)"] {
+            switch processor.process(bad) {
+            case .error(let message):
+                #expect(message.contains("invalid cashu token") == true)
+            default:
+                Issue.record("Expected error for \(bad)")
+            }
+        }
+        #expect(context.sentPrivateMessages.isEmpty)
+        #expect(context.sentPublicMessages.isEmpty)
+    }
+
+    @MainActor
+    @Test func paySendsValidDefiniteLengthV4Token() {
+        let context = MockCommandContextProvider()
+        let peerID = PeerID(str: "abcd1234abcd1234")
+        context.selectedPrivateChatPeer = peerID
+        let processor = makePayProcessor(context: context)
+
+        switch processor.process("/pay \(Self.validV4Token)") {
+        case .success(let message):
+            #expect(message?.contains("21 sat") == true)
+        default:
+            Issue.record("Expected success result for valid V4 token")
+        }
+        #expect(context.sentPrivateMessages.count == 1)
+        #expect(context.sentPrivateMessages.first?.content == Self.validV4Token)
+    }
+
     /// 21-sat single-mint V3 token (proofs of 1+4+16).
     private static let validV3Token: String = {
         let json: [String: Any] = [
@@ -457,6 +496,36 @@ struct CommandProcessorTests {
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
         return "cashuA" + b64
+    }()
+
+    /// 21-sat single-mint definite-length V4 (CBOR) token (proofs of 1+4+16).
+    private static let validV4Token: String = {
+        func head(_ major: UInt8, _ value: UInt64) -> [UInt8] {
+            switch value {
+            case 0...23: return [(major << 5) | UInt8(value)]
+            case 24...0xFF: return [(major << 5) | 24, UInt8(value)]
+            default: return [(major << 5) | 25, UInt8(value >> 8), UInt8(value & 0xFF)]
+            }
+        }
+        func text(_ s: String) -> [UInt8] { head(3, UInt64(s.utf8.count)) + Array(s.utf8) }
+        func bytes(_ b: [UInt8]) -> [UInt8] { head(2, UInt64(b.count)) + b }
+        func uint(_ v: UInt64) -> [UInt8] { head(0, v) }
+        func array(_ items: [[UInt8]]) -> [UInt8] { head(4, UInt64(items.count)) + items.flatMap { $0 } }
+        func map(_ pairs: [(String, [UInt8])]) -> [UInt8] { head(5, UInt64(pairs.count)) + pairs.flatMap { text($0.0) + $0.1 } }
+
+        let proofs = [UInt64(1), 4, 16].map { amount in
+            map([("a", uint(amount)), ("s", text("secret")), ("c", bytes([0x02, 0xAB, 0xCD]))])
+        }
+        let cbor = map([
+            ("m", text("https://mint.example.com")),
+            ("u", text("sat")),
+            ("t", array([map([("i", bytes([0x00, 0xAD, 0x26, 0x8C])), ("p", array(proofs))])]))
+        ])
+        let b64 = Data(cbor).base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        return "cashuB" + b64
     }()
 
     @MainActor

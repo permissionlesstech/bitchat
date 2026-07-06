@@ -353,8 +353,8 @@ final class CommandProcessor {
         guard parts.count == 1, let token = CashuTokenDecoder.bareToken(from: parts[0]) else {
             return .error(message: "that doesn't look like a cashu token — expected cashuA… or cashuB…")
         }
-        guard let info = CashuTokenDecoder.decode(token) else {
-            return .error(message: "couldn't decode that cashu token — not sending it")
+        guard let info = CashuTokenDecoder.decode(token, strict: true) else {
+            return .error(message: "invalid cashu token — it doesn't decode to a known token with an amount, not sending it")
         }
 
         let summary = info.displayAmount ?? "a cashu token"

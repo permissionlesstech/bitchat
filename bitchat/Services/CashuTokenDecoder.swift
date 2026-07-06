@@ -67,23 +67,45 @@ enum CashuTokenDecoder {
     }
 
     /// Decodes a token (raw or `cashu:` URI form) into a display summary.
-    /// V3 tokens must parse as JSON; V4 tokens whose CBOR we cannot walk
-    /// still return a generic `TokenInfo` (version "B", no amount) because
-    /// the payload may use encodings this minimal reader doesn't support.
-    static func decode(_ raw: String) -> TokenInfo? {
+    ///
+    /// In the default (permissive) mode this is for *rendering*: V3 tokens
+    /// must parse as JSON, but a V4 token whose CBOR we cannot walk still
+    /// returns a generic `TokenInfo` (version "B", no amount) because the
+    /// payload may use encodings this minimal reader doesn't support — an
+    /// unknown chip is fine for display.
+    ///
+    /// In `strict` mode (used by the `/pay` SEND path) there is no permissive
+    /// fallback: the token must cleanly decode to a known version *and* carry
+    /// a positive amount, otherwise this returns nil. This stops base64 junk
+    /// and truncated V4 tokens from being relayed as if they were valid money.
+    static func decode(_ raw: String, strict: Bool = false) -> TokenInfo? {
         guard let token = bareToken(from: raw) else { return nil }
         let version = String(token[token.index(token.startIndex, offsetBy: 5)])
         guard let payload = base64URLDecode(String(token.dropFirst(6))), !payload.isEmpty else {
             return nil
         }
+        let info: TokenInfo?
         switch version {
         case "A":
-            return decodeV3(payload)
+            info = decodeV3(payload)
         case "B":
-            return decodeV4(payload) ?? TokenInfo(version: "B", amount: nil, unit: nil, mintHost: nil, memo: nil)
+            if let walked = decodeV4(payload) {
+                info = walked
+            } else if strict {
+                // Couldn't cleanly walk the CBOR — refuse to send it.
+                return nil
+            } else {
+                info = TokenInfo(version: "B", amount: nil, unit: nil, mintHost: nil, memo: nil)
+            }
         default:
             return nil
         }
+        guard let info else { return nil }
+        if strict {
+            // A sendable token must resolve to a positive, sane amount.
+            guard let amount = info.amount, amount > 0 else { return nil }
+        }
+        return info
     }
 
     // MARK: - Base64url
