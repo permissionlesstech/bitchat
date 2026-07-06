@@ -86,45 +86,44 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         var enrichedPeers: [BitchatPeer] = []
         var connected: Set<PeerID> = []
         var addedPeerIDs: Set<PeerID> = []
-        
+        var meshNoiseKeys: Set<Data> = []
+
         // Phase 1: Add all mesh peers (connected and reachable)
         for peerInfo in meshPeers {
             let peerID = peerInfo.peerID
             guard peerID != meshService.myPeerID else { continue }  // Never add self
-            
+
             let peer = buildPeerFromMesh(
                 peerInfo: peerInfo,
                 favorites: favorites,
                 meshAttached: hasAnyConnected
             )
-            
+
             enrichedPeers.append(peer)
             if peer.isConnected { connected.insert(peerID) }
             addedPeerIDs.insert(peerID)
-            
+
             // Update fingerprint cache
             if let publicKey = peerInfo.noisePublicKey {
+                meshNoiseKeys.insert(publicKey)
                 fingerprintCache[peerID] = publicKey.sha256Fingerprint()
             }
         }
-        
-        // Phase 2: Add offline favorites that we actively favorite
+
+        // Phase 2: Add offline favorites that we actively favorite.
+        // Mesh rows use the short 16-hex peer ID while favorites are keyed by
+        // the full 32-byte noise key, so dedup must compare noise keys — a
+        // PeerID comparison between the two forms can never match.
         for (favoriteKey, favorite) in favorites where favorite.isFavorite {
+            if meshNoiseKeys.contains(favoriteKey) { continue }
+
             let peerID = PeerID(hexData: favoriteKey)
-            
-            // Skip if already added (connected peer)
             if addedPeerIDs.contains(peerID) { continue }
-            
-            // Skip if connected under different ID but same nickname
-            let isConnectedByNickname = enrichedPeers.contains { 
-                $0.nickname == favorite.peerNickname && $0.isConnected 
-            }
-            if isConnectedByNickname { continue }
-            
+
             let peer = buildPeerFromFavorite(favorite: favorite, peerID: peerID)
             enrichedPeers.append(peer)
             addedPeerIDs.insert(peerID)
-            
+
             // Update fingerprint cache
             fingerprintCache[peerID] = favoriteKey.sha256Fingerprint()
         }

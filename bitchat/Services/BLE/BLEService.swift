@@ -2757,8 +2757,11 @@ extension BLEService {
     // MARK: Private Message Handling
     
     private func sendPrivateMessage(_ content: String, to recipientID: PeerID, messageID: String) {
+        // Sessions and wire recipient IDs are keyed by the short 16-hex form;
+        // callers may pass the full 64-hex noise key (mirrors sendFilePrivate).
+        let recipientID = recipientID.toShort()
         SecureLogger.debug("📨 Sending PM to \(recipientID.id.prefix(8))… id=\(messageID.prefix(8))… chars=\(content.count) bytes=\(content.utf8.count)", category: .session)
-        
+
         // Check if we have an established Noise session
         if noiseService.hasEstablishedSession(with: recipientID) {
             // Encrypt and send

@@ -442,8 +442,7 @@ final class NostrInboundPipeline {
     }
 
     /// Resolves the Noise static key behind a Nostr pubkey via the favorites
-    /// store. Lives here because the inbound DM path needs it per message;
-    /// the favorites glue in `ChatNostrCoordinator` delegates to it.
+    /// store. Lives here because the inbound DM path needs it per message.
     @MainActor
     func findNoiseKey(for nostrPubkey: String) -> Data? {
         guard let context else { return nil }

@@ -51,8 +51,9 @@ protocol CommandContextProvider: AnyObject {
     func addPublicSystemMessage(_ content: String)
 
     // MARK: - Favorites
+    /// Toggles the favorite via the unified peer flow, which persists by the
+    /// real noise key and notifies the peer over mesh or Nostr.
     func toggleFavorite(peerID: PeerID)
-    func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool)
 }
 
 /// Processes chat commands in a focused, efficient way
@@ -335,34 +336,31 @@ final class CommandProcessor {
         guard !targetName.isEmpty else {
             return .error(message: "usage: /\(add ? "fav" : "unfav") <nickname>")
         }
-        
+
         let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
-        
-        guard let peerID = contextProvider?.getPeerIDForNickname(nickname),
-              let noisePublicKey = Data(hexString: peerID.id) else {
+
+        guard let peerID = contextProvider?.getPeerIDForNickname(nickname) else {
             return .error(message: "can't find peer: \(nickname)")
         }
-        
-        if add {
-            let existingFavorite = FavoritesPersistenceService.shared.getFavoriteStatus(for: noisePublicKey)
-            FavoritesPersistenceService.shared.addFavorite(
-                peerNoisePublicKey: noisePublicKey,
-                peerNostrPublicKey: existingFavorite?.peerNostrPublicKey,
-                peerNickname: nickname
-            )
-            
-            contextProvider?.toggleFavorite(peerID: peerID)
-            contextProvider?.sendFavoriteNotification(to: peerID, isFavorite: true)
-            
-            return .success(message: "added \(nickname) to favorites")
+
+        // Resolve current state by the peer's real noise key. The resolved
+        // peerID is either the short 16-hex mesh ID or the full 64-hex
+        // noise-key ID (offline favorite row) — never the noise key itself.
+        let isCurrentlyFavorite: Bool
+        if let noiseKey = peerID.noiseKey {
+            isCurrentlyFavorite = FavoritesPersistenceService.shared.isFavorite(noiseKey)
         } else {
-            FavoritesPersistenceService.shared.removeFavorite(peerNoisePublicKey: noisePublicKey)
-            
-            contextProvider?.toggleFavorite(peerID: peerID)
-            contextProvider?.sendFavoriteNotification(to: peerID, isFavorite: false)
-            
-            return .success(message: "removed \(nickname) from favorites")
+            isCurrentlyFavorite = FavoritesPersistenceService.shared.getFavoriteStatus(forPeerID: peerID)?.isFavorite ?? false
         }
+
+        guard add != isCurrentlyFavorite else {
+            return .success(message: add ? "\(nickname) is already a favorite" : "\(nickname) is not a favorite")
+        }
+
+        // toggleFavorite persists by the real noise key and notifies the peer.
+        contextProvider?.toggleFavorite(peerID: peerID)
+
+        return .success(message: add ? "added \(nickname) to favorites" : "removed \(nickname) from favorites")
     }
     
 }

@@ -110,11 +110,6 @@ extension ChatViewModel {
     }
 
     @MainActor
-    func handleFavoriteNotification(content: String, from nostrPubkey: String) {
-        nostrCoordinator.handleFavoriteNotification(content: content, from: nostrPubkey)
-    }
-
-    @MainActor
     func sendFavoriteNotificationViaNostr(noisePublicKey: Data, isFavorite: Bool) {
         nostrCoordinator.sendFavoriteNotificationViaNostr(noisePublicKey: noisePublicKey, isFavorite: isFavorite)
     }

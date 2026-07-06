@@ -549,14 +549,14 @@ struct ChatPrivateConversationCoordinatorContextTests {
     }
 
     @Test @MainActor
-    func handleFavoriteNotificationFromMesh_persistsAndAnnouncesTransitionsOnly() async {
+    func handleFavoriteNotification_persistsAndAnnouncesTransitionsOnly() async {
         let context = MockChatPrivateConversationContext()
         let coordinator = ChatPrivateConversationCoordinator(context: context)
         let noiseKey = Data(repeating: 0xAB, count: 32)
         let peerID = PeerID(hexData: noiseKey)
 
         // First [FAVORITED] flips theyFavoritedUs: store write + announcement.
-        coordinator.handleFavoriteNotificationFromMesh("[FAVORITED]:npub1alice", from: peerID, senderNickname: "alice")
+        coordinator.handleFavoriteNotification("[FAVORITED]:npub1alice", from: peerID, senderNickname: "alice")
         #expect(context.peerFavoritedUsUpdates.count == 1)
         #expect(context.peerFavoritedUsUpdates.first?.noiseKey == noiseKey)
         #expect(context.peerFavoritedUsUpdates.first?.favorited == true)
@@ -568,14 +568,45 @@ struct ChatPrivateConversationCoordinatorContextTests {
             noiseKey: noiseKey,
             theyFavoritedUs: true
         )
-        coordinator.handleFavoriteNotificationFromMesh("[FAVORITED]:npub1alice", from: peerID, senderNickname: "alice")
+        coordinator.handleFavoriteNotification("[FAVORITED]:npub1alice", from: peerID, senderNickname: "alice")
         #expect(context.peerFavoritedUsUpdates.count == 2)
         #expect(context.meshOnlySystemMessages == ["alice favorited you"])
 
         // [UNFAVORITED] transition announces again.
-        coordinator.handleFavoriteNotificationFromMesh("[UNFAVORITED]", from: peerID, senderNickname: "alice")
+        coordinator.handleFavoriteNotification("[UNFAVORITED]", from: peerID, senderNickname: "alice")
         #expect(context.peerFavoritedUsUpdates.last?.favorited == false)
         #expect(context.meshOnlySystemMessages == ["alice favorited you", "alice unfavorited you"])
+    }
+
+    /// Over Nostr, [FAVORITED] markers arrive as embedded PMs on the convKey
+    /// path; they must update the relationship, not render as chat text.
+    @Test @MainActor
+    func nostrPrivateMessage_favoritedMarkerUpdatesRelationshipInsteadOfAppending() async {
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+        let noiseKey = Data(repeating: 0xEE, count: 32)
+        // The inbound pipeline resolves known favorites to their noise-key ID.
+        let convKey = PeerID(hexData: noiseKey)
+        let senderPubkey = "feedface99887766"
+        context.displayNamesByPubkey[senderPubkey] = "alice#1234"
+
+        let payloadData = PrivateMessagePacket(messageID: "fav-1", content: "[FAVORITED]:npub1alice").encode()!
+        let payload = NoisePayload(type: .privateMessage, data: payloadData)
+
+        coordinator.handlePrivateMessage(
+            payload,
+            senderPubkey: senderPubkey,
+            convKey: convKey,
+            id: MockChatPrivateConversationContext.dummyIdentity,
+            messageTimestamp: Date()
+        )
+
+        #expect(context.peerFavoritedUsUpdates.count == 1)
+        #expect(context.peerFavoritedUsUpdates.first?.noiseKey == noiseKey)
+        #expect(context.peerFavoritedUsUpdates.first?.favorited == true)
+        #expect(context.peerFavoritedUsUpdates.first?.nostrPublicKey == "npub1alice")
+        #expect(context.privateChats[convKey, default: []].isEmpty)
+        #expect(context.meshOnlySystemMessages == ["alice#1234 favorited you"])
     }
 
     @Test @MainActor

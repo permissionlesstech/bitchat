@@ -122,25 +122,6 @@ extension ChatViewModel {
     }
 
     @MainActor
-    func handlePrivateMessage(
-        _ payload: NoisePayload,
-        actualSenderNoiseKey: Data?,
-        senderNickname: String,
-        targetPeerID: PeerID,
-        messageTimestamp: Date,
-        senderPubkey: String
-    ) {
-        privateConversationCoordinator.handlePrivateMessage(
-            payload,
-            actualSenderNoiseKey: actualSenderNoiseKey,
-            senderNickname: senderNickname,
-            targetPeerID: targetPeerID,
-            messageTimestamp: messageTimestamp,
-            senderPubkey: senderPubkey
-        )
-    }
-
-    @MainActor
     func handlePrivateMessage(_ message: BitchatMessage) {
         privateConversationCoordinator.handlePrivateMessage(message)
     }
@@ -190,8 +171,8 @@ extension ChatViewModel {
     }
 
     @MainActor
-    func handleFavoriteNotificationFromMesh(_ content: String, from peerID: PeerID, senderNickname: String) {
-        privateConversationCoordinator.handleFavoriteNotificationFromMesh(
+    func handleFavoriteNotification(_ content: String, from peerID: PeerID, senderNickname: String) {
+        privateConversationCoordinator.handleFavoriteNotification(
             content,
             from: peerID,
             senderNickname: senderNickname

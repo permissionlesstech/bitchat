@@ -66,6 +66,117 @@ struct UnifiedPeerServiceTests {
         #expect(!service.isBlocked(peerID))
     }
 
+    // MARK: - Offline-favorite dedup (updatePeers phase 2)
+
+    /// A mutual favorite that is also on the mesh must collapse to a single
+    /// row keyed by the short mesh ID — even when the announced nickname no
+    /// longer matches the one stored with the favorite.
+    @Test @MainActor
+    func updatePeers_mutualFavoriteOnMeshYieldsSingleRow() async {
+        let favoritesService = FavoritesPersistenceService.shared
+
+        let transport = MockTransport()
+        let idBridge = NostrIdentityBridge(keychain: MockKeychainHelper())
+        let service = UnifiedPeerService(meshService: transport, idBridge: idBridge, identityManager: TestIdentityManager())
+
+        let noiseKey = Data(repeating: 0xAB, count: 32)
+        favoritesService.addFavorite(peerNoisePublicKey: noiseKey, peerNickname: "alice")
+        favoritesService.updatePeerFavoritedUs(peerNoisePublicKey: noiseKey, favorited: true)
+        defer {
+            favoritesService.updatePeerFavoritedUs(peerNoisePublicKey: noiseKey, favorited: false)
+            favoritesService.removeFavorite(peerNoisePublicKey: noiseKey)
+        }
+
+        let meshID = PeerID(publicKey: noiseKey)
+        let snapshots = [TransportPeerSnapshot(
+            peerID: meshID,
+            nickname: "alice-renamed",
+            isConnected: true,
+            noisePublicKey: noiseKey,
+            lastSeen: Date()
+        )]
+        transport.updatePeerSnapshots(snapshots)
+        service.didUpdatePeerSnapshots(snapshots)
+
+        let rows = service.peers.filter { $0.noisePublicKey == noiseKey }
+        #expect(rows.count == 1)
+        #expect(rows.first?.peerID == meshID)
+        #expect(rows.first?.isMutualFavorite == true)
+        #expect(service.favorites.filter { $0.noisePublicKey == noiseKey }.count == 1)
+    }
+
+    /// Same collapse must hold for a reachable-but-not-connected favorite
+    /// (relayed peers linger as "reachable" after their link drops).
+    @Test @MainActor
+    func updatePeers_reachableMutualFavoriteYieldsSingleRow() async {
+        let favoritesService = FavoritesPersistenceService.shared
+
+        let transport = MockTransport()
+        let idBridge = NostrIdentityBridge(keychain: MockKeychainHelper())
+        let service = UnifiedPeerService(meshService: transport, idBridge: idBridge, identityManager: TestIdentityManager())
+
+        let noiseKey = Data(repeating: 0xCD, count: 32)
+        favoritesService.addFavorite(peerNoisePublicKey: noiseKey, peerNickname: "bob")
+        favoritesService.updatePeerFavoritedUs(peerNoisePublicKey: noiseKey, favorited: true)
+        defer {
+            favoritesService.updatePeerFavoritedUs(peerNoisePublicKey: noiseKey, favorited: false)
+            favoritesService.removeFavorite(peerNoisePublicKey: noiseKey)
+        }
+
+        let otherKey = Data(repeating: 0x11, count: 32)
+        let snapshots = [
+            // A live link is required for anyone to count as reachable.
+            TransportPeerSnapshot(
+                peerID: PeerID(publicKey: otherKey),
+                nickname: "carol",
+                isConnected: true,
+                noisePublicKey: otherKey,
+                lastSeen: Date()
+            ),
+            TransportPeerSnapshot(
+                peerID: PeerID(publicKey: noiseKey),
+                nickname: "bob",
+                isConnected: false,
+                noisePublicKey: noiseKey,
+                lastSeen: Date()
+            )
+        ]
+        transport.updatePeerSnapshots(snapshots)
+        service.didUpdatePeerSnapshots(snapshots)
+
+        let bobRows = service.peers.filter { $0.noisePublicKey == noiseKey }
+        #expect(bobRows.count == 1)
+        #expect(bobRows.first?.peerID == PeerID(publicKey: noiseKey))
+        #expect(bobRows.first?.isReachable == true)
+    }
+
+    /// A mutual favorite with no mesh presence still gets its offline row,
+    /// keyed by the full noise-key PeerID.
+    @Test @MainActor
+    func updatePeers_offlineMutualFavoriteGetsOfflineRow() async {
+        let favoritesService = FavoritesPersistenceService.shared
+
+        let transport = MockTransport()
+        let idBridge = NostrIdentityBridge(keychain: MockKeychainHelper())
+        let service = UnifiedPeerService(meshService: transport, idBridge: idBridge, identityManager: TestIdentityManager())
+
+        let noiseKey = Data(repeating: 0xEF, count: 32)
+        favoritesService.addFavorite(peerNoisePublicKey: noiseKey, peerNickname: "dave")
+        favoritesService.updatePeerFavoritedUs(peerNoisePublicKey: noiseKey, favorited: true)
+        defer {
+            favoritesService.updatePeerFavoritedUs(peerNoisePublicKey: noiseKey, favorited: false)
+            favoritesService.removeFavorite(peerNoisePublicKey: noiseKey)
+        }
+
+        transport.updatePeerSnapshots([])
+        service.didUpdatePeerSnapshots([])
+
+        let rows = service.peers.filter { $0.noisePublicKey == noiseKey }
+        #expect(rows.count == 1)
+        #expect(rows.first?.peerID == PeerID(hexData: noiseKey))
+        #expect(rows.first?.isMutualFavorite == true)
+    }
+
     @Test @MainActor
     func setBlocked_unknownIdentityReturnsNil() async {
         let transport = MockTransport()

@@ -141,7 +141,13 @@ final class FavoritesPersistenceService: ObservableObject {
         peerNostrPublicKey: String? = nil
     ) {
         let existing = favorites[peerNoisePublicKey]
-        let displayName = peerNickname ?? existing?.peerNickname ?? "Unknown"
+        // Callers that can't resolve the live nickname pass the "Unknown"
+        // placeholder (e.g. a notification arriving before the announce);
+        // never let it clobber a real stored nickname.
+        let incoming = peerNickname.flatMap { name in
+            (name.isEmpty || name == "Unknown") ? nil : name
+        }
+        let displayName = incoming ?? existing?.peerNickname ?? "Unknown"
         
         SecureLogger.info("📨 Received favorite notification: \(displayName) \(favorited ? "favorited" : "unfavorited") us", category: .session)
         

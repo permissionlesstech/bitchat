@@ -42,7 +42,9 @@ struct NostrTransportTests {
             )
         )
 
-        #expect(!transport.isPeerReachable(fullPeerID))
+        // Offline favorites are addressed by the full 64-hex noise key, so
+        // both forms must resolve to the same reachability answer.
+        #expect(transport.isPeerReachable(fullPeerID))
         #expect(transport.isPeerReachable(shortPeerID))
         #expect(!transport.isPeerReachable(PeerID(str: "feedfeedfeedfeed")))
     }

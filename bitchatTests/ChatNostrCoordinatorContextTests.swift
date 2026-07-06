@@ -608,34 +608,6 @@ struct GeoPresenceTrackerTests {
         #expect(stamped > stale)
         #expect(context.appendedGeohashMessages.count == 1)
     }
-    @Test @MainActor
-    func handleFavoriteNotification_persistsFavoriteAndPostsLocalNotification() async throws {
-        let context = MockChatNostrContext()
-        let coordinator = ChatNostrCoordinator(context: context)
-        let sender = try NostrIdentity.generate()
-        let noiseKey = Data(repeating: 0x42, count: 32)
-        // The favorites store bridges the sender's npub back to a Noise key.
-        context.favoriteRelationshipsByNoiseKey[noiseKey] = makeFavoriteRelationship(
-            noiseKey: noiseKey,
-            nostrPublicKey: sender.npub
-        )
-
-        coordinator.handleFavoriteNotification(content: "FAVORITE:TRUE|alice", from: sender.publicKeyHex)
-
-        #expect(context.addedFavorites.count == 1)
-        #expect(context.addedFavorites.first?.noiseKey == noiseKey)
-        #expect(context.addedFavorites.first?.nostrPublicKey == sender.publicKeyHex)
-        #expect(context.addedFavorites.first?.nickname == "alice")
-        #expect(context.postedLocalNotifications.count == 1)
-        #expect(context.postedLocalNotifications.first?.title == "New Favorite")
-        #expect(context.postedLocalNotifications.first?.body == "alice favorited you")
-
-        // Unfavorite: no store write, but the removal notification still posts.
-        coordinator.handleFavoriteNotification(content: "FAVORITE:FALSE|alice", from: sender.publicKeyHex)
-        #expect(context.addedFavorites.count == 1)
-        #expect(context.postedLocalNotifications.last?.title == "Favorite Removed")
-        #expect(context.postedLocalNotifications.last?.body == "alice unfavorited you")
-    }
 
     @Test @MainActor
     func geoPresence_sampledActivityNotificationRespectsPerGeohashCooldown() async throws {

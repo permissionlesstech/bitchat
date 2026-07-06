@@ -303,6 +303,50 @@ struct CommandProcessorTests {
         #expect(!identityManager.isNostrBlocked(pubkeyHexLowercased: String(repeating: "d", count: 64)))
     }
 
+    /// /fav must go through toggleFavorite (which persists by the real noise
+    /// key) — not write the hex peer ID into the favorites store, and not
+    /// send a second favorite notification.
+    @MainActor
+    @Test func favoriteCommandTogglesWithoutDirectStoreWrite() async {
+        let identityManager = MockIdentityManager(MockKeychain())
+        let context = MockCommandContextProvider()
+        let processor = CommandProcessor(
+            contextProvider: context,
+            meshService: MockTransport(),
+            identityManager: identityManager
+        )
+        let peerID = PeerID(str: "00aa00bb00cc00dd")
+        context.nicknameToPeerID["alice"] = peerID
+
+        let result = await withSelectedChannel(.mesh, context: context) {
+            processor.process("/fav alice")
+        }
+
+        switch result {
+        case .success(let message):
+            #expect(message == "added alice to favorites")
+        default:
+            Issue.record("Expected success result")
+        }
+        #expect(context.toggledFavorites == [peerID])
+        #expect(context.favoriteNotifications.isEmpty)
+        // The 8-byte routing ID must never be stored as a "noise key".
+        let bogusKey = Data(hexString: peerID.id)!
+        #expect(FavoritesPersistenceService.shared.getFavoriteStatus(for: bogusKey) == nil)
+
+        // Unfavoriting someone who is not a favorite is a no-op.
+        let unfavResult = await withSelectedChannel(.mesh, context: context) {
+            processor.process("/unfav alice")
+        }
+        switch unfavResult {
+        case .success(let message):
+            #expect(message == "alice is not a favorite")
+        default:
+            Issue.record("Expected success result")
+        }
+        #expect(context.toggledFavorites == [peerID])
+    }
+
     @MainActor
     @Test func favoriteCommandIsRejectedOutsideMesh() async {
         let identityManager = MockIdentityManager(MockKeychain())

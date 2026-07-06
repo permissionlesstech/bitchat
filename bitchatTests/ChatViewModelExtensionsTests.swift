@@ -655,8 +655,10 @@ struct ChatViewModelNostrExtensionTests {
         #expect(viewModel.findNoiseKey(for: nostrHex) == noiseKey)
     }
 
+    /// An inbound Nostr [FAVORITED] marker must flip theyFavoritedUs and stay
+    /// out of the conversation transcript.
     @Test @MainActor
-    func handleFavoriteNotification_updatesFavoriteAssociation() async throws {
+    func handlePrivateMessage_nostrFavoritedMarkerUpdatesRelationship() async throws {
         let (viewModel, _) = makeTestableViewModel()
         let identity = try NostrIdentity.generate()
         let noiseKey = Data((0..<32).map { UInt8(($0 + 144) & 0xFF) })
@@ -664,19 +666,33 @@ struct ChatViewModelNostrExtensionTests {
         FavoritesPersistenceService.shared.addFavorite(
             peerNoisePublicKey: noiseKey,
             peerNostrPublicKey: identity.npub,
-            peerNickname: "Before"
+            peerNickname: "Alice"
         )
-        defer { FavoritesPersistenceService.shared.removeFavorite(peerNoisePublicKey: noiseKey) }
+        defer {
+            FavoritesPersistenceService.shared.updatePeerFavoritedUs(peerNoisePublicKey: noiseKey, favorited: false)
+            FavoritesPersistenceService.shared.removeFavorite(peerNoisePublicKey: noiseKey)
+        }
 
-        viewModel.handleFavoriteNotification(
-            content: "FAVORITE:TRUE|NPUB:\(identity.npub)|Alice",
-            from: identity.publicKeyHex
+        // The inbound pipeline resolves a known sender to their noise-key ID.
+        let convKey = PeerID(hexData: noiseKey)
+        let payloadData = try #require(
+            PrivateMessagePacket(messageID: "fav-e2e-1", content: "[FAVORITED]:\(identity.npub)").encode()
+        )
+        let payload = NoisePayload(type: .privateMessage, data: payloadData)
+
+        viewModel.handlePrivateMessage(
+            payload,
+            senderPubkey: identity.publicKeyHex,
+            convKey: convKey,
+            id: identity,
+            messageTimestamp: Date()
         )
 
         let relationship = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey)
-        #expect(relationship?.peerNickname == "Alice")
+        #expect(relationship?.theyFavoritedUs == true)
+        #expect(relationship?.isMutual == true)
         #expect(relationship?.peerNostrPublicKey == identity.npub)
-        #expect(relationship?.isFavorite == true)
+        #expect(viewModel.privateChats[convKey, default: []].isEmpty)
     }
 
     @Test @MainActor
