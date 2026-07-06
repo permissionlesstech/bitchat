@@ -136,7 +136,13 @@ final class AppRuntime: ObservableObject {
     /// `activeChannel`), so there is no race.
     private func restoreLastActiveConversationOnLaunch() {
         let presentation = conversations.restoreLastActiveConversation(
-            isPeerResolvable: { Self.isDirectChatRestorable($0, favorites: .shared) }
+            isPeerResolvable: {
+                Self.isDirectChatRestorable(
+                    $0,
+                    favorites: .shared,
+                    isPeerBlocked: { chatViewModel.isPeerBlocked($0) }
+                )
+            }
         )
         var didOpenDirectChat = false
         if case .restoredDirectChat(let peerID) = presentation {
@@ -156,37 +162,55 @@ final class AppRuntime: ObservableObject {
     }
 
     /// Whether a persisted last-active DM peer is genuinely restorable at
-    /// launch — validated against *durable* conversation state, never live
+    /// launch — validated against *durable* relationship state, never live
     /// presence (mesh discovery is async, so no peer is connected yet). A
     /// syntactically valid `PeerID` is NOT sufficient: an unknown peer would
     /// otherwise fall straight through `startPrivateChat` into an empty phantom
-    /// DM. Restorable iff the peerID is a geohash/Nostr DM (its stable Nostr
-    /// identity is embedded in the id itself) or the peer is a persisted
-    /// favorite (keychain-backed, stored by stable Noise public key across
-    /// launches). Presence-independent and pure, so it is unit-testable.
+    /// DM. Mirrors the open-path gate
+    /// (`ChatPeerIdentityCoordinator.startPrivateChat`): restorable iff the peer
+    /// is a MUTUAL favorite (we favorite them AND they favorite us) and NOT
+    /// blocked. The gate's third relaxation term, `isConnected`, is always false
+    /// at launch, so it drops out of the launch-effective predicate. A geohash/
+    /// Nostr DM is *not* special-cased: its full Nostr key is rebuilt only from
+    /// inbound ephemeral events, so at launch a restored `nostr_` id cannot
+    /// resolve and would open an unsendable phantom unless it is also a mutual
+    /// favorite. Favorites are keychain-backed and keyed by stable Noise public
+    /// key, so this is presence-independent and pure, hence unit-testable.
     static func isDirectChatRestorable(
         _ peerID: PeerID,
-        isPeerFavorited: (PeerID) -> Bool
+        isPeerFavorited: (PeerID) -> Bool,
+        theyFavoritedUs: (PeerID) -> Bool,
+        isPeerBlocked: (PeerID) -> Bool
     ) -> Bool {
-        if peerID.isGeoDM { return true }
-        return isPeerFavorited(peerID)
+        guard !isPeerBlocked(peerID) else { return false }
+        return isPeerFavorited(peerID) && theyFavoritedUs(peerID)
     }
 
     /// Production wiring of `isDirectChatRestorable`, extracted so the real
-    /// favorites lookup (not just a stub predicate) is unit-testable via an
-    /// injected in-memory-keychain-backed `FavoritesPersistenceService`.
-    /// `migrateSelectedConversationIfNeeded` can persist the last-active peer in
-    /// full 64-hex Noise-key form, but the favorites store is keyed by the
-    /// short, Noise-key-derived id — so normalize with `toShort()` (a no-op on
-    /// an already-short id) before the lookup, or favorited DMs silently fail to
-    /// restore.
+    /// favorites/block lookups (not just stub predicates) are unit-testable via
+    /// an injected in-memory-keychain-backed `FavoritesPersistenceService` and a
+    /// block closure. `migrateSelectedConversationIfNeeded` can persist the
+    /// last-active peer in full 64-hex Noise-key form, but the favorites store is
+    /// keyed by the short, Noise-key-derived id — so normalize with `toShort()`
+    /// (a no-op on an already-short id) before the lookup, or favorited DMs
+    /// silently fail to restore. The block lookup mirrors the open-path gate's
+    /// `unifiedIsBlocked` (fingerprint-resolved, so it works for offline
+    /// favorites).
     static func isDirectChatRestorable(
         _ peerID: PeerID,
-        favorites: FavoritesPersistenceService
+        favorites: FavoritesPersistenceService,
+        isPeerBlocked: (PeerID) -> Bool
     ) -> Bool {
-        isDirectChatRestorable(peerID, isPeerFavorited: {
-            favorites.getFavoriteStatus(forPeerID: $0.toShort())?.isFavorite ?? false
-        })
+        isDirectChatRestorable(
+            peerID,
+            isPeerFavorited: {
+                favorites.getFavoriteStatus(forPeerID: $0.toShort())?.isFavorite ?? false
+            },
+            theyFavoritedUs: {
+                favorites.getFavoriteStatus(forPeerID: $0.toShort())?.theyFavoritedUs ?? false
+            },
+            isPeerBlocked: isPeerBlocked
+        )
     }
 
     /// Pure launch-effect decision, extracted so the fallback is unit-testable
