@@ -5208,7 +5208,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "símbolos"
+            "value" : "SÍMBOLOS"
           }
         }
       }
@@ -5262,7 +5262,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "red"
+            "value" : "RED"
           }
         }
       }
