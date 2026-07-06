@@ -1274,6 +1274,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
 
         // Delete ALL media files (incoming and outgoing) in background
         Task.detached(priority: .utility) {
+            // Skipped under tests: the test process shares the user's real
+            // ~/Library/Application Support/files tree, and this detached
+            // utility-priority wipe fires at a nondeterministic time —
+            // deleting media that concurrently running tests (e.g. the
+            // sendImage flow) just wrote there, and the developer's real
+            // app data with it.
+            guard !TestEnvironment.isRunningTests else { return }
             do {
                 let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
                 let filesDir = base.appendingPathComponent("files", isDirectory: true)
