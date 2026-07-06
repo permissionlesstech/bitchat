@@ -36,14 +36,16 @@ struct TextMessageView: View {
             // Precompute heavy token scans once per row
             let cashuLinks = message.content.extractCashuLinks()
             let lightningLinks = message.content.extractLightningLinks()
-            HStack(alignment: .top, spacing: 0) {
+            // Baseline alignment keeps the lock and delivery glyphs on the
+            // first text line; a fixed top padding left the lock's solid body
+            // hanging below the line's visual center.
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
                 let isLong = (message.content.count > TransportConfig.uiLongMessageLengthThreshold || message.content.hasVeryLongToken(threshold: TransportConfig.uiVeryLongTokenThreshold)) && cashuLinks.isEmpty
                 let isExpanded = expandedMessageIDs.contains(message.id)
                 if message.isPrivate {
                     Image(systemName: "lock.fill")
                         .font(.bitchatSystem(size: 8))
                         .foregroundColor(Color.orange.opacity(0.75))
-                        .padding(.top, 5)
                         .padding(.trailing, 4)
                         .accessibilityHidden(true)
                 }

@@ -446,13 +446,19 @@ private struct ContentPrivateChatSheetView: View {
         HStack(spacing: 5) {
             Image(systemName: "lock.fill")
                 .font(.bitchatSystem(size: 9))
+                // Optical centering: lock.fill's ink is bottom-heavy, so
+                // geometric centering reads low next to the caption text.
+                .offset(y: -1)
             Text(verbatim: privacyCaptionText)
                 .bitchatFont(size: 11, weight: .medium)
         }
         .foregroundColor(Color.orange)
         .frame(maxWidth: .infinity)
         .padding(.vertical, 4)
-        .background(Color.orange.opacity(0.08))
+        // The orange text is signature enough; a tinted band here reads as a
+        // stray strip against the untinted composer chrome below it, so the
+        // caption sits on the same surface as the rest of the bottom chrome.
+        .themedSurface()
         .accessibilityElement(children: .combine)
     }
 
@@ -517,6 +523,11 @@ private struct ContentPrivateHeaderInfoButton: View {
                    let icon = encryptionStatus.icon {
                     Image(systemName: icon)
                         .font(.bitchatSystem(size: 14))
+                        // Optical centering: the lock glyphs' ink is bottom-heavy
+                        // (solid body, thin shackle), so geometric centering reads
+                        // ~1pt low next to the name. The seal badge is symmetric
+                        // and needs no lift.
+                        .offset(y: icon.hasPrefix("lock") ? -1 : 0)
                         .foregroundColor(
                             encryptionStatus == .noiseVerified || encryptionStatus == .noiseSecured
                             ? palette.primary

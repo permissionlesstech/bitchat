@@ -297,7 +297,9 @@ private extension MessageListView {
     }
 
     func emptyStateLine(_ text: String) -> some View {
-        Text(verbatim: "* \(text) *")
+        // Non-breaking space before the closing asterisk so a tight wrap
+        // can't orphan a lone "*" onto its own line.
+        Text(verbatim: "* \(text)\u{00A0}*")
             .bitchatFont(size: 13)
             .foregroundColor(palette.secondary.opacity(0.9))
             .fixedSize(horizontal: false, vertical: true)
