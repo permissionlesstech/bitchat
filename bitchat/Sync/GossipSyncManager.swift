@@ -90,7 +90,7 @@ final class GossipSyncManager {
     private var messages = PacketStore()
     private var fragments = PacketStore()
     private var fileTransfers = PacketStore()
-    private var latestAnnouncementByPeer: [PeerID: (id: String, packet: BitchatPacket)] = [:]
+    private var latestAnnouncementByPeer: [PeerID: BitchatPacket] = [:]
     private var archiveDirty = false
 
     // Timer
@@ -206,9 +206,8 @@ final class GossipSyncManager {
                 removeState(for: sender)
                 return
             }
-            let idHex = PacketIdUtil.computeId(packet).hexEncodedString()
             let sender = PeerID(hexData: packet.senderID)
-            latestAnnouncementByPeer[sender] = (id: idHex, packet: packet)
+            latestAnnouncementByPeer[sender] = packet
         case .message:
             guard isBroadcastRecipient else { return }
             guard isPacketFresh(packet) else { return }
@@ -312,10 +311,9 @@ final class GossipSyncManager {
         // keys needed to verify everything else, and there is at most one per
         // peer, so the resend cost is negligible.
         if requestedTypes.contains(.announce) {
-            for (_, pair) in latestAnnouncementByPeer {
-                let (idHex, pkt) = pair
+            for (_, pkt) in latestAnnouncementByPeer {
                 guard isPacketFresh(pkt) else { continue }
-                let idBytes = Data(hexString: idHex) ?? Data()
+                let idBytes = PacketIdUtil.computeId(pkt)
                 if !mightContain(idBytes) {
                     var toSend = pkt
                     toSend.ttl = 0
@@ -372,8 +370,8 @@ final class GossipSyncManager {
     private func buildGcsPayload(for types: SyncTypeFlags) -> Data {
         var candidates: [BitchatPacket] = []
         if types.contains(.announce) {
-            for (_, pair) in latestAnnouncementByPeer where isPacketFresh(pair.packet) {
-                candidates.append(pair.packet)
+            for (_, pkt) in latestAnnouncementByPeer where isPacketFresh(pkt) {
+                candidates.append(pkt)
             }
         }
         if types.contains(.message) {
@@ -431,8 +429,8 @@ final class GossipSyncManager {
     // Periodic cleanup of expired messages and announcements
     private func cleanupExpiredMessages() {
         // Remove expired announcements
-        latestAnnouncementByPeer = latestAnnouncementByPeer.filter { _, pair in
-            isPacketFresh(pair.packet)
+        latestAnnouncementByPeer = latestAnnouncementByPeer.filter { _, pkt in
+            isPacketFresh(pkt)
         }
 
         let messageCountBefore = messages.packets.count
@@ -512,8 +510,8 @@ final class GossipSyncManager {
         let nowMs = UInt64(now.timeIntervalSince1970 * 1000)
         guard nowMs >= timeoutMs else { return }
         let cutoff = nowMs - timeoutMs
-        let stalePeerIDs = latestAnnouncementByPeer.compactMap { peerID, pair in
-            pair.packet.timestamp < cutoff ? peerID : nil
+        let stalePeerIDs = latestAnnouncementByPeer.compactMap { peerID, pkt in
+            pkt.timestamp < cutoff ? peerID : nil
         }
         guard !stalePeerIDs.isEmpty else { return }
         for peerKey in stalePeerIDs {

@@ -357,6 +357,44 @@ struct GossipSyncManagerTests {
         #expect(sentPackets.allSatisfy { $0.isRSR })
     }
 
+    @Test func handleRequestSyncSkipsAnnounceAlreadyInFilter() async throws {
+        var config = GossipSyncManager.Config()
+        config.messageSyncIntervalSeconds = 0
+        config.fragmentSyncIntervalSeconds = 0
+        config.fileTransferSyncIntervalSeconds = 0
+
+        let requestSyncManager = RequestSyncManager()
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: requestSyncManager)
+        let delegate = RecordingDelegate()
+        manager.delegate = delegate
+
+        let sender = try #require(Data(hexString: "aabbccddeeff0011"))
+        let announcePacket = BitchatPacket(
+            type: MessageType.announce.rawValue,
+            senderID: sender,
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: Data(),
+            signature: nil,
+            ttl: 1
+        )
+        manager.onPublicPacketSeen(announcePacket)
+
+        // A filter that already contains the announce's canonical ID must
+        // suppress the response — this only holds if the responder recomputes
+        // the ID the same way the filter was built (the dual-path bug would
+        // diff a stored hex string instead).
+        let announceID = PacketIdUtil.computeId(announcePacket)
+        let params = GCSFilter.buildFilter(ids: [announceID], maxBytes: 256, targetFpr: 0.01)
+        let request = RequestSyncPacket(p: params.p, m: params.m, data: params.data, types: .announce)
+
+        let peer = PeerID(str: "FFFFFFFFFFFFFFFF")
+        manager.handleRequestSync(from: peer, request: request)
+        // Barrier: the async handler is enqueued, so this sync flush runs after it.
+        manager._performMaintenanceSynchronously(now: Date())
+        #expect(delegate.packets.isEmpty)
+    }
+
     @Test func handleRequestSyncIsRateLimitedPerPeer() async throws {
         var config = GossipSyncManager.Config()
         config.seenCapacity = 5
