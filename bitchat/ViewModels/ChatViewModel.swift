@@ -1205,6 +1205,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         GossipMessageArchive.wipeDefault()
         StoreAndForwardMetrics.shared.reset()
 
+        // Drop cached peers' prekey bundles (who we could write to is
+        // metadata too). Our own prekey privates are keychain-backed and go
+        // with deleteAllKeychainData above plus the identity reset below.
+        PrekeyBundleStore.shared.wipe()
+
         // Identity manager has cleared persisted identity data above
 
         // Clear autocomplete state
@@ -1273,6 +1278,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
 
         // Delete ALL media files (incoming and outgoing) in background
         Task.detached(priority: .utility) {
+            // The SPM test process shares the real Application Support tree, so
+            // this detached tree-delete can land mid-test under parallel
+            // scheduling and flake a file-dependent test; tests never need the
+            // on-disk media wiped.
+            guard !TestEnvironment.isRunningTests else { return }
             do {
                 let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
                 let filesDir = base.appendingPathComponent("files", isDirectory: true)

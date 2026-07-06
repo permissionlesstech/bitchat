@@ -39,6 +39,11 @@ struct SyncTypeFlags: OptionSet {
         // Courier envelopes are directed deposits between trusted peers and
         // must never spread via gossip sync.
         case .courierEnvelope: return nil
+        // Bit 8 is reserved for the board feature. The bitfield is already a
+        // wire-tolerant little-endian UInt64 (1-8 bytes, unknown high bits
+        // ignored by `type(forBit:)`), so bits 8+ need no format change: old
+        // clients decode the wider flags and simply never match the new bits.
+        case .prekeyBundle: return 9
         }
     }
 
@@ -52,6 +57,8 @@ struct SyncTypeFlags: OptionSet {
         case 5: return .fragment
         case 6: return .requestSync
         case 7: return .fileTransfer
+        // Bit 8 reserved (board).
+        case 9: return .prekeyBundle
         default:
             return nil
         }
@@ -61,6 +68,7 @@ struct SyncTypeFlags: OptionSet {
     static let message = SyncTypeFlags(messageTypes: [.message])
     static let fragment = SyncTypeFlags(messageTypes: [.fragment])
     static let fileTransfer = SyncTypeFlags(messageTypes: [.fileTransfer])
+    static let prekeyBundle = SyncTypeFlags(messageTypes: [.prekeyBundle])
 
     static let publicMessages = SyncTypeFlags(messageTypes: [.announce, .message])
 

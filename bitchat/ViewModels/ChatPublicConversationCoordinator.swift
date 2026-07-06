@@ -290,6 +290,11 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
     func clearCurrentPublicTimeline() {
         context.clearPublicConversation(ConversationID(channelID: context.activeChannel))
 
+        // The SPM test process shares the real Application Support tree, so this
+        // detached deletion can land mid-test under parallel scheduling and flake
+        // a file-dependent test. Tests never need the on-disk media cleared.
+        guard !TestEnvironment.isRunningTests else { return }
+
         Task.detached(priority: .utility) {
             do {
                 let base = try FileManager.default.url(

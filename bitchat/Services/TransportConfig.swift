@@ -289,4 +289,16 @@ enum TransportConfig {
     // Cooldown between speculative multi-hop handovers of the same envelope
     // toward a recipient heard only via relayed announces.
     static let courierRemoteHandoverCooldownSeconds: TimeInterval = 10 * 60
+
+    // One-time prekey bundles (forward-secret courier sealing)
+    // Own gossip-sync round for bundles: modest cadence, bounded peer count,
+    // and a long freshness window so bundles persist mesh-wide while their
+    // owners are away.
+    static let syncPrekeyBundleCapacity: Int = 200
+    static let syncPrekeyBundleIntervalSeconds: TimeInterval = 60.0
+    static let syncPrekeyBundleMaxAgeSeconds: TimeInterval = 24 * 60 * 60
+    // Unforced re-broadcasts of our own (unchanged) bundle, piggybacked on
+    // announces, keep it alive in peers' gossip stores; changed bundles are
+    // sent immediately.
+    static let prekeyBundleRebroadcastSeconds: TimeInterval = 60 * 60
 }
