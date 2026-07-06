@@ -582,9 +582,13 @@ final class ConversationStore: ObservableObject {
     func setActiveChannel(_ channelID: ChannelID) {
         if activeChannel != channelID {
             activeChannel = channelID
+            // Persist only on an ACTUAL change. A redundant re-apply of the
+            // current channel (e.g. `GeoChannelCoordinator` re-asserting the
+            // default mesh channel at launch) must not overwrite a persisted
+            // `.direct` record when a DM restore has just failed (#1064).
+            persistLastActive()
         }
         refreshDerivedSelection()
-        persistLastActive()
     }
 
     /// Opens a private chat (`nil` closes it, returning the selection to the
@@ -592,9 +596,11 @@ final class ConversationStore: ObservableObject {
     func setSelectedPrivatePeer(_ peerID: PeerID?) {
         if selectedPrivatePeerID != peerID {
             selectedPrivatePeerID = peerID
+            // Persist only on an actual selection change; the people-sheet
+            // dismissal re-invokes this with the same (nil) value.
+            persistLastActive()
         }
         refreshDerivedSelection()
-        persistLastActive()
     }
 
     private func refreshDerivedSelection() {

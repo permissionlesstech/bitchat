@@ -320,37 +320,41 @@ final class ChatPeerIdentityCoordinator {
     }
 
     @MainActor
-    func startPrivateChat(with peerID: PeerID) {
+    func startPrivateChat(with peerID: PeerID, suppressSystemMessages: Bool = false) {
         guard peerID != context.myPeerID else { return }
 
         let peerNickname = context.peerNickname(for: peerID) ?? "unknown"
 
         if context.unifiedIsBlocked(peerID) {
-            context.addSystemMessage(
-                String(
-                    format: String(
-                        localized: "system.chat.blocked",
-                        comment: "System message when starting chat fails because peer is blocked"
-                    ),
-                    locale: .current,
-                    peerNickname
+            if !suppressSystemMessages {
+                context.addSystemMessage(
+                    String(
+                        format: String(
+                            localized: "system.chat.blocked",
+                            comment: "System message when starting chat fails because peer is blocked"
+                        ),
+                        locale: .current,
+                        peerNickname
+                    )
                 )
-            )
+            }
             return
         }
 
         if let peer = context.unifiedPeer(for: peerID),
            peer.isFavorite && !peer.theyFavoritedUs && !peer.isConnected {
-            context.addSystemMessage(
-                String(
-                    format: String(
-                        localized: "system.chat.requires_favorite",
-                        comment: "System message when mutual favorite requirement blocks chat"
-                    ),
-                    locale: .current,
-                    peerNickname
+            if !suppressSystemMessages {
+                context.addSystemMessage(
+                    String(
+                        format: String(
+                            localized: "system.chat.requires_favorite",
+                            comment: "System message when mutual favorite requirement blocks chat"
+                        ),
+                        locale: .current,
+                        peerNickname
+                    )
                 )
-            )
+            }
             return
         }
 

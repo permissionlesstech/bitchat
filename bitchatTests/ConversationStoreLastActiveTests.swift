@@ -63,6 +63,30 @@ final class ConversationStoreLastActiveTests: XCTestCase {
         XCTAssertEqual(restored, .conversationList)
     }
 
+    func test_failedDirectRestoreDoesNotEraseDirectRecord() {
+        // #1064: a redundant channel re-apply must not clobber a persisted DM.
+        let storage = makeStorage()
+
+        // Session 1: the user is in a DM — persists a `.direct` record.
+        ConversationStore(storage: storage).setSelectedPrivatePeer(peerID)
+
+        // Session 2 (launch): a fresh store starts with no private peer
+        // selected. The DM restore has just failed, and GeoChannelCoordinator
+        // re-asserts the SAME (default mesh) active channel. Because the channel
+        // does not actually change, the persist is now guarded out — so the
+        // `.direct` record on disk must survive rather than be overwritten with
+        // `.mesh`.
+        let launch = ConversationStore(storage: storage)
+        launch.setActiveChannel(launch.activeChannel)
+
+        // Session 3: the DM record is intact and still restores.
+        XCTAssertEqual(
+            ConversationStore(storage: storage)
+                .restoreLastActiveConversation(isPeerResolvable: { _ in true }),
+            .restoredDirectChat(peerID)
+        )
+    }
+
     func test_firstLaunchPresentsConversationList() {
         let storage = makeStorage()
 

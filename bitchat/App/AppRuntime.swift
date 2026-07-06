@@ -146,11 +146,15 @@ final class AppRuntime: ObservableObject {
         )
         var didOpenDirectChat = false
         if case .restoredDirectChat(let peerID) = presentation {
-            // `startPrivateChat` silently no-ops when the peer is now blocked
-            // or fails the mutual-favorite-and-connected gate
-            // (ChatPeerIdentityCoordinator.startPrivateChat), leaving no chat
-            // open — `selectedPrivateChatPeer` is only set on the success path.
-            chatViewModel.startPrivateChat(with: peerID)
+            // `startPrivateChat`'s gate (ChatPeerIdentityCoordinator) rejects a
+            // now-blocked or non-mutual-favorite peer by emitting a system
+            // message and returning WITHOUT opening the chat. At launch that
+            // message would land in the current (public mesh) timeline, so pass
+            // `suppressSystemMessages: true` — the reject stays silent and we
+            // detect it via `selectedPrivateChatPeer`, which is only set on the
+            // success path. `isDirectChatRestorable` already screens for the
+            // same conditions; this is the belt-and-suspenders second line.
+            chatViewModel.startPrivateChat(with: peerID, suppressSystemMessages: true)
             didOpenDirectChat = chatViewModel.selectedPrivateChatPeer == peerID
         }
         // Fall back to the conversation list rather than silently landing on
