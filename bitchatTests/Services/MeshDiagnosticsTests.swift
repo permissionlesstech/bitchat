@@ -129,6 +129,44 @@ struct MeshDiagnosticsTests {
         #expect(context.commandOutputs == ["no reply from alice"])
     }
 
+    @MainActor
+    @Test func pingOutputRoutesToConversationWhereCommandWasIssued() async {
+        let context = DiagnosticsMockContext()
+        let alice = PeerID(str: "abcd1234abcd1234")
+        let bob = PeerID(str: "b0b0b0b0b0b0b0b0")
+        context.nicknameToPeerID["alice"] = alice
+        let transport = MockTransport()
+        transport.meshPingResult = MeshPingResult(rttMs: 42, hops: 2)
+        let processor = makeProcessor(context: context, transport: transport)
+
+        // Issue the ping from bob's DM, then switch chats before the async
+        // result lands. The output must follow the origin conversation, not
+        // whatever is selected at callback time.
+        context.selectedPrivateChatPeer = bob
+        _ = processor.process("/ping @alice")
+        context.selectedPrivateChatPeer = nil
+
+        await waitForCommandOutput(context)
+        #expect(context.commandOutputDestinations == [.privateChat(bob)])
+    }
+
+    @MainActor
+    @Test func pingIssuedFromPublicTimelineRoutesToMeshTimeline() async {
+        let context = DiagnosticsMockContext()
+        let alice = PeerID(str: "abcd1234abcd1234")
+        context.nicknameToPeerID["alice"] = alice
+        let transport = MockTransport()
+        transport.meshPingResult = MeshPingResult(rttMs: 7, hops: 1)
+        let processor = makeProcessor(context: context, transport: transport)
+
+        _ = processor.process("/ping @alice")
+        // Opening a DM afterwards must not swallow the public-timeline result.
+        context.selectedPrivateChatPeer = alice
+
+        await waitForCommandOutput(context)
+        #expect(context.commandOutputDestinations == [.meshTimeline])
+    }
+
     // MARK: - /trace
 
     @MainActor
@@ -225,6 +263,7 @@ private final class DiagnosticsMockContext: CommandContextProvider {
 
     var nicknameToPeerID: [String: PeerID] = [:]
     private(set) var commandOutputs: [String] = []
+    private(set) var commandOutputDestinations: [CommandOutputDestination] = []
 
     func getPeerIDForNickname(_ nickname: String) -> PeerID? {
         nicknameToPeerID[nickname]
@@ -241,7 +280,15 @@ private final class DiagnosticsMockContext: CommandContextProvider {
     func addPublicSystemMessage(_ content: String) {}
     func toggleFavorite(peerID: PeerID) {}
 
-    func addCommandOutput(_ content: String) {
+    func currentCommandDestination() -> CommandOutputDestination {
+        if let peerID = selectedPrivateChatPeer {
+            return .privateChat(peerID)
+        }
+        return .meshTimeline
+    }
+
+    func addCommandOutput(_ content: String, to destination: CommandOutputDestination) {
         commandOutputs.append(content)
+        commandOutputDestinations.append(destination)
     }
 }

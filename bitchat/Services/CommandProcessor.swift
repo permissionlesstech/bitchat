@@ -22,6 +22,17 @@ struct CommandGeoParticipant {
     let displayName: String
 }
 
+/// The conversation a command was typed into, captured when the command is
+/// issued so deferred output (e.g. an async /ping result, which can arrive
+/// many seconds later) lands there even if the user switches chats first.
+enum CommandOutputDestination: Equatable {
+    /// The #mesh public timeline. Commands that defer output (/ping) are
+    /// mesh-only, so a non-DM origin is always the mesh timeline.
+    case meshTimeline
+    /// The private chat that was open when the command was typed.
+    case privateChat(PeerID)
+}
+
 /// Protocol defining what CommandProcessor needs from its context.
 /// This breaks the circular dependency between CommandProcessor and ChatViewModel.
 @MainActor
@@ -49,9 +60,13 @@ protocol CommandContextProvider: AnyObject {
     // MARK: - System Messages
     func addLocalPrivateSystemMessage(_ content: String, to peerID: PeerID)
     func addPublicSystemMessage(_ content: String)
+    /// The conversation the user is typing into right now. Commands that
+    /// finish asynchronously capture this BEFORE starting async work, so a
+    /// chat switch cannot misroute their deferred output.
+    func currentCommandDestination() -> CommandOutputDestination
     /// Routes deferred command output (e.g. an async /ping result) into the
-    /// conversation where the user typed the command.
-    func addCommandOutput(_ content: String)
+    /// conversation captured when the command was issued.
+    func addCommandOutput(_ content: String, to destination: CommandOutputDestination)
 
     // MARK: - Favorites
     /// Toggles the favorite via the unified peer flow, which persists by the
@@ -373,16 +388,20 @@ final class CommandProcessor {
 
         let nickname = target.nickname
         let currentProvider = contextProvider
+        // Capture the origin conversation now: the pong can arrive up to
+        // meshPingTimeoutSeconds later, and reading the selected chat at
+        // callback time would misroute the result after a chat switch.
+        let destination = contextProvider?.currentCommandDestination() ?? .meshTimeline
         meshService?.sendMeshPing(to: target.peerID) { [weak currentProvider] result in
             let provider = currentProvider
             guard let result else {
-                provider?.addCommandOutput("no reply from \(nickname)")
+                provider?.addCommandOutput("no reply from \(nickname)", to: destination)
                 return
             }
             let hopText: String = result.hops.map { hops in
                 hops == 1 ? " · direct (1 hop)" : " · \(hops) hops"
             } ?? ""
-            provider?.addCommandOutput("pong from \(nickname): \(result.rttMs) ms\(hopText)")
+            provider?.addCommandOutput("pong from \(nickname): \(result.rttMs) ms\(hopText)", to: destination)
         }
         return .success(message: "pinging \(nickname)…")
     }

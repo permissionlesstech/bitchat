@@ -1273,6 +1273,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
 
         // Delete ALL media files (incoming and outgoing) in background
         Task.detached(priority: .utility) {
+            // Skipped under tests: the test process shares the user's real
+            // ~/Library/Application Support/files tree, and this detached
+            // utility-priority wipe fires at a nondeterministic time —
+            // deleting media that concurrently running tests (e.g. the
+            // sendImage flow) just wrote there, and the developer's real
+            // app data with it.
+            guard !TestEnvironment.isRunningTests else { return }
             do {
                 let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
                 let filesDir = base.appendingPathComponent("files", isDirectory: true)
@@ -1514,15 +1521,40 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     /// Command output belongs in the conversation where the user typed the
     /// command; the public timeline is invisible while a DM is open. The DM
     /// selection is read *after* processing so commands that switch chats
-    /// (`/msg`) print into the conversation they just opened. Internal (not
-    /// private) because CommandProcessor routes deferred output (async /ping
-    /// results) through it via CommandContextProvider.
+    /// (`/msg`) print into the conversation they just opened.
     @MainActor
-    func addCommandOutput(_ content: String) {
+    private func addCommandOutput(_ content: String) {
         if let peerID = selectedPrivateChatPeer {
             addLocalPrivateSystemMessage(content, to: peerID)
         } else {
             addSystemMessage(content)
+        }
+    }
+
+    /// Origin conversation for deferred command output, captured when the
+    /// command is issued (before any async work starts).
+    @MainActor
+    func currentCommandDestination() -> CommandOutputDestination {
+        if let peerID = selectedPrivateChatPeer {
+            return .privateChat(peerID)
+        }
+        // Deferring commands (/ping) are rejected in geohash channels, so a
+        // non-DM origin is always the #mesh timeline.
+        return .meshTimeline
+    }
+
+    /// Routes deferred command output (async /ping results) into the
+    /// conversation captured at issue time, immune to chat switches in the
+    /// meantime. A DM result lands in the origin chat's history even if that
+    /// chat is no longer selected (or was cleared — it then reappears as the
+    /// first message when the chat is reopened).
+    @MainActor
+    func addCommandOutput(_ content: String, to destination: CommandOutputDestination) {
+        switch destination {
+        case .privateChat(let peerID):
+            addLocalPrivateSystemMessage(content, to: peerID)
+        case .meshTimeline:
+            publicConversationCoordinator.addMeshOnlySystemMessage(content)
         }
     }
 

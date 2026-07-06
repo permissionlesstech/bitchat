@@ -18,7 +18,7 @@ enum TransportConfig {
 
     // Mesh diagnostics (/ping)
     static let meshPingTimeoutSeconds: TimeInterval = 10    // Give up on a probe after this window
-    static let meshPingInboundMaxPerPeer: Int = 5           // Inbound ping budget per peer...
+    static let meshPingInboundMaxPerLink: Int = 5           // Inbound ping budget per ingress link (claimed sender is spoofable)...
     static let meshPingInboundWindowSeconds: TimeInterval = 10 // ...per sliding window (anti-amplification)
 
     // UI / Storage Caps

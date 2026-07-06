@@ -69,9 +69,11 @@ final class BLEService: NSObject {
     private let meshTopology = MeshTopologyTracker()
 
     // Mesh diagnostics: outstanding /ping probes keyed by nonce, plus the
-    // inbound per-peer ping budget so a directed unencrypted probe cannot be
-    // turned into an amplification primitive. Both are owned by
-    // collectionsQueue barriers like the other mutable collections.
+    // inbound ping budget — keyed by the ingress link (the directly connected
+    // peer that delivered the packet), since the unsigned claimed sender is
+    // spoofable — so a directed unencrypted probe cannot be turned into an
+    // amplification primitive. Both are owned by collectionsQueue barriers
+    // like the other mutable collections.
     private struct PendingMeshPing {
         let peerID: PeerID
         let sentAt: Date
@@ -80,7 +82,7 @@ final class BLEService: NSObject {
     }
     private var pendingMeshPings: [Data: PendingMeshPing] = [:]
     private var meshPingResponseLimiter = SyncResponseRateLimiter(
-        maxResponses: TransportConfig.meshPingInboundMaxPerPeer,
+        maxResponses: TransportConfig.meshPingInboundMaxPerLink,
         window: TransportConfig.meshPingInboundWindowSeconds
     )
     
@@ -2474,18 +2476,25 @@ extension BLEService {
 
     /// Answers a ping addressed to us with a pong echoing its nonce; pings
     /// addressed elsewhere are left to the generic directed-relay path.
-    private func handleMeshPing(_ packet: BitchatPacket, from peerID: PeerID) {
+    ///
+    /// `linkPeerID` is the directly connected peer that delivered the packet
+    /// (the ingress link), NOT the packet's claimed sender: pings are
+    /// unsigned, so `packet.senderID` is attacker-controlled, and keying the
+    /// response budget on it would let one connected peer rotate forged
+    /// sender IDs to emit unbounded pongs. The budget is per physical link;
+    /// the pong still goes to the claimed sender (that's the protocol).
+    private func handleMeshPing(_ packet: BitchatPacket, fromLink linkPeerID: PeerID) {
         guard packet.recipientID == myPeerIDData else { return }
         guard let ping = MeshPingPayload.decode(packet.payload) else {
-            SecureLogger.debug("⚠️ Malformed ping from \(peerID.id.prefix(8))…", category: .session)
+            SecureLogger.debug("⚠️ Malformed ping via \(linkPeerID.id.prefix(8))…", category: .session)
             return
         }
         let allowed = collectionsQueue.sync(flags: .barrier) {
-            meshPingResponseLimiter.shouldRespond(to: peerID, now: Date())
+            meshPingResponseLimiter.shouldRespond(to: linkPeerID, now: Date())
         }
         guard allowed else {
-            if logRateLimiter.shouldLog(key: "ping-limit:\(peerID.id)") {
-                SecureLogger.warning("🚫 Rate-limiting pings from \(peerID.id.prefix(8))…", category: .security)
+            if logRateLimiter.shouldLog(key: "ping-limit:\(linkPeerID.id)") {
+                SecureLogger.warning("🚫 Rate-limiting pings via link \(linkPeerID.id.prefix(8))…", category: .security)
             }
             return
         }
@@ -3357,7 +3366,10 @@ extension BLEService {
             handleCourierEnvelope(packet, from: peerID)
 
         case .ping:
-            handleMeshPing(packet, from: senderID)
+            // Rate limiting must key on the ingress link (`peerID`), not the
+            // packet-claimed sender: pings are unsigned, so `senderID` is
+            // attacker-controlled and rotating it would reset the budget.
+            handleMeshPing(packet, fromLink: peerID)
 
         case .pong:
             handleMeshPong(packet, from: senderID)
