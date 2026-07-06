@@ -8953,6 +8953,18 @@
         }
       }
     },
+    "content.accessibility.delivery_detail_hint" : {
+      "comment" : "Accessibility hint for the delivery status glyph explaining a tap reveals details",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tap to show delivery details"
+          }
+        }
+      }
+    },
     "content.accessibility.encryption_status" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -16688,6 +16700,54 @@
         }
       }
     },
+    "content.delivery.reason.not_delivered" : {
+      "comment" : "Failure reason shown when the router gave up delivering a message",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "not delivered"
+          }
+        }
+      }
+    },
+    "content.delivery.reason.encryption_failed" : {
+      "comment" : "Failure reason shown when a message could not be encrypted for the peer",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "encryption failed"
+          }
+        }
+      }
+    },
+    "content.delivery.reason.voice_too_large" : {
+      "comment" : "Failure reason shown when a voice note exceeds the size limit",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "voice note too large"
+          }
+        }
+      }
+    },
+    "content.delivery.reason.voice_send_failed" : {
+      "comment" : "Failure reason shown when a voice note could not be sent",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "voice note failed to send"
+          }
+        }
+      }
+    },
     "content.delivery.reason.self" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -17404,6 +17464,30 @@
         }
       }
     },
+    "content.delivery.sending" : {
+      "comment" : "Delivery status description while a private message is being sent",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sending..."
+          }
+        }
+      }
+    },
+    "content.delivery.sent" : {
+      "comment" : "Delivery status description for a sent but not yet confirmed private message",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sent — no delivery confirmation yet"
+          }
+        }
+      }
+    },
     "content.header.people" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -17762,181 +17846,62 @@
         }
       }
     },
-    "content.input.message_placeholder" : {
+    "content.input.placeholder.location" : {
+      "comment" : "Composer placeholder for a public geohash channel, naming it",
       "extractionState" : "manual",
       "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "اكتب رسالة..."
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "একটি বার্তা লিখুন..."
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "nachricht eingeben..."
-          }
-        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "type a message..."
+            "value" : "message #%@ — public"
           }
-        },
-        "es" : {
+        }
+      }
+    },
+    "content.input.placeholder.mesh" : {
+      "comment" : "Composer placeholder for the public mesh channel",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "escribe un mensaje..."
+            "value" : "message #mesh — public, nearby"
           }
-        },
-        "fil" : {
+        }
+      }
+    },
+    "content.input.placeholder.private" : {
+      "comment" : "Composer placeholder inside a private chat, naming the conversation partner",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "mag-type ng mensahe..."
+            "value" : "message %@ — private"
           }
-        },
-        "fr" : {
+        }
+      }
+    },
+    "content.private.caption" : {
+      "comment" : "Caption above the private chat composer before encryption is established",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "écris un message..."
+            "value" : "private conversation"
           }
-        },
-        "he" : {
+        }
+      }
+    },
+    "content.private.caption_encrypted" : {
+      "comment" : "Caption above the private chat composer once the session is end-to-end encrypted",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "כתוב הודעה..."
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "संदेश लिखें..."
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ketik pesan..."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "scrivi un messaggio..."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "メッセージを入力..."
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "메시지를 입력하세요..."
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ketik pesan..."
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "सन्देश टाइप गर..."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "typ een bericht..."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wpisz wiadomość..."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "escreve uma mensagem..."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "digite uma mensagem..."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "напиши сообщение..."
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "skriv ett meddelande..."
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ஒரு செய்தியைத் தட்டச்சு செய்க..."
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "พิมพ์ข้อความ..."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "bir mesaj yazın..."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "напиши повідомлення..."
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "پیغام ٹائپ کریں..."
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "nhập tin nhắn..."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "输入消息..."
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "輸入訊息..."
+            "value" : "private · end-to-end encrypted"
           }
         }
       }
