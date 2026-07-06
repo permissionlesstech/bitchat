@@ -1514,9 +1514,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     /// Command output belongs in the conversation where the user typed the
     /// command; the public timeline is invisible while a DM is open. The DM
     /// selection is read *after* processing so commands that switch chats
-    /// (`/msg`) print into the conversation they just opened.
+    /// (`/msg`) print into the conversation they just opened. Internal (not
+    /// private) because CommandProcessor routes deferred output (async /ping
+    /// results) through it via CommandContextProvider.
     @MainActor
-    private func addCommandOutput(_ content: String) {
+    func addCommandOutput(_ content: String) {
         if let peerID = selectedPrivateChatPeer {
             addLocalPrivateSystemMessage(content, to: peerID)
         } else {

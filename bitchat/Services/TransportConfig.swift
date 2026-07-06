@@ -16,6 +16,11 @@ enum TransportConfig {
     static let bleFragmentRelayTtlCap: UInt8 = 7
     static let bleFragmentRelayTtlCapDense: UInt8 = 5       // Contain fragment floods in dense graphs
 
+    // Mesh diagnostics (/ping)
+    static let meshPingTimeoutSeconds: TimeInterval = 10    // Give up on a probe after this window
+    static let meshPingInboundMaxPerPeer: Int = 5           // Inbound ping budget per peer...
+    static let meshPingInboundWindowSeconds: TimeInterval = 10 // ...per sliding window (anti-amplification)
+
     // UI / Storage Caps
     static let privateChatCap: Int = 1337
     static let meshTimelineCap: Int = 1337

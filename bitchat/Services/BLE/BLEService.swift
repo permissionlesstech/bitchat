@@ -67,6 +67,22 @@ final class BLEService: NSObject {
     #endif
     private var selfBroadcastTracker = BLESelfBroadcastTracker()
     private let meshTopology = MeshTopologyTracker()
+
+    // Mesh diagnostics: outstanding /ping probes keyed by nonce, plus the
+    // inbound per-peer ping budget so a directed unencrypted probe cannot be
+    // turned into an amplification primitive. Both are owned by
+    // collectionsQueue barriers like the other mutable collections.
+    private struct PendingMeshPing {
+        let peerID: PeerID
+        let sentAt: Date
+        let completion: @MainActor (MeshPingResult?) -> Void
+        let timeout: DispatchWorkItem
+    }
+    private var pendingMeshPings: [Data: PendingMeshPing] = [:]
+    private var meshPingResponseLimiter = SyncResponseRateLimiter(
+        maxResponses: TransportConfig.meshPingInboundMaxPerPeer,
+        window: TransportConfig.meshPingInboundWindowSeconds
+    )
     
     // 5. Fragment Reassembly (necessary for messages > MTU)
     private var fragmentAssemblyBuffer = BLEFragmentAssemblyBuffer()
@@ -2406,6 +2422,143 @@ extension BLEService {
         PeerID(routingData: data)
     }
 
+    // MARK: - Mesh Diagnostics (/ping, /trace, topology map)
+
+    /// Sends a directed unencrypted ping probe (8-byte nonce + origin TTL).
+    /// The completion fires exactly once on the main actor: with RTT/hops
+    /// when the matching pong returns, or nil after the timeout window.
+    func sendMeshPing(to peerID: PeerID, completion: @escaping @MainActor (MeshPingResult?) -> Void) {
+        messageQueue.async { [weak self] in
+            guard let self,
+                  let recipientData = peerID.toShort().routingData,
+                  let payload = MeshPingPayload(
+                    nonce: Data((0..<MeshPingPayload.nonceLength).map { _ in UInt8.random(in: .min ... .max) }),
+                    originTTL: self.messageTTL
+                  ) else {
+                Task { @MainActor in completion(nil) }
+                return
+            }
+            let nonce = payload.nonce
+            let packet = BitchatPacket(
+                type: MessageType.ping.rawValue,
+                senderID: self.myPeerIDData,
+                recipientID: recipientData,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: payload.encode(),
+                signature: nil,
+                ttl: self.messageTTL
+            )
+            let timeout = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                let expired = self.collectionsQueue.sync(flags: .barrier) {
+                    self.pendingMeshPings.removeValue(forKey: nonce)
+                }
+                guard let expired else { return }
+                Task { @MainActor in expired.completion(nil) }
+            }
+            self.collectionsQueue.sync(flags: .barrier) {
+                self.pendingMeshPings[nonce] = PendingMeshPing(
+                    peerID: PeerID(hexData: recipientData),
+                    sentAt: Date(),
+                    completion: completion,
+                    timeout: timeout
+                )
+            }
+            self.messageQueue.asyncAfter(
+                deadline: .now() + TransportConfig.meshPingTimeoutSeconds,
+                execute: timeout
+            )
+            self.broadcastPacket(packet)
+        }
+    }
+
+    /// Answers a ping addressed to us with a pong echoing its nonce; pings
+    /// addressed elsewhere are left to the generic directed-relay path.
+    private func handleMeshPing(_ packet: BitchatPacket, from peerID: PeerID) {
+        guard packet.recipientID == myPeerIDData else { return }
+        guard let ping = MeshPingPayload.decode(packet.payload) else {
+            SecureLogger.debug("⚠️ Malformed ping from \(peerID.id.prefix(8))…", category: .session)
+            return
+        }
+        let allowed = collectionsQueue.sync(flags: .barrier) {
+            meshPingResponseLimiter.shouldRespond(to: peerID, now: Date())
+        }
+        guard allowed else {
+            if logRateLimiter.shouldLog(key: "ping-limit:\(peerID.id)") {
+                SecureLogger.warning("🚫 Rate-limiting pings from \(peerID.id.prefix(8))…", category: .security)
+            }
+            return
+        }
+        guard let pong = MeshPingPayload(nonce: ping.nonce, originTTL: messageTTL) else { return }
+        let reply = BitchatPacket(
+            type: MessageType.pong.rawValue,
+            senderID: myPeerIDData,
+            recipientID: packet.senderID,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: pong.encode(),
+            signature: nil,
+            ttl: messageTTL
+        )
+        broadcastPacket(reply)
+    }
+
+    /// Resolves a pong against its outstanding probe. The unguessable echoed
+    /// nonce plus the sender check bind the reply to the probed peer; hops
+    /// come from the pong's TTL decrements on the return path.
+    private func handleMeshPong(_ packet: BitchatPacket, from peerID: PeerID) {
+        guard packet.recipientID == myPeerIDData else { return }
+        guard let pong = MeshPingPayload.decode(packet.payload) else { return }
+        let pending = collectionsQueue.sync(flags: .barrier) { () -> PendingMeshPing? in
+            guard pendingMeshPings[pong.nonce]?.peerID == peerID else { return nil }
+            return pendingMeshPings.removeValue(forKey: pong.nonce)
+        }
+        guard let pending else { return }
+        pending.timeout.cancel()
+        let rttMs = Int((Date().timeIntervalSince(pending.sentAt) * 1000).rounded())
+        let result = MeshPingResult(
+            rttMs: max(0, rttMs),
+            hops: MeshPingPayload.hopCount(originTTL: pong.originTTL, receivedTTL: packet.ttl)
+        )
+        Task { @MainActor in pending.completion(result) }
+    }
+
+    /// Estimated intermediate hops toward `peerID`, BFS over gossiped
+    /// bidirectionally-confirmed neighbor claims ([] = direct, nil = none).
+    func computeMeshPath(to peerID: PeerID) -> [PeerID]? {
+        refreshLocalTopology()
+        if let route = computeRoute(to: peerID) {
+            return route.compactMap { PeerID(routingData: $0) }
+        }
+        // Confirmed claims can lag a brand-new link (the peer's next announce
+        // hasn't arrived yet); a live direct connection is still a known path.
+        return isPeerConnected(peerID) ? [] : nil
+    }
+
+    /// Mesh graph for the topology map. Edges are advisory: announces cap
+    /// neighbor lists at 10, so an edge claimed by either endpoint counts.
+    func currentMeshTopology() -> MeshTopologySnapshot? {
+        refreshLocalTopology()
+        let claims = meshTopology.adjacencySnapshot()
+        var nodes = Set<PeerID>()
+        var edges = Set<MeshTopologyEdge>()
+        for (source, neighbors) in claims {
+            guard let sourcePeer = PeerID(routingData: source) else { continue }
+            nodes.insert(sourcePeer)
+            for neighborData in neighbors {
+                guard let neighborPeer = PeerID(routingData: neighborData),
+                      neighborPeer != sourcePeer else { continue }
+                nodes.insert(neighborPeer)
+                edges.insert(MeshTopologyEdge(sourcePeer, neighborPeer))
+            }
+        }
+        nodes.insert(myPeerID)
+        return MeshTopologySnapshot(
+            localPeerID: myPeerID,
+            nodes: nodes.sorted(),
+            edges: edges.sorted { ($0.a, $0.b) < ($1.a, $1.b) }
+        )
+    }
+
     private func forwardAlongRouteIfNeeded(_ packet: BitchatPacket) -> Bool {
         let myRoutingData = routingData(for: myPeerID) ?? (myPeerIDData.isEmpty ? nil : myPeerIDData)
         let plan = BLERouteForwardingPolicy.plan(
@@ -3202,6 +3355,12 @@ extension BLEService {
 
         case .courierEnvelope:
             handleCourierEnvelope(packet, from: peerID)
+
+        case .ping:
+            handleMeshPing(packet, from: senderID)
+
+        case .pong:
+            handleMeshPong(packet, from: senderID)
 
         case .leave:
             handleLeave(packet, from: senderID)

@@ -23,6 +23,9 @@ struct SyncTypeFlags: OptionSet {
         // Courier envelopes are directed deposits between trusted peers and
         // must never spread via gossip sync.
         case .courierEnvelope: return nil
+        // Ping/pong are ephemeral directed probes; replaying them via gossip
+        // sync would only produce stale, unanswerable echoes.
+        case .ping, .pong: return nil
         }
     }
 

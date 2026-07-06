@@ -31,6 +31,40 @@ struct TransportPeerSnapshot: Equatable, Hashable {
     }
 }
 
+/// Outcome of a `/ping` probe over the mesh.
+struct MeshPingResult: Equatable {
+    /// Round-trip time in milliseconds.
+    let rttMs: Int
+    /// Total hops to the peer (1 = directly connected), derived from the
+    /// pong's TTL decrements; nil when the reply carried inconsistent TTLs.
+    let hops: Int?
+}
+
+/// Undirected mesh link between two peers, normalized so `(a, b)` and
+/// `(b, a)` collapse to one edge.
+struct MeshTopologyEdge: Hashable {
+    let a: PeerID
+    let b: PeerID
+
+    init(_ first: PeerID, _ second: PeerID) {
+        if first < second {
+            a = first
+            b = second
+        } else {
+            a = second
+            b = first
+        }
+    }
+}
+
+/// Point-in-time view of the mesh graph learned from gossiped announces
+/// (each announce carries up to 10 `directNeighbors`).
+struct MeshTopologySnapshot: Equatable {
+    let localPeerID: PeerID
+    let nodes: [PeerID]
+    let edges: [MeshTopologyEdge]
+}
+
 enum TransportEvent: @unchecked Sendable {
     case messageReceived(BitchatMessage)
     case publicMessageReceived(peerID: PeerID, nickname: String, content: String, timestamp: Date, messageID: String?)
@@ -124,6 +158,17 @@ protocol Transport: AnyObject {
     // transport cannot courier (no connected courier, or unsupported).
     func sendCourierMessage(_ content: String, messageID: String, recipientNoiseKey: Data, via couriers: [PeerID]) -> Bool
 
+    // Mesh diagnostics (optional for transports). Defaults are inert so
+    // queue-backed transports (e.g. NostrTransport) stay untouched.
+    /// Sends a directed ping probe; the completion fires exactly once on the
+    /// main actor with the measured result, or nil on timeout/unsupported.
+    func sendMeshPing(to peerID: PeerID, completion: @escaping @MainActor (MeshPingResult?) -> Void)
+    /// Estimated intermediate hops toward `peerID` from gossiped topology
+    /// ([] = direct link, nil = no known path).
+    func computeMeshPath(to peerID: PeerID) -> [PeerID]?
+    /// Current mesh graph for the topology map; nil when unsupported.
+    func currentMeshTopology() -> MeshTopologySnapshot?
+
     // QR verification (optional for transports)
     func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data)
     func sendVerifyResponse(to peerID: PeerID, noiseKeyHex: String, nonceA: Data)
@@ -154,6 +199,14 @@ extension Transport {
     func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {}
     func sendVerifyResponse(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {}
     func sendCourierMessage(_ content: String, messageID: String, recipientNoiseKey: Data, via couriers: [PeerID]) -> Bool { false }
+
+    // Mesh diagnostics are mesh-transport-only; other transports report
+    // "no reply"/"no path" rather than pretending to measure anything.
+    func sendMeshPing(to peerID: PeerID, completion: @escaping @MainActor (MeshPingResult?) -> Void) {
+        Task { @MainActor in completion(nil) }
+    }
+    func computeMeshPath(to peerID: PeerID) -> [PeerID]? { nil }
+    func currentMeshTopology() -> MeshTopologySnapshot? { nil }
     func sendFileBroadcast(_ packet: BitchatFilePacket, transferId: String) {}
     func sendFilePrivate(_ packet: BitchatFilePacket, to peerID: PeerID, transferId: String) {}
     func cancelTransfer(_ transferId: String) {}

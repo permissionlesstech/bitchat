@@ -24,7 +24,11 @@ public enum MessageType: UInt8 {
     // Fragmentation (simplified)
     case fragment = 0x20        // Single fragment type for large messages
     case fileTransfer = 0x22    // Binary file/audio/image payloads
-    
+
+    // Mesh diagnostics (0x23-0x25 and 0x28 are reserved by other features)
+    case ping = 0x26            // Directed echo request (nonce + origin TTL)
+    case pong = 0x27            // Directed echo reply (echoed nonce + origin TTL)
+
     public var description: String {
         switch self {
         case .announce: return "announce"
@@ -36,6 +40,8 @@ public enum MessageType: UInt8 {
         case .noiseEncrypted: return "noiseEncrypted"
         case .fragment: return "fragment"
         case .fileTransfer: return "fileTransfer"
+        case .ping: return "ping"
+        case .pong: return "pong"
         }
     }
 }

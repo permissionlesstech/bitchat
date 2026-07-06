@@ -435,6 +435,7 @@ private final class MockCommandContextProvider: CommandContextProvider {
     private(set) var sentPublicRawMessages: [String] = []
     private(set) var localPrivateSystemMessages: [(content: String, peerID: PeerID)] = []
     private(set) var publicSystemMessages: [String] = []
+    private(set) var commandOutputs: [String] = []
     private(set) var toggledFavorites: [PeerID] = []
     private(set) var favoriteNotifications: [(peerID: PeerID, isFavorite: Bool)] = []
 
@@ -483,6 +484,10 @@ private final class MockCommandContextProvider: CommandContextProvider {
 
     func addPublicSystemMessage(_ content: String) {
         publicSystemMessages.append(content)
+    }
+
+    func addCommandOutput(_ content: String) {
+        commandOutputs.append(content)
     }
 
     func toggleFavorite(peerID: PeerID) {

@@ -5,6 +5,11 @@ struct AppInfoView: View {
     @ThemedPalette private var palette
     @AppStorage(AppTheme.storageKey) private var appThemeRawValue = AppTheme.matrix.rawValue
 
+    /// Supplies the mesh topology map data. Nil (previews, missing wiring)
+    /// hides the topology row entirely.
+    var topologyProvider: (@MainActor () -> MeshTopologyDisplayModel)?
+    @State private var showTopology = false
+
     private var selectedTheme: AppTheme {
         AppTheme(rawValue: appThemeRawValue) ?? .matrix
     }
@@ -75,6 +80,15 @@ struct AppInfoView: View {
             ]
         }
 
+        enum Network {
+            static let title: LocalizedStringKey = "app_info.network.title"
+            static let topology = AppInfoFeatureInfo(
+                icon: "point.3.connected.trianglepath.dotted",
+                title: "app_info.network.topology.title",
+                description: "app_info.network.topology.description"
+            )
+        }
+
         enum Privacy {
             static let title: LocalizedStringKey = "app_info.privacy.title"
             static let noTracking = AppInfoFeatureInfo(
@@ -129,6 +143,11 @@ struct AppInfoView: View {
             .themedSheetBackground()
         }
         .frame(width: 600, height: 700)
+        .sheet(isPresented: $showTopology) {
+            if let topologyProvider {
+                MeshTopologyView(provider: topologyProvider)
+            }
+        }
         #else
         NavigationView {
             ScrollView {
@@ -141,6 +160,11 @@ struct AppInfoView: View {
                     SheetCloseButton { dismiss() }
                         .foregroundColor(textColor)
                 }
+            }
+        }
+        .sheet(isPresented: $showTopology) {
+            if let topologyProvider {
+                MeshTopologyView(provider: topologyProvider)
             }
         }
         #endif
@@ -235,6 +259,27 @@ struct AppInfoView: View {
                         Spacer()
                     }
                     .accessibilityElement(children: .combine)
+                }
+            }
+
+            // Network diagnostics
+            if topologyProvider != nil {
+                VStack(alignment: .leading, spacing: 16) {
+                    SectionHeader(Strings.Network.title)
+
+                    Button {
+                        showTopology = true
+                    } label: {
+                        HStack(spacing: 0) {
+                            FeatureRow(info: Strings.Network.topology)
+                            Image(systemName: "chevron.right")
+                                .font(.bitchatSystem(size: 12))
+                                .foregroundColor(secondaryTextColor)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint(Text("app_info.network.topology.hint"))
                 }
             }
 
