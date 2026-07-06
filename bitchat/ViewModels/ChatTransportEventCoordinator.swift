@@ -371,6 +371,11 @@ private extension ChatTransportEventCoordinator {
 
         case .verifyResponse:
             context.handleVerifyResponsePayload(from: peerID, payload: payload)
+
+        case .bulkTransferOffer, .bulkTransferResponse:
+            // Wi-Fi bulk negotiation is consumed inside the mesh transport
+            // (BLEService); it never reaches the UI layer.
+            break
         }
     }
 

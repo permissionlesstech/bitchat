@@ -44,7 +44,9 @@ final class BLEFileTransferHandler {
         self.environment = environment
     }
 
-    func handle(_ packet: BitchatPacket, from peerID: PeerID) {
+    /// `payloadLimit` defaults to the Bluetooth cap; Wi-Fi bulk deliveries
+    /// pass the ceiling that was enforced against the accepted offer.
+    func handle(_ packet: BitchatPacket, from peerID: PeerID, payloadLimit: Int = FileTransferLimits.maxPayloadBytes) {
         let env = environment
         if BLEFileTransferPolicy.isSelfEcho(packet: packet, from: peerID, localPeerID: env.localPeerID()) { return }
 
@@ -69,7 +71,7 @@ final class BLEFileTransferHandler {
 
         let filePacket: BitchatFilePacket
         let mime: MimeType
-        switch BLEIncomingFileValidator.validate(payload: packet.payload) {
+        switch BLEIncomingFileValidator.validate(payload: packet.payload, limit: payloadLimit) {
         case .success(let acceptance):
             filePacket = acceptance.filePacket
             mime = acceptance.mime
