@@ -793,15 +793,19 @@ final class BLEService: NSObject {
             }
             let fitsBLECaps = filePacket.encode() != nil
 
-            let candidate = WifiBulkPolicy.SendCandidate(
-                payloadBytes: payload.count,
-                peerCapabilities: self.peerCapabilities(peerID),
-                isDirectlyConnected: self.isPeerConnected(peerID),
-                hasEstablishedNoiseSession: self.noiseService.hasEstablishedSession(with: peerID)
-            )
+            // Normalize to the short routing ID (SHA256-derived 16-hex) once.
+            // Stable/verified private chats address the peer by its full
+            // 64-hex Noise key, but the Noise session and the negotiation
+            // packet are keyed by the short ID — so the capability/session
+            // eligibility checks (and the Wi-Fi offer) must all use it, or a
+            // 64-hex key makes `hasEstablishedSession` return false and Wi-Fi
+            // is never selected even when the peer advertises `.wifiBulk`.
+            let routingID = peerID.toShort()
+
+            let candidate = self.wifiBulkSendCandidate(payloadBytes: payload.count, to: routingID)
             if WifiBulkPolicy.shouldOffer(candidate) {
-                self.wifiBulkService.sendFile(payload: payload, to: peerID, transferId: transferId) { [weak self] in
-                    self?.sendFilePrivateViaBLE(payload: payload, to: peerID, transferId: transferId, fitsBLECaps: fitsBLECaps)
+                self.wifiBulkService.sendFile(payload: payload, to: routingID, transferId: transferId) { [weak self] in
+                    self?.sendFilePrivateViaBLE(payload: payload, to: routingID, transferId: transferId, fitsBLECaps: fitsBLECaps)
                 }
                 return
             }
@@ -811,8 +815,27 @@ final class BLEService: NSObject {
                 self.surfaceUndeliverableTransfer(transferId)
                 return
             }
-            self.sendFilePrivateViaBLE(payload: payload, to: peerID, transferId: transferId, fitsBLECaps: true)
+            self.sendFilePrivateViaBLE(payload: payload, to: routingID, transferId: transferId, fitsBLECaps: true)
         }
+    }
+
+    /// Builds the Wi-Fi bulk eligibility candidate for a private send.
+    ///
+    /// Normalizes `peerID` to its short routing ID first: stable/verified
+    /// private chats address the peer by its full 64-hex Noise key, but the
+    /// Noise session, advertised capabilities, and connection state are all
+    /// keyed by the short (SHA256-derived 16-hex) ID. Resolving them with the
+    /// 64-hex key would miss the session (`hasEstablishedSession` returns
+    /// false), so Wi-Fi would never be offered even to a directly-connected
+    /// `.wifiBulk` peer.
+    private func wifiBulkSendCandidate(payloadBytes: Int, to peerID: PeerID) -> WifiBulkPolicy.SendCandidate {
+        let routingID = peerID.toShort()
+        return WifiBulkPolicy.SendCandidate(
+            payloadBytes: payloadBytes,
+            peerCapabilities: peerCapabilities(routingID),
+            isDirectlyConnected: isPeerConnected(routingID),
+            hasEstablishedNoiseSession: noiseService.hasEstablishedSession(with: routingID)
+        )
     }
 
     /// BLE fragmentation path for private file transfers; also the fallback
@@ -1832,6 +1855,34 @@ extension BLEService {
             invalidatedServiceUUIDs: invalidatedServiceUUIDs,
             cachedServiceUUIDs: cachedServiceUUIDs
         )
+    }
+
+    /// The internal Noise service, so tests can drive a real handshake and
+    /// establish a session keyed by a chosen (short) routing ID.
+    var _test_noiseService: NoiseEncryptionService { noiseService }
+
+    /// Registers a directly-connected peer with the given advertised
+    /// capabilities, keyed by its short routing ID (as production does).
+    func _test_registerConnectedPeer(_ peerID: PeerID, capabilities: PeerCapabilities) {
+        let shortID = peerID.toShort()
+        collectionsQueue.sync(flags: .barrier) {
+            peerRegistry.upsert(BLEPeerInfo(
+                peerID: shortID,
+                nickname: "TestPeer_\(shortID.id.prefix(4))",
+                isConnected: true,
+                noisePublicKey: peerID.noiseKey,
+                signingPublicKey: nil,
+                isVerifiedNickname: true,
+                lastSeen: Date(),
+                capabilities: capabilities
+            ))
+        }
+    }
+
+    /// Runs the production Wi-Fi bulk eligibility resolution (including peer-ID
+    /// normalization) for the given payload size and recipient.
+    func _test_wifiBulkSendCandidate(payloadBytes: Int, to peerID: PeerID) -> WifiBulkPolicy.SendCandidate {
+        wifiBulkSendCandidate(payloadBytes: payloadBytes, to: peerID)
     }
 }
 #endif
