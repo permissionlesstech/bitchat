@@ -3027,9 +3027,21 @@ extension BLEService {
             },
             messageTTL: messageTTL,
             now: { Date() },
-            existingNoisePublicKey: { [weak self] peerID in
+            existingPeerKeys: { [weak self] peerID in
+                guard let self = self else { return (nil, nil) }
+                return self.collectionsQueue.sync {
+                    let info = self.peerRegistry.info(for: peerID)
+                    return (info?.noisePublicKey, info?.signingPublicKey)
+                }
+            },
+            persistedSigningPublicKey: { [weak self] peerID in
+                // Same synchronous identity-manager read pattern as
+                // signedSenderDisplayName(for:from:); the manager serializes
+                // access on its own internal queue.
                 guard let self = self else { return nil }
-                return self.collectionsQueue.sync { self.peerRegistry.info(for: peerID)?.noisePublicKey }
+                return self.identityManager.getCryptoIdentitiesByPeerIDPrefix(peerID)
+                    .compactMap { $0.signingPublicKey }
+                    .first
             },
             verifySignature: { [weak self] packet, signingPublicKey in
                 self?.noiseService.verifyPacketSignature(packet, publicKey: signingPublicKey) ?? false
@@ -3042,14 +3054,17 @@ extension BLEService {
             },
             upsertVerifiedAnnounce: { [weak self] peerID, announcement, isConnected, now in
                 // Called from inside withRegistryBarrier; access registry directly.
-                self?.peerRegistry.upsertVerifiedAnnounce(
+                guard let self = self else {
+                    return BLEPeerAnnounceUpdate(isNewPeer: false, wasDisconnected: false, previousNickname: nil)
+                }
+                return self.peerRegistry.upsertVerifiedAnnounce(
                     peerID: peerID,
                     nickname: announcement.nickname,
                     noisePublicKey: announcement.noisePublicKey,
                     signingPublicKey: announcement.signingPublicKey,
                     isConnected: isConnected,
                     now: now
-                ) ?? BLEPeerAnnounceUpdate(isNewPeer: false, wasDisconnected: false, previousNickname: nil)
+                )
             },
             shouldEmitReconnectLog: { [weak self] peerID, now in
                 // Called from inside withRegistryBarrier; access debouncer directly.

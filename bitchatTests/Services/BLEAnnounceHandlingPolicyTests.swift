@@ -123,7 +123,9 @@ struct BLEAnnounceHandlingPolicyTests {
             hasSignature: false,
             signatureValid: false,
             existingNoisePublicKey: nil,
-            announcedNoisePublicKey: Data(repeating: 0x11, count: 32)
+            announcedNoisePublicKey: Data(repeating: 0x11, count: 32),
+            existingSigningPublicKey: nil,
+            announcedSigningPublicKey: Data(repeating: 0x99, count: 32)
         )
 
         #expect(decision == .reject(.missingSignature))
@@ -136,7 +138,9 @@ struct BLEAnnounceHandlingPolicyTests {
             hasSignature: true,
             signatureValid: false,
             existingNoisePublicKey: nil,
-            announcedNoisePublicKey: Data(repeating: 0x11, count: 32)
+            announcedNoisePublicKey: Data(repeating: 0x11, count: 32),
+            existingSigningPublicKey: nil,
+            announcedSigningPublicKey: Data(repeating: 0x99, count: 32)
         )
 
         #expect(decision == .reject(.invalidSignature))
@@ -148,7 +152,9 @@ struct BLEAnnounceHandlingPolicyTests {
             hasSignature: true,
             signatureValid: true,
             existingNoisePublicKey: Data(repeating: 0xAA, count: 32),
-            announcedNoisePublicKey: Data(repeating: 0xBB, count: 32)
+            announcedNoisePublicKey: Data(repeating: 0xBB, count: 32),
+            existingSigningPublicKey: nil,
+            announcedSigningPublicKey: Data(repeating: 0x99, count: 32)
         )
 
         #expect(decision == .reject(.keyMismatch))
@@ -162,11 +168,49 @@ struct BLEAnnounceHandlingPolicyTests {
             hasSignature: true,
             signatureValid: true,
             existingNoisePublicKey: noiseKey,
-            announcedNoisePublicKey: noiseKey
+            announcedNoisePublicKey: noiseKey,
+            existingSigningPublicKey: nil,
+            announcedSigningPublicKey: Data(repeating: 0x99, count: 32)
         )
 
         #expect(decision == .verified)
         #expect(decision.isVerified)
+    }
+
+    @Test
+    func trustPolicyRejectsPinnedSigningKeyMismatchEvenWithValidSignature() {
+        let noiseKey = Data(repeating: 0xCC, count: 32)
+
+        // Attacker replays the victim's noiseKey/peerID with their own signing
+        // key and a valid self-signature; the pinned key must win.
+        let decision = BLEAnnounceTrustPolicy.evaluate(
+            hasSignature: true,
+            signatureValid: true,
+            existingNoisePublicKey: noiseKey,
+            announcedNoisePublicKey: noiseKey,
+            existingSigningPublicKey: Data(repeating: 0x99, count: 32),
+            announcedSigningPublicKey: Data(repeating: 0x66, count: 32)
+        )
+
+        #expect(decision == .reject(.signingKeyMismatch))
+        #expect(!decision.isVerified)
+    }
+
+    @Test
+    func trustPolicyAcceptsMatchingPinnedSigningKey() {
+        let noiseKey = Data(repeating: 0xCC, count: 32)
+        let signingKey = Data(repeating: 0x99, count: 32)
+
+        let decision = BLEAnnounceTrustPolicy.evaluate(
+            hasSignature: true,
+            signatureValid: true,
+            existingNoisePublicKey: noiseKey,
+            announcedNoisePublicKey: noiseKey,
+            existingSigningPublicKey: signingKey,
+            announcedSigningPublicKey: signingKey
+        )
+
+        #expect(decision == .verified)
     }
 
     @Test

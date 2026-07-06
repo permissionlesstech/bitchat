@@ -14,8 +14,14 @@ struct BLEAnnounceHandlerEnvironment {
     let messageTTL: UInt8
     /// Current time source.
     let now: () -> Date
-    /// Noise public key already recorded for the peer, if any (registry read).
-    let existingNoisePublicKey: (PeerID) -> Data?
+    /// Noise and signing public keys already recorded for the peer, if any
+    /// (single registry read so both come from one consistent snapshot).
+    let existingPeerKeys: (PeerID) -> (noisePublicKey: Data?, signingPublicKey: Data?)
+    /// Signing key from the persisted cryptographic identity for the peer, if
+    /// any. Registry pins do not survive app restarts or offline-peer
+    /// eviction; this fallback keeps the TOFU signing-key pin effective for
+    /// returning peers.
+    let persistedSigningPublicKey: (PeerID) -> Data?
     /// Verifies the packet signature against the announced signing key.
     let verifySignature: (_ packet: BitchatPacket, _ signingPublicKey: Data) -> Bool
     /// Direct link state for the peer (BLE-queue read).
@@ -23,13 +29,15 @@ struct BLEAnnounceHandlerEnvironment {
     /// Runs the registry mutation phase under the collections barrier.
     let withRegistryBarrier: (() -> Void) -> Void
     /// Upserts the verified announce into the peer registry.
+    /// Returns `nil` when the registry refuses the announce because it carries
+    /// a signing key different from the one already pinned for this peer.
     /// Must only be called from inside `withRegistryBarrier`.
     let upsertVerifiedAnnounce: (
         _ peerID: PeerID,
         _ announcement: AnnouncementPacket,
         _ isConnected: Bool,
         _ now: Date
-    ) -> BLEPeerAnnounceUpdate
+    ) -> BLEPeerAnnounceUpdate?
     /// Debounced reconnect-log decision.
     /// Must only be called from inside `withRegistryBarrier`.
     let shouldEmitReconnectLog: (_ peerID: PeerID, _ now: Date) -> Bool
@@ -99,7 +107,16 @@ final class BLEAnnounceHandler {
         // Suppress announce logs to reduce noise
 
         // Precompute signature verification outside barrier to reduce contention
-        let existingNoisePublicKey = env.existingNoisePublicKey(peerID)
+        var existingPeerKeys = env.existingPeerKeys(peerID)
+        if existingPeerKeys.signingPublicKey == nil {
+            // The registry entry (and its signing-key pin) is dropped on app
+            // restart and offline-peer eviction, but the persisted
+            // cryptographic identity survives both. Fall back to it so a
+            // returning peer is not treated as first contact — otherwise an
+            // attacker could replay the peer's noiseKey/peerID with their own
+            // signing key and re-pin the identity (TOFU downgrade).
+            existingPeerKeys.signingPublicKey = env.persistedSigningPublicKey(peerID)
+        }
         let hasSignature = packet.signature != nil
         let signatureValid: Bool
         if hasSignature {
@@ -113,13 +130,18 @@ final class BLEAnnounceHandler {
         let trustDecision = BLEAnnounceTrustPolicy.evaluate(
             hasSignature: hasSignature,
             signatureValid: signatureValid,
-            existingNoisePublicKey: existingNoisePublicKey,
-            announcedNoisePublicKey: announcement.noisePublicKey
+            existingNoisePublicKey: existingPeerKeys.noisePublicKey,
+            announcedNoisePublicKey: announcement.noisePublicKey,
+            existingSigningPublicKey: existingPeerKeys.signingPublicKey,
+            announcedSigningPublicKey: announcement.signingPublicKey
         )
         if case .reject(.keyMismatch) = trustDecision {
             SecureLogger.warning("⚠️ Announce key mismatch for \(peerID.id.prefix(8))… — keeping unverified", category: .security)
         }
-        let verifiedAnnounce = trustDecision.isVerified
+        if case .reject(.signingKeyMismatch) = trustDecision {
+            SecureLogger.warning("🚨 Announce signing-key mismatch for \(peerID.id.prefix(8))… — refusing to replace pinned signing key (possible impersonation attempt)", category: .security)
+        }
+        var verifiedAnnounce = trustDecision.isVerified
 
         var isNewPeer = false
         var isReconnectedPeer = false
@@ -139,12 +161,22 @@ final class BLEAnnounceHandler {
                 return
             }
 
-            let update = env.upsertVerifiedAnnounce(
+            // The registry re-checks the signing-key pin inside the barrier.
+            // The pre-barrier trust check reads the registry outside the
+            // barrier, so this closes the race where two announces for the
+            // same peer are evaluated concurrently.
+            guard let update = env.upsertVerifiedAnnounce(
                 peerID,
                 announcement,
                 isDirectAnnounce || hasPeripheralConnection || hasCentralSubscription,
                 now
-            )
+            ) else {
+                SecureLogger.warning("🚨 Registry refused announce for \(peerID.id.prefix(8))… — signing key differs from pinned key", category: .security)
+                verifiedAnnounce = false
+                isNewPeer = false
+                isReconnectedPeer = false
+                return
+            }
             isNewPeer = update.isNewPeer
             isReconnectedPeer = update.wasDisconnected
 
