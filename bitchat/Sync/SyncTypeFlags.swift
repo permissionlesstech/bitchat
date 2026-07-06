@@ -52,6 +52,10 @@ struct SyncTypeFlags: OptionSet {
         // ignored by `type(forBit:)`), so bits 8+ need no format change: old
         // clients decode the wider flags and simply never match the new bits.
         case .prekeyBundle: return 9
+        // Gateway carriers are ephemeral live traffic (uplinks are directed,
+        // downlinks are rate-budgeted rebroadcasts); replaying them via sync
+        // would waste airtime and extend their lifetime.
+        case .nostrCarrier: return nil
         }
     }
 
