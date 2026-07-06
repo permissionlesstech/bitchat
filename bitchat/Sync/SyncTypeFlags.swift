@@ -36,21 +36,21 @@ struct SyncTypeFlags: OptionSet {
         case .fragment: return 5
         case .requestSync: return 6
         case .fileTransfer: return 7
-        // Bits 8/9 are reserved by other in-flight features.
         // Extended bits are compat-safe by construction: `toData()` encodes
         // the bitfield little-endian with trailing zero bytes trimmed (bit 10
         // widens the wire form from 1 to 2 bytes inside the length-prefixed
         // REQUEST_SYNC TLV 0x04), and `decode(_:)` accepts 1...8 bytes while
         // `type(forBit:)` maps unknown bits to nil — so old clients simply
         // ignore the group bit and answer with the types they know.
+        case .boardPost: return 8
         case .groupMessage: return 10
         // Courier envelopes are directed deposits between trusted peers and
         // must never spread via gossip sync.
         case .courierEnvelope: return nil
-        // Bit 8 is reserved for the board feature. The bitfield is already a
-        // wire-tolerant little-endian UInt64 (1-8 bytes, unknown high bits
-        // ignored by `type(forBit:)`), so bits 8+ need no format change: old
-        // clients decode the wider flags and simply never match the new bits.
+        // The bitfield is a wire-tolerant little-endian UInt64 (1-8 bytes,
+        // unknown high bits ignored by `type(forBit:)`), so bits 8+ need no
+        // format change: old clients decode the wider flags and simply never
+        // match the new bits.
         case .prekeyBundle: return 9
         // Gateway carriers are ephemeral live traffic (uplinks are directed,
         // downlinks are rate-budgeted rebroadcasts); replaying them via sync
@@ -72,7 +72,10 @@ struct SyncTypeFlags: OptionSet {
         case 5: return .fragment
         case 6: return .requestSync
         case 7: return .fileTransfer
-        // Bit 8 reserved (board).
+        // Bit 8 spills the encoded bitfield into a second byte. Decoders since
+        // type-aware sync (#853) accept 1-8 bytes and map unknown bits to no
+        // known type, so old clients ignore board rounds instead of choking.
+        case 8: return .boardPost
         case 9: return .prekeyBundle
         case 10: return .groupMessage
         default:
@@ -84,6 +87,7 @@ struct SyncTypeFlags: OptionSet {
     static let message = SyncTypeFlags(messageTypes: [.message])
     static let fragment = SyncTypeFlags(messageTypes: [.fragment])
     static let fileTransfer = SyncTypeFlags(messageTypes: [.fileTransfer])
+    static let board = SyncTypeFlags(messageTypes: [.boardPost])
     static let prekeyBundle = SyncTypeFlags(messageTypes: [.prekeyBundle])
     static let groupMessage = SyncTypeFlags(messageTypes: [.groupMessage])
 

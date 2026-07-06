@@ -66,6 +66,10 @@ struct BLEReceivePipeline {
             isHandshake: packet.type == MessageType.noiseHandshake.rawValue,
             isAnnounce: packet.type == MessageType.announce.rawValue,
             isRequestSync: packet.type == MessageType.requestSync.rawValue,
+            // Board posts relay like broadcast messages; urgent ones get the
+            // announce-class TTL headroom so alerts travel the extra hop.
+            isUrgentBoardPost: packet.type == MessageType.boardPost.rawValue
+                && BoardWire.urgentFlag(in: packet.payload),
             degree: degree,
             highDegreeThreshold: highDegreeThreshold
         )

@@ -25,6 +25,9 @@ struct ContentHeaderView: View {
     /// Courier envelopes this device is carrying for offline third parties.
     @State private var carriedMailCount = 0
 
+    /// Bulletin board sheet for the current channel context.
+    @State private var showBoard = false
+
     var body: some View {
         HStack(spacing: 0) {
             Text(verbatim: "bitchat/")
@@ -152,6 +155,20 @@ struct ContentHeaderView: View {
                     )
                 }
 
+                Button(action: { showBoard = true }) {
+                    Image(systemName: "pin")
+                        .font(.bitchatSystem(size: 12))
+                        .foregroundColor(palette.secondary.opacity(0.9))
+                        .headerTapTarget()
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(
+                    String(localized: "content.accessibility.board", defaultValue: "Bulletin board", comment: "Accessibility label for the bulletin board button")
+                )
+                .help(
+                    String(localized: "content.header.board", defaultValue: "Bulletin board: persistent notices for this channel", comment: "Tooltip for the bulletin board button")
+                )
+
                 if case .location(let channel) = locationChannelsModel.selectedChannel {
                     Button(action: { locationChannelsModel.toggleBookmark(channel.geohash) }) {
                         Image(systemName: locationChannelsModel.isBookmarked(channel.geohash) ? "bookmark.fill" : "bookmark")
@@ -255,6 +272,13 @@ struct ContentHeaderView: View {
                 .environmentObject(locationChannelsModel)
                 .environmentObject(peerListModel)
         }
+        .sheet(isPresented: $showBoard) {
+            BoardView(
+                geohash: boardGeohash,
+                senderNickname: appChromeModel.nickname,
+                board: appChromeModel.boardManager
+            )
+        }
         .sheet(isPresented: $showLocationNotes, onDismiss: {
             notesGeohash = nil
         }) {
@@ -322,6 +346,15 @@ private extension View {
 private extension ContentHeaderView {
     var headerLineLimit: Int? {
         dynamicTypeSize.isAccessibilitySize ? 2 : 1
+    }
+
+    /// The board scope for the current channel: the geohash channel's board,
+    /// or the mesh-local board ("") in mesh chat.
+    var boardGeohash: String {
+        if case .location(let channel) = locationChannelsModel.selectedChannel {
+            return channel.geohash
+        }
+        return ""
     }
 
     /// Whether anyone is actually reachable on the current channel — the

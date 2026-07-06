@@ -178,6 +178,10 @@ protocol Transport: AnyObject {
     /// Current mesh graph for the topology map; nil when unsupported.
     func currentMeshTopology() -> MeshTopologySnapshot?
 
+    // Bulletin board (mesh transports only): broadcast a pre-signed board
+    // payload (post or tombstone) so it spreads over relay and gossip sync.
+    func sendBoardPayload(_ payload: Data)
+
     // QR verification (optional for transports)
     func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data)
     func sendVerifyResponse(to peerID: PeerID, noiseKeyHex: String, nonceA: Data)
@@ -234,6 +238,7 @@ extension Transport {
     }
     func computeMeshPath(to peerID: PeerID) -> [PeerID]? { nil }
     func currentMeshTopology() -> MeshTopologySnapshot? { nil }
+    func sendBoardPayload(_ payload: Data) {}
     func sendFileBroadcast(_ packet: BitchatFilePacket, transferId: String) {}
     func sendFilePrivate(_ packet: BitchatFilePacket, to peerID: PeerID, transferId: String) {}
     func cancelTransfer(_ transferId: String) {}

@@ -1220,6 +1220,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         // Drop private group keys and rosters (keychain + disk)
         groupStore.wipe()
 
+        // Drop bulletin-board posts and tombstones (memory and disk); board
+        // posts are signed with our identity key and persist for days.
+        BoardStore.shared.wipe()
+
         // Identity manager has cleared persisted identity data above
 
         // Clear autocomplete state

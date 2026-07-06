@@ -25,7 +25,7 @@ public enum MessageType: UInt8 {
     case fragment = 0x20        // Single fragment type for large messages
     case fileTransfer = 0x22    // Binary file/audio/image payloads
 
-    // 0x23 reserved by other in-flight features.
+    case boardPost = 0x23       // Signed geohash bulletin-board post or tombstone
     case prekeyBundle = 0x24    // Signed batch of one-time prekeys (gossiped)
     case groupMessage = 0x25    // Group-encrypted broadcast (cleartext group ID, ChaChaPoly body)
     // Mesh diagnostics
@@ -48,6 +48,7 @@ public enum MessageType: UInt8 {
         case .noiseEncrypted: return "noiseEncrypted"
         case .fragment: return "fragment"
         case .fileTransfer: return "fileTransfer"
+        case .boardPost: return "boardPost"
         case .prekeyBundle: return "prekeyBundle"
         case .groupMessage: return "groupMessage"
         case .ping: return "ping"
