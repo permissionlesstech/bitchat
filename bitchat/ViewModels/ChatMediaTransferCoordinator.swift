@@ -117,13 +117,13 @@ final class ChatMediaTransferCoordinator {
                 try? FileManager.default.removeItem(at: url)
                 await MainActor.run { [weak self] in
                     guard let self else { return }
-                    self.handleMediaSendFailure(messageID: messageID, reason: "Voice note too large")
+                    self.handleMediaSendFailure(messageID: messageID, reason: String(localized: "content.delivery.reason.voice_too_large", comment: "Failure reason shown when a voice note exceeds the size limit"))
                 }
             } catch {
                 SecureLogger.error("Voice note send failed: \(error)", category: .session)
                 await MainActor.run { [weak self] in
                     guard let self else { return }
-                    self.handleMediaSendFailure(messageID: messageID, reason: "Failed to send voice note")
+                    self.handleMediaSendFailure(messageID: messageID, reason: String(localized: "content.delivery.reason.voice_send_failed", comment: "Failure reason shown when a voice note could not be sent"))
                 }
             }
         }
