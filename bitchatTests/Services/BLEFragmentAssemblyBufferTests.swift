@@ -193,6 +193,64 @@ struct BLEFragmentAssemblyBufferTests {
     }
 
     @Test
+    func duplicateFragmentsDoNotResetStallClock() throws {
+        var buffer = BLEFragmentAssemblyBuffer()
+        let fragmentID = Data((20...27).map { UInt8($0) })
+        let packet = makePacket(payload: makePayload(count: 256))
+        let fragments = try makeFragments(for: packet, chunkSize: 128, fragmentID: fragmentID)
+        let first = try #require(BLEFragmentHeader(packet: fragments[0]))
+
+        let t0 = Date(timeIntervalSince1970: 100)
+        _ = buffer.append(first, maxInFlightAssemblies: 8, now: t0)
+
+        // Relay duplicates of the same index arrive every few seconds; they
+        // bring no new data, so they must not keep the stream "fresh".
+        _ = buffer.append(first, maxInFlightAssemblies: 8, now: t0.addingTimeInterval(3))
+        _ = buffer.append(first, maxInFlightAssemblies: 8, now: t0.addingTimeInterval(5))
+
+        let stalled = buffer.stalledBroadcastFragmentIDs(stalledAfter: 5, retryAfter: 10, now: t0.addingTimeInterval(6))
+        #expect(stalled == [fragmentID])
+    }
+
+    @Test
+    func overflowStalledStreamsRotateAcrossPasses() throws {
+        var buffer = BLEFragmentAssemblyBuffer()
+        let cap = RequestSyncPacket.maxFragmentIdFilterCount
+        let streamCount = cap + 10
+        let t0 = Date(timeIntervalSince1970: 100)
+
+        // Incomplete broadcast assemblies with staggered last-fragment times
+        // (stream 0 is the oldest stall).
+        var ids: [Data] = []
+        for i in 0..<streamCount {
+            let fragmentID = Data([0xAB, 0, 0, 0, 0, 0, UInt8(i >> 8), UInt8(i & 0xFF)])
+            ids.append(fragmentID)
+            let header = try #require(BLEFragmentHeader(packet: makeFragmentPacket(
+                fragmentID: fragmentID,
+                index: 0,
+                total: 2,
+                originalType: MessageType.message.rawValue,
+                fragmentData: Data([0x01])
+            )))
+            _ = buffer.append(header, maxInFlightAssemblies: streamCount, now: t0.addingTimeInterval(Double(i)))
+        }
+
+        // All streams are stalled; only the cap's worth (oldest first) is
+        // requested and rate-limited, the overflow stays eligible.
+        let firstPassAt = t0.addingTimeInterval(Double(streamCount) + 5)
+        let firstPass = buffer.stalledBroadcastFragmentIDs(stalledAfter: 5, retryAfter: 60, now: firstPassAt)
+        #expect(firstPass == Array(ids.prefix(cap)))
+
+        // Next pass picks up exactly the overflow streams.
+        let secondPass = buffer.stalledBroadcastFragmentIDs(stalledAfter: 5, retryAfter: 60, now: firstPassAt.addingTimeInterval(1))
+        #expect(secondPass == Array(ids.suffix(streamCount - cap)))
+
+        // Nothing left until a retry window lapses.
+        let thirdPass = buffer.stalledBroadcastFragmentIDs(stalledAfter: 5, retryAfter: 60, now: firstPassAt.addingTimeInterval(2))
+        #expect(thirdPass.isEmpty)
+    }
+
+    @Test
     func directedAssembliesAreNeverReportedAsStalled() throws {
         var buffer = BLEFragmentAssemblyBuffer()
         let fragment = makeFragmentPacket(

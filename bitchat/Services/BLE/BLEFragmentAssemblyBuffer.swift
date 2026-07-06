@@ -108,8 +108,15 @@ struct BLEFragmentAssemblyBuffer {
             return .oversized(header: header, projectedSize: projectedSize, limit: limit, started: started)
         }
 
+        // Only actual progress resets the stall clock: fragment packets
+        // bypass the packet deduplicator, so relayed duplicates of an
+        // already-held index must not keep suppressing the targeted
+        // REQUEST_SYNC for a stalled stream.
+        let isNewIndex = fragmentsByKey[header.key]?[header.index] == nil
         fragmentsByKey[header.key]?[header.index] = header.fragmentData
-        metadataByKey[header.key]?.lastFragmentAt = now
+        if isNewIndex {
+            metadataByKey[header.key]?.lastFragmentAt = now
+        }
 
         guard let fragments = fragmentsByKey[header.key],
               fragments.count == header.total else {
@@ -156,14 +163,18 @@ struct BLEFragmentAssemblyBuffer {
     /// reassemblies that have not seen a new fragment for `stalledAfter`
     /// seconds — candidates for a targeted REQUEST_SYNC. Each returned
     /// stream is marked so it is not re-requested within `retryAfter`.
-    /// Directed reassemblies are excluded: peers only archive broadcast
-    /// fragments for gossip sync, so a targeted request cannot recover them.
+    /// At most `RequestSyncPacket.maxFragmentIdFilterCount` streams are
+    /// returned per pass — the wire filter cannot carry more — selected
+    /// oldest-stall first; overflow streams stay unmarked and eligible for
+    /// the next pass. Directed reassemblies are excluded: peers only archive
+    /// broadcast fragments for gossip sync, so a targeted request cannot
+    /// recover them.
     mutating func stalledBroadcastFragmentIDs(
         stalledAfter: TimeInterval,
         retryAfter: TimeInterval,
         now: Date = Date()
     ) -> [Data] {
-        var stalled: [Data] = []
+        var candidates: [(key: BLEFragmentKey, lastFragmentAt: Date)] = []
         for (key, metadata) in metadataByKey {
             guard metadata.isBroadcast,
                   let fragments = fragmentsByKey[key],
@@ -171,10 +182,24 @@ struct BLEFragmentAssemblyBuffer {
                   now.timeIntervalSince(metadata.lastFragmentAt) >= stalledAfter else { continue }
             if let lastRequest = metadata.lastResyncRequestAt,
                now.timeIntervalSince(lastRequest) < retryAfter { continue }
-            metadataByKey[key]?.lastResyncRequestAt = now
-            stalled.append(withUnsafeBytes(of: key.id.bigEndian) { Data($0) })
+            candidates.append((key: key, lastFragmentAt: metadata.lastFragmentAt))
         }
-        return stalled
+
+        // Mark only the streams that will actually go on the wire, so the
+        // overflow is not silently suppressed for `retryAfter`.
+        let selected = candidates
+            .sorted {
+                if $0.lastFragmentAt != $1.lastFragmentAt {
+                    return $0.lastFragmentAt < $1.lastFragmentAt
+                }
+                return ($0.key.sender, $0.key.id) < ($1.key.sender, $1.key.id)
+            }
+            .prefix(RequestSyncPacket.maxFragmentIdFilterCount)
+
+        return selected.map { candidate in
+            metadataByKey[candidate.key]?.lastResyncRequestAt = now
+            return withUnsafeBytes(of: candidate.key.id.bigEndian) { Data($0) }
+        }
     }
 
     private static func assemblyLimit(for originalType: UInt8) -> Int {
