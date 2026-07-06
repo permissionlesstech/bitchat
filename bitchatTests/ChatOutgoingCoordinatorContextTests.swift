@@ -218,4 +218,35 @@ struct ChatOutgoingCoordinatorContextTests {
         #expect(context.appendedPublicMessages.count == 1)
         #expect(context.sentGeohashContexts.count == 1)
     }
+
+    @Test @MainActor
+    func sendMessage_onLocationChannel_serializesRapidSendsInSendOrder() async {
+        let context = MockChatOutgoingContext()
+        let coordinator = ChatOutgoingCoordinator(context: context)
+        let channel = GeohashChannel(level: .city, geohash: "u4pruydq")
+        context.activeChannel = .location(channel)
+
+        // Two back-to-back sends. The first carries much larger content, so
+        // its NIP-13 mining hashes a bigger event per attempt and runs longer
+        // than the second's. Without serialization the second (faster) task
+        // could finish first and reorder both the local timeline and the
+        // relayed events. The coordinator chains the mining tasks — each send
+        // awaits the previous send's task before it echoes and relays — so the
+        // visible order must always match the send order.
+        let first = "first " + String(repeating: "x", count: 4000)
+        let second = "second"
+        coordinator.sendMessage(first)
+        coordinator.sendMessage(second)
+
+        // The stored task is the second send, which awaits the first.
+        await coordinator.geohashMiningTask?.value
+        await drainMainActorTasks()
+
+        // Local echoes land in send order…
+        #expect(context.appendedPublicMessages.map(\.message.content) == [first, second])
+        // …and so do the relayed events (IDs match the echoes 1:1, in order).
+        #expect(context.sentGeohashContexts.count == 2)
+        #expect(context.sentGeohashContexts.map(\.event.id)
+                == context.appendedPublicMessages.map(\.message.id))
+    }
 }

@@ -157,10 +157,18 @@ private extension ChatOutgoingCoordinator {
         let teleported = context.isTeleported
         let nickname = context.nickname
 
-        // A newer send expedites the previous one's mining so sends keep
-        // their order and mining delays never stack.
-        geohashMiningTask?.cancel()
+        // Serialize geohash sends: each send awaits the previous send's task
+        // before it appends + relays, so user-visible order always matches
+        // send order even when an earlier message mines longer than a later
+        // one. Cancelling the previous task only *expedites* its mining (the
+        // NIP-13 target is polled, not aborted), so it still finishes and
+        // sends — and it finishes fast, so awaiting it never stacks mining
+        // delays or blocks a send beyond `NostrPoW.miningTimeCap`.
+        let previousSend = geohashMiningTask
+        previousSend?.cancel()
         geohashMiningTask = Task { @MainActor [weak context = self.context] in
+            await previousSend?.value
+
             let event: NostrEvent
             do {
                 event = try await NostrProtocol.createMinedEphemeralGeohashEvent(
