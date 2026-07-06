@@ -2577,9 +2577,14 @@ extension BLEService {
                 SecureLogger.debug("🚫 Dropping courier envelope from blocked sender", category: .security)
                 return
             }
-            // Mesh peer IDs are derived from Noise static keys, so the sender
-            // resolves to the same DM thread whether or not they're present.
-            let senderPeerID = PeerID(publicKey: senderStaticKey)
+            // A present sender resolves to their live mesh thread via the
+            // derived short ID. An absent sender — the usual courier case —
+            // uses the full noise-key ID so the message lands on the stable
+            // favorite conversation instead of an unresolvable short-ID
+            // thread labeled "Unknown".
+            let shortID = PeerID(publicKey: senderStaticKey)
+            let isKnownOnMesh = collectionsQueue.sync { peerRegistry.info(for: shortID) != nil }
+            let senderPeerID = isKnownOnMesh ? shortID : PeerID(hexData: senderStaticKey)
             let payload = Data(typedPayload.dropFirst())
             SecureLogger.debug("📦 Opened courier envelope from \(senderPeerID.id.prefix(8))…", category: .session)
             notifyUI { [weak self] in

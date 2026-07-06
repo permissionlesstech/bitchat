@@ -14,7 +14,11 @@ struct CourierDirectory {
     static func favoritesBacked() -> CourierDirectory {
         CourierDirectory(
             noiseKey: { peerID in
-                FavoritesPersistenceService.shared.getFavoriteStatus(forPeerID: peerID)?.peerNoisePublicKey
+                // Offline favorites are addressed by the full 64-hex
+                // noise-key ID, which carries the key itself; the favorites
+                // lookup only resolves short 16-hex IDs.
+                peerID.noiseKey
+                    ?? FavoritesPersistenceService.shared.getFavoriteStatus(forPeerID: peerID)?.peerNoisePublicKey
             },
             isTrustedCourier: { noiseKey in
                 FavoritesPersistenceService.shared.isMutualFavorite(noiseKey)

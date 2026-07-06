@@ -170,8 +170,12 @@ struct CourierEndToEndTests {
 
         let delivered = try #require(bobDelegate.snapshot().first)
         #expect(delivered.type == .privateMessage)
-        // Sender resolves to Alice's stable mesh identity, not the courier's.
-        #expect(delivered.peerID == alice.myPeerID)
+        // Alice is absent from Bob's mesh, so the sender resolves to her
+        // full noise-key ID — the stable favorite conversation — not the
+        // short mesh ID (which Bob couldn't resolve to a nickname) and not
+        // the courier's identity.
+        #expect(delivered.peerID == PeerID(hexData: alice.noiseStaticPublicKeyData()))
+        #expect(delivered.peerID != carol.myPeerID)
         let message = try #require(PrivateMessagePacket.decode(from: delivered.payload))
         #expect(message.messageID == "courier-msg-1")
         #expect(message.content == "the camp moved north")
@@ -615,6 +619,21 @@ struct MessageRouterCourierTests {
 
         #expect(transport.courierSends.isEmpty)
         #expect(carried.isEmpty)
+    }
+
+    /// The production directory must resolve both ID forms: a 64-hex
+    /// noise-key ID (offline favorite row) carries the key itself, and a
+    /// short 16-hex ID resolves through the favorites store.
+    @Test @MainActor
+    func favoritesBackedDirectoryResolvesBothIDForms() {
+        let directory = CourierDirectory.favoritesBacked()
+        let bobKey = Data(repeating: 0xB7, count: 32)
+
+        #expect(directory.noiseKey(PeerID(hexData: bobKey)) == bobKey)
+
+        FavoritesPersistenceService.shared.addFavorite(peerNoisePublicKey: bobKey, peerNickname: "bob")
+        defer { FavoritesPersistenceService.shared.removeFavorite(peerNoisePublicKey: bobKey) }
+        #expect(directory.noiseKey(PeerID(publicKey: bobKey)) == bobKey)
     }
 
     @Test @MainActor
