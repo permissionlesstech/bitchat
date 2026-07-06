@@ -35,6 +35,9 @@ enum TransportEvent: @unchecked Sendable {
     case messageReceived(BitchatMessage)
     case publicMessageReceived(peerID: PeerID, nickname: String, content: String, timestamp: Date, messageID: String?)
     case noisePayloadReceived(peerID: PeerID, type: NoisePayloadType, payload: Data, timestamp: Date)
+    /// Encrypted group broadcast (MessageType 0x25). Opaque here — the group
+    /// coordinator decrypts and authenticates against the roster.
+    case groupMessageReceived(payload: Data, timestamp: Date)
     case peerConnected(PeerID)
     case peerDisconnected(PeerID)
     case peerListUpdated([PeerID])
@@ -124,6 +127,12 @@ protocol Transport: AnyObject {
     // transport cannot courier (no connected courier, or unsupported).
     func sendCourierMessage(_ content: String, messageID: String, recipientNoiseKey: Data, via couriers: [PeerID]) -> Bool
 
+    // Private groups (mesh transports only): creator-signed state travels
+    // 1:1 over Noise sessions; group messages flood like public broadcasts.
+    func sendGroupInvite(_ statePayload: Data, to peerID: PeerID)
+    func sendGroupKeyUpdate(_ statePayload: Data, to peerID: PeerID)
+    func broadcastGroupMessage(_ envelope: Data)
+
     // QR verification (optional for transports)
     func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data)
     func sendVerifyResponse(to peerID: PeerID, noiseKeyHex: String, nonceA: Data)
@@ -153,6 +162,9 @@ extension Transport {
 
     func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {}
     func sendVerifyResponse(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {}
+    func sendGroupInvite(_ statePayload: Data, to peerID: PeerID) {}
+    func sendGroupKeyUpdate(_ statePayload: Data, to peerID: PeerID) {}
+    func broadcastGroupMessage(_ envelope: Data) {}
     func sendCourierMessage(_ content: String, messageID: String, recipientNoiseKey: Data, via couriers: [PeerID]) -> Bool { false }
     func sendFileBroadcast(_ packet: BitchatFilePacket, transferId: String) {}
     func sendFilePrivate(_ packet: BitchatFilePacket, to peerID: PeerID, transferId: String) {}
@@ -186,6 +198,8 @@ extension BitchatDelegate {
             )
         case let .noisePayloadReceived(peerID, type, payload, timestamp):
             didReceiveNoisePayload(from: peerID, type: type, payload: payload, timestamp: timestamp)
+        case let .groupMessageReceived(payload, timestamp):
+            didReceiveGroupMessage(payload: payload, timestamp: timestamp)
         case .peerConnected(let peerID):
             didConnectToPeer(peerID)
         case .peerDisconnected(let peerID):

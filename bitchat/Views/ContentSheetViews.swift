@@ -221,6 +221,13 @@ private struct ContentPeopleListView: View {
                             }
                         )
                     } else {
+                        GroupChatList(
+                            groups: peerListModel.groupRows,
+                            onTapGroup: { peerID in
+                                peerListModel.startConversation(with: peerID)
+                                showSidebar = true
+                            }
+                        )
                         MeshPeerList(
                             onTapPeer: { peerID in
                                 peerListModel.startConversation(with: peerID)
@@ -455,6 +462,10 @@ private struct ContentPrivateChatSheetView: View {
     }
 
     private var privacyCaptionText: String {
+        // Group chats are ChaCha20-Poly1305 sealed to the roster's shared key.
+        if privateConversationModel.selectedPeerID?.isGroup == true {
+            return String(localized: "content.private.caption_group", comment: "Caption above the group chat composer noting messages are encrypted to group members")
+        }
         // Geohash DMs are NIP-17 gift-wrapped — always end-to-end encrypted,
         // even though they carry no Noise session status. Mesh DMs earn the
         // "encrypted" claim only once the Noise handshake has secured.
@@ -503,30 +514,39 @@ private struct ContentPrivateHeaderInfoButton: View {
 
     var body: some View {
         Button(action: {
+            // A group has no single fingerprint to show.
+            guard !headerState.isGroupConversation else { return }
             appChromeModel.showFingerprint(for: headerState.headerPeerID)
         }) {
             HStack(spacing: 6) {
-                switch headerState.availability {
-                case .bluetoothConnected:
-                    Image(systemName: "dot.radiowaves.left.and.right")
+                if headerState.isGroupConversation {
+                    Image(systemName: "person.3.fill")
                         .font(.bitchatSystem(size: 14))
                         .foregroundColor(palette.primary)
-                        .accessibilityLabel(String(localized: "content.accessibility.connected_mesh", comment: "Accessibility label for mesh-connected peer indicator"))
-                case .meshReachable:
-                    Image(systemName: "point.3.filled.connected.trianglepath.dotted")
-                        .font(.bitchatSystem(size: 14))
-                        .foregroundColor(palette.primary)
-                        .accessibilityLabel(String(localized: "content.accessibility.reachable_mesh", comment: "Accessibility label for mesh-reachable peer indicator"))
-                case .nostrAvailable:
-                    Image(systemName: "globe")
-                        .font(.bitchatSystem(size: 14))
-                        .foregroundColor(.purple)
-                        .accessibilityLabel(String(localized: "content.accessibility.available_nostr", comment: "Accessibility label for Nostr-available peer indicator"))
-                case .offline:
-                    // Absence of a glyph was the only offline signal; say it.
-                    Text("mesh_peers.state.offline")
-                        .bitchatFont(size: 11)
-                        .foregroundColor(palette.secondary)
+                        .accessibilityLabel(String(localized: "content.accessibility.group_chat", comment: "Accessibility label for the group chat indicator"))
+                } else {
+                    switch headerState.availability {
+                    case .bluetoothConnected:
+                        Image(systemName: "dot.radiowaves.left.and.right")
+                            .font(.bitchatSystem(size: 14))
+                            .foregroundColor(palette.primary)
+                            .accessibilityLabel(String(localized: "content.accessibility.connected_mesh", comment: "Accessibility label for mesh-connected peer indicator"))
+                    case .meshReachable:
+                        Image(systemName: "point.3.filled.connected.trianglepath.dotted")
+                            .font(.bitchatSystem(size: 14))
+                            .foregroundColor(palette.primary)
+                            .accessibilityLabel(String(localized: "content.accessibility.reachable_mesh", comment: "Accessibility label for mesh-reachable peer indicator"))
+                    case .nostrAvailable:
+                        Image(systemName: "globe")
+                            .font(.bitchatSystem(size: 14))
+                            .foregroundColor(.purple)
+                            .accessibilityLabel(String(localized: "content.accessibility.available_nostr", comment: "Accessibility label for Nostr-available peer indicator"))
+                    case .offline:
+                        // Absence of a glyph was the only offline signal; say it.
+                        Text("mesh_peers.state.offline")
+                            .bitchatFont(size: 11)
+                            .foregroundColor(palette.secondary)
+                    }
                 }
 
                 Text(headerState.displayName)
@@ -571,7 +591,9 @@ private struct ContentPrivateHeaderInfoButton: View {
             )
         )
         .accessibilityHint(
-            String(localized: "content.accessibility.view_fingerprint_hint", comment: "Accessibility hint for viewing encryption fingerprint")
+            headerState.isGroupConversation
+            ? ""
+            : String(localized: "content.accessibility.view_fingerprint_hint", comment: "Accessibility hint for viewing encryption fingerprint")
         )
         .frame(minHeight: headerHeight)
     }

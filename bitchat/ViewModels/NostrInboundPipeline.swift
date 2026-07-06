@@ -297,7 +297,9 @@ final class NostrInboundPipeline {
             context.handleDelivered(noisePayload, senderPubkey: senderPubkey, convKey: convKey)
         case .readReceipt:
             context.handleReadReceipt(noisePayload, senderPubkey: senderPubkey, convKey: convKey)
-        case .verifyChallenge, .verifyResponse:
+        // Group state travels only over mesh Noise sessions in v1; anything
+        // claiming to be group traffic over Nostr is ignored.
+        case .verifyChallenge, .verifyResponse, .groupInvite, .groupKeyUpdate:
             break
         }
     }
@@ -349,7 +351,9 @@ final class NostrInboundPipeline {
             context.handleDelivered(payload, senderPubkey: senderPubkey, convKey: convKey)
         case .readReceipt:
             context.handleReadReceipt(payload, senderPubkey: senderPubkey, convKey: convKey)
-        case .verifyChallenge, .verifyResponse:
+        // Group state travels only over mesh Noise sessions in v1; anything
+        // claiming to be group traffic over Nostr is ignored.
+        case .verifyChallenge, .verifyResponse, .groupInvite, .groupKeyUpdate:
             break
         }
     }
@@ -428,7 +432,9 @@ final class NostrInboundPipeline {
                             context.handleDelivered(payload, senderPubkey: senderPubkey, convKey: targetPeerID)
                         case .readReceipt:
                             context.handleReadReceipt(payload, senderPubkey: senderPubkey, convKey: targetPeerID)
-                        case .verifyChallenge, .verifyResponse:
+                        // Group state travels only over mesh Noise sessions
+                        // in v1; group traffic over Nostr is ignored.
+                        case .verifyChallenge, .verifyResponse, .groupInvite, .groupKeyUpdate:
                             break
                         }
                     }

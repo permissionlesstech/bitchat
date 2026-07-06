@@ -20,6 +20,14 @@ struct SyncTypeFlags: OptionSet {
         case .fragment: return 5
         case .requestSync: return 6
         case .fileTransfer: return 7
+        // Bits 8/9 are reserved by other in-flight features.
+        // Extended bits are compat-safe by construction: `toData()` encodes
+        // the bitfield little-endian with trailing zero bytes trimmed (bit 10
+        // widens the wire form from 1 to 2 bytes inside the length-prefixed
+        // REQUEST_SYNC TLV 0x04), and `decode(_:)` accepts 1...8 bytes while
+        // `type(forBit:)` maps unknown bits to nil — so old clients simply
+        // ignore the group bit and answer with the types they know.
+        case .groupMessage: return 10
         // Courier envelopes are directed deposits between trusted peers and
         // must never spread via gossip sync.
         case .courierEnvelope: return nil
@@ -36,6 +44,7 @@ struct SyncTypeFlags: OptionSet {
         case 5: return .fragment
         case 6: return .requestSync
         case 7: return .fileTransfer
+        case 10: return .groupMessage
         default:
             return nil
         }
@@ -45,6 +54,7 @@ struct SyncTypeFlags: OptionSet {
     static let message = SyncTypeFlags(messageTypes: [.message])
     static let fragment = SyncTypeFlags(messageTypes: [.fragment])
     static let fileTransfer = SyncTypeFlags(messageTypes: [.fileTransfer])
+    static let groupMessage = SyncTypeFlags(messageTypes: [.groupMessage])
 
     static let publicMessages = SyncTypeFlags(messageTypes: [.announce, .message])
 

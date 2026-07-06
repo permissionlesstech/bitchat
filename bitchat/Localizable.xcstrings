@@ -9348,6 +9348,17 @@
         }
       }
     },
+    "content.accessibility.group_chat" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Group chat"
+          }
+        }
+      }
+    },
     "content.accessibility.jump_to_latest" : {
       "comment" : "Accessibility label for the jump to latest messages button",
       "extractionState" : "manual",
@@ -15055,6 +15066,17 @@
         }
       }
     },
+    "content.commands.group" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "create or manage private groups"
+          }
+        }
+      }
+    },
     "content.commands.help" : {
       "comment" : "Description of the /help command in the suggestions panel",
       "extractionState" : "manual",
@@ -18230,6 +18252,17 @@
         }
       }
     },
+    "content.input.group_placeholder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "create|invite|leave|list"
+          }
+        }
+      }
+    },
     "content.input.placeholder.location" : {
       "comment" : "Composer placeholder for a public geohash channel, naming it",
       "extractionState" : "manual",
@@ -19909,6 +19942,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "透過 lightning 支付"
+          }
+        }
+      }
+    },
+    "content.private.caption_group" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "encrypted group · members only"
           }
         }
       }
@@ -24420,6 +24464,50 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : " (你)"
+          }
+        }
+      }
+    },
+    "groups.accessibility.open_group_hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens the group chat"
+          }
+        }
+      }
+    },
+    "groups.member_count %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "(%@)"
+          }
+        }
+      }
+    },
+    "groups.section.header" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "groups"
+          }
+        }
+      }
+    },
+    "groups.state.creator" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Creator"
           }
         }
       }
@@ -33889,6 +33977,303 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已在 geohash 聊天中解除屏蔽 %@"
+          }
+        }
+      }
+    },
+    "system.group.already_member" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ is already a member"
+          }
+        }
+      }
+    },
+    "system.group.cannot_remove_creator" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the creator cannot be removed"
+          }
+        }
+      }
+    },
+    "system.group.create_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "could not create the group"
+          }
+        }
+      }
+    },
+    "system.group.created" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "created group '%@' — use /group invite @name to add people"
+          }
+        }
+      }
+    },
+    "system.group.creator_only" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "only the group creator can do that"
+          }
+        }
+      }
+    },
+    "system.group.full" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "group is full (max %@ members)"
+          }
+        }
+      }
+    },
+    "system.group.identity_unavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "your identity keys are not ready yet"
+          }
+        }
+      }
+    },
+    "system.group.invite_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "could not build the group invite"
+          }
+        }
+      }
+    },
+    "system.group.invited" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "invited %1$@ to '%2$@'"
+          }
+        }
+      }
+    },
+    "system.group.joined" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "you were added to group '%1$@' by %2$@ — it now appears in your people list"
+          }
+        }
+      }
+    },
+    "system.group.left" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "left group '%@'"
+          }
+        }
+      }
+    },
+    "system.group.list_header" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "your groups:"
+          }
+        }
+      }
+    },
+    "system.group.member_not_found" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "'%@' is not a member of this group"
+          }
+        }
+      }
+    },
+    "system.group.name_too_long" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "group names are limited to 40 characters"
+          }
+        }
+      }
+    },
+    "system.group.none" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "you are not in any groups — /group create <name> to start one"
+          }
+        }
+      }
+    },
+    "system.group.not_in_group" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "open a group chat first"
+          }
+        }
+      }
+    },
+    "system.group.peer_identity_unknown" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cannot verify %@'s identity yet — wait for their announce"
+          }
+        }
+      }
+    },
+    "system.group.peer_not_connected" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ must be connected over mesh to be invited"
+          }
+        }
+      }
+    },
+    "system.group.peer_not_found" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "'%@' not found"
+          }
+        }
+      }
+    },
+    "system.group.removed_from" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "you were removed from group '%@'"
+          }
+        }
+      }
+    },
+    "system.group.removed_member" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "removed %@ and rotated the group key"
+          }
+        }
+      }
+    },
+    "system.group.rotate_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "could not rotate the group key"
+          }
+        }
+      }
+    },
+    "system.group.send_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "could not encrypt the message"
+          }
+        }
+      }
+    },
+    "system.group.unknown" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "you are no longer in this group"
+          }
+        }
+      }
+    },
+    "system.group.usage_create" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "usage: /group create <name>"
+          }
+        }
+      }
+    },
+    "system.group.usage_invite" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "usage: /group invite @name"
+          }
+        }
+      }
+    },
+    "system.group.usage_remove" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "usage: /group remove @name"
           }
         }
       }

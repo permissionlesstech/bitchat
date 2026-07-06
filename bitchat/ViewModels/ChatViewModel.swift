@@ -177,6 +177,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     lazy var nostrCoordinator = ChatNostrCoordinator(context: self)
     lazy var mediaTransferCoordinator = ChatMediaTransferCoordinator(context: self)
     lazy var verificationCoordinator = ChatVerificationCoordinator(context: self)
+    lazy var groupCoordinator = ChatGroupCoordinator(context: self)
 
     // Computed properties for compatibility
     @MainActor
@@ -305,6 +306,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     var nostrRelayManager: NostrRelayManager?
     private let userDefaults = UserDefaults.standard
     let keychain: KeychainManagerProtocol
+    /// Private group membership: keys in the keychain, metadata on disk.
+    let groupStore: GroupStore
     private let nicknameKey = "bitchat.nickname"
     // Location channel state (macOS supports manual geohash selection)
     var activeChannel: ChannelID {
@@ -809,6 +812,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         )
 
         self.keychain = keychain
+        self.groupStore = GroupStore(keychain: keychain)
         self.idBridge = idBridge
         self.identityManager = identityManager
         self.conversations = conversations
@@ -1205,6 +1209,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         GossipMessageArchive.wipeDefault()
         StoreAndForwardMetrics.shared.reset()
 
+        // Drop private group keys and rosters (keychain + disk)
+        groupStore.wipe()
+
         // Identity manager has cleared persisted identity data above
 
         // Clear autocomplete state
@@ -1553,6 +1560,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
             timestamp: timestamp,
             messageID: messageID
         )
+    }
+
+    func didReceiveGroupMessage(payload: Data, timestamp: Date) {
+        Task { @MainActor [weak self] in
+            self?.groupCoordinator.handleGroupMessagePayload(payload, timestamp: timestamp)
+        }
     }
 
     // MARK: - QR Verification API

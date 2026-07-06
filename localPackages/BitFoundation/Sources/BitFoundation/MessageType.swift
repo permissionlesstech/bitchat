@@ -24,7 +24,10 @@ public enum MessageType: UInt8 {
     // Fragmentation (simplified)
     case fragment = 0x20        // Single fragment type for large messages
     case fileTransfer = 0x22    // Binary file/audio/image payloads
-    
+
+    // Private groups (0x23/0x24/0x26/0x27/0x28 reserved by other features)
+    case groupMessage = 0x25    // Group-encrypted broadcast (cleartext group ID, ChaChaPoly body)
+
     public var description: String {
         switch self {
         case .announce: return "announce"
@@ -36,6 +39,7 @@ public enum MessageType: UInt8 {
         case .noiseEncrypted: return "noiseEncrypted"
         case .fragment: return "fragment"
         case .fileTransfer: return "fileTransfer"
+        case .groupMessage: return "groupMessage"
         }
     }
 }

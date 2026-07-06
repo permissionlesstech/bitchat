@@ -492,4 +492,32 @@ private final class MockCommandContextProvider: CommandContextProvider {
     func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {
         favoriteNotifications.append((peerID, isFavorite))
     }
+
+    // Groups: record the parsed subcommand + argument the processor forwarded.
+    private(set) var groupCommands: [(subcommand: String, argument: String)] = []
+
+    func groupCreate(named name: String) -> CommandResult {
+        groupCommands.append(("create", name))
+        return .handled
+    }
+
+    func groupInvite(nickname: String) -> CommandResult {
+        groupCommands.append(("invite", nickname))
+        return .handled
+    }
+
+    func groupRemove(nickname: String) -> CommandResult {
+        groupCommands.append(("remove", nickname))
+        return .handled
+    }
+
+    func groupLeave() -> CommandResult {
+        groupCommands.append(("leave", ""))
+        return .handled
+    }
+
+    func groupList() -> CommandResult {
+        groupCommands.append(("list", ""))
+        return .handled
+    }
 }
