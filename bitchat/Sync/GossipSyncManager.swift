@@ -76,6 +76,11 @@ final class GossipSyncManager {
         var fragmentSyncIntervalSeconds: TimeInterval = 30.0
         var fileTransferSyncIntervalSeconds: TimeInterval = 60.0
         var messageSyncIntervalSeconds: TimeInterval = 15.0
+        // Board posts are few but long-lived (days, until each post's own
+        // expiry), so they get a slow round with their own capacity instead
+        // of competing with the 15-minute message window.
+        var boardCapacity: Int = 200
+        var boardSyncIntervalSeconds: TimeInterval = 60.0
         var responseRateLimitMaxResponses: Int = 8
         var responseRateLimitWindowSeconds: TimeInterval = 30.0
     }
@@ -85,6 +90,12 @@ final class GossipSyncManager {
     private let requestSyncManager: RequestSyncManager
     private let archive: GossipMessageArchive?
     weak var delegate: Delegate?
+
+    /// Source of raw signed board packets (posts + tombstones). The board
+    /// store is the single owner of board retention (expiry, tombstones,
+    /// caps, persistence), so sync rounds query it instead of keeping a
+    /// second copy here. Must be thread-safe; set before `start()`.
+    var boardPacketsProvider: (() -> [BitchatPacket])?
 
     // Storage: broadcast packets by type, and latest announce per sender
     private var messages = PacketStore()
@@ -118,6 +129,9 @@ final class GossipSyncManager {
         }
         if config.fileTransferCapacity > 0 && config.fileTransferSyncIntervalSeconds > 0 {
             schedules.append(SyncSchedule(types: .fileTransfer, interval: config.fileTransferSyncIntervalSeconds, lastSent: .distantPast))
+        }
+        if config.boardCapacity > 0 && config.boardSyncIntervalSeconds > 0 {
+            schedules.append(SyncSchedule(types: .board, interval: config.boardSyncIntervalSeconds, lastSent: .distantPast))
         }
         syncSchedules = schedules
 
@@ -154,6 +168,9 @@ final class GossipSyncManager {
             }
             if self.config.fileTransferCapacity > 0 && self.config.fileTransferSyncIntervalSeconds > 0 {
                 types.formUnion(.fileTransfer)
+            }
+            if self.config.boardCapacity > 0 && self.config.boardSyncIntervalSeconds > 0 && self.boardPacketsProvider != nil {
+                types.formUnion(.board)
             }
             self.sendRequestSync(to: peerID, types: types)
         }
@@ -366,6 +383,22 @@ final class GossipSyncManager {
                 }
             }
         }
+
+        if requestedTypes.contains(.boardPost) {
+            // The board store already filters to live posts and tombstones;
+            // no freshness window applies (posts sync until their own expiry).
+            let boardPackets = boardPacketsProvider?() ?? []
+            for pkt in boardPackets {
+                if let since, pkt.timestamp < since { continue }
+                let idBytes = PacketIdUtil.computeId(pkt)
+                if !mightContain(idBytes) {
+                    var toSend = pkt
+                    toSend.ttl = 0
+                    toSend.isRSR = true // Mark as solicited response
+                    delegate?.sendPacket(to: peerID, packet: toSend)
+                }
+            }
+        }
     }
 
     // Build REQUEST_SYNC payload using current candidates and GCS params
@@ -385,6 +418,9 @@ final class GossipSyncManager {
         if types.contains(.fileTransfer) {
             candidates.append(contentsOf: fileTransfers.allPackets(isFresh: isPacketFresh))
         }
+        if types.contains(.boardPost) {
+            candidates.append(contentsOf: boardPacketsProvider?() ?? [])
+        }
         if candidates.isEmpty {
             let p = GCSFilter.deriveP(targetFpr: config.gcsTargetFpr)
             let req = RequestSyncPacket(p: p, m: 1, data: Data(), types: types)
@@ -401,6 +437,8 @@ final class GossipSyncManager {
             cap = max(1, config.fragmentCapacity)
         } else if types == .fileTransfer {
             cap = max(1, config.fileTransferCapacity)
+        } else if types == .board {
+            cap = max(1, config.boardCapacity)
         } else {
             cap = max(1, config.seenCapacity)
         }
@@ -492,6 +530,9 @@ final class GossipSyncManager {
         // fragment traffic can't crowd messages out of the filter.
         for index in syncSchedules.indices {
             guard syncSchedules[index].interval > 0 else { continue }
+            // No board source wired up means nothing to offer or store;
+            // skip the round entirely.
+            if syncSchedules[index].types == .board && boardPacketsProvider == nil { continue }
             if syncSchedules[index].lastSent == .distantPast || now.timeIntervalSince(syncSchedules[index].lastSent) >= syncSchedules[index].interval {
                 syncSchedules[index].lastSent = now
                 sendPeriodicSync(for: syncSchedules[index].types)

@@ -20,6 +20,7 @@ struct SyncTypeFlags: OptionSet {
         case .fragment: return 5
         case .requestSync: return 6
         case .fileTransfer: return 7
+        case .boardPost: return 8
         // Courier envelopes are directed deposits between trusted peers and
         // must never spread via gossip sync.
         case .courierEnvelope: return nil
@@ -36,6 +37,10 @@ struct SyncTypeFlags: OptionSet {
         case 5: return .fragment
         case 6: return .requestSync
         case 7: return .fileTransfer
+        // Bit 8 spills the encoded bitfield into a second byte. Decoders since
+        // type-aware sync (#853) accept 1-8 bytes and map unknown bits to no
+        // known type, so old clients ignore board rounds instead of choking.
+        case 8: return .boardPost
         default:
             return nil
         }
@@ -45,6 +50,7 @@ struct SyncTypeFlags: OptionSet {
     static let message = SyncTypeFlags(messageTypes: [.message])
     static let fragment = SyncTypeFlags(messageTypes: [.fragment])
     static let fileTransfer = SyncTypeFlags(messageTypes: [.fileTransfer])
+    static let board = SyncTypeFlags(messageTypes: [.boardPost])
 
     static let publicMessages = SyncTypeFlags(messageTypes: [.announce, .message])
 
