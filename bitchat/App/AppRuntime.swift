@@ -161,7 +161,7 @@ final class AppRuntime: ObservableObject {
         // the public mesh timeline when a restore target existed but could not
         // be opened.
         if Self.shouldPresentConversationList(for: presentation, didOpenDirectChat: didOpenDirectChat) {
-            appChromeModel.presentsConversationListOnLaunch = true
+            appChromeModel.showSidebar = true
         }
     }
 

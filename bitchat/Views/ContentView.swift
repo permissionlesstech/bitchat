@@ -41,7 +41,8 @@ struct ContentView: View {
     @FocusState private var isTextFieldFocused: Bool
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.appTheme) private var appTheme
-    @State private var showSidebar = false
+    // `showSidebar` (the people/conversation-list sheet latch) lives on
+    // `AppChromeModel` so non-view launch code can raise it; see that property.
     @State private var selectedMessageSender: String?
     @State private var selectedMessageSenderID: PeerID?
     @FocusState private var isNicknameFieldFocused: Bool
@@ -97,16 +98,15 @@ struct ContentView: View {
         #endif
         .onChange(of: selectedPrivatePeerID) { newValue in
             if newValue != nil {
-                showSidebar = true
+                appChromeModel.showSidebar = true
             }
         }
         .sheet(
             isPresented: Binding(
-                get: { showSidebar || selectedPrivatePeerID != nil || appChromeModel.presentsConversationListOnLaunch },
+                get: { appChromeModel.showSidebar || selectedPrivatePeerID != nil },
                 set: { isPresented in
                     if !isPresented {
-                        showSidebar = false
-                        appChromeModel.presentsConversationListOnLaunch = false
+                        appChromeModel.showSidebar = false
                         privateConversationModel.endConversation()
                     }
                 }
@@ -114,7 +114,7 @@ struct ContentView: View {
         ) {
             #if os(iOS)
             ContentPeopleSheetView(
-                showSidebar: $showSidebar,
+                showSidebar: $appChromeModel.showSidebar,
                 messageText: $messageText,
                 selectedMessageSender: $selectedMessageSender,
                 selectedMessageSenderID: $selectedMessageSenderID,
@@ -132,7 +132,7 @@ struct ContentView: View {
             )
             #else
             ContentPeopleSheetView(
-                showSidebar: $showSidebar,
+                showSidebar: $appChromeModel.showSidebar,
                 messageText: $messageText,
                 selectedMessageSender: $selectedMessageSender,
                 selectedMessageSenderID: $selectedMessageSenderID,
@@ -153,7 +153,7 @@ struct ContentView: View {
             AppInfoView()
         }
         .sheet(isPresented: Binding(
-            get: { appChromeModel.showingFingerprintFor != nil && !showSidebar && selectedPrivatePeerID == nil },
+            get: { appChromeModel.showingFingerprintFor != nil && !appChromeModel.showSidebar && selectedPrivatePeerID == nil },
             set: { _ in appChromeModel.clearFingerprint() }
         )) {
             if let peerID = appChromeModel.showingFingerprintFor {
@@ -163,7 +163,7 @@ struct ContentView: View {
         }
         #if os(iOS)
         .fullScreenCover(isPresented: Binding(
-            get: { showImagePicker && !showSidebar && selectedPrivatePeerID == nil },
+            get: { showImagePicker && !appChromeModel.showSidebar && selectedPrivatePeerID == nil },
             set: { newValue in
                 if !newValue {
                     showImagePicker = false
@@ -179,7 +179,7 @@ struct ContentView: View {
         #endif
         #if os(macOS)
         .sheet(isPresented: Binding(
-            get: { showMacImagePicker && !showSidebar && selectedPrivatePeerID == nil },
+            get: { showMacImagePicker && !appChromeModel.showSidebar && selectedPrivatePeerID == nil },
             set: { newValue in
                 if !newValue {
                     showMacImagePicker = false
@@ -268,7 +268,7 @@ struct ContentView: View {
 
     private var headerView: some View {
         ContentHeaderView(
-            showSidebar: $showSidebar,
+            showSidebar: $appChromeModel.showSidebar,
             showVerifySheet: $showVerifySheet,
             showLocationNotes: $showLocationNotes,
             notesGeohash: $notesGeohash,
@@ -289,7 +289,7 @@ struct ContentView: View {
             imagePreviewURL: $imagePreviewURL,
             windowCountPublic: $windowCountPublic,
             windowCountPrivate: $windowCountPrivate,
-            showSidebar: $showSidebar,
+            showSidebar: $appChromeModel.showSidebar,
             isTextFieldFocused: $isTextFieldFocused
         )
     }
