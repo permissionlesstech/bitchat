@@ -376,7 +376,21 @@ final class ConversationStore: ObservableObject {
         case deferToChannelRestore
     }
 
-    init(storage: UserDefaults = .standard) {
+    /// Default persistence store for the last-active conversation. Production
+    /// uses `.standard`. Under test, a dedicated scratch suite is used instead
+    /// — wiped at first use per process — so the ~48 no-arg `ConversationStore()`
+    /// tests never pollute the real app's `.standard` `conversation.lastActive`
+    /// and back-to-back local runs never see each other's persisted selection.
+    /// Mirrors `ChatViewModel.defaultReadReceiptsDefaults`.
+    static let defaultStorage: UserDefaults = {
+        guard TestEnvironment.isRunningTests else { return .standard }
+        let suiteName = "chat.bitchat.tests.conversationStore"
+        guard let scratch = UserDefaults(suiteName: suiteName) else { return .standard }
+        scratch.removePersistentDomain(forName: suiteName)
+        return scratch
+    }()
+
+    init(storage: UserDefaults = ConversationStore.defaultStorage) {
         self.storage = storage
         if let data = storage.data(forKey: lastActiveKey),
            let record = try? JSONDecoder().decode(LastActiveRecord.self, from: data) {
