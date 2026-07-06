@@ -391,14 +391,21 @@ final class GossipSyncManager {
             let req = RequestSyncPacket(p: p, m: 1, data: Data(), types: types)
             return req.encode()
         }
-        let included = candidates.prefix(takeN)
-        // When the filter can't cover the whole store, tell the responder how
-        // far back it reaches. Packets older than the cursor are outside the
-        // filter but not missing; without the cursor the responder would
-        // re-send that entire tail every round.
-        let sinceTimestamp: UInt64? = takeN < candidates.count ? included.last?.timestamp : nil
+        let included = Array(candidates.prefix(takeN))
         let ids: [Data] = included.map { PacketIdUtil.computeId($0) }
         let params = GCSFilter.buildFilter(ids: ids, maxBytes: config.gcsMaxBytes, targetFpr: config.gcsTargetFpr)
+        // When the filter can't cover every candidate — either the store
+        // exceeds `takeN` or the encoder trimmed the tail to fit the byte
+        // budget — tell the responder how far back the filter actually
+        // reaches. `includedCount` counts inputs in newest-first order, so the
+        // covered set is a contiguous newest-prefix and the oldest included
+        // timestamp is an exact cursor. Packets older than it are outside the
+        // filter but not missing; without the cursor the responder would
+        // re-send that entire tail every round.
+        let covered = params.includedCount
+        let sinceTimestamp: UInt64? = (covered < candidates.count && covered > 0)
+            ? included[covered - 1].timestamp
+            : nil
         let req = RequestSyncPacket(p: params.p, m: params.m, data: params.data, types: types, sinceTimestamp: sinceTimestamp)
         return req.encode()
     }

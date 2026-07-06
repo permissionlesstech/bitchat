@@ -244,9 +244,14 @@ struct GossipSyncManagerTests {
 
         let packet = try #require(delegate.packets.first)
         let request = try #require(RequestSyncPacket.decode(from: packet.payload))
-        // The filter covers the newest 28 of 40 messages, so the cursor must
-        // point at the oldest included timestamp (index 40 - 28 = 12).
-        #expect(request.sinceTimestamp == baseTimestamp + 12)
+        // The store (40) exceeds what the tiny filter can cover, so a cursor
+        // must be present. It points at the oldest timestamp the filter
+        // actually encodes: the filter covers the newest ~28, and byte-budget
+        // trimming can only shrink that further, so the cursor sits at or
+        // above baseTimestamp + 12 (= 40 - 28) and below the newest message.
+        let since = try #require(request.sinceTimestamp)
+        #expect(since >= baseTimestamp + 12)
+        #expect(since < baseTimestamp + UInt64(totalMessages))
     }
 
     @Test func fullCoverageFilterOmitsSinceCursor() throws {
