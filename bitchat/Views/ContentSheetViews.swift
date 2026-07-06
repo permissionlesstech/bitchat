@@ -371,6 +371,12 @@ private struct ContentPrivateChatSheetView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 10)
                 .padding(.bottom, 12)
+                // Orange tint before themedSurface so it layers in front of the
+                // (opaque, in matrix) themed background rather than behind it.
+                // Glass has no opaque backing — themedSurface is a no-op there,
+                // so the wash needs more opacity to read over the backdrop
+                // gradient's blue/purple glows.
+                .background(Color.orange.opacity(theme.usesGlassChrome ? 0.14 : 0.06))
                 .themedSurface()
             }
 
@@ -392,6 +398,8 @@ private struct ContentPrivateChatSheetView: View {
             if !theme.usesGlassChrome {
                 Divider()
             }
+
+            privacyCaption
 
             #if os(iOS)
             ContentComposerView(
@@ -428,6 +436,41 @@ private struct ContentPrivateChatSheetView: View {
                     }
                 }
         )
+    }
+
+    /// Persistent one-line reminder that this composer feeds a private
+    /// conversation — the DM sheet otherwise renders identically to the
+    /// public timeline. Claims end-to-end encryption only once the session
+    /// is actually secured.
+    private var privacyCaption: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "lock.fill")
+                .font(.bitchatSystem(size: 9))
+            Text(verbatim: privacyCaptionText)
+                .bitchatFont(size: 11, weight: .medium)
+        }
+        .foregroundColor(Color.orange)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 4)
+        .background(Color.orange.opacity(0.08))
+        .accessibilityElement(children: .combine)
+    }
+
+    private var privacyCaptionText: String {
+        // Geohash DMs are NIP-17 gift-wrapped — always end-to-end encrypted,
+        // even though they carry no Noise session status. Mesh DMs earn the
+        // "encrypted" claim only once the Noise handshake has secured.
+        let isGeoDM = privateConversationModel.selectedPeerID?.isGeoDM == true
+        let noiseSecured: Bool = {
+            switch privateConversationModel.selectedHeaderState?.encryptionStatus {
+            case .noiseSecured, .noiseVerified: return true
+            default: return false
+            }
+        }()
+        if isGeoDM || noiseSecured {
+            return String(localized: "content.private.caption_encrypted", comment: "Caption above the private chat composer once the session is end-to-end encrypted")
+        }
+        return String(localized: "content.private.caption", comment: "Caption above the private chat composer before encryption is established")
     }
 }
 
