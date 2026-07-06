@@ -321,11 +321,29 @@ final class GossipSyncManager {
         delegate?.sendPacket(signed)
     }
 
-    private func sendRequestSync(to peerID: PeerID, types: SyncTypeFlags) {
+    /// Targeted fragment recovery: ask connected peers for the specific
+    /// fragment streams whose reassembly has stalled, instead of waiting on
+    /// the next periodic GCS fragment round to cover them.
+    func requestMissingFragments(fragmentIDs: [Data]) {
+        queue.async { [weak self] in
+            self?._requestMissingFragments(fragmentIDs)
+        }
+    }
+
+    private func _requestMissingFragments(_ fragmentIDs: [Data]) {
+        guard let filter = RequestSyncPacket.encodeFragmentIdFilter(fragmentIDs) else { return }
+        guard let connectedPeers = delegate?.getConnectedPeers(), !connectedPeers.isEmpty else { return }
+        SecureLogger.debug("Requesting \(fragmentIDs.count) stalled fragment stream(s) from \(connectedPeers.count) peer(s)", category: .sync)
+        for peerID in connectedPeers {
+            sendRequestSync(to: peerID, types: .fragment, fragmentIdFilter: filter)
+        }
+    }
+
+    private func sendRequestSync(to peerID: PeerID, types: SyncTypeFlags, fragmentIdFilter: String? = nil) {
         // Register the request for RSR validation
         requestSyncManager.registerRequest(to: peerID)
-        
-        let payload = buildGcsPayload(for: types)
+
+        let payload = buildGcsPayload(for: types, fragmentIdFilter: fragmentIdFilter)
         var recipient = Data()
         var temp = peerID.id
         while temp.count >= 2 && recipient.count < 8 {
@@ -402,9 +420,19 @@ final class GossipSyncManager {
         }
 
         if requestedTypes.contains(.fragment) {
+            // A fragment-ID filter narrows the diff to exactly the named
+            // fragment streams (targeted resync for stalled reassemblies)
+            // and bypasses the since-cursor for them; the GCS filter still
+            // excludes the pieces the requester already holds. Fragment
+            // payloads start with the 8-byte stream ID.
+            let fragmentIdFilter = RequestSyncPacket.decodeFragmentIdFilter(request.fragmentIdFilter)
             let frags = fragments.allPackets(isFresh: isPacketFresh)
             for pkt in frags {
-                if let since, pkt.timestamp < since { continue }
+                if let fragmentIdFilter {
+                    guard fragmentIdFilter.contains(Data(pkt.payload.prefix(8))) else { continue }
+                } else if let since, pkt.timestamp < since {
+                    continue
+                }
                 let idBytes = PacketIdUtil.computeId(pkt)
                 if !mightContain(idBytes) {
                     var toSend = pkt
@@ -463,7 +491,7 @@ final class GossipSyncManager {
     }
 
     // Build REQUEST_SYNC payload using current candidates and GCS params
-    private func buildGcsPayload(for types: SyncTypeFlags) -> Data {
+    private func buildGcsPayload(for types: SyncTypeFlags, fragmentIdFilter: String? = nil) -> Data {
         var candidates: [BitchatPacket] = []
         if types.contains(.announce) {
             for (_, pkt) in latestAnnouncementByPeer where isPacketFresh(pkt) {
@@ -489,7 +517,7 @@ final class GossipSyncManager {
         }
         if candidates.isEmpty {
             let p = GCSFilter.deriveP(targetFpr: config.gcsTargetFpr)
-            let req = RequestSyncPacket(p: p, m: 1, data: Data(), types: types)
+            let req = RequestSyncPacket(p: p, m: 1, data: Data(), types: types, fragmentIdFilter: fragmentIdFilter)
             return req.encode()
         }
 
@@ -510,7 +538,7 @@ final class GossipSyncManager {
         }
         let takeN = min(candidates.count, min(nMax, cap))
         if takeN <= 0 {
-            let req = RequestSyncPacket(p: p, m: 1, data: Data(), types: types)
+            let req = RequestSyncPacket(p: p, m: 1, data: Data(), types: types, fragmentIdFilter: fragmentIdFilter)
             return req.encode()
         }
         let included = Array(candidates.prefix(takeN))
@@ -528,7 +556,7 @@ final class GossipSyncManager {
         let sinceTimestamp: UInt64? = (covered < candidates.count && covered > 0)
             ? included[covered - 1].timestamp
             : nil
-        let req = RequestSyncPacket(p: params.p, m: params.m, data: params.data, types: types, sinceTimestamp: sinceTimestamp)
+        let req = RequestSyncPacket(p: params.p, m: params.m, data: params.data, types: types, sinceTimestamp: sinceTimestamp, fragmentIdFilter: fragmentIdFilter)
         return req.encode()
     }
 
