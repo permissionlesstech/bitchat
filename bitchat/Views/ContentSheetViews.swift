@@ -369,13 +369,7 @@ private struct ContentPrivateChatSheetView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 10)
                 .padding(.bottom, 12)
-                // Orange tint before themedSurface so it layers in front of the
-                // (opaque, in matrix) themed background rather than behind it.
-                // Glass has no opaque backing — themedSurface is a no-op there,
-                // so the wash needs more opacity to read over the backdrop
-                // gradient's blue/purple glows.
-                .background(Color.orange.opacity(theme.usesGlassChrome ? 0.14 : 0.06))
-                .themedSurface()
+                .modifier(PrivateHeaderChrome())
             }
 
             MessageListView(
@@ -475,6 +469,28 @@ private struct ContentPrivateChatSheetView: View {
             return String(localized: "content.private.caption_encrypted", comment: "Caption above the private chat composer once the session is end-to-end encrypted")
         }
         return String(localized: "content.private.caption", comment: "Caption above the private chat composer before encryption is established")
+    }
+}
+
+/// Chrome for the private-chat header. Matrix keeps its orange privacy wash
+/// over an opaque themed surface. Glass gets the same floating panel as the
+/// main header instead: an orange wash over the backdrop gradient reads as a
+/// muddy gray-beige band, and the DM signature is already carried by the
+/// orange lock, caption, and composer accents.
+private struct PrivateHeaderChrome: ViewModifier {
+    @Environment(\.appTheme) private var theme
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if theme.usesGlassChrome {
+            content.themedChromePanel(edge: .top)
+        } else {
+            // Orange tint before themedSurface so it layers in front of the
+            // opaque themed background rather than behind it.
+            content
+                .background(Color.orange.opacity(0.06))
+                .themedSurface()
+        }
     }
 }
 
