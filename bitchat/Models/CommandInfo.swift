@@ -16,6 +16,7 @@ enum CommandInfo: String, Identifiable {
     // suggesting a spelling the processor rejects teaches users dead ends.
     case block
     case clear
+    case group
     case help
     case hug
     case message = "msg"
@@ -33,6 +34,8 @@ enum CommandInfo: String, Identifiable {
         switch self {
         case .block, .hug, .message, .slap, .unblock, .favorite, .unfavorite:
             return "<" + String(localized: "content.input.nickname_placeholder") + ">"
+        case .group:
+            return "<" + String(localized: "content.input.group_placeholder") + ">"
         case .clear, .help, .who:
             return nil
         }
@@ -42,6 +45,7 @@ enum CommandInfo: String, Identifiable {
         switch self {
         case .block:        String(localized: "content.commands.block")
         case .clear:        String(localized: "content.commands.clear")
+        case .group:        String(localized: "content.commands.group")
         case .help:         String(localized: "content.commands.help")
         case .hug:          String(localized: "content.commands.hug")
         case .message:      String(localized: "content.commands.message")
@@ -55,11 +59,11 @@ enum CommandInfo: String, Identifiable {
 
     static func all(isGeoPublic: Bool, isGeoDM: Bool) -> [CommandInfo] {
         let baseCommands: [CommandInfo] = [.block, .unblock, .clear, .help, .hug, .message, .slap, .who]
-        // The processor rejects favorites in geohash contexts, so only
-        // suggest them where they actually work: mesh.
+        // The processor rejects favorites and groups in geohash contexts, so
+        // only suggest them where they actually work: mesh.
         if isGeoPublic || isGeoDM {
             return baseCommands
         }
-        return baseCommands + [.favorite, .unfavorite]
+        return baseCommands + [.favorite, .unfavorite, .group]
     }
 }

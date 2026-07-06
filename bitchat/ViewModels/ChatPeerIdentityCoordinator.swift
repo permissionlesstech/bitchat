@@ -323,6 +323,15 @@ final class ChatPeerIdentityCoordinator {
     func startPrivateChat(with peerID: PeerID) {
         guard peerID != context.myPeerID else { return }
 
+        // Group chats are virtual conversations: no peer identity, favorites,
+        // handshake, or message consolidation applies — just select the chat.
+        if peerID.isGroup {
+            context.selectedPrivateChatFingerprint = nil
+            context.beginPrivateChatSession(with: peerID)
+            context.markPrivateChatRead(peerID)
+            return
+        }
+
         let peerNickname = context.peerNickname(for: peerID) ?? "unknown"
 
         if context.unifiedIsBlocked(peerID) {

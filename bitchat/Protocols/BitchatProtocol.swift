@@ -72,6 +72,9 @@ enum NoisePayloadType: UInt8 {
     case privateMessage = 0x01      // Private chat message
     case readReceipt = 0x02         // Message was read
     case delivered = 0x03           // Message was delivered
+    // Private groups (0x04/0x05 reserved by other features)
+    case groupInvite = 0x06         // Creator-signed group state (invite)
+    case groupKeyUpdate = 0x07      // Creator-signed group state (key rotation / roster update)
     // Verification (QR-based OOB binding)
     case verifyChallenge = 0x10     // Verification challenge
     case verifyResponse  = 0x11     // Verification response
@@ -83,6 +86,8 @@ enum NoisePayloadType: UInt8 {
         case .privateMessage: return "privateMessage"
         case .readReceipt: return "readReceipt"
         case .delivered: return "delivered"
+        case .groupInvite: return "groupInvite"
+        case .groupKeyUpdate: return "groupKeyUpdate"
         case .verifyChallenge: return "verifyChallenge"
         case .verifyResponse: return "verifyResponse"
         case .vouch: return "vouch"
@@ -117,6 +122,9 @@ protocol BitchatDelegate: AnyObject {
     // Low-level events for better separation of concerns
     func didReceiveNoisePayload(from peerID: PeerID, type: NoisePayloadType, payload: Data, timestamp: Date)
 
+    // Encrypted group broadcast (opaque envelope; decrypted by the group coordinator)
+    func didReceiveGroupMessage(payload: Data, timestamp: Date)
+
     // Bluetooth state updates for user notifications
     func didUpdateBluetoothState(_ state: CBManagerState)
     func didReceivePublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date, messageID: String?)
@@ -133,6 +141,10 @@ extension BitchatDelegate {
     }
 
     func didReceiveNoisePayload(from peerID: PeerID, type: NoisePayloadType, payload: Data, timestamp: Date) {
+        // Default empty implementation
+    }
+
+    func didReceiveGroupMessage(payload: Data, timestamp: Date) {
         // Default empty implementation
     }
 

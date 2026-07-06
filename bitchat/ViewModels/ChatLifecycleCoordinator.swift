@@ -185,6 +185,13 @@ final class ChatLifecycleCoordinator {
     func markPrivateMessagesAsRead(from peerID: PeerID) {
         context.markChatAsRead(from: peerID)
 
+        // Group chats are keyed under a virtual group_ peerID; no member IS the
+        // conversation peer, so the receipt loops below (which gate on
+        // senderPeerID == peerID) must never emit a read/delivered receipt for
+        // one. This guard makes that explicit so a future refactor of the
+        // receipt matching can't silently start leaking receipts into groups.
+        guard !peerID.isGroup else { return }
+
         if peerID.isGeoDM,
            let recipientHex = context.nostrKeyMapping[peerID],
            case .location(let channel) = context.activeChannel,

@@ -1330,6 +1330,48 @@ final class BLEService: NSObject {
 
     // MARK: QR Verification over Noise
     
+    // MARK: Private Groups
+
+    /// Sends creator-signed group state (invite) 1:1 over the Noise session,
+    /// queueing behind a handshake when none is established yet.
+    func sendGroupInvite(_ statePayload: Data, to peerID: PeerID) {
+        sendNoisePayload(NoisePayload(type: .groupInvite, data: statePayload).encode(), to: peerID)
+    }
+
+    /// Sends creator-signed group state (key rotation / roster update) 1:1
+    /// over the Noise session.
+    func sendGroupKeyUpdate(_ statePayload: Data, to peerID: PeerID) {
+        sendNoisePayload(NoisePayload(type: .groupKeyUpdate, data: statePayload).encode(), to: peerID)
+    }
+
+    /// Broadcasts a sealed group message (MessageType 0x25) like a public
+    /// message: fire-and-flood with gossip-sync backfill. The outer packet is
+    /// intentionally unsigned — receivers authenticate the sender's Ed25519
+    /// signature inside the ciphertext, which still verifies for backfilled
+    /// copies long after the sender's announce has expired.
+    func broadcastGroupMessage(_ envelope: Data) {
+        guard !envelope.isEmpty else { return }
+        messageQueue.async { [weak self] in
+            guard let self else { return }
+            let packet = BitchatPacket(
+                type: MessageType.groupMessage.rawValue,
+                senderID: Data(hexString: self.myPeerID.id) ?? Data(),
+                recipientID: nil,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: envelope,
+                signature: nil,
+                ttl: self.messageTTL
+            )
+            // Pre-mark our own broadcast as processed to avoid handling a
+            // relayed self copy.
+            let dedupID = BLESelfBroadcastTracker.dedupID(for: packet)
+            self.messageDeduplicator.markProcessed(dedupID)
+            self.broadcastPacket(packet)
+            // Track our own broadcast for gossip sync
+            self.gossipSyncManager?.onPublicPacketSeen(packet)
+        }
+    }
+
     func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {
         let payload = VerificationService.shared.buildVerifyChallenge(noiseKeyHex: noiseKeyHex, nonceA: nonceA)
         sendNoisePayload(payload, to: peerID)
@@ -3447,6 +3489,9 @@ extension BLEService {
         case .prekeyBundle:
             handlePrekeyBundle(packet, from: senderID)
 
+        case .groupMessage:
+            handleGroupMessage(packet, from: senderID)
+
         case .leave:
             handleLeave(packet, from: senderID)
 
@@ -3707,6 +3752,26 @@ extension BLEService {
                 }
             }
         )
+    }
+
+    /// Group broadcasts are opaque ciphertext to this layer: track them for
+    /// gossip backfill and hand the payload to the UI layer, where the group
+    /// coordinator decrypts and authenticates against the roster. Non-members
+    /// still relay (generic broadcast relay path) but never decode.
+    private func handleGroupMessage(_ packet: BitchatPacket, from peerID: PeerID) {
+        let isBroadcastRecipient: Bool = {
+            guard let recipient = packet.recipientID else { return true }
+            return recipient.count == 8 && recipient.allSatisfy { $0 == 0xFF }
+        }()
+        guard isBroadcastRecipient, !packet.payload.isEmpty else { return }
+
+        gossipSyncManager?.onPublicPacketSeen(packet)
+
+        let payload = packet.payload
+        let timestamp = Date(timeIntervalSince1970: TimeInterval(packet.timestamp) / 1000)
+        notifyUI { [weak self] in
+            self?.deliverTransportEvent(.groupMessageReceived(payload: payload, timestamp: timestamp))
+        }
     }
 
     private func handleNoiseHandshake(_ packet: BitchatPacket, from peerID: PeerID) {

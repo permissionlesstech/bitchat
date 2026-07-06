@@ -208,7 +208,10 @@ struct GossipSyncManagerTests {
         #expect(allTypes.contains(.fragment))
         #expect(allTypes.contains(.fileTransfer))
         #expect(allTypes.contains(.prekeyBundle))
-        #expect(decoded.contains { $0.types == .publicMessages })
+        #expect(allTypes.contains(.groupMessage))
+        // The message schedule also asks for group messages (bit 10);
+        // responders that don't know the bit just ignore it.
+        #expect(decoded.contains { $0.types == SyncTypeFlags.publicMessages.union(.groupMessage) })
         #expect(decoded.contains { $0.types == .fragment })
         #expect(decoded.contains { $0.types == .fileTransfer })
         #expect(decoded.contains { $0.types == .prekeyBundle })

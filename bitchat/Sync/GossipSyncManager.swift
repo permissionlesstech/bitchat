@@ -73,6 +73,7 @@ final class GossipSyncManager {
         var stalePeerTimeoutSeconds: TimeInterval = 60.0
         var fragmentCapacity: Int = 600
         var fileTransferCapacity: Int = 200
+        var groupMessageCapacity: Int = 200
         var fragmentSyncIntervalSeconds: TimeInterval = 30.0
         var fileTransferSyncIntervalSeconds: TimeInterval = 60.0
         var messageSyncIntervalSeconds: TimeInterval = 15.0
@@ -95,6 +96,7 @@ final class GossipSyncManager {
     private var messages = PacketStore()
     private var fragments = PacketStore()
     private var fileTransfers = PacketStore()
+    private var groupMessages = PacketStore()
     private var latestAnnouncementByPeer: [PeerID: BitchatPacket] = [:]
     // Latest verified prekey bundle per owner. Unlike announces, bundles are
     // NOT dropped on leave/stale peer: their whole purpose is reaching a
@@ -120,7 +122,13 @@ final class GossipSyncManager {
         )
         var schedules: [SyncSchedule] = []
         if config.seenCapacity > 0 && config.messageSyncIntervalSeconds > 0 {
-            schedules.append(SyncSchedule(types: .publicMessages, interval: config.messageSyncIntervalSeconds, lastSent: .distantPast))
+            // Group messages ride the public-message cadence; old clients
+            // ignore the extended bit and answer with announces/messages only.
+            var messageTypes: SyncTypeFlags = .publicMessages
+            if config.groupMessageCapacity > 0 {
+                messageTypes.formUnion(.groupMessage)
+            }
+            schedules.append(SyncSchedule(types: messageTypes, interval: config.messageSyncIntervalSeconds, lastSent: .distantPast))
         }
         if config.fragmentCapacity > 0 && config.fragmentSyncIntervalSeconds > 0 {
             schedules.append(SyncSchedule(types: .fragment, interval: config.fragmentSyncIntervalSeconds, lastSent: .distantPast))
@@ -161,6 +169,9 @@ final class GossipSyncManager {
             guard let self = self else { return }
 
             var types: SyncTypeFlags = .publicMessages
+            if self.config.groupMessageCapacity > 0 {
+                types.formUnion(.groupMessage)
+            }
             if self.config.fragmentCapacity > 0 && self.config.fragmentSyncIntervalSeconds > 0 {
                 types.formUnion(.fragment)
             }
@@ -186,7 +197,9 @@ final class GossipSyncManager {
     private func isPacketFresh(_ packet: BitchatPacket) -> Bool {
         let maxAgeSeconds: TimeInterval
         switch packet.type {
-        case MessageType.message.rawValue:
+        // Group messages share the whole-message window: members off the mesh
+        // for a while should backfill their crew's history like public chat.
+        case MessageType.message.rawValue, MessageType.groupMessage.rawValue:
             maxAgeSeconds = config.publicMessageMaxAgeSeconds
         case MessageType.prekeyBundle.rawValue:
             maxAgeSeconds = config.prekeyBundleMaxAgeSeconds
@@ -268,6 +281,13 @@ final class GossipSyncManager {
                     || latestPrekeyBundleByPeer.count < max(1, config.prekeyBundleCapacity) else { return }
             let idHex = PacketIdUtil.computeId(packet).hexEncodedString()
             latestPrekeyBundleByPeer[owner] = (id: idHex, packet: packet)
+        case .groupMessage:
+            // Opaque ciphertext to non-members; carried and served like any
+            // other broadcast so members get backfill from any relay.
+            guard isBroadcastRecipient else { return }
+            guard isPacketFresh(packet) else { return }
+            let idHex = PacketIdUtil.computeId(packet).hexEncodedString()
+            groupMessages.insert(idHex: idHex, packet: packet, capacity: max(1, config.groupMessageCapacity))
         default:
             break
         }
@@ -426,6 +446,20 @@ final class GossipSyncManager {
                 }
             }
         }
+
+        if requestedTypes.contains(.groupMessage) {
+            let groupPkts = groupMessages.allPackets(isFresh: isPacketFresh)
+            for pkt in groupPkts {
+                if let since, pkt.timestamp < since { continue }
+                let idBytes = PacketIdUtil.computeId(pkt)
+                if !mightContain(idBytes) {
+                    var toSend = pkt
+                    toSend.ttl = 0
+                    toSend.isRSR = true // Mark as solicited response
+                    delegate?.sendPacket(to: peerID, packet: toSend)
+                }
+            }
+        }
     }
 
     // Build REQUEST_SYNC payload using current candidates and GCS params
@@ -449,6 +483,9 @@ final class GossipSyncManager {
             for (_, pair) in latestPrekeyBundleByPeer where isPacketFresh(pair.packet) {
                 candidates.append(pair.packet)
             }
+        }
+        if types.contains(.groupMessage) {
+            candidates.append(contentsOf: groupMessages.allPackets(isFresh: isPacketFresh))
         }
         if candidates.isEmpty {
             let p = GCSFilter.deriveP(targetFpr: config.gcsTargetFpr)
@@ -512,6 +549,7 @@ final class GossipSyncManager {
         latestPrekeyBundleByPeer = latestPrekeyBundleByPeer.filter { _, pair in
             isPacketFresh(pair.packet)
         }
+        groupMessages.removeExpired(isFresh: isPacketFresh)
     }
 
     // MARK: - Archive (public message persistence)
@@ -609,6 +647,7 @@ final class GossipSyncManager {
         }
         fragments.remove { PeerID(hexData: $0.senderID) == peerID }
         fileTransfers.remove { PeerID(hexData: $0.senderID) == peerID }
+        groupMessages.remove { PeerID(hexData: $0.senderID) == peerID }
     }
 }
 

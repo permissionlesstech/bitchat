@@ -34,6 +34,9 @@ public struct PeerID: Equatable, Hashable, Sendable {
         case geoDM = "nostr_"
         /// `"nostr:"` (+ 8 characters hex)
         case geoChat = "nostr:"
+        /// `"group_"` (+ 32 characters hex) — virtual conversation ID for a
+        /// private group (16-byte group ID). Never routed to a single peer.
+        case group = "group_"
     }
 
     public let prefix: Prefix
@@ -96,6 +99,22 @@ public extension PeerID {
     }
 }
 
+// MARK: - Group Conversation Helpers
+
+public extension PeerID {
+    /// Convenience init to create a virtual group conversation PeerID from a
+    /// 16-byte group ID ("group_" + 32 hex characters).
+    init(groupID: Data) {
+        self.init(str: Prefix.group.rawValue + groupID.hexEncodedString())
+    }
+
+    /// The 16-byte group ID behind a "group_" PeerID, if this is one.
+    var groupIDData: Data? {
+        guard isGroup, bare.count == 32 else { return nil }
+        return Data(hexString: bare)
+    }
+}
+
 // MARK: - Noise Public Key Helpers
 
 public extension PeerID {
@@ -141,6 +160,11 @@ public extension PeerID {
     /// Returns true if `id` starts with "`nostr_`"
     var isGeoDM: Bool {
         prefix == .geoDM
+    }
+
+    /// Returns true if `id` starts with "`group_`"
+    var isGroup: Bool {
+        prefix == .group
     }
 
     func toPercentEncoded() -> String {

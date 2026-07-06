@@ -54,6 +54,15 @@ protocol CommandContextProvider: AnyObject {
     /// Toggles the favorite via the unified peer flow, which persists by the
     /// real noise key and notifies the peer over mesh or Nostr.
     func toggleFavorite(peerID: PeerID)
+
+    // MARK: - Groups
+    // Group logic lives in `ChatGroupCoordinator`; these forward the parsed
+    // /group subcommands.
+    func groupCreate(named name: String) -> CommandResult
+    func groupInvite(nickname: String) -> CommandResult
+    func groupRemove(nickname: String) -> CommandResult
+    func groupLeave() -> CommandResult
+    func groupList() -> CommandResult
 }
 
 /// Processes chat commands in a focused, efficient way
@@ -100,6 +109,9 @@ final class CommandProcessor {
             return handleBlock(args)
         case "/unblock":
             return handleUnblock(args)
+        case "/group":
+            if inGeoPublic || inGeoDM { return .error(message: "groups are only for mesh peers in #mesh") }
+            return handleGroup(args)
         case "/fav":
             if inGeoPublic || inGeoDM { return .error(message: "favorites are only for mesh peers in #mesh") }
             return handleFavorite(args, add: true)
@@ -125,6 +137,9 @@ final class CommandProcessor {
     /slap @name — slap with a large trout
     /block @name · /unblock @name
     /fav @name · /unfav @name — favorites (mesh only)
+    /group create <name> — start an encrypted group
+    /group invite @name · /group remove @name — manage members (creator)
+    /group leave · /group list — leave or list your groups
     /help — this list
     """
 
@@ -331,6 +346,32 @@ final class CommandProcessor {
         return .error(message: "cannot unblock \(nickname): not found")
     }
     
+    private static let groupUsage = "usage: /group create <name> · invite @name · remove @name · leave · list"
+
+    private func handleGroup(_ args: String) -> CommandResult {
+        let parts = args.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+        guard let subcommand = parts.first else {
+            return .error(message: Self.groupUsage)
+        }
+        let rest = parts.count > 1 ? String(parts[1]) : ""
+        guard let provider = contextProvider else { return .handled }
+
+        switch subcommand {
+        case "create":
+            return provider.groupCreate(named: rest)
+        case "invite":
+            return provider.groupInvite(nickname: rest)
+        case "remove":
+            return provider.groupRemove(nickname: rest)
+        case "leave":
+            return provider.groupLeave()
+        case "list":
+            return provider.groupList()
+        default:
+            return .error(message: Self.groupUsage)
+        }
+    }
+
     private func handleFavorite(_ args: String, add: Bool) -> CommandResult {
         let targetName = args.trimmed
         guard !targetName.isEmpty else {

@@ -25,9 +25,11 @@ public enum MessageType: UInt8 {
     case fragment = 0x20        // Single fragment type for large messages
     case fileTransfer = 0x22    // Binary file/audio/image payloads
 
-    // 0x23, 0x25-0x28 reserved for in-flight protocol work.
+    // 0x23/0x26-0x28 reserved by other in-flight features.
     case prekeyBundle = 0x24    // Signed batch of one-time prekeys (gossiped)
-    
+    case groupMessage = 0x25    // Group-encrypted broadcast (cleartext group ID, ChaChaPoly body)
+
+
     public var description: String {
         switch self {
         case .announce: return "announce"
@@ -40,6 +42,7 @@ public enum MessageType: UInt8 {
         case .fragment: return "fragment"
         case .fileTransfer: return "fileTransfer"
         case .prekeyBundle: return "prekeyBundle"
+        case .groupMessage: return "groupMessage"
         }
     }
 }
