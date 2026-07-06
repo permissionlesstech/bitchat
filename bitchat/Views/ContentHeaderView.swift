@@ -207,9 +207,12 @@ struct ContentHeaderView: View {
                     .environmentObject(verificationModel)
             }
         }
-        // minHeight, not height: headerLineLimit allows two lines at
-        // accessibility text sizes, which a fixed single-line height clips.
-        .frame(minHeight: headerHeight)
+        // Fixed height is load-bearing: children fill the bar with
+        // .frame(maxHeight: .infinity) tap targets, so an open-ended
+        // minHeight lets the header expand to swallow the whole screen.
+        // headerHeight is a @ScaledMetric, so it still grows with Dynamic
+        // Type.
+        .frame(height: headerHeight)
         .padding(.horizontal, 12)
         .sheet(isPresented: $appChromeModel.isLocationChannelsSheetPresented) {
             LocationChannelsSheet(isPresented: $appChromeModel.isLocationChannelsSheetPresented)
