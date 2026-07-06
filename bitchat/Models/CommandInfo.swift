@@ -25,6 +25,8 @@ enum CommandInfo: String, Identifiable {
     case who
     case favorite = "fav"
     case unfavorite = "unfav"
+    case ping
+    case trace
 
     var id: String { rawValue }
 
@@ -32,7 +34,7 @@ enum CommandInfo: String, Identifiable {
 
     var placeholder: String? {
         switch self {
-        case .block, .hug, .message, .slap, .unblock, .favorite, .unfavorite:
+        case .block, .hug, .message, .slap, .unblock, .favorite, .unfavorite, .ping, .trace:
             return "<" + String(localized: "content.input.nickname_placeholder") + ">"
         case .group:
             return "<" + String(localized: "content.input.group_placeholder") + ">"
@@ -54,16 +56,18 @@ enum CommandInfo: String, Identifiable {
         case .who:          String(localized: "content.commands.who")
         case .favorite:     String(localized: "content.commands.favorite")
         case .unfavorite:   String(localized: "content.commands.unfavorite")
+        case .ping:         String(localized: "content.commands.ping")
+        case .trace:        String(localized: "content.commands.trace")
         }
     }
 
     static func all(isGeoPublic: Bool, isGeoDM: Bool) -> [CommandInfo] {
         let baseCommands: [CommandInfo] = [.block, .unblock, .clear, .help, .hug, .message, .slap, .who]
-        // The processor rejects favorites and groups in geohash contexts, so
-        // only suggest them where they actually work: mesh.
+        // The processor rejects favorites, groups and mesh diagnostics in
+        // geohash contexts, so only suggest them where they actually work: mesh.
         if isGeoPublic || isGeoDM {
             return baseCommands
         }
-        return baseCommands + [.favorite, .unfavorite, .group]
+        return baseCommands + [.favorite, .unfavorite, .group, .ping, .trace]
     }
 }

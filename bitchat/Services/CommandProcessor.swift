@@ -22,6 +22,17 @@ struct CommandGeoParticipant {
     let displayName: String
 }
 
+/// The conversation a command was typed into, captured when the command is
+/// issued so deferred output (e.g. an async /ping result, which can arrive
+/// many seconds later) lands there even if the user switches chats first.
+enum CommandOutputDestination: Equatable {
+    /// The #mesh public timeline. Commands that defer output (/ping) are
+    /// mesh-only, so a non-DM origin is always the mesh timeline.
+    case meshTimeline
+    /// The private chat that was open when the command was typed.
+    case privateChat(PeerID)
+}
+
 /// Protocol defining what CommandProcessor needs from its context.
 /// This breaks the circular dependency between CommandProcessor and ChatViewModel.
 @MainActor
@@ -49,6 +60,13 @@ protocol CommandContextProvider: AnyObject {
     // MARK: - System Messages
     func addLocalPrivateSystemMessage(_ content: String, to peerID: PeerID)
     func addPublicSystemMessage(_ content: String)
+    /// The conversation the user is typing into right now. Commands that
+    /// finish asynchronously capture this BEFORE starting async work, so a
+    /// chat switch cannot misroute their deferred output.
+    func currentCommandDestination() -> CommandOutputDestination
+    /// Routes deferred command output (e.g. an async /ping result) into the
+    /// conversation captured when the command was issued.
+    func addCommandOutput(_ content: String, to destination: CommandOutputDestination)
 
     // MARK: - Favorites
     /// Toggles the favorite via the unified peer flow, which persists by the
@@ -118,6 +136,12 @@ final class CommandProcessor {
         case "/unfav":
             if inGeoPublic || inGeoDM { return .error(message: "favorites are only for mesh peers in #mesh") }
             return handleFavorite(args, add: false)
+        case "/ping":
+            if inGeoPublic || inGeoDM { return .error(message: "ping only works for mesh peers in #mesh") }
+            return handlePing(args)
+        case "/trace":
+            if inGeoPublic || inGeoDM { return .error(message: "trace only works for mesh peers in #mesh") }
+            return handleTrace(args)
         case "/help":
             return .success(message: Self.helpText)
         default:
@@ -140,6 +164,8 @@ final class CommandProcessor {
     /group create <name> — start an encrypted group
     /group invite @name · /group remove @name — manage members (creator)
     /group leave · /group list — leave or list your groups
+    /ping @name — measure round-trip time (mesh only)
+    /trace @name — estimated mesh path (mesh only)
     /help — this list
     """
 
@@ -370,6 +396,76 @@ final class CommandProcessor {
         default:
             return .error(message: Self.groupUsage)
         }
+    }
+
+    // MARK: - Mesh Diagnostics
+
+    private enum MeshPeerResolution {
+        case resolved(peerID: PeerID, nickname: String)
+        case failed(CommandResult)
+    }
+
+    /// Resolves a mesh peer for /ping and /trace. Geohash identities are
+    /// rejected — diagnostics measure the BLE mesh, not Nostr.
+    private func resolveMeshPeer(_ args: String, command: String) -> MeshPeerResolution {
+        let targetName = args.trimmed
+        guard !targetName.isEmpty else {
+            return .failed(.error(message: "usage: /\(command) <nickname>"))
+        }
+        let nickname = targetName.hasPrefix("@") ? String(targetName.dropFirst()) : targetName
+        guard let peerID = contextProvider?.getPeerIDForNickname(nickname),
+              !peerID.isGeoDM, !peerID.isGeoChat else {
+            return .failed(.error(message: "cannot \(command) \(nickname): not found on mesh"))
+        }
+        return .resolved(peerID: peerID, nickname: nickname)
+    }
+
+    private func handlePing(_ args: String) -> CommandResult {
+        let target: (peerID: PeerID, nickname: String)
+        switch resolveMeshPeer(args, command: "ping") {
+        case .resolved(let peerID, let nickname): target = (peerID, nickname)
+        case .failed(let result): return result
+        }
+
+        let nickname = target.nickname
+        let currentProvider = contextProvider
+        // Capture the origin conversation now: the pong can arrive up to
+        // meshPingTimeoutSeconds later, and reading the selected chat at
+        // callback time would misroute the result after a chat switch.
+        let destination = contextProvider?.currentCommandDestination() ?? .meshTimeline
+        meshService?.sendMeshPing(to: target.peerID) { [weak currentProvider] result in
+            let provider = currentProvider
+            guard let result else {
+                provider?.addCommandOutput("no reply from \(nickname)", to: destination)
+                return
+            }
+            let hopText: String = result.hops.map { hops in
+                hops == 1 ? " · direct (1 hop)" : " · \(hops) hops"
+            } ?? ""
+            provider?.addCommandOutput("pong from \(nickname): \(result.rttMs) ms\(hopText)", to: destination)
+        }
+        return .success(message: "pinging \(nickname)…")
+    }
+
+    private func handleTrace(_ args: String) -> CommandResult {
+        let target: (peerID: PeerID, nickname: String)
+        switch resolveMeshPeer(args, command: "trace") {
+        case .resolved(let peerID, let nickname): target = (peerID, nickname)
+        case .failed(let result): return result
+        }
+
+        guard let mesh = meshService,
+              let intermediates = mesh.computeMeshPath(to: target.peerID) else {
+            return .success(message: "no known path to \(target.nickname)")
+        }
+        // Graph-derived from gossiped neighbor claims, not route-recorded —
+        // present it as an estimate.
+        let hopNames = intermediates.map { hop in
+            mesh.peerNickname(peerID: hop) ?? "\(hop.id.prefix(8))…"
+        }
+        let chain = (["you"] + hopNames + [target.nickname]).joined(separator: " → ")
+        let hops = intermediates.count + 1
+        return .success(message: "estimated path: \(chain) (\(hops) hop\(hops == 1 ? "" : "s"))")
     }
 
     private func handleFavorite(_ args: String, add: Bool) -> CommandResult {

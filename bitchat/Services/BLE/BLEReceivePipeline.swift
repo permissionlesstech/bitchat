@@ -53,9 +53,14 @@ struct BLEReceivePipeline {
             // deterministic relay treatment instead of the broadcast clamp.
             // Directed nostrCarrier uplinks (mesh-only peer -> gateway) need
             // the same multi-hop treatment to reach a non-adjacent gateway.
+            // Ping/pong diagnostics also ride it: probes need the same
+            // deterministic multi-hop relay as DMs (always relay, jitter,
+            // no TTL cap) so RTT and hop counts reflect the real path.
             isDirectedEncrypted: (packet.type == MessageType.noiseEncrypted.rawValue
                 || packet.type == MessageType.courierEnvelope.rawValue
-                || packet.type == MessageType.nostrCarrier.rawValue) && packet.recipientID != nil,
+                || packet.type == MessageType.nostrCarrier.rawValue
+                || packet.type == MessageType.ping.rawValue
+                || packet.type == MessageType.pong.rawValue) && packet.recipientID != nil,
             isFragment: packet.type == MessageType.fragment.rawValue,
             isDirectedFragment: packet.type == MessageType.fragment.rawValue && packet.recipientID != nil,
             isHandshake: packet.type == MessageType.noiseHandshake.rawValue,

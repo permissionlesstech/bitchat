@@ -435,6 +435,8 @@ private final class MockCommandContextProvider: CommandContextProvider {
     private(set) var sentPublicRawMessages: [String] = []
     private(set) var localPrivateSystemMessages: [(content: String, peerID: PeerID)] = []
     private(set) var publicSystemMessages: [String] = []
+    private(set) var commandOutputs: [String] = []
+    private(set) var commandOutputDestinations: [CommandOutputDestination] = []
     private(set) var toggledFavorites: [PeerID] = []
     private(set) var favoriteNotifications: [(peerID: PeerID, isFavorite: Bool)] = []
 
@@ -483,6 +485,18 @@ private final class MockCommandContextProvider: CommandContextProvider {
 
     func addPublicSystemMessage(_ content: String) {
         publicSystemMessages.append(content)
+    }
+
+    func currentCommandDestination() -> CommandOutputDestination {
+        if let peerID = selectedPrivateChatPeer {
+            return .privateChat(peerID)
+        }
+        return .meshTimeline
+    }
+
+    func addCommandOutput(_ content: String, to destination: CommandOutputDestination) {
+        commandOutputs.append(content)
+        commandOutputDestinations.append(destination)
     }
 
     func toggleFavorite(peerID: PeerID) {

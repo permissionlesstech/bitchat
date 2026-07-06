@@ -1552,6 +1552,33 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         }
     }
 
+    /// Origin conversation for deferred command output, captured when the
+    /// command is issued (before any async work starts).
+    @MainActor
+    func currentCommandDestination() -> CommandOutputDestination {
+        if let peerID = selectedPrivateChatPeer {
+            return .privateChat(peerID)
+        }
+        // Deferring commands (/ping) are rejected in geohash channels, so a
+        // non-DM origin is always the #mesh timeline.
+        return .meshTimeline
+    }
+
+    /// Routes deferred command output (async /ping results) into the
+    /// conversation captured at issue time, immune to chat switches in the
+    /// meantime. A DM result lands in the origin chat's history even if that
+    /// chat is no longer selected (or was cleared — it then reappears as the
+    /// first message when the chat is reopened).
+    @MainActor
+    func addCommandOutput(_ content: String, to destination: CommandOutputDestination) {
+        switch destination {
+        case .privateChat(let peerID):
+            addLocalPrivateSystemMessage(content, to: peerID)
+        case .meshTimeline:
+            publicConversationCoordinator.addMeshOnlySystemMessage(content)
+        }
+    }
+
     // MARK: - Message Reception
 
     @MainActor

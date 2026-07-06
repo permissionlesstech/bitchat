@@ -5171,6 +5171,54 @@
         }
       }
     },
+    "app_info.network.title" : {
+      "comment" : "Section header for network diagnostics in the app info sheet",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "network"
+          }
+        }
+      }
+    },
+    "app_info.network.topology.description" : {
+      "comment" : "Row description for the mesh topology map",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "map of peers and links learned from mesh announces"
+          }
+        }
+      }
+    },
+    "app_info.network.topology.hint" : {
+      "comment" : "Accessibility hint for the mesh topology row",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "opens the mesh topology map"
+          }
+        }
+      }
+    },
+    "app_info.network.topology.title" : {
+      "comment" : "Row title opening the mesh topology map",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh topology"
+          }
+        }
+      }
+    },
     "app_info.privacy.ephemeral.description" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -15459,6 +15507,18 @@
         }
       }
     },
+    "content.commands.ping" : {
+      "comment" : "Description of the /ping command in the suggestions panel",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "measure round-trip time to a mesh peer"
+          }
+        }
+      }
+    },
     "content.commands.slap" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -15634,6 +15694,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "用鱒魚拍某人"
+          }
+        }
+      }
+    },
+    "content.commands.trace" : {
+      "comment" : "Description of the /trace command in the suggestions panel",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "estimate the mesh path to a peer"
           }
         }
       }
@@ -35705,6 +35777,66 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在啟動 tor..."
+          }
+        }
+      }
+    },
+    "topology.caption" : {
+      "comment" : "Caption under the mesh topology map",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "estimated from gossiped neighbor lists (up to 10 per peer) — your device is highlighted"
+          }
+        }
+      }
+    },
+    "topology.empty" : {
+      "comment" : "Empty state of the mesh topology map",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no mesh links yet — the map fills in as peer announces arrive"
+          }
+        }
+      }
+    },
+    "topology.refresh" : {
+      "comment" : "Accessibility label of the topology refresh button",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "refresh topology"
+          }
+        }
+      }
+    },
+    "topology.summary" : {
+      "comment" : "Topology map summary: number of peers and links",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$ld peers · %2$ld links"
+          }
+        }
+      }
+    },
+    "topology.title" : {
+      "comment" : "Title of the mesh topology map sheet",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh topology"
           }
         }
       }

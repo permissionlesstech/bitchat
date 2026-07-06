@@ -34,6 +34,13 @@ final class MeshTopologyTracker {
         }
     }
 
+    /// Raw directed neighbor claims, for diagnostics (topology map, /trace).
+    /// Callers treat the claims as advisory: announces cap `directNeighbors`
+    /// at 10, so an edge may be claimed by only one of its endpoints.
+    func adjacencySnapshot() -> [Data: Set<Data>] {
+        queue.sync { claims }
+    }
+
     func removePeer(_ data: Data?) {
         guard let peer = sanitize(data) else { return }
         queue.sync(flags: .barrier) {

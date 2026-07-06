@@ -59,6 +59,28 @@ final class AppChromeModel: ObservableObject {
         isAppInfoPresented = true
     }
 
+    /// Builds the mesh topology map model from the transport's gossiped
+    /// graph plus the live nickname table. Unknown nodes (heard about via a
+    /// neighbor claim but never announced to us) fall back to a short ID.
+    func meshTopologyDisplayModel() -> MeshTopologyDisplayModel {
+        let mesh = chatViewModel.meshService
+        guard let snapshot = mesh.currentMeshTopology() else { return .empty }
+        let nicknames = mesh.getPeerNicknames()
+
+        let nodes = snapshot.nodes.map { peerID -> MeshTopologyDisplayModel.Node in
+            let isSelf = peerID == snapshot.localPeerID
+            let label: String
+            if isSelf {
+                label = chatViewModel.nickname
+            } else {
+                label = nicknames[peerID] ?? "\(peerID.id.prefix(8))…"
+            }
+            return MeshTopologyDisplayModel.Node(id: peerID.id, label: label, isSelf: isSelf)
+        }
+        let edges = snapshot.edges.map { ($0.a.id, $0.b.id) }
+        return MeshTopologyDisplayModel(nodes: nodes, edges: edges)
+    }
+
     func triggerScreenshotPrivacyWarning() {
         showScreenshotPrivacyWarning = true
     }

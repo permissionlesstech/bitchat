@@ -25,12 +25,16 @@ public enum MessageType: UInt8 {
     case fragment = 0x20        // Single fragment type for large messages
     case fileTransfer = 0x22    // Binary file/audio/image payloads
 
-    // 0x23/0x26/0x27 reserved by other in-flight features.
+    // 0x23 reserved by other in-flight features.
     case prekeyBundle = 0x24    // Signed batch of one-time prekeys (gossiped)
     case groupMessage = 0x25    // Group-encrypted broadcast (cleartext group ID, ChaChaPoly body)
+    // Mesh diagnostics
+    case ping = 0x26            // Directed echo request (nonce + origin TTL)
+    case pong = 0x27            // Directed echo reply (echoed nonce + origin TTL)
     // Gateway mode: signed Nostr event ferried between a mesh-only peer and
     // an internet gateway peer.
     case nostrCarrier = 0x28
+
 
 
     public var description: String {
@@ -46,6 +50,8 @@ public enum MessageType: UInt8 {
         case .fileTransfer: return "fileTransfer"
         case .prekeyBundle: return "prekeyBundle"
         case .groupMessage: return "groupMessage"
+        case .ping: return "ping"
+        case .pong: return "pong"
         case .nostrCarrier: return "nostrCarrier"
         }
     }

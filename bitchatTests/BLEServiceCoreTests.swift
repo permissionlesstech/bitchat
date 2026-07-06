@@ -261,6 +261,69 @@ struct BLEServiceCoreTests {
         #expect(WifiBulkPolicy.shouldOffer(viaShort, enabled: true))
         #expect(WifiBulkPolicy.shouldOffer(viaFull, enabled: true))
     }
+
+    /// Pings are unsigned, so their claimed sender is attacker-controlled.
+    /// The pong budget must be keyed on the ingress link (the directly
+    /// connected peer that delivered the packet): rotating forged sender IDs
+    /// over one link exhausts one budget instead of resetting it, so a single
+    /// malicious link cannot turn /ping into an amplification primitive.
+    @Test
+    func meshPingResponseBudget_isPerIngressLinkNotClaimedSender() async throws {
+        let ble = makeService()
+        let outbound = OutboundPacketTap()
+        ble._test_onOutboundPacket = outbound.record
+
+        let link = PeerID(str: "1122334455667788")
+        let budget = TransportConfig.meshPingInboundMaxPerLink
+        let myRecipientData = try #require(Data(hexString: ble.myPeerID.id))
+
+        for i in 0..<(budget * 2) {
+            // A fresh forged sender for every ping, all arriving on one link.
+            let forgedSender = PeerID(str: String(format: "%016x", 0xA0_0000 + i))
+            var nonce = Data(repeating: 0, count: MeshPingPayload.nonceLength)
+            nonce[0] = UInt8(i)
+            let payload = try #require(MeshPingPayload(nonce: nonce, originTTL: 7))
+            let packet = BitchatPacket(
+                type: MessageType.ping.rawValue,
+                senderID: Data(hexString: forgedSender.id) ?? Data(),
+                recipientID: myRecipientData,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: payload.encode(),
+                signature: nil,
+                ttl: 7
+            )
+            ble._test_handlePacket(packet, fromPeerID: link, preseedPeer: false)
+        }
+
+        let reachedBudget = await TestHelpers.waitUntil(
+            { outbound.count(ofType: .pong) >= budget },
+            timeout: TestConstants.defaultTimeout
+        )
+        #expect(reachedBudget)
+        // Give any over-budget pong a chance to surface, then confirm the
+        // rotated sender IDs never bought a sixth response.
+        let exceededBudget = await TestHelpers.waitUntil(
+            { outbound.count(ofType: .pong) > budget },
+            timeout: TestConstants.shortTimeout
+        )
+        #expect(!exceededBudget)
+        #expect(outbound.count(ofType: .pong) == budget)
+    }
+}
+
+/// Thread-safe capture of packets leaving the service under test.
+private final class OutboundPacketTap {
+    private let lock = NSLock()
+    private var packets: [BitchatPacket] = []
+
+    func record(_ packet: BitchatPacket) {
+        lock.lock(); packets.append(packet); lock.unlock()
+    }
+
+    func count(ofType type: MessageType) -> Int {
+        lock.lock(); defer { lock.unlock() }
+        return packets.filter { $0.type == type.rawValue }.count
+    }
 }
 
 private func makeService() -> BLEService {
