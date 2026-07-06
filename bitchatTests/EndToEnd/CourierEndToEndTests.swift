@@ -67,9 +67,9 @@ struct CourierEndToEndTests {
         func didReceivePublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date, messageID: String?) {}
     }
 
-    private func makeService() -> BLEService {
+    private func makeService(identityManager: MockIdentityManager? = nil) -> BLEService {
         let keychain = MockKeychain()
-        let identityManager = MockIdentityManager(keychain)
+        let identityManager = identityManager ?? MockIdentityManager(keychain)
         let idBridge = NostrIdentityBridge(keychain: MockKeychainHelper())
         let service = BLEService(
             keychain: keychain,
@@ -175,6 +175,75 @@ struct CourierEndToEndTests {
         let message = try #require(PrivateMessagePacket.decode(from: delivered.payload))
         #expect(message.messageID == "courier-msg-1")
         #expect(message.content == "the camp moved north")
+    }
+
+    @Test func courieredMailFromBlockedSenderIsDropped() async throws {
+        let alice = makeService()
+        let carol = makeService()
+        let bobIdentity = MockIdentityManager(MockKeychain())
+        let bob = makeService(identityManager: bobIdentity)
+        carol.courierDepositPolicy = { _ in true }
+
+        let bobDelegate = NoiseCaptureDelegate()
+        bob.delegate = bobDelegate
+        let aliceOut = PacketTap()
+        alice._test_onOutboundPacket = aliceOut.record
+        let carolOut = PacketTap()
+        carol._test_onOutboundPacket = carolOut.record
+        let bobOut = PacketTap()
+        bob._test_onOutboundPacket = bobOut.record
+
+        preseedConnectedPeer(carol, in: alice)
+
+        // Bob blocked Alice by her stable Noise identity while she was away.
+        bobIdentity.setBlocked(alice.noiseStaticPublicKeyData().sha256Fingerprint(), isBlocked: true)
+
+        #expect(alice.sendCourierMessage(
+            "you should not see this",
+            messageID: "courier-msg-blocked-sender",
+            recipientNoiseKey: bob.noiseStaticPublicKeyData(),
+            via: [carol.myPeerID]
+        ))
+        let deposited = await TestHelpers.waitUntil(
+            { aliceOut.first(ofType: .courierEnvelope) != nil },
+            timeout: TestConstants.defaultTimeout
+        )
+        #expect(deposited)
+        let depositPacket = try #require(aliceOut.first(ofType: .courierEnvelope))
+
+        carol._test_handlePacket(depositPacket, fromPeerID: alice.myPeerID)
+        let carried = await TestHelpers.waitUntil(
+            { !carol.courierStore.isEmpty },
+            timeout: TestConstants.defaultTimeout
+        )
+        #expect(carried)
+
+        bob.sendBroadcastAnnounce()
+        let announced = await TestHelpers.waitUntil(
+            { bobOut.first(ofType: .announce) != nil },
+            timeout: TestConstants.defaultTimeout
+        )
+        #expect(announced)
+        let announcePacket = try #require(bobOut.first(ofType: .announce))
+        carol._test_handlePacket(announcePacket, fromPeerID: bob.myPeerID, preseedPeer: false)
+
+        let handedOver = await TestHelpers.waitUntil(
+            { carolOut.first(ofType: .courierEnvelope) != nil },
+            timeout: TestConstants.defaultTimeout
+        )
+        #expect(handedOver)
+        let handoverPacket = try #require(carolOut.first(ofType: .courierEnvelope))
+
+        // Bob opens the envelope — but the sealed sender is blocked, and it
+        // must never reach the UI. The live block check can't cover this: the
+        // sender is absent from Bob's registry, so no fingerprint resolves at
+        // delivery time.
+        bob._test_handlePacket(handoverPacket, fromPeerID: carol.myPeerID)
+        let delivered = await TestHelpers.waitUntil(
+            { !bobDelegate.snapshot().isEmpty },
+            timeout: TestConstants.shortTimeout
+        )
+        #expect(!delivered)
     }
 
     @Test func unverifiedAnnounceDoesNotTriggerCourierHandover() async throws {

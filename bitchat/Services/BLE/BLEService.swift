@@ -2570,6 +2570,13 @@ extension BLEService {
                 SecureLogger.warning("⚠️ Courier envelope carried unsupported payload type", category: .session)
                 return
             }
+            // Couriered mail arrives while the sender is absent, so the UI's
+            // block check can't resolve their fingerprint from a live session.
+            // Gate here, where the full static key is in hand.
+            guard !identityManager.isBlocked(fingerprint: senderStaticKey.sha256Fingerprint()) else {
+                SecureLogger.debug("🚫 Dropping courier envelope from blocked sender", category: .security)
+                return
+            }
             // Mesh peer IDs are derived from Noise static keys, so the sender
             // resolves to the same DM thread whether or not they're present.
             let senderPeerID = PeerID(publicKey: senderStaticKey)
