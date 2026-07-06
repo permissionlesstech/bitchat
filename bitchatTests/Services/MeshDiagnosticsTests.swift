@@ -276,9 +276,15 @@ private final class DiagnosticsMockContext: CommandContextProvider {
     func clearCurrentPublicTimeline() {}
     func clearPrivateChat(_ peerID: PeerID) {}
     func sendPublicRaw(_ content: String) {}
+    func sendPublicMessage(_ content: String) {}
     func addLocalPrivateSystemMessage(_ content: String, to peerID: PeerID) {}
     func addPublicSystemMessage(_ content: String) {}
     func toggleFavorite(peerID: PeerID) {}
+    func groupCreate(named name: String) -> CommandResult { .handled }
+    func groupInvite(nickname: String) -> CommandResult { .handled }
+    func groupRemove(nickname: String) -> CommandResult { .handled }
+    func groupLeave() -> CommandResult { .handled }
+    func groupList() -> CommandResult { .handled }
 
     func currentCommandDestination() -> CommandOutputDestination {
         if let peerID = selectedPrivateChatPeer {

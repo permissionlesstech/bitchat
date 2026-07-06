@@ -13,17 +13,19 @@ struct SyncTypeFlagsTests {
     }
 
     @Test func decodeDropsPhantomBits() {
-        // Bits 8+ map to no message type. They must not survive decode as
+        // Bits 11+ map to no message type (bits 8/9/10 are board/prekey/group
+        // after the feature integration). They must not survive decode as
         // phantom membership.
-        let phantom = Data([0x00, 0xFF]) // bits 8..15 set, no known type
+        let phantom = Data([0x00, 0xF8]) // bits 11..15 set, no known type
         let decoded = SyncTypeFlags.decode(phantom)
         #expect(decoded?.rawValue == 0)
         #expect(decoded?.toMessageTypes().isEmpty == true)
     }
 
     @Test func phantomBitsAreStrippedButKnownBitsSurvive() {
-        // Low byte = announce(0) + message(1); high byte = phantom.
-        let mixed = Data([0b0000_0011, 0xFF])
+        // Low byte = announce(0) + message(1); high byte = phantom (bits 11+,
+        // which map to no known type).
+        let mixed = Data([0b0000_0011, 0xF8])
         let decoded = SyncTypeFlags.decode(mixed)
         #expect(decoded?.contains(.announce) == true)
         #expect(decoded?.contains(.message) == true)
@@ -33,11 +35,12 @@ struct SyncTypeFlagsTests {
 
     @Test func rawValueInitNormalizesPhantomBits() {
         let flags = SyncTypeFlags(rawValue: 0xFFFF_FFFF_FFFF_FFFF)
-        // Every known type bit is set; nothing above them survives, so the
-        // field serializes to a single byte.
+        // Every known type bit is set; nothing above them survives. The
+        // highest known bit is 10 (groupMessage), so the field serializes to
+        // two bytes.
         #expect(flags.contains(.announce))
         #expect(flags.contains(.fileTransfer))
         let data = flags.toData()
-        #expect(data?.count == 1)
+        #expect(data?.count == 2)
     }
 }

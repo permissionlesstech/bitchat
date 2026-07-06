@@ -370,6 +370,8 @@ struct GossipSyncManagerTests {
         config.messageSyncIntervalSeconds = 0
         config.fragmentSyncIntervalSeconds = 0
         config.fileTransferSyncIntervalSeconds = 0
+        // Silence the prekey round so the maintenance barrier below emits nothing.
+        config.prekeyBundleSyncIntervalSeconds = 0
 
         let requestSyncManager = RequestSyncManager()
         let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: requestSyncManager)
@@ -543,6 +545,8 @@ struct GossipSyncManagerTests {
         config.messageSyncIntervalSeconds = 0
         config.fragmentSyncIntervalSeconds = 0
         config.fileTransferSyncIntervalSeconds = 0
+        // Silence the prekey round so the maintenance barrier isolates fragments.
+        config.prekeyBundleSyncIntervalSeconds = 0
 
         let requestSyncManager = RequestSyncManager()
         let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: requestSyncManager)

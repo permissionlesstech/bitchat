@@ -34,6 +34,9 @@ struct GossipSyncBoardTests {
         config.messageSyncIntervalSeconds = 0
         config.fragmentSyncIntervalSeconds = 0
         config.fileTransferSyncIntervalSeconds = 0
+        // Silence the prekey round (added by the prekeys feature; groupMessage
+        // rides the message schedule, already off) so board is isolated.
+        config.prekeyBundleSyncIntervalSeconds = 0
         return config
     }
 
