@@ -28,12 +28,14 @@ struct BitchatFilePacket {
 
     /// Encodes the packet using v2 canonical TLVs (4-byte FILE_SIZE, 4-byte CONTENT length).
     /// Returns `nil` when fields exceed protocol limits (e.g., content > UInt32.max).
-    func encode() -> Data? {
+    /// `limit` defaults to the Bluetooth payload cap; Wi-Fi bulk transfers pass
+    /// `FileTransferLimits.maxWifiBulkPayloadBytes`.
+    func encode(limit: Int = FileTransferLimits.maxPayloadBytes) -> Data? {
         let resolvedSize = fileSize ?? UInt64(content.count)
         guard resolvedSize <= UInt64(UInt32.max) else { return nil }
-        guard resolvedSize <= UInt64(FileTransferLimits.maxPayloadBytes) else { return nil }
+        guard resolvedSize <= UInt64(limit) else { return nil }
         guard content.count <= Int(UInt32.max) else { return nil }
-        guard FileTransferLimits.isValidPayload(content.count) else { return nil }
+        guard FileTransferLimits.isValidPayload(content.count, limit: limit) else { return nil }
 
         func appendBE<T: FixedWidthInteger>(_ value: T, into data: inout Data) {
             var big = value.bigEndian
@@ -66,7 +68,9 @@ struct BitchatFilePacket {
     }
 
     /// Decodes TLV payloads, tolerating legacy encodings (FILE_SIZE len=8, CONTENT len=2) when possible.
-    static func decode(_ data: Data) -> BitchatFilePacket? {
+    /// `limit` defaults to the Bluetooth payload cap; Wi-Fi bulk transfers pass
+    /// the (smaller of the) accepted-offer size and the Wi-Fi bulk ceiling.
+    static func decode(_ data: Data, limit: Int = FileTransferLimits.maxPayloadBytes) -> BitchatFilePacket? {
         var cursor = data.startIndex
         let end = data.endIndex
 
@@ -126,7 +130,7 @@ struct BitchatFilePacket {
                     for byte in value {
                         size = (size << 8) | UInt64(byte)
                     }
-                    if size > UInt64(FileTransferLimits.maxPayloadBytes) {
+                    if size > UInt64(limit) {
                         return nil
                     }
                     fileSize = size
@@ -135,7 +139,7 @@ struct BitchatFilePacket {
                 mimeType = String(data: Data(value), encoding: .utf8)
             case .content:
                 let proposedSize = content.count + value.count
-                if proposedSize > FileTransferLimits.maxPayloadBytes {
+                if proposedSize > limit {
                     return nil
                 }
                 content.append(contentsOf: value)
@@ -145,7 +149,7 @@ struct BitchatFilePacket {
         }
 
         guard !content.isEmpty else { return nil }
-        guard FileTransferLimits.isValidPayload(content.count) else { return nil }
+        guard FileTransferLimits.isValidPayload(content.count, limit: limit) else { return nil }
         return BitchatFilePacket(
             fileName: fileName,
             fileSize: fileSize ?? UInt64(content.count),

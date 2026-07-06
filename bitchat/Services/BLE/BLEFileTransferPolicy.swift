@@ -42,12 +42,17 @@ enum BLEIncomingFileRejection: Error, Equatable {
 }
 
 enum BLEIncomingFileValidator {
-    static func validate(payload: Data) -> Result<BLEIncomingFileAcceptance, BLEIncomingFileRejection> {
-        guard let filePacket = BitchatFilePacket.decode(payload) else {
+    /// `limit` defaults to the Bluetooth payload cap; Wi-Fi bulk deliveries
+    /// pass the ceiling enforced against the accepted offer.
+    static func validate(
+        payload: Data,
+        limit: Int = FileTransferLimits.maxPayloadBytes
+    ) -> Result<BLEIncomingFileAcceptance, BLEIncomingFileRejection> {
+        guard let filePacket = BitchatFilePacket.decode(payload, limit: limit) else {
             return .failure(.malformedPayload)
         }
 
-        guard FileTransferLimits.isValidPayload(filePacket.content.count) else {
+        guard FileTransferLimits.isValidPayload(filePacket.content.count, limit: limit) else {
             return .failure(.payloadTooLarge(bytes: filePacket.content.count))
         }
 

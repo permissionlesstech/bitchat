@@ -216,6 +216,51 @@ struct BLEServiceCoreTests {
             cachedServiceUUIDs: [BLEService.serviceUUID, otherService]
         ))
     }
+
+    // Regression: a stable/verified private chat addresses the peer by its
+    // full 64-hex Noise key, but the Noise session (and capabilities/
+    // connection) are keyed by the short routing ID. The Wi-Fi bulk send path
+    // must normalize the ID first, or `hasEstablishedSession` misses and
+    // Wi-Fi is never offered for a large payload to a direct `.wifiBulk` peer.
+    @Test
+    func wifiBulkEligibility_resolvesWhenAddressedBy64HexNoiseKey() throws {
+        let ble = makeService()
+
+        let noiseKey = Data((0..<32).map { UInt8(($0 &* 7) &+ 3) })
+        let fullKey = PeerID(str: noiseKey.hexEncodedString())   // 64-hex Noise key
+        #expect(fullKey.noiseKey != nil)
+        let shortID = fullKey.toShort()                          // 16-hex routing ID
+        #expect(shortID != fullKey)
+
+        // Establish a real Noise session in the service's noise engine, keyed
+        // by the short routing ID (exactly as a completed handshake would).
+        let peer = NoiseEncryptionService(keychain: MockKeychain())
+        let noise = ble._test_noiseService
+        let m1 = try noise.initiateHandshake(with: shortID)
+        let m2 = try #require(try peer.processHandshakeMessage(from: shortID, message: m1))
+        let m3 = try #require(try noise.processHandshakeMessage(from: shortID, message: m2))
+        _ = try peer.processHandshakeMessage(from: shortID, message: m3)
+
+        #expect(noise.hasEstablishedSession(with: shortID))
+        // The bug in raw form: querying by the 64-hex key misses the session.
+        #expect(!noise.hasEstablishedSession(with: fullKey))
+
+        // Register the peer as a directly-connected `.wifiBulk` neighbor.
+        ble._test_registerConnectedPeer(fullKey, capabilities: [.wifiBulk])
+
+        let bigPayload = FileTransferLimits.maxWifiBulkPayloadBytes
+
+        // The send path normalizes first, so eligibility + offer resolve for
+        // both the short ID and the full 64-hex Noise key.
+        let viaShort = ble._test_wifiBulkSendCandidate(payloadBytes: bigPayload, to: shortID)
+        let viaFull = ble._test_wifiBulkSendCandidate(payloadBytes: bigPayload, to: fullKey)
+        #expect(viaShort.hasEstablishedNoiseSession)
+        #expect(viaFull.hasEstablishedNoiseSession)
+        #expect(viaFull.isDirectlyConnected)
+        #expect(viaFull.peerCapabilities.contains(.wifiBulk))
+        #expect(WifiBulkPolicy.shouldOffer(viaShort, enabled: true))
+        #expect(WifiBulkPolicy.shouldOffer(viaFull, enabled: true))
+    }
 }
 
 private func makeService() -> BLEService {

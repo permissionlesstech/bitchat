@@ -281,6 +281,21 @@ enum TransportConfig {
     static let syncResponseRateLimitMaxResponses: Int = 8
     static let syncResponseRateLimitWindowSeconds: TimeInterval = 30.0
 
+    // Wi-Fi bulk transport (peer-to-peer AWDL data plane for large media).
+    // BLE stays the control plane: offers/responses ride the Noise session,
+    // only the sealed chunk stream moves to TCP over AWDL.
+    static let wifiBulkEnabled: Bool = true
+    // Below this size BLE fragmentation is fast enough that negotiation
+    // overhead isn't worth it.
+    static let wifiBulkMinPayloadBytes: Int = 64 * 1024
+    static let wifiBulkChunkBytes: Int = 64 * 1024
+    // Offer unanswered for this long → fall back to BLE fragmentation.
+    static let wifiBulkOfferTimeoutSeconds: TimeInterval = 10.0
+    // Hard ceiling on how long the Bonjour listener/connection may live.
+    static let wifiBulkTransferWindowSeconds: TimeInterval = 60.0
+    static let wifiBulkServiceType: String = "_bitchat-bulk._tcp"
+    static let wifiBulkMaxConcurrentIncoming: Int = 4
+
     // Courier store-and-forward
     // Initial spray-and-wait budget per deposited envelope: each courier may
     // hand half its remaining copies to another courier on encounter, so a

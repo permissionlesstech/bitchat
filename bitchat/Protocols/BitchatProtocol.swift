@@ -72,7 +72,10 @@ enum NoisePayloadType: UInt8 {
     case privateMessage = 0x01      // Private chat message
     case readReceipt = 0x02         // Message was read
     case delivered = 0x03           // Message was delivered
-    // Private groups (0x04/0x05 reserved by other features)
+    // Wi-Fi bulk transport negotiation (AWDL data plane for large media)
+    case bulkTransferOffer = 0x04    // Offer to move a large file over peer-to-peer Wi-Fi
+    case bulkTransferResponse = 0x05 // Accept/decline reply to a bulk transfer offer
+    // Private groups
     case groupInvite = 0x06         // Creator-signed group state (invite)
     case groupKeyUpdate = 0x07      // Creator-signed group state (key rotation / roster update)
     // Verification (QR-based OOB binding)
@@ -86,6 +89,8 @@ enum NoisePayloadType: UInt8 {
         case .privateMessage: return "privateMessage"
         case .readReceipt: return "readReceipt"
         case .delivered: return "delivered"
+        case .bulkTransferOffer: return "bulkTransferOffer"
+        case .bulkTransferResponse: return "bulkTransferResponse"
         case .groupInvite: return "groupInvite"
         case .groupKeyUpdate: return "groupKeyUpdate"
         case .verifyChallenge: return "verifyChallenge"

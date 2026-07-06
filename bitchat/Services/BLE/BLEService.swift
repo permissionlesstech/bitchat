@@ -166,6 +166,8 @@ final class BLEService: NSObject {
     private lazy var fragmentHandler = BLEFragmentHandler(environment: makeFragmentHandlerEnvironment())
     // File-transfer orchestration (queue hops stay in the environment closures)
     private lazy var fileTransferHandler = BLEFileTransferHandler(environment: makeFileTransferHandlerEnvironment())
+    // Wi-Fi bulk data plane: BLE/Noise negotiates, AWDL carries large media
+    private lazy var wifiBulkService = WifiBulkTransferService(environment: makeWifiBulkEnvironment())
 
     // MARK: - Gossip Sync
     private var gossipSyncManager: GossipSyncManager?
@@ -290,6 +292,12 @@ final class BLEService: NSObject {
 
         // Initialize gossip sync manager
         restartGossipManager()
+
+        // Force single-threaded instantiation: unlike the packet handlers
+        // (touched only from messageQueue), the Wi-Fi bulk service is reached
+        // from the main actor too (cancelTransfer/stopServices), and lazy
+        // vars are not thread-safe.
+        _ = wifiBulkService
     }
     
     private func restartGossipManager() {
@@ -530,6 +538,9 @@ final class BLEService: NSObject {
     }
     
     func stopServices() {
+        // Tear down any Wi-Fi bulk listeners/connections deterministically
+        wifiBulkService.stop()
+
         // Send leave message synchronously to ensure delivery
         var leavePacket = BitchatPacket(
             type: MessageType.leave.rawValue,
@@ -748,6 +759,9 @@ final class BLEService: NSObject {
     // MARK: Messaging
 
     func cancelTransfer(_ transferId: String) {
+        // A transfer may be riding the Wi-Fi bulk channel instead of the BLE
+        // fragment scheduler; cancelling both is safe (each no-ops on miss).
+        wifiBulkService.cancelTransfer(transferId: transferId)
         collectionsQueue.async(flags: .barrier) { [weak self] in
             guard let self = self else { return }
 
@@ -823,8 +837,70 @@ final class BLEService: NSObject {
     func sendFilePrivate(_ filePacket: BitchatFilePacket, to peerID: PeerID, transferId: String) {
         messageQueue.async { [weak self] in
             guard let self = self else { return }
-            guard let payload = filePacket.encode() else {
+            // Encode with the Wi-Fi bulk ceiling; whether the payload also
+            // fits the BLE caps decides what a fallback may do.
+            guard let payload = filePacket.encode(limit: FileTransferLimits.maxWifiBulkPayloadBytes) else {
                 SecureLogger.error("❌ Failed to encode file packet for private send", category: .session)
+                return
+            }
+            let fitsBLECaps = filePacket.encode() != nil
+
+            // Normalize to the short routing ID (SHA256-derived 16-hex) once.
+            // Stable/verified private chats address the peer by its full
+            // 64-hex Noise key, but the Noise session and the negotiation
+            // packet are keyed by the short ID — so the capability/session
+            // eligibility checks (and the Wi-Fi offer) must all use it, or a
+            // 64-hex key makes `hasEstablishedSession` return false and Wi-Fi
+            // is never selected even when the peer advertises `.wifiBulk`.
+            let routingID = peerID.toShort()
+
+            let candidate = self.wifiBulkSendCandidate(payloadBytes: payload.count, to: routingID)
+            if WifiBulkPolicy.shouldOffer(candidate) {
+                self.wifiBulkService.sendFile(payload: payload, to: routingID, transferId: transferId) { [weak self] in
+                    self?.sendFilePrivateViaBLE(payload: payload, to: routingID, transferId: transferId, fitsBLECaps: fitsBLECaps)
+                }
+                return
+            }
+            guard fitsBLECaps else {
+                // Wi-Fi-only payload with no eligible Wi-Fi path.
+                SecureLogger.error("❌ File exceeds BLE caps and Wi-Fi bulk is unavailable", category: .session)
+                self.surfaceUndeliverableTransfer(transferId)
+                return
+            }
+            self.sendFilePrivateViaBLE(payload: payload, to: routingID, transferId: transferId, fitsBLECaps: true)
+        }
+    }
+
+    /// Builds the Wi-Fi bulk eligibility candidate for a private send.
+    ///
+    /// Normalizes `peerID` to its short routing ID first: stable/verified
+    /// private chats address the peer by its full 64-hex Noise key, but the
+    /// Noise session, advertised capabilities, and connection state are all
+    /// keyed by the short (SHA256-derived 16-hex) ID. Resolving them with the
+    /// 64-hex key would miss the session (`hasEstablishedSession` returns
+    /// false), so Wi-Fi would never be offered even to a directly-connected
+    /// `.wifiBulk` peer.
+    private func wifiBulkSendCandidate(payloadBytes: Int, to peerID: PeerID) -> WifiBulkPolicy.SendCandidate {
+        let routingID = peerID.toShort()
+        return WifiBulkPolicy.SendCandidate(
+            payloadBytes: payloadBytes,
+            peerCapabilities: peerCapabilities(routingID),
+            isDirectlyConnected: isPeerConnected(routingID),
+            hasEstablishedNoiseSession: noiseService.hasEstablishedSession(with: routingID)
+        )
+    }
+
+    /// BLE fragmentation path for private file transfers; also the fallback
+    /// target when a Wi-Fi bulk attempt declines, times out, or errors.
+    /// May be invoked from the Wi-Fi bulk queue.
+    private func sendFilePrivateViaBLE(payload: Data, to peerID: PeerID, transferId: String, fitsBLECaps: Bool) {
+        messageQueue.async { [weak self] in
+            guard let self = self else { return }
+            guard fitsBLECaps else {
+                // A >1 MiB payload was negotiated for Wi-Fi and the channel
+                // failed: BLE cannot carry it, surface the normal failure path.
+                SecureLogger.error("❌ Wi-Fi bulk failed and payload exceeds BLE caps (\(payload.count) bytes)", category: .session)
+                self.surfaceUndeliverableTransfer(transferId)
                 return
             }
             // Normalize to short form (SHA256-derived 16-hex) for wire protocol compatibility
@@ -853,6 +929,13 @@ final class BLEService: NSObject {
             SecureLogger.debug("📁 Sending private file transfer to \(peerID.id.prefix(8))… bytes=\(payload.count)", category: .session)
             self.broadcastPacket(packet, transferId: transferId)
         }
+    }
+
+    /// Drives the progress bus through started→cancelled so the UI clears a
+    /// transfer that no transport can carry.
+    private func surfaceUndeliverableTransfer(_ transferId: String) {
+        TransferProgressManager.shared.start(id: transferId, totalFragments: 1)
+        TransferProgressManager.shared.cancel(id: transferId)
     }
 
     
@@ -1240,6 +1323,57 @@ final class BLEService: NSObject {
         )
     }
     
+    /// Builds the Wi-Fi bulk service environment. Noise encryption and packet
+    /// dispatch stay on the message queue; incoming payloads re-enter the
+    /// normal file-transfer pipeline as if a fully assembled packet arrived.
+    private func makeWifiBulkEnvironment() -> WifiBulkTransferServiceEnvironment {
+        WifiBulkTransferServiceEnvironment(
+            sendNoisePayload: { [weak self] typedPayload, peerID in
+                guard let self = self, self.noiseService.hasEstablishedSession(with: peerID) else { return false }
+                self.messageQueue.async { [weak self] in
+                    guard let self = self else { return }
+                    do {
+                        self.broadcastPacket(try self.makeEncryptedNoisePacket(typedPayload, to: peerID))
+                    } catch {
+                        SecureLogger.error("❌ Failed to send Wi-Fi bulk negotiation payload: \(error)", category: .session)
+                    }
+                }
+                return true
+            },
+            isPeerConnected: { [weak self] peerID in
+                self?.isPeerConnected(peerID) ?? false
+            },
+            deliverReceivedFile: { [weak self] payload, peerID, payloadLimit in
+                self?.messageQueue.async { [weak self] in
+                    guard let self = self else { return }
+                    let packet = BitchatPacket(
+                        type: MessageType.fileTransfer.rawValue,
+                        senderID: Data(hexString: peerID.toShort().id) ?? Data(),
+                        recipientID: self.myPeerIDData,
+                        timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                        payload: payload,
+                        signature: nil,
+                        ttl: 0,
+                        version: 2
+                    )
+                    self.fileTransferHandler.handle(packet, from: peerID, payloadLimit: payloadLimit)
+                }
+            },
+            progressStart: { transferId, totalChunks in
+                TransferProgressManager.shared.start(id: transferId, totalFragments: totalChunks)
+            },
+            progressChunkSent: { transferId in
+                TransferProgressManager.shared.recordFragmentSent(id: transferId)
+            },
+            progressReset: { transferId in
+                TransferProgressManager.shared.reset(id: transferId)
+            },
+            progressCancel: { transferId in
+                TransferProgressManager.shared.cancel(id: transferId)
+            }
+        )
+    }
+
     func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {
         SecureLogger.debug("🔔 sendFavoriteNotification peer=\(peerID.id.prefix(8))… isFavorite=\(isFavorite)", category: .session)
         
@@ -1835,6 +1969,34 @@ extension BLEService {
             invalidatedServiceUUIDs: invalidatedServiceUUIDs,
             cachedServiceUUIDs: cachedServiceUUIDs
         )
+    }
+
+    /// The internal Noise service, so tests can drive a real handshake and
+    /// establish a session keyed by a chosen (short) routing ID.
+    var _test_noiseService: NoiseEncryptionService { noiseService }
+
+    /// Registers a directly-connected peer with the given advertised
+    /// capabilities, keyed by its short routing ID (as production does).
+    func _test_registerConnectedPeer(_ peerID: PeerID, capabilities: PeerCapabilities) {
+        let shortID = peerID.toShort()
+        collectionsQueue.sync(flags: .barrier) {
+            peerRegistry.upsert(BLEPeerInfo(
+                peerID: shortID,
+                nickname: "TestPeer_\(shortID.id.prefix(4))",
+                isConnected: true,
+                noisePublicKey: peerID.noiseKey,
+                signingPublicKey: nil,
+                isVerifiedNickname: true,
+                lastSeen: Date(),
+                capabilities: capabilities
+            ))
+        }
+    }
+
+    /// Runs the production Wi-Fi bulk eligibility resolution (including peer-ID
+    /// normalization) for the given payload size and recipient.
+    func _test_wifiBulkSendCandidate(payloadBytes: Int, to peerID: PeerID) -> WifiBulkPolicy.SendCandidate {
+        wifiBulkSendCandidate(payloadBytes: payloadBytes, to: peerID)
     }
 }
 #endif
@@ -3929,8 +4091,21 @@ extension BLEService {
                 self?.noiseService.clearSession(for: peerID)
             },
             deliverNoisePayload: { [weak self] peerID, type, payload, timestamp in
+                guard let self = self else { return }
+                // Wi-Fi bulk negotiation is a transport concern; consume it
+                // here instead of surfacing it to the UI layer.
+                switch type {
+                case .bulkTransferOffer:
+                    self.wifiBulkService.handleOfferPayload(payload, from: peerID)
+                    return
+                case .bulkTransferResponse:
+                    self.wifiBulkService.handleResponsePayload(payload, from: peerID)
+                    return
+                default:
+                    break
+                }
                 // Single main-actor hop delivering `.noisePayloadReceived`.
-                self?.notifyUI { [weak self] in
+                self.notifyUI { [weak self] in
                     self?.deliverTransportEvent(.noisePayloadReceived(
                         peerID: peerID,
                         type: type,

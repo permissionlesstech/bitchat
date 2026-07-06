@@ -2,6 +2,10 @@
 public enum FileTransferLimits {
     /// Absolute ceiling enforced for any file payload (voice, image, other).
     public static let maxPayloadBytes: Int = 1 * 1024 * 1024 // 1 MiB
+    /// Ceiling for transfers negotiated onto the peer-to-peer Wi-Fi bulk
+    /// channel. The receiver enforces it against the size in the accepted
+    /// offer; the Bluetooth path keeps `maxPayloadBytes`.
+    public static let maxWifiBulkPayloadBytes: Int = 8 * 1024 * 1024 // 8 MiB
     /// Voice notes stay small for low-latency relays.
     public static let maxVoiceNoteBytes: Int = 512 * 1024 // 512 KiB
     /// Compressed images after downscaling should comfortably fit under this budget.
@@ -17,7 +21,7 @@ public enum FileTransferLimits {
         return maxPayloadBytes + tlvEnvelopeOverhead + binaryEnvelopeOverhead
     }()
 
-    public static func isValidPayload(_ size: Int) -> Bool {
-        size <= maxPayloadBytes
+    public static func isValidPayload(_ size: Int, limit: Int = maxPayloadBytes) -> Bool {
+        size <= limit
     }
 }

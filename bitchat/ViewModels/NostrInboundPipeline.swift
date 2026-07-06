@@ -298,8 +298,10 @@ final class NostrInboundPipeline {
         case .readReceipt:
             context.handleReadReceipt(noisePayload, senderPubkey: senderPubkey, convKey: convKey)
         // Group state travels only over mesh Noise sessions in v1; anything
-        // claiming to be group traffic over Nostr is ignored.
-        case .verifyChallenge, .verifyResponse, .vouch, .groupInvite, .groupKeyUpdate:
+        // claiming to be group traffic over Nostr is ignored. Wi-Fi bulk
+        // negotiation is mesh-proximity only; it never rides Nostr either.
+        case .verifyChallenge, .verifyResponse, .vouch, .groupInvite, .groupKeyUpdate,
+             .bulkTransferOffer, .bulkTransferResponse:
             break
         }
     }
@@ -352,8 +354,10 @@ final class NostrInboundPipeline {
         case .readReceipt:
             context.handleReadReceipt(payload, senderPubkey: senderPubkey, convKey: convKey)
         // Group state travels only over mesh Noise sessions in v1; anything
-        // claiming to be group traffic over Nostr is ignored.
-        case .verifyChallenge, .verifyResponse, .vouch, .groupInvite, .groupKeyUpdate:
+        // claiming to be group traffic over Nostr is ignored. Wi-Fi bulk
+        // negotiation is mesh-proximity only; it never rides Nostr either.
+        case .verifyChallenge, .verifyResponse, .vouch, .groupInvite, .groupKeyUpdate,
+             .bulkTransferOffer, .bulkTransferResponse:
             break
         }
     }
@@ -433,8 +437,11 @@ final class NostrInboundPipeline {
                         case .readReceipt:
                             context.handleReadReceipt(payload, senderPubkey: senderPubkey, convKey: targetPeerID)
                         // Group state travels only over mesh Noise sessions
-                        // in v1; group traffic over Nostr is ignored.
-                        case .verifyChallenge, .verifyResponse, .vouch, .groupInvite, .groupKeyUpdate:
+                        // in v1; group traffic over Nostr is ignored. Wi-Fi
+                        // bulk negotiation is mesh-proximity only; it never
+                        // rides Nostr either.
+                        case .verifyChallenge, .verifyResponse, .vouch, .groupInvite, .groupKeyUpdate,
+                             .bulkTransferOffer, .bulkTransferResponse:
                             break
                         }
                     }
