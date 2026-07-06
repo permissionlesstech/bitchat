@@ -15507,6 +15507,18 @@
         }
       }
     },
+    "content.commands.pay" : {
+      "comment" : "Autocomplete description for the /pay command that sends a Cashu ecash token",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "send a cashu ecash token in this chat"
+          }
+        }
+      }
+    },
     "content.commands.ping" : {
       "comment" : "Description of the /ping command in the suggestions panel",
       "extractionState" : "manual",
@@ -18598,6 +18610,18 @@
         }
       }
     },
+    "content.input.token_placeholder" : {
+      "comment" : "Placeholder shown after /pay in the command suggestion panel",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "token"
+          }
+        }
+      }
+    },
     "content.jump.new_count" : {
       "comment" : "Count of messages that arrived while scrolled up, shown in the jump-to-latest pill",
       "extractionState" : "manual",
@@ -19863,6 +19887,18 @@
         }
       }
     },
+    "content.payment.copy_token" : {
+      "comment" : "Context menu action copying a Cashu token to the pasteboard",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "copy token"
+          }
+        }
+      }
+    },
     "content.payment.lightning" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -20038,6 +20074,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "透過 lightning 支付"
+          }
+        }
+      }
+    },
+    "content.payment.redeem_wallet" : {
+      "comment" : "Context menu action opening a Cashu token in an ecash wallet app",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "redeem in wallet"
+          }
+        }
+      }
+    },
+    "content.payment.redeem_web" : {
+      "comment" : "Context menu action opening a Cashu token in the web redemption page",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "redeem on web"
           }
         }
       }

@@ -1745,6 +1745,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         publicConversationCoordinator.sendPublicRaw(content)
     }
 
+    // Send a normal public message (with local echo) to the active channel.
+    // CommandContextProvider hook for commands that post real messages
+    // (`/pay`); only called when no private chat is selected.
+    @MainActor
+    func sendPublicMessage(_ content: String) {
+        sendMessage(content)
+    }
+
     /// Handle incoming public message
     @MainActor
     func handlePublicMessage(_ message: BitchatMessage) {
