@@ -13,6 +13,13 @@ struct GeohashPeopleList: View {
         static let blockedTooltip = String(localized: "geohash_people.tooltip.blocked", comment: "Tooltip shown next to users blocked in geohash channels")
         static let unblock: LocalizedStringKey = "geohash_people.action.unblock"
         static let block: LocalizedStringKey = "geohash_people.action.block"
+        static let unblockText = String(localized: "geohash_people.action.unblock", comment: "Context menu action to unblock a person")
+        static let blockText = String(localized: "geohash_people.action.block", comment: "Context menu action to block a person")
+        static let teleported = String(localized: "geohash_people.state.teleported", comment: "State label for someone who joined the location channel from elsewhere")
+        static let nearby = String(localized: "geohash_people.state.nearby", comment: "State label for someone physically in the location channel's area")
+        static let blockedState = String(localized: "mesh_peers.state.blocked", comment: "State label for a blocked peer")
+        static let youState = String(localized: "geohash_people.state.you", comment: "State label marking your own row in the people list")
+        static let openDMHint = String(localized: "mesh_peers.accessibility.open_dm_hint", comment: "Accessibility hint on a peer row explaining activation opens a private chat")
     }
 
     var body: some View {
@@ -46,7 +53,12 @@ struct GeohashPeopleList: View {
                         let icon = person.isTeleported ? "face.dashed" : "mappin.and.ellipse"
                         let assignedColor = peerListModel.colorForGeohashPerson(id: person.id, isDark: colorScheme == .dark)
                         let rowColor: Color = person.isMe ? .orange : assignedColor
-                        Image(systemName: icon).font(.bitchatSystem(size: 12)).foregroundColor(rowColor)
+                        Image(systemName: icon)
+                            // Size 10 to match the mesh rows' leading glyphs —
+                            // both lists share the sidebar.
+                            .font(.bitchatSystem(size: 10))
+                            .foregroundColor(rowColor)
+                            .help(person.isTeleported ? Strings.teleported : Strings.nearby)
 
                         let (base, suffix) = person.displayName.splitSuffix()
                         HStack(spacing: 0) {
@@ -54,6 +66,8 @@ struct GeohashPeopleList: View {
                                 .bitchatFont(size: 14)
                                 .fontWeight(person.isMe ? .bold : .regular)
                                 .foregroundColor(rowColor)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
                             if !suffix.isEmpty {
                                 let suffixColor = person.isMe ? Color.orange.opacity(0.6) : rowColor.opacity(0.6)
                                 Text(suffix)
@@ -105,6 +119,27 @@ struct GeohashPeopleList: View {
                             }
                         }
                     }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(accessibilityDescription(for: person))
+                    .accessibilityAddTraits(person.isMe ? [] : .isButton)
+                    .accessibilityHint(person.isMe ? "" : Strings.openDMHint)
+                    .accessibilityActions {
+                        if !person.isMe {
+                            Button(person.isBlocked ? Strings.unblockText : Strings.blockText) {
+                                if person.isBlocked {
+                                    peerListModel.unblockGeohashUser(
+                                        pubkeyHexLowercased: person.id,
+                                        displayName: person.displayName
+                                    )
+                                } else {
+                                    peerListModel.blockGeohashUser(
+                                        pubkeyHexLowercased: person.id,
+                                        displayName: person.displayName
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
             // Seed and update order outside result builder
@@ -118,5 +153,14 @@ struct GeohashPeopleList: View {
                 if newOrder != orderedIDs { orderedIDs = newOrder }
             }
         }
+    }
+
+    /// One spoken sentence per row: name, presence type, and block state.
+    private func accessibilityDescription(for person: GeohashPersonRow) -> String {
+        var parts: [String] = [person.displayName]
+        if person.isMe { parts.append(Strings.youState) }
+        parts.append(person.isTeleported ? Strings.teleported : Strings.nearby)
+        if person.isBlocked { parts.append(Strings.blockedState) }
+        return parts.joined(separator: ", ")
     }
 }

@@ -57,7 +57,7 @@ struct PaymentChipView: View {
     
     private var fgColor: Color { palette.primary }
     private var bgColor: Color {
-        colorScheme == .dark ? Color.gray.opacity(0.18) : Color.gray.opacity(0.12)
+        palette.secondary.opacity(colorScheme == .dark ? 0.18 : 0.12)
     }
     private var border: Color { fgColor.opacity(0.25) }
     

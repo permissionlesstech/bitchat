@@ -5015,6 +5015,162 @@
         }
       }
     },
+    "app_info.legend.blocked" : {
+      "comment" : "Legend entry for the nosign glyph",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "blocked"
+          }
+        }
+      }
+    },
+    "app_info.legend.encrypted" : {
+      "comment" : "Legend entry for the lock glyph",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "end-to-end encrypted session"
+          }
+        }
+      }
+    },
+    "app_info.legend.encryption_failed" : {
+      "comment" : "Legend entry for the failed-encryption lock-slash glyph",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "encryption failed — messages not secured"
+          }
+        }
+      }
+    },
+    "app_info.legend.favorite" : {
+      "comment" : "Legend entry for the star glyph",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favorite — enables offline messages via nostr when mutual"
+          }
+        }
+      }
+    },
+    "app_info.legend.location_nearby" : {
+      "comment" : "Legend entry for the map pin glyph",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "physically in this location channel's area"
+          }
+        }
+      }
+    },
+    "app_info.legend.mesh_connected" : {
+      "comment" : "Legend entry for the antenna glyph",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "connected directly over bluetooth"
+          }
+        }
+      }
+    },
+    "app_info.legend.mesh_relayed" : {
+      "comment" : "Legend entry for the relayed-mesh glyph",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "reachable through the mesh, relayed by others"
+          }
+        }
+      }
+    },
+    "app_info.legend.nostr" : {
+      "comment" : "Legend entry for the globe glyph",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "reachable over the internet (nostr) — mutual favorites only"
+          }
+        }
+      }
+    },
+    "app_info.legend.offline" : {
+      "comment" : "Legend entry for the offline person glyph",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "offline — not currently reachable"
+          }
+        }
+      }
+    },
+    "app_info.legend.teleported" : {
+      "comment" : "Legend entry for the teleported glyph",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "teleported — joined the channel from somewhere else"
+          }
+        }
+      }
+    },
+    "app_info.legend.title" : {
+      "comment" : "Section header for the symbols legend in app info",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "symbols"
+          }
+        }
+      }
+    },
+    "app_info.legend.unread" : {
+      "comment" : "Legend entry for the envelope glyph",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "unread private messages"
+          }
+        }
+      }
+    },
+    "app_info.legend.verified" : {
+      "comment" : "Legend entry for the verified seal glyph",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "identity verified"
+          }
+        }
+      }
+    },
     "app_info.privacy.ephemeral.description" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -8416,6 +8572,42 @@
         }
       }
     },
+    "content.accessibility.app_info_hint" : {
+      "comment" : "Accessibility hint on the bitchat/ logo explaining a tap opens app info",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "shows app info"
+          }
+        }
+      }
+    },
+    "content.accessibility.attach_photo" : {
+      "comment" : "Accessibility label for the photo attachment button",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "attach photo"
+          }
+        }
+      }
+    },
+    "content.accessibility.attach_photo_hint" : {
+      "comment" : "Accessibility hint explaining the attachment button opens the photo library",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "opens the photo library; use the take photo action for the camera"
+          }
+        }
+      }
+    },
     "content.accessibility.available_nostr" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -8774,6 +8966,18 @@
         }
       }
     },
+    "content.accessibility.choose_photo" : {
+      "comment" : "Accessibility label for the macOS photo picker button",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "choose photo"
+          }
+        }
+      }
+    },
     "content.accessibility.connected_mesh" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -8953,6 +9157,18 @@
         }
       }
     },
+    "content.accessibility.delivery_detail_hint" : {
+      "comment" : "Accessibility hint for the delivery status glyph explaining a tap reveals details",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tap to show delivery details"
+          }
+        }
+      }
+    },
     "content.accessibility.encryption_status" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -9128,6 +9344,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "加密狀態：%@"
+          }
+        }
+      }
+    },
+    "content.accessibility.jump_to_latest" : {
+      "comment" : "Accessibility label for the jump to latest messages button",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "jump to latest messages"
           }
         }
       }
@@ -9665,6 +9893,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "打開未讀私聊"
+          }
+        }
+      }
+    },
+    "content.accessibility.peers_connected" : {
+      "comment" : "Accessibility value when peers are reachable",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "connected"
+          }
+        }
+      }
+    },
+    "content.accessibility.peers_none" : {
+      "comment" : "Accessibility value when no peers are reachable",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no one reachable"
           }
         }
       }
@@ -10590,6 +10842,42 @@
         }
       }
     },
+    "content.accessibility.record_voice_hint" : {
+      "comment" : "Accessibility hint explaining double-tap toggles voice recording",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "double-tap to start recording, double-tap again to send"
+          }
+        }
+      }
+    },
+    "content.accessibility.record_voice_note" : {
+      "comment" : "Accessibility label for the voice note button",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "record voice note"
+          }
+        }
+      }
+    },
+    "content.accessibility.recording" : {
+      "comment" : "Accessibility value announced while a voice note is recording",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "recording"
+          }
+        }
+      }
+    },
     "content.accessibility.remove_favorite" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -11306,6 +11594,18 @@
         }
       }
     },
+    "content.accessibility.take_photo" : {
+      "comment" : "Accessibility action name for taking a photo with the camera",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "take photo with camera"
+          }
+        }
+      }
+    },
     "content.accessibility.toggle_bookmark" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -11660,6 +11960,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "雙擊切換收藏狀態"
+          }
+        }
+      }
+    },
+    "content.accessibility.verification" : {
+      "comment" : "Accessibility label for the verification QR button",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "verify encryption"
           }
         }
       }
@@ -12555,6 +12867,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "提及"
+          }
+        }
+      }
+    },
+    "content.actions.resend" : {
+      "comment" : "Context menu action that resends a failed private message",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "resend"
           }
         }
       }
@@ -14170,6 +14494,30 @@
         }
       }
     },
+    "content.clear.confirm_action" : {
+      "comment" : "Destructive confirmation button that clears the current chat",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "clear chat"
+          }
+        }
+      }
+    },
+    "content.clear.confirm_title" : {
+      "comment" : "Title of the confirmation dialog shown before clearing the current chat",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "clear this chat?"
+          }
+        }
+      }
+    },
     "content.commands.block" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -14703,6 +15051,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "加入收藏"
+          }
+        }
+      }
+    },
+    "content.commands.help" : {
+      "comment" : "Description of the /help command in the suggestions panel",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "show available commands"
           }
         }
       }
@@ -16676,6 +17036,54 @@
         }
       }
     },
+    "content.delivery.reason.not_delivered" : {
+      "comment" : "Failure reason shown when the router gave up delivering a message",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "not delivered"
+          }
+        }
+      }
+    },
+    "content.delivery.reason.encryption_failed" : {
+      "comment" : "Failure reason shown when a message could not be encrypted for the peer",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "encryption failed"
+          }
+        }
+      }
+    },
+    "content.delivery.reason.voice_too_large" : {
+      "comment" : "Failure reason shown when a voice note exceeds the size limit",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "voice note too large"
+          }
+        }
+      }
+    },
+    "content.delivery.reason.voice_send_failed" : {
+      "comment" : "Failure reason shown when a voice note could not be sent",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "voice note failed to send"
+          }
+        }
+      }
+    },
     "content.delivery.reason.self" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -17392,6 +17800,78 @@
         }
       }
     },
+    "content.delivery.sending" : {
+      "comment" : "Delivery status description while a private message is being sent",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sending..."
+          }
+        }
+      }
+    },
+    "content.delivery.sent" : {
+      "comment" : "Delivery status description for a sent but not yet confirmed private message",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sent — no delivery confirmation yet"
+          }
+        }
+      }
+    },
+    "content.empty.location_intro" : {
+      "comment" : "First line of an empty geohash timeline naming the channel",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "you're in #%@ — a public location channel over the internet"
+          }
+        }
+      }
+    },
+    "content.empty.mesh_intro" : {
+      "comment" : "First line of the empty mesh timeline explaining what the mesh channel is",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "you're on #mesh — reaches people within bluetooth range"
+          }
+        }
+      }
+    },
+    "content.empty.mesh_waiting" : {
+      "comment" : "Second line of the empty mesh timeline saying no peers are in range yet",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nobody in range yet... messages appear here"
+          }
+        }
+      }
+    },
+    "content.empty.switch_hint" : {
+      "comment" : "Empty timeline hint pointing at the channel switcher and the help screen",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tap the channel name above to switch · tap bitchat/ for help"
+          }
+        }
+      }
+    },
     "content.header.people" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -17750,181 +18230,62 @@
         }
       }
     },
-    "content.input.message_placeholder" : {
+    "content.input.placeholder.location" : {
+      "comment" : "Composer placeholder for a public geohash channel, naming it",
       "extractionState" : "manual",
       "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "اكتب رسالة..."
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "একটি বার্তা লিখুন..."
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "nachricht eingeben..."
-          }
-        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "type a message..."
+            "value" : "message #%@ — public"
           }
-        },
-        "es" : {
+        }
+      }
+    },
+    "content.input.placeholder.mesh" : {
+      "comment" : "Composer placeholder for the public mesh channel",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "escribe un mensaje..."
+            "value" : "message #mesh — public, nearby"
           }
-        },
-        "fil" : {
+        }
+      }
+    },
+    "content.input.placeholder.private" : {
+      "comment" : "Composer placeholder inside a private chat, naming the conversation partner",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "mag-type ng mensahe..."
+            "value" : "message %@ — private"
           }
-        },
-        "fr" : {
+        }
+      }
+    },
+    "content.private.caption" : {
+      "comment" : "Caption above the private chat composer before encryption is established",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "écris un message..."
+            "value" : "private conversation"
           }
-        },
-        "he" : {
+        }
+      }
+    },
+    "content.private.caption_encrypted" : {
+      "comment" : "Caption above the private chat composer once the session is end-to-end encrypted",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "כתוב הודעה..."
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "संदेश लिखें..."
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ketik pesan..."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "scrivi un messaggio..."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "メッセージを入力..."
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "메시지를 입력하세요..."
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ketik pesan..."
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "सन्देश टाइप गर..."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "typ een bericht..."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wpisz wiadomość..."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "escreve uma mensagem..."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "digite uma mensagem..."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "напиши сообщение..."
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "skriv ett meddelande..."
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ஒரு செய்தியைத் தட்டச்சு செய்க..."
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "พิมพ์ข้อความ..."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "bir mesaj yazın..."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "напиши повідомлення..."
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "پیغام ٹائپ کریں..."
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "nhập tin nhắn..."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "输入消息..."
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "輸入訊息..."
+            "value" : "private · end-to-end encrypted"
           }
         }
       }
@@ -18104,6 +18465,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "暱稱"
+          }
+        }
+      }
+    },
+    "content.jump.new_count" : {
+      "comment" : "Count of messages that arrived while scrolled up, shown in the jump-to-latest pill",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld new"
           }
         }
       }
@@ -23657,6 +24030,42 @@
         }
       }
     },
+    "geohash_people.state.nearby" : {
+      "comment" : "State label for someone physically in the location channel's area",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "in this area"
+          }
+        }
+      }
+    },
+    "geohash_people.state.teleported" : {
+      "comment" : "State label for someone who joined the location channel from elsewhere",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "teleported from elsewhere"
+          }
+        }
+      }
+    },
+    "geohash_people.state.you" : {
+      "comment" : "State label marking your own row in the people list",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "you"
+          }
+        }
+      }
+    },
     "geohash_people.tooltip.blocked" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -24011,6 +24420,42 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : " (你)"
+          }
+        }
+      }
+    },
+    "location_channels.accessibility.add_bookmark" : {
+      "comment" : "Accessibility action name for bookmarking a channel",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bookmark channel"
+          }
+        }
+      }
+    },
+    "location_channels.accessibility.remove_bookmark" : {
+      "comment" : "Accessibility action name for removing a channel bookmark",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "remove bookmark"
+          }
+        }
+      }
+    },
+    "location_channels.accessibility.switch_hint" : {
+      "comment" : "Accessibility hint on a channel row explaining activation switches to it",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "switches to this channel"
           }
         }
       }
@@ -31227,6 +31672,258 @@
         }
       }
     },
+    "media.accessibility.cancel_send" : {
+      "comment" : "Accessibility label for the cancel button on an in-flight media send",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cancel sending"
+          }
+        }
+      }
+    },
+    "media.image.accessibility.hidden" : {
+      "comment" : "Accessibility label for a blurred incoming image",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hidden image"
+          }
+        }
+      }
+    },
+    "media.image.accessibility.hint.open" : {
+      "comment" : "Accessibility hint for a revealed image; activating it opens the image full screen",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "opens the image full screen"
+          }
+        }
+      }
+    },
+    "media.image.accessibility.hint.reveal" : {
+      "comment" : "Accessibility hint for a blurred image; activating it reveals the image",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "reveals the image"
+          }
+        }
+      }
+    },
+    "media.image.accessibility.revealed" : {
+      "comment" : "Accessibility label for a revealed image",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "image"
+          }
+        }
+      }
+    },
+    "media.image.accessibility.sending" : {
+      "comment" : "Accessibility label for an image that is still sending",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sending image"
+          }
+        }
+      }
+    },
+    "media.image.action.delete" : {
+      "comment" : "Context menu action that deletes a received image",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "delete image"
+          }
+        }
+      }
+    },
+    "media.image.action.hide" : {
+      "comment" : "Context menu action that re-blurs a revealed image",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hide image"
+          }
+        }
+      }
+    },
+    "media.image.action.open" : {
+      "comment" : "Context menu action that opens an image full screen",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "open image"
+          }
+        }
+      }
+    },
+    "media.image.action.reveal" : {
+      "comment" : "Context menu action that reveals a blurred image",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "reveal image"
+          }
+        }
+      }
+    },
+    "media.image.delete_confirm_message" : {
+      "comment" : "Body of the confirmation dialog before deleting a received image",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "this cannot be undone — the sender may not be in range to send it again."
+          }
+        }
+      }
+    },
+    "media.image.delete_confirm_title" : {
+      "comment" : "Title of the confirmation dialog before deleting a received image",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "delete this image?"
+          }
+        }
+      }
+    },
+    "media.image.tap_to_reveal" : {
+      "comment" : "Caption on a blurred incoming image inviting a tap to reveal it",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tap to reveal"
+          }
+        }
+      }
+    },
+    "media.voice.accessibility.pause" : {
+      "comment" : "Accessibility label for pausing voice note playback",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pause voice note"
+          }
+        }
+      }
+    },
+    "media.voice.accessibility.play" : {
+      "comment" : "Accessibility label for playing a voice note",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "play voice note"
+          }
+        }
+      }
+    },
+    "mesh_peers.accessibility.open_dm_hint" : {
+      "comment" : "Accessibility hint on a peer row explaining activation opens a private chat",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "opens a private chat"
+          }
+        }
+      }
+    },
+    "mesh_peers.action.fingerprint" : {
+      "comment" : "Context menu action that shows a peer's fingerprint/verification screen",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "show fingerprint"
+          }
+        }
+      }
+    },
+    "mesh_peers.state.blocked" : {
+      "comment" : "State label for a blocked peer",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "blocked"
+          }
+        }
+      }
+    },
+    "mesh_peers.state.favorite" : {
+      "comment" : "State label for a favorited peer",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favorite"
+          }
+        }
+      }
+    },
+    "mesh_peers.state.offline" : {
+      "comment" : "State label for a peer that is not currently reachable",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "offline"
+          }
+        }
+      }
+    },
+    "mesh_peers.state.unread" : {
+      "comment" : "State label for a peer with unread private messages",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "new messages"
+          }
+        }
+      }
+    },
     "mesh_peers.tooltip.new_messages" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -33550,6 +34247,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "無法發送到位置頻道"
+          }
+        }
+      }
+    },
+    "system.mesh.block_failed" : {
+      "comment" : "System message shown when a mesh peer cannot be blocked",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cannot block %@: not found or unable to verify identity"
+          }
+        }
+      }
+    },
+    "system.mesh.blocked" : {
+      "comment" : "System message shown when a mesh peer is blocked",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "blocked %@. you will no longer receive messages from them"
+          }
+        }
+      }
+    },
+    "system.mesh.unblock_failed" : {
+      "comment" : "System message shown when a mesh peer cannot be unblocked",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cannot unblock %@: not found"
+          }
+        }
+      }
+    },
+    "system.mesh.unblocked" : {
+      "comment" : "System message shown when a mesh peer is unblocked",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "unblocked %@"
           }
         }
       }
@@ -36773,6 +37518,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "選擇圖像"
+          }
+        }
+      }
+    },
+    "media.image.accessibility.unavailable" : {
+      "comment" : "Accessibility label for an image whose file could not be loaded",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "image unavailable"
           }
         }
       }

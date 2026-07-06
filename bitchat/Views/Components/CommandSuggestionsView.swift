@@ -14,29 +14,46 @@ struct CommandSuggestionsView: View {
 
     @Binding var messageText: String
 
+    /// The command already typed in full, once arguments have begun.
+    private var typedCommandAlias: String? {
+        guard messageText.hasPrefix("/"),
+              let spaceIndex = messageText.firstIndex(of: " ")
+        else { return nil }
+        return String(messageText[..<spaceIndex]).lowercased()
+    }
+
     private var filteredCommands: [CommandInfo] {
-        guard messageText.hasPrefix("/") && !messageText.contains(" ") else { return [] }
+        guard messageText.hasPrefix("/") else { return [] }
         let isGeoPublic = locationChannelsModel.selectedChannel.isLocation
         let isGeoDM = privateConversationModel.selectedPeerID?.isGeoDM == true
-        return CommandInfo.all(isGeoPublic: isGeoPublic, isGeoDM: isGeoDM).filter { command in
+        let commands = CommandInfo.all(isGeoPublic: isGeoPublic, isGeoDM: isGeoDM)
+        // While arguments are being typed, keep the matched command's usage
+        // row visible instead of vanishing at the first space.
+        if let typed = typedCommandAlias {
+            return commands.filter { $0.alias == typed && $0.placeholder != nil }
+        }
+        return commands.filter { command in
             command.alias.starts(with: messageText.lowercased())
         }
     }
-    
+
     var body: some View {
         // Render nothing when there are no matches: a zero-height view would
         // still receive the composer VStack's spacing and push the input row
         // off-center.
         if !filteredCommands.isEmpty {
+            let isUsageReminder = typedCommandAlias != nil
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(filteredCommands) { command in
                     Button {
+                        // In usage-reminder mode the row is informational; an
+                        // insert here would wipe the arguments being typed.
+                        guard !isUsageReminder else { return }
                         messageText = command.alias + " "
                     } label: {
                         buttonRow(for: command)
                     }
                     .buttonStyle(.plain)
-                    .background(Color.gray.opacity(0.1))
                 }
             }
             .themedOverlayPanel()

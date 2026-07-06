@@ -49,6 +49,14 @@ final class ConversationUIModel: ObservableObject {
         chatViewModel.sendMessage(message)
     }
 
+    /// Resends a failed private message through the normal send path,
+    /// removing the failed original so the re-submission replaces it
+    /// instead of stacking a duplicate under the red bubble.
+    func resendFailedPrivateMessage(_ message: BitchatMessage) {
+        chatViewModel.removePrivateMessage(withID: message.id)
+        chatViewModel.sendMessage(message.content)
+    }
+
     func clearCurrentConversation() {
         chatViewModel.sendMessage("/clear")
     }
@@ -67,9 +75,21 @@ final class ConversationUIModel: ObservableObject {
         if let peerID, peerID.isGeoChat,
            let full = chatViewModel.fullNostrHex(forSenderPeerID: peerID) {
             chatViewModel.blockGeohashUser(pubkeyHexLowercased: full, displayName: displayName)
+        } else if let peerID, !peerID.isGeoDM, !peerID.isGeoChat {
+            // Mesh: block the peer's stable Noise identity resolved from the
+            // tapped peerID rather than re-resolving a display-name string.
+            chatViewModel.blockMeshPeer(peerID: peerID, displayName: displayName)
         } else {
             chatViewModel.sendMessage("/block \(displayName)")
         }
+    }
+
+    /// Mesh counterpart of `block(peerID:displayName:)`. Resolves the unblock by
+    /// the tapped peer's stable identity so the exact row is unblocked — this
+    /// also works for offline peers, which the `/unblock <displayName>` command
+    /// cannot resolve.
+    func unblock(peerID: PeerID, displayName: String) {
+        chatViewModel.unblockMeshPeer(peerID: peerID, displayName: displayName)
     }
 
     func updateAutocomplete(for text: String, cursorPosition: Int) {

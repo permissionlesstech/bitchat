@@ -232,7 +232,13 @@ final class PrivateConversationModel: ObservableObject {
         let headerPeerID = chatViewModel.getShortIDForNoiseKey(conversationPeerID)
         let peer = chatViewModel.getPeer(byID: headerPeerID)
         let displayName = resolveDisplayName(for: conversationPeerID, headerPeerID: headerPeerID, peer: peer)
-        let availability = resolveAvailability(for: headerPeerID, peer: peer)
+        // Geo DMs are always routed over Nostr (NIP-17); their nostr_ keys
+        // never resolve to a reachable mesh peer, so resolveAvailability would
+        // report .offline. Report .nostrAvailable so the header shows the
+        // globe instead of a misleading "offline" tag.
+        let availability = conversationPeerID.isGeoDM
+            ? .nostrAvailable
+            : resolveAvailability(for: headerPeerID, peer: peer)
         let encryptionStatus: EncryptionStatus? = conversationPeerID.isGeoDM
             ? nil
             : chatViewModel.getEncryptionStatus(for: headerPeerID)

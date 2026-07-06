@@ -12,7 +12,10 @@ jobs:
     runs-on: macos-latest
     # A hung test must fail fast, not hold a runner for GitHub's 360-minute
     # default (observed: intermittent app-suite hangs starving the queue).
-    timeout-minutes: 15
+    # The long steps carry tighter individual bounds (5-minute test watchdog,
+    # 6-minute benchmark step, 10-minute floor gate that may re-run the
+    # benchmarks up to twice on a noisy runner); this is the backstop.
+    timeout-minutes: 25
 
     strategy:
       fail-fast: false # Don't cancel other matrix jobs when one fails
@@ -102,9 +105,14 @@ jobs:
 
       # Order-of-magnitude performance regression gate. Floors are deliberately
       # generous (see bitchatTests/Performance/perf-floors.json) so this
-      # catches algorithmic regressions, never runner variance.
+      # catches algorithmic regressions, never runner variance. If a metric
+      # still lands below floor (a saturated runner can dip one), the script
+      # re-runs the benchmarks — appending to the same log and keeping each
+      # benchmark's best value per metric — so noise clears on retry while a
+      # real regression fails every attempt. Floors are never lowered by this.
       - name: Performance floor gate
         if: matrix.name == 'app'
+        timeout-minutes: 10
         run: ./scripts/check-perf-floors.sh perf-output.log
 
       # Informational only: surfaces per-file and total line coverage in the
@@ -145,3 +153,27 @@ jobs:
             ARCHS=arm64 \
             CODE_SIGNING_ALLOWED=NO \
             build
+
+  # Advisory only: SwiftLint reports style violations without ever failing the
+  # build. Runs in a pinned container (no Xcode plugin, no pbxproj changes) so
+  # it can never break the documented xcodebuild path or block a merge.
+  lint:
+    name: SwiftLint (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # This job runs a third-party container image, so give it the least
+    # privilege we can: a read-only token, and no credentials left in the
+    # checkout for the container to find.
+    permissions:
+      contents: read
+    container:
+      # Tag for readability, digest for immutability (tags can be repointed).
+      # Bump both together, deliberately — never a floating tag.
+      image: ghcr.io/realm/swiftlint:0.65.0@sha256:a482729f4b58741875af1566f23397f3f6db300372756fc31606d0a4527fab9e
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Run SwiftLint
+        run: swiftlint lint --reporter github-actions-logging

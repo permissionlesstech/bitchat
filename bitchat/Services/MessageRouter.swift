@@ -86,7 +86,7 @@ final class MessageRouter {
             }
             // Handle key updates
             if let newKey = note.userInfo?["peerPublicKey"] as? Data,
-               let _ = note.userInfo?["isKeyUpdate"] as? Bool {
+               note.userInfo?["isKeyUpdate"] is Bool {
                 let peerID = PeerID(publicKey: newKey)
                 Task { @MainActor in
                     self.flushOutbox(for: peerID)

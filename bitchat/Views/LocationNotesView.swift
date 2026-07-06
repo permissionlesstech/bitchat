@@ -30,7 +30,6 @@ struct LocationNotesView: View {
     private var maxDraftLines: Int { dynamicTypeSize.isAccessibilitySize ? 5 : 3 }
 
     private enum Strings {
-        static let closeAccessibility = String(localized: "common.close", comment: "Accessibility label for close buttons")
         static let description: LocalizedStringKey = "location_notes.description"
         static let loadingRecent: LocalizedStringKey = "location_notes.loading_recent"
         static let relaysPaused: LocalizedStringKey = "location_notes.relays_paused"
@@ -97,13 +96,7 @@ struct LocationNotesView: View {
     }
 
     private var closeButton: some View {
-        Button(action: { dismiss() }) {
-            Image(systemName: "xmark")
-                .bitchatFont(size: 13, weight: .semibold)
-                .frame(width: 32, height: 32)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Strings.closeAccessibility)
+        SheetCloseButton { dismiss() }
     }
 
     private var headerSection: some View {
@@ -126,12 +119,12 @@ struct LocationNotesView: View {
             }
             Text(Strings.description)
                 .bitchatFont(size: 12)
-                .foregroundColor(.secondary)
+                .foregroundColor(palette.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             if manager.state == .noRelays {
                 Text(Strings.relaysPaused)
                     .bitchatFont(size: 11)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(palette.secondary)
             }
         }
         .padding(.horizontal, 16)
@@ -180,7 +173,7 @@ struct LocationNotesView: View {
                 if !ts.isEmpty {
                     Text(ts)
                         .bitchatFont(size: 11)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(palette.secondary)
                 }
                 Spacer()
             }
@@ -197,7 +190,7 @@ struct LocationNotesView: View {
                 .bitchatFont(size: 13, weight: .semibold)
             Text(Strings.relaysRetryHint)
                 .bitchatFont(size: 12)
-                .foregroundColor(.secondary)
+                .foregroundColor(palette.secondary)
             Button(Strings.retry) { manager.refresh() }
                 .bitchatFont(size: 12)
                 .buttonStyle(.plain)
@@ -210,7 +203,7 @@ struct LocationNotesView: View {
             ProgressView()
             Text(Strings.loadingNotes)
                 .bitchatFont(size: 12)
-                .foregroundColor(.secondary)
+                .foregroundColor(palette.secondary)
             Spacer()
         }
         .padding(.vertical, 8)
@@ -222,7 +215,7 @@ struct LocationNotesView: View {
                 .bitchatFont(size: 13, weight: .semibold)
             Text(Strings.emptySubtitle)
                 .bitchatFont(size: 12)
-                .foregroundColor(.secondary)
+                .foregroundColor(palette.secondary)
         }
         .padding(.vertical, 6)
     }

@@ -134,6 +134,7 @@ private struct ContentPeopleListView: View {
     @EnvironmentObject private var appChromeModel: AppChromeModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
     @EnvironmentObject private var verificationModel: VerificationModel
+    @EnvironmentObject private var conversationUIModel: ConversationUIModel
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @EnvironmentObject private var peerListModel: PeerListModel
     @Environment(\.dismiss) private var dismiss
@@ -159,24 +160,23 @@ private struct ContentPeopleListView: View {
                                 .font(.bitchatSystem(size: 14))
                         }
                         .buttonStyle(.plain)
+                        // .help maps to the accessibility *hint* on iOS, so the
+                        // button still needs a spoken name.
+                        .accessibilityLabel(
+                            String(localized: "content.accessibility.verification", comment: "Accessibility label for the verification QR button")
+                        )
                         .help(
                             String(localized: "content.help.verification", comment: "Help text for verification button")
                         )
                     }
-                    Button(action: {
+                    SheetCloseButton {
                         withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
                             dismiss()
                             showSidebar = false
                             showVerifySheet = false
                             privateConversationModel.endConversation()
                         }
-                    }) {
-                        Image(systemName: "xmark")
-                            .bitchatFont(size: 12, weight: .semibold)
-                            .frame(width: 32, height: 32)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Close")
                 }
 
                 let activeText = String.localizedStringWithFormat(
@@ -198,13 +198,13 @@ private struct ContentPeopleListView: View {
                         Text(subtitle)
                             .foregroundColor(subtitleColor)
                         Text(activeText)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(palette.secondary)
                     }
                     .bitchatFont(size: 12)
                 } else {
                     Text(activeText)
                         .bitchatFont(size: 12)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(palette.secondary)
                 }
             }
             .padding(.horizontal, 16)
@@ -231,6 +231,13 @@ private struct ContentPeopleListView: View {
                             },
                             onShowFingerprint: { peerID in
                                 appChromeModel.showFingerprint(for: peerID)
+                            },
+                            onToggleBlock: { peer in
+                                if peer.isBlocked {
+                                    conversationUIModel.unblock(peerID: peer.peerID, displayName: peer.displayName)
+                                } else {
+                                    conversationUIModel.block(peerID: peer.peerID, displayName: peer.displayName)
+                                }
                             }
                         )
                     }
@@ -333,6 +340,9 @@ private struct ContentPrivateChatSheetView: View {
                                 Image(systemName: headerState.isFavorite ? "star.fill" : "star")
                                     .font(.bitchatSystem(size: 14))
                                     .foregroundColor(headerState.isFavorite ? Color.yellow : palette.primary)
+                                    // Same visual box + 44pt hit target as SheetCloseButton.
+                                    .frame(width: 32, height: 32)
+                                    .contentShape(Rectangle().inset(by: -6))
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel(
@@ -346,24 +356,20 @@ private struct ContentPrivateChatSheetView: View {
 
                     Spacer(minLength: 0)
 
-                    Button(action: {
+                    SheetCloseButton {
                         withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
                             privateConversationModel.endConversation()
                             showSidebar = true
                         }
-                    }) {
-                        Image(systemName: "xmark")
-                            .bitchatFont(size: 12, weight: .semibold)
-                            .frame(width: 32, height: 32)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Close")
                 }
-                .frame(height: headerHeight)
+                // minHeight so scaled text at accessibility sizes grows the
+                // bar instead of clipping inside it.
+                .frame(minHeight: headerHeight)
                 .padding(.horizontal, 16)
                 .padding(.top, 10)
                 .padding(.bottom, 12)
-                .themedSurface()
+                .modifier(PrivateHeaderChrome())
             }
 
             MessageListView(
@@ -384,6 +390,8 @@ private struct ContentPrivateChatSheetView: View {
             if !theme.usesGlassChrome {
                 Divider()
             }
+
+            privacyCaption
 
             #if os(iOS)
             ContentComposerView(
@@ -421,6 +429,69 @@ private struct ContentPrivateChatSheetView: View {
                 }
         )
     }
+
+    /// Persistent one-line reminder that this composer feeds a private
+    /// conversation — the DM sheet otherwise renders identically to the
+    /// public timeline. Claims end-to-end encryption only once the session
+    /// is actually secured.
+    private var privacyCaption: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "lock.fill")
+                .font(.bitchatSystem(size: 9))
+                // Optical centering: lock.fill's ink is bottom-heavy, so
+                // geometric centering reads low next to the caption text.
+                .offset(y: -1)
+            Text(verbatim: privacyCaptionText)
+                .bitchatFont(size: 11, weight: .medium)
+        }
+        .foregroundColor(Color.orange)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 4)
+        // The orange text is signature enough; a tinted band here reads as a
+        // stray strip against the untinted composer chrome below it, so the
+        // caption sits on the same surface as the rest of the bottom chrome.
+        .themedSurface()
+        .accessibilityElement(children: .combine)
+    }
+
+    private var privacyCaptionText: String {
+        // Geohash DMs are NIP-17 gift-wrapped — always end-to-end encrypted,
+        // even though they carry no Noise session status. Mesh DMs earn the
+        // "encrypted" claim only once the Noise handshake has secured.
+        let isGeoDM = privateConversationModel.selectedPeerID?.isGeoDM == true
+        let noiseSecured: Bool = {
+            switch privateConversationModel.selectedHeaderState?.encryptionStatus {
+            case .noiseSecured, .noiseVerified: return true
+            default: return false
+            }
+        }()
+        if isGeoDM || noiseSecured {
+            return String(localized: "content.private.caption_encrypted", comment: "Caption above the private chat composer once the session is end-to-end encrypted")
+        }
+        return String(localized: "content.private.caption", comment: "Caption above the private chat composer before encryption is established")
+    }
+}
+
+/// Chrome for the private-chat header. Matrix keeps its orange privacy wash
+/// over an opaque themed surface. Glass gets the same floating panel as the
+/// main header instead: an orange wash over the backdrop gradient reads as a
+/// muddy gray-beige band, and the DM signature is already carried by the
+/// orange lock, caption, and composer accents.
+private struct PrivateHeaderChrome: ViewModifier {
+    @Environment(\.appTheme) private var theme
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if theme.usesGlassChrome {
+            content.themedChromePanel(edge: .top)
+        } else {
+            // Orange tint before themedSurface so it layers in front of the
+            // opaque themed background rather than behind it.
+            content
+                .background(Color.orange.opacity(0.06))
+                .themedSurface()
+        }
+    }
 }
 
 private struct ContentPrivateHeaderInfoButton: View {
@@ -452,17 +523,30 @@ private struct ContentPrivateHeaderInfoButton: View {
                         .foregroundColor(.purple)
                         .accessibilityLabel(String(localized: "content.accessibility.available_nostr", comment: "Accessibility label for Nostr-available peer indicator"))
                 case .offline:
-                    EmptyView()
+                    // Absence of a glyph was the only offline signal; say it.
+                    Text("mesh_peers.state.offline")
+                        .bitchatFont(size: 11)
+                        .foregroundColor(palette.secondary)
                 }
 
                 Text(headerState.displayName)
                     .bitchatFont(size: 16, weight: .medium)
                     .foregroundColor(palette.primary)
+                    // Middle truncation keeps the identity suffix visible on
+                    // long nicknames instead of wrapping into the fixed-height
+                    // header.
+                    .lineLimit(1)
+                    .truncationMode(.middle)
 
                 if let encryptionStatus = headerState.encryptionStatus,
                    let icon = encryptionStatus.icon {
                     Image(systemName: icon)
                         .font(.bitchatSystem(size: 14))
+                        // Optical centering: the lock glyphs' ink is bottom-heavy
+                        // (solid body, thin shackle), so geometric centering reads
+                        // ~1pt low next to the name. The seal badge is symmetric
+                        // and needs no lift.
+                        .offset(y: icon.hasPrefix("lock") ? -1 : 0)
                         .foregroundColor(
                             encryptionStatus == .noiseVerified || encryptionStatus == .noiseSecured
                             ? palette.primary
@@ -489,6 +573,6 @@ private struct ContentPrivateHeaderInfoButton: View {
         .accessibilityHint(
             String(localized: "content.accessibility.view_fingerprint_hint", comment: "Accessibility hint for viewing encryption fingerprint")
         )
-        .frame(height: headerHeight)
+        .frame(minHeight: headerHeight)
     }
 }

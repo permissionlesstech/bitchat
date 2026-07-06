@@ -12,6 +12,11 @@ import Foundation
 struct TestConstants {
     static let defaultTimeout: TimeInterval = 5.0
     static let shortTimeout: TimeInterval = 1.0
+    /// For positive waits on work that hops through `Task.detached` or
+    /// background queues: those contend with every parallel test worker for
+    /// the global executor, so a loaded CI runner can exceed
+    /// `defaultTimeout`. `waitUntil` returns as soon as the condition holds,
+    /// so passing runs never pay the longer timeout.
     static let longTimeout: TimeInterval = 10.0
     
     static let testNickname1 = "Alice"

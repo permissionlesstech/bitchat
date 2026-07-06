@@ -257,7 +257,29 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
         
         return false
     }
-    
+
+    /// Block or unblock a mesh peer by its stable Noise identity.
+    ///
+    /// The block is keyed by the peer's fingerprint, resolved from `peerID`
+    /// (cache / mesh session / known-peer Noise key). This works even when the
+    /// peer is offline — including offline favorites — so the exact tapped peer
+    /// is (un)blocked unambiguously instead of being re-resolved by a
+    /// display-name string that two peers could share.
+    /// - Returns: the resolved fingerprint, or `nil` if the identity is unknown.
+    @discardableResult
+    func setBlocked(_ peerID: PeerID, blocked: Bool) -> String? {
+        guard let fingerprint = getFingerprint(for: peerID) else {
+            SecureLogger.warning(
+                "⚠️ Cannot \(blocked ? "block" : "unblock") - unknown identity for peer: \(peerID)",
+                category: .session
+            )
+            return nil
+        }
+        identityManager.setBlocked(fingerprint, isBlocked: blocked)
+        updatePeers()
+        return fingerprint
+    }
+
     /// Toggle favorite status
     func toggleFavorite(_ peerID: PeerID) {
         guard let peer = getPeer(by: peerID) else {

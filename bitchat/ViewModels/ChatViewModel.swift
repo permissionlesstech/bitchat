@@ -988,6 +988,48 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         )
     }
 
+    // Mesh (Noise identity) block helpers. Unlike the `/block <nickname>`
+    // command, these resolve and persist the block by the peer's stable
+    // fingerprint (derived from `peerID`), so the exact tapped peer is
+    // (un)blocked — unambiguous across nickname collisions and functional for
+    // offline peers that can no longer be resolved through the mesh service.
+    @MainActor
+    func blockMeshPeer(peerID: PeerID, displayName: String) {
+        setMeshPeerBlocked(peerID, blocked: true, displayName: displayName)
+    }
+
+    @MainActor
+    func unblockMeshPeer(peerID: PeerID, displayName: String) {
+        setMeshPeerBlocked(peerID, blocked: false, displayName: displayName)
+    }
+
+    @MainActor
+    private func setMeshPeerBlocked(_ peerID: PeerID, blocked: Bool, displayName: String) {
+        guard unifiedPeerService.setBlocked(peerID, blocked: blocked) != nil else {
+            addCommandOutput(
+                String(
+                    format: String(
+                        localized: blocked ? "system.mesh.block_failed" : "system.mesh.unblock_failed",
+                        comment: "System message shown when a mesh peer cannot be blocked or unblocked"
+                    ),
+                    locale: .current,
+                    displayName
+                )
+            )
+            return
+        }
+        addCommandOutput(
+            String(
+                format: String(
+                    localized: blocked ? "system.mesh.blocked" : "system.mesh.unblocked",
+                    comment: "System message shown when a mesh peer is blocked or unblocked"
+                ),
+                locale: .current,
+                displayName
+            )
+        )
+    }
+
     func displayNameForNostrPubkey(_ pubkeyHex: String) -> String {
         publicConversationCoordinator.displayNameForNostrPubkey(pubkeyHex)
     }
@@ -1438,7 +1480,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
 
     /// Processes IRC-style commands starting with '/'.
     /// - Parameter command: The full command string including the leading slash
-    /// - Note: Supports commands like /nick, /msg, /who, /slap, /clear, /help
+    /// - Note: Supports commands like /msg, /who, /slap, /clear, /help
     @MainActor
     func handleCommand(_ command: String) {
         let result = commandProcessor.process(command)
@@ -1446,13 +1488,26 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         switch result {
         case .success(let message):
             if let msg = message {
-                addSystemMessage(msg)
+                addCommandOutput(msg)
             }
         case .error(let message):
-            addSystemMessage(message)
+            addCommandOutput(message)
         case .handled:
             // Command was handled, no message needed
             break
+        }
+    }
+
+    /// Command output belongs in the conversation where the user typed the
+    /// command; the public timeline is invisible while a DM is open. The DM
+    /// selection is read *after* processing so commands that switch chats
+    /// (`/msg`) print into the conversation they just opened.
+    @MainActor
+    private func addCommandOutput(_ content: String) {
+        if let peerID = selectedPrivateChatPeer {
+            addLocalPrivateSystemMessage(content, to: peerID)
+        } else {
+            addSystemMessage(content)
         }
     }
 

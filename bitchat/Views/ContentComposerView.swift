@@ -6,6 +6,7 @@ import UIKit
 struct ContentComposerView: View {
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
+    @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
 
@@ -43,7 +44,6 @@ struct ContentComposerView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .buttonStyle(.plain)
-                        .background(Color.gray.opacity(0.1))
                     }
                 }
                 .themedOverlayPanel()
@@ -60,10 +60,8 @@ struct ContentComposerView: View {
                 TextField(
                     "",
                     text: $messageText,
-                    prompt: Text(
-                        String(localized: "content.input.message_placeholder", comment: "Placeholder shown in the chat composer")
-                    )
-                    .foregroundColor(palette.secondary.opacity(0.6))
+                    prompt: Text(placeholderText)
+                        .foregroundColor(palette.secondary.opacity(0.6))
                 )
                 .textFieldStyle(.plain)
                 .bitchatFont(size: 15)
@@ -110,6 +108,33 @@ struct ContentComposerView: View {
 }
 
 private extension ContentComposerView {
+    /// States where a message will land: the DM partner's name for private
+    /// chats, the channel (and its public nature) otherwise — so a stressed
+    /// user never has to guess who can read what they're typing.
+    var placeholderText: String {
+        if let header = privateConversationModel.selectedHeaderState {
+            // A geohash-DM display name already carries its own "#geohash/@name"
+            // form, so it must not get another "@" prefix; a mesh nickname does.
+            let isGeoDM = privateConversationModel.selectedPeerID?.isGeoDM == true
+            let target = isGeoDM ? header.displayName : "@\(header.displayName)"
+            return String(
+                format: String(localized: "content.input.placeholder.private", comment: "Composer placeholder inside a private chat, naming the conversation partner"),
+                locale: .current,
+                target
+            )
+        }
+        switch locationChannelsModel.selectedChannel {
+        case .mesh:
+            return String(localized: "content.input.placeholder.mesh", comment: "Composer placeholder for the public mesh channel")
+        case .location(let channel):
+            return String(
+                format: String(localized: "content.input.placeholder.location", comment: "Composer placeholder for a public geohash channel, naming it"),
+                locale: .current,
+                channel.geohash
+            )
+        }
+    }
+
     var recordingIndicator: some View {
         HStack(spacing: 12) {
             Image(systemName: "waveform.circle.fill")
@@ -158,7 +183,19 @@ private extension ContentComposerView {
                 imagePickerSourceType = .camera
                 showImagePicker = true
             }
-            .accessibilityLabel("Tap for library, long press for camera")
+            .accessibilityLabel(
+                String(localized: "content.accessibility.attach_photo", comment: "Accessibility label for the photo attachment button")
+            )
+            .accessibilityHint(
+                String(localized: "content.accessibility.attach_photo_hint", comment: "Accessibility hint explaining the attachment button opens the photo library")
+            )
+            .accessibilityAddTraits(.isButton)
+            // The long-press → camera path is unreachable for VoiceOver users;
+            // mirror it as a named action.
+            .accessibilityAction(named: Text("content.accessibility.take_photo", comment: "Accessibility action name for taking a photo with the camera")) {
+                imagePickerSourceType = .camera
+                showImagePicker = true
+            }
         #else
         Button(action: { showMacImagePicker = true }) {
             Image(systemName: "photo.circle.fill")
@@ -167,7 +204,9 @@ private extension ContentComposerView {
                 .frame(width: 36, height: 36)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Choose photo")
+        .accessibilityLabel(
+            String(localized: "content.accessibility.choose_photo", comment: "Accessibility label for the macOS photo picker button")
+        )
         #endif
     }
 
@@ -209,7 +248,27 @@ private extension ContentComposerView {
                             }
                     )
             )
-            .accessibilityLabel("Hold to record a voice note")
+            .accessibilityLabel(
+                String(localized: "content.accessibility.record_voice_note", comment: "Accessibility label for the voice note button")
+            )
+            .accessibilityValue(
+                voiceRecordingVM.state.isActive
+                ? String(localized: "content.accessibility.recording", comment: "Accessibility value announced while a voice note is recording")
+                : ""
+            )
+            .accessibilityHint(
+                String(localized: "content.accessibility.record_voice_hint", comment: "Accessibility hint explaining double-tap toggles voice recording")
+            )
+            .accessibilityAddTraits(.isButton)
+            // Press-and-hold drag gestures can't be activated by VoiceOver;
+            // give it a start/stop toggle as the default action.
+            .accessibilityAction {
+                if voiceRecordingVM.state.isActive {
+                    voiceRecordingVM.finish(completion: conversationUIModel.sendVoiceNote)
+                } else {
+                    voiceRecordingVM.start(shouldShow: conversationUIModel.canSendMediaInCurrentContext)
+                }
+            }
     }
 
     func sendButtonView(enabled: Bool) -> some View {

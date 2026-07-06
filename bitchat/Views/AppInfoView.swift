@@ -55,6 +55,26 @@ struct AppInfoView: View {
             )
         }
 
+        enum Legend {
+            static let title: LocalizedStringKey = "app_info.legend.title"
+            /// Every glyph the peer lists and headers use, in one place —
+            /// nothing else in the app defines them.
+            static let items: [(icon: String, text: LocalizedStringKey)] = [
+                ("antenna.radiowaves.left.and.right", "app_info.legend.mesh_connected"),
+                ("point.3.filled.connected.trianglepath.dotted", "app_info.legend.mesh_relayed"),
+                ("globe", "app_info.legend.nostr"),
+                ("person", "app_info.legend.offline"),
+                ("mappin.and.ellipse", "app_info.legend.location_nearby"),
+                ("face.dashed", "app_info.legend.teleported"),
+                ("lock.fill", "app_info.legend.encrypted"),
+                ("lock.slash", "app_info.legend.encryption_failed"),
+                ("checkmark.seal.fill", "app_info.legend.verified"),
+                ("star.fill", "app_info.legend.favorite"),
+                ("envelope.fill", "app_info.legend.unread"),
+                ("nosign", "app_info.legend.blocked")
+            ]
+        }
+
         enum Privacy {
             static let title: LocalizedStringKey = "app_info.privacy.title"
             static let noTracking = AppInfoFeatureInfo(
@@ -118,14 +138,8 @@ struct AppInfoView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark")
-                            .bitchatFont(size: 13, weight: .semibold)
-                            .foregroundColor(textColor)
-                            .frame(width: 32, height: 32)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("app_info.close")
+                    SheetCloseButton { dismiss() }
+                        .foregroundColor(textColor)
                 }
             }
         }
@@ -200,6 +214,28 @@ struct AppInfoView: View {
                 FeatureRow(info: Strings.Features.geohash)
 
                 FeatureRow(info: Strings.Features.mentions)
+            }
+
+            // Symbols legend
+            VStack(alignment: .leading, spacing: 10) {
+                SectionHeader(Strings.Legend.title)
+
+                ForEach(Strings.Legend.items, id: \.icon) { item in
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: item.icon)
+                            .font(.bitchatSystem(size: 14))
+                            .foregroundColor(textColor)
+                            .frame(width: 30)
+
+                        Text(item.text)
+                            .bitchatFont(size: 13)
+                            .foregroundColor(secondaryTextColor)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Spacer()
+                    }
+                    .accessibilityElement(children: .combine)
+                }
             }
 
             // Privacy

@@ -100,7 +100,7 @@ private extension ChatViewModelBootstrapper {
                     category: .session
                 )
                 viewModel.conversations.setDeliveryStatus(
-                    .failed(reason: "Not delivered"),
+                    .failed(reason: String(localized: "content.delivery.reason.not_delivered", comment: "Failure reason shown when the router gave up delivering a message")),
                     forMessageID: messageID
                 )
             }

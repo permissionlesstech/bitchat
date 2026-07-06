@@ -132,4 +132,3 @@ private extension Data {
         replaceSubrange(offset..<(offset+4), with: bytes)
     }
 }
-

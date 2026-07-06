@@ -105,10 +105,27 @@ final class CommandProcessor {
         case "/unfav":
             if inGeoPublic || inGeoDM { return .error(message: "favorites are only for mesh peers in #mesh") }
             return handleFavorite(args, add: false)
+        case "/help":
+            return .success(message: Self.helpText)
         default:
-            return .error(message: "unknown command: \(cmd)")
+            return .error(message: "unknown command: \(cmd) — type /help for commands")
         }
     }
+
+    /// Local-only command reference, printed as a system message. The
+    /// suggestion panel hides once arguments are typed, and typos used to
+    /// dead-end in a bare "unknown command" — this is the way out.
+    static let helpText = """
+    commands:
+    /msg @name [message] — start a private chat
+    /who — list who's here
+    /clear — clear this chat
+    /hug @name — send a hug
+    /slap @name — slap with a large trout
+    /block @name · /unblock @name
+    /fav @name · /unfav @name — favorites (mesh only)
+    /help — this list
+    """
 
     // MARK: - Command Handlers
     

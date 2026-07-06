@@ -1326,7 +1326,7 @@ extension BLEService: GossipSyncManager.Delegate {
 
 extension BLEService: CBCentralManagerDelegate {
     #if os(iOS)
-    func centralManager(_ central: CBCentralManager, willRestoreState dict: [String : Any]) {
+    func centralManager(_ central: CBCentralManager, willRestoreState dict: [String: Any]) {
         let restoredPeripherals = (dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral]) ?? []
         let restoredServices = (dict[CBCentralManagerRestoredStateScanServicesKey] as? [CBUUID]) ?? []
         let restoredOptions = (dict[CBCentralManagerRestoredStateScanOptionsKey] as? [String: Any]) ?? [:]
@@ -2008,7 +2008,7 @@ extension BLEService: CBPeripheralManagerDelegate {
     }
     
     #if os(iOS)
-    func peripheralManager(_ peripheral: CBPeripheralManager, willRestoreState dict: [String : Any]) {
+    func peripheralManager(_ peripheral: CBPeripheralManager, willRestoreState dict: [String: Any]) {
         let restoredServices = (dict[CBPeripheralManagerRestoredStateServicesKey] as? [CBMutableService]) ?? []
         let restoredAdvertisement = (dict[CBPeripheralManagerRestoredStateAdvertisementDataKey] as? [String: Any]) ?? [:]
 
@@ -2849,7 +2849,7 @@ extension BLEService {
 
                 // Notify delegate of failure
                 notifyUI { [weak self] in
-                    self?.deliverTransportEvent(.messageDeliveryStatusUpdated(messageID: message.messageID, status: .failed(reason: "Encryption failed")))
+                    self?.deliverTransportEvent(.messageDeliveryStatusUpdated(messageID: message.messageID, status: .failed(reason: String(localized: "content.delivery.reason.encryption_failed", comment: "Failure reason shown when a message could not be encrypted for the peer"))))
                 }
             }
         }
@@ -3108,10 +3108,9 @@ extension BLEService {
 
         case .leave:
             handleLeave(packet, from: senderID)
-            
+
         case .none:
             SecureLogger.warning("⚠️ Unknown message type: \(packet.type)", category: .session)
-            break
         }
         
         if forwardAlongRouteIfNeeded(packet) {

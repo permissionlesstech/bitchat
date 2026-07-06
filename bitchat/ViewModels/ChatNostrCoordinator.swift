@@ -71,7 +71,7 @@ final class ChatNostrCoordinator {
         key: Data?
     ) {
         guard let context else { return }
-        if let _ = key {
+        if key != nil {
             if let identity = context.currentNostrIdentity() {
                 context.sendGeohashDeliveryAck(for: message.id, toRecipientHex: senderPubkey, from: identity)
             }
@@ -84,7 +84,7 @@ final class ChatNostrCoordinator {
         }
 
         if !wasReadBefore && context.selectedPrivateChatPeer == message.senderPeerID {
-            if let _ = key {
+            if key != nil {
                 if let identity = context.currentNostrIdentity() {
                     context.sendGeohashReadReceipt(message.id, toRecipientHex: senderPubkey, from: identity)
                 }
