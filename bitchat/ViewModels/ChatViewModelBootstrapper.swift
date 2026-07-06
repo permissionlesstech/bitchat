@@ -72,6 +72,7 @@ final class ChatViewModelBootstrapper {
         configureNoiseCallbacks()
         bindTransferProgress()
         configureGeoChannels()
+        configureGateway()
         bindTeleportState()
         requestNotifications()
         registerObservers()
@@ -242,6 +243,68 @@ private extension ChatViewModelBootstrapper {
             locationManager: viewModel.locationManager,
             context: viewModel
         )
+    }
+
+    /// Wires the gateway-mode policy layer (`GatewayService`) to the mesh
+    /// transport, the relay manager, and the inbound Nostr pipeline. All
+    /// dependencies are closures so the service stays unit-testable with
+    /// fakes.
+    func configureGateway() {
+        // Gateway mode bridges BLE mesh <-> Nostr; a mock transport (tests)
+        // has no carrier packets to bridge.
+        guard let bleService = viewModel.meshService as? BLEService else { return }
+        let gateway = GatewayService.shared
+
+        gateway.publishToRelays = { event, geohash in
+            let relays = GeoRelayDirectory.shared.closestRelays(
+                toGeohash: geohash,
+                count: TransportConfig.nostrGeoRelayCount
+            )
+            if relays.isEmpty {
+                NostrRelayManager.shared.sendEvent(event)
+            } else {
+                NostrRelayManager.shared.sendEvent(event, to: relays)
+            }
+        }
+        gateway.broadcastToMesh = { [weak bleService] payload in
+            bleService?.broadcastNostrCarrier(payload)
+        }
+        gateway.sendToGatewayPeer = { [weak bleService] payload, peer in
+            bleService?.sendNostrCarrier(payload, to: peer) ?? false
+        }
+        gateway.availableGatewayPeers = { [weak bleService] in
+            bleService?.reachableGatewayPeers() ?? []
+        }
+        gateway.relaysConnected = { NostrRelayManager.shared.isConnected }
+        gateway.currentGeohash = { [weak viewModel] in viewModel?.currentGeohash }
+        // Carried events enter the same pipeline as relay-received events so
+        // blocking, rate limits, dedup, and rendering behave identically.
+        gateway.injectInbound = { [weak viewModel] event in
+            viewModel?.handleNostrEvent(event)
+        }
+        // The capability bit is advertised ONLY while the toggle is on; a
+        // change forces a re-announce so peers learn promptly.
+        gateway.onEnabledChanged = { [weak bleService] enabled in
+            bleService?.setLocalCapability(.gateway, enabled: enabled)
+        }
+        bleService.onNostrCarrierPacket = { payload, from, directedToUs in
+            GatewayService.shared.handleMeshCarrier(payload, from: from, directedToUs: directedToUs)
+        }
+
+        // Uplinks deposited while relays were unreachable flush on reconnect.
+        NostrRelayManager.shared.$isConnected
+            .receive(on: DispatchQueue.main)
+            .sink { connected in
+                if connected {
+                    GatewayService.shared.flushQueuedUplinks()
+                }
+            }
+            .store(in: &viewModel.cancellables)
+
+        // Apply the persisted toggle at launch.
+        if gateway.isEnabled {
+            bleService.setLocalCapability(.gateway, enabled: true)
+        }
     }
 
     func bindTeleportState() {

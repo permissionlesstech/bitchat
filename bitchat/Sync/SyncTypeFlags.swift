@@ -23,6 +23,10 @@ struct SyncTypeFlags: OptionSet {
         // Courier envelopes are directed deposits between trusted peers and
         // must never spread via gossip sync.
         case .courierEnvelope: return nil
+        // Gateway carriers are ephemeral live traffic (uplinks are directed,
+        // downlinks are rate-budgeted rebroadcasts); replaying them via sync
+        // would waste airtime and extend their lifetime.
+        case .nostrCarrier: return nil
         }
     }
 

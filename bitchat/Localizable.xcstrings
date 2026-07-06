@@ -9348,6 +9348,18 @@
         }
       }
     },
+    "content.accessibility.gateway_active" : {
+      "comment" : "Accessibility label for the internet gateway indicator",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Internet gateway active, sharing your connection with the mesh"
+          }
+        }
+      }
+    },
     "content.accessibility.jump_to_latest" : {
       "comment" : "Accessibility label for the jump to latest messages button",
       "extractionState" : "manual",
@@ -17872,6 +17884,18 @@
         }
       }
     },
+    "content.header.gateway_active" : {
+      "comment" : "Tooltip for the internet gateway indicator",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sharing your internet connection with nearby mesh peers"
+          }
+        }
+      }
+    },
     "content.header.people" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -25713,6 +25737,30 @@
         }
       }
     },
+    "location_channels.gateway.subtitle" : {
+      "comment" : "Explanation under the internet gateway toggle",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "share your internet with nearby mesh peers so their geohash messages reach the network"
+          }
+        }
+      }
+    },
+    "location_channels.gateway.title" : {
+      "comment" : "Title for the internet gateway toggle in the location channels sheet",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "internet gateway"
+          }
+        }
+      }
+    },
     "location_channels.loading_nearby" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -33531,6 +33579,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "無法向 %@ 發送：對方無法透過 mesh 或 Nostr 到達。"
+          }
+        }
+      }
+    },
+    "system.gateway.sent_via_mesh" : {
+      "comment" : "System message when a geohash message was handed to a mesh internet gateway because no relay is reachable",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sent via mesh gateway"
           }
         }
       }
