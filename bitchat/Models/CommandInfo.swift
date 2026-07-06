@@ -20,6 +20,7 @@ enum CommandInfo: String, Identifiable {
     case hug
     case message = "msg"
     case slap
+    case pay
     case unblock
     case who
     case favorite = "fav"
@@ -33,6 +34,8 @@ enum CommandInfo: String, Identifiable {
         switch self {
         case .block, .hug, .message, .slap, .unblock, .favorite, .unfavorite:
             return "<" + String(localized: "content.input.nickname_placeholder") + ">"
+        case .pay:
+            return "<" + String(localized: "content.input.token_placeholder") + ">"
         case .clear, .help, .who:
             return nil
         }
@@ -45,6 +48,7 @@ enum CommandInfo: String, Identifiable {
         case .help:         String(localized: "content.commands.help")
         case .hug:          String(localized: "content.commands.hug")
         case .message:      String(localized: "content.commands.message")
+        case .pay:          String(localized: "content.commands.pay")
         case .slap:         String(localized: "content.commands.slap")
         case .unblock:      String(localized: "content.commands.unblock")
         case .who:          String(localized: "content.commands.who")
@@ -54,12 +58,19 @@ enum CommandInfo: String, Identifiable {
     }
 
     static func all(isGeoPublic: Bool, isGeoDM: Bool) -> [CommandInfo] {
-        let baseCommands: [CommandInfo] = [.block, .unblock, .clear, .help, .hug, .message, .slap, .who]
+        var commands: [CommandInfo] = [.block, .unblock, .clear, .help, .hug, .message, .slap, .who]
+        // Cashu tokens are bearer instruments: in a public geohash any nearby
+        // stranger can redeem one, so don't *suggest* /pay there (the
+        // processor still allows it behind an explicit "public" confirm).
+        // Payments make sense in every DM and in mesh public.
+        if !isGeoPublic {
+            commands.append(.pay)
+        }
         // The processor rejects favorites in geohash contexts, so only
         // suggest them where they actually work: mesh.
         if isGeoPublic || isGeoDM {
-            return baseCommands
+            return commands
         }
-        return baseCommands + [.favorite, .unfavorite]
+        return commands + [.favorite, .unfavorite]
     }
 }
