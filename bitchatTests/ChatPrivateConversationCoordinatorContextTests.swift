@@ -582,6 +582,38 @@ struct ChatPrivateConversationCoordinatorContextTests {
         #expect(context.meshOnlySystemMessages == ["alice favorited you", "alice unfavorited you"])
     }
 
+    /// A Nostr DM whose sender resolved to a known noise key must be labeled
+    /// with the favorite's nickname, not the geohash-scoped anon fallback.
+    @Test @MainActor
+    func nostrPrivateMessage_noiseKeyedConversationUsesFavoriteNickname() async {
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+        let noiseKey = Data(repeating: 0xDA, count: 32)
+        let convKey = PeerID(hexData: noiseKey)
+        let senderPubkey = "0badc0de00112233"
+        // No displayNamesByPubkey entry: the geo fallback would be "anon".
+        context.favoriteRelationshipsByNoiseKey[noiseKey] = makeFavoriteRelationship(
+            noiseKey: noiseKey,
+            nostrPublicKey: "npub1bob",
+            nickname: "bob",
+            isFavorite: true,
+            theyFavoritedUs: true
+        )
+
+        let payloadData = PrivateMessagePacket(messageID: "nostr-dm-1", content: "hello from afar").encode()!
+        let payload = NoisePayload(type: .privateMessage, data: payloadData)
+
+        coordinator.handlePrivateMessage(
+            payload,
+            senderPubkey: senderPubkey,
+            convKey: convKey,
+            id: MockChatPrivateConversationContext.dummyIdentity,
+            messageTimestamp: Date()
+        )
+
+        #expect(context.privateChats[convKey]?.first?.sender == "bob")
+    }
+
     /// Over Nostr, [FAVORITED] markers arrive as embedded PMs on the convKey
     /// path; they must update the relationship, not render as chat text.
     @Test @MainActor

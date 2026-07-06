@@ -416,20 +416,32 @@ final class ChatPrivateConversationCoordinator {
             return
         }
 
+        // Prefer the favorite's stored nickname when the sender resolved to a
+        // known noise key; the Nostr display name is a geohash-scoped
+        // fallback (e.g. "anon#678e") that would mislabel favorite-transport
+        // DMs. Geohash conversations (nostr_ keys) keep the geo name.
+        let senderName: String = {
+            if let noiseKey = convKey.noiseKey,
+               let favoriteNickname = context.favoriteRelationship(forNoiseKey: noiseKey)?.peerNickname,
+               !favoriteNickname.isEmpty {
+                return favoriteNickname
+            }
+            return context.displayNameForNostrPubkey(senderPubkey)
+        }()
+
         // Favorite notifications ride the PM channel over Nostr too; intercept
         // them so they update the relationship instead of rendering as text.
         if pm.content.hasPrefix("[FAVORITED]") || pm.content.hasPrefix("[UNFAVORITED]") {
             handleFavoriteNotification(
                 pm.content,
                 from: convKey,
-                senderNickname: context.displayNameForNostrPubkey(senderPubkey)
+                senderNickname: senderName
             )
             return
         }
 
         if context.privateChatsContainMessage(withID: messageId) { return }
 
-        let senderName = context.displayNameForNostrPubkey(senderPubkey)
         let message = BitchatMessage(
             id: messageId,
             sender: senderName,
