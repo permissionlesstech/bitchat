@@ -137,6 +137,10 @@ final class NostrRelayManager: ObservableObject {
     
     @Published private(set) var relays: [Relay] = []
     @Published private(set) var isConnected = false
+    /// Whether a relay that carries private messages is connected. DMs
+    /// target the default (gift-wrap-capable) relay set, so a connected
+    /// geohash/custom relay alone must not count — sends would still queue.
+    @Published private(set) var isDMRelayConnected = false
     
     private let dependencies: NostrRelayManagerDependencies
     private var allowDefaultRelays: Bool = false
@@ -1087,6 +1091,9 @@ final class NostrRelayManager: ObservableObject {
     
     private func updateConnectionStatus() {
         isConnected = relays.contains { $0.isConnected }
+        // Relay URLs are normalized before entries are created, so direct
+        // set membership is sound.
+        isDMRelayConnected = relays.contains { $0.isConnected && Self.defaultRelaySet.contains($0.url) }
     }
     
     /// A relay that drops before sending EOSE must not stall initial-load

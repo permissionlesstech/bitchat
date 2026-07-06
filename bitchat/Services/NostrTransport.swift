@@ -14,7 +14,10 @@ final class NostrTransport: Transport, @unchecked Sendable {
         let registerPendingGiftWrap: @MainActor (String) -> Void
         let sendEvent: @MainActor (NostrEvent) -> Void
         let scheduleAfter: @Sendable (TimeInterval, @escaping @Sendable () -> Void) -> Void
-        /// Emits whether any relay connection is up (fail-closed behind Tor).
+        /// Emits whether a relay that carries private messages is up
+        /// (fail-closed behind Tor). A connected geohash/custom relay alone
+        /// doesn't count: DM sends target the default relay set and would
+        /// still queue.
         let relayConnectivity: @MainActor () -> AnyPublisher<Bool, Never>
 
         @MainActor
@@ -30,7 +33,7 @@ final class NostrTransport: Transport, @unchecked Sendable {
                 scheduleAfter: { delay, action in
                     DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: action)
                 },
-                relayConnectivity: { NostrRelayManager.shared.$isConnected.eraseToAnyPublisher() }
+                relayConnectivity: { NostrRelayManager.shared.$isDMRelayConnected.eraseToAnyPublisher() }
             )
         }
     }
