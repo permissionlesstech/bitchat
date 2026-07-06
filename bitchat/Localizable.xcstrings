@@ -5024,6 +5024,12 @@
             "state" : "translated",
             "value" : "blocked"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bloqueado"
+          }
         }
       }
     },
@@ -5035,6 +5041,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "end-to-end encrypted session"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sesión cifrada de extremo a extremo"
           }
         }
       }
@@ -5048,6 +5060,12 @@
             "state" : "translated",
             "value" : "encryption failed — messages not secured"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cifrado fallido — mensajes no protegidos"
+          }
         }
       }
     },
@@ -5059,6 +5077,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "favorite — enables offline messages via nostr when mutual"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favorito — habilita mensajes sin conexión vía Nostr cuando es mutuo"
           }
         }
       }
@@ -5072,6 +5096,12 @@
             "state" : "translated",
             "value" : "physically in this location channel's area"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "físicamente en el área de este canal de ubicación"
+          }
         }
       }
     },
@@ -5083,6 +5113,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "connected directly over bluetooth"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "conectado directamente por Bluetooth"
           }
         }
       }
@@ -5096,6 +5132,12 @@
             "state" : "translated",
             "value" : "reachable through the mesh, relayed by others"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alcanzable a través del mesh, retransmitido por otros"
+          }
         }
       }
     },
@@ -5107,6 +5149,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "reachable over the internet (nostr) — mutual favorites only"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alcanzable por internet (Nostr) — solo favoritos mutuos"
           }
         }
       }
@@ -5120,6 +5168,12 @@
             "state" : "translated",
             "value" : "offline — not currently reachable"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sin conexión — no alcanzable ahora"
+          }
         }
       }
     },
@@ -5131,6 +5185,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "teleported — joined the channel from somewhere else"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "teletransportado — se unió al canal desde otro lugar"
           }
         }
       }
@@ -5144,6 +5204,12 @@
             "state" : "translated",
             "value" : "SYMBOLS"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "símbolos"
+          }
         }
       }
     },
@@ -5155,6 +5221,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "unread private messages"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mensajes privados sin leer"
           }
         }
       }
@@ -5168,6 +5240,12 @@
             "state" : "translated",
             "value" : "identity verified"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "identidad verificada"
+          }
         }
       }
     },
@@ -5179,6 +5257,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "NETWORK"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "red"
           }
         }
       }
@@ -5192,6 +5276,12 @@
             "state" : "translated",
             "value" : "map of peers and links learned from mesh announces"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mapa de peers y enlaces obtenidos de los anuncios del mesh"
+          }
         }
       }
     },
@@ -5204,6 +5294,12 @@
             "state" : "translated",
             "value" : "opens the mesh topology map"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "abre el mapa de topología del mesh"
+          }
         }
       }
     },
@@ -5215,6 +5311,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "mesh topology"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "topología del mesh"
           }
         }
       }
@@ -8629,6 +8731,12 @@
             "state" : "translated",
             "value" : "shows app info"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "muestra la información de la app"
+          }
         }
       }
     },
@@ -8641,6 +8749,12 @@
             "state" : "translated",
             "value" : "attach photo"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "adjuntar foto"
+          }
         }
       }
     },
@@ -8652,6 +8766,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "opens the photo library; use the take photo action for the camera"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "abre la fototeca; usa la acción tomar foto para la cámara"
           }
         }
       }
@@ -9023,6 +9143,12 @@
             "state" : "translated",
             "value" : "choose photo"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "elegir foto"
+          }
         }
       }
     },
@@ -9213,6 +9339,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "tap to show delivery details"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "toca para ver los detalles de entrega"
           }
         }
       }
@@ -9405,6 +9537,12 @@
             "state" : "translated",
             "value" : "Internet gateway active, sharing your connection with the mesh"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Puerta de enlace a internet activa, compartiendo tu conexión con el mesh"
+          }
         }
       }
     },
@@ -9415,6 +9553,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Group chat"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chat de grupo"
           }
         }
       }
@@ -9427,6 +9571,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "jump to latest messages"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ir a los mensajes más recientes"
           }
         }
       }
@@ -9977,6 +10127,12 @@
             "state" : "translated",
             "value" : "connected"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "conectado"
+          }
         }
       }
     },
@@ -9988,6 +10144,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "no one reachable"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nadie alcanzable"
           }
         }
       }
@@ -10922,6 +11084,12 @@
             "state" : "translated",
             "value" : "double-tap to start recording, double-tap again to send"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "toca dos veces para empezar a grabar, toca dos veces de nuevo para enviar"
+          }
         }
       }
     },
@@ -10934,6 +11102,12 @@
             "state" : "translated",
             "value" : "record voice note"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "grabar nota de voz"
+          }
         }
       }
     },
@@ -10945,6 +11119,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "recording"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "grabando"
           }
         }
       }
@@ -11674,6 +11854,12 @@
             "state" : "translated",
             "value" : "take photo with camera"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tomar foto con la cámara"
+          }
         }
       }
     },
@@ -12043,6 +12229,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "verify encryption"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "verificar cifrado"
           }
         }
       }
@@ -12950,6 +13142,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "resend"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "reenviar"
           }
         }
       }
@@ -14574,6 +14772,12 @@
             "state" : "translated",
             "value" : "clear chat"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "limpiar chat"
+          }
         }
       }
     },
@@ -14585,6 +14789,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "clear this chat?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿limpiar este chat?"
           }
         }
       }
@@ -15134,6 +15344,12 @@
             "state" : "translated",
             "value" : "create or manage private groups"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "crear o gestionar grupos privados"
+          }
         }
       }
     },
@@ -15145,6 +15361,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "show available commands"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mostrar los comandos disponibles"
           }
         }
       }
@@ -15516,6 +15738,12 @@
             "state" : "translated",
             "value" : "send a cashu ecash token in this chat"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "enviar un token de ecash Cashu en este chat"
+          }
         }
       }
     },
@@ -15527,6 +15755,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "measure round-trip time to a mesh peer"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "medir el tiempo de ida y vuelta a un peer del mesh"
           }
         }
       }
@@ -15718,6 +15952,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "estimate the mesh path to a peer"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "estimar la ruta del mesh hasta un peer"
           }
         }
       }
@@ -17163,6 +17403,12 @@
             "state" : "translated",
             "value" : "not delivered"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no entregado"
+          }
         }
       }
     },
@@ -17174,6 +17420,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "encryption failed"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cifrado fallido"
           }
         }
       }
@@ -17187,6 +17439,12 @@
             "state" : "translated",
             "value" : "voice note too large"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nota de voz demasiado grande"
+          }
         }
       }
     },
@@ -17198,6 +17456,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "voice note failed to send"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no se pudo enviar la nota de voz"
           }
         }
       }
@@ -17927,6 +18191,12 @@
             "state" : "translated",
             "value" : "sending..."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "enviando..."
+          }
         }
       }
     },
@@ -17938,6 +18208,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "sent — no delivery confirmation yet"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "enviado — aún sin confirmación de entrega"
           }
         }
       }
@@ -17951,6 +18227,12 @@
             "state" : "translated",
             "value" : "you're in #%@ — a public location channel over the internet"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "estás en #%@ — un canal de ubicación público por internet"
+          }
         }
       }
     },
@@ -17962,6 +18244,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "you're on #mesh — reaches people within bluetooth range"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "estás en #mesh — llega a personas dentro del alcance de Bluetooth"
           }
         }
       }
@@ -17975,6 +18263,12 @@
             "state" : "translated",
             "value" : "nobody in range yet... messages appear here"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nadie a tu alcance todavía... los mensajes aparecerán aquí"
+          }
         }
       }
     },
@@ -17987,6 +18281,12 @@
             "state" : "translated",
             "value" : "tap the channel name above to switch · tap bitchat/ for help"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "toca el nombre del canal de arriba para cambiar · toca bitchat/ para ayuda"
+          }
         }
       }
     },
@@ -17998,6 +18298,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sharing your internet connection with nearby mesh peers"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartiendo tu conexión a internet con peers cercanos del mesh"
           }
         }
       }
@@ -18368,6 +18674,12 @@
             "state" : "translated",
             "value" : "create|invite|leave|list"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "create|invite|leave|list"
+          }
         }
       }
     },
@@ -18379,6 +18691,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "message #%@ — public"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mensaje #%@ — público"
           }
         }
       }
@@ -18392,6 +18710,12 @@
             "state" : "translated",
             "value" : "message #mesh — public, nearby"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mensaje #mesh — público, cerca"
+          }
         }
       }
     },
@@ -18403,6 +18727,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "message %@ — private"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mensaje %@ — privado"
           }
         }
       }
@@ -18416,6 +18746,12 @@
             "state" : "translated",
             "value" : "private conversation"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "conversación privada"
+          }
         }
       }
     },
@@ -18427,6 +18763,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "private · end-to-end encrypted"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "privado · cifrado de extremo a extremo"
           }
         }
       }
@@ -18619,6 +18961,12 @@
             "state" : "translated",
             "value" : "token"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "token"
+          }
         }
       }
     },
@@ -18630,6 +18978,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld new"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld nuevos"
           }
         }
       }
@@ -19896,6 +20250,12 @@
             "state" : "translated",
             "value" : "copy token"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "copiar token"
+          }
         }
       }
     },
@@ -20087,6 +20447,12 @@
             "state" : "translated",
             "value" : "redeem in wallet"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "canjear en la cartera"
+          }
         }
       }
     },
@@ -20099,6 +20465,12 @@
             "state" : "translated",
             "value" : "redeem on web"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "canjear en la web"
+          }
         }
       }
     },
@@ -20109,6 +20481,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "encrypted group · members only"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "grupo cifrado · solo miembros"
           }
         }
       }
@@ -22628,6 +23006,12 @@
             "state" : "translated",
             "value" : "✓ VOUCHED"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✓ AVALADO"
+          }
         }
       }
     },
@@ -23193,6 +23577,34 @@
                     "stringUnit" : {
                       "state" : "translated",
                       "value" : "%d people"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "avalado por %#@people@ que verificaste"
+          },
+          "substitutions" : {
+            "people" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%d persona"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%d personas"
                     }
                   }
                 }
@@ -24285,6 +24697,12 @@
             "state" : "translated",
             "value" : "in this area"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "en esta zona"
+          }
         }
       }
     },
@@ -24297,6 +24715,12 @@
             "state" : "translated",
             "value" : "teleported from elsewhere"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "teletransportado desde otro lugar"
+          }
         }
       }
     },
@@ -24308,6 +24732,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "you"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tú"
           }
         }
       }
@@ -24678,6 +25108,12 @@
             "state" : "translated",
             "value" : "Opens the group chat"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre el chat de grupo"
+          }
         }
       }
     },
@@ -24685,6 +25121,12 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "(%@)"
+          }
+        },
+        "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "(%@)"
@@ -24700,6 +25142,12 @@
             "state" : "translated",
             "value" : "groups"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "grupos"
+          }
         }
       }
     },
@@ -24710,6 +25158,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Creator"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Creador"
           }
         }
       }
@@ -24723,6 +25177,12 @@
             "state" : "translated",
             "value" : "bookmark channel"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "marcar canal"
+          }
         }
       }
     },
@@ -24735,6 +25195,12 @@
             "state" : "translated",
             "value" : "remove bookmark"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "quitar marcador"
+          }
         }
       }
     },
@@ -24746,6 +25212,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "switches to this channel"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cambia a este canal"
           }
         }
       }
@@ -26012,6 +26484,12 @@
             "state" : "translated",
             "value" : "share your internet with nearby mesh peers so their geohash messages reach the network"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "comparte tu internet con peers cercanos del mesh para que sus mensajes geohash lleguen a la red"
+          }
         }
       }
     },
@@ -26023,6 +26501,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "internet gateway"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "puerta de enlace a internet"
           }
         }
       }
@@ -31995,6 +32479,12 @@
             "state" : "translated",
             "value" : "cancel sending"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cancelar envío"
+          }
         }
       }
     },
@@ -32006,6 +32496,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "hidden image"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "imagen oculta"
           }
         }
       }
@@ -32019,6 +32515,12 @@
             "state" : "translated",
             "value" : "opens the image full screen"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "abre la imagen a pantalla completa"
+          }
         }
       }
     },
@@ -32030,6 +32532,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "reveals the image"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "revela la imagen"
           }
         }
       }
@@ -32043,6 +32551,12 @@
             "state" : "translated",
             "value" : "image"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "imagen"
+          }
         }
       }
     },
@@ -32054,6 +32568,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "sending image"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "enviando imagen"
           }
         }
       }
@@ -32067,6 +32587,12 @@
             "state" : "translated",
             "value" : "delete image"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "eliminar imagen"
+          }
         }
       }
     },
@@ -32078,6 +32604,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "hide image"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ocultar imagen"
           }
         }
       }
@@ -32091,6 +32623,12 @@
             "state" : "translated",
             "value" : "open image"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "abrir imagen"
+          }
         }
       }
     },
@@ -32102,6 +32640,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "reveal image"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "revelar imagen"
           }
         }
       }
@@ -32115,6 +32659,12 @@
             "state" : "translated",
             "value" : "this cannot be undone — the sender may not be in range to send it again."
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "esto no se puede deshacer — puede que el remitente no esté a tu alcance para enviarla de nuevo."
+          }
         }
       }
     },
@@ -32126,6 +32676,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "delete this image?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿eliminar esta imagen?"
           }
         }
       }
@@ -32139,6 +32695,12 @@
             "state" : "translated",
             "value" : "tap to reveal"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "toca para revelar"
+          }
         }
       }
     },
@@ -32150,6 +32712,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "pause voice note"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pausar nota de voz"
           }
         }
       }
@@ -32163,6 +32731,12 @@
             "state" : "translated",
             "value" : "play voice note"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "reproducir nota de voz"
+          }
         }
       }
     },
@@ -32174,6 +32748,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "opens a private chat"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "abre un chat privado"
           }
         }
       }
@@ -32187,6 +32767,12 @@
             "state" : "translated",
             "value" : "show fingerprint"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mostrar huella"
+          }
         }
       }
     },
@@ -32198,6 +32784,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "blocked"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bloqueado"
           }
         }
       }
@@ -32211,6 +32803,12 @@
             "state" : "translated",
             "value" : "favorite"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favorito"
+          }
         }
       }
     },
@@ -32222,6 +32820,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "offline"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sin conexión"
           }
         }
       }
@@ -32235,6 +32839,12 @@
             "state" : "translated",
             "value" : "new messages"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mensajes nuevos"
+          }
         }
       }
     },
@@ -32246,6 +32856,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "vouched"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "avalado"
           }
         }
       }
@@ -32437,6 +33053,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "vouched for by someone you verified"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "avalado por alguien que verificaste"
           }
         }
       }
@@ -33882,6 +34504,12 @@
             "state" : "translated",
             "value" : "sent via mesh gateway"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "enviado por la puerta de enlace del mesh"
+          }
         }
       }
     },
@@ -34251,6 +34879,12 @@
             "state" : "translated",
             "value" : "%@ is already a member"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ya es miembro"
+          }
         }
       }
     },
@@ -34261,6 +34895,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "the creator cannot be removed"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no se puede eliminar al creador"
           }
         }
       }
@@ -34273,6 +34913,12 @@
             "state" : "translated",
             "value" : "could not create the group"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no se pudo crear el grupo"
+          }
         }
       }
     },
@@ -34283,6 +34929,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "created group '%@' — use /group invite @name to add people"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "grupo '%@' creado — usa /group invite @name para añadir personas"
           }
         }
       }
@@ -34295,6 +34947,12 @@
             "state" : "translated",
             "value" : "only the group creator can do that"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "solo el creador del grupo puede hacer eso"
+          }
         }
       }
     },
@@ -34305,6 +34963,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "group is full (max %@ members)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "el grupo está lleno (máx. %@ miembros)"
           }
         }
       }
@@ -34317,6 +34981,12 @@
             "state" : "translated",
             "value" : "your identity keys are not ready yet"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tus claves de identidad aún no están listas"
+          }
         }
       }
     },
@@ -34327,6 +34997,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "could not build the group invite"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no se pudo generar la invitación al grupo"
           }
         }
       }
@@ -34339,6 +35015,12 @@
             "state" : "translated",
             "value" : "invited %1$@ to '%2$@'"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "invitaste a %1$@ a '%2$@'"
+          }
         }
       }
     },
@@ -34349,6 +35031,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "you were added to group '%1$@' by %2$@ — it now appears in your people list"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%2$@ te añadió al grupo '%1$@' — ahora aparece en tu lista de personas"
           }
         }
       }
@@ -34361,6 +35049,12 @@
             "state" : "translated",
             "value" : "left group '%@'"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "saliste del grupo '%@'"
+          }
         }
       }
     },
@@ -34371,6 +35065,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "your groups:"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tus grupos:"
           }
         }
       }
@@ -34383,6 +35083,12 @@
             "state" : "translated",
             "value" : "'%@' is not a member of this group"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "'%@' no es miembro de este grupo"
+          }
         }
       }
     },
@@ -34393,6 +35099,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "group names are limited to 40 characters"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "los nombres de grupo están limitados a 40 caracteres"
           }
         }
       }
@@ -34405,6 +35117,12 @@
             "state" : "translated",
             "value" : "you are not in any groups — /group create <name> to start one"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no estás en ningún grupo — /group create <name> para crear uno"
+          }
         }
       }
     },
@@ -34415,6 +35133,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "open a group chat first"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "abre primero un chat de grupo"
           }
         }
       }
@@ -34427,6 +35151,12 @@
             "state" : "translated",
             "value" : "cannot verify %@'s identity yet — wait for their announce"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "aún no se puede verificar la identidad de %@ — espera su anuncio"
+          }
         }
       }
     },
@@ -34437,6 +35167,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ must be connected over mesh to be invited"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ debe estar conectado por mesh para ser invitado"
           }
         }
       }
@@ -34449,6 +35185,12 @@
             "state" : "translated",
             "value" : "'%@' not found"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "'%@' no encontrado"
+          }
         }
       }
     },
@@ -34459,6 +35201,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "you were removed from group '%@'"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "fuiste eliminado del grupo '%@'"
           }
         }
       }
@@ -34471,6 +35219,12 @@
             "state" : "translated",
             "value" : "removed %@ and rotated the group key"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "se eliminó a %@ y se rotó la clave del grupo"
+          }
         }
       }
     },
@@ -34481,6 +35235,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "could not rotate the group key"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no se pudo rotar la clave del grupo"
           }
         }
       }
@@ -34493,6 +35253,12 @@
             "state" : "translated",
             "value" : "could not encrypt the message"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no se pudo cifrar el mensaje"
+          }
         }
       }
     },
@@ -34503,6 +35269,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "you are no longer in this group"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ya no estás en este grupo"
           }
         }
       }
@@ -34515,6 +35287,12 @@
             "state" : "translated",
             "value" : "usage: /group create <name>"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "uso: /group create <name>"
+          }
         }
       }
     },
@@ -34526,6 +35304,12 @@
             "state" : "translated",
             "value" : "usage: /group invite @name"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "uso: /group invite @name"
+          }
         }
       }
     },
@@ -34536,6 +35320,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "usage: /group remove @name"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "uso: /group remove @name"
           }
         }
       }
@@ -34907,6 +35697,12 @@
             "state" : "translated",
             "value" : "cannot block %@: not found or unable to verify identity"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no se puede bloquear a %@: no encontrado o no se pudo verificar la identidad"
+          }
         }
       }
     },
@@ -34918,6 +35714,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "blocked %@. you will no longer receive messages from them"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "se bloqueó a %@. ya no recibirás mensajes suyos"
           }
         }
       }
@@ -34931,6 +35733,12 @@
             "state" : "translated",
             "value" : "cannot unblock %@: not found"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no se puede desbloquear a %@: no encontrado"
+          }
         }
       }
     },
@@ -34942,6 +35750,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "unblocked %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "se desbloqueó a %@"
           }
         }
       }
@@ -35850,6 +36664,12 @@
             "state" : "translated",
             "value" : "estimated from gossiped neighbor lists (up to 10 per peer) — your device is highlighted"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "estimado a partir de listas de vecinos difundidas (hasta 10 por peer) — tu dispositivo está resaltado"
+          }
         }
       }
     },
@@ -35861,6 +36681,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "no mesh links yet — the map fills in as peer announces arrive"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "aún no hay enlaces del mesh — el mapa se completa a medida que llegan los anuncios de peers"
           }
         }
       }
@@ -35874,6 +36700,12 @@
             "state" : "translated",
             "value" : "refresh topology"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "actualizar topología"
+          }
         }
       }
     },
@@ -35886,6 +36718,12 @@
             "state" : "translated",
             "value" : "%1$ld peers · %2$ld links"
           }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$ld peers · %2$ld enlaces"
+          }
         }
       }
     },
@@ -35897,6 +36735,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "mesh topology"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "topología del mesh"
           }
         }
       }
@@ -38237,6 +39081,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "image unavailable"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "imagen no disponible"
           }
         }
       }
