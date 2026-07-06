@@ -260,11 +260,15 @@ private extension ChatViewModelBootstrapper {
                 toGeohash: geohash,
                 count: TransportConfig.nostrGeoRelayCount
             )
-            if relays.isEmpty {
-                NostrRelayManager.shared.sendEvent(event)
-            } else {
-                NostrRelayManager.shared.sendEvent(event, to: relays)
+            // Symmetric with the local send path (GeohashSubscriptionManager
+            // .sendGeohash): with no known geo relay, refuse rather than
+            // publish to default relays no geo subscriber reads — that would
+            // be silent dead traffic, not delivery.
+            guard !relays.isEmpty else {
+                SecureLogger.warning("🌐 Gateway: no geo relays for #\(geohash); not publishing carried event", category: .session)
+                return
             }
+            NostrRelayManager.shared.sendEvent(event, to: relays)
         }
         gateway.broadcastToMesh = { [weak bleService] payload in
             bleService?.broadcastNostrCarrier(payload)

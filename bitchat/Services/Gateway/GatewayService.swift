@@ -30,7 +30,7 @@ import Foundation
 /// - Carried contents are public geohash chat, already plaintext on Nostr,
 ///   so the mesh carrier adds no confidentiality loss.
 ///
-/// Loop-prevention rules (each enforced here and unit-tested):
+/// Loop-prevention rules:
 /// 1. An event learned from a `fromGateway` mesh broadcast is never
 ///    re-published to relays, never re-uplinked, and never rebroadcast
 ///    (`meshBroadcastEventIDs`), so a second gateway on the same mesh cannot
@@ -41,7 +41,10 @@ import Foundation
 ///    repeat deposits and relay echoes are absorbed.
 /// 3. Uplink is only attempted for locally composed events at the send site
 ///    (`GeohashSubscriptionManager.sendGeohash`); events received over the
-///    carrier never re-enter the uplink path.
+///    carrier never re-enter the uplink path. This is a call-site convention;
+///    the `meshBroadcastEventIDs`/`publishedEventIDs` backstops in
+///    `uplinkViaMesh` enforce it defensively and are unit-tested.
+/// Rules 1 and 2 are enforced here and unit-tested.
 /// Rebroadcast storms at the mesh layer are additionally bounded by the BLE
 /// `MessageDeduplicator` and packet TTL, and receivers dedup carried events
 /// against their own relay subscriptions via the Nostr event-ID cache in
@@ -59,9 +62,9 @@ final class GatewayService: ObservableObject {
         /// Uplink deposits accepted per depositor per minute.
         static let uplinkEventsPerMinutePerDepositor = 10
         /// Downlink mesh rebroadcasts per minute — BLE airtime is precious.
-        /// Beyond the budget events queue (bounded, drop-oldest) and drain as
-        /// the window frees; a busy channel triggers frequent drains, a quiet
-        /// one never queues.
+        /// Beyond the budget events queue (bounded, drop-oldest) and drain on
+        /// a scheduled timer once the window frees (also re-driven by the next
+        /// inbound relay event); a quiet channel does not strand its backlog.
         static let downlinkEventsPerMinute = 30
         static let maxPendingDownlinks = 30
         /// Accepted clock skew for a carried ephemeral event; anything older
@@ -105,6 +108,9 @@ final class GatewayService: ObservableObject {
     /// Fired on toggle changes (advertise/withdraw the capability bit and
     /// force a re-announce).
     var onEnabledChanged: (@MainActor (Bool) -> Void)?
+    /// Schedules a downlink-drain closure to run after a delay. Injected so
+    /// the drain timer is deterministic in tests; nil arms a real `Task`.
+    var scheduleDrainTimer: (@MainActor (TimeInterval, @escaping @MainActor () -> Void) -> Void)?
 
     // MARK: State
 
@@ -119,6 +125,8 @@ final class GatewayService: ObservableObject {
     private var uplinkDepositTimes: [PeerID: [Date]] = [:]
     private var downlinkSendTimes: [Date] = []
     private var pendingDownlinks: [(event: NostrEvent, geohash: String)] = []
+    /// True while a drain timer is armed, so a burst schedules at most one.
+    private var downlinkDrainScheduled = false
 
     private let defaults: UserDefaults
     private let now: () -> Date
@@ -174,32 +182,49 @@ final class GatewayService: ObservableObject {
 
     private func handleUplinkDeposit(_ carrier: NostrCarrierPacket, from depositor: PeerID) {
         guard isEnabled else { return }
-        guard let event = validatedEvent(from: carrier) else {
+        // Cheap structural checks first (parse, size, geohash, kind, #g tag,
+        // age) — no crypto — so junk and stale replays are dropped before we
+        // ever pay for a MainActor Schnorr verify.
+        guard let event = structurallyValidEvent(from: carrier) else {
             SecureLogger.debug("🌐 Gateway: rejected uplink deposit from \(depositor.id.prefix(8))… (failed validation)", category: .security)
             return
         }
-        // Loop rule 1: events learned from a fromGateway broadcast are
-        // mesh-carried; a gateway must never re-publish them.
-        guard !meshBroadcastEventIDs.contains(event.id) else { return }
-        // Loop rule 2: repeat deposits of an already handled event are absorbed.
-        guard !publishedEventIDs.contains(event.id),
+        // Dedup by the carried event ID BEFORE verification. Loop rule 1: a
+        // fromGateway-learned event is mesh-carried and must never be
+        // re-published. Loop rule 2: repeat deposits of an already handled
+        // event are absorbed. A replay of one valid deposit is short-circuited
+        // here without a per-packet signature verify.
+        guard !meshBroadcastEventIDs.contains(event.id),
+              !publishedEventIDs.contains(event.id),
               !queuedUplinks.contains(where: { $0.event.id == event.id }) else {
             return
         }
+        // Consume the per-depositor rate token BEFORE the expensive verify so
+        // a flood of distinct forged/junk deposits is bounded by cheap work,
+        // not by main-actor Schnorr verifications.
         guard allowUplinkDeposit(from: depositor) else {
             SecureLogger.debug("🌐 Gateway: rate-limited uplink deposit from \(depositor.id.prefix(8))…", category: .session)
             return
         }
-
-        if relaysConnected?() ?? false {
-            publish(event, geohash: carrier.geohash)
-        } else {
-            enqueueUplink(QueuedUplink(depositor: depositor, geohash: carrier.geohash, event: event, queuedAt: now()))
+        // Only now pay for cryptographic verification; receivers verify again.
+        guard event.isValidSignature() else {
+            SecureLogger.debug("🌐 Gateway: rejected uplink deposit from \(depositor.id.prefix(8))… (bad signature)", category: .security)
+            return
         }
 
-        // Show the carried message on our own timeline when we're viewing
-        // that geohash; the relay echo (if any) dedups in the pipeline.
-        if currentGeohash?() == carrier.geohash {
+        let accepted: Bool
+        if relaysConnected?() ?? false {
+            publish(event, geohash: carrier.geohash)
+            accepted = true
+        } else {
+            accepted = enqueueUplink(QueuedUplink(depositor: depositor, geohash: carrier.geohash, event: event, queuedAt: now()))
+        }
+
+        // Only render on our own timeline what we actually accepted for
+        // publish or queue: a quota-dropped deposit is never published and,
+        // being directed, no other peer will ever see it, so showing it would
+        // diverge our timeline permanently from what reached the channel.
+        if accepted, currentGeohash?() == carrier.geohash {
             injectInbound?(event)
         }
     }
@@ -221,16 +246,19 @@ final class GatewayService: ObservableObject {
         SecureLogger.info("🌐 Gateway: published carried event \(event.id.prefix(8))… to relays for #\(geohash)", category: .session)
     }
 
-    private func enqueueUplink(_ item: QueuedUplink) {
+    /// Returns true when the item was actually stored for later publish.
+    @discardableResult
+    private func enqueueUplink(_ item: QueuedUplink) -> Bool {
         let fromDepositor = queuedUplinks.filter { $0.depositor == item.depositor }.count
         guard fromDepositor < Limits.maxQueuedUplinksPerDepositor else {
             SecureLogger.debug("🌐 Gateway: uplink queue quota reached for \(item.depositor.id.prefix(8))…", category: .session)
-            return
+            return false
         }
         if queuedUplinks.count >= Limits.maxQueuedUplinks {
             queuedUplinks.removeFirst(queuedUplinks.count - Limits.maxQueuedUplinks + 1)
         }
         queuedUplinks.append(item)
+        return true
     }
 
     private func allowUplinkDeposit(from depositor: PeerID) -> Bool {
@@ -258,19 +286,35 @@ final class GatewayService: ObservableObject {
     func rebroadcastRelayEvent(_ event: NostrEvent, geohash: String) {
         guard isEnabled, broadcastToMesh != nil else { return }
         guard event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue else { return }
+        // Freshness + geohash gate BEFORE spending any budget. A channel
+        // (re)subscribe backfills up to an hour of history (limit 200), but
+        // every receiver's `validatedEvent` drops anything older than the
+        // same window — so rebroadcasting backfill would burn the whole
+        // per-minute budget on events no mesh peer accepts. Also require the
+        // event's own `#g` tag to match the carrier geohash.
+        guard isFresh(event),
+              event.tags.contains(where: { $0.count >= 2 && $0[0] == "g" && $0[1] == geohash }) else {
+            return
+        }
         // Loop rule 1: never rebroadcast mesh-carried events back onto the
-        // mesh. Loop rule 2: rebroadcast each relay event at most once.
+        // mesh. Loop rule 2: rebroadcast each relay event at most once — but
+        // mark only AFTER it is actually sent (in `drainPendingDownlinks`), so
+        // an event dropped by the queue overflow stays retryable on relay
+        // redelivery. Guard against a redelivery re-queueing an event that is
+        // still waiting to be sent.
         guard !meshBroadcastEventIDs.contains(event.id),
-              !rebroadcastEventIDs.contains(event.id) else {
+              !rebroadcastEventIDs.contains(event.id),
+              !pendingDownlinks.contains(where: { $0.event.id == event.id }) else {
             return
         }
         // Verify before spending BLE airtime; receivers verify again.
         guard event.isValidSignature() else { return }
-        rebroadcastEventIDs.insert(event.id)
 
         pendingDownlinks.append((event, geohash))
         if pendingDownlinks.count > Limits.maxPendingDownlinks {
-            // Bandwidth guard: drop-oldest — fresher chat is worth more.
+            // Bandwidth guard: drop-oldest — fresher chat is worth more. The
+            // dropped event is not yet in `rebroadcastEventIDs`, so a later
+            // relay redelivery can still carry it.
             pendingDownlinks.removeFirst(pendingDownlinks.count - Limits.maxPendingDownlinks)
         }
         drainPendingDownlinks()
@@ -282,10 +326,43 @@ final class GatewayService: ObservableObject {
         while !pendingDownlinks.isEmpty,
               downlinkSendTimes.count < Limits.downlinkEventsPerMinute {
             let (event, geohash) = pendingDownlinks.removeFirst()
+            // A queued event may have aged past the window while it waited;
+            // don't burn airtime on what receivers would now drop.
+            guard isFresh(event) else { continue }
             guard let carrier = NostrCarrierPacket(direction: .fromGateway, geohash: geohash, event: event),
                   let payload = carrier.encode() else { continue }
             broadcastToMesh?(payload)
+            // Mark-after-send: only now is the relay event definitively
+            // rebroadcast (loop rule 2).
+            rebroadcastEventIDs.insert(event.id)
             downlinkSendTimes.append(now())
+        }
+        // Budget exhausted with events still queued: arm a timer to drain when
+        // the window frees, instead of stranding them until the next inbound
+        // relay event (which may never come on a channel that went quiet).
+        scheduleDownlinkDrainIfNeeded()
+    }
+
+    /// Arms a single timer to drain the backlog once the per-minute window
+    /// frees. No-op when nothing is pending or a drain is already scheduled.
+    private func scheduleDownlinkDrainIfNeeded() {
+        guard !pendingDownlinks.isEmpty, !downlinkDrainScheduled else { return }
+        // The window frees when the oldest recorded send ages out of 60s.
+        let oldest = downlinkSendTimes.min() ?? now()
+        let delay = max(0.05, 60 - now().timeIntervalSince(oldest))
+        downlinkDrainScheduled = true
+        let fire: @MainActor () -> Void = { [weak self] in
+            guard let self else { return }
+            self.downlinkDrainScheduled = false
+            self.drainPendingDownlinks()
+        }
+        if let scheduleDrainTimer {
+            scheduleDrainTimer(delay, fire)
+        } else {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                fire()
+            }
         }
     }
 
@@ -341,16 +418,34 @@ final class GatewayService: ObservableObject {
     /// before a gateway publishes it or a receiver displays it. Ordered
     /// cheap-first; Schnorr verification runs last.
     private func validatedEvent(from carrier: NostrCarrierPacket) -> NostrEvent? {
+        guard let event = structurallyValidEvent(from: carrier),
+              event.isValidSignature() else {
+            return nil
+        }
+        return event
+    }
+
+    /// The cheap half of `validatedEvent`: parse + size + geohash + kind +
+    /// `#g` tag + freshness, with NO signature verification. Callers that can
+    /// dedup or rate-limit on the carried ID run this first so the expensive
+    /// Schnorr verify is reached only for events that survive the cheap gates.
+    private func structurallyValidEvent(from carrier: NostrCarrierPacket) -> NostrEvent? {
         guard carrier.eventJSON.count <= NostrCarrierPacket.maxEventJSONBytes,
               Self.isValidGeohash(carrier.geohash),
               let event = carrier.event(),
               event.kind == NostrProtocol.EventKind.ephemeralEvent.rawValue,
               event.tags.contains(where: { $0.count >= 2 && $0[0] == "g" && $0[1] == carrier.geohash }),
-              abs(now().timeIntervalSince1970 - TimeInterval(event.created_at)) <= Limits.maxEventAgeSeconds,
-              event.isValidSignature() else {
+              isFresh(event) else {
             return nil
         }
         return event
+    }
+
+    /// True when `event.created_at` is within the accepted clock skew — the
+    /// SAME freshness window receivers enforce, so a gateway never spends
+    /// airtime on events every receiver would drop as stale.
+    private func isFresh(_ event: NostrEvent) -> Bool {
+        abs(now().timeIntervalSince1970 - TimeInterval(event.created_at)) <= Limits.maxEventAgeSeconds
     }
 
     static func isValidGeohash(_ geohash: String) -> Bool {

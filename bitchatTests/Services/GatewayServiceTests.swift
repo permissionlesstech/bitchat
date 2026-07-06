@@ -34,6 +34,7 @@ struct GatewayServiceTests {
         private(set) var injected: [NostrEvent] = []
         private(set) var uplinkSends: [(payload: Data, peer: PeerID)] = []
         private(set) var enabledChanges: [Bool] = []
+        private(set) var scheduledDrains: [(delay: TimeInterval, work: @MainActor () -> Void)] = []
 
         private let clock = ClockBox()
         let defaults: UserDefaults
@@ -60,6 +61,11 @@ struct GatewayServiceTests {
             service.currentGeohash = { [weak self] in self?.currentGeohash }
             service.injectInbound = { [weak self] event in self?.injected.append(event) }
             service.onEnabledChanged = { [weak self] enabled in self?.enabledChanges.append(enabled) }
+            // Capture drain timers instead of arming a real Task so the drain
+            // is deterministic under the fake clock.
+            service.scheduleDrainTimer = { [weak self] delay, work in
+                self?.scheduledDrains.append((delay, work))
+            }
             if enabled {
                 service.setEnabled(true)
             }
@@ -67,6 +73,14 @@ struct GatewayServiceTests {
 
         func advance(_ seconds: TimeInterval) {
             clock.now = clock.now.addingTimeInterval(seconds)
+        }
+
+        /// Fires every currently-scheduled drain timer (simulating the window
+        /// freeing), as the real Task would after its delay.
+        func fireScheduledDrains() {
+            let due = scheduledDrains
+            scheduledDrains.removeAll()
+            for item in due { item.work() }
         }
     }
 
@@ -258,6 +272,27 @@ struct GatewayServiceTests {
         #expect(fixture.published.count == 1)
     }
 
+    @Test("a quota-dropped deposit is not rendered on the local timeline")
+    func quotaDroppedDepositNotInjected() throws {
+        let fixture = Fixture()
+        fixture.relaysConnected = false
+        let depositor = PeerID(str: "1111111111111111")
+
+        // Fill this depositor's offline queue to its per-depositor cap; each
+        // accepted deposit is rendered locally (we view that geohash).
+        for _ in 0..<GatewayService.Limits.maxQueuedUplinksPerDepositor {
+            try deposit(try makeEvent(), into: fixture, from: depositor)
+        }
+        #expect(fixture.service.queuedUplinks.count == GatewayService.Limits.maxQueuedUplinksPerDepositor)
+        #expect(fixture.injected.count == GatewayService.Limits.maxQueuedUplinksPerDepositor)
+
+        // One past the cap: dropped by the queue quota, so it is neither
+        // queued nor shown — no phantom local message.
+        try deposit(try makeEvent(), into: fixture, from: depositor)
+        #expect(fixture.service.queuedUplinks.count == GatewayService.Limits.maxQueuedUplinksPerDepositor)
+        #expect(fixture.injected.count == GatewayService.Limits.maxQueuedUplinksPerDepositor)
+    }
+
     // MARK: - Loop prevention
 
     @Test("never re-publishes or re-carries an event learned from a fromGateway broadcast")
@@ -338,6 +373,47 @@ struct GatewayServiceTests {
         #expect(fixture.broadcasts.count == overBudget + 1)
     }
 
+    @Test("does not spend downlink budget on stale backfill or geohash mismatch")
+    func downlinkDropsStaleAndMismatched() throws {
+        let fixture = Fixture()
+
+        // A fresh, matching event rebroadcasts.
+        let fresh = try makeEvent()
+        // An event whose #g tag disagrees with the carrier geohash.
+        let mismatched = try makeEvent(geohash: "9q8yyk")
+        // An event that will age past the receiver window before we offer it.
+        let willBeStale = try makeEvent()
+
+        fixture.service.rebroadcastRelayEvent(fresh, geohash: Self.geohash)
+        #expect(fixture.broadcasts.count == 1)
+
+        fixture.service.rebroadcastRelayEvent(mismatched, geohash: Self.geohash)
+        #expect(fixture.broadcasts.count == 1) // geohash mismatch: dropped pre-budget
+
+        fixture.advance(GatewayService.Limits.maxEventAgeSeconds + 60)
+        fixture.service.rebroadcastRelayEvent(willBeStale, geohash: Self.geohash)
+        #expect(fixture.broadcasts.count == 1) // stale backfill: dropped pre-budget
+    }
+
+    @Test("drains a downlink backlog on the scheduled timer when the channel goes quiet")
+    func downlinkDrainsOnTimer() throws {
+        let fixture = Fixture()
+        let overBudget = GatewayService.Limits.downlinkEventsPerMinute + 5
+
+        for _ in 0..<overBudget {
+            fixture.service.rebroadcastRelayEvent(try makeEvent(), geohash: Self.geohash)
+        }
+        // Budget spent; the tail is queued and a drain timer was armed.
+        #expect(fixture.broadcasts.count == GatewayService.Limits.downlinkEventsPerMinute)
+        #expect(!fixture.scheduledDrains.isEmpty)
+
+        // The channel goes quiet — no new inbound event. The window frees and
+        // the timer fires on its own, draining the remaining backlog.
+        fixture.advance(61)
+        fixture.fireScheduledDrains()
+        #expect(fixture.broadcasts.count == overBudget)
+    }
+
     // MARK: - Receiver downlink handling
 
     @Test("injects a carried event once, even when broadcast twice")
@@ -409,6 +485,25 @@ struct GatewayServiceTests {
         // A failed transport hand-off reports false.
         fixture.sendToGatewaySucceeds = false
         #expect(!fixture.service.uplinkViaMesh(event: try makeEvent(), geohash: Self.geohash))
+    }
+
+    @Test("uplinkViaMesh backstop refuses an event this gateway already published")
+    func uplinkViaMeshBackstopsPublished() throws {
+        let fixture = Fixture()
+        let event = try makeEvent()
+
+        // This gateway publishes the event to relays (loop rule 2 records it
+        // in publishedEventIDs).
+        try deposit(event, into: fixture)
+        #expect(fixture.published.map(\.event.id) == [event.id])
+
+        // Relays then drop and a gateway peer appears. The same event must not
+        // be re-uplinked from this device — the publishedEventIDs backstop in
+        // uplinkViaMesh catches it even though it was never a mesh broadcast.
+        fixture.relaysConnected = false
+        fixture.gatewayPeers = [PeerID(str: "8877665544332211")]
+        #expect(!fixture.service.uplinkViaMesh(event: event, geohash: Self.geohash))
+        #expect(fixture.uplinkSends.isEmpty)
     }
 
     // MARK: - Toggle
