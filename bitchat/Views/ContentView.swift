@@ -102,10 +102,11 @@ struct ContentView: View {
         }
         .sheet(
             isPresented: Binding(
-                get: { showSidebar || selectedPrivatePeerID != nil },
+                get: { showSidebar || selectedPrivatePeerID != nil || appChromeModel.presentsConversationListOnLaunch },
                 set: { isPresented in
                     if !isPresented {
                         showSidebar = false
+                        appChromeModel.presentsConversationListOnLaunch = false
                         privateConversationModel.endConversation()
                     }
                 }

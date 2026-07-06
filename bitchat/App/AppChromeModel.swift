@@ -14,6 +14,10 @@ final class AppChromeModel: ObservableObject {
     @Published var bluetoothAlertMessage = ""
     @Published var bluetoothState: CBManagerState = .unknown
     @Published var showScreenshotPrivacyWarning = false
+    /// #1064: set once at launch when the last-active conversation resolves to
+    /// "present the conversation list" (first-ever launch or a stale DM peer).
+    /// `ContentView` folds this into the people-sheet presentation binding.
+    @Published var presentsConversationListOnLaunch = false
 
     private let chatViewModel: ChatViewModel
     private var cancellables = Set<AnyCancellable>()

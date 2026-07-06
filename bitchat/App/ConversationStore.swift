@@ -339,6 +339,88 @@ final class ConversationStore: ObservableObject {
 
     let changes = PassthroughSubject<ConversationChange, Never>()
 
+    // MARK: Last-active persistence (#1064)
+
+    /// Persisted last-active conversation, so launch can restore where the
+    /// user left off instead of always dropping into the public mesh
+    /// timeline. Mirrors `LocationStateManager`'s `locationChannel.selected`
+    /// idiom: injected `UserDefaults`, JSON-encoded value. Location channels
+    /// are deliberately NOT restored here — `GeoChannelCoordinator` already
+    /// owns launch-time channel restore; persisting a `.location` marker only
+    /// lets us tell "was in a channel" apart from a first-ever launch.
+    private let storage: UserDefaults
+    private let lastActiveKey = "conversation.lastActive"
+
+    /// Snapshot of the persisted value read once at init, before any launch
+    /// writer (e.g. `GeoChannelCoordinator` re-applying the location channel)
+    /// can overwrite the key. Restore decisions read this, never the disk.
+    private let restoredLastActive: LastActiveRecord?
+
+    /// Codable form of the last-active conversation. `peerID` is a peer's
+    /// `PeerID.id` string (`PeerID` is not itself `Codable`).
+    private struct LastActiveRecord: Codable, Equatable {
+        enum Kind: String, Codable { case mesh, location, direct }
+        let kind: Kind
+        let peerID: String?
+    }
+
+    /// What launch should present, decided purely from `restoredLastActive`.
+    enum LaunchPresentation: Equatable {
+        /// First-ever launch, or a persisted DM whose peer no longer resolves.
+        case conversationList
+        /// A valid persisted DM — the caller re-opens it via the normal
+        /// private-chat path (this axis never writes `activeChannel`).
+        case restoredDirectChat(PeerID)
+        /// Last-active was a public channel — defer to the existing mesh /
+        /// `GeoChannelCoordinator` restore; do nothing here.
+        case deferToChannelRestore
+    }
+
+    init(storage: UserDefaults = .standard) {
+        self.storage = storage
+        if let data = storage.data(forKey: lastActiveKey),
+           let record = try? JSONDecoder().decode(LastActiveRecord.self, from: data) {
+            self.restoredLastActive = record
+        } else {
+            self.restoredLastActive = nil
+        }
+    }
+
+    /// Persists the current foreground conversation. Called from the two
+    /// single-writer selection paths on every switch; an open DM wins over
+    /// the active channel.
+    private func persistLastActive() {
+        let record: LastActiveRecord
+        if let peerID = selectedPrivatePeerID {
+            record = LastActiveRecord(kind: .direct, peerID: peerID.id)
+        } else if activeChannel.isLocation {
+            record = LastActiveRecord(kind: .location, peerID: nil)
+        } else {
+            record = LastActiveRecord(kind: .mesh, peerID: nil)
+        }
+        if let data = try? JSONEncoder().encode(record) {
+            storage.set(data, forKey: lastActiveKey)
+        }
+    }
+
+    /// Decides what to present at launch from the value persisted last
+    /// session. Pure aside from reading the init snapshot: performs no
+    /// selection mutation and never writes `activeChannel`, so it cannot race
+    /// the location-channel restore. `isPeerResolvable` lets the caller reject
+    /// a stale/unaddressable DM peer, falling back to the conversation list.
+    func restoreLastActiveConversation(isPeerResolvable: (PeerID) -> Bool) -> LaunchPresentation {
+        guard let record = restoredLastActive else { return .conversationList }
+        switch record.kind {
+        case .mesh, .location:
+            return .deferToChannelRestore
+        case .direct:
+            guard let raw = record.peerID, !raw.isEmpty else { return .conversationList }
+            let peerID = PeerID(str: raw)
+            guard isPeerResolvable(peerID) else { return .conversationList }
+            return .restoredDirectChat(peerID)
+        }
+    }
+
     // MARK: Intent API
 
     /// Returns the conversation for `id`, creating it (with the cap policy
@@ -488,6 +570,7 @@ final class ConversationStore: ObservableObject {
             activeChannel = channelID
         }
         refreshDerivedSelection()
+        persistLastActive()
     }
 
     /// Opens a private chat (`nil` closes it, returning the selection to the
@@ -497,6 +580,7 @@ final class ConversationStore: ObservableObject {
             selectedPrivatePeerID = peerID
         }
         refreshDerivedSelection()
+        persistLastActive()
     }
 
     private func refreshDerivedSelection() {

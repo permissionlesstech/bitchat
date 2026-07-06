@@ -122,9 +122,90 @@ final class AppRuntime: ObservableObject {
         NetworkActivationService.shared.start()
         GeohashPresenceService.shared.start()
         checkForSharedContent()
+        restoreLastActiveConversationOnLaunch()
 
         record(.launched)
         record(.startupCompleted)
+    }
+
+    /// #1064: restore the last-active conversation at launch. A persisted DM
+    /// re-opens via the normal private-chat path (which never writes
+    /// `activeChannel`); a first-ever launch or a stale DM peer presents the
+    /// conversation list; a public channel defers to the existing mesh /
+    /// `GeoChannelCoordinator` restore (the sole launch-time writer of
+    /// `activeChannel`), so there is no race.
+    private func restoreLastActiveConversationOnLaunch() {
+        let presentation = conversations.restoreLastActiveConversation(
+            isPeerResolvable: { Self.isDirectChatRestorable($0, favorites: .shared) }
+        )
+        var didOpenDirectChat = false
+        if case .restoredDirectChat(let peerID) = presentation {
+            // `startPrivateChat` silently no-ops when the peer is now blocked
+            // or fails the mutual-favorite-and-connected gate
+            // (ChatPeerIdentityCoordinator.startPrivateChat), leaving no chat
+            // open — `selectedPrivateChatPeer` is only set on the success path.
+            chatViewModel.startPrivateChat(with: peerID)
+            didOpenDirectChat = chatViewModel.selectedPrivateChatPeer == peerID
+        }
+        // Fall back to the conversation list rather than silently landing on
+        // the public mesh timeline when a restore target existed but could not
+        // be opened.
+        if Self.shouldPresentConversationList(for: presentation, didOpenDirectChat: didOpenDirectChat) {
+            appChromeModel.presentsConversationListOnLaunch = true
+        }
+    }
+
+    /// Whether a persisted last-active DM peer is genuinely restorable at
+    /// launch — validated against *durable* conversation state, never live
+    /// presence (mesh discovery is async, so no peer is connected yet). A
+    /// syntactically valid `PeerID` is NOT sufficient: an unknown peer would
+    /// otherwise fall straight through `startPrivateChat` into an empty phantom
+    /// DM. Restorable iff the peerID is a geohash/Nostr DM (its stable Nostr
+    /// identity is embedded in the id itself) or the peer is a persisted
+    /// favorite (keychain-backed, stored by stable Noise public key across
+    /// launches). Presence-independent and pure, so it is unit-testable.
+    static func isDirectChatRestorable(
+        _ peerID: PeerID,
+        isPeerFavorited: (PeerID) -> Bool
+    ) -> Bool {
+        if peerID.isGeoDM { return true }
+        return isPeerFavorited(peerID)
+    }
+
+    /// Production wiring of `isDirectChatRestorable`, extracted so the real
+    /// favorites lookup (not just a stub predicate) is unit-testable via an
+    /// injected in-memory-keychain-backed `FavoritesPersistenceService`.
+    /// `migrateSelectedConversationIfNeeded` can persist the last-active peer in
+    /// full 64-hex Noise-key form, but the favorites store is keyed by the
+    /// short, Noise-key-derived id — so normalize with `toShort()` (a no-op on
+    /// an already-short id) before the lookup, or favorited DMs silently fail to
+    /// restore.
+    static func isDirectChatRestorable(
+        _ peerID: PeerID,
+        favorites: FavoritesPersistenceService
+    ) -> Bool {
+        isDirectChatRestorable(peerID, isPeerFavorited: {
+            favorites.getFavoriteStatus(forPeerID: $0.toShort()) != nil
+        })
+    }
+
+    /// Pure launch-effect decision, extracted so the fallback is unit-testable
+    /// without constructing `AppRuntime`: present the conversation list on a
+    /// first-ever launch, or when a persisted DM could not actually be opened
+    /// (blocked / stale / gated peer). A public-channel restore is left to
+    /// `GeoChannelCoordinator`.
+    static func shouldPresentConversationList(
+        for presentation: ConversationStore.LaunchPresentation,
+        didOpenDirectChat: Bool
+    ) -> Bool {
+        switch presentation {
+        case .conversationList:
+            return true
+        case .restoredDirectChat:
+            return !didOpenDirectChat
+        case .deferToChannelRestore:
+            return false
+        }
     }
 
     func handleOpenURL(_ url: URL) {
