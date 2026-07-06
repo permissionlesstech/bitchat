@@ -311,6 +311,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         get { conversations.activeChannel }
         set {
             guard conversations.activeChannel != newValue else { return }
+            // Leaving a channel expedites any in-flight NIP-13 mining: the
+            // pending message still sends, at the difficulty already reached.
+            outgoingCoordinator.expeditePendingGeohashMining()
             conversations.setActiveChannel(newValue)
             visibleMessagesCache = nil
             objectWillChange.send()
@@ -1681,6 +1684,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     @MainActor
     func handlePublicMessage(_ message: BitchatMessage) {
         publicConversationCoordinator.handlePublicMessage(message)
+    }
+
+    /// Handle an incoming public Nostr message with its validated NIP-13
+    /// difficulty; sufficient PoW relaxes the per-sender rate limit.
+    @MainActor
+    func handlePublicMessage(_ message: BitchatMessage, powBits: Int) {
+        publicConversationCoordinator.handlePublicMessage(message, powBits: powBits)
     }
 
     /// Check for mentions and send notifications

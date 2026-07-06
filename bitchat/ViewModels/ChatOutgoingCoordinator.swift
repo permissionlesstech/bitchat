@@ -68,8 +68,20 @@ extension ChatViewModel: ChatOutgoingContext {
 final class ChatOutgoingCoordinator {
     private unowned let context: any ChatOutgoingContext
 
+    /// In-flight NIP-13 mining for the most recent geohash send. A newer send
+    /// (or leaving the channel) cancels it, which only expedites the mining —
+    /// the message still goes out at the difficulty already reached.
+    /// (Read access is internal so tests can await the send's completion.)
+    private(set) var geohashMiningTask: Task<Void, Never>?
+
     init(context: any ChatOutgoingContext) {
         self.context = context
+    }
+
+    /// Finish any in-flight geohash PoW mining early (the pending message
+    /// still sends, at whatever committed difficulty it reached).
+    func expeditePendingGeohashMining() {
+        geohashMiningTask?.cancel()
     }
 
     func sendMessage(_ content: String) {
@@ -92,120 +104,109 @@ final class ChatOutgoingCoordinator {
         }
 
         let mentions = context.parseMentions(from: content)
-        let preparedMessage = preparePublicMessage(content: content, trimmed: trimmed, mentions: mentions)
-        guard let preparedMessage else { return }
 
-        appendLocalEcho(preparedMessage.message)
-        routePublicMessage(
-            originalContent: content,
-            mentions: mentions,
-            geoContext: preparedMessage.geoContext,
-            messageID: preparedMessage.message.id,
-            timestamp: preparedMessage.message.timestamp
-        )
+        switch context.activeChannel {
+        case .mesh:
+            sendMeshPublicMessage(originalContent: content, trimmed: trimmed, mentions: mentions)
+        case .location(let channel):
+            sendGeohashPublicMessage(trimmed, mentions: mentions, channel: channel)
+        }
     }
 }
 
 private extension ChatOutgoingCoordinator {
-    func preparePublicMessage(
-        content: String,
-        trimmed: String,
-        mentions: [String]
-    ) -> (message: BitchatMessage, geoContext: ChatViewModel.GeoOutgoingContext?)? {
-        var geoContext: ChatViewModel.GeoOutgoingContext?
-        var displaySender = context.nickname
-        var localSenderPeerID = context.myPeerID
-        var messageID: String?
-        var messageTimestamp = Date()
+    func sendMeshPublicMessage(originalContent: String, trimmed: String, mentions: [String]) {
+        let message = BitchatMessage(
+            sender: context.nickname,
+            content: trimmed,
+            timestamp: Date(),
+            isRelay: false,
+            senderPeerID: context.myPeerID,
+            mentions: mentions.isEmpty ? nil : mentions
+        )
 
-        switch context.activeChannel {
-        case .mesh:
-            break
+        appendLocalEcho(message, to: .mesh)
+        context.recordPublicActivity(forChannelKey: "mesh")
+        context.sendMeshMessage(
+            originalContent,
+            mentions: mentions,
+            messageID: message.id,
+            timestamp: message.timestamp
+        )
+    }
 
-        case .location(let channel):
+    /// Geohash sends mine a NIP-13 nonce tag first (off the main actor, see
+    /// `NostrPoW`), so the whole echo-and-send runs in a task once the signed
+    /// event — whose ID is also the local message ID — exists. Typical mining
+    /// at the default target is well under 100 ms and hard-capped at
+    /// `NostrPoW.miningTimeCap`, so sending is never meaningfully delayed.
+    func sendGeohashPublicMessage(_ trimmed: String, mentions: [String], channel: GeohashChannel) {
+        let identity: NostrIdentity
+        do {
+            identity = try context.deriveNostrIdentity(forGeohash: channel.geohash)
+        } catch {
+            SecureLogger.error("❌ Failed to prepare geohash message: \(error)", category: .session)
+            context.addSystemMessage(
+                String(localized: "system.location.send_failed", comment: "System message when a location channel send fails")
+            )
+            return
+        }
+
+        let displaySender = context.nickname + "#" + String(identity.publicKeyHex.suffix(4))
+        let senderPeerID = PeerID(nostr: identity.publicKeyHex)
+        let teleported = context.isTeleported
+        let nickname = context.nickname
+
+        // A newer send expedites the previous one's mining so sends keep
+        // their order and mining delays never stack.
+        geohashMiningTask?.cancel()
+        geohashMiningTask = Task { @MainActor [weak context = self.context] in
+            let event: NostrEvent
             do {
-                let identity = try context.deriveNostrIdentity(forGeohash: channel.geohash)
-                let suffix = String(identity.publicKeyHex.suffix(4))
-                displaySender = context.nickname + "#" + suffix
-                localSenderPeerID = PeerID(nostr: identity.publicKeyHex)
-
-                let teleported = context.isTeleported
-                let event = try NostrProtocol.createEphemeralGeohashEvent(
+                event = try await NostrProtocol.createMinedEphemeralGeohashEvent(
                     content: trimmed,
                     geohash: channel.geohash,
                     senderIdentity: identity,
-                    nickname: context.nickname,
-                    teleported: teleported
-                )
-
-                messageID = event.id
-                messageTimestamp = Date(timeIntervalSince1970: TimeInterval(event.created_at))
-                geoContext = (
-                    channel: channel,
-                    event: event,
-                    identity: identity,
+                    nickname: nickname,
                     teleported: teleported
                 )
             } catch {
                 SecureLogger.error("❌ Failed to prepare geohash message: \(error)", category: .session)
-                context.addSystemMessage(
-                    String(localized: "system.location.send_failed", comment: "System message when a location channel send fails")
-                )
-                return nil
-            }
-        }
-
-        let message = BitchatMessage(
-            id: messageID,
-            sender: displaySender,
-            content: trimmed,
-            timestamp: messageTimestamp,
-            isRelay: false,
-            senderPeerID: localSenderPeerID,
-            mentions: mentions.isEmpty ? nil : mentions
-        )
-
-        return (message, geoContext)
-    }
-
-    func appendLocalEcho(_ message: BitchatMessage) {
-        context.appendPublicMessage(message, to: ConversationID(channelID: context.activeChannel))
-
-        let contentKey = context.normalizedContentKey(message.content)
-        context.recordContentKey(contentKey, timestamp: message.timestamp)
-    }
-
-    func routePublicMessage(
-        originalContent: String,
-        mentions: [String],
-        geoContext: ChatViewModel.GeoOutgoingContext?,
-        messageID: String,
-        timestamp: Date
-    ) {
-        switch context.activeChannel {
-        case .mesh:
-            context.recordPublicActivity(forChannelKey: "mesh")
-            context.sendMeshMessage(
-                originalContent,
-                mentions: mentions,
-                messageID: messageID,
-                timestamp: timestamp
-            )
-
-        case .location(let channel):
-            context.recordPublicActivity(forChannelKey: "geo:\(channel.geohash)")
-
-            guard let geoContext, geoContext.channel.geohash == channel.geohash else {
-                SecureLogger.error("Geo: missing send context for \(channel.geohash)", category: .session)
-                context.addSystemMessage(
+                context?.addSystemMessage(
                     String(localized: "system.location.send_failed", comment: "System message when a location channel send fails")
                 )
                 return
             }
+            guard let context else { return }
 
-            Task { @MainActor [weak context = self.context] in
-                context?.sendGeohash(context: geoContext)
-            }
+            let message = BitchatMessage(
+                id: event.id,
+                sender: displaySender,
+                content: trimmed,
+                timestamp: Date(timeIntervalSince1970: TimeInterval(event.created_at)),
+                isRelay: false,
+                senderPeerID: senderPeerID,
+                mentions: mentions.isEmpty ? nil : mentions
+            )
+
+            context.appendPublicMessage(message, to: ConversationID(channelID: .location(channel)))
+            let contentKey = context.normalizedContentKey(message.content)
+            context.recordContentKey(contentKey, timestamp: message.timestamp)
+
+            context.recordPublicActivity(forChannelKey: "geo:\(channel.geohash)")
+            context.sendGeohash(context: (
+                channel: channel,
+                event: event,
+                identity: identity,
+                teleported: teleported
+            ))
         }
+    }
+
+    func appendLocalEcho(_ message: BitchatMessage, to conversationID: ConversationID) {
+        context.appendPublicMessage(message, to: conversationID)
+
+        let contentKey = context.normalizedContentKey(message.content)
+        context.recordContentKey(contentKey, timestamp: message.timestamp)
     }
 }

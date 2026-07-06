@@ -192,6 +192,9 @@ struct ChatOutgoingCoordinatorContextTests {
         context.isTeleported = true
 
         coordinator.sendMessage("hello geo")
+        // Geohash sends mine a NIP-13 nonce tag off-main before echoing and
+        // sending; await the send task, then drain the main queue.
+        await coordinator.geohashMiningTask?.value
         await drainMainActorTasks()
 
         // Local echo carries the geohash sender suffix (#last-4-of-pubkey) and
