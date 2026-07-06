@@ -350,7 +350,7 @@ private extension ChatLifecycleCoordinator {
             } catch {
                 SecureLogger.error("❌ Failed to send geohash screenshot message: \(error)", category: .session)
                 context.addSystemMessage(
-                    String(localized: "system.location.send_failed", comment: "System message when a location channel send fails")
+                    String(localized: "system.location.send_failed", defaultValue: "failed to send to location channel", comment: "System message when a location channel send fails")
                 )
             }
         }

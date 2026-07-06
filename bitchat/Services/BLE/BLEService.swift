@@ -3719,7 +3719,7 @@ extension BLEService {
 
                 // Notify delegate of failure
                 notifyUI { [weak self] in
-                    self?.deliverTransportEvent(.messageDeliveryStatusUpdated(messageID: message.messageID, status: .failed(reason: String(localized: "content.delivery.reason.encryption_failed", comment: "Failure reason shown when a message could not be encrypted for the peer"))))
+                    self?.deliverTransportEvent(.messageDeliveryStatusUpdated(messageID: message.messageID, status: .failed(reason: String(localized: "content.delivery.reason.encryption_failed", defaultValue: "encryption failed", comment: "Failure reason shown when a message could not be encrypted for the peer"))))
                 }
             }
         }

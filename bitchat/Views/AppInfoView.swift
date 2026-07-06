@@ -144,7 +144,7 @@ struct AppInfoView: View {
             // Custom header for macOS
             HStack {
                 Spacer()
-                Button("app_info.done") {
+                Button(String(localized: "app_info.done", defaultValue: "DONE")) {
                     dismiss()
                 }
                 .buttonStyle(.plain)
@@ -256,7 +256,7 @@ struct AppInfoView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityHint(Text("app_info.network.topology.hint"))
+                    .accessibilityHint(Text(String(localized: "app_info.network.topology.hint", defaultValue: "opens the mesh topology map")))
                 }
             }
 

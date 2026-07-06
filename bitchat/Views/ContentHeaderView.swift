@@ -44,7 +44,7 @@ struct ContentHeaderView: View {
                 // stays undiscoverable on purpose — it's destructive.)
                 .accessibilityAddTraits(.isButton)
                 .accessibilityHint(
-                    String(localized: "content.accessibility.app_info_hint", comment: "Accessibility hint on the bitchat/ logo explaining a tap opens app info")
+                    String(localized: "content.accessibility.app_info_hint", defaultValue: "shows app info", comment: "Accessibility hint on the bitchat/ logo explaining a tap opens app info")
                 )
                 .accessibilityAction {
                     appChromeModel.presentAppInfo()
@@ -56,7 +56,7 @@ struct ContentHeaderView: View {
                     .foregroundColor(palette.secondary)
 
                 TextField(
-                    "content.input.nickname_placeholder",
+                    String(localized: "content.input.nickname_placeholder", defaultValue: "nickname"),
                     text: Binding(
                         get: { appChromeModel.nickname },
                         set: { appChromeModel.setNickname($0) }
@@ -133,7 +133,7 @@ struct ContentHeaderView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(
-                        String(localized: "content.accessibility.open_unread_private_chat", comment: "Accessibility label for the unread private chat button")
+                        String(localized: "content.accessibility.open_unread_private_chat", defaultValue: "open unread private chat", comment: "Accessibility label for the unread private chat button")
                     )
                 }
 
@@ -151,7 +151,7 @@ struct ContentHeaderView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(
-                        String(localized: "content.accessibility.location_notes", comment: "Accessibility label for location notes button")
+                        String(localized: "content.accessibility.location_notes", defaultValue: "location notes for this place", comment: "Accessibility label for location notes button")
                     )
                 }
 
@@ -178,7 +178,7 @@ struct ContentHeaderView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel(
                         String(
-                            format: String(localized: "content.accessibility.toggle_bookmark", comment: "Accessibility label for toggling a geohash bookmark"),
+                            format: String(localized: "content.accessibility.toggle_bookmark", defaultValue: "toggle bookmark for #%@", comment: "Accessibility label for toggling a geohash bookmark"),
                             locale: .current,
                             channel.geohash
                         )
@@ -211,7 +211,7 @@ struct ContentHeaderView: View {
                         .frame(maxHeight: .infinity)
                         .contentShape(Rectangle())
                         .accessibilityLabel(
-                            String(localized: "content.accessibility.location_channels", comment: "Accessibility label for the location channels button")
+                            String(localized: "content.accessibility.location_channels", defaultValue: "location channels", comment: "Accessibility label for the location channels button")
                         )
                 }
                 .buttonStyle(.plain)
@@ -238,7 +238,7 @@ struct ContentHeaderView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(
                     String(
-                        format: String(localized: "content.accessibility.people_count", comment: "Accessibility label announcing number of people in header"),
+                        format: String(localized: "content.accessibility.people_count", defaultValue: "%#@people@", comment: "Accessibility label announcing number of people in header"),
                         locale: .current,
                         headerOtherPeersCount
                     )
@@ -247,8 +247,8 @@ struct ContentHeaderView: View {
                 // color; say it.
                 .accessibilityValue(
                     headerPeersReachable
-                    ? String(localized: "content.accessibility.peers_connected", comment: "Accessibility value when peers are reachable")
-                    : String(localized: "content.accessibility.peers_none", comment: "Accessibility value when no peers are reachable")
+                    ? String(localized: "content.accessibility.peers_connected", defaultValue: "connected", comment: "Accessibility value when peers are reachable")
+                    : String(localized: "content.accessibility.peers_none", defaultValue: "no one reachable", comment: "Accessibility value when no peers are reachable")
                 )
             }
             .layoutPriority(3)
@@ -325,10 +325,10 @@ struct ContentHeaderView: View {
         .onChange(of: locationChannelsModel.permissionState) { _ in
             locationChannelsModel.refreshMeshChannelsIfNeeded()
         }
-        .alert("content.alert.screenshot.title", isPresented: $appChromeModel.showScreenshotPrivacyWarning) {
-            Button("common.ok", role: .cancel) {}
+        .alert(String(localized: "content.alert.screenshot.title", defaultValue: "heads up"), isPresented: $appChromeModel.showScreenshotPrivacyWarning) {
+            Button(String(localized: "common.ok", defaultValue: "OK"), role: .cancel) {}
         } message: {
-            Text("content.alert.screenshot.message")
+            Text(String(localized: "content.alert.screenshot.message", defaultValue: "screenshots of location channels will reveal your location. think before sharing publicly."))
         }
         .themedChromePanel(edge: .top)
     }
@@ -392,7 +392,7 @@ private struct ContentLocationNotesUnavailableView: View {
     var body: some View {
         VStack(spacing: 12) {
             HStack {
-                Text("content.notes.title")
+                Text(String(localized: "content.notes.title", defaultValue: "notes"))
                     .bitchatFont(size: 16, weight: .bold)
                 Spacer()
                 SheetCloseButton { showLocationNotes = false }
@@ -401,10 +401,10 @@ private struct ContentLocationNotesUnavailableView: View {
             .frame(minHeight: headerHeight)
             .padding(.horizontal, 12)
             .themedChromePanel(edge: .top)
-            Text("content.notes.location_unavailable")
+            Text(String(localized: "content.notes.location_unavailable", defaultValue: "location unavailable"))
                 .bitchatFont(size: 14)
                 .foregroundColor(palette.secondary)
-            Button("content.location.enable") {
+            Button(String(localized: "content.location.enable", defaultValue: "enable location")) {
                 locationChannelsModel.enableAndRefresh()
             }
             .buttonStyle(.bordered)

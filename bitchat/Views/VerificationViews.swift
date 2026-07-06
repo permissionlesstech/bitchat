@@ -18,7 +18,7 @@ struct MyQRView: View {
 
     private enum Strings {
         static let title: LocalizedStringKey = "verification.my_qr.title"
-        static let accessibilityLabel = String(localized: "verification.my_qr.accessibility_label", comment: "Accessibility label describing the verification QR code")
+        static let accessibilityLabel = String(localized: "verification.my_qr.accessibility_label", defaultValue: "verification QR code", comment: "Accessibility label describing the verification QR code")
     }
 
     var body: some View {
@@ -124,13 +124,13 @@ struct QRScanView: View {
         static let validate: LocalizedStringKey = "verification.scan.validate"
         static func requested(_ nickname: String) -> String {
             String(
-                format: String(localized: "verification.scan.status.requested", comment: "Status text when verification is requested for a nickname"),
+                format: String(localized: "verification.scan.status.requested", defaultValue: "verification requested for %@", comment: "Status text when verification is requested for a nickname"),
                 locale: .current,
                 nickname
             )
         }
-        static let notFound = String(localized: "verification.scan.status.no_peer", comment: "Status when no matching peer is found for a verification request")
-        static let invalid = String(localized: "verification.scan.status.invalid", comment: "Status when a scanned QR payload is invalid")
+        static let notFound = String(localized: "verification.scan.status.no_peer", defaultValue: "could not find matching peer", comment: "Status when no matching peer is found for a verification request")
+        static let invalid = String(localized: "verification.scan.status.invalid", defaultValue: "invalid or expired QR payload", comment: "Status when a scanned QR payload is invalid")
     }
 
     var body: some View {
@@ -296,7 +296,7 @@ struct VerificationSheetView: View {
         VStack(spacing: 0) {
             // Top header (always at top)
             HStack {
-                Text("verification.sheet.title")
+                Text(String(localized: "verification.sheet.title", defaultValue: "VERIFY"))
                     .bitchatFont(size: 14, weight: .bold)
                     .foregroundColor(accentColor)
                 Spacer()
@@ -316,7 +316,7 @@ struct VerificationSheetView: View {
             Group {
                 if showingScanner {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("verification.scan.prompt_friend")
+                        Text(String(localized: "verification.scan.prompt_friend", defaultValue: "scan a friend's QR"))
                             .bitchatFont(size: 16, weight: .bold)
                             .frame(maxWidth: .infinity)
                             .multilineTextAlignment(.center)

@@ -135,7 +135,7 @@ struct LocationNotesView: View {
 
     private func headerTitle(for count: Int) -> String {
         String(
-            format: String(localized: "location_notes.header", comment: "Header displaying the geohash and localized note count"),
+            format: String(localized: "location_notes.header", defaultValue: "#%1$@ • %2$#@note_count@", comment: "Header displaying the geohash and localized note count"),
             locale: .current,
             "\(geohash) ± 1", count
         )

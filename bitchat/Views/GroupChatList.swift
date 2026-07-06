@@ -10,12 +10,12 @@ struct GroupChatList: View {
     let onTapGroup: (PeerID) -> Void
 
     private enum Strings {
-        static let header = String(localized: "groups.section.header", comment: "Section header above the private groups list")
-        static let creator = String(localized: "groups.state.creator", comment: "State label for a group the user created")
-        static let unread = String(localized: "mesh_peers.state.unread", comment: "State label for a peer with unread private messages")
-        static let newMessagesTooltip = String(localized: "mesh_peers.tooltip.new_messages", comment: "Tooltip for the unread messages indicator")
-        static let openGroupHint = String(localized: "groups.accessibility.open_group_hint", comment: "Accessibility hint on a group row explaining activation opens the group chat")
-        static let memberCountFormat = String(localized: "groups.member_count %@", comment: "Member count shown next to a group name; placeholder is the count")
+        static let header = String(localized: "groups.section.header", defaultValue: "groups", comment: "Section header above the private groups list")
+        static let creator = String(localized: "groups.state.creator", defaultValue: "Creator", comment: "State label for a group the user created")
+        static let unread = String(localized: "mesh_peers.state.unread", defaultValue: "new messages", comment: "State label for a peer with unread private messages")
+        static let newMessagesTooltip = String(localized: "mesh_peers.tooltip.new_messages", defaultValue: "new messages", comment: "Tooltip for the unread messages indicator")
+        static let openGroupHint = String(localized: "groups.accessibility.open_group_hint", defaultValue: "Opens the group chat", comment: "Accessibility hint on a group row explaining activation opens the group chat")
+        static let memberCountFormat = String(localized: "groups.member_count %@", defaultValue: "(%@)", comment: "Member count shown next to a group name; placeholder is the count")
     }
 
     var body: some View {

@@ -118,17 +118,17 @@ private extension ContentComposerView {
             let isGeoDM = privateConversationModel.selectedPeerID?.isGeoDM == true
             let target = isGeoDM ? header.displayName : "@\(header.displayName)"
             return String(
-                format: String(localized: "content.input.placeholder.private", comment: "Composer placeholder inside a private chat, naming the conversation partner"),
+                format: String(localized: "content.input.placeholder.private", defaultValue: "message %@ — private", comment: "Composer placeholder inside a private chat, naming the conversation partner"),
                 locale: .current,
                 target
             )
         }
         switch locationChannelsModel.selectedChannel {
         case .mesh:
-            return String(localized: "content.input.placeholder.mesh", comment: "Composer placeholder for the public mesh channel")
+            return String(localized: "content.input.placeholder.mesh", defaultValue: "message #mesh — public, nearby", comment: "Composer placeholder for the public mesh channel")
         case .location(let channel):
             return String(
-                format: String(localized: "content.input.placeholder.location", comment: "Composer placeholder for a public geohash channel, naming it"),
+                format: String(localized: "content.input.placeholder.location", defaultValue: "message #%@ — public", comment: "Composer placeholder for a public geohash channel, naming it"),
                 locale: .current,
                 channel.geohash
             )
@@ -184,15 +184,15 @@ private extension ContentComposerView {
                 showImagePicker = true
             }
             .accessibilityLabel(
-                String(localized: "content.accessibility.attach_photo", comment: "Accessibility label for the photo attachment button")
+                String(localized: "content.accessibility.attach_photo", defaultValue: "attach photo", comment: "Accessibility label for the photo attachment button")
             )
             .accessibilityHint(
-                String(localized: "content.accessibility.attach_photo_hint", comment: "Accessibility hint explaining the attachment button opens the photo library")
+                String(localized: "content.accessibility.attach_photo_hint", defaultValue: "opens the photo library; use the take photo action for the camera", comment: "Accessibility hint explaining the attachment button opens the photo library")
             )
             .accessibilityAddTraits(.isButton)
             // The long-press → camera path is unreachable for VoiceOver users;
             // mirror it as a named action.
-            .accessibilityAction(named: Text("content.accessibility.take_photo", comment: "Accessibility action name for taking a photo with the camera")) {
+            .accessibilityAction(named: Text(String(localized: "content.accessibility.take_photo", defaultValue: "take photo with camera", comment: "Accessibility action name for taking a photo with the camera"))) {
                 imagePickerSourceType = .camera
                 showImagePicker = true
             }
@@ -205,7 +205,7 @@ private extension ContentComposerView {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(
-            String(localized: "content.accessibility.choose_photo", comment: "Accessibility label for the macOS photo picker button")
+            String(localized: "content.accessibility.choose_photo", defaultValue: "choose photo", comment: "Accessibility label for the macOS photo picker button")
         )
         #endif
     }
@@ -249,15 +249,15 @@ private extension ContentComposerView {
                     )
             )
             .accessibilityLabel(
-                String(localized: "content.accessibility.record_voice_note", comment: "Accessibility label for the voice note button")
+                String(localized: "content.accessibility.record_voice_note", defaultValue: "record voice note", comment: "Accessibility label for the voice note button")
             )
             .accessibilityValue(
                 voiceRecordingVM.state.isActive
-                ? String(localized: "content.accessibility.recording", comment: "Accessibility value announced while a voice note is recording")
+                ? String(localized: "content.accessibility.recording", defaultValue: "recording", comment: "Accessibility value announced while a voice note is recording")
                 : ""
             )
             .accessibilityHint(
-                String(localized: "content.accessibility.record_voice_hint", comment: "Accessibility hint explaining double-tap toggles voice recording")
+                String(localized: "content.accessibility.record_voice_hint", defaultValue: "double-tap to start recording, double-tap again to send", comment: "Accessibility hint explaining double-tap toggles voice recording")
             )
             .accessibilityAddTraits(.isButton)
             // Press-and-hold drag gestures can't be activated by VoiceOver;
@@ -282,12 +282,12 @@ private extension ContentComposerView {
         .buttonStyle(.plain)
         .disabled(!enabled)
         .accessibilityLabel(
-            String(localized: "content.accessibility.send_message", comment: "Accessibility label for the send message button")
+            String(localized: "content.accessibility.send_message", defaultValue: "send message", comment: "Accessibility label for the send message button")
         )
         .accessibilityHint(
             enabled
-            ? String(localized: "content.accessibility.send_hint_ready", comment: "Hint prompting the user to send the message")
-            : String(localized: "content.accessibility.send_hint_empty", comment: "Hint prompting the user to enter a message")
+            ? String(localized: "content.accessibility.send_hint_ready", defaultValue: "double tap to send", comment: "Hint prompting the user to send the message")
+            : String(localized: "content.accessibility.send_hint_empty", defaultValue: "enter a message to send", comment: "Hint prompting the user to enter a message")
         )
     }
 }

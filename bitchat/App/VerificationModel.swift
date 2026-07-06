@@ -186,6 +186,6 @@ final class VerificationModel: ObservableObject {
             }
         }
 
-        return String(localized: "common.unknown", comment: "Label for an unknown peer")
+        return String(localized: "common.unknown", defaultValue: "unknown", comment: "Label for an unknown peer")
     }
 }

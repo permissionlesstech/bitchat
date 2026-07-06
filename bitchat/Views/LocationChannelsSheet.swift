@@ -32,13 +32,13 @@ struct LocationChannelsSheet: View {
         static let toggleOn: LocalizedStringKey = "common.toggle.on"
         static let toggleOff: LocalizedStringKey = "common.toggle.off"
 
-        static let invalidGeohash = String(localized: "location_channels.error.invalid_geohash", comment: "Error shown when a custom geohash is invalid")
-        static let switchChannelHint = String(localized: "location_channels.accessibility.switch_hint", comment: "Accessibility hint on a channel row explaining activation switches to it")
-        static let addBookmark = String(localized: "location_channels.accessibility.add_bookmark", comment: "Accessibility action name for bookmarking a channel")
-        static let removeBookmark = String(localized: "location_channels.accessibility.remove_bookmark", comment: "Accessibility action name for removing a channel bookmark")
+        static let invalidGeohash = String(localized: "location_channels.error.invalid_geohash", defaultValue: "invalid geohash", comment: "Error shown when a custom geohash is invalid")
+        static let switchChannelHint = String(localized: "location_channels.accessibility.switch_hint", defaultValue: "switches to this channel", comment: "Accessibility hint on a channel row explaining activation switches to it")
+        static let addBookmark = String(localized: "location_channels.accessibility.add_bookmark", defaultValue: "bookmark channel", comment: "Accessibility action name for bookmarking a channel")
+        static let removeBookmark = String(localized: "location_channels.accessibility.remove_bookmark", defaultValue: "remove bookmark", comment: "Accessibility action name for removing a channel bookmark")
 
         static func meshTitle(_ count: Int) -> String {
-            let label = String(localized: "location_channels.mesh_label", comment: "Label for the mesh channel row")
+            let label = String(localized: "location_channels.mesh_label", defaultValue: "mesh", comment: "Label for the mesh channel row")
             return rowTitle(label: label, count: count)
         }
 
@@ -73,7 +73,7 @@ struct LocationChannelsSheet: View {
 
         static func subtitlePrefix(geohash: String, coverage: String) -> String {
             String(
-                format: String(localized: "location_channels.subtitle_prefix", comment: "Subtitle prefix showing geohash and coverage"),
+                format: String(localized: "location_channels.subtitle_prefix", defaultValue: "#%1$@ • %2$@", comment: "Subtitle prefix showing geohash and coverage"),
                 locale: .current,
                 geohash, coverage
             )
@@ -82,7 +82,7 @@ struct LocationChannelsSheet: View {
         static func subtitle(prefix: String, name: String?) -> String {
             guard let name, !name.isEmpty else { return prefix }
             return String(
-                format: String(localized: "location_channels.subtitle_with_name", comment: "Subtitle combining prefix and resolved location name"),
+                format: String(localized: "location_channels.subtitle_with_name", defaultValue: "%1$@ • %2$@", comment: "Subtitle combining prefix and resolved location name"),
                 locale: .current,
                 prefix, name
             )
@@ -90,7 +90,7 @@ struct LocationChannelsSheet: View {
 
         private static func rowTitle(label: String, count: Int) -> String {
             String(
-                format: String(localized: "location_channels.row_title", comment: "List row title with participant count"),
+                format: String(localized: "location_channels.row_title", defaultValue: "%1$@ [%2$#@people_count@]", comment: "List row title with participant count"),
                 locale: .current,
                 label, count
             )

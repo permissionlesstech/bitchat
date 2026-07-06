@@ -24,6 +24,6 @@ struct SheetCloseButton: View {
                 .contentShape(Rectangle().inset(by: -6))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(String(localized: "common.close", comment: "Accessibility label for close buttons"))
+        .accessibilityLabel(String(localized: "common.close", defaultValue: "close", comment: "Accessibility label for close buttons"))
     }
 }

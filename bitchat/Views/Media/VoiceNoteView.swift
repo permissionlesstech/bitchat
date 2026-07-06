@@ -54,8 +54,8 @@ struct VoiceNoteView: View {
             .buttonStyle(.plain)
             .accessibilityLabel(
                 playback.isPlaying
-                ? String(localized: "media.voice.accessibility.pause", comment: "Accessibility label for pausing voice note playback")
-                : String(localized: "media.voice.accessibility.play", comment: "Accessibility label for playing a voice note")
+                ? String(localized: "media.voice.accessibility.pause", defaultValue: "pause voice note", comment: "Accessibility label for pausing voice note playback")
+                : String(localized: "media.voice.accessibility.play", defaultValue: "play voice note", comment: "Accessibility label for playing a voice note")
             )
             .accessibilityValue(playbackLabel)
 
@@ -83,7 +83,7 @@ struct VoiceNoteView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(
-                    String(localized: "media.accessibility.cancel_send", comment: "Accessibility label for the cancel button on an in-flight media send")
+                    String(localized: "media.accessibility.cancel_send", defaultValue: "cancel sending", comment: "Accessibility label for the cancel button on an in-flight media send")
                 )
             }
         }

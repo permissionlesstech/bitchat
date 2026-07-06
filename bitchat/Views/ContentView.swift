@@ -204,20 +204,20 @@ struct ContentView: View {
             }
         }
         .alert("Recording Error", isPresented: $voiceRecordingVM.showAlert, actions: {
-            Button("common.ok", role: .cancel) {}
+            Button(String(localized: "common.ok", defaultValue: "OK"), role: .cancel) {}
             if voiceRecordingVM.state == .permissionDenied {
-                Button("location_channels.action.open_settings") {
+                Button(String(localized: "location_channels.action.open_settings", defaultValue: "open settings")) {
                     SystemSettings.microphone.open()
                 }
             }
         }, message: {
             Text(voiceRecordingVM.state.alertMessage)
         })
-        .alert("content.alert.bluetooth_required.title", isPresented: $appChromeModel.showBluetoothAlert) {
-            Button("content.alert.bluetooth_required.settings") {
+        .alert(String(localized: "content.alert.bluetooth_required.title", defaultValue: "bluetooth required"), isPresented: $appChromeModel.showBluetoothAlert) {
+            Button(String(localized: "content.alert.bluetooth_required.settings", defaultValue: "settings")) {
                 SystemSettings.bluetooth.open()
             }
-            Button("common.ok", role: .cancel) {}
+            Button(String(localized: "common.ok", defaultValue: "OK"), role: .cancel) {}
         } message: {
             Text(appChromeModel.bluetoothAlertMessage)
         }

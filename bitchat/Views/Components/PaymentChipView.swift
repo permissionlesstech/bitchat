@@ -70,9 +70,9 @@ struct PaymentChipView: View {
         var label: String {
             switch self {
             case .cashu:
-                String(localized: "content.payment.cashu", comment: "Label for Cashu payment chip")
+                String(localized: "content.payment.cashu", defaultValue: "pay via cashu", comment: "Label for Cashu payment chip")
             case .lightning:
-                String(localized: "content.payment.lightning", comment: "Label for Lightning payment chip")
+                String(localized: "content.payment.lightning", defaultValue: "pay via lightning", comment: "Label for Lightning payment chip")
             }
         }
     }
@@ -145,18 +145,18 @@ struct PaymentChipView: View {
                 Button {
                     copyToPasteboard(token)
                 } label: {
-                    Label(String(localized: "content.payment.copy_token", comment: "Context menu action copying a Cashu token to the pasteboard"), systemImage: "doc.on.doc")
+                    Label(String(localized: "content.payment.copy_token", defaultValue: "copy token", comment: "Context menu action copying a Cashu token to the pasteboard"), systemImage: "doc.on.doc")
                 }
                 Button {
                     redeemCashu()
                 } label: {
-                    Label(String(localized: "content.payment.redeem_wallet", comment: "Context menu action opening a Cashu token in an ecash wallet app"), systemImage: "wallet.pass")
+                    Label(String(localized: "content.payment.redeem_wallet", defaultValue: "redeem in wallet", comment: "Context menu action opening a Cashu token in an ecash wallet app"), systemImage: "wallet.pass")
                 }
                 if let webURL = paymentType.cashuWebRedeemURL {
                     Button {
                         openExternalURL(webURL)
                     } label: {
-                        Label(String(localized: "content.payment.redeem_web", comment: "Context menu action opening a Cashu token in the web redemption page"), systemImage: "safari")
+                        Label(String(localized: "content.payment.redeem_web", defaultValue: "redeem on web", comment: "Context menu action opening a Cashu token in the web redemption page"), systemImage: "safari")
                     }
                 }
             }
