@@ -102,7 +102,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     @MainActor
     var canSendMediaInCurrentContext: Bool {
         if let peer = selectedPrivateChatPeer {
-            return !(peer.isGeoDM || peer.isGeoChat)
+            // Media transfer is not wired for groups in v1 (sendFilePrivate
+            // rejects the virtual group_ recipient), so keep the affordance off.
+            return !(peer.isGeoDM || peer.isGeoChat || peer.isGroup)
         }
         switch activeChannel {
         case .mesh: return true

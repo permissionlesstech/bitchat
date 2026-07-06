@@ -142,7 +142,7 @@ struct GroupProtocolTests {
             Issue.record("roster should encode")
             return
         }
-        let content = GroupStatePayload.signingContent(groupID: groupID, epoch: 1, key: key, rosterBlob: rosterBlob)
+        let content = GroupStatePayload.signingContent(groupID: groupID, epoch: 1, key: key, rosterBlob: rosterBlob, name: group.name)
         let payload = GroupStatePayload(
             groupID: groupID,
             name: group.name,
@@ -298,5 +298,77 @@ struct GroupProtocolTests {
         #expect(GroupMessageEnvelope.decode(Data()) == nil)
         #expect(GroupMessageEnvelope.decode(Data([0x01, 0x00])) == nil)
         #expect(GroupStatePayload.decode(Data([0xFF, 0x00, 0x01])) == nil)
+    }
+
+    // MARK: - Oversize / UTF-8 safety (Codex findings)
+
+    @Test func oversizeMessageContentFailsToSealInsteadOfTruncating() {
+        // A content whose UTF-8 exceeds the 16-bit TLV length must fail to
+        // seal (surfacing send_failed) rather than silently truncate into a
+        // ciphertext recipients would drop.
+        let oversize = String(repeating: "a", count: 70_000)
+        #expect(throws: (any Error).self) {
+            _ = try GroupCrypto.sealMessage(
+                content: oversize,
+                messageID: "big",
+                senderNickname: "alice",
+                senderSigningKey: member.member.signingKey,
+                timestampMs: 1,
+                groupID: groupID,
+                epoch: 1,
+                key: key,
+                sign: member.sign
+            )
+        }
+    }
+
+    @Test func multiByteNicknameTruncatesOnScalarBoundary() throws {
+        // 40 euro signs = 120 UTF-8 bytes; a raw 64-byte prefix would split
+        // the 21st scalar and make the roster undecodable. Truncation must
+        // land on a Character boundary so the blob round-trips.
+        let euros = String(repeating: "€", count: 40)
+        let wide = GroupMember(
+            fingerprint: creator.fingerprint,
+            signingKey: creator.member.signingKey,
+            nickname: euros
+        )
+        let blob = try #require(GroupRosterCoding.encode([wide]))
+        let decoded = try #require(GroupRosterCoding.decode(blob))
+        #expect(decoded.count == 1)
+        #expect(Data(decoded[0].nickname.utf8).count <= 64)
+        #expect(decoded[0].nickname.allSatisfy { $0 == "€" })
+        #expect(!decoded[0].nickname.isEmpty)
+    }
+
+    // MARK: - Signable-bytes forward-proofing
+
+    @Test func creatorSignatureCoversName() throws {
+        let group = makeGroup()
+        let payload = try #require(GroupStatePayload.makeSigned(group: group, key: key, sign: creator.sign))
+        #expect(payload.verifyCreatorSignature())
+
+        // Swapping only the display name must invalidate the creator signature.
+        let renamed = GroupStatePayload(
+            groupID: payload.groupID,
+            name: "totally different name",
+            key: payload.key,
+            epoch: payload.epoch,
+            members: payload.members,
+            creatorFingerprint: payload.creatorFingerprint,
+            signature: payload.signature
+        )
+        #expect(!renamed.verifyCreatorSignature())
+    }
+
+    @Test func messageSignatureCoversEpoch() {
+        // The signed bytes differ by epoch, so a signature captured at one
+        // epoch cannot verify when re-sealed under a later epoch key.
+        let atEpoch1 = GroupCrypto.messageSigningContent(
+            groupID: groupID, epoch: 1, messageID: "m", timestampMs: 1, content: "x"
+        )
+        let atEpoch2 = GroupCrypto.messageSigningContent(
+            groupID: groupID, epoch: 2, messageID: "m", timestampMs: 1, content: "x"
+        )
+        #expect(atEpoch1 != atEpoch2)
     }
 }

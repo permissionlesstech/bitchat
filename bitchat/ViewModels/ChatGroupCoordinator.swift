@@ -35,6 +35,8 @@ protocol ChatGroupContext: AnyObject {
     func cryptoIdentity(for peerID: PeerID) -> (fingerprint: String, signingKey: Data)?
     /// The connected short peer ID whose fingerprint matches, if any.
     func connectedPeerID(forFingerprint fingerprint: String) -> PeerID?
+    /// Whether the user has blocked the identity with this Noise fingerprint.
+    func isFingerprintBlocked(_ fingerprint: String) -> Bool
 
     // MARK: Transport
     func sendGroupInvitePayload(_ payload: Data, to peerID: PeerID)
@@ -97,6 +99,10 @@ extension ChatViewModel: ChatGroupContext {
     func connectedPeerID(forFingerprint fingerprint: String) -> PeerID? {
         let shortID = PeerID(str: String(fingerprint.prefix(16)))
         return meshService.isPeerConnected(shortID) ? shortID : nil
+    }
+
+    func isFingerprintBlocked(_ fingerprint: String) -> Bool {
+        identityManager.isBlocked(fingerprint: fingerprint)
     }
 
     func sendGroupInvitePayload(_ payload: Data, to peerID: PeerID) {
@@ -230,9 +236,12 @@ final class ChatGroupCoordinator {
             signingKey: identity.signingKey,
             nickname: context.peerNickname(for: peerID) ?? nickname
         )
+        // Rotate the key (epoch + 1) on every roster change, not just removals.
+        // A monotonically increasing epoch per roster gives the receiver a
+        // strict ordering: two out-of-order invite states can no longer share
+        // an epoch and last-writer-wins a just-added member back out.
         let members = group.members + [newMember]
-        guard let updated = context.groupStore.updateRoster(groupID: group.groupID, members: members),
-              let key = context.groupStore.key(forGroupID: group.groupID),
+        guard let (updated, key) = context.groupStore.rotateKey(groupID: group.groupID, members: members),
               let payload = signedStatePayload(for: updated, key: key) else {
             return .error(message: String(localized: "system.group.invite_failed", comment: "Error when building or signing a group invite fails"))
         }
@@ -280,6 +289,7 @@ final class ChatGroupCoordinator {
         }
 
         distributeState(payload, group: rotated, excluding: [], type: .keyUpdate)
+        notifyRemovedMember(member, rotated: rotated)
 
         return .success(message: String(
             format: String(localized: "system.group.removed_member", comment: "System message after removing a member and rotating the key; placeholder is the nickname"),
@@ -402,6 +412,12 @@ final class ChatGroupCoordinator {
         }
         // Our own broadcast echoed back via relay or sync replay.
         guard plaintext.senderSigningKey != context.mySigningPublicKey() else { return }
+        // Honor /block inside groups too: drop display + notification for a
+        // blocked member, consistent with every other inbound path.
+        guard !context.isFingerprintBlocked(member.fingerprint) else {
+            SecureLogger.debug("Dropping group message from blocked member", category: .security)
+            return
+        }
 
         let groupPeerID = group.peerID
         // Trust the authenticated inner timestamp (clamped so a future-dated
@@ -491,6 +507,26 @@ private extension ChatGroupCoordinator {
                 context.sendGroupKeyUpdatePayload(payload, to: peerID)
             }
         }
+    }
+
+    /// Tells a just-removed member they're out so their client can deactivate
+    /// the group instead of silently going dark (dropping every message under
+    /// the epoch it no longer has the key for). The notice is a creator-signed
+    /// state whose roster excludes the removee — their `applyGroupState`
+    /// removal branch fires on the missing-self roster and surfaces the
+    /// "removed from group" system message.
+    ///
+    /// It carries a throwaway all-zero key, never the rotated key, so the
+    /// removee cannot decrypt post-removal traffic. State is sent 1:1 over
+    /// authenticated Noise, so no remaining member ever receives this blob
+    /// (and even if one did, its own missing-self check would not match).
+    /// If the removee is offline the notice can't be delivered — same v1
+    /// limitation as any other missed key update, documented in the PR.
+    func notifyRemovedMember(_ removed: GroupMember, rotated: BitchatGroup) {
+        guard let peerID = context.connectedPeerID(forFingerprint: removed.fingerprint) else { return }
+        let throwawayKey = Data(count: BitchatGroup.keyLength)
+        guard let payload = signedStatePayload(for: rotated, key: throwawayKey) else { return }
+        context.sendGroupKeyUpdatePayload(payload, to: peerID)
     }
 
     func applyGroupState(from peerID: PeerID, payload: Data, isInvite: Bool) {

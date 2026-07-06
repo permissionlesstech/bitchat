@@ -63,13 +63,24 @@ struct BitchatGroup: Codable, Equatable {
 
 // MARK: - TLV helpers
 
+enum GroupTLVError: Error, Equatable {
+    /// A TLV value exceeded the 16-bit length field. Encoding fails instead
+    /// of silently truncating (which would ship a value the receiver drops).
+    case valueTooLong
+}
+
 private enum GroupTLV {
-    static func put(_ type: UInt8, _ value: Data, into out: inout Data) {
+    /// Appends a (type, 16-bit length, value) triple. Throws rather than
+    /// truncating when `value` does not fit the 16-bit length field, so an
+    /// oversize field surfaces a send failure instead of a silently truncated
+    /// blob the recipient rejects during decrypt/verify.
+    static func put(_ type: UInt8, _ value: Data, into out: inout Data) throws {
+        guard value.count <= Int(UInt16.max) else { throw GroupTLVError.valueTooLong }
         out.append(type)
-        let length = UInt16(clamping: value.count)
+        let length = UInt16(value.count)
         out.append(UInt8((length >> 8) & 0xFF))
         out.append(UInt8(length & 0xFF))
-        out.append(value.prefix(Int(length)))
+        out.append(value)
     }
 
     /// Iterates (type, value) pairs; returns nil on malformed framing.
@@ -131,7 +142,10 @@ enum GroupRosterCoding {
                   member.signingKey.count == signingKeyLength else { return nil }
             out.append(fingerprintData)
             out.append(member.signingKey)
-            let nickname = Data(member.nickname.utf8).prefix(maxNicknameBytes)
+            // Truncate on a Character boundary so the byte prefix is always
+            // valid UTF-8; a raw byte-prefix could split a multi-byte scalar
+            // and make the whole signed roster undecodable on the recipient.
+            let nickname = truncatedNicknameBytes(member.nickname)
             out.append(UInt8(nickname.count))
             out.append(nickname)
         }
@@ -159,6 +173,16 @@ enum GroupRosterCoding {
         }
         guard offset == data.endIndex else { return nil }
         return members
+    }
+
+    /// UTF-8 bytes of `nickname` trimmed to at most `maxNicknameBytes`,
+    /// dropping whole Characters so the result is never split mid-scalar.
+    private static func truncatedNicknameBytes(_ nickname: String) -> Data {
+        var candidate = nickname
+        while Data(candidate.utf8).count > maxNicknameBytes {
+            candidate.removeLast()
+        }
+        return Data(candidate.utf8)
     }
 }
 
@@ -192,14 +216,17 @@ struct GroupStatePayload: Equatable {
 
     static let signingDomain = Data("bitchat-group-v1".utf8)
 
-    /// The bytes the creator signs. Binding the key and roster by hash keeps
-    /// the signed content fixed-size.
-    static func signingContent(groupID: Data, epoch: UInt32, key: Data, rosterBlob: Data) -> Data {
+    /// The bytes the creator signs. Binding the key, roster, and name by hash
+    /// keeps the signed content fixed-size. The name is covered so a relay
+    /// that caches/replays a signed state (e.g. store-and-forward) cannot swap
+    /// the display name while keeping a valid creator signature.
+    static func signingContent(groupID: Data, epoch: UInt32, key: Data, rosterBlob: Data, name: String) -> Data {
         var content = signingDomain
         content.append(groupID)
         content.append(GroupTLV.epochData(epoch))
         content.append(key.sha256Hash())
         content.append(rosterBlob.sha256Hash())
+        content.append(Data(name.utf8).sha256Hash())
         return content
     }
 
@@ -211,7 +238,7 @@ struct GroupStatePayload: Equatable {
         sign: (Data) -> Data?
     ) -> GroupStatePayload? {
         guard let rosterBlob = GroupRosterCoding.encode(group.members) else { return nil }
-        let content = signingContent(groupID: group.groupID, epoch: group.epoch, key: key, rosterBlob: rosterBlob)
+        let content = signingContent(groupID: group.groupID, epoch: group.epoch, key: key, rosterBlob: rosterBlob, name: group.name)
         guard let signature = sign(content) else { return nil }
         return GroupStatePayload(
             groupID: group.groupID,
@@ -229,13 +256,17 @@ struct GroupStatePayload: Equatable {
               let fingerprintData = Data(hexString: creatorFingerprint),
               fingerprintData.count == 32 else { return nil }
         var out = Data()
-        GroupTLV.put(FieldType.groupID.rawValue, groupID, into: &out)
-        GroupTLV.put(FieldType.name.rawValue, Data(name.utf8), into: &out)
-        GroupTLV.put(FieldType.key.rawValue, key, into: &out)
-        GroupTLV.put(FieldType.epoch.rawValue, GroupTLV.epochData(epoch), into: &out)
-        GroupTLV.put(FieldType.roster.rawValue, rosterBlob, into: &out)
-        GroupTLV.put(FieldType.creatorFingerprint.rawValue, fingerprintData, into: &out)
-        GroupTLV.put(FieldType.signature.rawValue, signature, into: &out)
+        do {
+            try GroupTLV.put(FieldType.groupID.rawValue, groupID, into: &out)
+            try GroupTLV.put(FieldType.name.rawValue, Data(name.utf8), into: &out)
+            try GroupTLV.put(FieldType.key.rawValue, key, into: &out)
+            try GroupTLV.put(FieldType.epoch.rawValue, GroupTLV.epochData(epoch), into: &out)
+            try GroupTLV.put(FieldType.roster.rawValue, rosterBlob, into: &out)
+            try GroupTLV.put(FieldType.creatorFingerprint.rawValue, fingerprintData, into: &out)
+            try GroupTLV.put(FieldType.signature.rawValue, signature, into: &out)
+        } catch {
+            return nil
+        }
         return out
     }
 
@@ -292,7 +323,7 @@ struct GroupStatePayload: Equatable {
         guard members.count <= BitchatGroup.maxMembers,
               let creator = members.first(where: { $0.fingerprint == creatorFingerprint }),
               let rosterBlob = GroupRosterCoding.encode(members) else { return false }
-        let content = GroupStatePayload.signingContent(groupID: groupID, epoch: epoch, key: key, rosterBlob: rosterBlob)
+        let content = GroupStatePayload.signingContent(groupID: groupID, epoch: epoch, key: key, rosterBlob: rosterBlob, name: name)
         return GroupCrypto.verify(signature: signature, for: content, publicKey: creator.signingKey)
     }
 
@@ -326,12 +357,12 @@ struct GroupMessageEnvelope: Equatable {
         case ciphertext = 0x04
     }
 
-    func encode() -> Data {
+    func encode() throws -> Data {
         var out = Data()
-        GroupTLV.put(FieldType.groupID.rawValue, groupID, into: &out)
-        GroupTLV.put(FieldType.epoch.rawValue, GroupTLV.epochData(epoch), into: &out)
-        GroupTLV.put(FieldType.nonce.rawValue, nonce, into: &out)
-        GroupTLV.put(FieldType.ciphertext.rawValue, ciphertext, into: &out)
+        try GroupTLV.put(FieldType.groupID.rawValue, groupID, into: &out)
+        try GroupTLV.put(FieldType.epoch.rawValue, GroupTLV.epochData(epoch), into: &out)
+        try GroupTLV.put(FieldType.nonce.rawValue, nonce, into: &out)
+        try GroupTLV.put(FieldType.ciphertext.rawValue, ciphertext, into: &out)
         return out
     }
 
@@ -392,10 +423,14 @@ enum GroupCrypto {
         case signature = 0x06
     }
 
-    /// Bytes the sender signs: domain | groupID | messageID | timestamp | content.
-    static func messageSigningContent(groupID: Data, messageID: String, timestampMs: UInt64, content: String) -> Data {
+    /// Bytes the sender signs: domain | groupID | epoch | messageID | timestamp | content.
+    /// Covering the epoch stops a current member from re-sealing another
+    /// member's decrypted inner bytes under a later epoch key (the signature
+    /// would no longer verify at the new epoch).
+    static func messageSigningContent(groupID: Data, epoch: UInt32, messageID: String, timestampMs: UInt64, content: String) -> Data {
         var data = messageSigningDomain
         data.append(groupID)
+        data.append(GroupTLV.epochData(epoch))
         data.append(Data(messageID.utf8))
         data.append(GroupTLV.timestampData(timestampMs))
         data.append(Data(content.utf8))
@@ -424,6 +459,7 @@ enum GroupCrypto {
     ) throws -> Data {
         let signingContent = messageSigningContent(
             groupID: groupID,
+            epoch: epoch,
             messageID: messageID,
             timestampMs: timestampMs,
             content: content
@@ -433,12 +469,12 @@ enum GroupCrypto {
         }
 
         var inner = Data()
-        GroupTLV.put(InnerField.messageID.rawValue, Data(messageID.utf8), into: &inner)
-        GroupTLV.put(InnerField.senderSigningKey.rawValue, senderSigningKey, into: &inner)
-        GroupTLV.put(InnerField.senderNickname.rawValue, Data(senderNickname.utf8), into: &inner)
-        GroupTLV.put(InnerField.timestamp.rawValue, GroupTLV.timestampData(timestampMs), into: &inner)
-        GroupTLV.put(InnerField.content.rawValue, Data(content.utf8), into: &inner)
-        GroupTLV.put(InnerField.signature.rawValue, signature, into: &inner)
+        try GroupTLV.put(InnerField.messageID.rawValue, Data(messageID.utf8), into: &inner)
+        try GroupTLV.put(InnerField.senderSigningKey.rawValue, senderSigningKey, into: &inner)
+        try GroupTLV.put(InnerField.senderNickname.rawValue, Data(senderNickname.utf8), into: &inner)
+        try GroupTLV.put(InnerField.timestamp.rawValue, GroupTLV.timestampData(timestampMs), into: &inner)
+        try GroupTLV.put(InnerField.content.rawValue, Data(content.utf8), into: &inner)
+        try GroupTLV.put(InnerField.signature.rawValue, signature, into: &inner)
 
         do {
             let symmetricKey = SymmetricKey(data: key)
@@ -453,7 +489,7 @@ enum GroupCrypto {
                 nonce: Data(sealed.nonce),
                 ciphertext: ciphertext
             )
-            return envelope.encode()
+            return try envelope.encode()
         } catch {
             throw GroupCryptoError.sealFailed
         }
@@ -513,6 +549,7 @@ enum GroupCrypto {
 
         let signingContent = messageSigningContent(
             groupID: envelope.groupID,
+            epoch: envelope.epoch,
             messageID: messageID,
             timestampMs: timestampMs,
             content: content
