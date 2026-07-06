@@ -329,4 +329,71 @@ struct PrekeyEndToEndTests {
         // The verified bundle now participates in Alice's sync rounds.
         #expect(alice._test_hasGossipPrekeyBundle(for: bob.myPeerID))
     }
+
+    @Test func spoofedSenderPrekeyBundleIsRejected() async throws {
+        let alice = makeService()
+        let bob = makeService()
+
+        let bobOut = PacketTap()
+        bob._test_onOutboundPacket = bobOut.record
+
+        let (announce, bundlePacket) = try await captureAnnounceAndBundle(from: bob, tap: bobOut)
+        alice._test_handlePacket(announce, fromPeerID: bob.myPeerID, preseedPeer: false)
+
+        // A relay re-broadcasts Bob's genuine bundle under a fabricated sender
+        // ID (the DoS that would multiply cache/gossip entries and exhaust the
+        // per-owner cap). Attribution is by the bundle's own key and the outer
+        // signature is bound to Bob's sender ID, so the spoof is dropped — no
+        // cache entry, and no gossip entry under either the fake or real ID.
+        let fakeSender = Data((0..<8).map { _ in UInt8.random(in: 0...255) })
+        let spoofed = BitchatPacket(
+            type: MessageType.prekeyBundle.rawValue,
+            senderID: fakeSender,
+            recipientID: nil,
+            timestamp: bundlePacket.timestamp + 5_000,
+            payload: bundlePacket.payload,
+            signature: bundlePacket.signature,
+            ttl: bundlePacket.ttl
+        )
+        alice._test_handlePacket(spoofed, fromPeerID: PeerID(hexData: fakeSender), preseedPeer: false)
+
+        let cached = await TestHelpers.waitUntil(
+            { alice.prekeyBundleStore.hasUsableBundle(for: bob.noiseStaticPublicKeyData()) },
+            timeout: TestConstants.shortTimeout
+        )
+        #expect(!cached)
+        #expect(!alice._test_hasGossipPrekeyBundle(for: bob.myPeerID))
+        #expect(!alice._test_hasGossipPrekeyBundle(for: PeerID(hexData: fakeSender)))
+    }
+
+    @Test func replayedPrekeyBundleWithFreshTimestampIsRejected() async throws {
+        let alice = makeService()
+        let bob = makeService()
+
+        let bobOut = PacketTap()
+        bob._test_onOutboundPacket = bobOut.record
+
+        let (announce, bundlePacket) = try await captureAnnounceAndBundle(from: bob, tap: bobOut)
+        alice._test_handlePacket(announce, fromPeerID: bob.myPeerID, preseedPeer: false)
+
+        // Rewriting the outer timestamp (to defeat the freshness window)
+        // invalidates the packet signature, which covers senderID + timestamp.
+        let replay = BitchatPacket(
+            type: MessageType.prekeyBundle.rawValue,
+            senderID: bundlePacket.senderID,
+            recipientID: nil,
+            timestamp: bundlePacket.timestamp + 5_000,
+            payload: bundlePacket.payload,
+            signature: bundlePacket.signature,
+            ttl: bundlePacket.ttl
+        )
+        alice._test_handlePacket(replay, fromPeerID: bob.myPeerID, preseedPeer: false)
+
+        let cached = await TestHelpers.waitUntil(
+            { alice.prekeyBundleStore.hasUsableBundle(for: bob.noiseStaticPublicKeyData()) },
+            timeout: TestConstants.shortTimeout
+        )
+        #expect(!cached)
+        #expect(!alice._test_hasGossipPrekeyBundle(for: bob.myPeerID))
+    }
 }

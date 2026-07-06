@@ -156,6 +156,15 @@ struct LocalPrekeyStoreTests {
         LocalPrekeyStore(keychain: keychain, now: { clock.now })
     }
 
+    private func bundle(noiseKey: Data, prekeys: [PrekeyBundle.Prekey], generatedAt: UInt64) -> PrekeyBundle {
+        PrekeyBundle(
+            noiseStaticPublicKey: noiseKey,
+            prekeys: prekeys,
+            generatedAt: generatedAt,
+            signature: Data(count: PrekeyBundle.signatureLength)
+        )
+    }
+
     @Test func mintsFullBatchOnFirstUse() {
         let store = makeStore(clock: Clock())
         let (prekeys, generatedAt) = store.currentBundlePrekeys()
@@ -190,6 +199,42 @@ struct LocalPrekeyStoreTests {
         #expect(survivorIDs.isSubset(of: Set(replenished.map(\.id))))
     }
 
+    @Test func consumingAPrekeyRepublishesANewerBundlePeersAccept() {
+        // Codex P1: consuming a prekey (even above the replenish threshold)
+        // must republish a strictly newer bundle so a peer that cached the old
+        // one replaces it and stops assigning the consumed ID before its 48h
+        // grace lapses.
+        let clock = Clock()
+        let store = makeStore(clock: clock)
+        let noiseKey = Data(repeating: 0xC0, count: 32)
+
+        // Owner publishes; a peer caches it and would assign the first prekey.
+        let (initial, firstGeneratedAt) = store.currentBundlePrekeys()
+        let peerCache = PrekeyBundleStore(persistsToDisk: false)
+        #expect(peerCache.ingest(bundle(noiseKey: noiseKey, prekeys: initial, generatedAt: firstGeneratedAt)))
+        let consumedID = initial[0].id
+        #expect(peerCache.assignPrekey(messageID: "m1", recipientNoiseKey: noiseKey)?.id == consumedID)
+
+        // The owner opens mail sealed to that prekey: it's retired and the
+        // republished bundle is strictly newer and no longer offers the ID.
+        #expect(store.markConsumed(consumedID))
+        let (afterConsume, secondGeneratedAt) = store.currentBundlePrekeys()
+        #expect(secondGeneratedAt > firstGeneratedAt)
+        #expect(!afterConsume.contains { $0.id == consumedID })
+
+        // The peer accepts the replacement (a same-generatedAt copy would be
+        // rejected) and stops assigning the consumed ID for new mail.
+        #expect(peerCache.ingest(bundle(noiseKey: noiseKey, prekeys: afterConsume, generatedAt: secondGeneratedAt)))
+        #expect(peerCache.assignPrekey(messageID: "m2", recipientNoiseKey: noiseKey)?.id != consumedID)
+
+        // 48h grace: the owner can still open a redelivery of the in-flight
+        // ciphertext sealed to the consumed ID until the window lapses.
+        clock.now = clock.now.addingTimeInterval(LocalPrekeyStore.Policy.consumedGraceSeconds - 60)
+        #expect(store.privateKey(for: consumedID) != nil)
+        clock.now = clock.now.addingTimeInterval(120)
+        #expect(store.privateKey(for: consumedID) == nil)
+    }
+
     @Test func consumedPrivateSurvivesGraceWindowThenDies() {
         let clock = Clock()
         let store = makeStore(clock: clock)
@@ -217,7 +262,11 @@ struct LocalPrekeyStoreTests {
 
         let second = LocalPrekeyStore(keychain: keychain, now: { clock.now })
         let (reloaded, reloadedGeneratedAt) = second.currentBundlePrekeys()
-        #expect(reloadedGeneratedAt == generatedAt)
+        // Consuming a prekey shrinks the published bundle, so its generation
+        // stamp advances strictly (even without the clock moving) — peers must
+        // see a newer bundle to replace the one that still offered the
+        // consumed ID.
+        #expect(reloadedGeneratedAt > generatedAt)
         #expect(Set(reloaded.map(\.id)) == Set(prekeys.dropFirst().map(\.id)))
         // The consumed key is still openable within grace after a relaunch.
         #expect(second.privateKey(for: prekeys[0].id) != nil)

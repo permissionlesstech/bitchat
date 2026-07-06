@@ -252,17 +252,23 @@ final class GossipSyncManager {
             // spreads a bundle this node couldn't attribute.
             guard isBroadcastRecipient else { return }
             guard isPacketFresh(packet) else { return }
-            let sender = PeerID(hexData: packet.senderID)
-            if let existing = latestPrekeyBundleByPeer[sender],
+            // Key by the bundle's authenticated identity (its noise static key),
+            // NOT the unauthenticated packet senderID. Otherwise one valid
+            // bundle re-broadcast under many fabricated sender IDs would create
+            // one cache entry each and exhaust the per-owner cap, starving
+            // legitimate bundles. One owner ⇒ at most one entry.
+            guard let bundle = PrekeyBundle.decode(packet.payload) else { return }
+            let owner = PeerID(publicKey: bundle.noiseStaticPublicKey)
+            if let existing = latestPrekeyBundleByPeer[owner],
                existing.packet.timestamp >= packet.timestamp {
                 return
             }
-            // Bounded peer count; replacing a known owner's bundle is always
+            // Bounded owner count; replacing a known owner's bundle is always
             // allowed so the cap can't block refreshes.
-            guard latestPrekeyBundleByPeer[sender] != nil
+            guard latestPrekeyBundleByPeer[owner] != nil
                     || latestPrekeyBundleByPeer.count < max(1, config.prekeyBundleCapacity) else { return }
             let idHex = PacketIdUtil.computeId(packet).hexEncodedString()
-            latestPrekeyBundleByPeer[sender] = (id: idHex, packet: packet)
+            latestPrekeyBundleByPeer[owner] = (id: idHex, packet: packet)
         default:
             break
         }

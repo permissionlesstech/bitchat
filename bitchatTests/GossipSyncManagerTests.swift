@@ -489,14 +489,23 @@ struct GossipSyncManagerTests {
         let delegate = RecordingDelegate()
         manager.delegate = delegate
 
-        let sender = try #require(Data(hexString: "aabbccddeeff0011"))
-        let senderPeer = PeerID(hexData: sender)
+        // Bundles are keyed by their authenticated identity (the noise static
+        // key), not the packet senderID, so the payload must be a real bundle.
+        let noiseKey = Data(repeating: 0xAB, count: 32)
+        let senderPeer = PeerID(publicKey: noiseKey)
+        let sender = try #require(Data(hexString: senderPeer.id))
+        let bundle = PrekeyBundle(
+            noiseStaticPublicKey: noiseKey,
+            prekeys: [PrekeyBundle.Prekey(id: 0, publicKey: Data(repeating: 0x11, count: 32))],
+            generatedAt: UInt64(Date().timeIntervalSince1970 * 1000),
+            signature: Data(count: PrekeyBundle.signatureLength)
+        )
         let bundlePacket = BitchatPacket(
             type: MessageType.prekeyBundle.rawValue,
             senderID: sender,
             recipientID: nil,
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-            payload: Data([0x01]),
+            payload: try #require(bundle.encode()),
             signature: nil,
             ttl: 1
         )
@@ -517,6 +526,41 @@ struct GossipSyncManagerTests {
         let served = try #require(delegate.packets.first)
         #expect(served.type == MessageType.prekeyBundle.rawValue)
         #expect(served.isRSR)
+    }
+
+    @Test func prekeyBundleGossipIsKeyedByOwnerNotSenderID() {
+        // One valid bundle re-broadcast under many fabricated sender IDs must
+        // collapse to a single entry keyed by the bundle's own identity — the
+        // spray-to-exhaust-the-cap DoS produces one entry, not N.
+        let manager = GossipSyncManager(myPeerID: myPeerID, requestSyncManager: RequestSyncManager())
+        let noiseKey = Data(repeating: 0xCD, count: 32)
+        let ownerPeer = PeerID(publicKey: noiseKey)
+        let bundle = PrekeyBundle(
+            noiseStaticPublicKey: noiseKey,
+            prekeys: [PrekeyBundle.Prekey(id: 0, publicKey: Data(repeating: 0x22, count: 32))],
+            generatedAt: UInt64(Date().timeIntervalSince1970 * 1000),
+            signature: Data(count: PrekeyBundle.signatureLength)
+        )
+        guard let payload = bundle.encode() else { return }
+
+        for i in 0..<5 {
+            let fakeSender = Data((0..<8).map { j in UInt8(truncatingIfNeeded: i * 31 + j) })
+            let packet = BitchatPacket(
+                type: MessageType.prekeyBundle.rawValue,
+                senderID: fakeSender,
+                recipientID: nil,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000) + UInt64(i),
+                payload: payload,
+                signature: nil,
+                ttl: 1
+            )
+            manager.onPublicPacketSeen(packet)
+            manager._performMaintenanceSynchronously(now: Date())
+            // No fabricated sender ID ever creates its own entry.
+            #expect(!manager._hasPrekeyBundle(for: PeerID(hexData: fakeSender)))
+        }
+        // Exactly the owner-keyed entry exists.
+        #expect(manager._hasPrekeyBundle(for: ownerPeer))
     }
 
     // MARK: - Archive persistence

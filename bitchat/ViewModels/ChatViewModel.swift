@@ -1278,6 +1278,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
 
         // Delete ALL media files (incoming and outgoing) in background
         Task.detached(priority: .utility) {
+            // The SPM test process shares the real Application Support tree, so
+            // this detached tree-delete can land mid-test under parallel
+            // scheduling and flake a file-dependent test; tests never need the
+            // on-disk media wiped.
+            guard !TestEnvironment.isRunningTests else { return }
             do {
                 let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
                 let filesDir = base.appendingPathComponent("files", isDirectory: true)

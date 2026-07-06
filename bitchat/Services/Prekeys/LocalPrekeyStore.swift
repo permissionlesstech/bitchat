@@ -109,13 +109,24 @@ final class LocalPrekeyStore {
 
     /// Marks a prekey consumed (starts its grace clock). Idempotent: a
     /// redelivery within the grace window does not restart the clock.
-    func markConsumed(_ id: UInt32) {
+    ///
+    /// Returns true when this call actually retired a prekey, i.e. the
+    /// published bundle shrank. Consuming a prekey drops it from
+    /// `currentBundlePrekeys()`, so `generatedAt` must advance strictly too:
+    /// otherwise peers that cached the old bundle reject the same-`generatedAt`
+    /// replacement in `PrekeyBundleStore.ingest`, keep assigning the consumed
+    /// ID, and their mail starts failing `unknownPrekey` once the 48h grace
+    /// lapses. The caller re-gossips on a true result.
+    @discardableResult
+    func markConsumed(_ id: UInt32) -> Bool {
         queue.sync {
             loadLocked()
             guard let index = records.firstIndex(where: { $0.id == id }),
-                  records[index].consumedAt == nil else { return }
+                  records[index].consumedAt == nil else { return false }
             records[index].consumedAt = now()
+            advanceGeneratedAtLocked()
             persistLocked()
+            return true
         }
     }
 
@@ -174,13 +185,22 @@ final class LocalPrekeyStore {
                 records.append(Record(id: nextID, privateKey: key.rawRepresentation, createdAt: date, consumedAt: nil))
                 nextID &+= 1
             }
-            generatedAt = UInt64(max(0, date.timeIntervalSince1970 * 1000))
+            advanceGeneratedAtLocked()
             bundleChanged = true
             SecureLogger.debug("🔑 Replenished one-time prekeys (unconsumed was \(unconsumed))", category: .security)
         }
 
         if bundleChanged || records.count != recordsBefore { persistLocked() }
         return bundleChanged
+    }
+
+    /// Advance `generatedAt` strictly monotonically. Uses wall-clock millis but
+    /// never repeats or regresses, so two changes within the same millisecond
+    /// still produce distinct, increasing stamps that peers' monotonic ingest
+    /// accepts.
+    private func advanceGeneratedAtLocked() {
+        let nowMillis = UInt64(max(0, now().timeIntervalSince1970 * 1000))
+        generatedAt = max(nowMillis, generatedAt &+ 1)
     }
 
     private func loadLocked() {

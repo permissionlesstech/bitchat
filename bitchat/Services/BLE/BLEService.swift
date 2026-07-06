@@ -66,6 +66,13 @@ final class BLEService: NSObject {
     // Throttle for re-broadcasting our own (unchanged) bundle; guarded by
     // collectionsQueue barriers.
     private var lastPrekeyBundleSentAt: Date?
+    // Prekey bundles that arrived before their owner's verified announce bound
+    // a signing key. The receive queue is concurrent, so a bundle can race
+    // ahead of the announce it depends on; we retain the latest such bundle per
+    // owner (bounded) and re-attempt attribution when the announce lands.
+    // Guarded by collectionsQueue barriers.
+    private var pendingPrekeyBundles: [PeerID: BitchatPacket] = [:]
+    private static let pendingPrekeyBundleCap = 64
 
     #if DEBUG
     // Test-only tap on the outbound pipeline so multi-node tests can ferry
@@ -2637,11 +2644,17 @@ extension BLEService {
             let senderStaticKey: Data
             if let prekeyID = envelope.prekeyID {
                 // Envelope v2: sealed to one of our one-time prekeys. Opening
-                // consumes the prekey (48h redelivery grace); regenerate and
-                // re-gossip a fresh bundle when the batch runs low.
-                (typedPayload, senderStaticKey) = try noiseService.openPrekeyPayload(envelope.ciphertext, prekeyID: prekeyID)
-                if noiseService.replenishPrekeysIfNeeded() {
-                    sendPrekeyBundle(force: true)
+                // consumes the prekey (48h redelivery grace), which shrinks our
+                // published bundle under a strictly newer generatedAt. Re-gossip
+                // so peers replace their cached copy and stop assigning the
+                // consumed ID before the grace lapses; force the broadcast when
+                // the batch also topped back up (low-water), otherwise let the
+                // rebroadcast throttle coalesce bursts.
+                let opened = try noiseService.openPrekeyPayload(envelope.ciphertext, prekeyID: prekeyID)
+                (typedPayload, senderStaticKey) = (opened.payload, opened.senderStaticKey)
+                if opened.consumedPrekey {
+                    let replenished = noiseService.replenishPrekeysIfNeeded()
+                    sendPrekeyBundle(force: replenished)
                 }
             } else {
                 (typedPayload, senderStaticKey) = try noiseService.openCourierPayload(envelope.ciphertext)
@@ -2822,10 +2835,16 @@ extension BLEService {
         gossipSyncManager?.onPublicPacketSeen(signedPacket)
     }
 
-    /// Ingests a gossiped prekey bundle: verify the inner Ed25519 signature
-    /// against the owner's announce-bound signing key, cache the latest copy
-    /// per owner, and only then let the packet enter our own gossip store so
-    /// we never help spread a bundle we couldn't attribute.
+    /// Ingests a gossiped prekey bundle. Attribution is layered: the outer
+    /// packet must originate from the bundle owner (fabricated sender IDs, used
+    /// to multiply cache/gossip entries, are rejected), and BOTH the inner
+    /// bundle signature and the outer packet signature must verify against the
+    /// owner's announce-bound signing key. Verifying the outer packet — whose
+    /// signed bytes cover senderID and timestamp — stops a valid bundle from
+    /// being replayed under a fresh timestamp or spoofed sender to pass
+    /// freshness or poison attribution. Only after that does the packet enter
+    /// our own gossip store, so we never help spread a bundle we couldn't
+    /// attribute.
     private func handlePrekeyBundle(_ packet: BitchatPacket, from peerID: PeerID) {
         guard let bundle = PrekeyBundle.decode(packet.payload) else {
             SecureLogger.debug("🔑 Ignoring malformed prekey bundle from \(peerID.id.prefix(8))…", category: .security)
@@ -2833,15 +2852,71 @@ extension BLEService {
         }
         // Our own bundle is tracked at send time; a copy echoing back adds nothing.
         guard bundle.noiseStaticPublicKey != noiseService.getStaticPublicKeyData() else { return }
-        guard let signingKey = announceBoundSigningKey(forNoiseKey: bundle.noiseStaticPublicKey),
-              noiseService.verifyPrekeyBundleSignature(bundle, signingPublicKey: signingKey) else {
-            SecureLogger.debug("🔑 Ignoring prekey bundle without verifiable signature (owner \(PeerID(publicKey: bundle.noiseStaticPublicKey).id.prefix(8))…)", category: .security)
+        let owner = PeerID(publicKey: bundle.noiseStaticPublicKey)
+        // The owner's genuine bundle (direct or relayed) always carries the
+        // owner's senderID + outer signature; gossip resends preserve both. A
+        // packet whose senderID isn't the owner can't be authenticated here.
+        guard PeerID(hexData: packet.senderID) == owner else {
+            SecureLogger.debug("🔑 Ignoring prekey bundle whose sender ≠ owner \(owner.id.prefix(8))…", category: .security)
+            return
+        }
+        // Look up the announce-bound signing key and stash-if-unbound in ONE
+        // barrier: the receive queue is concurrent, so this bundle can race
+        // ahead of the announce that binds the key. Reading the live registry
+        // and stashing atomically closes the check-then-act gap against
+        // handleAnnounce's drain (see drainPendingPrekeyBundles).
+        let signingKey: Data? = collectionsQueue.sync(flags: .barrier) {
+            if let info = peerRegistry.info(for: owner),
+               info.noisePublicKey == bundle.noiseStaticPublicKey,
+               let key = info.signingPublicKey {
+                return key
+            }
+            // Offline-verified identities are stable across this race.
+            for candidate in identityManager.getCryptoIdentitiesByPeerIDPrefix(owner)
+            where candidate.publicKey == bundle.noiseStaticPublicKey {
+                if let key = candidate.signingPublicKey { return key }
+            }
+            // No binding yet: retain the latest bundle per owner, bounded, and
+            // retry once the verified announce lands.
+            if pendingPrekeyBundles[owner] != nil
+                || pendingPrekeyBundles.count < Self.pendingPrekeyBundleCap {
+                pendingPrekeyBundles[owner] = packet
+            }
+            return nil
+        }
+        guard let signingKey else {
+            SecureLogger.debug("🔑 Deferring prekey bundle without a bound signing key (owner \(owner.id.prefix(8))…)", category: .security)
+            return
+        }
+        ingestVerifiedPrekeyBundle(bundle, packet: packet, owner: owner, signingKey: signingKey)
+    }
+
+    /// Verify a bundle's inner + outer signatures against the owner's bound
+    /// signing key and, on success, cache it and let it enter our gossip store.
+    private func ingestVerifiedPrekeyBundle(_ bundle: PrekeyBundle, packet: BitchatPacket, owner: PeerID, signingKey: Data) {
+        guard noiseService.verifyPrekeyBundleSignature(bundle, signingPublicKey: signingKey),
+              noiseService.verifyPacketSignature(packet, publicKey: signingKey) else {
+            SecureLogger.debug("🔑 Ignoring prekey bundle without verifiable signature (owner \(owner.id.prefix(8))…)", category: .security)
             return
         }
         if prekeyBundleStore.ingest(bundle) {
-            SecureLogger.debug("🔑 Cached prekey bundle for \(PeerID(publicKey: bundle.noiseStaticPublicKey).id.prefix(8))… (\(bundle.prekeys.count) prekeys)", category: .security)
+            SecureLogger.debug("🔑 Cached prekey bundle for \(owner.id.prefix(8))… (\(bundle.prekeys.count) prekeys)", category: .security)
         }
         gossipSyncManager?.onPublicPacketSeen(packet)
+    }
+
+    /// Re-attempt any prekey bundle that arrived before this owner's announce
+    /// bound a signing key. Called from handleAnnounce after a verified
+    /// announce, in a barrier ordered after the registry write, so a bundle
+    /// stashed before the write is always observed here.
+    private func drainPendingPrekeyBundles(for owner: PeerID) {
+        let pending: BitchatPacket? = collectionsQueue.sync(flags: .barrier) {
+            pendingPrekeyBundles.removeValue(forKey: owner)
+        }
+        guard let packet = pending,
+              let bundle = PrekeyBundle.decode(packet.payload),
+              let signingKey = announceBoundSigningKey(forNoiseKey: bundle.noiseStaticPublicKey) else { return }
+        ingestVerifiedPrekeyBundle(bundle, packet: packet, owner: owner, signingKey: signingKey)
     }
 
     /// Ed25519 signing key bound to a Noise static key by a verified
@@ -3422,6 +3497,12 @@ extension BLEService {
     
     private func handleAnnounce(_ packet: BitchatPacket, from peerID: PeerID) {
         let result = announceHandler.handle(packet, from: peerID)
+
+        // A verified announce is the moment a signing key becomes bound to this
+        // owner's noise key: retry any prekey bundle that raced ahead of it.
+        if let result, result.isVerified {
+            drainPendingPrekeyBundles(for: result.peerID)
+        }
 
         // Courier work: an announce is the moment we learn a peer's Noise
         // static key, so check whether we're carrying mail addressed to them

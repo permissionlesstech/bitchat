@@ -457,9 +457,11 @@ final class NoiseEncryptionService {
     /// Decrypt an envelope sealed to one of our one-time prekeys. On success
     /// the prekey is marked consumed (its private key survives a 48h grace
     /// window for spray-and-wait redeliveries, then is deleted for good).
-    /// Returns the payload and the sender's authenticated static key, same
-    /// contract as `openCourierPayload`.
-    func openPrekeyPayload(_ envelopeCiphertext: Data, prekeyID: UInt32) throws -> (payload: Data, senderStaticKey: Data) {
+    /// Returns the payload, the sender's authenticated static key (same
+    /// contract as `openCourierPayload`), and whether this open actually
+    /// retired the prekey — false for a redelivery of already-consumed mail —
+    /// so the caller can re-gossip the shrunken bundle only when it changed.
+    func openPrekeyPayload(_ envelopeCiphertext: Data, prekeyID: UInt32) throws -> (payload: Data, senderStaticKey: Data, consumedPrekey: Bool) {
         guard let prekeyPrivate = localPrekeys.privateKey(for: prekeyID) else {
             throw NoiseEncryptionError.unknownPrekey
         }
@@ -474,8 +476,8 @@ final class NoiseEncryptionService {
         guard let senderKey = handshake.getRemoteStaticPublicKey() else {
             throw NoiseError.missingKeys
         }
-        localPrekeys.markConsumed(prekeyID)
-        return (payload: payload, senderStaticKey: senderKey.rawRepresentation)
+        let consumedPrekey = localPrekeys.markConsumed(prekeyID)
+        return (payload: payload, senderStaticKey: senderKey.rawRepresentation, consumedPrekey: consumedPrekey)
     }
 
     /// Current signed prekey bundle for gossip, minting the initial batch on
