@@ -295,15 +295,11 @@ struct VerificationSheetView: View {
                     .bitchatFont(size: 14, weight: .bold)
                     .foregroundColor(accentColor)
                 Spacer()
-                Button(action: {
+                SheetCloseButton {
                     showingScanner = false
                     isPresented = false
-                }) {
-                    Image(systemName: "xmark")
-                        .font(.bitchatSystem(size: 14, weight: .semibold))
-                        .foregroundColor(accentColor)
                 }
-                .buttonStyle(.plain)
+                .foregroundColor(accentColor)
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)

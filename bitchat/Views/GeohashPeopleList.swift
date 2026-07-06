@@ -54,7 +54,9 @@ struct GeohashPeopleList: View {
                         let assignedColor = peerListModel.colorForGeohashPerson(id: person.id, isDark: colorScheme == .dark)
                         let rowColor: Color = person.isMe ? .orange : assignedColor
                         Image(systemName: icon)
-                            .font(.bitchatSystem(size: 12))
+                            // Size 10 to match the mesh rows' leading glyphs —
+                            // both lists share the sidebar.
+                            .font(.bitchatSystem(size: 10))
                             .foregroundColor(rowColor)
                             .help(person.isTeleported ? Strings.teleported : Strings.nearby)
 
@@ -64,6 +66,8 @@ struct GeohashPeopleList: View {
                                 .bitchatFont(size: 14)
                                 .fontWeight(person.isMe ? .bold : .regular)
                                 .foregroundColor(rowColor)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
                             if !suffix.isEmpty {
                                 let suffixColor = person.isMe ? Color.orange.opacity(0.6) : rowColor.opacity(0.6)
                                 Text(suffix)

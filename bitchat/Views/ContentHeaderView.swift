@@ -293,14 +293,8 @@ private struct ContentLocationNotesUnavailableView: View {
                 Text("content.notes.title")
                     .bitchatFont(size: 16, weight: .bold)
                 Spacer()
-                Button(action: { showLocationNotes = false }) {
-                    Image(systemName: "xmark")
-                        .bitchatFont(size: 13, weight: .semibold)
-                        .foregroundColor(palette.primary)
-                        .frame(width: 32, height: 32)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "common.close", comment: "Accessibility label for close buttons"))
+                SheetCloseButton { showLocationNotes = false }
+                    .foregroundColor(palette.primary)
             }
             .frame(height: headerHeight)
             .padding(.horizontal, 12)

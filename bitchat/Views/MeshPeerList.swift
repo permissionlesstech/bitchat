@@ -92,6 +92,8 @@ struct MeshPeerList: View {
                             Text(base)
                                 .bitchatFont(size: 14)
                                 .foregroundColor(baseColor)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
                             if !suffix.isEmpty {
                                 let suffixColor = isMe ? Color.orange.opacity(0.6) : baseColor.opacity(0.6)
                                 Text(suffix)
@@ -112,6 +114,10 @@ struct MeshPeerList: View {
                                 if let icon = peer.encryptionStatus.icon {
                                     Image(systemName: icon)
                                         .font(.bitchatSystem(size: 10))
+                                        // Optical centering: lock glyph ink is
+                                        // bottom-heavy, so geometric centering
+                                        // reads low next to the name.
+                                        .offset(y: icon.hasPrefix("lock") ? -0.5 : 0)
                                         .foregroundColor(baseColor)
                                 }
                             } else {
@@ -124,6 +130,7 @@ struct MeshPeerList: View {
                                     // Fallback to whatever status says (likely lock if we had a past session)
                                     Image(systemName: icon)
                                         .font(.bitchatSystem(size: 10))
+                                        .offset(y: icon.hasPrefix("lock") ? -0.5 : 0)
                                         .foregroundColor(baseColor)
                                 }
                             }
@@ -144,6 +151,11 @@ struct MeshPeerList: View {
                                 Image(systemName: peer.isFavorite ? "star.fill" : "star")
                                     .font(.bitchatSystem(size: 12))
                                     .foregroundColor(peer.isFavorite ? .yellow : palette.secondary)
+                                    // Widen the tap target beyond the bare glyph;
+                                    // height stays row-bound so neighboring rows
+                                    // keep their own taps.
+                                    .frame(width: 36)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                         }

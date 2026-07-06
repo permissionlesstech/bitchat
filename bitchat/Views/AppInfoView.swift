@@ -138,14 +138,8 @@ struct AppInfoView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark")
-                            .bitchatFont(size: 13, weight: .semibold)
-                            .foregroundColor(textColor)
-                            .frame(width: 32, height: 32)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("app_info.close")
+                    SheetCloseButton { dismiss() }
+                        .foregroundColor(textColor)
                 }
             }
         }

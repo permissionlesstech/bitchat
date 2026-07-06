@@ -54,11 +54,8 @@ struct FingerprintView: View {
                 
                 Spacer()
                 
-                Button(action: { dismiss() }) {
-                    Image(systemName: "xmark")
-                        .font(.bitchatSystem(size: 14, weight: .semibold))
-                }
-                .foregroundColor(textColor)
+                SheetCloseButton { dismiss() }
+                    .foregroundColor(textColor)
             }
             .padding()
             

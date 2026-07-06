@@ -164,20 +164,14 @@ private struct ContentPeopleListView: View {
                             String(localized: "content.help.verification", comment: "Help text for verification button")
                         )
                     }
-                    Button(action: {
+                    SheetCloseButton {
                         withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
                             dismiss()
                             showSidebar = false
                             showVerifySheet = false
                             privateConversationModel.endConversation()
                         }
-                    }) {
-                        Image(systemName: "xmark")
-                            .bitchatFont(size: 12, weight: .semibold)
-                            .frame(width: 32, height: 32)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Close")
                 }
 
                 let activeText = String.localizedStringWithFormat(
@@ -341,6 +335,9 @@ private struct ContentPrivateChatSheetView: View {
                                 Image(systemName: headerState.isFavorite ? "star.fill" : "star")
                                     .font(.bitchatSystem(size: 14))
                                     .foregroundColor(headerState.isFavorite ? Color.yellow : palette.primary)
+                                    // Same visual box + 44pt hit target as SheetCloseButton.
+                                    .frame(width: 32, height: 32)
+                                    .contentShape(Rectangle().inset(by: -6))
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel(
@@ -354,18 +351,12 @@ private struct ContentPrivateChatSheetView: View {
 
                     Spacer(minLength: 0)
 
-                    Button(action: {
+                    SheetCloseButton {
                         withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
                             privateConversationModel.endConversation()
                             showSidebar = true
                         }
-                    }) {
-                        Image(systemName: "xmark")
-                            .bitchatFont(size: 12, weight: .semibold)
-                            .frame(width: 32, height: 32)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Close")
                 }
                 .frame(height: headerHeight)
                 .padding(.horizontal, 16)
@@ -518,6 +509,11 @@ private struct ContentPrivateHeaderInfoButton: View {
                 Text(headerState.displayName)
                     .bitchatFont(size: 16, weight: .medium)
                     .foregroundColor(palette.primary)
+                    // Middle truncation keeps the identity suffix visible on
+                    // long nicknames instead of wrapping into the fixed-height
+                    // header.
+                    .lineLimit(1)
+                    .truncationMode(.middle)
 
                 if let encryptionStatus = headerState.encryptionStatus,
                    let icon = encryptionStatus.icon {

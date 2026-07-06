@@ -30,7 +30,6 @@ struct LocationNotesView: View {
     private var maxDraftLines: Int { dynamicTypeSize.isAccessibilitySize ? 5 : 3 }
 
     private enum Strings {
-        static let closeAccessibility = String(localized: "common.close", comment: "Accessibility label for close buttons")
         static let description: LocalizedStringKey = "location_notes.description"
         static let loadingRecent: LocalizedStringKey = "location_notes.loading_recent"
         static let relaysPaused: LocalizedStringKey = "location_notes.relays_paused"
@@ -97,13 +96,7 @@ struct LocationNotesView: View {
     }
 
     private var closeButton: some View {
-        Button(action: { dismiss() }) {
-            Image(systemName: "xmark")
-                .bitchatFont(size: 13, weight: .semibold)
-                .frame(width: 32, height: 32)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Strings.closeAccessibility)
+        SheetCloseButton { dismiss() }
     }
 
     private var headerSection: some View {

@@ -169,13 +169,7 @@ struct LocationChannelsSheet: View {
     }
 
     private var closeButton: some View {
-        Button(action: { isPresented = false }) {
-            Image(systemName: "xmark")
-                .bitchatFont(size: 13, weight: .semibold)
-                .frame(width: 32, height: 32)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Close")
+        SheetCloseButton { isPresented = false }
     }
 
     private var channelList: some View {
