@@ -64,6 +64,9 @@ struct BLEFragmentAssemblyBuffer {
         let type: UInt8
         let total: Int
         let timestamp: Date
+        let isBroadcast: Bool
+        var lastFragmentAt: Date
+        var lastResyncRequestAt: Date?
     }
 
     private var fragmentsByKey: [BLEFragmentKey: [Int: Data]] = [:]
@@ -106,6 +109,7 @@ struct BLEFragmentAssemblyBuffer {
         }
 
         fragmentsByKey[header.key]?[header.index] = header.fragmentData
+        metadataByKey[header.key]?.lastFragmentAt = now
 
         guard let fragments = fragmentsByKey[header.key],
               fragments.count == header.total else {
@@ -138,8 +142,39 @@ struct BLEFragmentAssemblyBuffer {
         }
 
         fragmentsByKey[header.key] = [:]
-        metadataByKey[header.key] = Metadata(type: header.originalType, total: header.total, timestamp: now)
+        metadataByKey[header.key] = Metadata(
+            type: header.originalType,
+            total: header.total,
+            timestamp: now,
+            isBroadcast: header.isBroadcastFragment,
+            lastFragmentAt: now
+        )
         return true
+    }
+
+    /// Fragment stream IDs (8-byte, big-endian) of incomplete broadcast
+    /// reassemblies that have not seen a new fragment for `stalledAfter`
+    /// seconds — candidates for a targeted REQUEST_SYNC. Each returned
+    /// stream is marked so it is not re-requested within `retryAfter`.
+    /// Directed reassemblies are excluded: peers only archive broadcast
+    /// fragments for gossip sync, so a targeted request cannot recover them.
+    mutating func stalledBroadcastFragmentIDs(
+        stalledAfter: TimeInterval,
+        retryAfter: TimeInterval,
+        now: Date = Date()
+    ) -> [Data] {
+        var stalled: [Data] = []
+        for (key, metadata) in metadataByKey {
+            guard metadata.isBroadcast,
+                  let fragments = fragmentsByKey[key],
+                  fragments.count < metadata.total,
+                  now.timeIntervalSince(metadata.lastFragmentAt) >= stalledAfter else { continue }
+            if let lastRequest = metadata.lastResyncRequestAt,
+               now.timeIntervalSince(lastRequest) < retryAfter { continue }
+            metadataByKey[key]?.lastResyncRequestAt = now
+            stalled.append(withUnsafeBytes(of: key.id.bigEndian) { Data($0) })
+        }
+        return stalled
     }
 
     private static func assemblyLimit(for originalType: UInt8) -> Int {

@@ -135,6 +135,82 @@ struct BLEFragmentAssemblyBufferTests {
         }
     }
 
+    @Test
+    func stalledBroadcastAssemblyReportsFragmentIDOnceUntilRetryLapses() throws {
+        var buffer = BLEFragmentAssemblyBuffer()
+        let fragmentID = Data((1...8).map { UInt8($0) })
+        let packet = makePacket(payload: makePayload(count: 256))
+        let fragments = try makeFragments(for: packet, chunkSize: 128, fragmentID: fragmentID)
+        let first = try #require(BLEFragmentHeader(packet: fragments[0]))
+
+        let t0 = Date(timeIntervalSince1970: 100)
+        _ = buffer.append(first, maxInFlightAssemblies: 8, now: t0)
+
+        // Not yet stalled.
+        let early = buffer.stalledBroadcastFragmentIDs(stalledAfter: 5, retryAfter: 10, now: t0.addingTimeInterval(4))
+        #expect(early.isEmpty)
+
+        // Stalled: reported once, big-endian stream ID.
+        let stalled = buffer.stalledBroadcastFragmentIDs(stalledAfter: 5, retryAfter: 10, now: t0.addingTimeInterval(6))
+        #expect(stalled == [fragmentID])
+
+        // Within the retry window: not re-reported.
+        let repeated = buffer.stalledBroadcastFragmentIDs(stalledAfter: 5, retryAfter: 10, now: t0.addingTimeInterval(8))
+        #expect(repeated.isEmpty)
+
+        // After the retry window it is requested again.
+        let retried = buffer.stalledBroadcastFragmentIDs(stalledAfter: 5, retryAfter: 10, now: t0.addingTimeInterval(17))
+        #expect(retried == [fragmentID])
+    }
+
+    @Test
+    func newFragmentResetsStallClockAndCompletionStopsRequests() throws {
+        var buffer = BLEFragmentAssemblyBuffer()
+        let fragmentID = Data((10...17).map { UInt8($0) })
+        let packet = makePacket(payload: makePayload(count: 384))
+        let fragments = try makeFragments(for: packet, chunkSize: 128, fragmentID: fragmentID)
+        let headers = try fragments.map { try #require(BLEFragmentHeader(packet: $0)) }
+        #expect(headers.count >= 3)
+
+        let t0 = Date(timeIntervalSince1970: 100)
+        _ = buffer.append(headers[0], maxInFlightAssemblies: 8, now: t0)
+        // A fragment arriving at t0+4 resets the stall clock.
+        _ = buffer.append(headers[1], maxInFlightAssemblies: 8, now: t0.addingTimeInterval(4))
+        let afterProgress = buffer.stalledBroadcastFragmentIDs(stalledAfter: 5, retryAfter: 10, now: t0.addingTimeInterval(6))
+        #expect(afterProgress.isEmpty)
+
+        // Completion removes the assembly entirely.
+        var result: BLEFragmentAssemblyBuffer.AppendResult?
+        for header in headers.dropFirst(2) {
+            result = buffer.append(header, maxInFlightAssemblies: 8, now: t0.addingTimeInterval(5))
+        }
+        guard case .complete = result else {
+            Issue.record("Expected assembly to complete")
+            return
+        }
+        let afterCompletion = buffer.stalledBroadcastFragmentIDs(stalledAfter: 5, retryAfter: 10, now: t0.addingTimeInterval(60))
+        #expect(afterCompletion.isEmpty)
+    }
+
+    @Test
+    func directedAssembliesAreNeverReportedAsStalled() throws {
+        var buffer = BLEFragmentAssemblyBuffer()
+        let fragment = makeFragmentPacket(
+            fragmentID: Data(repeating: 0x0A, count: 8),
+            index: 0,
+            total: 2,
+            originalType: MessageType.message.rawValue,
+            fragmentData: Data([0x01]),
+            recipientID: Data(hexString: "0102030405060708")
+        )
+        let header = try #require(BLEFragmentHeader(packet: fragment))
+
+        let t0 = Date(timeIntervalSince1970: 100)
+        _ = buffer.append(header, maxInFlightAssemblies: 8, now: t0)
+        let stalled = buffer.stalledBroadcastFragmentIDs(stalledAfter: 5, retryAfter: 10, now: t0.addingTimeInterval(60))
+        #expect(stalled.isEmpty)
+    }
+
     private func makePacket(payload: Data, timestamp: UInt64 = 0x0102030405) -> BitchatPacket {
         BitchatPacket(
             type: MessageType.message.rawValue,
