@@ -14,7 +14,10 @@ final class NostrTransport: Transport, @unchecked Sendable {
         let registerPendingGiftWrap: @MainActor (String) -> Void
         let sendEvent: @MainActor (NostrEvent) -> Void
         let scheduleAfter: @Sendable (TimeInterval, @escaping @Sendable () -> Void) -> Void
+        /// Emits whether any relay connection is up (fail-closed behind Tor).
+        let relayConnectivity: @MainActor () -> AnyPublisher<Bool, Never>
 
+        @MainActor
         static func live(idBridge: NostrIdentityBridge) -> Dependencies {
             Dependencies(
                 notificationCenter: .default,
@@ -26,7 +29,8 @@ final class NostrTransport: Transport, @unchecked Sendable {
                 sendEvent: { NostrRelayManager.shared.sendEvent($0) },
                 scheduleAfter: { delay, action in
                     DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: action)
-                }
+                },
+                relayConnectivity: { NostrRelayManager.shared.$isConnected.eraseToAnyPublisher() }
             )
         }
     }
@@ -49,6 +53,10 @@ final class NostrTransport: Transport, @unchecked Sendable {
 
     // Reachability Cache (thread-safe)
     private var reachablePeers: Set<PeerID> = []
+    // Mirror of the relay manager's connection state, cached here because
+    // canDeliverPromptly is called synchronously off the main actor.
+    private var relaysConnected = false
+    private var relayConnectivityCancellable: AnyCancellable?
     private let queue = DispatchQueue(label: "nostr.transport.state", attributes: .concurrent)
 
     @MainActor
@@ -72,6 +80,12 @@ final class NostrTransport: Transport, @unchecked Sendable {
         queue.sync(flags: .barrier) {
             self.reachablePeers = Set(reachable)
         }
+
+        relayConnectivityCancellable = self.dependencies.relayConnectivity()
+            .sink { [weak self] connected in
+                guard let self else { return }
+                self.queue.async(flags: .barrier) { self.relaysConnected = connected }
+            }
     }
 
     deinit {
@@ -132,6 +146,14 @@ final class NostrTransport: Transport, @unchecked Sendable {
             if reachablePeers.contains(peerID) { return true }
             return reachablePeers.contains(where: { $0.toShort() == short })
         }
+    }
+
+    func canDeliverPromptly(to peerID: PeerID) -> Bool {
+        // A known npub makes a peer "reachable", but with no relay
+        // connection a send only joins the local queue. Answering honestly
+        // here lets the router hand a sealed copy to a courier in parallel
+        // instead of waiting for internet that may never come.
+        isPeerReachable(peerID) && queue.sync { relaysConnected }
     }
     
     func peerNickname(peerID: PeerID) -> String? { nil }

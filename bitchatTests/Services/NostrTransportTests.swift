@@ -6,6 +6,7 @@
 // For more information, see <https://unlicense.org>
 //
 
+import Combine
 import Foundation
 import Testing
 import BitFoundation
@@ -83,6 +84,51 @@ struct NostrTransportTests {
 
         let didRefresh = await TestHelpers.waitUntil({ transport.isPeerReachable(peerID) }, timeout: 5.0)
         #expect(didRefresh)
+    }
+
+    @Test("Prompt delivery requires both a known npub and a relay connection")
+    @MainActor
+    func canDeliverPromptlyTracksRelayConnectivity() async throws {
+        let keychain = MockKeychain()
+        let idBridge = NostrIdentityBridge(keychain: keychain)
+        let recipient = try NostrIdentity.generate()
+        let noiseKey = Data((0..<32).map(UInt8.init))
+        let peerID = PeerID(hexData: noiseKey)
+        let relationship = makeRelationship(
+            peerNoisePublicKey: noiseKey,
+            peerNostrPublicKey: recipient.npub,
+            peerNickname: "Alice"
+        )
+        let connectivity = CurrentValueSubject<Bool, Never>(false)
+
+        let transport = NostrTransport(
+            keychain: keychain,
+            idBridge: idBridge,
+            dependencies: makeDependencies(
+                loadFavorites: { [noiseKey: relationship] },
+                relayConnectivity: { connectivity.eraseToAnyPublisher() }
+            )
+        )
+
+        // Reachable (npub known) but relays down: the peer must not be
+        // treated as promptly deliverable, or the router would skip the
+        // courier and let the message rot in the Nostr send queue.
+        #expect(transport.isPeerReachable(peerID))
+        #expect(!transport.canDeliverPromptly(to: peerID))
+
+        connectivity.send(true)
+        let deliverable = await TestHelpers.waitUntil(
+            { transport.canDeliverPromptly(to: peerID) },
+            timeout: 5.0
+        )
+        #expect(deliverable)
+
+        connectivity.send(false)
+        let undeliverable = await TestHelpers.waitUntil(
+            { !transport.canDeliverPromptly(to: peerID) },
+            timeout: 5.0
+        )
+        #expect(undeliverable)
     }
 
     @Test("Private message resolves short peer ID and emits decryptable packet")
@@ -375,7 +421,8 @@ struct NostrTransportTests {
         currentIdentity: @escaping @MainActor () throws -> NostrIdentity? = { nil },
         registerPendingGiftWrap: @escaping @MainActor (String) -> Void = { _ in },
         sendEvent: @escaping @MainActor (NostrEvent) -> Void = { _ in },
-        scheduleAfter: @escaping @Sendable (TimeInterval, @escaping @Sendable () -> Void) -> Void = { _, _ in }
+        scheduleAfter: @escaping @Sendable (TimeInterval, @escaping @Sendable () -> Void) -> Void = { _, _ in },
+        relayConnectivity: @escaping @MainActor () -> AnyPublisher<Bool, Never> = { Just(false).eraseToAnyPublisher() }
     ) -> NostrTransport.Dependencies {
         NostrTransport.Dependencies(
             notificationCenter: notificationCenter,
@@ -385,7 +432,8 @@ struct NostrTransportTests {
             currentIdentity: currentIdentity,
             registerPendingGiftWrap: registerPendingGiftWrap,
             sendEvent: sendEvent,
-            scheduleAfter: scheduleAfter
+            scheduleAfter: scheduleAfter,
+            relayConnectivity: relayConnectivity
         )
     }
 

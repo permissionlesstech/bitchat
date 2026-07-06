@@ -544,7 +544,16 @@ private final class CourierCaptureTransport: Transport {
     func isPeerConnected(_ peerID: PeerID) -> Bool {
         snapshots.contains { $0.peerID == peerID && $0.isConnected }
     }
-    func isPeerReachable(_ peerID: PeerID) -> Bool { isPeerConnected(peerID) }
+    // Nostr-style reachability: claimed for peers with no live link (known
+    // npub), where prompt delivery additionally needs a relay connection.
+    var reachablePeers: Set<PeerID> = []
+    var promptDelivery = true
+    func isPeerReachable(_ peerID: PeerID) -> Bool {
+        isPeerConnected(peerID) || reachablePeers.contains(peerID)
+    }
+    func canDeliverPromptly(to peerID: PeerID) -> Bool {
+        isPeerReachable(peerID) && promptDelivery
+    }
     func peerNickname(peerID: PeerID) -> String? { nil }
     func getPeerNicknames() -> [PeerID: String] { [:] }
 
@@ -651,5 +660,71 @@ struct MessageRouterCourierTests {
 
         #expect(transport.directSends == ["m3"])
         #expect(transport.courierSends.isEmpty)
+    }
+
+    /// A peer can be "reachable" through a transport that cannot deliver
+    /// promptly (Nostr claims any favorite with a known npub, even with no
+    /// relay connection). The queued send must not shadow the courier: a
+    /// sealed copy goes to connected couriers in parallel, and receivers
+    /// dedup by message ID if both arrive.
+    @Test @MainActor
+    func queuedReachableSendAlsoDepositsWithCourier() {
+        let bobKey = Data(repeating: 0xB0, count: 32)
+        let bobID = PeerID(publicKey: bobKey)
+        let carolKey = Data(repeating: 0xC0, count: 32)
+        let carolID = PeerID(publicKey: carolKey)
+
+        let transport = CourierCaptureTransport()
+        transport.snapshots = [
+            TransportPeerSnapshot(peerID: carolID, nickname: "carol", isConnected: true, noisePublicKey: carolKey, lastSeen: Date())
+        ]
+        transport.reachablePeers = [bobID]
+        transport.promptDelivery = false
+
+        let directory = CourierDirectory(
+            noiseKey: { peerID in peerID == bobID ? bobKey : nil },
+            isTrustedCourier: { $0 == carolKey }
+        )
+        let router = MessageRouter(transports: [transport], courierDirectory: directory)
+        var carried: [String] = []
+        router.onMessageCarried = { messageID, _ in carried.append(messageID) }
+
+        router.sendPrivate("hi bob", to: bobID, recipientNickname: "bob", messageID: "m4")
+
+        #expect(transport.directSends == ["m4"])
+        #expect(transport.courierSends.count == 1)
+        #expect(transport.courierSends.first?.messageID == "m4")
+        #expect(transport.courierSends.first?.couriers == [carolID])
+        #expect(carried == ["m4"])
+    }
+
+    /// When the reachable transport can deliver promptly (relays up), the
+    /// send is trusted and no courier quota is spent.
+    @Test @MainActor
+    func promptlyDeliverableReachablePeerSkipsCourier() {
+        let bobKey = Data(repeating: 0xB0, count: 32)
+        let bobID = PeerID(publicKey: bobKey)
+        let carolKey = Data(repeating: 0xC0, count: 32)
+        let carolID = PeerID(publicKey: carolKey)
+
+        let transport = CourierCaptureTransport()
+        transport.snapshots = [
+            TransportPeerSnapshot(peerID: carolID, nickname: "carol", isConnected: true, noisePublicKey: carolKey, lastSeen: Date())
+        ]
+        transport.reachablePeers = [bobID]
+
+        let directory = CourierDirectory(
+            noiseKey: { peerID in peerID == bobID ? bobKey : nil },
+            isTrustedCourier: { $0 == carolKey }
+        )
+        let router = MessageRouter(transports: [transport], courierDirectory: directory)
+        var carried: [String] = []
+        router.onMessageCarried = { messageID, _ in carried.append(messageID) }
+
+        router.sendPrivate("hi bob", to: bobID, recipientNickname: "bob", messageID: "m5")
+
+        #expect(transport.directSends == ["m5"])
+        #expect(transport.courierSends.isEmpty)
+        #expect(carried.isEmpty)
     }
 }

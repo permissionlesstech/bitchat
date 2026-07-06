@@ -54,6 +54,11 @@ protocol Transport: AnyObject {
     // Connectivity and peers
     func isPeerConnected(_ peerID: PeerID) -> Bool
     func isPeerReachable(_ peerID: PeerID) -> Bool
+    /// Whether a send to this peer is likely to leave the device promptly.
+    /// Distinct from reachability: Nostr claims any favorite with a known
+    /// npub as reachable even with no relay connection, where a send only
+    /// joins a queue waiting for internet that may never come.
+    func canDeliverPromptly(to peerID: PeerID) -> Bool
     func peerNickname(peerID: PeerID) -> String?
     func getPeerNicknames() -> [PeerID: String]
 
@@ -111,6 +116,10 @@ protocol Transport: AnyObject {
 }
 
 extension Transport {
+    // Reachability implies prompt delivery for transports that hand packets
+    // straight to the radio; queue-backed transports override this.
+    func canDeliverPromptly(to peerID: PeerID) -> Bool { isPeerReachable(peerID) }
+
     // Noise identity hooks default to inert for transports that do not carry
     // Noise sessions (e.g. NostrTransport).
     func noiseSessionPublicKeyData(for peerID: PeerID) -> Data? { nil }

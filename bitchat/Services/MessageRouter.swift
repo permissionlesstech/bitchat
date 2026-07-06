@@ -128,6 +128,14 @@ final class MessageRouter {
             SecureLogger.debug("Routing PM via \(type(of: transport)) (reachable) to \(peerID.id.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
             transport.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname, messageID: messageID)
             enqueue(message, for: peerID)
+            // "Reachable" without prompt delivery means the send only joined
+            // a queue (Nostr with relays down): also hand a sealed copy to
+            // any connected couriers rather than waiting for internet that
+            // may never come. Double delivery is harmless — receivers dedup
+            // by message ID, and delivered/read acks never downgrade.
+            if !transport.canDeliverPromptly(to: peerID) {
+                attemptCourierDeposit(content: content, messageID: messageID, for: peerID)
+            }
         } else {
             var unsent = message
             unsent.sendAttempts = 0
@@ -137,11 +145,12 @@ final class MessageRouter {
         }
     }
 
-    /// Last resort when no transport can reach the peer: seal the message to
-    /// their known static key and hand it to connected mutual favorites who
-    /// may physically encounter them. The queued copy above stays retained,
-    /// so direct delivery still wins if the peer reappears first (receivers
-    /// dedup by message ID).
+    /// Last resort when no transport can deliver promptly — the peer is
+    /// unreachable, or only reachable through a send queue waiting on
+    /// internet: seal the message to their known static key and hand it to
+    /// connected mutual favorites who may physically encounter them. The
+    /// queued copy above stays retained, so direct delivery still wins if
+    /// the peer reappears first (receivers dedup by message ID).
     private func attemptCourierDeposit(content: String, messageID: String, for peerID: PeerID) {
         guard let recipientKey = courierDirectory.noiseKey(peerID) else { return }
         for transport in transports {
