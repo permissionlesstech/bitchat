@@ -184,7 +184,19 @@ private extension ContentComposerView {
                 imagePickerSourceType = .camera
                 showImagePicker = true
             }
-            .accessibilityLabel("Tap for library, long press for camera")
+            .accessibilityLabel(
+                String(localized: "content.accessibility.attach_photo", comment: "Accessibility label for the photo attachment button")
+            )
+            .accessibilityHint(
+                String(localized: "content.accessibility.attach_photo_hint", comment: "Accessibility hint explaining the attachment button opens the photo library")
+            )
+            .accessibilityAddTraits(.isButton)
+            // The long-press → camera path is unreachable for VoiceOver users;
+            // mirror it as a named action.
+            .accessibilityAction(named: Text("content.accessibility.take_photo", comment: "Accessibility action name for taking a photo with the camera")) {
+                imagePickerSourceType = .camera
+                showImagePicker = true
+            }
         #else
         Button(action: { showMacImagePicker = true }) {
             Image(systemName: "photo.circle.fill")
@@ -193,7 +205,9 @@ private extension ContentComposerView {
                 .frame(width: 36, height: 36)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Choose photo")
+        .accessibilityLabel(
+            String(localized: "content.accessibility.choose_photo", comment: "Accessibility label for the macOS photo picker button")
+        )
         #endif
     }
 
@@ -235,7 +249,27 @@ private extension ContentComposerView {
                             }
                     )
             )
-            .accessibilityLabel("Hold to record a voice note")
+            .accessibilityLabel(
+                String(localized: "content.accessibility.record_voice_note", comment: "Accessibility label for the voice note button")
+            )
+            .accessibilityValue(
+                voiceRecordingVM.state.isActive
+                ? String(localized: "content.accessibility.recording", comment: "Accessibility value announced while a voice note is recording")
+                : ""
+            )
+            .accessibilityHint(
+                String(localized: "content.accessibility.record_voice_hint", comment: "Accessibility hint explaining double-tap toggles voice recording")
+            )
+            .accessibilityAddTraits(.isButton)
+            // Press-and-hold drag gestures can't be activated by VoiceOver;
+            // give it a start/stop toggle as the default action.
+            .accessibilityAction {
+                if voiceRecordingVM.state.isActive {
+                    voiceRecordingVM.finish(completion: conversationUIModel.sendVoiceNote)
+                } else {
+                    voiceRecordingVM.start(shouldShow: conversationUIModel.canSendMediaInCurrentContext)
+                }
+            }
     }
 
     func sendButtonView(enabled: Bool) -> some View {

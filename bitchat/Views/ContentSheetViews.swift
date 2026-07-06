@@ -160,6 +160,11 @@ private struct ContentPeopleListView: View {
                                 .font(.bitchatSystem(size: 14))
                         }
                         .buttonStyle(.plain)
+                        // .help maps to the accessibility *hint* on iOS, so the
+                        // button still needs a spoken name.
+                        .accessibilityLabel(
+                            String(localized: "content.accessibility.verification", comment: "Accessibility label for the verification QR button")
+                        )
                         .help(
                             String(localized: "content.help.verification", comment: "Help text for verification button")
                         )

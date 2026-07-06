@@ -33,6 +33,16 @@ struct ContentHeaderView: View {
                 .onTapGesture(count: 1) {
                     appChromeModel.presentAppInfo()
                 }
+                // This is the only entry point to App Info, but it reads as
+                // static text; surface the tap. (The triple-tap panic wipe
+                // stays undiscoverable on purpose — it's destructive.)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHint(
+                    String(localized: "content.accessibility.app_info_hint", comment: "Accessibility hint on the bitchat/ logo explaining a tap opens app info")
+                )
+                .accessibilityAction {
+                    appChromeModel.presentAppInfo()
+                }
 
             HStack(spacing: 0) {
                 Text(verbatim: "@")
@@ -183,6 +193,13 @@ struct ContentHeaderView: View {
                         headerOtherPeersCount
                     )
                 )
+                // Connected-vs-nobody is otherwise encoded only in the icon's
+                // color; say it.
+                .accessibilityValue(
+                    headerPeersReachable
+                    ? String(localized: "content.accessibility.peers_connected", comment: "Accessibility value when peers are reachable")
+                    : String(localized: "content.accessibility.peers_none", comment: "Accessibility value when no peers are reachable")
+                )
             }
             .layoutPriority(3)
             .sheet(isPresented: $showVerifySheet) {
@@ -264,6 +281,17 @@ private extension View {
 private extension ContentHeaderView {
     var headerLineLimit: Int? {
         dynamicTypeSize.isAccessibilitySize ? 2 : 1
+    }
+
+    /// Whether anyone is actually reachable on the current channel — the
+    /// state the count icon's color encodes visually.
+    var headerPeersReachable: Bool {
+        switch locationChannelsModel.selectedChannel {
+        case .location:
+            return peerListModel.visibleGeohashPeerCount > 0
+        case .mesh:
+            return peerListModel.connectedMeshPeerCount > 0
+        }
     }
 
     func channelPeopleCountAndColor() -> (Int, Color) {

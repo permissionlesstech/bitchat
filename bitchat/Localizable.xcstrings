@@ -8572,6 +8572,42 @@
         }
       }
     },
+    "content.accessibility.app_info_hint" : {
+      "comment" : "Accessibility hint on the bitchat/ logo explaining a tap opens app info",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "shows app info"
+          }
+        }
+      }
+    },
+    "content.accessibility.attach_photo" : {
+      "comment" : "Accessibility label for the photo attachment button",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "attach photo"
+          }
+        }
+      }
+    },
+    "content.accessibility.attach_photo_hint" : {
+      "comment" : "Accessibility hint explaining the attachment button opens the photo library",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "opens the photo library; use the take photo action for the camera"
+          }
+        }
+      }
+    },
     "content.accessibility.available_nostr" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -8926,6 +8962,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "返回主聊天"
+          }
+        }
+      }
+    },
+    "content.accessibility.choose_photo" : {
+      "comment" : "Accessibility label for the macOS photo picker button",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "choose photo"
           }
         }
       }
@@ -9845,6 +9893,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "打開未讀私聊"
+          }
+        }
+      }
+    },
+    "content.accessibility.peers_connected" : {
+      "comment" : "Accessibility value when peers are reachable",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "connected"
+          }
+        }
+      }
+    },
+    "content.accessibility.peers_none" : {
+      "comment" : "Accessibility value when no peers are reachable",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no one reachable"
           }
         }
       }
@@ -10770,6 +10842,42 @@
         }
       }
     },
+    "content.accessibility.record_voice_hint" : {
+      "comment" : "Accessibility hint explaining double-tap toggles voice recording",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "double-tap to start recording, double-tap again to send"
+          }
+        }
+      }
+    },
+    "content.accessibility.record_voice_note" : {
+      "comment" : "Accessibility label for the voice note button",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "record voice note"
+          }
+        }
+      }
+    },
+    "content.accessibility.recording" : {
+      "comment" : "Accessibility value announced while a voice note is recording",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "recording"
+          }
+        }
+      }
+    },
     "content.accessibility.remove_favorite" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -11486,6 +11594,18 @@
         }
       }
     },
+    "content.accessibility.take_photo" : {
+      "comment" : "Accessibility action name for taking a photo with the camera",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "take photo with camera"
+          }
+        }
+      }
+    },
     "content.accessibility.toggle_bookmark" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -11840,6 +11960,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "雙擊切換收藏狀態"
+          }
+        }
+      }
+    },
+    "content.accessibility.verification" : {
+      "comment" : "Accessibility label for the verification QR button",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "verify encryption"
           }
         }
       }
@@ -24288,6 +24420,42 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : " (你)"
+          }
+        }
+      }
+    },
+    "location_channels.accessibility.add_bookmark" : {
+      "comment" : "Accessibility action name for bookmarking a channel",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bookmark channel"
+          }
+        }
+      }
+    },
+    "location_channels.accessibility.remove_bookmark" : {
+      "comment" : "Accessibility action name for removing a channel bookmark",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "remove bookmark"
+          }
+        }
+      }
+    },
+    "location_channels.accessibility.switch_hint" : {
+      "comment" : "Accessibility hint on a channel row explaining activation switches to it",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "switches to this channel"
           }
         }
       }

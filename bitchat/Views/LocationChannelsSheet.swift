@@ -31,6 +31,9 @@ struct LocationChannelsSheet: View {
         static let toggleOff: LocalizedStringKey = "common.toggle.off"
 
         static let invalidGeohash = String(localized: "location_channels.error.invalid_geohash", comment: "Error shown when a custom geohash is invalid")
+        static let switchChannelHint = String(localized: "location_channels.accessibility.switch_hint", comment: "Accessibility hint on a channel row explaining activation switches to it")
+        static let addBookmark = String(localized: "location_channels.accessibility.add_bookmark", comment: "Accessibility action name for bookmarking a channel")
+        static let removeBookmark = String(localized: "location_channels.accessibility.remove_bookmark", comment: "Accessibility action name for removing a channel bookmark")
 
         static func meshTitle(_ count: Int) -> String {
             let label = String(localized: "location_channels.mesh_label", comment: "Label for the mesh channel row")
@@ -204,7 +207,10 @@ struct LocationChannelsSheet: View {
                                 }
                                 .buttonStyle(.plain)
                                 .padding(.leading, 8)
-                            }
+                                .accessibilityLabel(locationChannelsModel.isBookmarked(channel.geohash) ? Strings.removeBookmark : Strings.addBookmark)
+                            },
+                            accessoryActionTitle: locationChannelsModel.isBookmarked(channel.geohash) ? Strings.removeBookmark : Strings.addBookmark,
+                            accessoryAction: { locationChannelsModel.toggleBookmark(channel.geohash) }
                         ) {
                             locationChannelsModel.markTeleported(for: channel.geohash, false)
                             locationChannelsModel.select(ChannelID.location(channel))
@@ -351,7 +357,10 @@ struct LocationChannelsSheet: View {
                             }
                             .buttonStyle(.plain)
                             .padding(.leading, 8)
-                        }
+                            .accessibilityLabel(locationChannelsModel.isBookmarked(gh) ? Strings.removeBookmark : Strings.addBookmark)
+                        },
+                        accessoryActionTitle: locationChannelsModel.isBookmarked(gh) ? Strings.removeBookmark : Strings.addBookmark,
+                        accessoryAction: { locationChannelsModel.toggleBookmark(gh) }
                     ) {
                         let inRegional = locationChannelsModel.availableChannels.contains { $0.geohash == gh }
                         if !inRegional && !locationChannelsModel.availableChannels.isEmpty {
@@ -393,6 +402,8 @@ struct LocationChannelsSheet: View {
         titleColor: Color? = nil,
         titleBold: Bool = false,
         @ViewBuilder trailingAccessory: () -> some View = { EmptyView() },
+        accessoryActionTitle: String? = nil,
+        accessoryAction: (() -> Void)? = nil,
         action: @escaping () -> Void
     ) -> some View {
         HStack(alignment: .center, spacing: 8) {
@@ -428,6 +439,19 @@ struct LocationChannelsSheet: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .onTapGesture(perform: action)
+        // The row is a plain HStack with a tap gesture, which VoiceOver reads
+        // as disconnected static text. Expose it as one activatable button;
+        // the visible bookmark accessory is mirrored as a named action.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: "\(title), \(Strings.subtitle(prefix: subtitlePrefix, name: subtitleName))"))
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : [.isButton])
+        .accessibilityHint(Strings.switchChannelHint)
+        .accessibilityAction(.default, action)
+        .accessibilityActions {
+            if let accessoryActionTitle, let accessoryAction {
+                Button(accessoryActionTitle, action: accessoryAction)
+            }
+        }
     }
 
     // Split a title like "#mesh [3 people]" into base and suffix "[3 people]"
