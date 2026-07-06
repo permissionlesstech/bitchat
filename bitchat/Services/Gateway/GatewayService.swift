@@ -152,7 +152,7 @@ final class GatewayService: ObservableObject {
             pendingDownlinks.removeAll()
             uplinkDepositTimes.removeAll()
         }
-        SecureLogger.info("🌐 Gateway mode \(enabled ? "enabled" : "disabled")", category: .session)
+        SecureLogger.info("[GW] mode \(enabled ? "enabled" : "disabled")", category: .gateway)
         onEnabledChanged?(enabled)
     }
 
@@ -163,7 +163,7 @@ final class GatewayService: ObservableObject {
     /// for broadcasts (downlink rebroadcasts from a gateway).
     func handleMeshCarrier(_ payload: Data, from peerID: PeerID, directedToUs: Bool) {
         guard let carrier = NostrCarrierPacket.decode(payload) else {
-            SecureLogger.debug("🌐 Gateway: dropping undecodable carrier from \(peerID.id.prefix(8))…", category: .session)
+            SecureLogger.debug("[GW] carrier drop (undecodable) from \(peerID.id.prefix(8))…", category: .gateway)
             return
         }
         switch carrier.direction {
@@ -186,7 +186,7 @@ final class GatewayService: ObservableObject {
         // age) — no crypto — so junk and stale replays are dropped before we
         // ever pay for a MainActor Schnorr verify.
         guard let event = structurallyValidEvent(from: carrier) else {
-            SecureLogger.debug("🌐 Gateway: rejected uplink deposit from \(depositor.id.prefix(8))… (failed validation)", category: .security)
+            SecureLogger.info("[GW] uplink reject (validation) from \(depositor.id.prefix(8))…", category: .gateway)
             return
         }
         // Dedup by the carried event ID BEFORE verification. Loop rule 1: a
@@ -197,18 +197,19 @@ final class GatewayService: ObservableObject {
         guard !meshBroadcastEventIDs.contains(event.id),
               !publishedEventIDs.contains(event.id),
               !queuedUplinks.contains(where: { $0.event.id == event.id }) else {
+            SecureLogger.debug("[GW] uplink skip (loop/dup) \(event.id.prefix(8))…", category: .gateway)
             return
         }
         // Consume the per-depositor rate token BEFORE the expensive verify so
         // a flood of distinct forged/junk deposits is bounded by cheap work,
         // not by main-actor Schnorr verifications.
         guard allowUplinkDeposit(from: depositor) else {
-            SecureLogger.debug("🌐 Gateway: rate-limited uplink deposit from \(depositor.id.prefix(8))…", category: .session)
+            SecureLogger.info("[GW] uplink reject (rate-limit) from \(depositor.id.prefix(8))…", category: .gateway)
             return
         }
         // Only now pay for cryptographic verification; receivers verify again.
         guard event.isValidSignature() else {
-            SecureLogger.debug("🌐 Gateway: rejected uplink deposit from \(depositor.id.prefix(8))… (bad signature)", category: .security)
+            SecureLogger.info("[GW] uplink reject (sig-fail) from \(depositor.id.prefix(8))…", category: .gateway)
             return
         }
 
@@ -218,6 +219,9 @@ final class GatewayService: ObservableObject {
             accepted = true
         } else {
             accepted = enqueueUplink(QueuedUplink(depositor: depositor, geohash: carrier.geohash, event: event, queuedAt: now()))
+            if accepted {
+                SecureLogger.info("[GW] uplink accept→queue \(event.id.prefix(8))… (relays down)", category: .gateway)
+            }
         }
 
         // Only render on our own timeline what we actually accepted for
@@ -243,7 +247,7 @@ final class GatewayService: ObservableObject {
     private func publish(_ event: NostrEvent, geohash: String) {
         publishedEventIDs.insert(event.id)
         publishToRelays?(event, geohash)
-        SecureLogger.info("🌐 Gateway: published carried event \(event.id.prefix(8))… to relays for #\(geohash)", category: .session)
+        SecureLogger.info("[GW] uplink accept→publish \(event.id.prefix(8))… to relays for #\(geohash)", category: .gateway)
     }
 
     /// Returns true when the item was actually stored for later publish.
@@ -251,7 +255,7 @@ final class GatewayService: ObservableObject {
     private func enqueueUplink(_ item: QueuedUplink) -> Bool {
         let fromDepositor = queuedUplinks.filter { $0.depositor == item.depositor }.count
         guard fromDepositor < Limits.maxQueuedUplinksPerDepositor else {
-            SecureLogger.debug("🌐 Gateway: uplink queue quota reached for \(item.depositor.id.prefix(8))…", category: .session)
+            SecureLogger.info("[GW] uplink reject (quota) for \(item.depositor.id.prefix(8))…", category: .gateway)
             return false
         }
         if queuedUplinks.count >= Limits.maxQueuedUplinks {
@@ -294,6 +298,7 @@ final class GatewayService: ObservableObject {
         // event's own `#g` tag to match the carrier geohash.
         guard isFresh(event),
               event.tags.contains(where: { $0.count >= 2 && $0[0] == "g" && $0[1] == geohash }) else {
+            SecureLogger.debug("[GW] downlink drop (stale/mismatch) \(event.id.prefix(8))…", category: .gateway)
             return
         }
         // Loop rule 1: never rebroadcast mesh-carried events back onto the
@@ -305,10 +310,14 @@ final class GatewayService: ObservableObject {
         guard !meshBroadcastEventIDs.contains(event.id),
               !rebroadcastEventIDs.contains(event.id),
               !pendingDownlinks.contains(where: { $0.event.id == event.id }) else {
+            SecureLogger.debug("[GW] downlink skip (loop/dup) \(event.id.prefix(8))…", category: .gateway)
             return
         }
         // Verify before spending BLE airtime; receivers verify again.
-        guard event.isValidSignature() else { return }
+        guard event.isValidSignature() else {
+            SecureLogger.debug("[GW] downlink drop (sig-fail) \(event.id.prefix(8))…", category: .gateway)
+            return
+        }
 
         pendingDownlinks.append((event, geohash))
         if pendingDownlinks.count > Limits.maxPendingDownlinks {
@@ -316,6 +325,7 @@ final class GatewayService: ObservableObject {
             // dropped event is not yet in `rebroadcastEventIDs`, so a later
             // relay redelivery can still carry it.
             pendingDownlinks.removeFirst(pendingDownlinks.count - Limits.maxPendingDownlinks)
+            SecureLogger.info("[GW] downlink drop-oldest (budget), \(pendingDownlinks.count) pending", category: .gateway)
         }
         drainPendingDownlinks()
     }
@@ -332,6 +342,7 @@ final class GatewayService: ObservableObject {
             guard let carrier = NostrCarrierPacket(direction: .fromGateway, geohash: geohash, event: event),
                   let payload = carrier.encode() else { continue }
             broadcastToMesh?(payload)
+            SecureLogger.info("[GW] downlink rebroadcast \(event.id.prefix(8))… to mesh for #\(geohash)", category: .gateway)
             // Mark-after-send: only now is the relay event definitively
             // rebroadcast (loop rule 2).
             rebroadcastEventIDs.insert(event.id)
@@ -351,9 +362,11 @@ final class GatewayService: ObservableObject {
         let oldest = downlinkSendTimes.min() ?? now()
         let delay = max(0.05, 60 - now().timeIntervalSince(oldest))
         downlinkDrainScheduled = true
+        SecureLogger.info("[GW] drain-timer armed (\(String(format: "%.1f", delay))s, \(pendingDownlinks.count) pending)", category: .gateway)
         let fire: @MainActor () -> Void = { [weak self] in
             guard let self else { return }
             self.downlinkDrainScheduled = false
+            SecureLogger.info("[GW] drain-timer fired", category: .gateway)
             self.drainPendingDownlinks()
         }
         if let scheduleDrainTimer {
@@ -408,7 +421,7 @@ final class GatewayService: ObservableObject {
             return false
         }
         guard sendToGatewayPeer?(payload, gateway) ?? false else { return false }
-        SecureLogger.info("🌐 Gateway: uplinked event \(event.id.prefix(8))… for #\(geohash) via mesh gateway \(gateway.id.prefix(8))…", category: .session)
+        SecureLogger.info("[GW] uplink send \(event.id.prefix(8))… for #\(geohash) via gateway \(gateway.id.prefix(8))…", category: .gateway)
         return true
     }
 

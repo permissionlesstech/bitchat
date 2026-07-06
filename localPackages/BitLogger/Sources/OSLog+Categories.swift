@@ -20,4 +20,11 @@ public extension OSLog {
     static let security     = OSLog(subsystem: subsystem, category: "security")
     static let handshake    = OSLog(subsystem: subsystem, category: "handshake")
     static let sync         = OSLog(subsystem: subsystem, category: "sync")
+    // Added for the observability pass: coarse filtering buckets for the mesh
+    // routing layer, the internet gateway bridge, and the Wi-Fi bulk transport.
+    // The bracket tags in the messages ([ROUTE]/[GW]/[WIFI]/…) remain the
+    // primary filter; these just let `log stream --category` narrow further.
+    static let mesh         = OSLog(subsystem: subsystem, category: "mesh")
+    static let gateway      = OSLog(subsystem: subsystem, category: "gateway")
+    static let transport    = OSLog(subsystem: subsystem, category: "transport")
 }

@@ -313,7 +313,6 @@ final class GossipSyncManager {
     private func sendPeriodicSync(for types: SyncTypeFlags) {
         // Unicast sync to connected peers to allow RSR attribution
         if let connectedPeers = delegate?.getConnectedPeers(), !connectedPeers.isEmpty {
-            SecureLogger.debug("Sending periodic sync to \(connectedPeers.count) connected peers", category: .sync)
             for peerID in connectedPeers {
                 sendRequestSync(to: peerID, types: types)
             }
@@ -350,7 +349,7 @@ final class GossipSyncManager {
     private func _requestMissingFragments(_ fragmentIDs: [Data]) {
         guard let filter = RequestSyncPacket.encodeFragmentIdFilter(fragmentIDs) else { return }
         guard let connectedPeers = delegate?.getConnectedPeers(), !connectedPeers.isEmpty else { return }
-        SecureLogger.debug("Requesting \(fragmentIDs.count) stalled fragment stream(s) from \(connectedPeers.count) peer(s)", category: .sync)
+        SecureLogger.info("[ROUTE] targeted-resync \(fragmentIDs.count) stalled fragment stream(s) from \(connectedPeers.count) peer(s)", category: .mesh)
         for peerID in connectedPeers {
             sendRequestSync(to: peerID, types: .fragment, fragmentIdFilter: filter)
         }
@@ -391,7 +390,7 @@ final class GossipSyncManager {
         // A response can replay the whole store, so bound how often one peer
         // can trigger a diff pass regardless of how fast it asks.
         guard responseRateLimiter.shouldRespond(to: peerID, now: Date()) else {
-            SecureLogger.warning("Rate-limited REQUEST_SYNC from \(peerID.id.prefix(8))…", category: .sync)
+            SecureLogger.warning("[SYNC] rate-limited REQUEST_SYNC from \(peerID.id.prefix(8))…", category: .sync)
             return
         }
         let requestedTypes = (request.types ?? .publicMessages)
@@ -399,6 +398,9 @@ final class GossipSyncManager {
         // older packets are outside the filter but not missing, and without
         // the cursor they would be re-sent every round.
         let since = request.sinceTimestamp
+        // One concise per-request summary (RSR is already rate-limited per
+        // peer), never per-packet spam.
+        var servedCount = 0
         // Decode GCS into sorted set and prepare membership checker
         let sorted = GCSFilter.decodeToSortedSet(p: request.p, m: request.m, data: request.data)
         func mightContain(_ id: Data) -> Bool {
@@ -418,6 +420,7 @@ final class GossipSyncManager {
                     toSend.ttl = 0
                     toSend.isRSR = true // Mark as solicited response
                     delegate?.sendPacket(to: peerID, packet: toSend)
+                    servedCount += 1
                 }
             }
         }
@@ -432,6 +435,7 @@ final class GossipSyncManager {
                     toSend.ttl = 0
                     toSend.isRSR = true // Mark as solicited response
                     delegate?.sendPacket(to: peerID, packet: toSend)
+                    servedCount += 1
                 }
             }
         }
@@ -456,6 +460,7 @@ final class GossipSyncManager {
                     toSend.ttl = 0
                     toSend.isRSR = true // Mark as solicited response
                     delegate?.sendPacket(to: peerID, packet: toSend)
+                    servedCount += 1
                 }
             }
         }
@@ -470,6 +475,7 @@ final class GossipSyncManager {
                     toSend.ttl = 0
                     toSend.isRSR = true // Mark as solicited response
                     delegate?.sendPacket(to: peerID, packet: toSend)
+                    servedCount += 1
                 }
             }
         }
@@ -488,6 +494,7 @@ final class GossipSyncManager {
                     toSend.ttl = 0
                     toSend.isRSR = true // Mark as solicited response
                     delegate?.sendPacket(to: peerID, packet: toSend)
+                    servedCount += 1
                 }
             }
         }
@@ -502,6 +509,7 @@ final class GossipSyncManager {
                     toSend.ttl = 0
                     toSend.isRSR = true // Mark as solicited response
                     delegate?.sendPacket(to: peerID, packet: toSend)
+                    servedCount += 1
                 }
             }
         }
@@ -518,8 +526,13 @@ final class GossipSyncManager {
                     toSend.ttl = 0
                     toSend.isRSR = true // Mark as solicited response
                     delegate?.sendPacket(to: peerID, packet: toSend)
+                    servedCount += 1
                 }
             }
+        }
+
+        if servedCount > 0 {
+            SecureLogger.info("[SYNC] served \(servedCount) packet(s) [\(requestedTypes.debugShortLabel)] to \(peerID.id.prefix(8))…", category: .sync)
         }
     }
 
@@ -664,6 +677,7 @@ final class GossipSyncManager {
         // One request per due schedule rather than a union filter: each type
         // group gets the full GCS capacity and its own since-cursor, so heavy
         // fragment traffic can't crowd messages out of the filter.
+        var dueLabels: [String] = []
         for index in syncSchedules.indices {
             guard syncSchedules[index].interval > 0 else { continue }
             // No board source wired up means nothing to offer or store;
@@ -672,7 +686,13 @@ final class GossipSyncManager {
             if syncSchedules[index].lastSent == .distantPast || now.timeIntervalSince(syncSchedules[index].lastSent) >= syncSchedules[index].interval {
                 syncSchedules[index].lastSent = now
                 sendPeriodicSync(for: syncSchedules[index].types)
+                dueLabels.append(syncSchedules[index].types.debugShortLabel)
             }
+        }
+        // One concise summary per maintenance cycle, not per packet.
+        if !dueLabels.isEmpty {
+            let peerCount = delegate?.getConnectedPeers().count ?? 0
+            SecureLogger.info("[SYNC] cycle: request [\(dueLabels.joined(separator: " "))] to \(peerCount) peer(s)", category: .sync)
         }
     }
 

@@ -86,6 +86,17 @@ public final class SecureLogger {
             case .fault: return 4
             }
         }
+
+        /// Short uppercase label for the in-memory export buffer line prefix.
+        var label: String {
+            switch self {
+            case .debug: return "DEBUG"
+            case .info: return "INFO"
+            case .warning: return "WARN"
+            case .error: return "ERROR"
+            case .fault: return "FAULT"
+            }
+        }
         
         var osLogType: OSLogType {
             switch self {
@@ -100,18 +111,34 @@ public final class SecureLogger {
 
     // MARK: - Global Threshold
 
-    /// Minimum level that will be logged. Defaults to .info. Override via env BITCHAT_LOG_LEVEL.
+    /// Minimum level that will be logged. Override via env BITCHAT_LOG_LEVEL
+    /// (env always wins). The default is `.debug` in DEBUG builds and `.info`
+    /// otherwise: a sideloaded, tap-launched build can't receive the env var,
+    /// so DEBUG must surface the `.debug` decision logs out of the box. Release
+    /// emits nothing regardless (all log paths are `#if DEBUG`).
     /// Internal-settable so tests can verify level filtering; app code should not mutate it.
-    internal static var minimumLevel: LogLevel = {
+    internal static var minimumLevel: LogLevel = defaultMinimumLevel
+
+    /// The level used when nothing mutates `minimumLevel`. Honors the
+    /// BITCHAT_LOG_LEVEL env override; otherwise `.debug` in DEBUG builds (so a
+    /// tap-launched sideload surfaces decision logs) and `.info` elsewhere.
+    /// Exposed for tests.
+    internal static var defaultMinimumLevel: LogLevel {
         let env = ProcessInfo.processInfo.environment["BITCHAT_LOG_LEVEL"]?.lowercased()
         switch env {
         case "debug": return .debug
+        case "info": return .info
         case "warning": return .warning
         case "error": return .error
         case "fault": return .fault
-        default: return .info
+        default:
+            #if DEBUG
+            return .debug
+            #else
+            return .info
+            #endif
         }
-    }()
+    }
 
     private static func shouldLog(_ level: LogLevel) -> Bool {
         return level.order >= minimumLevel.order
@@ -168,6 +195,7 @@ public extension SecureLogger {
         
         #if DEBUG
         os_log("%{public}@ Error in %{public}@: %{public}@", log: category, type: .error, location, sanitized, errorDesc)
+        record(level: .error, message: "\(location) Error in \(sanitized): \(errorDesc)")
         #else
         os_log("%{private}@ Error in %{private}@: %{private}@", log: category, type: .error, location, sanitized, errorDesc)
         #endif
@@ -258,9 +286,10 @@ private extension SecureLogger {
         let location = formatLocation(file: file, line: line, function: function)
         let sanitized = "\(location) \(message())".sanitized()
         os_log("%{public}@", log: category, type: level.osLogType, sanitized)
+        record(level: level, message: sanitized)
         #endif
     }
-    
+
     /// Log a security event
     static func logSecurityEvent(_ event: SecurityEvent, level: LogLevel = .info,
                                  file: String, line: Int, function: String) {
@@ -269,6 +298,18 @@ private extension SecureLogger {
         let location = formatLocation(file: file, line: line, function: function)
         let message = "\(location) \(event.message)"
         os_log("%{public}@", log: .security, type: level.osLogType, message)
+        record(level: level, message: message)
+        #endif
+    }
+
+    /// Fan a sanitized line out to the in-memory export buffer and the
+    /// (opt-in, off by default) UDP network sink. DEBUG-only; both consumers
+    /// are non-blocking. Same formatted text everywhere.
+    static func record(level: LogLevel, message: String) {
+        #if DEBUG
+        let line = "[\(level.label)] \(message)"
+        LogExportBuffer.shared.append(line)
+        LogNetworkSink.shared.send(line)
         #endif
     }
     

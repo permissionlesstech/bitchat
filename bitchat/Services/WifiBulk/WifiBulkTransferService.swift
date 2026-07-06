@@ -172,6 +172,7 @@ final class WifiBulkTransferService {
             serviceName: serviceName
         )
         guard let offerData = offer.encode() else {
+            SecureLogger.info("[WIFI] fallback→BLE to \(peerID.id.prefix(8))… (offer encode failed)", category: .transport)
             fallbackToBLE()
             return
         }
@@ -229,7 +230,7 @@ final class WifiBulkTransferService {
             return
         }
 
-        SecureLogger.debug("WifiBulk: offered \(payload.count) bytes to \(peerID.id.prefix(8))… over \(serviceName.prefix(8))…", category: .session)
+        SecureLogger.info("[WIFI] offer sent \(payload.count) bytes to \(peerID.id.prefix(8))… over \(serviceName.prefix(8))…", category: .transport)
         environment.progressStart(transferId, session.totalChunks)
 
         let offerTimeout = DispatchWorkItem { [weak self, weak transfer] in
@@ -271,6 +272,7 @@ final class WifiBulkTransferService {
         transfer.accepted = true
         transfer.offerTimeout?.cancel()
         transfer.offerTimeout = nil
+        SecureLogger.info("[WIFI] offer accepted by \(peerID.id.prefix(8))…, activating channel", category: .transport)
         transfer.session?.activate(key: key)
     }
 
@@ -284,13 +286,13 @@ final class WifiBulkTransferService {
 
         switch outcome {
         case .completed:
-            SecureLogger.debug("WifiBulk: transfer \(transfer.transferId.prefix(8))… completed (\(reason))", category: .session)
+            SecureLogger.info("[WIFI] transfer \(transfer.transferId.prefix(8))… complete (\(reason))", category: .transport)
         case .fallback:
-            SecureLogger.info("WifiBulk: transfer \(transfer.transferId.prefix(8))… falling back to BLE (\(reason))", category: .session)
+            SecureLogger.info("[WIFI] fallback→BLE \(transfer.transferId.prefix(8))… (\(reason))", category: .transport)
             environment.progressReset(transfer.transferId)
             transfer.fallback()
         case .cancelled:
-            SecureLogger.debug("WifiBulk: transfer \(transfer.transferId.prefix(8))… cancelled", category: .session)
+            SecureLogger.info("[WIFI] transfer \(transfer.transferId.prefix(8))… cancelled", category: .transport)
             environment.progressCancel(transfer.transferId)
         }
     }
@@ -338,13 +340,13 @@ final class WifiBulkTransferService {
 
         let transfer = IncomingTransfer(offer: offer, peerID: peerID, key: key)
         incoming[offer.transferID] = transfer
-        SecureLogger.debug("WifiBulk: accepted offer of \(offer.fileSize) bytes from \(peerID.id.prefix(8))…", category: .session)
+        SecureLogger.info("[WIFI] offer accept \(offer.fileSize) bytes from \(peerID.id.prefix(8))…", category: .transport)
 
         startBrowsing(for: transfer)
 
         let windowTimeout = DispatchWorkItem { [weak self, weak transfer] in
             guard let self, let transfer else { return }
-            SecureLogger.info("WifiBulk: incoming transfer window expired", category: .session)
+            SecureLogger.info("[WIFI] incoming window expired", category: .transport)
             self.tearDownIncoming(transfer)
         }
         transfer.windowTimeout = windowTimeout
@@ -352,7 +354,7 @@ final class WifiBulkTransferService {
     }
 
     private func decline(offer: WifiBulkOffer, peerID: PeerID) {
-        SecureLogger.debug("WifiBulk: declining offer of \(offer.fileSize) bytes from \(peerID.id.prefix(8))…", category: .session)
+        SecureLogger.info("[WIFI] offer decline \(offer.fileSize) bytes from \(peerID.id.prefix(8))…", category: .transport)
         guard let responseData = WifiBulkResponse.decline(transferID: offer.transferID).encode() else { return }
         _ = environment.sendNoisePayload(
             BLENoisePayloadFactory.typedPayload(.bulkTransferResponse, payload: responseData),
@@ -380,7 +382,7 @@ final class WifiBulkTransferService {
         browser.stateUpdateHandler = { [weak self, weak transfer] state in
             guard let self, let transfer else { return }
             if case .failed(let error) = state {
-                SecureLogger.warning("WifiBulk: browser failed: \(error)", category: .session)
+                SecureLogger.warning("[WIFI] browser failed: \(error)", category: .transport)
                 self.tearDownIncoming(transfer)
             }
         }
@@ -416,13 +418,13 @@ final class WifiBulkTransferService {
         }
         session.onCompleted = { [weak self, weak transfer] payload in
             guard let self, let transfer else { return }
-            SecureLogger.debug("WifiBulk: received \(payload.count) bytes from \(transfer.peerID.id.prefix(8))…", category: .session)
+            SecureLogger.info("[WIFI] transfer complete, received \(payload.count) bytes from \(transfer.peerID.id.prefix(8))…", category: .transport)
             self.environment.deliverReceivedFile(payload, transfer.peerID, self.config.maxIncomingPayloadBytes)
             self.tearDownIncoming(transfer)
         }
         session.onFailed = { [weak self, weak transfer] reason in
             guard let self, let transfer else { return }
-            SecureLogger.info("WifiBulk: incoming transfer failed (\(reason)); sender falls back to BLE", category: .session)
+            SecureLogger.info("[WIFI] incoming failed (\(reason)); sender falls back to BLE", category: .transport)
             self.tearDownIncoming(transfer)
         }
         transfer.session = session

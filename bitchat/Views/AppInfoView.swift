@@ -1,4 +1,12 @@
 import SwiftUI
+#if DEBUG
+import BitLogger
+#if os(iOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
+#endif
 
 struct AppInfoView: View {
     @Environment(\.dismiss) var dismiss
@@ -9,6 +17,14 @@ struct AppInfoView: View {
     /// hides the topology row entirely.
     var topologyProvider: (@MainActor () -> MeshTopologyDisplayModel)?
     @State private var showTopology = false
+
+    #if DEBUG
+    // Opt-in LAN log streaming + in-app export. DEBUG-only; empty host = off.
+    @AppStorage(LogNetworkSink.hostDefaultsKey) private var logSinkHost = ""
+    @AppStorage(LogNetworkSink.portDefaultsKey) private var logSinkPort = LogNetworkSink.defaultPort
+    @State private var exportedLogURL: URL?
+    @State private var isPresentingLogShare = false
+    #endif
 
     private var selectedTheme: AppTheme {
         AppTheme(rawValue: appThemeRawValue) ?? .matrix
@@ -293,10 +309,121 @@ struct AppInfoView: View {
 
                 FeatureRow(info: Strings.Privacy.panic)
             }
+
+            #if DEBUG
+            debugSection
+            #endif
         }
         .padding()
     }
+
+    #if DEBUG
+    // Tester-only observability panel: live LAN log streaming + a logs export.
+    // Never compiled into release (privacy-first: release ships no such UI).
+    @ViewBuilder
+    private var debugSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeader("debug & logs")
+
+            Text("Stream sanitized logs over the LAN to a collector (nc -lu \(logSinkPort)). Empty host = off.")
+                .bitchatFont(size: 12)
+                .foregroundColor(secondaryTextColor)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 8) {
+                TextField("collector host (e.g. 192.168.1.5)", text: $logSinkHost)
+                    .textFieldStyle(.roundedBorder)
+                    .bitchatFont(size: 13)
+                    #if os(iOS)
+                    .keyboardType(.numbersAndPunctuation)
+                    .autocapitalization(.none)
+                    .disableAutocorrection(true)
+                    #endif
+                    .accessibilityLabel(Text("log collector host"))
+
+                TextField("port", value: $logSinkPort, format: .number.grouping(.never))
+                    .textFieldStyle(.roundedBorder)
+                    .bitchatFont(size: 13)
+                    .frame(width: 70)
+                    #if os(iOS)
+                    .keyboardType(.numberPad)
+                    #endif
+                    .accessibilityLabel(Text("log collector port"))
+            }
+            .onChange(of: logSinkHost) { _ in LogNetworkSink.shared.reloadConfiguration() }
+            .onChange(of: logSinkPort) { _ in LogNetworkSink.shared.reloadConfiguration() }
+
+            Button(action: exportLogs) {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.bitchatSystem(size: 20))
+                        .foregroundColor(textColor)
+                        .frame(width: 30)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Export Logs")
+                            .bitchatFont(size: 14, weight: .semibold)
+                            .foregroundColor(textColor)
+                        Text("Share the recent in-memory log buffer as a .txt file.")
+                            .bitchatFont(size: 12)
+                            .foregroundColor(secondaryTextColor)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("Export logs"))
+            .accessibilityHint(Text("Shares the recent log buffer as a text file"))
+        }
+        #if os(iOS)
+        .sheet(isPresented: $isPresentingLogShare) {
+            if let exportedLogURL {
+                LogShareSheet(activityItems: [exportedLogURL])
+            }
+        }
+        #endif
+    }
+
+    /// Write the buffered log to a temp `.txt` and present the platform share.
+    private func exportLogs() {
+        let text = LogExportBuffer.shared.snapshot()
+        let stamp = ISO8601DateFormatter().string(from: Date())
+            .replacingOccurrences(of: ":", with: "-")
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("bitchat-logs-\(stamp).txt")
+        do {
+            try text.data(using: .utf8)?.write(to: url)
+        } catch {
+            return
+        }
+        #if os(iOS)
+        exportedLogURL = url
+        isPresentingLogShare = true
+        #elseif os(macOS)
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = url.lastPathComponent
+        panel.allowedContentTypes = [.plainText]
+        if panel.runModal() == .OK, let dest = panel.url {
+            try? text.data(using: .utf8)?.write(to: dest)
+        }
+        #endif
+    }
+    #endif
 }
+
+#if DEBUG && os(iOS)
+/// Minimal UIActivityViewController bridge for the Export Logs share sheet.
+private struct LogShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
+}
+#endif
 
 struct AppInfoFeatureInfo {
     let icon: String

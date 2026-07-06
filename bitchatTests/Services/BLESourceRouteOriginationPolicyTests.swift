@@ -32,13 +32,13 @@ struct BLESourceRouteOriginationPolicyTests {
         )
     }
 
-    private func route(
+    private func decide(
         packet: BitchatPacket,
         isRecipientConnected: Bool = false,
         shouldAttemptRoute: Bool = true,
         computedRoute: [Data]? = nil
-    ) -> [Data]? {
-        BLESourceRouteOriginationPolicy.route(
+    ) -> BLESourceRouteOriginationPolicy.Decision {
+        BLESourceRouteOriginationPolicy.decide(
             for: packet,
             to: recipient,
             localPeerIDData: localPeerIDData,
@@ -49,38 +49,38 @@ struct BLESourceRouteOriginationPolicyTests {
     }
 
     @Test func routesWhenAllGatesPass() {
-        #expect(route(packet: makePacket()) == [hop])
+        #expect(decide(packet: makePacket()) == .route([hop]))
     }
 
     @Test func relayedPacketNeverGetsRoute() {
         let relayed = makePacket(senderID: Data(hexString: "aabbccddeeff0011"))
-        #expect(route(packet: relayed) == nil)
+        #expect(decide(packet: relayed) == .flood(.relayedNotOriginator))
     }
 
     @Test func broadcastRecipientNeverGetsRoute() {
         let broadcast = makePacket(recipientID: Data(repeating: 0xFF, count: 8))
-        #expect(route(packet: broadcast) == nil)
+        #expect(decide(packet: broadcast) == .flood(.broadcast))
         let noRecipient = makePacket(recipientID: nil)
-        #expect(route(packet: noRecipient) == nil)
+        #expect(decide(packet: noRecipient) == .flood(.broadcast))
     }
 
     @Test func linkLocalTTLNeverGetsRoute() {
         // TTL 0/1 packets (e.g. REQUEST_SYNC) cannot traverse hops.
-        #expect(route(packet: makePacket(ttl: 0)) == nil)
-        #expect(route(packet: makePacket(ttl: 1)) == nil)
+        #expect(decide(packet: makePacket(ttl: 0)) == .flood(.noTTLHeadroom))
+        #expect(decide(packet: makePacket(ttl: 1)) == .flood(.noTTLHeadroom))
     }
 
     @Test func directlyConnectedRecipientNeverGetsRoute() {
-        #expect(route(packet: makePacket(), isRecipientConnected: true) == nil)
+        #expect(decide(packet: makePacket(), isRecipientConnected: true) == .flood(.recipientDirect))
     }
 
     @Test func suppressedRecipientFallsBackToFlood() {
-        #expect(route(packet: makePacket(), shouldAttemptRoute: false) == nil)
+        #expect(decide(packet: makePacket(), shouldAttemptRoute: false) == .flood(.routeSuppressed))
     }
 
     @Test func missingOrEmptyRouteFallsBackToFlood() {
         var sawComputeRoute = false
-        let result = BLESourceRouteOriginationPolicy.route(
+        let result = BLESourceRouteOriginationPolicy.decide(
             for: makePacket(),
             to: recipient,
             localPeerIDData: localPeerIDData,
@@ -91,8 +91,8 @@ struct BLESourceRouteOriginationPolicyTests {
                 return nil
             }
         )
-        #expect(result == nil)
+        #expect(result == .flood(.noPath))
         #expect(sawComputeRoute)
-        #expect(route(packet: makePacket(), computedRoute: []) == nil)
+        #expect(decide(packet: makePacket(), computedRoute: []) == .flood(.noPath))
     }
 }

@@ -150,4 +150,19 @@ struct SyncTypeFlags: OptionSet {
         }
         return SyncTypeFlags(rawValue: raw)
     }
+
+    /// Compact human label for the `[SYNC]` observability logs, e.g. "msg,frag,pre".
+    /// (Referenced only from DEBUG log lines, but kept unconditional so the
+    /// log-call arguments compile in release too, where the log itself no-ops.)
+    var debugShortLabel: String {
+        var parts: [String] = []
+        if contains(.announce) { parts.append("ann") }
+        if contains(.message) { parts.append("msg") }
+        if contains(.fragment) { parts.append("frag") }
+        if contains(.fileTransfer) { parts.append("file") }
+        if contains(.prekeyBundle) { parts.append("pre") }
+        if contains(.groupMessage) { parts.append("grp") }
+        if contains(.boardPost) { parts.append("board") }
+        return parts.isEmpty ? "none" : parts.joined(separator: ",")
+    }
 }

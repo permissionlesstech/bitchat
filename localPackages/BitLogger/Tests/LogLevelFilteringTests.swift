@@ -51,4 +51,25 @@ final class LogLevelFilteringTests: XCTestCase {
 
         XCTAssertEqual(counter.count, 1, "Enabled levels must still log")
     }
+
+    /// A sideloaded, tap-launched build can't receive BITCHAT_LOG_LEVEL, so the
+    /// DEBUG default must be `.debug` (not `.info`) or the `.debug` decision
+    /// logs stay invisible on device. Release still defaults to `.info` and
+    /// emits nothing regardless (all log paths are `#if DEBUG`).
+    func testDebugBuildDefaultsToDebugLevelUnlessOverridden() throws {
+        // Only meaningful when the env override isn't set (CI sometimes sets it).
+        try XCTSkipUnless(
+            ProcessInfo.processInfo.environment["BITCHAT_LOG_LEVEL"] == nil,
+            "BITCHAT_LOG_LEVEL is set; default-level assertion doesn't apply"
+        )
+        #if DEBUG
+        XCTAssertEqual(
+            SecureLogger.defaultMinimumLevel,
+            .debug,
+            "DEBUG builds must default to .debug so tap-launched sideloads surface decision logs"
+        )
+        #else
+        XCTAssertEqual(SecureLogger.defaultMinimumLevel, .info)
+        #endif
+    }
 }

@@ -463,6 +463,7 @@ final class NoiseEncryptionService {
     /// so the caller can re-gossip the shrunken bundle only when it changed.
     func openPrekeyPayload(_ envelopeCiphertext: Data, prekeyID: UInt32) throws -> (payload: Data, senderStaticKey: Data, consumedPrekey: Bool) {
         guard let prekeyPrivate = localPrekeys.privateKey(for: prekeyID) else {
+            SecureLogger.info("[PREKEY] open failed (unknown prekey id=\(prekeyID))", category: .session)
             throw NoiseEncryptionError.unknownPrekey
         }
         let handshake = NoiseHandshakeState(

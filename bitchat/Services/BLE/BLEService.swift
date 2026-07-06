@@ -2703,7 +2703,7 @@ extension BLEService {
 
     private func applyRouteIfAvailable(_ packet: BitchatPacket, to recipient: PeerID) -> BitchatPacket {
         let now = Date()
-        let route = BLESourceRouteOriginationPolicy.route(
+        let decision = BLESourceRouteOriginationPolicy.decide(
             for: packet,
             to: recipient,
             localPeerIDData: myPeerIDData,
@@ -2715,7 +2715,19 @@ extension BLEService {
             },
             computeRoute: { self.computeRoute(to: $0) }
         )
-        guard let route else { return packet }
+        let route: [Data]
+        switch decision {
+        case .flood(let reason):
+            // Only log the interesting directed cases; a plain broadcast keeps
+            // flood by design and would spam the origination path.
+            if reason != .broadcast {
+                SecureLogger.info("[ROUTE] flood to \(recipient.id.prefix(8))… (\(reason.rawValue))", category: .mesh)
+            }
+            return packet
+        case .route(let hops):
+            SecureLogger.info("[ROUTE] source-route to \(recipient.id.prefix(8))… via \(hops.count) hop(s)", category: .mesh)
+            route = hops
+        }
         // Create new packet with route applied and version upgraded to 2
         let routedPacket = BitchatPacket(
             type: packet.type,
@@ -2805,7 +2817,7 @@ extension BLEService {
     private func handleMeshPing(_ packet: BitchatPacket, fromLink linkPeerID: PeerID) {
         guard packet.recipientID == myPeerIDData else { return }
         guard let ping = MeshPingPayload.decode(packet.payload) else {
-            SecureLogger.debug("⚠️ Malformed ping via \(linkPeerID.id.prefix(8))…", category: .session)
+            SecureLogger.debug("[PING] malformed ping via \(linkPeerID.id.prefix(8))…", category: .mesh)
             return
         }
         let allowed = collectionsQueue.sync(flags: .barrier) {
@@ -2813,7 +2825,7 @@ extension BLEService {
         }
         guard allowed else {
             if logRateLimiter.shouldLog(key: "ping-limit:\(linkPeerID.id)") {
-                SecureLogger.warning("🚫 Rate-limiting pings via link \(linkPeerID.id.prefix(8))…", category: .security)
+                SecureLogger.warning("[PING] rate-limiting pings via link \(linkPeerID.id.prefix(8))…", category: .mesh)
             }
             return
         }
@@ -2847,6 +2859,7 @@ extension BLEService {
             rttMs: max(0, rttMs),
             hops: MeshPingPayload.hopCount(originTTL: pong.originTTL, receivedTTL: packet.ttl)
         )
+        SecureLogger.info("[PING] pong from \(peerID.id.prefix(8))… rtt=\(result.rttMs)ms hops=\(result.hops)", category: .mesh)
         Task { @MainActor in pending.completion(result) }
     }
 
@@ -2855,11 +2868,15 @@ extension BLEService {
     func computeMeshPath(to peerID: PeerID) -> [PeerID]? {
         refreshLocalTopology()
         if let route = computeRoute(to: peerID) {
-            return route.compactMap { PeerID(routingData: $0) }
+            let path = route.compactMap { PeerID(routingData: $0) }
+            SecureLogger.info("[TRACE] path to \(peerID.id.prefix(8))… via \(path.count) hop(s)", category: .mesh)
+            return path
         }
         // Confirmed claims can lag a brand-new link (the peer's next announce
         // hasn't arrived yet); a live direct connection is still a known path.
-        return isPeerConnected(peerID) ? [] : nil
+        let direct = isPeerConnected(peerID)
+        SecureLogger.info("[TRACE] path to \(peerID.id.prefix(8))… \(direct ? "direct (0 hops)" : "no known path")", category: .mesh)
+        return direct ? [] : nil
     }
 
     /// Mesh graph for the topology map. Edges are advisory: announces cap
@@ -3005,9 +3022,11 @@ extension BLEService {
             if let prekey = assignRecipientPrekey(messageID: messageID, recipientNoiseKey: recipientNoiseKey) {
                 sealed = try noiseService.sealPrekeyPayload(typedPayload, recipientPrekey: prekey)
                 prekeyID = prekey.id
+                SecureLogger.info("[PREKEY] seal prekey (id=\(prekey.id)) id=\(messageID.prefix(8))…", category: .session)
             } else {
                 sealed = try noiseService.sealCourierPayload(typedPayload, recipientStaticKey: recipientNoiseKey)
                 prekeyID = nil
+                SecureLogger.info("[PREKEY] seal static (no bundle) id=\(messageID.prefix(8))…", category: .session)
             }
             let envelope = CourierEnvelope(
                 recipientTag: CourierEnvelope.recipientTag(
@@ -3101,6 +3120,7 @@ extension BLEService {
                 (typedPayload, senderStaticKey) = (opened.payload, opened.senderStaticKey)
                 if opened.consumedPrekey {
                     let replenished = noiseService.replenishPrekeysIfNeeded()
+                    SecureLogger.info("[PREKEY] consume id=\(prekeyID), re-gossip bundle (replenished=\(replenished))", category: .session)
                     sendPrekeyBundle(force: replenished)
                 }
             } else {
@@ -3332,7 +3352,7 @@ extension BLEService {
             return nil
         }
         guard let signingKey else {
-            SecureLogger.debug("🔑 Deferring prekey bundle without a bound signing key (owner \(owner.id.prefix(8))…)", category: .security)
+            SecureLogger.debug("[PREKEY] bundle defer (no bound signing key) owner \(owner.id.prefix(8))…", category: .session)
             return
         }
         ingestVerifiedPrekeyBundle(bundle, packet: packet, owner: owner, signingKey: signingKey)
@@ -3343,11 +3363,13 @@ extension BLEService {
     private func ingestVerifiedPrekeyBundle(_ bundle: PrekeyBundle, packet: BitchatPacket, owner: PeerID, signingKey: Data) {
         guard noiseService.verifyPrekeyBundleSignature(bundle, signingPublicKey: signingKey),
               noiseService.verifyPacketSignature(packet, publicKey: signingKey) else {
-            SecureLogger.debug("🔑 Ignoring prekey bundle without verifiable signature (owner \(owner.id.prefix(8))…)", category: .security)
+            SecureLogger.info("[PREKEY] bundle reject (bad signature) owner \(owner.id.prefix(8))…", category: .session)
             return
         }
         if prekeyBundleStore.ingest(bundle) {
-            SecureLogger.debug("🔑 Cached prekey bundle for \(owner.id.prefix(8))… (\(bundle.prekeys.count) prekeys)", category: .security)
+            SecureLogger.info("[PREKEY] bundle accept owner \(owner.id.prefix(8))… (\(bundle.prekeys.count) prekeys)", category: .session)
+        } else {
+            SecureLogger.debug("[PREKEY] bundle reject (not newer/invalid) owner \(owner.id.prefix(8))…", category: .session)
         }
         gossipSyncManager?.onPublicPacketSeen(packet)
     }

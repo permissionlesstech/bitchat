@@ -8,6 +8,9 @@
 
 import SwiftUI
 import UserNotifications
+#if DEBUG
+import BitLogger
+#endif
 
 @main
 struct BitchatApp: App {
@@ -43,6 +46,11 @@ struct BitchatApp: App {
                 .onAppear {
                     appDelegate.runtime = runtime
                     runtime.start()
+                    #if DEBUG
+                    // Arm the opt-in UDP log sink from persisted config (no-op
+                    // until a collector host is set in the App Info sheet).
+                    LogNetworkSink.shared.reloadConfiguration()
+                    #endif
                 }
                 .onOpenURL { url in
                     runtime.handleOpenURL(url)

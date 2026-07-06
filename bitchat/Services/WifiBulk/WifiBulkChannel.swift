@@ -137,7 +137,7 @@ final class WifiBulkSenderSession {
         do {
             listener = try NWListener(using: parameters)
         } catch {
-            SecureLogger.error("WifiBulk: listener creation failed: \(error)", category: .session)
+            SecureLogger.error("[WIFI] listener creation failed: \(error)", category: .transport)
             return false
         }
         listener.service = service
@@ -214,7 +214,7 @@ final class WifiBulkSenderSession {
                 guard let self, let connection, !self.finished, self.authenticated == nil else { return false }
                 guard WifiBulkCrypto.validateClientAuthFrameBody(body, transferID: self.transferID, key: key) else {
                     // Bonjour-level gatecrasher: no channel key, no service.
-                    SecureLogger.warning("WifiBulk: disconnecting client with invalid auth frame", category: .security)
+                    SecureLogger.warning("[WIFI] AWDL connect rejected (invalid auth frame)", category: .security)
                     self.dropCandidate(connection)
                     return false
                 }
@@ -238,6 +238,7 @@ final class WifiBulkSenderSession {
             candidate.cancel()
         }
         candidates.removeAll()
+        SecureLogger.info("[WIFI] AWDL connected (sender), streaming \(totalChunks) chunk(s)", category: .transport)
         streamChunk(at: 0, over: connection, key: key, receiptBuffer: residualBuffer)
     }
 
@@ -372,8 +373,10 @@ final class WifiBulkReceiverSession {
             guard let self else { return }
             switch state {
             case .ready:
+                SecureLogger.info("[WIFI] AWDL connect established (receiver)", category: .transport)
                 self.sendAuthFrameAndReceive()
             case .failed(let error):
+                SecureLogger.info("[WIFI] AWDL connect failed: \(error)", category: .transport)
                 self.fail("connect failed: \(error)")
             case .waiting(let error):
                 // .waiting can resolve on its own, but a per-transfer channel
