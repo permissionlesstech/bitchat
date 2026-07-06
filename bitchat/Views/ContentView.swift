@@ -35,6 +35,7 @@ struct ContentView: View {
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
     @EnvironmentObject private var verificationModel: VerificationModel
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
+    @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
 
     @StateObject private var voiceRecordingVM = VoiceRecordingViewModel()
     @State private var messageText = ""
@@ -239,7 +240,10 @@ struct ContentView: View {
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     if selectedPrivatePeerID == nil {
-                        composerView
+                        VStack(spacing: 0) {
+                            meshPrivacyCaption
+                            composerView
+                        }
                     }
                 }
         } else {
@@ -260,9 +264,29 @@ struct ContentView: View {
                 Divider()
 
                 if selectedPrivatePeerID == nil {
+                    meshPrivacyCaption
                     composerView
                 }
             }
+        }
+    }
+
+    /// Persistent trust caption under the PUBLIC mesh timeline — the parity
+    /// twin of the DM sheet's `privacyCaption` (#1366). Moved here out of the
+    /// header's non-compressible trailing cluster, where its `.fixedSize` text
+    /// overflowed narrow (SE-width) headers. Mesh-only: geohash/location
+    /// channels carry no such caption. Muted rather than orange — orange is the
+    /// DM privacy signal; this surface is deliberately public.
+    @ViewBuilder
+    private var meshPrivacyCaption: some View {
+        if case .mesh = locationChannelsModel.selectedChannel {
+            Text("content.header.public_caption")
+                .bitchatFont(size: 11, weight: .medium)
+                .foregroundColor(palette.secondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 4)
+                .themedSurface()
+                .accessibilityLabel(Text("content.header.public_caption.a11y"))
         }
     }
 

@@ -18051,6 +18051,30 @@
         }
       }
     },
+    "content.header.public_caption" : {
+      "comment" : "Trust caption under the public mesh timeline: this channel is public and reaches nearby devices. Reuses the composer placeholder vocabulary (content.input.placeholder.mesh).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "public · nearby"
+          }
+        }
+      }
+    },
+    "content.header.public_caption.a11y" : {
+      "comment" : "Accessibility label for the public mesh trust caption; comma form of content.header.public_caption for VoiceOver.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "public, nearby"
+          }
+        }
+      }
+    },
     "content.help.verification" : {
       "extractionState" : "manual",
       "localizations" : {

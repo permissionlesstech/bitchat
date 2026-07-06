@@ -186,15 +186,6 @@ struct ContentHeaderView: View {
                 }
                 .buttonStyle(.plain)
 
-                if case .mesh = locationChannelsModel.selectedChannel {
-                    Text(verbatim: "public · unencrypted")
-                        .bitchatFont(size: 10)
-                        .foregroundColor(palette.secondary)
-                        .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
-                        .accessibilityLabel(Text(verbatim: "public, unencrypted"))
-                }
-
                 Button(action: {
                     withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
                         showSidebar.toggle()
