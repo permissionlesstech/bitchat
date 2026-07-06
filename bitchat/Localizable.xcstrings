@@ -22419,6 +22419,18 @@
         }
       }
     },
+    "fingerprint.badge.vouched" : {
+      "comment" : "Badge shown when a peer is vouched for by people the user verified but not directly verified",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✓ VOUCHED"
+          }
+        }
+      }
+    },
     "fingerprint.handshake_pending" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -22952,6 +22964,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "透過安全渠道與 %@ 比對這些指紋。"
+          }
+        }
+      }
+    },
+    "fingerprint.message.vouched_by" : {
+      "comment" : "How many people the user verified have vouched for this peer",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "vouched for by %#@people@ you verified"
+          },
+          "substitutions" : {
+            "people" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%d person"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%d people"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -31924,6 +31970,18 @@
         }
       }
     },
+    "mesh_peers.state.vouched" : {
+      "comment" : "State label for a peer vouched for by someone the user verified",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "vouched"
+          }
+        }
+      }
+    },
     "mesh_peers.tooltip.new_messages" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -32099,6 +32157,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "新訊息"
+          }
+        }
+      }
+    },
+    "mesh_peers.tooltip.vouched" : {
+      "comment" : "Tooltip for the vouched (unfilled seal) badge next to a peer",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "vouched for by someone you verified"
           }
         }
       }

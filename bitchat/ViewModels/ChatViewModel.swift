@@ -177,6 +177,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     lazy var nostrCoordinator = ChatNostrCoordinator(context: self)
     lazy var mediaTransferCoordinator = ChatMediaTransferCoordinator(context: self)
     lazy var verificationCoordinator = ChatVerificationCoordinator(context: self)
+    lazy var vouchCoordinator = ChatVouchCoordinator(context: self)
 
     // Computed properties for compatibility
     @MainActor
@@ -1495,6 +1496,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
 
     func setupNoiseCallbacks() {
         verificationCoordinator.setupNoiseCallbacks()
+        vouchCoordinator.setupNoiseCallbacks()
+    }
+
+    /// Whether the fingerprint currently counts as vouched (≥1 valid vouch
+    /// from a voucher I verified, and no explicit verification of mine).
+    @MainActor
+    func isVouchedFingerprint(_ fingerprint: String) -> Bool {
+        identityManager.isVouched(fingerprint: fingerprint)
     }
 
     // MARK: - BitchatDelegate Methods
