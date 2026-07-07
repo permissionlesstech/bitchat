@@ -64,6 +64,11 @@ final class LRUDeduplicationCache<Value> {
         head = 0
     }
 
+    /// Active keys in insertion order (oldest first), for persistence.
+    func snapshotKeysOldestFirst() -> [String] {
+        order[head...].filter { map[$0] != nil }
+    }
+
     // MARK: - Private
 
     private func trimIfNeeded() {
@@ -172,17 +177,34 @@ final class MessageDeduplicationService {
     /// Cache for Nostr ACK deduplication (messageId:ackType:senderPubkey format)
     private let nostrAckCache: LRUDeduplicationCache<Bool>
 
+    /// Optional cross-launch persistence for the Nostr event cache. NIP-59
+    /// randomizes gift-wrap timestamps, so DM subscriptions look back 24h and
+    /// relays redeliver the same events on every launch; without this record
+    /// each relaunch reprocesses old PMs and acks. Nil (tests, macOS callers
+    /// that don't opt in) keeps the cache purely in-memory.
+    private let nostrEventStore: NostrProcessedEventStore?
+    private var persistScheduled = false
+
     /// Creates a new deduplication service with specified capacities.
     /// - Parameters:
     ///   - contentCapacity: Max entries for content cache
     ///   - nostrEventCapacity: Max entries for Nostr event cache
+    ///   - nostrEventStore: Optional disk store preloading and persisting
+    ///     processed Nostr event IDs across launches
     init(
         contentCapacity: Int = TransportConfig.contentLRUCap,
-        nostrEventCapacity: Int = TransportConfig.uiProcessedNostrEventsCap
+        nostrEventCapacity: Int = TransportConfig.uiProcessedNostrEventsCap,
+        nostrEventStore: NostrProcessedEventStore? = nil
     ) {
         self.contentCache = LRUDeduplicationCache(capacity: contentCapacity)
         self.nostrEventCache = LRUDeduplicationCache(capacity: nostrEventCapacity)
         self.nostrAckCache = LRUDeduplicationCache(capacity: nostrEventCapacity)
+        self.nostrEventStore = nostrEventStore
+        if let nostrEventStore {
+            for eventID in nostrEventStore.load() {
+                nostrEventCache.record(eventID, value: true)
+            }
+        }
     }
 
     // MARK: - Content Deduplication
@@ -239,6 +261,24 @@ final class MessageDeduplicationService {
     /// - Parameter eventId: The event ID
     func recordNostrEvent(_ eventId: String) {
         nostrEventCache.record(eventId, value: true)
+        schedulePersistIfNeeded()
+    }
+
+    /// Debounced persistence: bursts of inbound events (reconnect redelivery)
+    /// collapse into one write, snapshotted on the main actor and written off
+    /// it.
+    private func schedulePersistIfNeeded() {
+        guard let nostrEventStore, !persistScheduled else { return }
+        persistScheduled = true
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard let self else { return }
+            self.persistScheduled = false
+            let snapshot = self.nostrEventCache.snapshotKeysOldestFirst()
+            Task.detached(priority: .utility) {
+                nostrEventStore.save(snapshot)
+            }
+        }
     }
 
     // MARK: - Nostr ACK Deduplication
@@ -268,11 +308,13 @@ final class MessageDeduplicationService {
         contentCache.clear()
         nostrEventCache.clear()
         nostrAckCache.clear()
+        nostrEventStore?.wipe()
     }
 
     /// Clears only the Nostr caches (events and ACKs)
     func clearNostrCaches() {
         nostrEventCache.clear()
         nostrAckCache.clear()
+        nostrEventStore?.wipe()
     }
 }

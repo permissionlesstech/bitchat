@@ -41,14 +41,19 @@ final class NostrTransport: Transport, @unchecked Sendable {
     // Provide BLE short peer ID for BitChat embedding
     var senderPeerID = PeerID(str: "")
 
-    // Throttle READ receipts to avoid relay rate limits
-    private struct QueuedRead {
-        let receipt: ReadReceipt
-        let peerID: PeerID
+    // Throttle outbound acks — READ receipts and DELIVERED acks, direct and
+    // geohash — to avoid relay rate limits. Reconnect redelivery produces a
+    // burst of acks at once: 8 DELIVERED in under a second tripped damus's
+    // "noting too much" during July 2026 device testing.
+    private enum QueuedAck {
+        case readDirect(ReadReceipt, PeerID)
+        case deliveredDirect(messageID: String, peerID: PeerID)
+        case deliveredGeohash(messageID: String, recipientHex: String, identity: NostrIdentity)
+        case readGeohash(messageID: String, recipientHex: String, identity: NostrIdentity)
     }
-    private var readQueue: [QueuedRead] = []
-    private var isSendingReadAcks = false
-    private let readAckInterval: TimeInterval = TransportConfig.nostrReadAckInterval
+    private var ackQueue: [QueuedAck] = []
+    private var isSendingAcks = false
+    private let ackInterval: TimeInterval = TransportConfig.nostrReadAckInterval
     private let keychain: KeychainManagerProtocol
     private let idBridge: NostrIdentityBridge
     private let dependencies: Dependencies
@@ -187,11 +192,14 @@ final class NostrTransport: Transport, @unchecked Sendable {
     }
 
     func sendReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {
-        // Enqueue and process with throttling to avoid relay rate limits
-        // Use barrier to synchronize access to readQueue
+        enqueueAck(.readDirect(receipt, peerID))
+    }
+
+    /// Enqueue an ack for paced sending (barrier-synchronized on `queue`).
+    private func enqueueAck(_ ack: QueuedAck) {
         queue.async(flags: .barrier) {
-            self.readQueue.append(QueuedRead(receipt: receipt, peerID: peerID))
-            self.processReadQueueIfNeeded()
+            self.ackQueue.append(ack)
+            self.processAckQueueIfNeeded()
         }
     }
 
@@ -212,17 +220,7 @@ final class NostrTransport: Transport, @unchecked Sendable {
 
     func sendBroadcastAnnounce() { /* no-op for Nostr */ }
     func sendDeliveryAck(for messageID: String, to peerID: PeerID) {
-        Task { @MainActor in
-            guard let recipientNpub = resolveRecipientNpub(for: peerID),
-                  let recipientHex = npubToHex(recipientNpub),
-                  let senderIdentity = try? dependencies.currentIdentity() else { return }
-            SecureLogger.debug("NostrTransport: preparing DELIVERED ack id=\(messageID.prefix(8))…", category: .session)
-            guard let ack = NostrEmbeddedBitChat.encodeAckForNostr(type: .delivered, messageID: messageID, recipientPeerID: peerID, senderPeerID: senderPeerID) else {
-                SecureLogger.error("NostrTransport: failed to embed DELIVERED ack", category: .session)
-                return
-            }
-            sendWrappedMessage(content: ack, recipientHex: recipientHex, senderIdentity: senderIdentity)
-        }
+        enqueueAck(.deliveredDirect(messageID: messageID, peerID: peerID))
     }
 }
 
@@ -232,19 +230,11 @@ extension NostrTransport {
 
     // MARK: Geohash ACK helpers
     func sendDeliveryAckGeohash(for messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity) {
-        Task { @MainActor in
-            SecureLogger.debug("GeoDM: send DELIVERED mid=\(messageID.prefix(8))…", category: .session)
-            guard let embedded = NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(type: .delivered, messageID: messageID, senderPeerID: senderPeerID) else { return }
-            sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: identity, registerPending: true)
-        }
+        enqueueAck(.deliveredGeohash(messageID: messageID, recipientHex: recipientHex, identity: identity))
     }
 
     func sendReadReceiptGeohash(_ messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity) {
-        Task { @MainActor in
-            SecureLogger.debug("GeoDM: send READ mid=\(messageID.prefix(8))…", category: .session)
-            guard let embedded = NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(type: .readReceipt, messageID: messageID, senderPeerID: senderPeerID) else { return }
-            sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: identity, registerPending: true)
-        }
+        enqueueAck(.readGeohash(messageID: messageID, recipientHex: recipientHex, identity: identity))
     }
 
     // MARK: Geohash DMs (per-geohash identity)
@@ -291,35 +281,59 @@ extension NostrTransport {
     }
 
     /// Must be called within a barrier on `queue`
-    private func processReadQueueIfNeeded() {
-        guard !isSendingReadAcks else { return }
-        guard !readQueue.isEmpty else { return }
-        isSendingReadAcks = true
-        let item = readQueue.removeFirst()
-        sendReadAckItem(item)
+    private func processAckQueueIfNeeded() {
+        guard !isSendingAcks else { return }
+        guard !ackQueue.isEmpty else { return }
+        isSendingAcks = true
+        let item = ackQueue.removeFirst()
+        sendAckItem(item)
     }
 
-    /// Sends a single read ack item (called after extraction from queue within barrier)
-    private func sendReadAckItem(_ item: QueuedRead) {
+    /// Sends a single ack item (called after extraction from queue within barrier)
+    private func sendAckItem(_ item: QueuedAck) {
         Task { @MainActor in
-            defer { scheduleNextReadAck() }
-            guard let recipientNpub = resolveRecipientNpub(for: item.peerID),
-                  let recipientHex = npubToHex(recipientNpub),
-                  let senderIdentity = try? dependencies.currentIdentity() else { return }
-            SecureLogger.debug("NostrTransport: preparing READ ack id=\(item.receipt.originalMessageID.prefix(8))…", category: .session)
-            guard let ack = NostrEmbeddedBitChat.encodeAckForNostr(type: .readReceipt, messageID: item.receipt.originalMessageID, recipientPeerID: item.peerID, senderPeerID: senderPeerID) else {
-                SecureLogger.error("NostrTransport: failed to embed READ ack", category: .session)
-                return
+            defer { scheduleNextAck() }
+            switch item {
+            case .readDirect(let receipt, let peerID):
+                guard let recipientNpub = resolveRecipientNpub(for: peerID),
+                      let recipientHex = npubToHex(recipientNpub),
+                      let senderIdentity = try? dependencies.currentIdentity() else { return }
+                SecureLogger.debug("NostrTransport: preparing READ ack id=\(receipt.originalMessageID.prefix(8))…", category: .session)
+                guard let ack = NostrEmbeddedBitChat.encodeAckForNostr(type: .readReceipt, messageID: receipt.originalMessageID, recipientPeerID: peerID, senderPeerID: senderPeerID) else {
+                    SecureLogger.error("NostrTransport: failed to embed READ ack", category: .session)
+                    return
+                }
+                sendWrappedMessage(content: ack, recipientHex: recipientHex, senderIdentity: senderIdentity)
+
+            case .deliveredDirect(let messageID, let peerID):
+                guard let recipientNpub = resolveRecipientNpub(for: peerID),
+                      let recipientHex = npubToHex(recipientNpub),
+                      let senderIdentity = try? dependencies.currentIdentity() else { return }
+                SecureLogger.debug("NostrTransport: preparing DELIVERED ack id=\(messageID.prefix(8))…", category: .session)
+                guard let ack = NostrEmbeddedBitChat.encodeAckForNostr(type: .delivered, messageID: messageID, recipientPeerID: peerID, senderPeerID: senderPeerID) else {
+                    SecureLogger.error("NostrTransport: failed to embed DELIVERED ack", category: .session)
+                    return
+                }
+                sendWrappedMessage(content: ack, recipientHex: recipientHex, senderIdentity: senderIdentity)
+
+            case .deliveredGeohash(let messageID, let recipientHex, let identity):
+                SecureLogger.debug("GeoDM: send DELIVERED mid=\(messageID.prefix(8))…", category: .session)
+                guard let embedded = NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(type: .delivered, messageID: messageID, senderPeerID: senderPeerID) else { return }
+                sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: identity, registerPending: true)
+
+            case .readGeohash(let messageID, let recipientHex, let identity):
+                SecureLogger.debug("GeoDM: send READ mid=\(messageID.prefix(8))…", category: .session)
+                guard let embedded = NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(type: .readReceipt, messageID: messageID, senderPeerID: senderPeerID) else { return }
+                sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: identity, registerPending: true)
             }
-            sendWrappedMessage(content: ack, recipientHex: recipientHex, senderIdentity: senderIdentity)
         }
     }
 
-    private func scheduleNextReadAck() {
-        dependencies.scheduleAfter(readAckInterval) { [weak self] in
+    private func scheduleNextAck() {
+        dependencies.scheduleAfter(ackInterval) { [weak self] in
             self?.queue.async(flags: .barrier) { [weak self] in
-                self?.isSendingReadAcks = false
-                self?.processReadQueueIfNeeded()
+                self?.isSendingAcks = false
+                self?.processAckQueueIfNeeded()
             }
         }
     }

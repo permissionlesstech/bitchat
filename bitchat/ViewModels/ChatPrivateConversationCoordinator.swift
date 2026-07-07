@@ -514,7 +514,10 @@ final class ChatPrivateConversationCoordinator {
                 category: .session
             )
         } else {
-            SecureLogger.warning("GeoDM: delivered ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)", category: .session)
+            // A stale ack for a message this device no longer tracks (dropped
+            // outbox entry, cleared chat, or a peer re-acking after losing our
+            // receipt) — expected occasionally, not actionable.
+            SecureLogger.debug("GeoDM: delivered ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)", category: .session)
         }
     }
 
