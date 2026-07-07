@@ -51,6 +51,9 @@ private final class MockChatVerificationContext: ChatVerificationContext {
 
     func saveIdentityState() { saveIdentityStateCount += 1 }
 
+    private(set) var vouchToConnectedVerifiedPeersCount = 0
+    func vouchToConnectedVerifiedPeers() { vouchToConnectedVerifiedPeersCount += 1 }
+
     // Encryption status
     private(set) var encryptionStatuses: [PeerID: EncryptionStatus?] = [:]
     private(set) var updatedEncryptionStatusPeers: [PeerID] = []

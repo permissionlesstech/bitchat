@@ -139,6 +139,7 @@ struct GossipSyncManagerTests {
         config.messageSyncIntervalSeconds = 1
         config.fragmentSyncIntervalSeconds = 1
         config.fileTransferSyncIntervalSeconds = 1
+        config.prekeyBundleSyncIntervalSeconds = 1
         config.maintenanceIntervalSeconds = 0
 
         let requestSyncManager = RequestSyncManager()
@@ -195,21 +196,25 @@ struct GossipSyncManagerTests {
         manager._performMaintenanceSynchronously(now: Date())
 
         // One request per due schedule so each type group gets the full
-        // filter capacity: publicMessages, fragment, and fileTransfer.
+        // filter capacity: publicMessages, fragment, fileTransfer, and
+        // prekeyBundle.
         let sentPackets = delegate.packets
-        #expect(sentPackets.count == 3)
+        #expect(sentPackets.count == 4)
         let decoded = sentPackets.compactMap { RequestSyncPacket.decode(from: $0.payload) }
-        #expect(decoded.count == 3)
+        #expect(decoded.count == 4)
         let allTypes = decoded.compactMap(\.types).reduce(SyncTypeFlags(rawValue: 0)) { $0.union($1) }
         #expect(allTypes.contains(.announce))
         #expect(allTypes.contains(.message))
         #expect(allTypes.contains(.fragment))
         #expect(allTypes.contains(.fileTransfer))
+        #expect(allTypes.contains(.prekeyBundle))
+        #expect(allTypes.contains(.groupMessage))
         // The message schedule also asks for group messages (bit 10);
         // responders that don't know the bit just ignore it.
         #expect(decoded.contains { $0.types == SyncTypeFlags.publicMessages.union(.groupMessage) })
         #expect(decoded.contains { $0.types == .fragment })
         #expect(decoded.contains { $0.types == .fileTransfer })
+        #expect(decoded.contains { $0.types == .prekeyBundle })
     }
 
     @Test func truncatedFilterCarriesSinceCursor() throws {
@@ -294,6 +299,7 @@ struct GossipSyncManagerTests {
         config.messageSyncIntervalSeconds = 0
         config.fragmentSyncIntervalSeconds = 0
         config.fileTransferSyncIntervalSeconds = 0
+        config.prekeyBundleSyncIntervalSeconds = 0
 
         let requestSyncManager = RequestSyncManager()
         let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: requestSyncManager)
@@ -359,12 +365,52 @@ struct GossipSyncManagerTests {
         #expect(sentPackets.allSatisfy { $0.isRSR })
     }
 
+    @Test func handleRequestSyncSkipsAnnounceAlreadyInFilter() async throws {
+        var config = GossipSyncManager.Config()
+        config.messageSyncIntervalSeconds = 0
+        config.fragmentSyncIntervalSeconds = 0
+        config.fileTransferSyncIntervalSeconds = 0
+        config.prekeyBundleSyncIntervalSeconds = 0
+
+        let requestSyncManager = RequestSyncManager()
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: requestSyncManager)
+        let delegate = RecordingDelegate()
+        manager.delegate = delegate
+
+        let sender = try #require(Data(hexString: "aabbccddeeff0011"))
+        let announcePacket = BitchatPacket(
+            type: MessageType.announce.rawValue,
+            senderID: sender,
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: Data(),
+            signature: nil,
+            ttl: 1
+        )
+        manager.onPublicPacketSeen(announcePacket)
+
+        // A filter that already contains the announce's canonical ID must
+        // suppress the response — this only holds if the responder recomputes
+        // the ID the same way the filter was built (the dual-path bug would
+        // diff a stored hex string instead).
+        let announceID = PacketIdUtil.computeId(announcePacket)
+        let params = GCSFilter.buildFilter(ids: [announceID], maxBytes: 256, targetFpr: 0.01)
+        let request = RequestSyncPacket(p: params.p, m: params.m, data: params.data, types: .announce)
+
+        let peer = PeerID(str: "FFFFFFFFFFFFFFFF")
+        manager.handleRequestSync(from: peer, request: request)
+        // Barrier: the async handler is enqueued, so this sync flush runs after it.
+        manager._performMaintenanceSynchronously(now: Date())
+        #expect(delegate.packets.isEmpty)
+    }
+
     @Test func handleRequestSyncIsRateLimitedPerPeer() async throws {
         var config = GossipSyncManager.Config()
         config.seenCapacity = 5
         config.messageSyncIntervalSeconds = 0
         config.fragmentSyncIntervalSeconds = 0
         config.fileTransferSyncIntervalSeconds = 0
+        config.prekeyBundleSyncIntervalSeconds = 0
         config.responseRateLimitMaxResponses = 1
         config.responseRateLimitWindowSeconds = 60
 
@@ -419,6 +465,7 @@ struct GossipSyncManagerTests {
         #expect(types.contains(.message))
         #expect(types.contains(.fragment))
         #expect(types.contains(.fileTransfer))
+        #expect(types.contains(.prekeyBundle))
     }
 
     @Test func handleRequestSyncHonorsTypeFilter() async throws {
@@ -469,6 +516,185 @@ struct GossipSyncManagerTests {
         let sentPackets = delegate.packets
         #expect(sentPackets.count == 1)
         #expect(sentPackets[0].type == MessageType.fragment.rawValue)
+    }
+
+    // MARK: - Fragment-ID filter (targeted resync)
+
+    private func makeFragmentPacket(sender: Data, fragmentID: Data, index: UInt16, timestamp: UInt64) -> BitchatPacket {
+        // Fragment payload: 8-byte stream ID + index + total + original type.
+        var payload = fragmentID
+        payload.append(contentsOf: withUnsafeBytes(of: index.bigEndian) { Data($0) })
+        payload.append(contentsOf: withUnsafeBytes(of: UInt16(4).bigEndian) { Data($0) })
+        payload.append(MessageType.fileTransfer.rawValue)
+        payload.append(Data([0xEE]))
+        return BitchatPacket(
+            type: MessageType.fragment.rawValue,
+            senderID: sender,
+            recipientID: nil,
+            timestamp: timestamp,
+            payload: payload,
+            signature: nil,
+            ttl: 1
+        )
+    }
+
+    @Test func handleRequestSyncHonorsFragmentIdFilter() async throws {
+        var config = GossipSyncManager.Config()
+        config.fragmentCapacity = 10
+        config.messageSyncIntervalSeconds = 0
+        config.fragmentSyncIntervalSeconds = 0
+        config.fileTransferSyncIntervalSeconds = 0
+        config.prekeyBundleSyncIntervalSeconds = 0
+
+        let requestSyncManager = RequestSyncManager()
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: requestSyncManager)
+        let delegate = RecordingDelegate()
+        manager.delegate = delegate
+
+        let sender = try #require(Data(hexString: "aabbccddeeff0011"))
+        let wantedID = try #require(Data(hexString: "0102030405060708"))
+        let otherID = try #require(Data(hexString: "1112131415161718"))
+        let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
+
+        let wanted = makeFragmentPacket(sender: sender, fragmentID: wantedID, index: 1, timestamp: nowMs - 60_000)
+        let other = makeFragmentPacket(sender: sender, fragmentID: otherID, index: 2, timestamp: nowMs)
+        manager.onPublicPacketSeen(wanted)
+        manager.onPublicPacketSeen(other)
+
+        // The since-cursor sits after both fragments; without the filter the
+        // responder would send nothing for `wanted`. The filter both bypasses
+        // the cursor and restricts the diff to exactly the named stream.
+        let request = RequestSyncPacket(
+            p: 7,
+            m: 1,
+            data: Data(),
+            types: .fragment,
+            sinceTimestamp: nowMs + 1,
+            fragmentIdFilter: RequestSyncPacket.encodeFragmentIdFilter([wantedID])
+        )
+        manager.handleRequestSync(from: PeerID(str: "FFFFFFFFFFFFFFFF"), request: request)
+
+        try await TestHelpers.waitFor({ delegate.packets.count == 1 }, timeout: TestConstants.shortTimeout)
+        // Barrier: flush the sync queue so a late second packet would be visible.
+        manager._performMaintenanceSynchronously(now: Date())
+        let sentPackets = delegate.packets
+        #expect(sentPackets.count == 1)
+        let sent = try #require(sentPackets.first)
+        #expect(sent.type == MessageType.fragment.rawValue)
+        #expect(sent.payload.prefix(8) == wantedID)
+        #expect(sent.ttl == 0)
+        #expect(sent.isRSR)
+    }
+
+    @Test func requestMissingFragmentsSendsFilteredRequestToConnectedPeers() async throws {
+        var config = GossipSyncManager.Config()
+        config.messageSyncIntervalSeconds = 0
+        config.fragmentSyncIntervalSeconds = 0
+        config.fileTransferSyncIntervalSeconds = 0
+        let requestSyncManager = RequestSyncManager()
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: requestSyncManager)
+        let delegate = RecordingDelegate()
+        delegate.connectedPeers = [PeerID(str: "FFFFFFFFFFFFFFFF")]
+        manager.delegate = delegate
+
+        let stalledID = try #require(Data(hexString: "0102030405060708"))
+        manager.requestMissingFragments(fragmentIDs: [stalledID])
+
+        try await TestHelpers.waitFor({ delegate.packets.count == 1 }, timeout: TestConstants.shortTimeout)
+        let sent = try #require(delegate.packets.first)
+        #expect(sent.type == MessageType.requestSync.rawValue)
+        #expect(sent.ttl == 0)
+        let request = try #require(RequestSyncPacket.decode(from: sent.payload))
+        #expect(request.types == .fragment)
+        let ids = try #require(RequestSyncPacket.decodeFragmentIdFilter(request.fragmentIdFilter))
+        #expect(ids == Set([stalledID]))
+    }
+
+    @Test func prekeyBundlesServeSyncAndSurviveStalePeerCleanup() async throws {
+        var config = GossipSyncManager.Config()
+        config.messageSyncIntervalSeconds = 0
+        config.fragmentSyncIntervalSeconds = 0
+        config.fileTransferSyncIntervalSeconds = 0
+        config.prekeyBundleSyncIntervalSeconds = 0
+        config.stalePeerCleanupIntervalSeconds = 0
+        config.stalePeerTimeoutSeconds = 5
+
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: RequestSyncManager())
+        let delegate = RecordingDelegate()
+        manager.delegate = delegate
+
+        // Bundles are keyed by their authenticated identity (the noise static
+        // key), not the packet senderID, so the payload must be a real bundle.
+        let noiseKey = Data(repeating: 0xAB, count: 32)
+        let senderPeer = PeerID(publicKey: noiseKey)
+        let sender = try #require(Data(hexString: senderPeer.id))
+        let bundle = PrekeyBundle(
+            noiseStaticPublicKey: noiseKey,
+            prekeys: [PrekeyBundle.Prekey(id: 0, publicKey: Data(repeating: 0x11, count: 32))],
+            generatedAt: UInt64(Date().timeIntervalSince1970 * 1000),
+            signature: Data(count: PrekeyBundle.signatureLength)
+        )
+        let bundlePacket = BitchatPacket(
+            type: MessageType.prekeyBundle.rawValue,
+            senderID: sender,
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: try #require(bundle.encode()),
+            signature: nil,
+            ttl: 1
+        )
+        manager.onPublicPacketSeen(bundlePacket)
+        manager._performMaintenanceSynchronously(now: Date())
+        #expect(manager._hasPrekeyBundle(for: senderPeer))
+
+        // Bundles outlive the owner's announce: a leave plus stale cleanup
+        // must not drop them (they exist to reach offline owners).
+        manager.removeAnnouncementForPeer(senderPeer)
+        manager._performMaintenanceSynchronously(now: Date().addingTimeInterval(config.stalePeerTimeoutSeconds + 1))
+        #expect(manager._hasPrekeyBundle(for: senderPeer))
+
+        // And a .prekeyBundle sync request is answered with the stored packet.
+        let request = RequestSyncPacket(p: 7, m: 1, data: Data(), types: .prekeyBundle)
+        manager.handleRequestSync(from: PeerID(str: "FFFFFFFFFFFFFFFF"), request: request)
+        try await TestHelpers.waitFor({ delegate.packets.count == 1 }, timeout: TestConstants.shortTimeout)
+        let served = try #require(delegate.packets.first)
+        #expect(served.type == MessageType.prekeyBundle.rawValue)
+        #expect(served.isRSR)
+    }
+
+    @Test func prekeyBundleGossipIsKeyedByOwnerNotSenderID() {
+        // One valid bundle re-broadcast under many fabricated sender IDs must
+        // collapse to a single entry keyed by the bundle's own identity — the
+        // spray-to-exhaust-the-cap DoS produces one entry, not N.
+        let manager = GossipSyncManager(myPeerID: myPeerID, requestSyncManager: RequestSyncManager())
+        let noiseKey = Data(repeating: 0xCD, count: 32)
+        let ownerPeer = PeerID(publicKey: noiseKey)
+        let bundle = PrekeyBundle(
+            noiseStaticPublicKey: noiseKey,
+            prekeys: [PrekeyBundle.Prekey(id: 0, publicKey: Data(repeating: 0x22, count: 32))],
+            generatedAt: UInt64(Date().timeIntervalSince1970 * 1000),
+            signature: Data(count: PrekeyBundle.signatureLength)
+        )
+        guard let payload = bundle.encode() else { return }
+
+        for i in 0..<5 {
+            let fakeSender = Data((0..<8).map { j in UInt8(truncatingIfNeeded: i * 31 + j) })
+            let packet = BitchatPacket(
+                type: MessageType.prekeyBundle.rawValue,
+                senderID: fakeSender,
+                recipientID: nil,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000) + UInt64(i),
+                payload: payload,
+                signature: nil,
+                ttl: 1
+            )
+            manager.onPublicPacketSeen(packet)
+            manager._performMaintenanceSynchronously(now: Date())
+            // No fabricated sender ID ever creates its own entry.
+            #expect(!manager._hasPrekeyBundle(for: PeerID(hexData: fakeSender)))
+        }
+        // Exactly the owner-keyed entry exists.
+        #expect(manager._hasPrekeyBundle(for: ownerPeer))
     }
 
     // MARK: - Archive persistence
@@ -547,6 +773,7 @@ struct GossipSyncManagerTests {
 
 private final class RecordingDelegate: GossipSyncManager.Delegate {
     var onSend: (() -> Void)?
+    var connectedPeers: [PeerID] = []
     private(set) var lastPacket: BitchatPacket?
     private(set) var packets: [BitchatPacket] = []
     private let lock = NSLock()
@@ -568,6 +795,6 @@ private final class RecordingDelegate: GossipSyncManager.Delegate {
     }
     
     func getConnectedPeers() -> [PeerID] {
-        return []
+        return connectedPeers
     }
 }

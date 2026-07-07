@@ -168,6 +168,12 @@ private final class MockChatTransportEventContext: ChatTransportEventContext {
     func handleGroupKeyUpdatePayload(from peerID: PeerID, payload: Data) {
         groupKeyUpdatePayloads.append((peerID, payload))
     }
+
+    private(set) var vouchPayloads: [(peerID: PeerID, payload: Data)] = []
+
+    func handleVouchPayload(from peerID: PeerID, payload: Data) {
+        vouchPayloads.append((peerID, payload))
+    }
 }
 
 // MARK: - Helpers

@@ -5142,7 +5142,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "symbols"
+            "value" : "SYMBOLS"
           }
         }
       }
@@ -5167,6 +5167,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "identity verified"
+          }
+        }
+      }
+    },
+    "app_info.network.title" : {
+      "comment" : "Section header for network diagnostics in the app info sheet",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "NETWORK"
+          }
+        }
+      }
+    },
+    "app_info.network.topology.description" : {
+      "comment" : "Row description for the mesh topology map",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "map of peers and links learned from mesh announces"
+          }
+        }
+      }
+    },
+    "app_info.network.topology.hint" : {
+      "comment" : "Accessibility hint for the mesh topology row",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "opens the mesh topology map"
+          }
+        }
+      }
+    },
+    "app_info.network.topology.title" : {
+      "comment" : "Row title opening the mesh topology map",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh topology"
           }
         }
       }
@@ -9344,6 +9392,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "加密狀態：%@"
+          }
+        }
+      }
+    },
+    "content.accessibility.gateway_active" : {
+      "comment" : "Accessibility label for the internet gateway indicator",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Internet gateway active, sharing your connection with the mesh"
           }
         }
       }
@@ -15447,6 +15507,30 @@
         }
       }
     },
+    "content.commands.pay" : {
+      "comment" : "Autocomplete description for the /pay command that sends a Cashu ecash token",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "send a cashu ecash token in this chat"
+          }
+        }
+      }
+    },
+    "content.commands.ping" : {
+      "comment" : "Description of the /ping command in the suggestions panel",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "measure round-trip time to a mesh peer"
+          }
+        }
+      }
+    },
     "content.commands.slap" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -15622,6 +15706,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "用鱒魚拍某人"
+          }
+        }
+      }
+    },
+    "content.commands.trace" : {
+      "comment" : "Description of the /trace command in the suggestions panel",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "estimate the mesh path to a peer"
           }
         }
       }
@@ -17894,6 +17990,18 @@
         }
       }
     },
+    "content.header.gateway_active" : {
+      "comment" : "Tooltip for the internet gateway indicator",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sharing your internet connection with nearby mesh peers"
+          }
+        }
+      }
+    },
     "content.header.people" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -18498,6 +18606,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "暱稱"
+          }
+        }
+      }
+    },
+    "content.input.token_placeholder" : {
+      "comment" : "Placeholder shown after /pay in the command suggestion panel",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "token"
           }
         }
       }
@@ -19767,6 +19887,18 @@
         }
       }
     },
+    "content.payment.copy_token" : {
+      "comment" : "Context menu action copying a Cashu token to the pasteboard",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "copy token"
+          }
+        }
+      }
+    },
     "content.payment.lightning" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -19942,6 +20074,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "透過 lightning 支付"
+          }
+        }
+      }
+    },
+    "content.payment.redeem_wallet" : {
+      "comment" : "Context menu action opening a Cashu token in an ecash wallet app",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "redeem in wallet"
+          }
+        }
+      }
+    },
+    "content.payment.redeem_web" : {
+      "comment" : "Context menu action opening a Cashu token in the web redemption page",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "redeem on web"
           }
         }
       }
@@ -22463,6 +22619,18 @@
         }
       }
     },
+    "fingerprint.badge.vouched" : {
+      "comment" : "Badge shown when a peer is vouched for by people the user verified but not directly verified",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✓ VOUCHED"
+          }
+        }
+      }
+    },
     "fingerprint.handshake_pending" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -22996,6 +23164,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "透過安全渠道與 %@ 比對這些指紋。"
+          }
+        }
+      }
+    },
+    "fingerprint.message.vouched_by" : {
+      "comment" : "How many people the user verified have vouched for this peer",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "vouched for by %#@people@ you verified"
+          },
+          "substitutions" : {
+            "people" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%d person"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%d people"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -25797,6 +25999,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "無效的 geohash"
+          }
+        }
+      }
+    },
+    "location_channels.gateway.subtitle" : {
+      "comment" : "Explanation under the internet gateway toggle",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "share your internet with nearby mesh peers so their geohash messages reach the network"
+          }
+        }
+      }
+    },
+    "location_channels.gateway.title" : {
+      "comment" : "Title for the internet gateway toggle in the location channels sheet",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "internet gateway"
           }
         }
       }
@@ -32012,6 +32238,18 @@
         }
       }
     },
+    "mesh_peers.state.vouched" : {
+      "comment" : "State label for a peer vouched for by someone the user verified",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "vouched"
+          }
+        }
+      }
+    },
     "mesh_peers.tooltip.new_messages" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -32187,6 +32425,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "新訊息"
+          }
+        }
+      }
+    },
+    "mesh_peers.tooltip.vouched" : {
+      "comment" : "Tooltip for the vouched (unfilled seal) badge next to a peer",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "vouched for by someone you verified"
           }
         }
       }
@@ -33619,6 +33869,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "無法向 %@ 發送：對方無法透過 mesh 或 Nostr 到達。"
+          }
+        }
+      }
+    },
+    "system.gateway.sent_via_mesh" : {
+      "comment" : "System message when a geohash message was handed to a mesh internet gateway because no relay is reachable",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sent via mesh gateway"
           }
         }
       }
@@ -35575,6 +35837,66 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在啟動 tor..."
+          }
+        }
+      }
+    },
+    "topology.caption" : {
+      "comment" : "Caption under the mesh topology map",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "estimated from gossiped neighbor lists (up to 10 per peer) — your device is highlighted"
+          }
+        }
+      }
+    },
+    "topology.empty" : {
+      "comment" : "Empty state of the mesh topology map",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no mesh links yet — the map fills in as peer announces arrive"
+          }
+        }
+      }
+    },
+    "topology.refresh" : {
+      "comment" : "Accessibility label of the topology refresh button",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "refresh topology"
+          }
+        }
+      }
+    },
+    "topology.summary" : {
+      "comment" : "Topology map summary: number of peers and links",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$ld peers · %2$ld links"
+          }
+        }
+      }
+    },
+    "topology.title" : {
+      "comment" : "Title of the mesh topology map sheet",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh topology"
           }
         }
       }

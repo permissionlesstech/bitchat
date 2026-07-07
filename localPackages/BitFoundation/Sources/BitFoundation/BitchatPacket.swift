@@ -14,7 +14,7 @@ import struct Foundation.Date
 /// including TTL for hop limiting and optional encryption.
 /// - Note: Packets larger than BLE MTU (512 bytes) are automatically fragmented
 public struct BitchatPacket: Codable {
-    let version: UInt8
+    public let version: UInt8
     public let type: UInt8
     public let senderID: Data
     public let recipientID: Data?

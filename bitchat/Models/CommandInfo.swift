@@ -21,10 +21,13 @@ enum CommandInfo: String, Identifiable {
     case hug
     case message = "msg"
     case slap
+    case pay
     case unblock
     case who
     case favorite = "fav"
     case unfavorite = "unfav"
+    case ping
+    case trace
 
     var id: String { rawValue }
 
@@ -32,10 +35,12 @@ enum CommandInfo: String, Identifiable {
 
     var placeholder: String? {
         switch self {
-        case .block, .hug, .message, .slap, .unblock, .favorite, .unfavorite:
+        case .block, .hug, .message, .slap, .unblock, .favorite, .unfavorite, .ping, .trace:
             return "<" + String(localized: "content.input.nickname_placeholder") + ">"
         case .group:
             return "<" + String(localized: "content.input.group_placeholder") + ">"
+        case .pay:
+            return "<" + String(localized: "content.input.token_placeholder") + ">"
         case .clear, .help, .who:
             return nil
         }
@@ -49,21 +54,31 @@ enum CommandInfo: String, Identifiable {
         case .help:         String(localized: "content.commands.help")
         case .hug:          String(localized: "content.commands.hug")
         case .message:      String(localized: "content.commands.message")
+        case .pay:          String(localized: "content.commands.pay")
         case .slap:         String(localized: "content.commands.slap")
         case .unblock:      String(localized: "content.commands.unblock")
         case .who:          String(localized: "content.commands.who")
         case .favorite:     String(localized: "content.commands.favorite")
         case .unfavorite:   String(localized: "content.commands.unfavorite")
+        case .ping:         String(localized: "content.commands.ping")
+        case .trace:        String(localized: "content.commands.trace")
         }
     }
 
     static func all(isGeoPublic: Bool, isGeoDM: Bool) -> [CommandInfo] {
-        let baseCommands: [CommandInfo] = [.block, .unblock, .clear, .help, .hug, .message, .slap, .who]
-        // The processor rejects favorites and groups in geohash contexts, so
-        // only suggest them where they actually work: mesh.
-        if isGeoPublic || isGeoDM {
-            return baseCommands
+        var commands: [CommandInfo] = [.block, .unblock, .clear, .help, .hug, .message, .slap, .who]
+        // Cashu tokens are bearer instruments: in a public geohash any nearby
+        // stranger can redeem one, so don't *suggest* /pay there (the
+        // processor still allows it behind an explicit "public" confirm).
+        // Payments make sense in every DM and in mesh public.
+        if !isGeoPublic {
+            commands.append(.pay)
         }
-        return baseCommands + [.favorite, .unfavorite, .group]
+        // The processor rejects favorites, groups, and mesh diagnostics in
+        // geohash contexts, so only suggest them where they work: mesh.
+        if isGeoPublic || isGeoDM {
+            return commands
+        }
+        return commands + [.favorite, .unfavorite, .ping, .trace, .group]
     }
 }

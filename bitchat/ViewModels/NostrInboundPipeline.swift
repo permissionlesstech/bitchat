@@ -32,7 +32,10 @@ protocol NostrInboundPipelineContext: AnyObject {
     func recordGeoParticipant(pubkeyHex: String)
 
     // MARK: Inbound public messages
-    func handlePublicMessage(_ message: BitchatMessage)
+    /// `powBits` is the validated NIP-13 difficulty of the source event
+    /// (`NostrPoW.validatedDifficulty`); it relaxes the per-sender rate limit
+    /// downstream.
+    func handlePublicMessage(_ message: BitchatMessage, powBits: Int)
     func checkForMentions(_ message: BitchatMessage)
     func sendHapticFeedback(for message: BitchatMessage)
     func parseMentions(from content: String) -> [String]
@@ -152,6 +155,7 @@ final class NostrInboundPipeline {
         let rawTs = Date(timeIntervalSince1970: TimeInterval(event.created_at))
         let timestamp = min(rawTs, Date())
         let mentions = context.parseMentions(from: content)
+        let powBits = NostrPoW.validatedDifficulty(idHex: event.id, tags: event.tags)
         let message = BitchatMessage(
             id: event.id,
             sender: senderName,
@@ -165,7 +169,7 @@ final class NostrInboundPipeline {
         Task { @MainActor [weak context] in
             guard let context else { return }
             let isBlocked = context.isNostrBlocked(pubkeyHexLowercased: event.pubkey.lowercased())
-            context.handlePublicMessage(message)
+            context.handlePublicMessage(message, powBits: powBits)
             if !isBlocked {
                 context.checkForMentions(message)
                 context.sendHapticFeedback(for: message)
@@ -187,10 +191,12 @@ final class NostrInboundPipeline {
         guard event.isValidSignature() else { return }
         context.recordProcessedNostrEvent(event.id)
 
+        let powBits = NostrPoW.validatedDifficulty(idHex: event.id, tags: event.tags)
+
         // Sampled: fires for every geo event and floods dev logs in busy geohashes.
         geoEventLogCount += 1
         if geoEventLogCount == 1 || geoEventLogCount.isMultiple(of: TransportConfig.nostrInboundEventLogInterval) {
-            SecureLogger.debug("GeoTeleport: recv #\(geoEventLogCount) pub=\(event.pubkey.prefix(8))… tags=\(event.tags.map { "[" + $0.joined(separator: ",") + "]" }.joined(separator: ","))", category: .session)
+            SecureLogger.debug("GeoTeleport: recv #\(geoEventLogCount) pub=\(event.pubkey.prefix(8))… pow=\(powBits) tags=\(event.tags.map { "[" + $0.joined(separator: ",") + "]" }.joined(separator: ","))", category: .session)
         }
 
         if context.isNostrBlocked(pubkeyHexLowercased: event.pubkey) {
@@ -255,7 +261,7 @@ final class NostrInboundPipeline {
 
         Task { @MainActor [weak context] in
             guard let context else { return }
-            context.handlePublicMessage(message)
+            context.handlePublicMessage(message, powBits: powBits)
             context.checkForMentions(message)
             context.sendHapticFeedback(for: message)
         }
@@ -299,7 +305,7 @@ final class NostrInboundPipeline {
             context.handleReadReceipt(noisePayload, senderPubkey: senderPubkey, convKey: convKey)
         // Group state travels only over mesh Noise sessions in v1; anything
         // claiming to be group traffic over Nostr is ignored.
-        case .verifyChallenge, .verifyResponse, .groupInvite, .groupKeyUpdate:
+        case .verifyChallenge, .verifyResponse, .groupInvite, .groupKeyUpdate, .vouch:
             break
         }
     }
@@ -353,7 +359,7 @@ final class NostrInboundPipeline {
             context.handleReadReceipt(payload, senderPubkey: senderPubkey, convKey: convKey)
         // Group state travels only over mesh Noise sessions in v1; anything
         // claiming to be group traffic over Nostr is ignored.
-        case .verifyChallenge, .verifyResponse, .groupInvite, .groupKeyUpdate:
+        case .verifyChallenge, .verifyResponse, .groupInvite, .groupKeyUpdate, .vouch:
             break
         }
     }
@@ -434,7 +440,7 @@ final class NostrInboundPipeline {
                             context.handleReadReceipt(payload, senderPubkey: senderPubkey, convKey: targetPeerID)
                         // Group state travels only over mesh Noise sessions
                         // in v1; group traffic over Nostr is ignored.
-                        case .verifyChallenge, .verifyResponse, .groupInvite, .groupKeyUpdate:
+                        case .verifyChallenge, .verifyResponse, .groupInvite, .groupKeyUpdate, .vouch:
                             break
                         }
                     }

@@ -27,6 +27,8 @@ struct LocationChannelsSheet: View {
         static let removeAccess: LocalizedStringKey = "location_channels.action.remove_access"
         static let torTitle: LocalizedStringKey = "location_channels.tor.title"
         static let torSubtitle: LocalizedStringKey = "location_channels.tor.subtitle"
+        static let gatewayTitle: LocalizedStringKey = "location_channels.gateway.title"
+        static let gatewaySubtitle: LocalizedStringKey = "location_channels.gateway.subtitle"
         static let toggleOn: LocalizedStringKey = "common.toggle.on"
         static let toggleOff: LocalizedStringKey = "common.toggle.off"
 
@@ -244,6 +246,8 @@ struct LocationChannelsSheet: View {
                     sectionDivider
                     torToggleSection
                         .padding(.top, 12)
+                    gatewayToggleSection
+                        .padding(.top, 8)
                     Button(action: SystemSettings.location.open) {
                         Text(Strings.removeAccess)
                             .bitchatFont(size: 12)
@@ -497,6 +501,32 @@ extension LocationChannelsSheet {
                         .bitchatFont(size: 12, weight: .semibold)
                         .foregroundColor(palette.primary)
                     Text(Strings.torSubtitle)
+                        .bitchatFont(size: 11)
+                        .foregroundColor(palette.secondary)
+                }
+            }
+            .toggleStyle(IRCToggleStyle(accent: palette.accent, onLabel: Strings.toggleOn, offLabel: Strings.toggleOff))
+        }
+        .padding(12)
+        .background(palette.secondary.opacity(0.12))
+        .cornerRadius(8)
+    }
+
+    private var gatewayToggleBinding: Binding<Bool> {
+        Binding(
+            get: { locationChannelsModel.gatewayEnabled },
+            set: { locationChannelsModel.setGatewayEnabled($0) }
+        )
+    }
+
+    private var gatewayToggleSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle(isOn: gatewayToggleBinding) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(Strings.gatewayTitle)
+                        .bitchatFont(size: 12, weight: .semibold)
+                        .foregroundColor(palette.primary)
+                    Text(Strings.gatewaySubtitle)
                         .bitchatFont(size: 11)
                         .foregroundColor(palette.secondary)
                 }

@@ -149,7 +149,7 @@ struct ContentView: View {
             #endif
         }
         .sheet(isPresented: $appChromeModel.isAppInfoPresented) {
-            AppInfoView()
+            AppInfoView(topologyProvider: { appChromeModel.meshTopologyDisplayModel() })
         }
         .sheet(isPresented: Binding(
             get: { appChromeModel.showingFingerprintFor != nil && !showSidebar && selectedPrivatePeerID == nil },

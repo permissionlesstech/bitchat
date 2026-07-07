@@ -75,6 +75,7 @@ protocol ChatTransportEventContext: AnyObject {
     // MARK: Group payloads (creator-signed state over Noise)
     func handleGroupInvitePayload(from peerID: PeerID, payload: Data)
     func handleGroupKeyUpdatePayload(from peerID: PeerID, payload: Data)
+    func handleVouchPayload(from peerID: PeerID, payload: Data)
 }
 
 extension ChatViewModel: ChatTransportEventContext {
@@ -140,6 +141,10 @@ extension ChatViewModel: ChatTransportEventContext {
 
     func handleGroupKeyUpdatePayload(from peerID: PeerID, payload: Data) {
         groupCoordinator.handleGroupKeyUpdatePayload(from: peerID, payload: payload)
+    }
+
+    func handleVouchPayload(from peerID: PeerID, payload: Data) {
+        vouchCoordinator.handleVouchPayload(from: peerID, payload: payload)
     }
 }
 
@@ -389,6 +394,9 @@ private extension ChatTransportEventCoordinator {
 
         case .groupKeyUpdate:
             context.handleGroupKeyUpdatePayload(from: peerID, payload: payload)
+
+        case .vouch:
+            context.handleVouchPayload(from: peerID, payload: payload)
         }
     }
 

@@ -2,7 +2,7 @@
 
 This document specifies the Source-Based Routing extension (v2) for the BitChat protocol. This upgrade enables efficient unicast routing across the mesh by allowing senders to specify an explicit path of intermediate relays.
 
-**Status:** Implemented in Android and iOS. Backward compatible (v1 clients ignore routing data).
+**Status:** Implemented in Android and iOS: both decode routed packets, forward along routes, and originate routes. iOS origination is policy-gated (see §8). Backward compatible (v1 clients never receive routed frames from iOS: routes are only originated when every node on the path has been observed speaking v2).
 
 ---
 
@@ -144,3 +144,44 @@ When a node receives a packet **not** addressed to itself:
     *   **Fallback:** If the Next Hop is unreachable, **fall back to broadcast/flood** to ensure delivery.
 3.  **If NO (Standard):**
     *   Flood the packet to all connected neighbors (subject to TTL and probability rules).
+
+---
+
+## 8. iOS Origination Policy
+
+iOS attaches a route (upgrading the packet to v2 and re-signing it) only when
+**all** of the following hold at send time (`BLESourceRouteOriginationPolicy`):
+
+1.  **Authored locally.** The packet's `SenderID` is our own peer ID. Relays
+    never rewrite someone else's packet — adding a route would force a
+    re-sign under the wrong key. Relays only *follow* existing routes
+    (`BLERouteForwardingPolicy`).
+2.  **Directed.** The packet has a single-peer `RecipientID` (not the
+    broadcast ID). In practice this covers Noise-encrypted private traffic,
+    private file transfers, and their fragments (fragments inherit the
+    parent's route and version, per §5).
+3.  **TTL headroom.** `TTL > 1`. Link-local packets (e.g. `REQUEST_SYNC`,
+    always TTL 0) never carry routes.
+4.  **Recipient not directly connected.** A direct write already delivers in
+    one hop; a route would only add bytes.
+5.  **Complete v2 path exists.** BFS over the confirmed-edge mesh graph
+    (`MeshTopologyTracker`, built from verified announce `directNeighbors`
+    claims, entries expiring after 60 s) finds a path with **at most 4
+    intermediate hops** where every intermediate hop **and the recipient**
+    has been observed originating or relaying a v2 packet. Nodes never seen
+    speaking v2 are assumed v1-only and are excluded — a v1 client cannot
+    decode a v2 frame, so routing through it would silently drop the packet.
+6.  **No recent route failure.** See below.
+
+If any gate fails, behavior is exactly the pre-routing flood/direct-write
+path — v1 peers observe no change.
+
+### Failure Fallback
+
+A routed unicast rides one path; a broken hop loses the packet where a flood
+would heal around it. iOS keeps a small per-recipient health cache
+(`BLESourceRouteFailureCache`): a routed send that sees no inbound packet
+authored by the recipient within 10 s counts as a route failure, and directed
+sends to that recipient fall back to flooding for the next 60 s before
+routing is attempted again. Retransmission of the payload itself stays where
+it always was (MessageRouter and higher layers).

@@ -14,6 +14,9 @@ struct MeshPeerRow: Identifiable, Equatable {
     let isMutualFavorite: Bool
     let encryptionStatus: EncryptionStatus
     let showsVerifiedBadgeWhenOffline: Bool
+    /// Vouched-for by someone I verified, without an explicit verification of
+    /// mine — rendered as the unfilled seal (verified gets the filled one).
+    let showsVouchedBadge: Bool
 
     var id: String { peerID.id }
 }
@@ -201,13 +204,12 @@ final class PeerListModel: ObservableObject {
         let myPeerID = chatViewModel.meshService.myPeerID
         let meshRows = allPeers.map { peer in
             let isMe = peer.peerID == myPeerID
-            let verifiedBadge: Bool
-            if !isMe && !peer.isConnected,
-               let fingerprint = chatViewModel.getFingerprint(for: peer.peerID) {
-                verifiedBadge = peerIdentityStore.isVerified(fingerprint)
-            } else {
-                verifiedBadge = false
-            }
+            let fingerprint = isMe ? nil : chatViewModel.getFingerprint(for: peer.peerID)
+            let isVerifiedFingerprint = fingerprint.map { peerIdentityStore.isVerified($0) } ?? false
+            let verifiedBadge = !peer.isConnected && isVerifiedFingerprint
+            // Vouched is subordinate to verified: never show both seals.
+            let vouchedBadge = !isVerifiedFingerprint
+                && (fingerprint.map { chatViewModel.isVouchedFingerprint($0) } ?? false)
 
             return MeshPeerRow(
                 peerID: peer.peerID,
@@ -220,7 +222,8 @@ final class PeerListModel: ObservableObject {
                 isReachable: peer.isReachable,
                 isMutualFavorite: peer.isMutualFavorite,
                 encryptionStatus: chatViewModel.getEncryptionStatus(for: peer.peerID),
-                showsVerifiedBadgeWhenOffline: verifiedBadge
+                showsVerifiedBadgeWhenOffline: verifiedBadge,
+                showsVouchedBadge: vouchedBadge
             )
         }
 

@@ -196,6 +196,27 @@ final class MockTransport: Transport {
         return courierSendResult
     }
 
+    // MARK: - Mesh Diagnostics
+
+    private(set) var sentMeshPings: [PeerID] = []
+    var meshPingResult: MeshPingResult?
+    var meshPaths: [PeerID: [PeerID]] = [:]
+    var meshTopologySnapshot: MeshTopologySnapshot?
+
+    func sendMeshPing(to peerID: PeerID, completion: @escaping @MainActor (MeshPingResult?) -> Void) {
+        sentMeshPings.append(peerID)
+        let result = meshPingResult
+        Task { @MainActor in completion(result) }
+    }
+
+    func computeMeshPath(to peerID: PeerID) -> [PeerID]? {
+        meshPaths[peerID]
+    }
+
+    func currentMeshTopology() -> MeshTopologySnapshot? {
+        meshTopologySnapshot
+    }
+
     // MARK: - Test Helpers
 
     /// Clears all recorded method calls for fresh assertions

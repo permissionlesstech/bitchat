@@ -112,6 +112,11 @@ struct BLEPeerRegistry {
         peers[peerID.toShort()]?.capabilities ?? []
     }
 
+    /// Peers whose last verified announce advertised the given capability.
+    func peers(advertising capability: PeerCapabilities) -> [PeerID] {
+        peers.values.filter { $0.capabilities.contains(capability) }.map(\.peerID)
+    }
+
     func displayNicknames(selfNickname: String) -> [PeerID: String] {
         let connected = peers.filter { $0.value.isConnected }
         let tuples = connected.map { ($0.key, $0.value.nickname, true) }
