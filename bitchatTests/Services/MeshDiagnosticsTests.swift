@@ -276,6 +276,7 @@ private final class DiagnosticsMockContext: CommandContextProvider {
     func clearCurrentPublicTimeline() {}
     func clearPrivateChat(_ peerID: PeerID) {}
     func sendPublicRaw(_ content: String) {}
+    func sendPublicMessage(_ content: String) {}
     func addLocalPrivateSystemMessage(_ content: String, to peerID: PeerID) {}
     func addPublicSystemMessage(_ content: String) {}
     func toggleFavorite(peerID: PeerID) {}
