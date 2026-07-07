@@ -9,6 +9,7 @@ struct BLEPeerInfo: Equatable {
     var signingPublicKey: Data?
     var isVerifiedNickname: Bool
     var lastSeen: Date
+    var capabilities: PeerCapabilities = []
 }
 
 struct BLEPeerAnnounceUpdate: Equatable {
@@ -107,6 +108,15 @@ struct BLEPeerRegistry {
         peers[peerID]?.noisePublicKey?.sha256Fingerprint()
     }
 
+    func capabilities(for peerID: PeerID) -> PeerCapabilities {
+        peers[peerID.toShort()]?.capabilities ?? []
+    }
+
+    /// Peers whose last verified announce advertised the given capability.
+    func peers(advertising capability: PeerCapabilities) -> [PeerID] {
+        peers.values.filter { $0.capabilities.contains(capability) }.map(\.peerID)
+    }
+
     func displayNicknames(selfNickname: String) -> [PeerID: String] {
         let connected = peers.filter { $0.value.isConnected }
         let tuples = connected.map { ($0.key, $0.value.nickname, true) }
@@ -125,7 +135,8 @@ struct BLEPeerRegistry {
                 nickname: resolvedNames[info.peerID] ?? info.nickname,
                 isConnected: info.isConnected,
                 noisePublicKey: info.noisePublicKey,
-                lastSeen: info.lastSeen
+                lastSeen: info.lastSeen,
+                isVerified: info.isVerifiedNickname
             )
         }
     }
@@ -156,7 +167,8 @@ struct BLEPeerRegistry {
         noisePublicKey: Data,
         signingPublicKey: Data?,
         isConnected: Bool,
-        now: Date
+        now: Date,
+        capabilities: PeerCapabilities = []
     ) -> BLEPeerAnnounceUpdate {
         let existing = peers[peerID]
         let update = BLEPeerAnnounceUpdate(
@@ -172,7 +184,8 @@ struct BLEPeerRegistry {
             noisePublicKey: noisePublicKey,
             signingPublicKey: signingPublicKey,
             isVerifiedNickname: true,
-            lastSeen: now
+            lastSeen: now,
+            capabilities: capabilities
         )
 
         return update

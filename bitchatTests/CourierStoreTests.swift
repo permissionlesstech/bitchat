@@ -103,7 +103,7 @@ struct CourierStoreTests {
 
     @Test func perDepositorQuota() {
         let store = makeStore()
-        for _ in 0..<CourierStore.Limits.maxPerDepositor {
+        for _ in 0..<CourierStore.Limits.maxPerFavoriteDepositor {
             #expect(store.deposit(makeEnvelope(), from: depositorA))
         }
         #expect(!store.deposit(makeEnvelope(), from: depositorA))
@@ -122,7 +122,7 @@ struct CourierStoreTests {
         var depositorByte: UInt8 = 1
         while deposited < CourierStore.Limits.maxEnvelopes + 1 {
             let depositor = Data(repeating: depositorByte, count: 32)
-            for _ in 0..<CourierStore.Limits.maxPerDepositor where deposited < CourierStore.Limits.maxEnvelopes + 1 {
+            for _ in 0..<CourierStore.Limits.maxPerFavoriteDepositor where deposited < CourierStore.Limits.maxEnvelopes + 1 {
                 #expect(store.deposit(makeEnvelope(), from: depositor))
                 deposited += 1
             }
@@ -172,5 +172,180 @@ struct CourierStoreTests {
 
         let second = CourierStore(persistsToDisk: true, fileURL: fileURL, now: { Self.baseDate })
         #expect(second.takeEnvelopes(for: recipientKey) == [envelope])
+    }
+
+    // MARK: - Tiers (open couriering)
+
+    @Test func verifiedTierGetsSmallerPerDepositorQuota() {
+        let store = makeStore()
+        for _ in 0..<CourierStore.Limits.maxPerVerifiedDepositor {
+            #expect(store.deposit(makeEnvelope(), from: depositorA, tier: .verified))
+        }
+        #expect(!store.deposit(makeEnvelope(), from: depositorA, tier: .verified))
+        // The same depositor promoted to favorite gets the larger quota.
+        #expect(store.deposit(makeEnvelope(), from: depositorB, tier: .favorite))
+    }
+
+    @Test func verifiedPoolIsCappedIndependentlyOfFavorites() {
+        let store = makeStore()
+        var depositorByte: UInt8 = 1
+        var accepted = 0
+        while accepted < CourierStore.Limits.maxVerifiedEnvelopes {
+            let depositor = Data(repeating: depositorByte, count: 32)
+            for _ in 0..<CourierStore.Limits.maxPerVerifiedDepositor where accepted < CourierStore.Limits.maxVerifiedEnvelopes {
+                #expect(store.deposit(makeEnvelope(), from: depositor, tier: .verified))
+                accepted += 1
+            }
+            depositorByte += 1
+        }
+        // Verified pool full: another verified deposit is rejected...
+        #expect(!store.deposit(makeEnvelope(), from: Data(repeating: 0xEE, count: 32), tier: .verified))
+        // ...but favorites still have their share.
+        #expect(store.deposit(makeEnvelope(), from: depositorA, tier: .favorite))
+    }
+
+    @Test func overflowEvictsVerifiedTierBeforeFavorites() {
+        let store = makeStore()
+        let favoriteRecipient = Data(repeating: 0xD0, count: 32)
+        let verifiedRecipient = Data(repeating: 0xD1, count: 32)
+        // Oldest envelope is a favorite deposit; a verified one follows.
+        #expect(store.deposit(makeEnvelope(recipientKey: favoriteRecipient), from: depositorA, tier: .favorite))
+        #expect(store.deposit(makeEnvelope(recipientKey: verifiedRecipient), from: depositorB, tier: .verified))
+
+        // Fill to the total cap with favorite deposits from distinct depositors.
+        var depositorByte: UInt8 = 10
+        var count = 2
+        while count < CourierStore.Limits.maxEnvelopes {
+            let depositor = Data(repeating: depositorByte, count: 32)
+            for _ in 0..<CourierStore.Limits.maxPerFavoriteDepositor where count < CourierStore.Limits.maxEnvelopes {
+                #expect(store.deposit(makeEnvelope(), from: depositor, tier: .favorite))
+                count += 1
+            }
+            depositorByte += 1
+        }
+
+        // The next favorite deposit evicts the verified envelope, not the
+        // older favorite one.
+        #expect(store.deposit(makeEnvelope(), from: Data(repeating: 0xEF, count: 32), tier: .favorite))
+        #expect(store.takeEnvelopes(for: verifiedRecipient).isEmpty)
+        #expect(store.takeEnvelopes(for: favoriteRecipient).count == 1)
+    }
+
+    @Test func verifiedDepositIsRejectedWhenStoreIsFullOfFavorites() {
+        let store = makeStore()
+        var depositorByte: UInt8 = 10
+        var count = 0
+        while count < CourierStore.Limits.maxEnvelopes {
+            let depositor = Data(repeating: depositorByte, count: 32)
+            for _ in 0..<CourierStore.Limits.maxPerFavoriteDepositor where count < CourierStore.Limits.maxEnvelopes {
+                #expect(store.deposit(makeEnvelope(), from: depositor, tier: .favorite))
+                count += 1
+            }
+            depositorByte += 1
+        }
+        // A verified deposit must not displace favorite-tier mail.
+        #expect(!store.deposit(makeEnvelope(), from: Data(repeating: 0xEE, count: 32), tier: .verified))
+        // A favorite deposit still can (oldest-favorite eviction).
+        #expect(store.deposit(makeEnvelope(), from: Data(repeating: 0xEF, count: 32), tier: .favorite))
+    }
+
+    // MARK: - Spray-and-wait
+
+    @Test func sprayHalvesBudgetAndSkipsIneligibleCouriers() {
+        let store = makeStore()
+        let recipientKey = Data(repeating: 0xB0, count: 32)
+        let envelope = makeEnvelope(recipientKey: recipientKey).withCopies(4)
+        #expect(store.deposit(envelope, from: depositorA))
+
+        // The recipient themselves never gets a spray copy (handover path).
+        #expect(store.takeSprayCopies(for: recipientKey).isEmpty)
+        // Neither does the depositor.
+        #expect(store.takeSprayCopies(for: depositorA).isEmpty)
+
+        // A fresh courier gets half the budget.
+        let courierX = Data(repeating: 0xC1, count: 32)
+        let sprayedToX = store.takeSprayCopies(for: courierX)
+        #expect(sprayedToX.count == 1)
+        #expect(sprayedToX.first?.copies == 2)
+        // Same courier again: no double spend.
+        #expect(store.takeSprayCopies(for: courierX).isEmpty)
+
+        // Next courier gets half the remainder (2 -> give 1, keep 1).
+        let courierY = Data(repeating: 0xC2, count: 32)
+        let sprayedToY = store.takeSprayCopies(for: courierY)
+        #expect(sprayedToY.count == 1)
+        #expect(sprayedToY.first?.copies == 1)
+
+        // Budget exhausted (carry-only): nothing left to spray.
+        #expect(store.takeSprayCopies(for: Data(repeating: 0xC3, count: 32)).isEmpty)
+        // The carried original is still deliverable.
+        #expect(store.takeEnvelopes(for: recipientKey).count == 1)
+    }
+
+    @Test func carryOnlyEnvelopesAreNeverSprayed() {
+        let store = makeStore()
+        #expect(store.deposit(makeEnvelope(), from: depositorA))
+        #expect(store.takeSprayCopies(for: Data(repeating: 0xC1, count: 32)).isEmpty)
+    }
+
+    @Test func duplicateDepositKeepsLargerSprayBudget() {
+        let store = makeStore()
+        let recipientKey = Data(repeating: 0xB0, count: 32)
+        let ciphertext = Data(repeating: 0x42, count: 96)
+        let carryOnly = makeEnvelope(recipientKey: recipientKey, ciphertext: ciphertext)
+        #expect(store.deposit(carryOnly, from: depositorA))
+        #expect(store.deposit(carryOnly.withCopies(4), from: depositorB))
+
+        let sprayed = store.takeSprayCopies(for: Data(repeating: 0xC1, count: 32))
+        #expect(sprayed.first?.copies == 2)
+    }
+
+    // MARK: - Remote handover (relayed announces)
+
+    @Test func remoteHandoverIsNonDestructiveAndCooledDown() {
+        let store = makeStore()
+        let recipientKey = Data(repeating: 0xB0, count: 32)
+        let envelope = makeEnvelope(recipientKey: recipientKey).withCopies(4)
+        #expect(store.deposit(envelope, from: depositorA))
+
+        let first = store.envelopesForRemoteHandover(recipientNoiseKey: recipientKey, cooldown: 600)
+        #expect(first.count == 1)
+        // The flooded copy carries no spray budget.
+        #expect(first.first?.copies == 1)
+        // Non-destructive: the envelope is still carried...
+        #expect(!store.isEmpty)
+        // ...and inside the cooldown it is not re-flooded.
+        #expect(store.envelopesForRemoteHandover(recipientNoiseKey: recipientKey, cooldown: 600).isEmpty)
+        // A direct encounter still hands it over destructively.
+        #expect(store.takeEnvelopes(for: recipientKey).count == 1)
+        #expect(store.isEmpty)
+    }
+
+    // MARK: - Legacy persistence
+
+    @Test func legacyPersistedFileLoadsAsFavoriteCarryOnly() throws {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("courier-legacy-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+
+        // Envelope persisted by a pre-tier/pre-spray build: no tier, copies,
+        // or spray bookkeeping fields.
+        let recipientKey = Data(repeating: 0xB0, count: 32)
+        let envelope = makeEnvelope(recipientKey: recipientKey)
+        let legacy: [[String: Any]] = [[
+            "recipientTag": envelope.recipientTag.base64EncodedString(),
+            "expiry": envelope.expiry,
+            "ciphertext": envelope.ciphertext.base64EncodedString(),
+            "depositorNoiseKey": depositorA.base64EncodedString(),
+            "storedAt": Self.baseDate.timeIntervalSinceReferenceDate
+        ]]
+        let data = try JSONSerialization.data(withJSONObject: legacy)
+        try data.write(to: fileURL)
+
+        let store = CourierStore(persistsToDisk: true, fileURL: fileURL, now: { Self.baseDate })
+        // Carry-only, so never sprayed...
+        #expect(store.takeSprayCopies(for: Data(repeating: 0xC1, count: 32)).isEmpty)
+        // ...but still delivered on encounter.
+        #expect(store.takeEnvelopes(for: recipientKey).count == 1)
     }
 }

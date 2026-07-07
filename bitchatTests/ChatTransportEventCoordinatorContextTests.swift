@@ -121,9 +121,11 @@ private final class MockChatTransportEventContext: ChatTransportEventContext {
 
     // Routing & acknowledgements
     private(set) var flushedOutboxPeerIDs: [PeerID] = []
+    private(set) var courierRetryPeerIDs: [PeerID] = []
     private(set) var meshDeliveryAcks: [(messageID: String, peerID: PeerID)] = []
 
     func flushRouterOutbox(for peerID: PeerID) { flushedOutboxPeerIDs.append(peerID) }
+    func retryCourierDeposits(via peerID: PeerID) { courierRetryPeerIDs.append(peerID) }
     func sendMeshDeliveryAck(for messageID: String, to peerID: PeerID) {
         meshDeliveryAcks.append((messageID, peerID))
     }
@@ -153,6 +155,24 @@ private final class MockChatTransportEventContext: ChatTransportEventContext {
 
     func handleVerifyResponsePayload(from peerID: PeerID, payload: Data) {
         verifyResponsePayloads.append((peerID, payload))
+    }
+
+    // Group payloads
+    private(set) var groupInvitePayloads: [(peerID: PeerID, payload: Data)] = []
+    private(set) var groupKeyUpdatePayloads: [(peerID: PeerID, payload: Data)] = []
+
+    func handleGroupInvitePayload(from peerID: PeerID, payload: Data) {
+        groupInvitePayloads.append((peerID, payload))
+    }
+
+    func handleGroupKeyUpdatePayload(from peerID: PeerID, payload: Data) {
+        groupKeyUpdatePayloads.append((peerID, payload))
+    }
+
+    private(set) var vouchPayloads: [(peerID: PeerID, payload: Data)] = []
+
+    func handleVouchPayload(from peerID: PeerID, payload: Data) {
+        vouchPayloads.append((peerID, payload))
     }
 }
 

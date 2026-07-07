@@ -14,6 +14,9 @@ struct MeshPeerRow: Identifiable, Equatable {
     let isMutualFavorite: Bool
     let encryptionStatus: EncryptionStatus
     let showsVerifiedBadgeWhenOffline: Bool
+    /// Vouched-for by someone I verified, without an explicit verification of
+    /// mine — rendered as the unfilled seal (verified gets the filled one).
+    let showsVouchedBadge: Bool
 
     var id: String { peerID.id }
 }
@@ -26,11 +29,22 @@ struct GeohashPersonRow: Identifiable, Equatable {
     let isBlocked: Bool
 }
 
+struct GroupChatRow: Identifiable, Equatable {
+    let peerID: PeerID
+    let name: String
+    let memberCount: Int
+    let isCreator: Bool
+    let hasUnread: Bool
+
+    var id: String { peerID.id }
+}
+
 @MainActor
 final class PeerListModel: ObservableObject {
     @Published private(set) var allPeers: [BitchatPeer] = []
     @Published private(set) var meshRows: [MeshPeerRow] = []
     @Published private(set) var geohashPeople: [GeohashPersonRow] = []
+    @Published private(set) var groupRows: [GroupChatRow] = []
     @Published private(set) var reachableMeshPeerCount = 0
     @Published private(set) var connectedMeshPeerCount = 0
     @Published private(set) var visibleGeohashPeerCount = 0
@@ -129,6 +143,13 @@ final class PeerListModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        chatViewModel.groupStore.$groups
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.refresh()
+            }
+            .store(in: &cancellables)
+
         peerIdentityStore.$encryptionStatuses
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
@@ -183,13 +204,12 @@ final class PeerListModel: ObservableObject {
         let myPeerID = chatViewModel.meshService.myPeerID
         let meshRows = allPeers.map { peer in
             let isMe = peer.peerID == myPeerID
-            let verifiedBadge: Bool
-            if !isMe && !peer.isConnected,
-               let fingerprint = chatViewModel.getFingerprint(for: peer.peerID) {
-                verifiedBadge = peerIdentityStore.isVerified(fingerprint)
-            } else {
-                verifiedBadge = false
-            }
+            let fingerprint = isMe ? nil : chatViewModel.getFingerprint(for: peer.peerID)
+            let isVerifiedFingerprint = fingerprint.map { peerIdentityStore.isVerified($0) } ?? false
+            let verifiedBadge = !peer.isConnected && isVerifiedFingerprint
+            // Vouched is subordinate to verified: never show both seals.
+            let vouchedBadge = !isVerifiedFingerprint
+                && (fingerprint.map { chatViewModel.isVouchedFingerprint($0) } ?? false)
 
             return MeshPeerRow(
                 peerID: peer.peerID,
@@ -202,7 +222,8 @@ final class PeerListModel: ObservableObject {
                 isReachable: peer.isReachable,
                 isMutualFavorite: peer.isMutualFavorite,
                 encryptionStatus: chatViewModel.getEncryptionStatus(for: peer.peerID),
-                showsVerifiedBadgeWhenOffline: verifiedBadge
+                showsVerifiedBadgeWhenOffline: verifiedBadge,
+                showsVouchedBadge: vouchedBadge
             )
         }
 
@@ -217,20 +238,38 @@ final class PeerListModel: ObservableObject {
         }
 
         let geohashPeople = buildGeohashPeople()
+        let groupRows = buildGroupRows()
 
         self.meshRows = meshRows
         reachableMeshPeerCount = meshCounts.reachable
         connectedMeshPeerCount = meshCounts.connected
         self.geohashPeople = geohashPeople
         visibleGeohashPeerCount = geohashPeople.count
+        self.groupRows = groupRows
         renderID = (
             meshRows.map {
                 "\($0.id)-\($0.isConnected)-\($0.isReachable)-\($0.hasUnread)-\($0.isFavorite)-\($0.isBlocked)"
             } +
             geohashPeople.map {
                 "geo:\($0.id)-\($0.isTeleported)-\($0.isBlocked)-\($0.displayName)"
+            } +
+            groupRows.map {
+                "group:\($0.id)-\($0.name)-\($0.memberCount)-\($0.hasUnread)"
             }
         ).joined(separator: "|")
+    }
+
+    private func buildGroupRows() -> [GroupChatRow] {
+        let myFingerprint = chatViewModel.meshService.noiseIdentityFingerprint()
+        return chatViewModel.groupStore.groups.map { group in
+            GroupChatRow(
+                peerID: group.peerID,
+                name: group.name,
+                memberCount: group.members.count,
+                isCreator: group.creatorFingerprint == myFingerprint,
+                hasUnread: chatViewModel.hasUnreadMessages(for: group.peerID)
+            )
+        }
     }
 
     private func buildGeohashPeople() -> [GeohashPersonRow] {

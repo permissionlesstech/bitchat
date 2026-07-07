@@ -71,6 +71,7 @@ private final class MockChatNostrContext: ChatNostrContext {
     private(set) var hapticMessageIDs: [String] = []
 
     func handlePublicMessage(_ message: BitchatMessage) { handledPublicMessages.append(message) }
+    func handlePublicMessage(_ message: BitchatMessage, powBits: Int) { handledPublicMessages.append(message) }
     func checkForMentions(_ message: BitchatMessage) { mentionCheckedMessageIDs.append(message.id) }
     func sendHapticFeedback(for message: BitchatMessage) { hapticMessageIDs.append(message.id) }
     func parseMentions(from content: String) -> [String] { [] }

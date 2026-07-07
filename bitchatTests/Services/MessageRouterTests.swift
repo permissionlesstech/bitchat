@@ -226,6 +226,197 @@ struct MessageRouterTests {
 
         #expect(transport.sentFavoriteNotifications.count == 1)
     }
+
+    // MARK: - Courier deposits
+
+    private static func snapshot(_ peerID: PeerID, key: Data, verified: Bool) -> TransportPeerSnapshot {
+        TransportPeerSnapshot(
+            peerID: peerID,
+            nickname: "peer",
+            isConnected: true,
+            noisePublicKey: key,
+            lastSeen: Date(),
+            isVerified: verified
+        )
+    }
+
+    /// Directory that resolves one offline recipient and treats a fixed key
+    /// set as mutual favorites.
+    private static func directory(recipient: PeerID, recipientKey: Data, favoriteKeys: Set<Data> = []) -> CourierDirectory {
+        CourierDirectory(
+            noiseKey: { peerID in peerID == recipient ? recipientKey : nil },
+            isTrustedCourier: { favoriteKeys.contains($0) }
+        )
+    }
+
+    @Test @MainActor
+    func sendPrivate_depositsWithVerifiedStrangerWhenNoFavoriteAround() async {
+        let recipient = PeerID(str: "00000000000000aa")
+        let recipientKey = Data(repeating: 0xBB, count: 32)
+        let courier = PeerID(str: "00000000000000cc")
+        let courierKey = Data(repeating: 0xCC, count: 32)
+
+        let transport = MockTransport()
+        transport.connectedPeers.insert(courier)
+        transport.updatePeerSnapshots([Self.snapshot(courier, key: courierKey, verified: true)])
+
+        let router = MessageRouter(
+            transports: [transport],
+            courierDirectory: Self.directory(recipient: recipient, recipientKey: recipientKey)
+        )
+        router.sendPrivate("Hello", to: recipient, recipientNickname: "Peer", messageID: "cv1")
+
+        #expect(transport.sentCourierMessages.count == 1)
+        #expect(transport.sentCourierMessages.first?.couriers == [courier])
+    }
+
+    @Test @MainActor
+    func sendPrivate_neverDepositsWithUnverifiedStranger() async {
+        let recipient = PeerID(str: "00000000000000aa")
+        let courier = PeerID(str: "00000000000000cc")
+
+        let transport = MockTransport()
+        transport.connectedPeers.insert(courier)
+        transport.updatePeerSnapshots([Self.snapshot(courier, key: Data(repeating: 0xCC, count: 32), verified: false)])
+
+        let router = MessageRouter(
+            transports: [transport],
+            courierDirectory: Self.directory(recipient: recipient, recipientKey: Data(repeating: 0xBB, count: 32))
+        )
+        router.sendPrivate("Hello", to: recipient, recipientNickname: "Peer", messageID: "cv2")
+
+        #expect(transport.sentCourierMessages.isEmpty)
+    }
+
+    @Test @MainActor
+    func sendPrivate_prefersFavoriteCouriersOverVerifiedOnes() async {
+        let recipient = PeerID(str: "00000000000000aa")
+        let recipientKey = Data(repeating: 0xBB, count: 32)
+        let favorite = PeerID(str: "00000000000000f0")
+        let favoriteKey = Data(repeating: 0xF0, count: 32)
+        var snapshots = [Self.snapshot(favorite, key: favoriteKey, verified: false)]
+        let transport = MockTransport()
+        transport.connectedPeers.insert(favorite)
+        // Three verified strangers compete for the three courier slots.
+        for byte: UInt8 in [0xC1, 0xC2, 0xC3] {
+            let peer = PeerID(str: String(format: "00000000000000%02x", byte))
+            transport.connectedPeers.insert(peer)
+            snapshots.append(Self.snapshot(peer, key: Data(repeating: byte, count: 32), verified: true))
+        }
+        transport.updatePeerSnapshots(snapshots)
+
+        let router = MessageRouter(
+            transports: [transport],
+            courierDirectory: Self.directory(recipient: recipient, recipientKey: recipientKey, favoriteKeys: [favoriteKey])
+        )
+        router.sendPrivate("Hello", to: recipient, recipientNickname: "Peer", messageID: "cv3")
+
+        let couriers = transport.sentCourierMessages.first?.couriers ?? []
+        #expect(couriers.count == 3)
+        #expect(couriers.contains(favorite))
+    }
+
+    @Test @MainActor
+    func courierBecameAvailable_retriesDepositOnceWithoutDoubleBurn() async {
+        let recipient = PeerID(str: "00000000000000aa")
+        let recipientKey = Data(repeating: 0xBB, count: 32)
+        let courier = PeerID(str: "00000000000000cc")
+        let courierKey = Data(repeating: 0xCC, count: 32)
+
+        let transport = MockTransport()
+        let router = MessageRouter(
+            transports: [transport],
+            courierDirectory: Self.directory(recipient: recipient, recipientKey: recipientKey)
+        )
+        // Nobody around at send time: the message just queues.
+        router.sendPrivate("Hello", to: recipient, recipientNickname: "Peer", messageID: "cr1")
+        #expect(transport.sentCourierMessages.isEmpty)
+
+        // A verified courier appears later: the deposit retries.
+        transport.connectedPeers.insert(courier)
+        transport.updatePeerSnapshots([Self.snapshot(courier, key: courierKey, verified: true)])
+        router.courierBecameAvailable(courier)
+        #expect(transport.sentCourierMessages.count == 1)
+        #expect(transport.sentCourierMessages.first?.couriers == [courier])
+
+        // The same courier reconnecting does not receive the same mail twice.
+        router.courierBecameAvailable(courier)
+        #expect(transport.sentCourierMessages.count == 1)
+    }
+
+    @Test @MainActor
+    func courierBecameAvailable_ignoresTheRecipientThemselves() async {
+        let recipient = PeerID(str: "00000000000000aa")
+        let recipientKey = Data(repeating: 0xBB, count: 32)
+
+        let transport = MockTransport()
+        let router = MessageRouter(
+            transports: [transport],
+            courierDirectory: Self.directory(recipient: recipient, recipientKey: recipientKey)
+        )
+        router.sendPrivate("Hello", to: recipient, recipientNickname: "Peer", messageID: "cr2")
+
+        // The recipient connecting is a flush, not a courier opportunity.
+        transport.connectedPeers.insert(recipient)
+        transport.updatePeerSnapshots([Self.snapshot(recipient, key: recipientKey, verified: true)])
+        router.courierBecameAvailable(recipient)
+        #expect(transport.sentCourierMessages.isEmpty)
+    }
+
+    // MARK: - Outbox persistence
+
+    @Test @MainActor
+    func queuedMessagesSurviveRouterRestart() async {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("router-outbox-\(UUID().uuidString).sealed")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let keychain = MockKeychain()
+        let peerID = PeerID(str: "00000000000000dd")
+
+        let transport = MockTransport()
+        let router = MessageRouter(
+            transports: [transport],
+            outboxStore: MessageOutboxStore(keychain: keychain, fileURL: fileURL)
+        )
+        router.sendPrivate("Survive", to: peerID, recipientNickname: "Peer", messageID: "p1")
+        #expect(transport.sentPrivateMessages.isEmpty)
+
+        // "App restart": a fresh router over the same store, peer now around.
+        let transport2 = MockTransport()
+        transport2.reachablePeers.insert(peerID)
+        let router2 = MessageRouter(
+            transports: [transport2],
+            outboxStore: MessageOutboxStore(keychain: keychain, fileURL: fileURL)
+        )
+        router2.flushOutbox(for: peerID)
+        #expect(transport2.sentPrivateMessages.map(\.messageID) == ["p1"])
+    }
+
+    @Test @MainActor
+    func deliveredMessagesDoNotResurrectAfterRestart() async {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("router-outbox-\(UUID().uuidString).sealed")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let keychain = MockKeychain()
+        let peerID = PeerID(str: "00000000000000de")
+
+        let transport = MockTransport()
+        let router = MessageRouter(
+            transports: [transport],
+            outboxStore: MessageOutboxStore(keychain: keychain, fileURL: fileURL)
+        )
+        router.sendPrivate("Once", to: peerID, recipientNickname: "Peer", messageID: "p2")
+        router.markDelivered("p2")
+
+        let transport2 = MockTransport()
+        transport2.reachablePeers.insert(peerID)
+        let router2 = MessageRouter(
+            transports: [transport2],
+            outboxStore: MessageOutboxStore(keychain: keychain, fileURL: fileURL)
+        )
+        router2.flushOutbox(for: peerID)
+        #expect(transport2.sentPrivateMessages.isEmpty)
+    }
 }
 
 /// Mutable wall clock injected into `MessageRouter` so TTL expiry is testable

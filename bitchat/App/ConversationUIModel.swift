@@ -193,7 +193,9 @@ final class ConversationUIModel: ObservableObject {
 
     private func refreshComputedState() {
         if let selectedPeerID = privateConversationModel.selectedPeerID {
-            canSendMediaInCurrentContext = !(selectedPeerID.isGeoDM || selectedPeerID.isGeoChat)
+            // Media transfer is not wired for groups in v1; keep it off so the
+            // composer can't strand a media placeholder that never sends.
+            canSendMediaInCurrentContext = !(selectedPeerID.isGeoDM || selectedPeerID.isGeoChat || selectedPeerID.isGroup)
             return
         }
 

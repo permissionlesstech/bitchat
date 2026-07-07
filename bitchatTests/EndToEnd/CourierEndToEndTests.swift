@@ -104,7 +104,7 @@ struct CourierEndToEndTests {
         let bob = makeService()
         // Alice and Carol are mutual favorites; trust policy is exercised
         // separately in depositFromUntrustedPeerIsRejected.
-        carol.courierDepositPolicy = { _ in true }
+        carol.courierDepositPolicy = { _, _ in .favorite }
 
         let bobDelegate = NoiseCaptureDelegate()
         bob.delegate = bobDelegate
@@ -134,7 +134,7 @@ struct CourierEndToEndTests {
         let depositPacket = try #require(aliceOut.first(ofType: .courierEnvelope))
 
         // 2. Ferry the deposit to Carol; she carries it (opaque to her).
-        carol._test_handlePacket(depositPacket, fromPeerID: alice.myPeerID)
+        carol._test_handlePacket(depositPacket, fromPeerID: alice.myPeerID, signingPublicKey: alice.noiseSigningPublicKeyData())
         let carried = await TestHelpers.waitUntil(
             { !carol.courierStore.isEmpty },
             timeout: TestConstants.defaultTimeout
@@ -186,7 +186,7 @@ struct CourierEndToEndTests {
         let carol = makeService()
         let bobIdentity = MockIdentityManager(MockKeychain())
         let bob = makeService(identityManager: bobIdentity)
-        carol.courierDepositPolicy = { _ in true }
+        carol.courierDepositPolicy = { _, _ in .favorite }
 
         let bobDelegate = NoiseCaptureDelegate()
         bob.delegate = bobDelegate
@@ -215,7 +215,7 @@ struct CourierEndToEndTests {
         #expect(deposited)
         let depositPacket = try #require(aliceOut.first(ofType: .courierEnvelope))
 
-        carol._test_handlePacket(depositPacket, fromPeerID: alice.myPeerID)
+        carol._test_handlePacket(depositPacket, fromPeerID: alice.myPeerID, signingPublicKey: alice.noiseSigningPublicKeyData())
         let carried = await TestHelpers.waitUntil(
             { !carol.courierStore.isEmpty },
             timeout: TestConstants.defaultTimeout
@@ -254,7 +254,7 @@ struct CourierEndToEndTests {
         let alice = makeService()
         let carol = makeService()
         let bob = makeService()
-        carol.courierDepositPolicy = { _ in true }
+        carol.courierDepositPolicy = { _, _ in .favorite }
 
         let aliceOut = PacketTap()
         alice._test_onOutboundPacket = aliceOut.record
@@ -278,7 +278,7 @@ struct CourierEndToEndTests {
         #expect(deposited)
         let depositPacket = try #require(aliceOut.first(ofType: .courierEnvelope))
 
-        carol._test_handlePacket(depositPacket, fromPeerID: alice.myPeerID)
+        carol._test_handlePacket(depositPacket, fromPeerID: alice.myPeerID, signingPublicKey: alice.noiseSigningPublicKeyData())
         let carried = await TestHelpers.waitUntil(
             { !carol.courierStore.isEmpty },
             timeout: TestConstants.defaultTimeout
@@ -312,11 +312,11 @@ struct CourierEndToEndTests {
         #expect(carol.courierStore.isEmpty)
     }
 
-    @Test func relayedAnnounceDoesNotTriggerCourierHandover() async throws {
+    @Test func relayedAnnounceTriggersNonDestructiveRemoteHandover() async throws {
         let alice = makeService()
         let carol = makeService()
         let bob = makeService()
-        carol.courierDepositPolicy = { _ in true }
+        carol.courierDepositPolicy = { _, _ in .favorite }
 
         let aliceOut = PacketTap()
         alice._test_onOutboundPacket = aliceOut.record
@@ -340,7 +340,7 @@ struct CourierEndToEndTests {
         #expect(deposited)
         let depositPacket = try #require(aliceOut.first(ofType: .courierEnvelope))
 
-        carol._test_handlePacket(depositPacket, fromPeerID: alice.myPeerID)
+        carol._test_handlePacket(depositPacket, fromPeerID: alice.myPeerID, signingPublicKey: alice.noiseSigningPublicKeyData())
         let carried = await TestHelpers.waitUntil(
             { !carol.courierStore.isEmpty },
             timeout: TestConstants.defaultTimeout
@@ -356,23 +356,24 @@ struct CourierEndToEndTests {
         let directAnnounce = try #require(bobOut.first(ofType: .announce))
 
         // A relayed copy has a decremented TTL but a still-valid signature
-        // (TTL is excluded from announce signatures). Envelopes are removed
-        // from the store optimistically, so handover must wait for a direct
-        // encounter instead of chasing a multi-hop path.
+        // (TTL is excluded from announce signatures). The recipient is
+        // multi-hop away, so a copy floods toward them speculatively while
+        // the carried original stays put for a future direct encounter.
         var relayedAnnounce = directAnnounce
         relayedAnnounce.ttl = directAnnounce.ttl - 1
         carol._test_handlePacket(relayedAnnounce, fromPeerID: bob.myPeerID, preseedPeer: false)
 
-        let leakedOnRelayedAnnounce = await TestHelpers.waitUntil(
-            { carolOut.count(ofType: .courierEnvelope) > 0 },
-            timeout: TestConstants.shortTimeout
+        let remoteHandover = await TestHelpers.waitUntil(
+            { carolOut.count(ofType: .courierEnvelope) == 1 },
+            timeout: TestConstants.defaultTimeout
         )
-        #expect(!leakedOnRelayedAnnounce)
+        #expect(remoteHandover)
         #expect(!carol.courierStore.isEmpty)
 
-        // The relayed copy consumed the original announce's dedup key
-        // (sender/timestamp/payload — TTL excluded), so the direct handover
-        // needs a fresh announce. Wait out the 1s announce throttle first.
+        // A second relayed announce inside the cooldown must not re-flood
+        // the same envelope. The original announce's dedup key is consumed
+        // (sender/timestamp/payload — TTL excluded), so use a fresh announce;
+        // wait out the 1s announce throttle first.
         try await Task.sleep(nanoseconds: 1_100_000_000)
         bob.sendBroadcastAnnounce()
         let reannounced = await TestHelpers.waitUntil(
@@ -383,10 +384,32 @@ struct CourierEndToEndTests {
         let freshAnnounce = try #require(
             bobOut.all(ofType: .announce).first { $0.timestamp != directAnnounce.timestamp }
         )
-        carol._test_handlePacket(freshAnnounce, fromPeerID: bob.myPeerID, preseedPeer: false)
+        var relayedFreshAnnounce = freshAnnounce
+        relayedFreshAnnounce.ttl = freshAnnounce.ttl - 1
+        carol._test_handlePacket(relayedFreshAnnounce, fromPeerID: bob.myPeerID, preseedPeer: false)
+
+        let refloodedInCooldown = await TestHelpers.waitUntil(
+            { carolOut.count(ofType: .courierEnvelope) > 1 },
+            timeout: TestConstants.shortTimeout
+        )
+        #expect(!refloodedInCooldown)
+        #expect(!carol.courierStore.isEmpty)
+
+        // A later *direct* announce still performs the destructive handover.
+        try await Task.sleep(nanoseconds: 1_100_000_000)
+        bob.sendBroadcastAnnounce()
+        let announcedAgain = await TestHelpers.waitUntil(
+            { bobOut.all(ofType: .announce).contains { $0.timestamp != directAnnounce.timestamp && $0.timestamp != freshAnnounce.timestamp } },
+            timeout: TestConstants.defaultTimeout
+        )
+        #expect(announcedAgain)
+        let directAgain = try #require(
+            bobOut.all(ofType: .announce).first { $0.timestamp != directAnnounce.timestamp && $0.timestamp != freshAnnounce.timestamp }
+        )
+        carol._test_handlePacket(directAgain, fromPeerID: bob.myPeerID, preseedPeer: false)
 
         let handedOver = await TestHelpers.waitUntil(
-            { carolOut.count(ofType: .courierEnvelope) == 1 },
+            { carolOut.count(ofType: .courierEnvelope) == 2 },
             timeout: TestConstants.defaultTimeout
         )
         #expect(handedOver)
@@ -417,7 +440,7 @@ struct CourierEndToEndTests {
 
     @Test func depositFromUntrustedPeerIsRejected() async throws {
         let carol = makeService()
-        carol.courierDepositPolicy = { _ in false } // depositor is not a mutual favorite
+        carol.courierDepositPolicy = { _, _ in nil } // depositor is neither favorite nor verified
 
         let alice = NoiseEncryptionService(keychain: MockKeychain())
         let bobKey = NoiseEncryptionService(keychain: MockKeychain()).getStaticPublicKeyData()
@@ -433,6 +456,45 @@ struct CourierEndToEndTests {
             ciphertext: sealed
         )
         let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
+        let unsigned = BitchatPacket(
+            type: MessageType.courierEnvelope.rawValue,
+            senderID: Data(hexString: alicePeerID.id) ?? Data(),
+            recipientID: Data(hexString: carol.myPeerID.id),
+            timestamp: UInt64(now.timeIntervalSince1970 * 1000),
+            payload: try #require(envelope.encode()),
+            signature: nil,
+            ttl: 1
+        )
+        let packet = try #require(alice.signPacket(unsigned))
+
+        carol._test_handlePacket(packet, fromPeerID: alicePeerID, signingPublicKey: alice.getSigningPublicKeyData())
+        let stored = await TestHelpers.waitUntil(
+            { !carol.courierStore.isEmpty },
+            timeout: TestConstants.shortTimeout
+        )
+        #expect(!stored)
+    }
+
+    @Test func unsignedDepositIsRejected() async throws {
+        let carol = makeService()
+        carol.courierDepositPolicy = { _, _ in .favorite }
+
+        let alice = NoiseEncryptionService(keychain: MockKeychain())
+        let bobKey = NoiseEncryptionService(keychain: MockKeychain()).getStaticPublicKeyData()
+        let typedPayload = try #require(BLENoisePayloadFactory.privateMessage(content: "x", messageID: "m-unsigned"))
+        let sealed = try alice.sealCourierPayload(typedPayload, recipientStaticKey: bobKey)
+        let now = Date()
+        let envelope = CourierEnvelope(
+            recipientTag: CourierEnvelope.recipientTag(
+                noiseStaticKey: bobKey,
+                epochDay: CourierEnvelope.epochDay(for: now)
+            ),
+            expiry: UInt64((now.timeIntervalSince1970 + 3600) * 1000),
+            ciphertext: sealed
+        )
+        let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
+        // Correct sender, willing policy — but no packet signature: the
+        // courier cannot authenticate the depositor, so it must not carry.
         let packet = BitchatPacket(
             type: MessageType.courierEnvelope.rawValue,
             senderID: Data(hexString: alicePeerID.id) ?? Data(),
@@ -443,7 +505,7 @@ struct CourierEndToEndTests {
             ttl: 1
         )
 
-        carol._test_handlePacket(packet, fromPeerID: alicePeerID)
+        carol._test_handlePacket(packet, fromPeerID: alicePeerID, signingPublicKey: alice.getSigningPublicKeyData())
         let stored = await TestHelpers.waitUntil(
             { !carol.courierStore.isEmpty },
             timeout: TestConstants.shortTimeout
@@ -459,8 +521,8 @@ struct CourierEndToEndTests {
         preseedConnectedPeer(mallory, in: carol)
 
         let trustedAliceKey = Data(hexString: alice.myPeerID.id) ?? Data()
-        carol.courierDepositPolicy = { depositorKey in
-            depositorKey == trustedAliceKey
+        carol.courierDepositPolicy = { depositorKey, _ in
+            depositorKey == trustedAliceKey ? .favorite : nil
         }
 
         let aliceNoise = NoiseEncryptionService(keychain: MockKeychain())

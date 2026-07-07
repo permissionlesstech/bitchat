@@ -42,6 +42,7 @@ final class MockTransport: Transport {
     private(set) var cancelledTransfers: [String] = []
     private(set) var sentVerifyChallenges: [(peerID: PeerID, noiseKeyHex: String, nonceA: Data)] = []
     private(set) var sentVerifyResponses: [(peerID: PeerID, noiseKeyHex: String, nonceA: Data)] = []
+    private(set) var sentCourierMessages: [(content: String, messageID: String, recipientNoiseKey: Data, couriers: [PeerID])] = []
     private(set) var startServicesCallCount = 0
     private(set) var stopServicesCallCount = 0
     private(set) var emergencyDisconnectCallCount = 0
@@ -187,6 +188,33 @@ final class MockTransport: Transport {
 
     func sendVerifyResponse(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {
         sentVerifyResponses.append((peerID, noiseKeyHex, nonceA))
+    }
+
+    var courierSendResult = true
+    func sendCourierMessage(_ content: String, messageID: String, recipientNoiseKey: Data, via couriers: [PeerID]) -> Bool {
+        sentCourierMessages.append((content, messageID, recipientNoiseKey, couriers))
+        return courierSendResult
+    }
+
+    // MARK: - Mesh Diagnostics
+
+    private(set) var sentMeshPings: [PeerID] = []
+    var meshPingResult: MeshPingResult?
+    var meshPaths: [PeerID: [PeerID]] = [:]
+    var meshTopologySnapshot: MeshTopologySnapshot?
+
+    func sendMeshPing(to peerID: PeerID, completion: @escaping @MainActor (MeshPingResult?) -> Void) {
+        sentMeshPings.append(peerID)
+        let result = meshPingResult
+        Task { @MainActor in completion(result) }
+    }
+
+    func computeMeshPath(to peerID: PeerID) -> [PeerID]? {
+        meshPaths[peerID]
+    }
+
+    func currentMeshTopology() -> MeshTopologySnapshot? {
+        meshTopologySnapshot
     }
 
     // MARK: - Test Helpers

@@ -18,6 +18,14 @@ enum Geohash {
         return geohash.lowercased().allSatisfy { base32Map[$0] != nil }
     }
 
+    /// Validates a geohash string at any channel precision (1-12 characters).
+    /// - Parameter geohash: The geohash string to validate
+    /// - Returns: true if a non-empty base32 geohash of at most 12 characters
+    static func isValidGeohash(_ geohash: String) -> Bool {
+        guard (1...12).contains(geohash.count) else { return false }
+        return geohash.lowercased().allSatisfy { base32Map[$0] != nil }
+    }
+
     /// Encodes the provided coordinates into a geohash string.
     /// - Parameters:
     ///   - latitude: Latitude in degrees (-90...90)

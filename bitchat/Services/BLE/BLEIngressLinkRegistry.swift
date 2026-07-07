@@ -99,7 +99,11 @@ struct BLEIngressLinkRegistry {
     }
 
     private static func requiresDirectSenderBinding(_ packet: BitchatPacket, directAnnounceTTL: UInt8) -> Bool {
-        packet.type == MessageType.announce.rawValue && packet.ttl == directAnnounceTTL
+        // REQUEST_SYNC is never relayed, so on a bound link the claimed sender
+        // must be the link peer — it elicits a full store replay, and the
+        // response is addressed to whoever the sender claims to be.
+        if packet.type == MessageType.requestSync.rawValue { return true }
+        return packet.type == MessageType.announce.rawValue && packet.ttl == directAnnounceTTL
     }
 
     private static func isSelfAuthoredSyncResponse(_ packet: BitchatPacket) -> Bool {

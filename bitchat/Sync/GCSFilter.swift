@@ -10,7 +10,13 @@ import CryptoKit
 //  - Golomb-Rice with parameter P: q = (x - 1) >> P encoded as unary (q ones then a zero), then write P-bit remainder r = (x - 1) & ((1<<P)-1).
 //  - Bitstream is MSB-first within each byte.
 enum GCSFilter {
-    struct Params { let p: Int; let m: UInt32; let data: Data }
+    // `includedCount` is how many of the input `ids` (in input order) the
+    // returned filter actually encodes. It can be below `ids.count` when the
+    // Golomb-Rice encoding overflows the byte budget and the tail is trimmed.
+    // Callers that derive a since-cursor need this: trimming drops from the
+    // input tail, so the first `includedCount` inputs are exactly what the
+    // filter covers.
+    struct Params { let p: Int; let m: UInt32; let data: Data; let includedCount: Int }
 
     // Highest Golomb-Rice parameter we accept from the wire. P maps to an FPR
     // of ~1/2^P; beyond 32 the remainder width exceeds any practical filter
@@ -35,39 +41,40 @@ enum GCSFilter {
     static func buildFilter(ids: [Data], maxBytes: Int, targetFpr: Double) -> Params {
         let p = deriveP(targetFpr: targetFpr)
         guard !ids.isEmpty else {
-            return Params(p: p, m: 1, data: Data())
+            return Params(p: p, m: 1, data: Data(), includedCount: 0)
         }
 
         let cap = estimateMaxElements(sizeBytes: maxBytes, p: p)
-        let selected = Array(ids.prefix(cap))
-        let range = max(1, hashRange(count: selected.count, p: p))
+        // Modulus is fixed to the initial candidate count so `m` stays stable
+        // as the tail is trimmed to fit the byte budget below.
+        let range = max(1, hashRange(count: min(ids.count, cap), p: p))
         let modulo = UInt64(range)
 
-        var mapped = selected
-            .map { h64($0) }
-            .map { mapHash($0, modulo: modulo) }
-            .sorted()
-        mapped = normalizeMappedValues(mapped, modulo: modulo)
-
-        if mapped.isEmpty {
-            return Params(p: p, m: range, data: Data())
+        // Encode the first `count` inputs (input order). The caller passes IDs
+        // newest-first, so trimming from the tail drops the oldest — which is
+        // what lets a since-cursor stay exact: the surviving set is always a
+        // contiguous newest-prefix, never a hash-order-arbitrary subset.
+        func encodeFirst(_ count: Int) -> Data {
+            var mapped = ids.prefix(count)
+                .map { h64($0) }
+                .map { mapHash($0, modulo: modulo) }
+                .sorted()
+            mapped = normalizeMappedValues(mapped, modulo: modulo)
+            return mapped.isEmpty ? Data() : encode(sorted: mapped, p: p)
         }
 
-        var encoded = encode(sorted: mapped, p: p)
-        var trimmedCount = mapped.count
-
-        while encoded.count > maxBytes && trimmedCount > 0 {
-            if trimmedCount == 1 {
-                mapped.removeAll()
-                encoded = Data()
-                break
-            }
-            trimmedCount = max(1, (trimmedCount * 9) / 10)
-            mapped = Array(mapped.prefix(trimmedCount))
-            encoded = encode(sorted: mapped, p: p)
+        var count = min(ids.count, cap)
+        var encoded = encodeFirst(count)
+        while encoded.count > maxBytes && count > 1 {
+            count = max(1, (count * 9) / 10)
+            encoded = encodeFirst(count)
+        }
+        // A single element that still overflows can't be represented.
+        if encoded.count > maxBytes {
+            return Params(p: p, m: range, data: Data(), includedCount: 0)
         }
 
-        return Params(p: p, m: range, data: encoded)
+        return Params(p: p, m: range, data: encoded, includedCount: encoded.isEmpty ? 0 : count)
     }
 
     static func decodeToSortedSet(p: Int, m: UInt32, data: Data) -> [UInt64] {

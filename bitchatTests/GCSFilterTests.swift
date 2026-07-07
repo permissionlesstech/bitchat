@@ -41,6 +41,24 @@ struct GCSFilterTests {
         #expect(truncated.allSatisfy { full.contains($0) })
     }
 
+    @Test func buildFilterReportsFullCoverageWhenBudgetFits() {
+        let ids = (0..<8).map { i in Data(repeating: UInt8(i), count: 16) }
+        let params = GCSFilter.buildFilter(ids: ids, maxBytes: 1024, targetFpr: 0.01)
+        #expect(params.includedCount == ids.count)
+    }
+
+    @Test func buildFilterTrimsTailWhenBudgetExceeded() {
+        // A tight byte budget can't hold every ID, so the encoder trims from
+        // the input tail and reports how many it actually covered.
+        let ids = (0..<200).map { i in
+            Data((0..<16).map { UInt8((i &* 31 &+ $0) & 0xFF) })
+        }
+        let params = GCSFilter.buildFilter(ids: ids, maxBytes: 32, targetFpr: 0.01)
+        #expect(params.includedCount > 0)
+        #expect(params.includedCount < ids.count)
+        #expect(params.data.count <= 32)
+    }
+
     @Test func requestSyncPacketDecodeRejectsOversizedP() {
         let valid = RequestSyncPacket(p: 8, m: 4096, data: Data([0x01, 0x02]))
         #expect(RequestSyncPacket.decode(from: valid.encode()) != nil)
