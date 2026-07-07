@@ -311,6 +311,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         get { conversations.activeChannel }
         set {
             guard conversations.activeChannel != newValue else { return }
+            // Leaving a channel expedites any in-flight NIP-13 mining: the
+            // pending message still sends, at the difficulty already reached.
+            outgoingCoordinator.expeditePendingGeohashMining()
             conversations.setActiveChannel(newValue)
             visibleMessagesCache = nil
             objectWillChange.send()
@@ -1205,6 +1208,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         GossipMessageArchive.wipeDefault()
         StoreAndForwardMetrics.shared.reset()
 
+        // Drop bulletin-board posts and tombstones (memory and disk); board
+        // posts are signed with our identity key and persist for days.
+        BoardStore.shared.wipe()
+
         // Identity manager has cleared persisted identity data above
 
         // Clear autocomplete state
@@ -1677,10 +1684,25 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         publicConversationCoordinator.sendPublicRaw(content)
     }
 
+    // Send a normal public message (with local echo) to the active channel.
+    // CommandContextProvider hook for commands that post real messages
+    // (`/pay`); only called when no private chat is selected.
+    @MainActor
+    func sendPublicMessage(_ content: String) {
+        sendMessage(content)
+    }
+
     /// Handle incoming public message
     @MainActor
     func handlePublicMessage(_ message: BitchatMessage) {
         publicConversationCoordinator.handlePublicMessage(message)
+    }
+
+    /// Handle an incoming public Nostr message with its validated NIP-13
+    /// difficulty; sufficient PoW relaxes the per-sender rate limit.
+    @MainActor
+    func handlePublicMessage(_ message: BitchatMessage, powBits: Int) {
+        publicConversationCoordinator.handlePublicMessage(message, powBits: powBits)
     }
 
     /// Check for mentions and send notifications

@@ -82,7 +82,9 @@ protocol ChatPublicConversationContext: AnyObject {
     // MARK: Inbound public message processing
     func processActionMessage(_ message: BitchatMessage) -> BitchatMessage
     func isMessageBlocked(_ message: BitchatMessage) -> Bool
-    func allowPublicMessage(senderKey: String, contentKey: String) -> Bool
+    /// `powBits` is the validated NIP-13 difficulty of the source Nostr event
+    /// (0 for mesh messages); sufficient PoW relaxes the per-sender bucket.
+    func allowPublicMessage(senderKey: String, contentKey: String, powBits: Int) -> Bool
     /// Buffers a visible-channel message for the batched (~80 ms) pipeline
     /// flush, which commits it to `conversationID` in the store.
     func enqueuePublicMessage(_ message: BitchatMessage, to conversationID: ConversationID)
@@ -137,8 +139,8 @@ extension ChatViewModel: ChatPublicConversationContext {
         meshService.sendMessage(content, mentions: mentions, messageID: messageID, timestamp: timestamp)
     }
 
-    func allowPublicMessage(senderKey: String, contentKey: String) -> Bool {
-        publicRateLimiter.allow(senderKey: senderKey, contentKey: contentKey)
+    func allowPublicMessage(senderKey: String, contentKey: String, powBits: Int) -> Bool {
+        publicRateLimiter.allow(senderKey: senderKey, contentKey: contentKey, powBits: powBits)
     }
 
     func enqueuePublicMessage(_ message: BitchatMessage, to conversationID: ConversationID) {
@@ -367,7 +369,7 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
                 guard let context else { return }
                 do {
                     let identity = try context.deriveNostrIdentity(forGeohash: channel.geohash)
-                    let event = try NostrProtocol.createEphemeralGeohashEvent(
+                    let event = try await NostrProtocol.createMinedEphemeralGeohashEvent(
                         content: content,
                         geohash: channel.geohash,
                         senderIdentity: identity,
@@ -395,7 +397,11 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
         )
     }
 
-    func handlePublicMessage(_ message: BitchatMessage) {
+    /// - Parameter powBits: validated NIP-13 difficulty of the source Nostr
+    ///   event (0 for mesh messages). Sufficient PoW relaxes the per-sender
+    ///   rate limit; low/no-PoW events keep the strict limits so old clients
+    ///   still get through at normal rates.
+    func handlePublicMessage(_ message: BitchatMessage, powBits: Int = 0) {
         let finalMessage = context.processActionMessage(message)
         if context.isMessageBlocked(finalMessage) { return }
 
@@ -405,7 +411,7 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
         if shouldRateLimit {
             let senderKey = normalizedSenderKey(for: finalMessage)
             let contentKey = context.normalizedContentKey(finalMessage.content)
-            if !context.allowPublicMessage(senderKey: senderKey, contentKey: contentKey) {
+            if !context.allowPublicMessage(senderKey: senderKey, contentKey: contentKey, powBits: powBits) {
                 return
             }
         }

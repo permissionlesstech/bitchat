@@ -53,6 +53,8 @@ final class BLEService: NSObject {
     // reject. Injectable for tests; main-actor policy because favorites live
     // on the main actor.
     var courierStore: CourierStore = .shared
+    // Bulletin-board posts this device carries; injectable for tests.
+    var boardStore: BoardStore = .shared
     var courierDepositPolicy: @MainActor (Data, Bool) -> CourierDepositTier? = { depositorNoiseKey, isVerifiedPeer in
         if FavoritesPersistenceService.shared.isMutualFavorite(depositorNoiseKey) { return .favorite }
         return isVerifiedPeer ? .verified : nil
@@ -305,6 +307,14 @@ final class BLEService: NSObject {
         let archive = meshBackgroundEnabled ? GossipMessageArchive() : nil
         let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: requestSyncManager, archive: archive)
         manager.delegate = self
+        // Board posts sync from the board store (their retention owner) so
+        // deleted/expired posts drop out of rounds immediately. Real sessions
+        // only, matching the archive: unit tests stay hermetic.
+        if meshBackgroundEnabled {
+            manager.boardPacketsProvider = { [weak self] in
+                self?.boardStore.syncCandidates() ?? []
+            }
+        }
         // Only start the periodic sync timers when real Bluetooth exists. In unit
         // tests there is no mesh to sync with, and the periodic sign/broadcast
         // churn just keeps the process busy and aggravates flaky exit hangs.
@@ -3319,6 +3329,9 @@ extension BLEService {
         case .courierEnvelope:
             handleCourierEnvelope(packet, from: peerID)
 
+        case .boardPost:
+            // Invalid or deleted posts must not spread; skip the relay step.
+            guard handleBoardPost(packet, from: senderID) else { return }
         case .nostrCarrier:
             handleNostrCarrier(packet, from: peerID)
 
@@ -3492,6 +3505,63 @@ extension BLEService {
                 }
             }
         )
+    }
+
+    // MARK: - Board (geohash bulletin board)
+
+    /// Validates and stores an incoming board post or tombstone. Returns
+    /// whether the packet is worth relaying onward.
+    private func handleBoardPost(_ packet: BitchatPacket, from peerID: PeerID) -> Bool {
+        guard let wire = BoardWire.decode(from: packet.payload) else {
+            SecureLogger.warning("⚠️ Malformed board packet from \(peerID.id.prefix(8))…", category: .session)
+            return false
+        }
+        // Posts are self-authenticating: the payload embeds the author's
+        // Ed25519 key and signature, so verification does not depend on the
+        // author still being around to announce.
+        guard wire.verifySignature() else {
+            if logRateLimiter.shouldLog(key: "board-sig:\(peerID.id)") {
+                SecureLogger.warning("🚫 Dropping board packet with invalid signature from \(peerID.id.prefix(8))…", category: .security)
+            }
+            return false
+        }
+        switch boardStore.ingest(wire, packet: packet) {
+        case .accepted, .duplicate:
+            return true
+        case .rejected:
+            return false
+        }
+    }
+
+    /// Broadcasts a pre-signed board payload (post or tombstone) built by the
+    /// board manager, and ingests it locally so it shows up on our own board
+    /// and joins gossip sync immediately.
+    func sendBoardPayload(_ payload: Data) {
+        guard let wire = BoardWire.decode(from: payload), wire.verifySignature() else {
+            SecureLogger.error("❌ Refusing to send invalid board payload", category: .session)
+            return
+        }
+        messageQueue.async { [weak self] in
+            guard let self = self else { return }
+            let basePacket = BitchatPacket(
+                type: MessageType.boardPost.rawValue,
+                senderID: Data(hexString: self.myPeerID.id) ?? Data(),
+                recipientID: nil,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: payload,
+                signature: nil,
+                ttl: self.messageTTL
+            )
+            guard let signedPacket = self.noiseService.signPacket(basePacket) else {
+                SecureLogger.error("❌ Failed to sign board packet", category: .security)
+                return
+            }
+            // Pre-mark our own broadcast as processed to avoid handling a relayed self copy
+            let dedupID = BLESelfBroadcastTracker.dedupID(for: signedPacket)
+            self.messageDeduplicator.markProcessed(dedupID)
+            self.boardStore.ingest(wire, packet: signedPacket)
+            self.broadcastPacket(signedPacket)
+        }
     }
 
     // Handle REQUEST_SYNC: decode payload and respond with missing packets via sync manager

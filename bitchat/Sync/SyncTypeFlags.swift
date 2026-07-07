@@ -7,8 +7,24 @@ struct SyncTypeFlags: OptionSet {
     let rawValue: UInt64
 
     init(rawValue: UInt64) {
-        self.rawValue = rawValue & 0x00FF_FFFF_FFFF_FFFF // Trim to max 8 bytes
+        // Drop any bit that doesn't map to a known message type. Wire data can
+        // carry up to 8 bytes of flags; without this mask, bits with no type
+        // (a truncated/garbled field, or a type a newer peer added) would live
+        // in the set as phantom membership that no `contains` check matches and
+        // `toData` re-serializes — a meaningless "accepted but does nothing"
+        // state. Masking here keeps every instance normalized at the source.
+        self.rawValue = rawValue & SyncTypeFlags.knownTypeMask
     }
+
+    /// Union of every bit that maps to a message type. Derived from the
+    /// bit↔type table so it tracks automatically when a type is added.
+    private static let knownTypeMask: UInt64 = {
+        var mask: UInt64 = 0
+        for bit in 0..<64 where SyncTypeFlags.type(forBit: bit) != nil {
+            mask |= (1 << UInt64(bit))
+        }
+        return mask
+    }()
 
     private static func bitIndex(for type: MessageType) -> Int? {
         switch type {
@@ -20,6 +36,7 @@ struct SyncTypeFlags: OptionSet {
         case .fragment: return 5
         case .requestSync: return 6
         case .fileTransfer: return 7
+        case .boardPost: return 8
         // Courier envelopes are directed deposits between trusted peers and
         // must never spread via gossip sync.
         case .courierEnvelope: return nil
@@ -40,6 +57,10 @@ struct SyncTypeFlags: OptionSet {
         case 5: return .fragment
         case 6: return .requestSync
         case 7: return .fileTransfer
+        // Bit 8 spills the encoded bitfield into a second byte. Decoders since
+        // type-aware sync (#853) accept 1-8 bytes and map unknown bits to no
+        // known type, so old clients ignore board rounds instead of choking.
+        case 8: return .boardPost
         default:
             return nil
         }
@@ -49,6 +70,7 @@ struct SyncTypeFlags: OptionSet {
     static let message = SyncTypeFlags(messageTypes: [.message])
     static let fragment = SyncTypeFlags(messageTypes: [.fragment])
     static let fileTransfer = SyncTypeFlags(messageTypes: [.fileTransfer])
+    static let board = SyncTypeFlags(messageTypes: [.boardPost])
 
     static let publicMessages = SyncTypeFlags(messageTypes: [.announce, .message])
 

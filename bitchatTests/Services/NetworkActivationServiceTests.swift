@@ -111,6 +111,7 @@ final class NetworkActivationServiceTests: XCTestCase {
             mutualFavoritesPublisher: favoritesSubject.eraseToAnyPublisher(),
             permissionProvider: { permissionSubject.value },
             mutualFavoritesProvider: { favoritesSubject.value },
+            reachabilityMonitor: AlwaysReachableMonitor(),
             torController: torController,
             relayController: relayController,
             proxyController: proxyController,
