@@ -74,6 +74,23 @@ struct BlockRevealImageView: View {
             imageContent
         }
         .buttonStyle(.plain)
+        // The cancel control must sit outside the Button label: nested
+        // buttons don't get reliable independent hit testing, and the outer
+        // tap is a no-op while sending — the x could become untappable.
+        .overlay(alignment: .topTrailing) {
+            if let onCancel = onCancel, isSending {
+                Button(action: onCancel) {
+                    Image(systemName: "xmark")
+                        .font(.bitchatSystem(size: 12, weight: .bold))
+                        .padding(8)
+                        .background(Circle().fill(Color.black.opacity(0.7)))
+                        .foregroundColor(.white)
+                        .padding(8)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Strings.cancelSend)
+            }
+        }
         .simultaneousGesture(hideSwipe)
         .onAppear {
             isBlurred = initiallyBlurred
@@ -117,71 +134,57 @@ struct BlockRevealImageView: View {
         }
     }
 
+    @ViewBuilder
     private var imageContent: some View {
-        ZStack(alignment: .topTrailing) {
-            if let image = platformImage {
-                Image(platformImage: image)
-                    .resizable()
-                    .aspectRatio(aspectRatio, contentMode: .fit)
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(
+        if let image = platformImage {
+            Image(platformImage: image)
+                .resizable()
+                .aspectRatio(aspectRatio, contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                )
+                .mask(
+                    BlockRevealMask(
+                        fraction: fraction,
+                        columns: 24,
+                        rows: 16
+                    )
+                    .animation(.easeOut(duration: 0.2), value: fraction)
+                )
+                .blur(radius: isBlurred ? 20 : 0)
+                .overlay {
+                    if isBlurred {
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                    )
-                    .mask(
-                        BlockRevealMask(
-                            fraction: fraction,
-                            columns: 24,
-                            rows: 16
-                        )
-                        .animation(.easeOut(duration: 0.2), value: fraction)
-                    )
-                    .blur(radius: isBlurred ? 20 : 0)
-                    .overlay {
-                        if isBlurred {
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(Color.black.opacity(0.35))
-                                .overlay(
-                                    VStack(spacing: 6) {
-                                        Image(systemName: "eye.slash.fill")
-                                            .font(.bitchatSystem(size: 24, weight: .semibold))
-                                        Text(verbatim: Strings.tapToReveal)
-                                            // Themed: monospaced under matrix,
-                                            // system under liquid glass.
-                                            .bitchatFont(size: 12, weight: .medium)
-                                    }
-                                    .foregroundColor(.white.opacity(0.85))
-                                )
-                        }
+                            .fill(Color.black.opacity(0.35))
+                            .overlay(
+                                VStack(spacing: 6) {
+                                    Image(systemName: "eye.slash.fill")
+                                        .font(.bitchatSystem(size: 24, weight: .semibold))
+                                    Text(verbatim: Strings.tapToReveal)
+                                        // Themed: monospaced under matrix,
+                                        // system under liquid glass.
+                                        .bitchatFont(size: 12, weight: .medium)
+                                }
+                                .foregroundColor(.white.opacity(0.85))
+                            )
                     }
-            } else {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(palette.secondary.opacity(0.2))
-                    .frame(height: 200)
-                    .overlay {
-                        if loadFailed {
-                            Image(systemName: "photo")
-                                .font(.bitchatSystem(size: 24, weight: .semibold))
-                                .foregroundColor(palette.secondary)
-                        } else {
-                            ProgressView()
-                                .progressViewStyle(.circular)
-                        }
-                    }
-            }
-
-            if let onCancel = onCancel, isSending {
-                Button(action: onCancel) {
-                    Image(systemName: "xmark")
-                        .font(.bitchatSystem(size: 12, weight: .bold))
-                        .padding(8)
-                        .background(Circle().fill(Color.black.opacity(0.7)))
-                        .foregroundColor(.white)
-                        .padding(8)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Strings.cancelSend)
-            }
+        } else {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(palette.secondary.opacity(0.2))
+                .frame(height: 200)
+                .overlay {
+                    if loadFailed {
+                        Image(systemName: "photo")
+                            .font(.bitchatSystem(size: 24, weight: .semibold))
+                            .foregroundColor(palette.secondary)
+                    } else {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                    }
+                }
         }
     }
 
