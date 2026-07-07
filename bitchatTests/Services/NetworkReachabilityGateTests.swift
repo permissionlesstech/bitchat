@@ -57,6 +57,39 @@ final class NetworkReachabilityGateTests: XCTestCase {
         XCTAssertTrue(d.committed)
     }
 
+    func test_debounce_duplicateObservationsPreservePendingDeadline() {
+        var d = ReachabilityDebounce(interval: 2.5, initial: true)
+        let t0 = Date()
+        XCTAssertNil(d.observe(reachable: false, at: t0))
+        // Duplicate unsatisfied updates mid-window keep the original deadline.
+        XCTAssertNil(d.observe(reachable: false, at: t0.addingTimeInterval(1.0)))
+        XCTAssertEqual(d.pendingRemaining(at: t0.addingTimeInterval(1.0)), 1.5)
+        // A duplicate arriving past the deadline commits immediately.
+        XCTAssertEqual(d.observe(reachable: false, at: t0.addingTimeInterval(2.5)), false)
+        XCTAssertNil(d.pendingRemaining(at: t0.addingTimeInterval(2.5)))
+    }
+
+    func test_monitor_duplicateUpdatesDoNotPostponeOfflineCommit() async {
+        let monitor = NWPathReachabilityMonitor(debounceInterval: 1.0)
+        var received: [Bool] = []
+        let cancellable = monitor.reachabilityPublisher.sink { received.append($0) }
+        defer { cancellable.cancel() }
+
+        let start = Date()
+        monitor.ingest(reachable: false)
+        try? await Task.sleep(nanoseconds: 500_000_000)
+        // Duplicate unsatisfied update mid-window (e.g. interface detail change
+        // while still offline) must not restart the debounce window.
+        monitor.ingest(reachable: false)
+
+        let committed = await waitUntil(timeout: 2.0) { !received.isEmpty }
+        XCTAssertTrue(committed)
+        XCTAssertEqual(received, [false])
+        // The flush must fire at the original ~1.0s deadline, not ~1.5s
+        // (a full interval after the duplicate).
+        XCTAssertLessThan(Date().timeIntervalSince(start), 1.4)
+    }
+
     // MARK: - Service gating
 
     func test_start_whenUnreachable_suppressesTorAndRelays() {

@@ -48,6 +48,15 @@ struct ReachabilityDebounce {
     /// Whether a change is currently waiting out the debounce window.
     var hasPendingChange: Bool { pending != nil }
 
+    /// Time left before the pending change may commit, or `nil` when nothing
+    /// is pending. Lets callers schedule a flush at the true deadline instead
+    /// of a full interval from "now" (duplicate observations must not push
+    /// the deadline out).
+    func pendingRemaining(at now: Date) -> TimeInterval? {
+        guard let pending else { return nil }
+        return max(0, interval - now.timeIntervalSince(pending.since))
+    }
+
     /// Feed a raw observation. Returns the new committed value if it changed,
     /// otherwise `nil`.
     mutating func observe(reachable: Bool, at now: Date) -> Bool? {
@@ -157,7 +166,10 @@ final class NWPathReachabilityMonitor: NetworkReachabilityMonitoring {
             }
         }
         flushWorkItem = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + debounce.interval, execute: work)
+        // Fire at the pending change's real deadline (pending.since + interval):
+        // duplicate path updates re-enter here and must not restart the window.
+        let delay = debounce.pendingRemaining(at: now()) ?? debounce.interval
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 
     private func publish(_ reachable: Bool) {

@@ -75,6 +75,11 @@ public final class TorManager: ObservableObject {
     }
 
     private var didStart = false
+    // shutdownCompletely() resets `didStart` asynchronously (after Arti has
+    // actually stopped). A startIfNeeded() arriving in that window must not be
+    // dropped — it is recorded here and honored when the shutdown finishes.
+    private var shutdownsInFlight = 0
+    private var startPendingAfterShutdown = false
     private var bootstrapMonitorStarted = false
     private var pathMonitor: NWPathMonitor?
     private var isAppForeground: Bool = true
@@ -90,6 +95,11 @@ public final class TorManager: ObservableObject {
     public func startIfNeeded() {
         guard allowAutoStart else { return }
         guard isAppForeground else { return }
+        if shutdownsInFlight > 0 {
+            SecureLogger.debug("TorManager: startIfNeeded() deferred - shutdown in flight", category: .session)
+            startPendingAfterShutdown = true
+            return
+        }
         guard !didStart else { return }
         didStart = true
         isDormant = false
@@ -329,6 +339,8 @@ public final class TorManager: ObservableObject {
 
     public func shutdownCompletely() {
         SecureLogger.debug("TorManager: shutdownCompletely() called", category: .session)
+        startPendingAfterShutdown = false
+        shutdownsInFlight += 1
         Task.detached { [weak self] in
             guard let self = self else { return }
             _ = arti_stop()
@@ -352,6 +364,12 @@ public final class TorManager: ObservableObject {
                 self.bootstrapMonitorStarted = false
                 // Note: Don't clear startedAt here - it will be set fresh on next startIfNeeded()
                 // Clearing it here races with startup and defeats the grace period
+                self.shutdownsInFlight -= 1
+                if self.shutdownsInFlight == 0 && self.startPendingAfterShutdown {
+                    self.startPendingAfterShutdown = false
+                    SecureLogger.debug("TorManager: honoring start deferred during shutdown", category: .session)
+                    self.startIfNeeded()
+                }
             }
         }
     }
