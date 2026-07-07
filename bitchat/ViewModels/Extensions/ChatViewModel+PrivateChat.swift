@@ -6,6 +6,7 @@
 //
 
 import BitFoundation
+import BitLogger
 import Foundation
 import SwiftUI
 
@@ -79,11 +80,19 @@ extension ChatViewModel {
     func makeVoiceCaptureSession() -> VoiceCaptureSession {
         guard PTTSettings.liveVoiceEnabled else { return VoiceNoteCaptureSession() }
 
-        if let peerID = selectedPrivateChatPeer {
-            guard !peerID.isGeoDM, !peerID.isGeoChat, !peerID.isGroup,
-                  meshService.isPeerReachable(peerID),
+        if let selectedPeer = selectedPrivateChatPeer {
+            guard !selectedPeer.isGeoDM, !selectedPeer.isGeoChat, !selectedPeer.isGroup else {
+                return VoiceNoteCaptureSession()
+            }
+            // A conversation can be selected under the stable 64-hex Noise key
+            // (e.g. after migration on disconnect), but Noise sessions are keyed
+            // by the 16-hex routing ID — normalize once and send to that same
+            // short ID, like the private-message/file paths do.
+            let peerID = selectedPeer.toShort()
+            guard meshService.isPeerReachable(peerID),
                   case .established = meshService.getNoiseSessionState(for: peerID)
             else {
+                SecureLogger.debug("PTT: live unavailable for \(peerID.id.prefix(8))… (reachable=\(meshService.isPeerReachable(peerID))) — using classic voice note", category: .session)
                 return VoiceNoteCaptureSession()
             }
             return PTTLiveVoiceSession(sendPacket: { [meshService] packet in

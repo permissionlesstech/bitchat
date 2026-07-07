@@ -1463,7 +1463,11 @@ final class BLEService: NSObject {
     /// only useful now, so without an established session frames are dropped.
     func sendVoiceFrame(_ burstContent: Data, to peerID: PeerID) {
         messageQueue.async { [weak self] in
-            guard let self, self.noiseService.hasEstablishedSession(with: peerID) else { return }
+            guard let self else { return }
+            guard self.noiseService.hasEstablishedSession(with: peerID) else {
+                SecureLogger.debug("PTT: dropping voice frame — no established session with \(peerID.id.prefix(8))…", category: .session)
+                return
+            }
             do {
                 let typedPayload = NoisePayload(type: .voiceFrame, data: burstContent).encode()
                 self.broadcastPacket(try self.makeEncryptedNoisePacket(typedPayload, to: peerID))
@@ -4010,7 +4014,9 @@ extension BLEService {
             handleNostrCarrier(packet, from: peerID)
 
         case .voiceFrame:
-            handleVoiceFrame(packet, from: senderID)
+            // Rejected frames (unsigned/stale/spoofed) must not spread; skip
+            // the relay step below, like invalid board posts.
+            guard handleVoiceFrame(packet, from: senderID) else { return }
 
         case .ping:
             // Rate limiting must key on the ingress link (`peerID`), not the
@@ -4364,14 +4370,16 @@ extension BLEService {
     /// signature-verified against the claimed sender's announce (mirrors the
     /// public-message identity gate — `senderID` is attacker-controlled, so a
     /// valid packet signature is required before any audio reaches the UI).
-    private func handleVoiceFrame(_ packet: BitchatPacket, from peerID: PeerID) {
-        guard peerID != myPeerID else { return }
-        guard BLEPacketFreshnessPolicy.isBroadcastRecipient(packet.recipientID) else { return }
+    /// Returns whether the packet was accepted; rejected packets must not be
+    /// relayed either, or spoofed 0x29 floods would still amplify.
+    private func handleVoiceFrame(_ packet: BitchatPacket, from peerID: PeerID) -> Bool {
+        guard peerID != myPeerID else { return false }
+        guard BLEPacketFreshnessPolicy.isBroadcastRecipient(packet.recipientID) else { return false }
         guard !BLEPacketFreshnessPolicy.isStale(
             timestampMilliseconds: packet.timestamp,
             now: Date(),
             maxAgeSeconds: TransportConfig.pttPublicFrameMaxAgeSeconds
-        ) else { return }
+        ) else { return false }
 
         let peersSnapshot = collectionsQueue.sync { peerRegistry.snapshotByID }
         let registrySigningKey = peersSnapshot[peerID]?.signingPublicKey
@@ -4379,7 +4387,7 @@ extension BLEService {
         let signedDisplayName = verifiedViaRegistry ? nil : signedSenderDisplayName(for: packet, from: peerID)
         guard verifiedViaRegistry || signedDisplayName != nil else {
             SecureLogger.warning("🚫 Dropping voice frame with missing/invalid signature for claimed sender \(peerID.id.prefix(8))…", category: .security)
-            return
+            return false
         }
         guard let senderNickname = BLEPeerSenderDisplayName.resolveKnownPeer(
             peerID: peerID,
@@ -4388,7 +4396,7 @@ extension BLEService {
             peers: peersSnapshot,
             allowConnectedUnverified: false
         ) ?? signedDisplayName else {
-            return
+            return false
         }
 
         let payload = packet.payload
@@ -4401,6 +4409,7 @@ extension BLEService {
                 timestamp: timestamp
             ))
         }
+        return true
     }
 
     private func handleNoiseHandshake(_ packet: BitchatPacket, from peerID: PeerID) {

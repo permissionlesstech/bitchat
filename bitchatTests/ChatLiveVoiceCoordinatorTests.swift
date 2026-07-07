@@ -19,7 +19,7 @@ private final class MockChatLiveVoiceContext: ChatLiveVoiceContext {
     var blockedPeers: Set<PeerID> = []
 
     private(set) var handledPrivateMessages: [BitchatMessage] = []
-    private(set) var handledPublicMessages: [BitchatMessage] = []
+    private(set) var appendedPublicMessages: [BitchatMessage] = []
     private(set) var upsertedMessages: [(message: BitchatMessage, peerID: PeerID)] = []
     private(set) var upsertedPublicMessages: [BitchatMessage] = []
     private(set) var removedMessageIDs: [String] = []
@@ -28,7 +28,7 @@ private final class MockChatLiveVoiceContext: ChatLiveVoiceContext {
     func isPeerBlocked(_ peerID: PeerID) -> Bool { blockedPeers.contains(peerID) }
     func resolveNickname(for peerID: PeerID) -> String { "alice" }
     func handlePrivateMessage(_ message: BitchatMessage) { handledPrivateMessages.append(message) }
-    func handlePublicMessage(_ message: BitchatMessage) { handledPublicMessages.append(message) }
+    func appendPublicMeshMessage(_ message: BitchatMessage) { appendedPublicMessages.append(message) }
     func upsertPrivateMessage(_ message: BitchatMessage, in peerID: PeerID) {
         upsertedMessages.append((message, peerID))
     }
@@ -229,6 +229,23 @@ struct ChatLiveVoiceCoordinatorTests {
         #expect(context.handledPrivateMessages.count == TransportConfig.pttMaxConcurrentAssemblies)
     }
 
+    @Test func liveVoiceToggleOffDropsInboundFrames() throws {
+        let previous = PTTSettings.liveVoiceEnabled
+        PTTSettings.liveVoiceEnabled = false
+        defer { PTTSettings.liveVoiceEnabled = previous }
+
+        let context = MockChatLiveVoiceContext()
+        let coordinator = ChatLiveVoiceCoordinator(context: context)
+        let burstID = makeBurstID(0xE8)
+
+        // Off means classic-notes-only: no live bubble, no partial file.
+        send(try #require(VoiceBurstPacket(burstID: burstID, seq: 0, kind: .start(codec: .aacLC16kMono))), to: coordinator, from: peer)
+        send(try #require(VoiceBurstPacket(burstID: burstID, seq: 1, kind: .frames([Data(repeating: 5, count: 40)]))), to: coordinator, from: peer)
+        #expect(context.handledPrivateMessages.isEmpty)
+        let url = try #require(incomingFileURL(burstID: burstID))
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+    }
+
     @Test func publicBurstCreatesMeshBubbleAndTracksTalker() throws {
         let context = MockChatLiveVoiceContext()
         let coordinator = ChatLiveVoiceCoordinator(context: context)
@@ -242,10 +259,10 @@ struct ChatLiveVoiceCoordinatorTests {
         sendPublic(try #require(VoiceBurstPacket(burstID: burstID, seq: 0, kind: .start(codec: .aacLC16kMono))))
         sendPublic(try #require(VoiceBurstPacket(burstID: burstID, seq: 1, kind: .frames([Data(repeating: 3, count: 50)]))))
 
-        // Bubble lands in the public pipeline with the verified nickname, and
-        // the floor-courtesy indicator names the talker.
+        // Bubble appends straight to the mesh store with the verified
+        // nickname, and the floor-courtesy indicator names the talker.
         #expect(context.handledPrivateMessages.isEmpty)
-        let bubble = try #require(context.handledPublicMessages.first)
+        let bubble = try #require(context.appendedPublicMessages.first)
         #expect(!bubble.isPrivate)
         #expect(bubble.sender == "bob")
         #expect(context.talkerUpdates.last == "bob")

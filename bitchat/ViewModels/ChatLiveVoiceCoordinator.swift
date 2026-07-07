@@ -19,8 +19,11 @@ protocol ChatLiveVoiceContext: AnyObject {
     /// Routes an inbound private message through the full pipeline
     /// (store append, unread state, notification, read receipt).
     func handlePrivateMessage(_ message: BitchatMessage)
-    /// Routes an inbound public message through the full pipeline.
-    func handlePublicMessage(_ message: BitchatMessage)
+    /// Appends directly to the public mesh timeline, bypassing the batched
+    /// public pipeline: a live bubble must be removable when its burst is
+    /// canceled or empty, which a pipeline-buffered entry is not (it would
+    /// re-commit at the next flush).
+    func appendPublicMeshMessage(_ message: BitchatMessage)
     /// Replace-or-append by message ID via the single-writer store intent.
     func upsertPrivateMessage(_ message: BitchatMessage, in peerID: PeerID)
     /// Replace-or-append by message ID in the public mesh timeline.
@@ -38,6 +41,10 @@ protocol ChatLiveVoiceContext: AnyObject {
 extension ChatViewModel: ChatLiveVoiceContext {
     var isViewingPublicMeshTimeline: Bool {
         selectedPrivateChatPeer == nil && activeChannel == .mesh
+    }
+
+    func appendPublicMeshMessage(_ message: BitchatMessage) {
+        _ = appendPublicMessage(message, to: ConversationID(channelID: .mesh))
     }
 
     func upsertPublicMeshMessage(_ message: BitchatMessage) {
@@ -137,8 +144,18 @@ final class ChatLiveVoiceCoordinator {
     }
 
     private func handle(_ payload: Data, from peerID: PeerID, scope: VoiceBurstScope, nickname: String, timestamp: Date) {
-        guard let packet = VoiceBurstPacket.decode(payload) else { return }
-        guard !context.isPeerBlocked(peerID) else { return }
+        // Live voice off means classic-notes-only in both directions: no live
+        // bubble, no partial file, no early notification — the finalized
+        // voice note still arrives through the normal pipeline.
+        guard PTTSettings.liveVoiceEnabled else { return }
+        guard let packet = VoiceBurstPacket.decode(payload) else {
+            SecureLogger.warning("PTT: undecodable voice frame from \(peerID.id.prefix(8))… (\(payload.count) bytes: \(payload.prefix(16).hexEncodedString())…)", category: .session)
+            return
+        }
+        guard !context.isPeerBlocked(peerID) else {
+            SecureLogger.debug("PTT: dropping voice frame from blocked peer \(peerID.id.prefix(8))…", category: .session)
+            return
+        }
 
         if let assembly = assemblies[packet.burstID] {
             // The sender is authenticated (Noise session or packet
@@ -228,9 +245,13 @@ final class ChatLiveVoiceCoordinator {
     // MARK: - Assembly lifecycle
 
     private func makeAssembly(burstID: Data, peerID: PeerID, scope: VoiceBurstScope, nickname: String, timestamp: Date) -> Assembly? {
-        guard let fileURL = Self.makeIncomingURL(burstID: burstID) else { return nil }
+        guard let fileURL = Self.makeIncomingURL(burstID: burstID) else {
+            SecureLogger.error("PTT: cannot resolve incoming media directory for burst \(burstID.hexEncodedString())", category: .session)
+            return nil
+        }
         FileManager.default.createFile(atPath: fileURL.path, contents: nil)
         guard let handle = try? FileHandle(forWritingTo: fileURL) else {
+            SecureLogger.error("PTT: cannot open capture file for burst \(burstID.hexEncodedString())", category: .session)
             try? FileManager.default.removeItem(at: fileURL)
             return nil
         }
@@ -257,12 +278,15 @@ final class ChatLiveVoiceCoordinator {
             fileHandle: handle
         )
 
-        // Full inbound pipeline: store append, unread, notification.
+        // DM bubbles ride the full inbound pipeline (store append, unread,
+        // notification). Public bubbles append directly to the store: the
+        // batched public pipeline can't purge a buffered entry if the burst
+        // is canceled before the flush.
         switch scope {
         case .directMessage:
             context.handlePrivateMessage(message)
         case .publicMesh:
-            context.handlePublicMessage(message)
+            context.appendPublicMeshMessage(message)
         }
 
         // Live playback only when the user is looking at this conversation
