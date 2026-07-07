@@ -60,7 +60,11 @@ private final class MockChatVouchContext: ChatVouchContext {
     private(set) var installedObservers: [(PeerID, String) -> Void] = []
     private(set) var sentVouchPayloads: [(payload: Data, peerID: PeerID)] = []
 
+    var connectedPeerIDList: [PeerID] = []
+
     func peerCapabilities(for peerID: PeerID) -> PeerCapabilities { capabilitiesByPeerID[peerID] ?? [] }
+
+    func connectedPeerIDs() -> [PeerID] { connectedPeerIDList }
 
     func addPeerAuthenticatedObserver(_ handler: @escaping (PeerID, String) -> Void) {
         installedObservers.append(handler)
@@ -135,12 +139,76 @@ struct ChatVouchCoordinatorContextTests {
         coordinator.peerAuthenticated(peerID, fingerprint: peerFingerprint)
         #expect(context.sentVouchPayloads.isEmpty)
 
-        // Verified but no .vouch capability: nothing.
+        // Verified but advertises a non-empty capability set lacking .vouch:
+        // nothing. (An *empty*/unknown set is race-tolerant and still sends —
+        // see `attemptVouch_sendsWhenCapabilitiesUnknown`.)
         context.verifiedFingerprints.insert(peerFingerprint)
-        context.capabilitiesByPeerID[peerID] = []
+        context.capabilitiesByPeerID[peerID] = [.prekeys]
         coordinator.peerAuthenticated(peerID, fingerprint: peerFingerprint)
         #expect(context.sentVouchPayloads.isEmpty)
         #expect(context.markedBatchSent.isEmpty)
+    }
+
+    // MARK: Capability race tolerance & new triggers
+
+    @Test @MainActor
+    func attemptVouch_sendsWhenCapabilitiesUnknown() {
+        // Capability set still empty at attempt time (the peer's .vouch bit
+        // arrives on a later announce): the batch must still go out.
+        let (context, coordinator) = makeVerifiedCapablePeer()
+        context.capabilitiesByPeerID[peerID] = []
+        context.recentVerified = [String(repeating: "01", count: 32)]
+        context.signingKeysByFingerprint[context.recentVerified[0]] = Data(repeating: 0x33, count: 32)
+
+        coordinator.peerAuthenticated(peerID, fingerprint: peerFingerprint)
+        #expect(context.sentVouchPayloads.count == 1)
+        #expect(context.markedBatchSent.map(\.fingerprint) == [peerFingerprint])
+    }
+
+    @Test @MainActor
+    func vouchToConnectedVerifiedPeers_sendsToConnectedVerifiedCapablePeer() {
+        let (context, coordinator) = makeVerifiedCapablePeer()
+        context.connectedPeerIDList = [peerID]
+        context.recentVerified = [String(repeating: "01", count: 32)]
+        context.signingKeysByFingerprint[context.recentVerified[0]] = Data(repeating: 0x33, count: 32)
+
+        // Session is already up (no peerAuthenticated re-fire); the verify pass
+        // is what makes the batch go out.
+        coordinator.vouchToConnectedVerifiedPeers()
+        let sent = context.sentVouchPayloads
+        #expect(sent.count == 1)
+        #expect(sent.first?.peerID == peerID)
+        #expect(context.markedBatchSent.map(\.fingerprint) == [peerFingerprint])
+    }
+
+    @Test @MainActor
+    func vouchToConnectedVerifiedPeers_skipsUnverifiedConnectedPeers() {
+        let (context, coordinator) = makeVerifiedCapablePeer()
+        context.connectedPeerIDList = [peerID]
+        context.verifiedFingerprints.remove(peerFingerprint)
+        context.recentVerified = [String(repeating: "01", count: 32)]
+        context.signingKeysByFingerprint[context.recentVerified[0]] = Data(repeating: 0x33, count: 32)
+
+        coordinator.vouchToConnectedVerifiedPeers()
+        #expect(context.sentVouchPayloads.isEmpty)
+    }
+
+    @Test @MainActor
+    func peersUpdated_sendsOnceCapabilityBearingAnnounceArrives() {
+        let (context, coordinator) = makeVerifiedCapablePeer()
+        context.recentVerified = [String(repeating: "01", count: 32)]
+        context.signingKeysByFingerprint[context.recentVerified[0]] = Data(repeating: 0x33, count: 32)
+
+        // First announce before the .vouch bit is known: empty set is
+        // race-tolerant, so it already sends and stamps the throttle.
+        context.capabilitiesByPeerID[peerID] = []
+        coordinator.peersUpdated([peerID])
+        #expect(context.sentVouchPayloads.count == 1)
+
+        // A later announce carrying .vouch must not double-send (throttled).
+        context.capabilitiesByPeerID[peerID] = [.vouch]
+        coordinator.peersUpdated([peerID])
+        #expect(context.sentVouchPayloads.count == 1)
     }
 
     @Test @MainActor

@@ -26,6 +26,9 @@ protocol ChatVouchContext: AnyObject {
 
     // MARK: Transport
     func peerCapabilities(for peerID: PeerID) -> PeerCapabilities
+    /// PeerIDs with a currently established mesh session (used to run a vouch
+    /// pass over peers we are already connected to when we verify someone).
+    func connectedPeerIDs() -> [PeerID]
     /// Appends a session-established observer (additive; never displaces the
     /// verification coordinator's callbacks).
     func addPeerAuthenticatedObserver(_ handler: @escaping (PeerID, String) -> Void)
@@ -74,6 +77,10 @@ extension ChatViewModel: ChatVouchContext {
         meshService.peerCapabilities(peerID)
     }
 
+    func connectedPeerIDs() -> [PeerID] {
+        Array(connectedPeers)
+    }
+
     func addPeerAuthenticatedObserver(_ handler: @escaping (PeerID, String) -> Void) {
         meshService.addPeerAuthenticatedObserver(handler)
     }
@@ -120,16 +127,70 @@ final class ChatVouchCoordinator {
         }
     }
 
-    /// Exchange policy: on session establishment with a peer I verified that
-    /// advertises the `.vouch` capability, send attestations for up to
-    /// `VouchAttestation.maxBatchCount` *other* verified fingerprints (most
-    /// recently verified first), at most once per peer per `batchInterval`.
+    /// Trigger — session established: on a Noise session coming up with a peer
+    /// I verified, attempt to send a vouch batch. Kept as the historical entry
+    /// point; the real work lives in `attemptVouch`.
     func peerAuthenticated(_ peerID: PeerID, fingerprint: String, now: Date = Date()) {
-        guard context.isVerifiedFingerprint(fingerprint) else { return }
-        guard context.peerCapabilities(for: peerID).contains(.vouch) else { return }
+        attemptVouch(to: peerID, fingerprint: fingerprint, now: now)
+    }
+
+    /// Trigger — verified announce processed: a peer's `.vouch` capability
+    /// arrives on its *announce*, which is handled independently of the Noise
+    /// handshake. This is invoked on every peer-list update (fired after each
+    /// verified announce), so it closes the capability race — the batch that
+    /// `peerAuthenticated` couldn't send (capabilities not yet known) goes out
+    /// once the capability-bearing announce lands. Throttled per peer.
+    func peersUpdated(_ peerIDs: [PeerID], now: Date = Date()) {
+        for peerID in peerIDs {
+            guard let fingerprint = context.getFingerprint(for: peerID) else { continue }
+            attemptVouch(to: peerID, fingerprint: fingerprint, now: now)
+        }
+    }
+
+    /// Trigger — local verification completed: the user just verified a peer.
+    /// Run a vouch pass over every currently connected peer I verified. This
+    /// makes vouching fire when verifying someone already connected (whose
+    /// session is authenticated, so `peerAuthenticated` never re-fires), and it
+    /// propagates the newly-verified identity to my other verified peers.
+    /// Throttled per peer by `batchInterval`, so it can't spam.
+    func vouchToConnectedVerifiedPeers(now: Date = Date()) {
+        var sentCount = 0
+        for peerID in context.connectedPeerIDs() {
+            guard let fingerprint = context.getFingerprint(for: peerID) else { continue }
+            if attemptVouch(to: peerID, fingerprint: fingerprint, now: now) {
+                sentCount += 1
+            }
+        }
+        if sentCount > 0 {
+            SecureLogger.info(
+                "🪪 verify-triggered vouch pass sent to \(sentCount) connected peer(s)",
+                category: .security
+            )
+        }
+    }
+
+    /// Exchange policy shared by every trigger: to a peer I verified, send
+    /// attestations for up to `VouchAttestation.maxBatchCount` *other* verified
+    /// fingerprints (most recently verified first), at most once per peer per
+    /// `batchInterval`. Returns whether a batch was actually sent.
+    @discardableResult
+    func attemptVouch(to peerID: PeerID, fingerprint: String, now: Date = Date()) -> Bool {
+        guard context.isVerifiedFingerprint(fingerprint) else { return false }
+
+        // Capability gate, race-tolerant: a peer's `.vouch` bit is carried on
+        // its announce, processed independently of the Noise handshake, so at
+        // authentication time the capability set is frequently still empty.
+        // Treat an empty/unknown set as eligible — the payload is a Noise
+        // `0x12` (`NoisePayloadType.vouch`) that non-supporting peers harmlessly
+        // ignore, so sending on an unknown set is safe and avoids the race
+        // dropping the batch. Only skip when the peer advertised a non-empty
+        // capability set that explicitly lacks `.vouch`.
+        let capabilities = context.peerCapabilities(for: peerID)
+        if !capabilities.isEmpty, !capabilities.contains(.vouch) { return false }
+
         if let lastSent = context.lastVouchBatchSent(to: fingerprint),
            now.timeIntervalSince(lastSent) < Self.batchInterval {
-            return
+            return false
         }
 
         let candidates = context.recentlyVerifiedFingerprints(
@@ -156,13 +217,14 @@ final class ChatVouchCoordinator {
         }
 
         guard !attestations.isEmpty,
-              let payload = VouchAttestation.encodeList(attestations) else { return }
+              let payload = VouchAttestation.encodeList(attestations) else { return false }
         context.sendVouchAttestations(payload, to: peerID)
         context.markVouchBatchSent(to: fingerprint, at: now)
         SecureLogger.debug(
             "🪪 Sent \(attestations.count) vouch attestation(s) to \(peerID.id.prefix(8))…",
             category: .security
         )
+        return true
     }
 
     /// Accept policy: process inbound vouches only from a sender I verified,

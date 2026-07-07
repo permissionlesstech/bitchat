@@ -1598,6 +1598,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
 
     func didUpdatePeerList(_ peers: [PeerID]) {
         peerListCoordinator.didUpdatePeerList(peers)
+        // A peer-list update follows every verified announce, which is where a
+        // peer's `.vouch` capability actually arrives — retry vouching now that
+        // capabilities may finally be known (closes the auth-time capability race).
+        Task { @MainActor [weak self] in
+            self?.vouchCoordinator.peersUpdated(peers)
+        }
     }
 
     @MainActor
