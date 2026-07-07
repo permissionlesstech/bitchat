@@ -38,6 +38,10 @@ final class BLEService: NSObject {
     // 1. Consolidated BLE link tracking for both central and peripheral roles.
     private var linkStateStore = BLELinkStateStore()
 
+    // Rotation-rebind cooldown per link UUID (bleQueue-owned, like the link
+    // store): entries older than the cooldown are pruned on insert.
+    private var lastLinkRebindAt: [String: Date] = [:]
+
     // BCH-01-004: Rate-limiting for subscription-triggered announces.
     private var subscriptionAnnounceLimiter = BLESubscriptionAnnounceLimiter()
     
@@ -4163,18 +4167,45 @@ extension BLEService {
         guard let link = (collectionsQueue.sync { ingressLinks.link(for: packet) }) else { return }
         bleQueue.async { [weak self] in
             guard let self else { return }
+            let linkUUID: String
             let previousPeerID: PeerID?
             switch link {
             case .peripheral(let peripheralUUID):
+                linkUUID = peripheralUUID
                 previousPeerID = self.linkStateStore.peerID(forPeripheralID: peripheralUUID)
-                guard previousPeerID != nil, previousPeerID != peerID else { return }
+            case .central(let centralUUID):
+                linkUUID = centralUUID
+                previousPeerID = self.linkStateStore.peerID(forCentralUUID: centralUUID)
+            }
+            guard let previousPeerID, previousPeerID != peerID else { return }
+
+            // The signature does not authenticate directness (TTL is excluded
+            // from signing because relays mutate it), so a "verified direct"
+            // announce can be a replay of another peer's fresh announce with
+            // its TTL restored. Contain what a forged rebind could do:
+            // never steal an identity another live link already owns, and
+            // allow at most one rebind per link per cooldown window so two
+            // identities can't fight over a link in a replay flip-flop.
+            guard self.linkStateStore.links(to: peerID).isEmpty else {
+                SecureLogger.warning("🚫 Refusing link rebind to \(peerID.id.prefix(8))…: identity already owns another live link", category: .security)
+                return
+            }
+            let now = Date()
+            self.lastLinkRebindAt = self.lastLinkRebindAt.filter {
+                now.timeIntervalSince($0.value) < TransportConfig.bleLinkRebindCooldownSeconds
+            }
+            guard self.lastLinkRebindAt[linkUUID] == nil else {
+                SecureLogger.warning("🚫 Refusing link rebind to \(peerID.id.prefix(8))…: rebind cooldown active for this link", category: .security)
+                return
+            }
+            self.lastLinkRebindAt[linkUUID] = now
+
+            switch link {
+            case .peripheral(let peripheralUUID):
                 self.linkStateStore.bindPeripheral(peripheralUUID, to: peerID)
             case .central(let centralUUID):
-                previousPeerID = self.linkStateStore.peerID(forCentralUUID: centralUUID)
-                guard previousPeerID != nil, previousPeerID != peerID else { return }
                 self.linkStateStore.bindCentral(centralUUID, to: peerID)
             }
-            guard let previousPeerID else { return }
             SecureLogger.debug("🔄 Rebinding link after peer-ID rotation: \(previousPeerID.id.prefix(8))… → \(peerID.id.prefix(8))…", category: .session)
             self.refreshLocalTopology()
             // Retire the rotated-away ID only once its last link is gone; a

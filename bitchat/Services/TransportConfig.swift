@@ -137,6 +137,10 @@ enum TransportConfig {
     static let bleReachabilityRetentionUnverifiedSeconds: TimeInterval = 45.0  // unknown/unverified
     static let bleFragmentLifetimeSeconds: TimeInterval = 30.0
     static let bleIngressRecordLifetimeSeconds: TimeInterval = 3.0
+    // At most one rotation rebind per link per window: TTL is not signed, so
+    // a replayed announce can forge "direct", and without a cooldown two
+    // identities could fight over a link in a rebind flip-flop.
+    static let bleLinkRebindCooldownSeconds: TimeInterval = 60.0
     static let bleConnectTimeoutBackoffWindowSeconds: TimeInterval = 120.0
     static let bleRecentPacketWindowSeconds: TimeInterval = 30.0
     static let bleRecentPacketWindowMaxCount: Int = 100

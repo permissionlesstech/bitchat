@@ -203,6 +203,57 @@ struct BLEServiceCoreTests {
     }
 
     @Test
+    func replayedDirectAnnounceCannotStealBoundIdentity() async throws {
+        let ble = makeService()
+        let attackerPeerID = PeerID(str: "1122334455667788")
+        let victimLink = "central-victim"
+        let attackerLink = "central-attacker"
+
+        // The victim's identity, genuinely bound on its own link.
+        let victimSigner = NoiseEncryptionService(keychain: MockKeychain())
+        let announcement = AnnouncementPacket(
+            nickname: "victim",
+            noisePublicKey: victimSigner.getStaticPublicKeyData(),
+            signingPublicKey: victimSigner.getSigningPublicKeyData(),
+            directNeighbors: nil
+        )
+        let payload = try #require(announcement.encode(), "Failed to encode announcement")
+        let victimPeerID = PeerID(publicKey: announcement.noisePublicKey)
+        ble._test_seedConnectedPeer(victimPeerID, nickname: "victim")
+        ble._test_bindCentral(victimLink, to: victimPeerID)
+        ble._test_seedConnectedPeer(attackerPeerID, nickname: "attacker")
+        ble._test_bindCentral(attackerLink, to: attackerPeerID)
+
+        // The victim's fresh signed announce replayed on the attacker's bound
+        // link with its direct TTL restored (TTL is excluded from signing, so
+        // the signature still verifies).
+        let unsigned = BitchatPacket(
+            type: MessageType.announce.rawValue,
+            senderID: Data(hexString: victimPeerID.id) ?? Data(),
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: payload,
+            signature: nil,
+            ttl: 7
+        )
+        let packet = try #require(victimSigner.signPacket(unsigned), "Failed to sign announce packet")
+
+        #expect(ble._test_recordIngressIfNew(packet: packet, linkID: attackerLink))
+        ble._test_handlePacket(packet, fromPeerID: victimPeerID, preseedPeer: false)
+
+        // The rebind must be refused: the identity already owns a live link.
+        let stolen = await TestHelpers.waitUntil(
+            { ble._test_centralBinding(attackerLink) == victimPeerID },
+            timeout: 0.3
+        )
+        #expect(!stolen)
+        #expect(ble._test_centralBinding(attackerLink) == attackerPeerID)
+        #expect(ble._test_centralBinding(victimLink) == victimPeerID)
+        // And the replay must not retire the link's real bound peer.
+        #expect(ble.currentPeerSnapshots().map(\.peerID).contains(attackerPeerID))
+    }
+
+    @Test
     func ingressRejectsSelfLoopbackBeforeSpoofChecks() async throws {
         let ble = makeService()
         let packet = makePublicPacket(
