@@ -77,6 +77,8 @@ enum NoisePayloadType: UInt8 {
     // Private groups (0x04/0x05 reserved by other features)
     case groupInvite = 0x06         // Creator-signed group state (invite)
     case groupKeyUpdate = 0x07      // Creator-signed group state (key rotation / roster update)
+    // Live voice (push-to-talk)
+    case voiceFrame = 0x08          // One live voice-burst packet (see VoiceBurstPacket)
     // Verification (QR-based OOB binding)
     case verifyChallenge = 0x10     // Verification challenge
     case verifyResponse  = 0x11     // Verification response
@@ -90,6 +92,7 @@ enum NoisePayloadType: UInt8 {
         case .delivered: return "delivered"
         case .groupInvite: return "groupInvite"
         case .groupKeyUpdate: return "groupKeyUpdate"
+        case .voiceFrame: return "voiceFrame"
         case .verifyChallenge: return "verifyChallenge"
         case .verifyResponse: return "verifyResponse"
         case .vouch: return "vouch"

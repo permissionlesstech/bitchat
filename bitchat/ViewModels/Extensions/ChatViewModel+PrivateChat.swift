@@ -69,6 +69,32 @@ extension ChatViewModel {
         mediaTransferCoordinator.sendVoiceNote(at: url)
     }
 
+    /// Picks the capture backend for the composer's hold-to-record gesture:
+    /// live push-to-talk when the selected DM peer can hear it now (mesh
+    /// reachable + established Noise session), otherwise the classic
+    /// record-then-send voice note. Either way the release delivers a normal
+    /// voice note through `sendVoiceNote(at:)`.
+    @MainActor
+    func makeVoiceCaptureSession() -> VoiceCaptureSession {
+        guard PTTSettings.liveVoiceEnabled,
+              let peerID = selectedPrivateChatPeer,
+              !peerID.isGeoDM, !peerID.isGeoChat, !peerID.isGroup,
+              meshService.isPeerReachable(peerID),
+              case .established = meshService.getNoiseSessionState(for: peerID)
+        else {
+            return VoiceNoteCaptureSession()
+        }
+        return PTTLiveVoiceSession(sendPacket: { [meshService] packet in
+            meshService.sendVoiceFrame(packet, to: peerID)
+        })
+    }
+
+    /// Inbound handler for `NoisePayloadType.voiceFrame`.
+    @MainActor
+    func handleVoiceFramePayload(from peerID: PeerID, payload: Data, timestamp: Date) {
+        liveVoiceCoordinator.handleVoiceFramePayload(from: peerID, payload: payload, timestamp: timestamp)
+    }
+
     #if os(iOS)
     func processThenSendImage(_ image: UIImage?) {
         mediaTransferCoordinator.processThenSendImage(image)
@@ -129,6 +155,9 @@ extension ChatViewModel {
 
     @MainActor
     func handlePrivateMessage(_ message: BitchatMessage) {
+        // A finalized voice note whose burst already streamed in live swaps
+        // into the existing bubble instead of appearing (and notifying) twice.
+        if liveVoiceCoordinator.absorbFinalizedVoiceNote(message) { return }
         privateConversationCoordinator.handlePrivateMessage(message)
     }
 

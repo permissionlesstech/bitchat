@@ -174,6 +174,13 @@ private final class MockChatTransportEventContext: ChatTransportEventContext {
     func handleVouchPayload(from peerID: PeerID, payload: Data) {
         vouchPayloads.append((peerID, payload))
     }
+
+    // Live voice payloads
+    private(set) var voiceFramePayloads: [(peerID: PeerID, payload: Data, timestamp: Date)] = []
+
+    func handleVoiceFramePayload(from peerID: PeerID, payload: Data, timestamp: Date) {
+        voiceFramePayloads.append((peerID, payload, timestamp))
+    }
 }
 
 // MARK: - Helpers

@@ -55,6 +55,14 @@ final class VoiceRecordingViewModel: ObservableObject {
     }
 
     @Published private(set) var state = State.idle
+    /// True while the active session streams audio live (push-to-talk); the
+    /// composer switches its recording HUD to the LIVE treatment.
+    @Published private(set) var isLiveStreaming = false
+
+    /// Supplies the capture backend per press. `ChatViewModel` swaps in a
+    /// live push-to-talk session when the current DM peer can hear it now.
+    var sessionProvider: () -> VoiceCaptureSession = { VoiceNoteCaptureSession() }
+    private var activeSession: VoiceCaptureSession?
 
     func formattedDuration(for date: Date) -> String {
         let clamped = max(0, state.duration(for: date))
@@ -67,26 +75,31 @@ final class VoiceRecordingViewModel: ObservableObject {
 
     func start(shouldShow: Bool) {
         guard shouldShow, state == .idle else { return }
+        let session = sessionProvider()
+        activeSession = session
         state = .requestingPermission
         Task {
-            let granted = await VoiceRecorder.shared.requestPermission()
-            guard state == .requestingPermission else { return }
+            let granted = await session.requestPermission()
+            guard state == .requestingPermission, activeSession === session else { return }
             guard granted else {
                 state = .permissionDenied
+                activeSession = nil
                 return
             }
             state = .preparing
             do {
-                try await VoiceRecorder.shared.startRecording()
-                guard state == .preparing else {
-                    cancel()
+                try await session.start()
+                guard state == .preparing, activeSession === session else {
+                    await session.cancel()
                     return
                 }
                 state = .recording(startDate: Date())
+                isLiveStreaming = session.isLive
             } catch {
                 SecureLogger.error("Voice recording failed to start: \(error)", category: .session)
-                await VoiceRecorder.shared.cancelRecording()
-                guard state == .preparing else { return }
+                await session.cancel()
+                guard state == .preparing, activeSession === session else { return }
+                activeSession = nil
                 state = .error(message: "Could not start recording.")
             }
         }
@@ -103,15 +116,18 @@ final class VoiceRecordingViewModel: ObservableObject {
         }
 
         state = .idle
+        isLiveStreaming = false
+        let session = activeSession
+        activeSession = nil
 
-        guard case .recording(let startDate) = previousState, let completion else {
-            Task { await VoiceRecorder.shared.cancelRecording() }
+        guard case .recording(let startDate) = previousState, let completion, let session else {
+            Task { await session?.cancel() }
             return
         }
 
         Task {
             let finalDuration = Date().timeIntervalSince(startDate)
-            if let url = await VoiceRecorder.shared.stopRecording(),
+            if let url = await session.finish(),
                isValidRecording(at: url, duration: finalDuration) {
                 completion(url)
             } else {

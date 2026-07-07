@@ -155,6 +155,12 @@ protocol Transport: AnyObject {
     func sendFilePrivate(_ packet: BitchatFilePacket, to peerID: PeerID, transferId: String)
     func cancelTransfer(_ transferId: String)
 
+    // Live voice / push-to-talk (mesh transports only): one encoded
+    // `VoiceBurstPacket`, fire-and-forget inside the Noise session. Frames are
+    // only useful now — transports drop them (never queue) when no
+    // established session exists.
+    func sendVoiceFrame(_ burstContent: Data, to peerID: PeerID)
+
     // Courier store-and-forward (mesh transports only): seal a message to the
     // recipient's static key and hand it to connected couriers for physical
     // delivery while the recipient is offline. Returns false when the
@@ -231,6 +237,7 @@ extension Transport {
     func addPeerAuthenticatedObserver(_ handler: @escaping (PeerID, String) -> Void) {}
     func sendCourierMessage(_ content: String, messageID: String, recipientNoiseKey: Data, via couriers: [PeerID]) -> Bool { false }
     func sendBoardPayload(_ payload: Data) {}
+    func sendVoiceFrame(_ burstContent: Data, to peerID: PeerID) {}
 
     // Mesh diagnostics are mesh-transport-only; other transports report
     // "no reply"/"no path" rather than pretending to measure anything.

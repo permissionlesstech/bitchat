@@ -181,23 +181,35 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
     }
 }
 
-/// Ensures only one voice note plays at a time.
+/// Something that can hold the app's single audio-playback slot and yield it
+/// when another playback starts (voice notes pause; live bursts stop).
+protocol ExclusivePlayback: AnyObject {
+    func pauseForExclusivity()
+}
+
+extension VoiceNotePlaybackController: ExclusivePlayback {
+    func pauseForExclusivity() {
+        pause()
+    }
+}
+
+/// Ensures only one voice playback (note or live burst) runs at a time.
 final class VoiceNotePlaybackCoordinator {
     static let shared = VoiceNotePlaybackCoordinator()
 
-    private weak var activeController: VoiceNotePlaybackController?
+    private weak var activeController: (any ExclusivePlayback)?
 
     private init() {}
 
-    func activate(_ controller: VoiceNotePlaybackController) {
+    func activate(_ controller: any ExclusivePlayback) {
         if activeController === controller {
             return
         }
-        activeController?.pause()
+        activeController?.pauseForExclusivity()
         activeController = controller
     }
 
-    func deactivate(_ controller: VoiceNotePlaybackController) {
+    func deactivate(_ controller: any ExclusivePlayback) {
         if activeController === controller {
             activeController = nil
         }

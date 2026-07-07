@@ -137,16 +137,28 @@ private extension ContentComposerView {
 
     var recordingIndicator: some View {
         HStack(spacing: 12) {
-            Image(systemName: "waveform.circle.fill")
+            Image(systemName: voiceRecordingVM.isLiveStreaming ? "dot.radiowaves.left.and.right" : "waveform.circle.fill")
                 .foregroundColor(.red)
                 .font(.bitchatSystem(size: 20))
+                .modifier(PulsingOpacityModifier(active: voiceRecordingVM.isLiveStreaming))
             TimelineView(.periodic(from: .now, by: 0.05)) { context in
-                Text(
-                    "recording \(voiceRecordingVM.formattedDuration(for: context.date))",
-                    comment: "Voice note recording duration indicator"
-                )
-                .bitchatFont(size: 13)
-                .foregroundColor(.red)
+                // Live streaming means audio is heard as you speak — the HUD
+                // must make that unmistakable, not just show a timer.
+                if voiceRecordingVM.isLiveStreaming {
+                    Text(
+                        "live \(voiceRecordingVM.formattedDuration(for: context.date))",
+                        comment: "Recording HUD label while a voice message streams live to the recipient"
+                    )
+                    .bitchatFont(size: 13, weight: .bold)
+                    .foregroundColor(.red)
+                } else {
+                    Text(
+                        "recording \(voiceRecordingVM.formattedDuration(for: context.date))",
+                        comment: "Voice note recording duration indicator"
+                    )
+                    .bitchatFont(size: 13)
+                    .foregroundColor(.red)
+                }
             }
             Spacer()
             Button(action: voiceRecordingVM.cancel) {

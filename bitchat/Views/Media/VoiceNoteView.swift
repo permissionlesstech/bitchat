@@ -5,6 +5,7 @@ struct VoiceNoteView: View {
     private let url: URL
     private let isSending: Bool
     private let sendProgress: Double?
+    private let isLive: Bool
     private let onCancel: (() -> Void)?
 
     @Environment(\.colorScheme) private var colorScheme
@@ -12,10 +13,11 @@ struct VoiceNoteView: View {
     @StateObject private var playback: VoiceNotePlaybackController
     @State private var waveform: [Float] = []
 
-    init(url: URL, isSending: Bool, sendProgress: Double?, onCancel: (() -> Void)?) {
+    init(url: URL, isSending: Bool, sendProgress: Double?, isLive: Bool = false, onCancel: (() -> Void)?) {
         self.url = url
         self.isSending = isSending
         self.sendProgress = sendProgress
+        self.isLive = isLive
         self.onCancel = onCancel
         _playback = StateObject(wrappedValue: VoiceNotePlaybackController(url: url))
     }
@@ -69,9 +71,13 @@ struct VoiceNoteView: View {
                 isInteractive: playback.isPlaying
             )
 
-            Text(playbackLabel)
-                .bitchatFont(size: 13)
-                .foregroundColor(palette.secondary)
+            if isLive {
+                LiveVoiceBadge()
+            } else {
+                Text(playbackLabel)
+                    .bitchatFont(size: 13)
+                    .foregroundColor(palette.secondary)
+            }
 
             if let onCancel = onCancel, isSending {
                 Button(action: onCancel) {

@@ -150,6 +150,17 @@ final class ConversationUIModel: ObservableObject {
         chatViewModel.sendVoiceNote(at: url)
     }
 
+    /// Capture backend for the mic gesture: live PTT when the current DM
+    /// peer can hear it now, classic voice note otherwise.
+    func makeVoiceCaptureSession() -> VoiceCaptureSession {
+        chatViewModel.makeVoiceCaptureSession()
+    }
+
+    /// Whether this message is a live voice burst still streaming in.
+    func isLiveVoiceMessage(_ message: BitchatMessage) -> Bool {
+        chatViewModel.liveVoiceCoordinator.isLiveVoiceMessage(message)
+    }
+
     func cancelMediaSend(messageID: String) {
         chatViewModel.cancelMediaSend(messageID: messageID)
     }

@@ -178,6 +178,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     lazy var privateConversationCoordinator = ChatPrivateConversationCoordinator(context: self)
     lazy var nostrCoordinator = ChatNostrCoordinator(context: self)
     lazy var mediaTransferCoordinator = ChatMediaTransferCoordinator(context: self)
+    lazy var liveVoiceCoordinator = ChatLiveVoiceCoordinator(context: self)
     lazy var verificationCoordinator = ChatVerificationCoordinator(context: self)
     lazy var groupCoordinator = ChatGroupCoordinator(context: self)
     lazy var vouchCoordinator = ChatVouchCoordinator(context: self)

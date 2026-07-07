@@ -96,6 +96,7 @@ struct MediaMessageView: View {
                             url: url,
                             isSending: state.isSending,
                             sendProgress: state.progress,
+                            isLive: conversationUIModel.isLiveVoiceMessage(message),
                             onCancel: cancelAction
                         )
                     case .image(let url):

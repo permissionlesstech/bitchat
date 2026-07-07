@@ -1456,6 +1456,23 @@ final class BLEService: NSObject {
         sendNoisePayload(NoisePayload(type: .vouch, data: payload).encode(), to: peerID)
     }
 
+    // MARK: Live Voice (PTT)
+
+    /// Sends one live voice-burst packet inside the Noise session. Unlike
+    /// `sendNoisePayload` this never queues behind a handshake: live audio is
+    /// only useful now, so without an established session frames are dropped.
+    func sendVoiceFrame(_ burstContent: Data, to peerID: PeerID) {
+        messageQueue.async { [weak self] in
+            guard let self, self.noiseService.hasEstablishedSession(with: peerID) else { return }
+            do {
+                let typedPayload = NoisePayload(type: .voiceFrame, data: burstContent).encode()
+                self.broadcastPacket(try self.makeEncryptedNoisePacket(typedPayload, to: peerID))
+            } catch {
+                SecureLogger.error("Failed to send voice frame: \(error)", category: .session)
+            }
+        }
+    }
+
     func addPeerAuthenticatedObserver(_ handler: @escaping (PeerID, String) -> Void) {
         // Appends to the encryption service's handler array, so this never
         // displaces the callbacks installed by installNoiseSessionCallbacks.

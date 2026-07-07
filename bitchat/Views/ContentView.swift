@@ -75,6 +75,9 @@ struct ContentView: View {
             .onAppear {
                 conversationUIModel.setCurrentColorScheme(colorScheme)
                 conversationUIModel.setCurrentTheme(appTheme)
+                voiceRecordingVM.sessionProvider = { [weak conversationUIModel] in
+                    conversationUIModel?.makeVoiceCaptureSession() ?? VoiceNoteCaptureSession()
+                }
                 #if os(macOS)
                 DispatchQueue.main.async {
                     isNicknameFieldFocused = false

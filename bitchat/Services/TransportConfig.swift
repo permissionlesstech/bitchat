@@ -16,6 +16,25 @@ enum TransportConfig {
     static let bleFragmentRelayTtlCap: UInt8 = 7
     static let bleFragmentRelayTtlCapDense: UInt8 = 5       // Contain fragment floods in dense graphs
 
+    // Live voice (push-to-talk)
+    // Burst-content budget per voice packet. Sized so the Noise ciphertext
+    // (content + 1 type byte + 16 tag bytes) stays within MessagePadding's
+    // 256-byte bucket and the whole directed packet (16 header + 8 sender +
+    // 8 recipient + 256 payload = 288 bytes) rides one BLE frame — live audio
+    // must never enter the fragment scheduler, which caps concurrent
+    // transfers at 2 and would let voice starve file sends.
+    static let pttMaxBurstContentBytes: Int = 210
+    static let pttJitterBufferSeconds: TimeInterval = 0.35  // buffered audio before live playback starts
+    static let pttJitterDeadlineSeconds: TimeInterval = 0.5 // start anyway after this wall-clock wait
+    static let pttBurstEndTimeoutSeconds: TimeInterval = 3.0 // no frames -> burst considered ended
+    static let pttAssemblyStaleSeconds: TimeInterval = 30.0 // drop half-open assemblies after this
+    static let pttMaxConcurrentAssemblies: Int = 8          // concurrent inbound bursts cap
+    static let pttMaxBurstBytes: Int = 384 * 1024           // 120s at ~2KB/s + generous slack
+    static let pttFinishedBurstRegistrySeconds: TimeInterval = 600 // window to absorb the finalized note
+    // Inbound flood guard: a real burst arrives at ~2KB/s; allow 3x plus a
+    // small settling allowance before dropping a sender's frames.
+    static let pttInboundMaxBytesPerSecond: Int = 6_000
+
     // Mesh diagnostics (/ping)
     static let meshPingTimeoutSeconds: TimeInterval = 10    // Give up on a probe after this window
     static let meshPingInboundMaxPerLink: Int = 5           // Inbound ping budget per ingress link (claimed sender is spoofable)...

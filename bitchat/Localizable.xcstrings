@@ -9512,6 +9512,543 @@
         }
       }
     },
+    "app_info.voice.live.description" : {
+      "comment" : "Description of the live voice messages setting",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بث الرسائل الصوتية أثناء التحدث عندما يكون المستلم متاحًا؛ يتم تشغيل الصوت المباشر الوارد تلقائيًا في المحادثة المفتوحة"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "প্রাপক নাগালের মধ্যে থাকলে কথা বলার সাথে সাথে ভয়েস বার্তা স্ট্রিম হয়; খোলা চ্যাটে আগত লাইভ ভয়েস স্বয়ংক্রিয়ভাবে চলে"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sprachnachrichten werden beim sprechen live übertragen, wenn der empfänger erreichbar ist; eingehende live-stimme wird im geöffneten chat automatisch abgespielt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "stream voice messages as you speak when the recipient is reachable; incoming live voice plays automatically in the open chat"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "transmite mensajes de voz mientras hablas cuando el destinatario está disponible; la voz en vivo entrante se reproduce automáticamente en el chat abierto"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ini-stream ang mga voice message habang nagsasalita kapag maaabot ang tatanggap; awtomatikong tumutugtog ang papasok na live na boses sa bukas na chat"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "diffuse les messages vocaux pendant que vous parlez lorsque le destinataire est joignable ; la voix en direct entrante est lue automatiquement dans la discussion ouverte"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "משדר הודעות קוליות בזמן שאתה מדבר כשהנמען זמין; קול חי נכנס מושמע אוטומטית בצ'אט הפתוח"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "प्राप्तकर्ता पहुंच में होने पर बोलते समय वॉयस संदेश स्ट्रीम होते हैं; खुली चैट में आने वाली लाइव आवाज़ अपने आप चलती है"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "streaming pesan suara saat Anda berbicara ketika penerima terjangkau; suara langsung yang masuk diputar otomatis di obrolan yang terbuka"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "trasmette i messaggi vocali mentre parli quando il destinatario è raggiungibile; la voce in diretta in arrivo viene riprodotta automaticamente nella chat aperta"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "受信者に到達可能なとき、話しながら音声メッセージをライブ配信します。受信したライブ音声は開いているチャットで自動再生されます"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "상대방이 연결되어 있으면 말하는 동안 음성 메시지가 실시간 전송됩니다. 수신된 라이브 음성은 열려 있는 채팅에서 자동 재생됩니다"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "strim mesej suara semasa anda bercakap apabila penerima boleh dihubungi; suara langsung masuk dimainkan secara automatik dalam sembang terbuka"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "प्रापक पहुँचयोग्य हुँदा बोल्दै गर्दा भ्वाइस सन्देशहरू स्ट्रिम हुन्छन्; खुला च्याटमा आगमन लाइभ आवाज स्वतः बज्छ"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "streamt spraakberichten terwijl je praat wanneer de ontvanger bereikbaar is; inkomende live spraak wordt automatisch afgespeeld in de geopende chat"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "przesyła wiadomości głosowe na żywo podczas mówienia, gdy odbiorca jest osiągalny; przychodzący głos na żywo odtwarza się automatycznie w otwartym czacie"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "transmite mensagens de voz enquanto fala quando o destinatário está acessível; a voz ao vivo recebida é reproduzida automaticamente na conversa aberta"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "transmite mensagens de voz enquanto você fala quando o destinatário está acessível; a voz ao vivo recebida toca automaticamente na conversa aberta"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "передаёт голосовые сообщения в реальном времени, пока вы говорите, если получатель доступен; входящий живой голос автоматически воспроизводится в открытом чате"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "strömmar röstmeddelanden medan du pratar när mottagaren är nåbar; inkommande live-röst spelas upp automatiskt i den öppna chatten"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "பெறுநர் அணுகக்கூடியதாக இருக்கும்போது நீங்கள் பேசும்போதே குரல் செய்திகள் நேரலையாக அனுப்பப்படும்; உள்வரும் நேரலை குரல் திறந்த அரட்டையில் தானாக ஒலிக்கும்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "สตรีมข้อความเสียงขณะพูดเมื่อติดต่อผู้รับได้ เสียงสดขาเข้าจะเล่นอัตโนมัติในแชทที่เปิดอยู่"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alıcı erişilebilir olduğunda sesli mesajlar siz konuşurken canlı iletilir; gelen canlı ses açık sohbette otomatik çalınır"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "передає голосові повідомлення наживо, поки ви говорите, якщо одержувач доступний; вхідний живий голос автоматично відтворюється у відкритому чаті"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "جب وصول کنندہ قابل رسائی ہو تو بولتے وقت صوتی پیغامات لائیو نشر ہوتے ہیں؛ موصول ہونے والی لائیو آواز کھلی چیٹ میں خود بخود چلتی ہے"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "phát trực tiếp tin nhắn thoại khi bạn nói nếu người nhận trong tầm kết nối; giọng nói trực tiếp đến sẽ tự phát trong cuộc trò chuyện đang mở"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当接收方可达时，语音消息会在你说话的同时实时传输；收到的实时语音会在打开的聊天中自动播放"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "當接收方可達時，語音訊息會在你說話的同時即時傳輸；收到的即時語音會在開啟的聊天中自動播放"
+          }
+        }
+      }
+    },
+    "app_info.voice.live.title" : {
+      "comment" : "Title of the live voice messages setting",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رسائل صوتية مباشرة"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "লাইভ ভয়েস বার্তা"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "live-sprachnachrichten"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "live voice messages"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mensajes de voz en vivo"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "live na mga voice message"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "messages vocaux en direct"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הודעות קוליות חיות"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "लाइव वॉयस संदेश"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pesan suara langsung"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "messaggi vocali in diretta"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ライブ音声メッセージ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "라이브 음성 메시지"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesej suara langsung"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "लाइभ भ्वाइस सन्देशहरू"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "live spraakberichten"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wiadomości głosowe na żywo"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mensagens de voz ao vivo"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mensagens de voz ao vivo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "живые голосовые сообщения"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "live-röstmeddelanden"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "நேரலை குரல் செய்திகள்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ข้อความเสียงสด"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "canlı sesli mesajlar"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "живі голосові повідомлення"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لائیو صوتی پیغامات"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tin nhắn thoại trực tiếp"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "实时语音消息"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "即時語音訊息"
+          }
+        }
+      }
+    },
+    "app_info.voice.title" : {
+      "comment" : "Section header for voice settings in the app info sheet",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الصوت"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ভয়েস"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AUDIO"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VOICE"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VOZ"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BOSES"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VOIX"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "קול"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "वॉयस"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SUARA"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VOCE"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ボイス"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "음성"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SUARA"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "आवाज"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SPRAAK"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GŁOS"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VOZ"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VOZ"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ГОЛОС"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RÖST"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "குரல்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เสียง"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SES"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ГОЛОС"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "آواز"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GIỌNG NÓI"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "语音"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "語音"
+          }
+        }
+      }
+    },
     "app_info.warning.message" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -38326,6 +38863,185 @@
         }
       }
     },
+    "live %@" : {
+      "comment" : "Recording HUD label while a voice message streams live to the recipient",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مباشر %@"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "লাইভ %@"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "live %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "live %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "en vivo %@"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "live %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "en direct %@"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "שידור חי %@"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "लाइव %@"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "langsung %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "in diretta %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ライブ %@"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "라이브 %@"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "langsung %@"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "लाइभ %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "live %@"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "na żywo %@"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ao vivo %@"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ao vivo %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "в эфире %@"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "live %@"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "நேரலை %@"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "สด %@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "canlı %@"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "наживо %@"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لائیو %@"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "trực tiếp %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "直播 %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "直播 %@"
+          }
+        }
+      }
+    },
     "location_channels.accessibility.add_bookmark" : {
       "comment" : "Accessibility action name for bookmarking a channel",
       "extractionState" : "manual",
@@ -48958,6 +49674,185 @@
         }
       }
     },
+    "media.voice.accessibility.live" : {
+      "comment" : "Accessibility label announcing a live incoming voice message",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رسالة صوتية مباشرة واردة"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "আগত লাইভ ভয়েস বার্তা"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "eingehende live-sprachnachricht"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "incoming live voice message"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mensaje de voz en vivo entrante"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "papasok na live na voice message"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "message vocal en direct entrant"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הודעה קולית חיה נכנסת"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "आने वाला लाइव वॉयस संदेश"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pesan suara langsung masuk"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "messaggio vocale in diretta in arrivo"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ライブ音声メッセージを受信中"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "수신 중인 라이브 음성 메시지"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesej suara langsung masuk"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "आगमन लाइभ भ्वाइस सन्देश"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "inkomend live spraakbericht"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "przychodząca wiadomość głosowa na żywo"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mensagem de voz ao vivo a chegar"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mensagem de voz ao vivo chegando"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "входящее живое голосовое сообщение"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "inkommande live-röstmeddelande"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "உள்வரும் நேரலை குரல் செய்தி"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ข้อความเสียงสดขาเข้า"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gelen canlı sesli mesaj"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "вхідне живе голосове повідомлення"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "موصول ہونے والا لائیو صوتی پیغام"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tin nhắn thoại trực tiếp đang đến"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在接收实时语音消息"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在接收即時語音訊息"
+          }
+        }
+      }
+    },
     "media.voice.accessibility.pause" : {
       "comment" : "Accessibility label for pausing voice note playback",
       "extractionState" : "manual",
@@ -49314,6 +50209,185 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "播放語音訊息"
+          }
+        }
+      }
+    },
+    "media.voice.live_badge" : {
+      "comment" : "Badge on a voice message that is currently streaming in live",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مباشر"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "লাইভ"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LIVE"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LIVE"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "EN VIVO"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LIVE"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DIRECT"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "חי"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "लाइव"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LANGSUNG"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LIVE"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ライブ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "라이브"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LANGSUNG"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "लाइभ"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LIVE"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "NA ŻYWO"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AO VIVO"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AO VIVO"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ЭФИР"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LIVE"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "நேரலை"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "สด"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CANLI"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "НАЖИВО"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لائیو"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TRỰC TIẾP"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "直播"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "直播"
           }
         }
       }

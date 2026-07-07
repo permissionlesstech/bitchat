@@ -9,6 +9,7 @@ struct AppInfoView: View {
     /// hides the topology row entirely.
     var topologyProvider: (@MainActor () -> MeshTopologyDisplayModel)?
     @State private var showTopology = false
+    @State private var liveVoiceEnabled = PTTSettings.liveVoiceEnabled
 
     private var selectedTheme: AppTheme {
         AppTheme(rawValue: appThemeRawValue) ?? .matrix
@@ -78,6 +79,15 @@ struct AppInfoView: View {
                 ("envelope.fill", "app_info.legend.unread"),
                 ("nosign", "app_info.legend.blocked")
             ]
+        }
+
+        enum Voice {
+            static let title: LocalizedStringKey = "app_info.voice.title"
+            static let live = AppInfoFeatureInfo(
+                icon: "dot.radiowaves.left.and.right",
+                title: "app_info.voice.live.title",
+                description: "app_info.voice.live.description"
+            )
         }
 
         enum Network {
@@ -221,6 +231,21 @@ struct AppInfoView: View {
                 }
                 .bitchatFont(size: 14)
                 .foregroundColor(textColor)
+            }
+
+            // Voice
+            VStack(alignment: .leading, spacing: 16) {
+                SectionHeader(Strings.Voice.title)
+
+                HStack(spacing: 0) {
+                    FeatureRow(info: Strings.Voice.live)
+                    Toggle(Strings.Voice.live.title, isOn: $liveVoiceEnabled)
+                        .labelsHidden()
+                        .tint(palette.accent)
+                        .onChange(of: liveVoiceEnabled) { newValue in
+                            PTTSettings.liveVoiceEnabled = newValue
+                        }
+                }
             }
 
             // Network diagnostics
