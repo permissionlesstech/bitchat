@@ -38,18 +38,19 @@ struct SyncTypeFlagsBoardTests {
     /// decode path accepts the bytes and simply maps unknown bits to no
     /// message type, so a board-only request reads as "nothing I can serve".
     @Test func unknownBitsDecodeToNoTypes() throws {
-        // Bits 9-15 are unassigned; a future (or unknown) two-byte bitfield
-        // must decode without error and yield no known types.
-        let decoded = try #require(SyncTypeFlags.decode(Data([0x00, 0xFE])))
+        // Bits 10-15 are unassigned (bit 8 = board, bit 9 = prekeyBundle); a
+        // future (or unknown) two-byte bitfield must decode without error and
+        // yield no known types.
+        let decoded = try #require(SyncTypeFlags.decode(Data([0x00, 0xFC])))
         #expect(decoded.toMessageTypes().isEmpty)
-        for type in [MessageType.announce, .message, .fragment, .fileTransfer, .boardPost] {
+        for type in [MessageType.announce, .message, .fragment, .fileTransfer, .boardPost, .prekeyBundle] {
             #expect(!decoded.contains(type))
         }
     }
 
     @Test func mixedKnownAndUnknownBitsKeepKnownTypes() throws {
-        // Known low-byte flags survive alongside unknown high bits.
-        let decoded = try #require(SyncTypeFlags.decode(Data([0x03, 0xFE])))
+        // Known low-byte flags survive alongside unknown high bits (10-15).
+        let decoded = try #require(SyncTypeFlags.decode(Data([0x03, 0xFC])))
         #expect(decoded.contains(.announce))
         #expect(decoded.contains(.message))
         #expect(Set(decoded.toMessageTypes()) == Set([.announce, .message]))

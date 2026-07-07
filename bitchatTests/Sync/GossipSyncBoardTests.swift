@@ -34,6 +34,7 @@ struct GossipSyncBoardTests {
         config.messageSyncIntervalSeconds = 0
         config.fragmentSyncIntervalSeconds = 0
         config.fileTransferSyncIntervalSeconds = 0
+        config.prekeyBundleSyncIntervalSeconds = 0
         return config
     }
 

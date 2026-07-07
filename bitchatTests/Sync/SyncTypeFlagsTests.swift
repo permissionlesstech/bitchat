@@ -13,9 +13,9 @@ struct SyncTypeFlagsTests {
     }
 
     @Test func decodeDropsPhantomBits() {
-        // Bits 9+ map to no message type (bit 8 is boardPost). They must not
-        // survive decode as phantom membership.
-        let phantom = Data([0x00, 0xFE]) // bits 9..15 set, no known type
+        // Bits 10+ map to no message type (bit 8 = boardPost, bit 9 =
+        // prekeyBundle). They must not survive decode as phantom membership.
+        let phantom = Data([0x00, 0xFC]) // bits 10..15 set, no known type
         let decoded = SyncTypeFlags.decode(phantom)
         #expect(decoded?.rawValue == 0)
         #expect(decoded?.toMessageTypes().isEmpty == true)
@@ -23,16 +23,17 @@ struct SyncTypeFlagsTests {
 
     @Test func boardBitSurvivesDecode() {
         // Bit 8 maps to boardPost and spills the field into a second byte;
-        // it must survive decode while the phantom high bits are stripped.
-        let mixed = Data([0x00, 0xFF]) // bit 8 (board) known, bits 9..15 phantom
+        // it must survive decode while the phantom high bits (10+) are
+        // stripped. Bit 9 (prekeyBundle) is cleared to isolate the board bit.
+        let mixed = Data([0x00, 0xFD]) // bit 8 (board) known, bits 10..15 phantom
         let decoded = SyncTypeFlags.decode(mixed)
         #expect(decoded?.contains(.board) == true)
         #expect(decoded?.rawValue == 0b1_0000_0000)
     }
 
     @Test func phantomBitsAreStrippedButKnownBitsSurvive() {
-        // Low byte = announce(0) + message(1); high byte bits 9+ are phantom.
-        let mixed = Data([0b0000_0011, 0xFE])
+        // Low byte = announce(0) + message(1); high byte bits 10+ are phantom.
+        let mixed = Data([0b0000_0011, 0xFC])
         let decoded = SyncTypeFlags.decode(mixed)
         #expect(decoded?.contains(.announce) == true)
         #expect(decoded?.contains(.message) == true)
