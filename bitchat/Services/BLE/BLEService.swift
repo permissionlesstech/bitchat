@@ -1519,6 +1519,19 @@ extension BLEService: CBCentralManagerDelegate {
                 assembler: assembler
             )
             linkStateStore.setPeripheralState(restoredState, for: identifier)
+
+            // Restored peripherals are the freshest wake-on-proximity
+            // candidates we have after a relaunch — without this the cache
+            // starts empty and backgrounding right after a restore arms
+            // nothing.
+            recentPeripheralCache.record(peripheral, peripheralID: identifier, at: Date())
+
+            // A link restored as connected has no characteristic in the new
+            // process; without rediscovery it would sit connected-but-unusable
+            // (no writes, no notifications) until the peer disconnects.
+            if peripheral.state == .connected && characteristic == nil {
+                peripheral.discoverServices([BLEService.serviceUUID])
+            }
         }
 
         captureBluetoothStatus(context: "central-restore")
