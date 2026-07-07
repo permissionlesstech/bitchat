@@ -1463,7 +1463,11 @@ final class BLEService: NSObject {
     /// only useful now, so without an established session frames are dropped.
     func sendVoiceFrame(_ burstContent: Data, to peerID: PeerID) {
         messageQueue.async { [weak self] in
-            guard let self, self.noiseService.hasEstablishedSession(with: peerID) else { return }
+            guard let self else { return }
+            guard self.noiseService.hasEstablishedSession(with: peerID) else {
+                SecureLogger.debug("PTT: dropping voice frame — no established session with \(peerID.id.prefix(8))…", category: .session)
+                return
+            }
             do {
                 let typedPayload = NoisePayload(type: .voiceFrame, data: burstContent).encode()
                 self.broadcastPacket(try self.makeEncryptedNoisePacket(typedPayload, to: peerID))

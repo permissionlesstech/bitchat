@@ -75,10 +75,12 @@ final class PTTCaptureEngine {
         do {
             try engine.start()
         } catch {
+            SecureLogger.error("PTT: capture engine failed to start (input: \(Int(inputFormat.sampleRate)) Hz, \(inputFormat.channelCount) ch): \(error)", category: .session)
             engine.inputNode.removeTap(onBus: 0)
             queue.sync { self.teardown(deleteFile: true) }
             throw error
         }
+        SecureLogger.info("PTT: capture engine running (input: \(Int(inputFormat.sampleRate)) Hz, \(inputFormat.channelCount) ch)", category: .session)
     }
 
     /// Stops capture and finalizes the `.m4a`. Returns the file URL and the

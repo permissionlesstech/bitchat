@@ -213,6 +213,23 @@ struct ChatLiveVoiceCoordinatorTests {
         #expect(context.handledPrivateMessages.count == TransportConfig.pttMaxConcurrentAssemblies)
     }
 
+    @Test func liveVoiceToggleOffDropsInboundFrames() throws {
+        let previous = PTTSettings.liveVoiceEnabled
+        PTTSettings.liveVoiceEnabled = false
+        defer { PTTSettings.liveVoiceEnabled = previous }
+
+        let context = MockChatLiveVoiceContext()
+        let coordinator = ChatLiveVoiceCoordinator(context: context)
+        let burstID = makeBurstID(0xE8)
+
+        // Off means classic-notes-only: no live bubble, no partial file.
+        send(try #require(VoiceBurstPacket(burstID: burstID, seq: 0, kind: .start(codec: .aacLC16kMono))), to: coordinator, from: peer)
+        send(try #require(VoiceBurstPacket(burstID: burstID, seq: 1, kind: .frames([Data(repeating: 5, count: 40)]))), to: coordinator, from: peer)
+        #expect(context.handledPrivateMessages.isEmpty)
+        let url = try #require(incomingFileURL(burstID: burstID))
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+    }
+
     @Test func burstIDParsingFromFileNames() {
         #expect(ChatLiveVoiceCoordinator.burstID(fromVoiceFileName: "voice_00112233445566ff.m4a") == Data(hexString: "00112233445566ff"))
         // Uniquified copies keep the leading hex run.

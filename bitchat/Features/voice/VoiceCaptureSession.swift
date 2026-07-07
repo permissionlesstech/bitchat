@@ -118,6 +118,7 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
         }
         try capture.start(outputURL: outputURL)
         startDate = Date()
+        SecureLogger.info("PTT: live burst \(burstID.hexEncodedString()) capture started", category: .session)
     }
 
     func finish() async -> URL? {
@@ -141,6 +142,7 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
         }
         let durationMs = UInt32((Double(encodedFrames) * PTTAudioFormat.frameDuration * 1000).rounded())
         sendControlPacket(.end(totalDataPackets: stream.packetizer.dataPacketCount, durationMs: durationMs))
+        SecureLogger.info("PTT: live burst \(burstID.hexEncodedString()) finished — \(stream.packetizer.dataPacketCount) data packets, \(encodedFrames) frames, \(durationMs) ms", category: .session)
         return url
     }
 

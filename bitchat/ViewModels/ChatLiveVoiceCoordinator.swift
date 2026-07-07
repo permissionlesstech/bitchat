@@ -89,8 +89,18 @@ final class ChatLiveVoiceCoordinator {
     // MARK: - Inbound frames
 
     func handleVoiceFramePayload(from peerID: PeerID, payload: Data, timestamp: Date) {
-        guard let packet = VoiceBurstPacket.decode(payload) else { return }
-        guard !context.isPeerBlocked(peerID) else { return }
+        // Live voice off means classic-notes-only in both directions: no live
+        // bubble, no partial file, no early notification — the finalized
+        // voice note still arrives through the normal pipeline.
+        guard PTTSettings.liveVoiceEnabled else { return }
+        guard let packet = VoiceBurstPacket.decode(payload) else {
+            SecureLogger.warning("PTT: undecodable voice frame from \(peerID.id.prefix(8))… (\(payload.count) bytes: \(payload.prefix(16).hexEncodedString())…)", category: .session)
+            return
+        }
+        guard !context.isPeerBlocked(peerID) else {
+            SecureLogger.debug("PTT: dropping voice frame from blocked peer \(peerID.id.prefix(8))…", category: .session)
+            return
+        }
 
         if let assembly = assemblies[packet.burstID] {
             // The sender is Noise-authenticated; a different peer reusing the
@@ -172,9 +182,13 @@ final class ChatLiveVoiceCoordinator {
     // MARK: - Assembly lifecycle
 
     private func makeAssembly(burstID: Data, peerID: PeerID, timestamp: Date) -> Assembly? {
-        guard let fileURL = Self.makeIncomingURL(burstID: burstID) else { return nil }
+        guard let fileURL = Self.makeIncomingURL(burstID: burstID) else {
+            SecureLogger.error("PTT: cannot resolve incoming media directory for burst \(burstID.hexEncodedString())", category: .session)
+            return nil
+        }
         FileManager.default.createFile(atPath: fileURL.path, contents: nil)
         guard let handle = try? FileHandle(forWritingTo: fileURL) else {
+            SecureLogger.error("PTT: cannot open capture file for burst \(burstID.hexEncodedString())", category: .session)
             try? FileManager.default.removeItem(at: fileURL)
             return nil
         }
