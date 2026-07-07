@@ -242,6 +242,16 @@ enum TransportConfig {
     static let bleDisconnectNotifyDebounceSeconds: TimeInterval = 0.9
     static let bleReconnectLogDebounceSeconds: TimeInterval = 2.0
 
+    // Background wake-on-proximity (iOS). Pending connects issued on
+    // backgrounding never expire at the OS level: the Bluetooth controller
+    // completes them whenever the peer reappears in range and relaunches the
+    // app via state restoration. Entries older than the BLE address-rotation
+    // window no longer map to a reachable address, so the cache prunes them.
+    static let bleRecentPeripheralCacheCap: Int = 16
+    static let bleRecentPeripheralMaxAgeSeconds: TimeInterval = 15 * 60
+    // Central slots kept free for connects driven by live background discovery
+    static let bleBackgroundPendingConnectSlotReserve: Int = 2
+
     // Weak-link cooldown after connection timeouts
     static let bleWeakLinkCooldownSeconds: TimeInterval = 30.0
     static let bleWeakLinkRSSICutoff: Int = -90

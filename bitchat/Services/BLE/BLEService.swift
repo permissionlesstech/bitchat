@@ -197,6 +197,7 @@ final class BLEService: NSObject {
     
     private var maintenanceTimer: DispatchSourceTimer?  // Single timer for all maintenance tasks
     private var maintenanceCounter = 0  // Track maintenance cycles
+    private var lastMaintenanceAt = Date.distantPast  // bleQueue-confined; drives background-wake catch-up passes
     /// Whether real CoreBluetooth managers were initialized. When false (unit
     /// tests), periodic mesh background work is not started — the maintenance
     /// timer and the gossip-sync timers only drain BLE writes/notifications,
@@ -207,6 +208,9 @@ final class BLEService: NSObject {
 
     // MARK: - Connection budget & scheduling (central role)
     private var connectionScheduler = BLEConnectionScheduler<CBPeripheral>()
+    // Recently seen peripherals retained for background wake-on-proximity
+    // connects (bleQueue-confined, like the link state store)
+    private let recentPeripheralCache = BLERecentPeripheralCache<CBPeripheral>()
 
     // MARK: - Adaptive scanning duty-cycle
     private var scanDutyTimer: DispatchSourceTimer?
@@ -1609,6 +1613,9 @@ extension BLEService: CBCentralManagerDelegate {
             isConnectable: isConnectable,
             discoveredAt: Date()
         )
+        if isConnectable {
+            recentPeripheralCache.record(peripheral, peripheralID: peripheralID, at: candidate.discoveredAt)
+        }
         let existingState = linkStateStore.state(forPeripheralID: peripheralID).map(BLEExistingConnectionState.init)
 
         switch connectionScheduler.handleDiscovery(
@@ -1635,7 +1642,15 @@ extension BLEService: CBCentralManagerDelegate {
     
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         let peripheralID = peripheral.identifier.uuidString
-        
+
+        #if os(iOS)
+        // A connect completing while backgrounded is the wake-on-proximity
+        // path doing its job — worth an info line for field verification.
+        if !isAppActive {
+            SecureLogger.info("🌙 Background wake: connected to \(peripheral.name ?? peripheralID) while backgrounded", category: .session)
+        }
+        #endif
+
         // Update state to connected
         linkStateStore.markConnected(peripheral)
         
@@ -1660,7 +1675,24 @@ extension BLEService: CBCentralManagerDelegate {
         if error != nil {
             connectionScheduler.recordDisconnectError(peripheralID: peripheralID, at: Date())
         }
-        
+
+        // Retain the handle: a dropped link is the best wake-on-proximity
+        // candidate if the app backgrounds before the peer returns.
+        recentPeripheralCache.record(peripheral, peripheralID: peripheralID, at: Date())
+
+        #if os(iOS)
+        // Link lost while backgrounded (peer walked away): re-arm a pending
+        // connect during this wake window so the peer's return wakes us again.
+        // Delayed past the disconnect-settle window to avoid reconnect thrash
+        // at range edge.
+        if !isAppActive {
+            bleQueue.asyncAfter(deadline: .now() + TransportConfig.bleDisconnectDiscoveryIgnoreSeconds) { [weak self] in
+                guard let self, !self.isAppActive else { return }
+                self.armPendingBackgroundConnects()
+            }
+        }
+        #endif
+
         // Clean up references and peer mappings
         _ = linkStateStore.removePeripheral(peripheralID)
         if let peerID {
@@ -1787,6 +1819,18 @@ extension BLEService {
                 SecureLogger.debug("⏱️ Timeout fired but peripheral already connected: \(candidate.name)", category: .session)
                 return
             }
+
+            #if os(iOS)
+            if !self.isAppActive {
+                // Backgrounded: leave the connect pending. iOS never expires
+                // it — the controller completes it whenever the peer comes
+                // back into range, waking the app (state restoration relaunches
+                // us if we were terminated). Foreground return cancels stale
+                // pendings via cancelStalePendingConnects().
+                SecureLogger.info("🌙 Connect timeout deferred while backgrounded, left pending for wake-on-proximity: \(candidate.name)", category: .session)
+                return
+            }
+            #endif
 
             SecureLogger.debug("⏱️ Timeout: \(candidate.name)", category: .session)
             central.cancelPeripheralConnection(peripheral)
@@ -3407,11 +3451,12 @@ extension BLEService {
             centralManager?.stopScan()
             startScanning()
         }
+        cancelStalePendingConnects()
         logBluetoothStatus("became-active")
         scheduleBluetoothStatusSample(after: 5.0, context: "active-5s")
         // No Local Name; nothing to refresh for advertising policy
     }
-    
+
     @objc private func appDidEnterBackground() {
         isAppActive = false
         // Restart scanning without allow duplicates in background
@@ -3419,12 +3464,83 @@ extension BLEService {
             centralManager?.stopScan()
             startScanning()
         }
+        armPendingBackgroundConnects()
         // Backgrounding may precede a kill; flush the public-history archive
         // outside its 30s maintenance cadence.
         gossipSyncManager?.persistNow()
         logBluetoothStatus("entered-background")
         scheduleBluetoothStatusSample(after: 15.0, context: "background-15s")
         // No Local Name; nothing to refresh for advertising policy
+    }
+
+    /// Issue indefinite `connect()` requests to recently seen peripherals on
+    /// backgrounding. Pending connects live in the Bluetooth controller's
+    /// allowlist — no scanning and no app CPU — and complete whenever a peer
+    /// comes into range, waking (or relaunching) the app. A couple of central
+    /// slots stay reserved for connects driven by live background discovery.
+    private func armPendingBackgroundConnects() {
+        bleQueue.async { [weak self] in
+            guard let self, let central = self.centralManager, central.state == .poweredOn else { return }
+            let budget = TransportConfig.bleMaxCentralLinks
+                - TransportConfig.bleBackgroundPendingConnectSlotReserve
+                - self.linkStateStore.connectedOrConnectingPeripheralCount
+            let now = Date()
+            let targets = self.recentPeripheralCache.reconnectTargets(now: now, limit: budget) { peripheralID in
+                let state = self.linkStateStore.state(forPeripheralID: peripheralID)
+                return state?.isConnected == true || state?.isConnecting == true
+            }
+            guard !targets.isEmpty else { return }
+            for target in targets {
+                // lastConnectionAttempt stays nil: an indefinite pending connect
+                // has no attempt clock, and nil marks it always-stale so
+                // cancelStalePendingConnects() reclaims it on foreground even
+                // after a quick background→foreground bounce.
+                self.linkStateStore.setPeripheralState(
+                    BLEPeripheralLinkState(
+                        peripheral: target.peripheral,
+                        characteristic: nil,
+                        peerID: nil,
+                        isConnecting: true,
+                        isConnected: false,
+                        lastConnectionAttempt: nil,
+                        assembler: NotificationStreamAssembler()
+                    ),
+                    for: target.peripheralID
+                )
+                target.peripheral.delegate = self
+                central.connect(target.peripheral, options: [
+                    CBConnectPeripheralOptionNotifyOnConnectionKey: true,
+                    CBConnectPeripheralOptionNotifyOnDisconnectionKey: true,
+                    CBConnectPeripheralOptionNotifyOnNotificationKey: true
+                ])
+            }
+            SecureLogger.info("🌙 Armed \(targets.count) pending background connect(s) for wake-on-proximity", category: .session)
+        }
+    }
+
+    /// Foreground restores normal connection management: pending connects
+    /// older than the connect timeout (including ones rebuilt by state
+    /// restoration after a relaunch) are cancelled so live scanning and the
+    /// scheduler take over. Anything still nearby is rediscovered within
+    /// seconds by the allow-duplicates foreground scan.
+    private func cancelStalePendingConnects() {
+        bleQueue.async { [weak self] in
+            guard let self, let central = self.centralManager else { return }
+            let now = Date()
+            var cancelled = 0
+            for state in self.linkStateStore.peripheralStates where state.isConnecting && !state.isConnected {
+                let age = state.lastConnectionAttempt.map { now.timeIntervalSince($0) } ?? .infinity
+                guard age > TransportConfig.bleConnectTimeoutSeconds else { continue }
+                let peripheralID = state.peripheral.identifier.uuidString
+                central.cancelPeripheralConnection(state.peripheral)
+                _ = self.linkStateStore.removePeripheral(peripheralID)
+                cancelled += 1
+            }
+            if cancelled > 0 {
+                SecureLogger.info("🌅 Cancelled \(cancelled) stale pending connect(s) on foreground", category: .session)
+                self.tryConnectFromQueue()
+            }
+        }
     }
     #endif
     
@@ -3773,6 +3889,16 @@ extension BLEService {
                 meshTopology.recordObservedVersion(packet.version, for: routingData(for: peerID))
             }
         }
+
+        #if os(iOS)
+        // The maintenance timer is suspended with the app, so a packet arriving
+        // while backgrounded means the radio woke us — use the wake window to
+        // run the announce/flush/drain pass the timer would have run.
+        if !isAppActive {
+            bleQueue.async { [weak self] in self?.performBackgroundWakeMaintenanceIfStale() }
+        }
+        #endif
+
 
         // Process by type
         switch context.messageType {
@@ -4270,6 +4396,7 @@ extension BLEService {
     
     private func performMaintenance() {
         maintenanceCounter += 1
+        lastMaintenanceAt = Date()
 
         let now = Date()
         let connectedCount = collectionsQueue.sync { peerRegistry.connectedCount }
@@ -4334,6 +4461,18 @@ extension BLEService {
         }
     }
     
+    #if os(iOS)
+    /// Catch-up maintenance for background wake windows (bleQueue-confined).
+    /// Rate-limited to the normal maintenance cadence so a burst of inbound
+    /// packets during one wake still runs at most one extra pass.
+    private func performBackgroundWakeMaintenanceIfStale() {
+        guard meshBackgroundEnabled,
+              !isAppActive,
+              Date().timeIntervalSince(lastMaintenanceAt) >= TransportConfig.bleMaintenanceInterval else { return }
+        performMaintenance()
+    }
+    #endif
+
     private func checkPeerConnectivity() {
         let now = Date()
         let peerIDsForLinkState: [PeerID] = collectionsQueue.sync { peerRegistry.peerIDs }
