@@ -70,22 +70,32 @@ extension ChatViewModel {
     }
 
     /// Picks the capture backend for the composer's hold-to-record gesture:
-    /// live push-to-talk when the selected DM peer can hear it now (mesh
-    /// reachable + established Noise session), otherwise the classic
-    /// record-then-send voice note. Either way the release delivers a normal
-    /// voice note through `sendVoiceNote(at:)`.
+    /// live push-to-talk when the audience can hear it now — a DM peer that
+    /// is mesh-reachable with an established Noise session, or the public
+    /// mesh channel — otherwise the classic record-then-send voice note.
+    /// Either way the release delivers a normal voice note through
+    /// `sendVoiceNote(at:)`, which live receivers absorb into the live bubble.
     @MainActor
     func makeVoiceCaptureSession() -> VoiceCaptureSession {
-        guard PTTSettings.liveVoiceEnabled,
-              let peerID = selectedPrivateChatPeer,
-              !peerID.isGeoDM, !peerID.isGeoChat, !peerID.isGroup,
-              meshService.isPeerReachable(peerID),
-              case .established = meshService.getNoiseSessionState(for: peerID)
-        else {
-            return VoiceNoteCaptureSession()
+        guard PTTSettings.liveVoiceEnabled else { return VoiceNoteCaptureSession() }
+
+        if let peerID = selectedPrivateChatPeer {
+            guard !peerID.isGeoDM, !peerID.isGeoChat, !peerID.isGroup,
+                  meshService.isPeerReachable(peerID),
+                  case .established = meshService.getNoiseSessionState(for: peerID)
+            else {
+                return VoiceNoteCaptureSession()
+            }
+            return PTTLiveVoiceSession(sendPacket: { [meshService] packet in
+                meshService.sendVoiceFrame(packet, to: peerID)
+            })
         }
+
+        // Public mesh timeline: signed live broadcast. Geohash channels never
+        // reach here (the composer hides media affordances there).
+        guard activeChannel == .mesh else { return VoiceNoteCaptureSession() }
         return PTTLiveVoiceSession(sendPacket: { [meshService] packet in
-            meshService.sendVoiceFrame(packet, to: peerID)
+            meshService.sendVoiceFrameBroadcast(packet)
         })
     }
 

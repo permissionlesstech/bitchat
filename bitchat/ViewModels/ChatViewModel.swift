@@ -187,6 +187,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     @MainActor
     var connectedPeers: Set<PeerID> { unifiedPeerService.connectedPeerIDs }
     @Published var allPeers: [BitchatPeer] = []
+    /// Nickname of whoever is talking live in the public mesh channel right
+    /// now (floor-courtesy indicator on the composer mic), nil when nobody.
+    @Published var activePublicVoiceTalker: String?
 
     /// Read-only derived view of all direct conversations in the
     /// `ConversationStore`, keyed by routing peer ID. Serves the coordinator
@@ -1624,6 +1627,17 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         }
     }
 
+    func didReceivePublicVoiceFrame(from peerID: PeerID, nickname: String, payload: Data, timestamp: Date) {
+        Task { @MainActor [weak self] in
+            self?.liveVoiceCoordinator.handlePublicVoiceFramePayload(
+                from: peerID,
+                nickname: nickname,
+                payload: payload,
+                timestamp: timestamp
+            )
+        }
+    }
+
     // MARK: - QR Verification API
     @MainActor
     func beginQRVerification(with qr: VerificationService.VerificationQR) -> Bool {
@@ -1776,6 +1790,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     /// Handle incoming public message
     @MainActor
     func handlePublicMessage(_ message: BitchatMessage) {
+        // A finalized voice note whose burst already streamed in live swaps
+        // into the existing bubble instead of appearing twice.
+        if liveVoiceCoordinator.absorbFinalizedVoiceNote(message) { return }
         publicConversationCoordinator.handlePublicMessage(message)
     }
 

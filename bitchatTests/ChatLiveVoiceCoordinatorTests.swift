@@ -15,22 +15,38 @@ import BitFoundation
 private final class MockChatLiveVoiceContext: ChatLiveVoiceContext {
     var nickname = "me"
     var selectedPrivateChatPeer: PeerID?
+    var isViewingPublicMeshTimeline = false
     var blockedPeers: Set<PeerID> = []
 
     private(set) var handledPrivateMessages: [BitchatMessage] = []
+    private(set) var handledPublicMessages: [BitchatMessage] = []
     private(set) var upsertedMessages: [(message: BitchatMessage, peerID: PeerID)] = []
+    private(set) var upsertedPublicMessages: [BitchatMessage] = []
     private(set) var removedMessageIDs: [String] = []
+    private(set) var talkerUpdates: [String?] = []
 
     func isPeerBlocked(_ peerID: PeerID) -> Bool { blockedPeers.contains(peerID) }
     func resolveNickname(for peerID: PeerID) -> String { "alice" }
     func handlePrivateMessage(_ message: BitchatMessage) { handledPrivateMessages.append(message) }
+    func handlePublicMessage(_ message: BitchatMessage) { handledPublicMessages.append(message) }
     func upsertPrivateMessage(_ message: BitchatMessage, in peerID: PeerID) {
         upsertedMessages.append((message, peerID))
+    }
+    func upsertPublicMeshMessage(_ message: BitchatMessage) {
+        upsertedPublicMessages.append(message)
     }
     @discardableResult
     func removePrivateMessage(withID messageID: String) -> BitchatMessage? {
         removedMessageIDs.append(messageID)
         return nil
+    }
+    func removeMessage(withID messageID: String, cleanupFile: Bool) {
+        removedMessageIDs.append(messageID)
+    }
+    func setActivePublicVoiceTalker(_ nickname: String?) {
+        if talkerUpdates.last ?? nil != nickname {
+            talkerUpdates.append(nickname)
+        }
     }
     func notifyUIChanged() {}
 }
@@ -211,6 +227,62 @@ struct ChatLiveVoiceCoordinatorTests {
 
         send(try #require(VoiceBurstPacket(burstID: makeBurstID(0xFF), seq: 0, kind: .start(codec: .aacLC16kMono))), to: coordinator, from: peer)
         #expect(context.handledPrivateMessages.count == TransportConfig.pttMaxConcurrentAssemblies)
+    }
+
+    @Test func publicBurstCreatesMeshBubbleAndTracksTalker() throws {
+        let context = MockChatLiveVoiceContext()
+        let coordinator = ChatLiveVoiceCoordinator(context: context)
+        let burstID = makeBurstID(0x71)
+        defer { incomingFileURL(burstID: burstID).map { try? FileManager.default.removeItem(at: $0) } }
+
+        func sendPublic(_ packet: VoiceBurstPacket) {
+            coordinator.handlePublicVoiceFramePayload(from: peer, nickname: "bob", payload: packet.encode(), timestamp: Date())
+        }
+
+        sendPublic(try #require(VoiceBurstPacket(burstID: burstID, seq: 0, kind: .start(codec: .aacLC16kMono))))
+        sendPublic(try #require(VoiceBurstPacket(burstID: burstID, seq: 1, kind: .frames([Data(repeating: 3, count: 50)]))))
+
+        // Bubble lands in the public pipeline with the verified nickname, and
+        // the floor-courtesy indicator names the talker.
+        #expect(context.handledPrivateMessages.isEmpty)
+        let bubble = try #require(context.handledPublicMessages.first)
+        #expect(!bubble.isPrivate)
+        #expect(bubble.sender == "bob")
+        #expect(context.talkerUpdates.last == "bob")
+
+        sendPublic(try #require(VoiceBurstPacket(burstID: burstID, seq: 2, kind: .end(totalDataPackets: 1, durationMs: 64))))
+        // Burst over: talker cleared, bubble republished into the mesh store.
+        #expect(context.talkerUpdates.last == .some(nil))
+        #expect(context.upsertedPublicMessages.contains { $0.id == bubble.id })
+
+        // The broadcast finalized note absorbs into the same bubble.
+        let note = BitchatMessage(
+            sender: "bob", content: "[voice] voice_\(burstID.hexEncodedString()).m4a", timestamp: Date(),
+            isRelay: false, isPrivate: false, senderPeerID: peer
+        )
+        #expect(coordinator.absorbFinalizedVoiceNote(note))
+        let replacement = try #require(context.upsertedPublicMessages.last)
+        #expect(replacement.id == bubble.id)
+        #expect(replacement.content == note.content)
+        #expect(!replacement.isPrivate)
+    }
+
+    @Test func absorbEnforcesScopeBinding() throws {
+        let context = MockChatLiveVoiceContext()
+        let coordinator = ChatLiveVoiceCoordinator(context: context)
+        let burstID = makeBurstID(0x72)
+        defer { incomingFileURL(burstID: burstID).map { try? FileManager.default.removeItem(at: $0) } }
+
+        // A DM burst...
+        send(try #require(VoiceBurstPacket(burstID: burstID, seq: 1, kind: .frames([Data(repeating: 4, count: 40)]))), to: coordinator, from: peer)
+        send(try #require(VoiceBurstPacket(burstID: burstID, seq: 2, kind: .end(totalDataPackets: 1, durationMs: 64))), to: coordinator, from: peer)
+
+        // ...must not be replaced by a *public* note claiming the same burst.
+        let publicNote = BitchatMessage(
+            sender: "alice", content: "[voice] voice_\(burstID.hexEncodedString()).m4a", timestamp: Date(),
+            isRelay: false, isPrivate: false, senderPeerID: peer
+        )
+        #expect(!coordinator.absorbFinalizedVoiceNote(publicNote))
     }
 
     @Test func burstIDParsingFromFileNames() {

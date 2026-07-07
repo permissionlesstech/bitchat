@@ -34,6 +34,9 @@ enum TransportConfig {
     // Inbound flood guard: a real burst arrives at ~2KB/s; allow 3x plus a
     // small settling allowance before dropping a sender's frames.
     static let pttInboundMaxBytesPerSecond: Int = 6_000
+    // Public bursts are live-only traffic: frames older than this are relay
+    // stragglers or replays, not audio anyone should start hearing.
+    static let pttPublicFrameMaxAgeSeconds: TimeInterval = 30
 
     // Mesh diagnostics (/ping)
     static let meshPingTimeoutSeconds: TimeInterval = 10    // Give up on a probe after this window

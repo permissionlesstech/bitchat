@@ -72,6 +72,9 @@ enum TransportEvent: @unchecked Sendable {
     /// Encrypted group broadcast (MessageType 0x25). Opaque here — the group
     /// coordinator decrypts and authenticates against the roster.
     case groupMessageReceived(payload: Data, timestamp: Date)
+    /// Public live-voice burst packet (MessageType 0x29), already
+    /// signature-verified against the claimed sender.
+    case publicVoiceFrameReceived(peerID: PeerID, nickname: String, payload: Data, timestamp: Date)
     case peerConnected(PeerID)
     case peerDisconnected(PeerID)
     case peerListUpdated([PeerID])
@@ -160,6 +163,8 @@ protocol Transport: AnyObject {
     // only useful now — transports drop them (never queue) when no
     // established session exists.
     func sendVoiceFrame(_ burstContent: Data, to peerID: PeerID)
+    // Public-mesh counterpart: signed ephemeral broadcast, never synced.
+    func sendVoiceFrameBroadcast(_ burstContent: Data)
 
     // Courier store-and-forward (mesh transports only): seal a message to the
     // recipient's static key and hand it to connected couriers for physical
@@ -238,6 +243,7 @@ extension Transport {
     func sendCourierMessage(_ content: String, messageID: String, recipientNoiseKey: Data, via couriers: [PeerID]) -> Bool { false }
     func sendBoardPayload(_ payload: Data) {}
     func sendVoiceFrame(_ burstContent: Data, to peerID: PeerID) {}
+    func sendVoiceFrameBroadcast(_ burstContent: Data) {}
 
     // Mesh diagnostics are mesh-transport-only; other transports report
     // "no reply"/"no path" rather than pretending to measure anything.
@@ -280,6 +286,8 @@ extension BitchatDelegate {
             didReceiveNoisePayload(from: peerID, type: type, payload: payload, timestamp: timestamp)
         case let .groupMessageReceived(payload, timestamp):
             didReceiveGroupMessage(payload: payload, timestamp: timestamp)
+        case let .publicVoiceFrameReceived(peerID, nickname, payload, timestamp):
+            didReceivePublicVoiceFrame(from: peerID, nickname: nickname, payload: payload, timestamp: timestamp)
         case .peerConnected(let peerID):
             didConnectToPeer(peerID)
         case .peerDisconnected(let peerID):

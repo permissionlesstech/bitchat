@@ -13,8 +13,10 @@ The "smart" part is that PTT is not a separate mode the user must choose. It is 
 |---|---|
 | DM, peer connected/reachable on mesh | **Live stream** (Noise-encrypted frames) + finalized voice note for reliability |
 | DM, peer only reachable via Nostr | Existing voice-note recording only (no live; media doesn't ride Nostr today) |
-| Public mesh chat | **Live broadcast stream**, best-effort, no file follow-up |
+| Public mesh chat | **Live broadcast stream** (signed) + finalized voice note, same dedup as DMs |
 | Geohash (Nostr) channels | PTT unavailable (matches existing `canSendMediaInCurrentContext` media policy) |
+
+*(Public originally speced as live-only to avoid doubling bandwidth, but dropping the note broadcast would regress mixed-version meshes — old clients that can't decode live bursts would stop receiving public voice entirely — and late joiners/out-of-range peers would get nothing. The note stays; live receivers absorb it silently.)*
 
 One gesture (hold mic), one mental model ("talk"), and the system degrades from live → reliable-note → unavailable based on what the transport can actually do.
 
@@ -91,7 +93,7 @@ New `VoiceBurstAssembler` (keyed by sender + burstID) feeding a `PTTBurstPlayer`
 - **Loss handling:** gap in seq → insert silence for the missing frames (64 ms each) and keep going. No PLC in v1; at these frame sizes brief dropouts are acceptable.
 - **Burst end:** on `END`, or 3 s with no frames (talker walked out of range).
 - **Persistence:** frames append to an incoming ADTS `.aac` file (already an allowed `MimeType`), so every burst becomes a replayable voice-note bubble containing whatever was captured — even a partial one.
-- **Dedup with the finalized note (DM):** when a `fileTransfer` arrives whose fileName carries a burstID we already assembled, it silently *replaces* the partial file behind the existing bubble (no new message row, no second notification). Receivers that heard everything live just get a lossless copy.
+- **Dedup with the finalized note:** when a `fileTransfer` arrives whose fileName carries a burstID we already assembled (DM or public), it silently *replaces* the partial file behind the existing bubble (no new message row, no second notification). Receivers that heard everything live just get a lossless copy.
 - **Resource caps:** ≤ 8 concurrent assemblies, ≤ 256 KB per burst (60 s × 2 KB/s + slack), 30 s stale cleanup, and drop inbound frames beyond ~2× realtime per sender (spam/flood guard).
 
 ## 6. Playback policy — when does it actually make sound?

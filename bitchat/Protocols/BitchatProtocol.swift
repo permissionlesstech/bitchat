@@ -130,6 +130,9 @@ protocol BitchatDelegate: AnyObject {
     // Encrypted group broadcast (opaque envelope; decrypted by the group coordinator)
     func didReceiveGroupMessage(payload: Data, timestamp: Date)
 
+    // Public live-voice burst packet (signature-verified by the transport)
+    func didReceivePublicVoiceFrame(from peerID: PeerID, nickname: String, payload: Data, timestamp: Date)
+
     // Bluetooth state updates for user notifications
     func didUpdateBluetoothState(_ state: CBManagerState)
     func didReceivePublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date, messageID: String?)
@@ -150,6 +153,10 @@ extension BitchatDelegate {
     }
 
     func didReceiveGroupMessage(payload: Data, timestamp: Date) {
+        // Default empty implementation
+    }
+
+    func didReceivePublicVoiceFrame(from peerID: PeerID, nickname: String, payload: Data, timestamp: Date) {
         // Default empty implementation
     }
 

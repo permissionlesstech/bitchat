@@ -54,6 +54,9 @@ struct SyncTypeFlags: OptionSet {
         // downlinks are rate-budgeted rebroadcasts); replaying them via sync
         // would waste airtime and extend their lifetime.
         case .nostrCarrier: return nil
+        // Live voice is only useful now; replaying stale audio frames via
+        // sync would waste airtime (receivers drop them as stale anyway).
+        case .voiceFrame: return nil
         // Prekey bundles gossip like board posts. The bitfield is a
         // wire-tolerant little-endian UInt64 (1-8 bytes, unknown high bits
         // ignored by `type(forBit:)`), so bits 8+ need no format change: old

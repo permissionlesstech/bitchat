@@ -20,6 +20,7 @@ struct RelayController {
                        isAnnounce: Bool,
                        isRequestSync: Bool = false,
                        isUrgentBoardPost: Bool = false,
+                       isVoiceFrame: Bool = false,
                        degree: Int,
                        highDegreeThreshold: Int) -> RelayDecision {
         let ttlCap = min(ttl, TransportConfig.messageTTLDefault)
@@ -46,7 +47,11 @@ struct RelayController {
             return RelayDecision(shouldRelay: true, newTTL: newTTL, delayMs: delayMs)
         }
 
-        if isFragment {
+        // Live voice floods with the fragment policy: the dense clamp
+        // contains the sustained ~15 pkt/s per-talker stream, and the tight
+        // jitter window keeps per-hop latency inside the receiver's ~350 ms
+        // jitter buffer across multi-hop paths.
+        if isFragment || isVoiceFrame {
             // Dense graphs clamp harder to contain full-fanout fragment floods;
             // sparse graphs get full depth so media reaches as far as text.
             let fragmentCap = degree >= highDegreeThreshold
