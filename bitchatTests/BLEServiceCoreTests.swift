@@ -114,7 +114,9 @@ struct BLEServiceCoreTests {
     }
 
     @Test
-    func ingressRejectsDirectAnnounceThatConflictsWithBoundLink() async throws {
+    func ingressAllowsDirectAnnounceThatConflictsWithBoundLink() async throws {
+        // Peer-ID rotation heal: the announce must reach signature
+        // verification, which decides whether the link rebinds.
         let ble = makeService()
         let boundPeer = PeerID(str: "1122334455667788")
         let claimedPeer = PeerID(str: "8899aabbccddeeff")
@@ -128,7 +130,76 @@ struct BLEServiceCoreTests {
             ttl: 7
         )
 
+        #expect(ble._test_acceptsIngress(packet: packet, boundPeerID: boundPeer))
+    }
+
+    @Test
+    func ingressRejectsRequestSyncThatConflictsWithBoundLink() async throws {
+        let ble = makeService()
+        let boundPeer = PeerID(str: "1122334455667788")
+        let claimedPeer = PeerID(str: "8899aabbccddeeff")
+        let packet = BitchatPacket(
+            type: MessageType.requestSync.rawValue,
+            senderID: Data(hexString: claimedPeer.id) ?? Data(),
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: Data(),
+            signature: nil,
+            ttl: 0
+        )
+
         #expect(!ble._test_acceptsIngress(packet: packet, boundPeerID: boundPeer))
+    }
+
+    @Test
+    func verifiedDirectAnnounceRebindsRotatedLinkAndRetiresOldPeer() async throws {
+        let ble = makeService()
+        let oldPeerID = PeerID(str: "1122334455667788")
+        let centralUUID = "central-rotation"
+
+        // A connected peer whose link binding predates its relaunch.
+        ble._test_seedConnectedPeer(oldPeerID, nickname: "alice")
+        ble._test_bindCentral(centralUUID, to: oldPeerID)
+
+        // The relaunched device re-announces its rotated identity over the
+        // still-open link.
+        let signer = NoiseEncryptionService(keychain: MockKeychain())
+        let announcement = AnnouncementPacket(
+            nickname: "alice",
+            noisePublicKey: signer.getStaticPublicKeyData(),
+            signingPublicKey: signer.getSigningPublicKeyData(),
+            directNeighbors: nil
+        )
+        let payload = try #require(announcement.encode(), "Failed to encode announcement")
+        let newPeerID = PeerID(publicKey: announcement.noisePublicKey)
+        let unsigned = BitchatPacket(
+            type: MessageType.announce.rawValue,
+            senderID: Data(hexString: newPeerID.id) ?? Data(),
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: payload,
+            signature: nil,
+            ttl: 7
+        )
+        let packet = try #require(signer.signPacket(unsigned), "Failed to sign announce packet")
+
+        #expect(ble._test_recordIngressIfNew(packet: packet, linkID: centralUUID))
+        ble._test_handlePacket(packet, fromPeerID: newPeerID, preseedPeer: false)
+
+        let rebound = await TestHelpers.waitUntil(
+            { ble._test_centralBinding(centralUUID) == newPeerID },
+            timeout: TestConstants.defaultTimeout
+        )
+        #expect(rebound)
+
+        let retired = await TestHelpers.waitUntil(
+            {
+                let peerIDs = ble.currentPeerSnapshots().map(\.peerID)
+                return peerIDs.contains(newPeerID) && !peerIDs.contains(oldPeerID)
+            },
+            timeout: TestConstants.defaultTimeout
+        )
+        #expect(retired)
     }
 
     @Test

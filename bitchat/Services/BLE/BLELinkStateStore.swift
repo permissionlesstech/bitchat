@@ -203,9 +203,19 @@ final class BLELinkStateStore {
 
     func bindPeripheral(_ peripheralUUID: String, to peerID: PeerID) {
         assertOwned()
-        if updatePeripheral(peripheralUUID, { $0.peerID = peerID }) != nil {
-            peerToPeripheralUUID[peerID] = peripheralUUID
+        var previousPeerID: PeerID?
+        let updated = updatePeripheral(peripheralUUID) {
+            previousPeerID = $0.peerID
+            $0.peerID = peerID
         }
+        guard updated != nil else { return }
+        // Rebinding (peer-ID rotation): drop the retired ID's reverse mapping
+        // so the old peer no longer claims this link.
+        if let previousPeerID, previousPeerID != peerID,
+           peerToPeripheralUUID[previousPeerID] == peripheralUUID {
+            peerToPeripheralUUID.removeValue(forKey: previousPeerID)
+        }
+        peerToPeripheralUUID[peerID] = peripheralUUID
     }
 
     func removePeripheral(_ peripheralID: String) -> PeerID? {
