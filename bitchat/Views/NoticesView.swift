@@ -78,8 +78,10 @@ struct NoticesView: View {
         static let geoTab = String(localized: "notices.tab.geo", defaultValue: "geo", comment: "Segmented control label for geohash-scoped notices")
         static let meshTab = String(localized: "notices.tab.mesh", defaultValue: "mesh", comment: "Segmented control label for mesh-local notices")
         static let scopePicker = String(localized: "notices.accessibility.scope", defaultValue: "Notices scope", comment: "Accessibility label for the geo/mesh scope toggle")
-        static let geoDescription = String(localized: "notices.description.geo", defaultValue: "notices for this area: signed posts carried by the mesh, merged with notes seen on nostr relays.", comment: "Explainer for the geo tab of the notices sheet")
-        static let meshDescription = String(localized: "board.description", defaultValue: "persistent notices carried by the mesh. posts are signed, spread device-to-device, and expire on their own.", comment: "Explainer under the board sheet title")
+        // The pre-merge location-notes explainer, reused so its existing
+        // translations carry over.
+        static let geoDescription = String(localized: "location_notes.description", comment: "Explainer for the geo tab of the notices sheet")
+        static let meshDescription = String(localized: "notices.description.mesh", defaultValue: "pin short notices for people around you. they hop phone to phone, even offline, and disappear on their own after a few days.", comment: "Explainer for the mesh tab of the notices sheet")
         static let emptyTitle = String(localized: "board.empty_title", defaultValue: "no notices yet", comment: "Title shown when the board has no posts")
         static let emptySubtitle = String(localized: "board.empty_subtitle", defaultValue: "pin the first notice for people around here.", comment: "Subtitle shown when the board has no posts")
         static let urgentBadge = String(localized: "board.urgent_badge", defaultValue: "urgent", comment: "Badge shown on urgent board posts")
@@ -250,27 +252,32 @@ struct NoticesView: View {
                 .disabled(!sendEnabled)
                 .accessibilityLabel(Strings.send)
             }
-            HStack(spacing: 12) {
-                Toggle(isOn: $urgent) {
-                    Text(Strings.urgentToggle)
-                        .bitchatFont(size: 12)
-                        .foregroundColor(urgent ? palette.alertRed : palette.secondary)
-                }
-                .toggleStyle(.switch)
-                .fixedSize()
-                .accessibilityLabel(Strings.urgentToggle)
-                Spacer()
-                Text(Strings.expiryLabel)
-                    .bitchatFont(size: 12)
-                    .foregroundColor(palette.secondary)
-                Picker(Strings.expiryLabel, selection: $expiryDays) {
-                    ForEach([1, 3, 7], id: \.self) { days in
-                        Text(Strings.expiryDaysOption(days)).tag(days)
+            // Urgency and expiry only travel with the mesh copy — the bridged
+            // Nostr note carries neither, so relay-side readers would never
+            // see them. Offer the controls only where they fully apply.
+            if tab == .mesh {
+                HStack(spacing: 12) {
+                    Toggle(isOn: $urgent) {
+                        Text(Strings.urgentToggle)
+                            .bitchatFont(size: 12)
+                            .foregroundColor(urgent ? palette.alertRed : palette.secondary)
                     }
+                    .toggleStyle(.switch)
+                    .fixedSize()
+                    .accessibilityLabel(Strings.urgentToggle)
+                    Spacer()
+                    Text(Strings.expiryLabel)
+                        .bitchatFont(size: 12)
+                        .foregroundColor(palette.secondary)
+                    Picker(Strings.expiryLabel, selection: $expiryDays) {
+                        ForEach([1, 3, 7], id: \.self) { days in
+                            Text(Strings.expiryDaysOption(days)).tag(days)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .fixedSize()
+                    .accessibilityLabel(Strings.expiryLabel)
                 }
-                .pickerStyle(.segmented)
-                .fixedSize()
-                .accessibilityLabel(Strings.expiryLabel)
             }
         }
         .padding(.horizontal, 16)
@@ -287,12 +294,13 @@ struct NoticesView: View {
     private func send() {
         guard let geohash = activeGeohash, let content = draft.trimmedOrNilIfEmpty else { return }
         // Geo posts go to the board and are bridged to Nostr by BoardManager,
-        // so mesh and internet see the same notice.
+        // so mesh and internet see the same notice. They always use the
+        // defaults: non-urgent, 7-day expiry (NIP-40 on the bridged copy).
         let sent = board.createPost(
             content: content,
             geohash: geohash,
-            urgent: urgent,
-            expiryDays: expiryDays,
+            urgent: tab == .mesh && urgent,
+            expiryDays: tab == .mesh ? expiryDays : 7,
             nickname: senderNickname
         )
         if sent {

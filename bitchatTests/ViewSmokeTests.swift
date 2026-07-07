@@ -1,3 +1,4 @@
+import Combine
 import Testing
 import Foundation
 import SwiftUI
@@ -39,6 +40,7 @@ private struct SmokeFeatureModels {
     let verificationModel: VerificationModel
     let conversationUIModel: ConversationUIModel
     let peerListModel: PeerListModel
+    let boardAlertsModel: BoardAlertsModel
 }
 
 @MainActor
@@ -80,6 +82,14 @@ private func makeSmokeFeatureModels(for viewModel: ChatViewModel) -> SmokeFeatur
         locationChannelsModel: locationChannelsModel
     )
 
+    let boardAlertsModel = BoardAlertsModel(
+        arrivals: Empty(completeImmediately: false).eraseToAnyPublisher(),
+        dependencies: BoardAlertsModel.Dependencies(
+            isOwnPost: { _ in false },
+            emitSystemLine: { _, _ in }
+        )
+    )
+
     return SmokeFeatureModels(
         publicChatModel: publicChatModel,
         appChromeModel: appChromeModel,
@@ -88,7 +98,8 @@ private func makeSmokeFeatureModels(for viewModel: ChatViewModel) -> SmokeFeatur
         privateConversationModel: privateConversationModel,
         verificationModel: verificationModel,
         conversationUIModel: conversationUIModel,
-        peerListModel: peerListModel
+        peerListModel: peerListModel,
+        boardAlertsModel: boardAlertsModel
     )
 }
 
@@ -106,6 +117,7 @@ private func installSmokeEnvironment<V: View>(
         .environmentObject(featureModels.verificationModel)
         .environmentObject(featureModels.conversationUIModel)
         .environmentObject(featureModels.peerListModel)
+        .environmentObject(featureModels.boardAlertsModel)
 }
 
 @MainActor
@@ -403,7 +415,7 @@ struct ViewSmokeTests {
         let board = BoardManager(
             transport: transport,
             store: BoardStore(persistsToDisk: false, fileURL: nil, now: { Date() }),
-            publishToNostr: { _, _, _ in nil },
+            publishToNostr: { _, _, _, _ in nil },
             deleteFromNostr: { _, _ in }
         )
 

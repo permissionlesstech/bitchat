@@ -40,6 +40,7 @@ struct BitchatApp: App {
                 .environmentObject(runtime.locationChannelsModel)
                 .environmentObject(runtime.peerListModel)
                 .environmentObject(runtime.appChromeModel)
+                .environmentObject(runtime.boardAlertsModel)
                 .onAppear {
                     appDelegate.runtime = runtime
                     runtime.start()

@@ -5,6 +5,7 @@ struct ContentHeaderView: View {
     @EnvironmentObject private var verificationModel: VerificationModel
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @EnvironmentObject private var peerListModel: PeerListModel
+    @EnvironmentObject private var boardAlertsModel: BoardAlertsModel
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
@@ -23,6 +24,10 @@ struct ContentHeaderView: View {
     /// Unified notices sheet (board posts + location notes) for the current
     /// channel context.
     @State private var showNotices = false
+
+    /// Board posts mirrored from the store so the pin icon can show when the
+    /// current scope has notices.
+    @State private var boardPosts: [BoardPostPacket] = []
 
     var body: some View {
         HStack(spacing: 0) {
@@ -133,15 +138,33 @@ struct ContentHeaderView: View {
                     )
                 }
 
-                Button(action: { showNotices = true }) {
-                    Image(systemName: "pin")
+                Button(action: {
+                    boardAlertsModel.markAllSeen()
+                    showNotices = true
+                }) {
+                    // Fill marks unseen new pins; the tint says the current
+                    // scope has notices at all.
+                    Image(systemName: unseenNoticesCount > 0 ? "pin.fill" : "pin")
                         .font(.bitchatSystem(size: 12))
-                        .foregroundColor(palette.secondary.opacity(0.9))
+                        .foregroundColor(
+                            scopeHasNotices || unseenNoticesCount > 0
+                                ? Color.orange.opacity(0.8)
+                                : palette.secondary.opacity(0.9)
+                        )
                         .headerTapTarget()
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(
                     String(localized: "content.accessibility.notices", defaultValue: "Notices", comment: "Accessibility label for the notices button")
+                )
+                .accessibilityValue(
+                    unseenNoticesCount > 0
+                        ? String(
+                            format: String(localized: "content.accessibility.notices_new", defaultValue: "%lld new", comment: "Accessibility value for the notices button when unseen pins arrived"),
+                            locale: .current,
+                            unseenNoticesCount
+                        )
+                        : ""
                 )
                 .help(
                     String(localized: "content.header.notices", defaultValue: "Notices: pinned posts for this area and the mesh", comment: "Tooltip for the notices button")
@@ -245,6 +268,9 @@ struct ContentHeaderView: View {
         .onReceive(CourierStore.shared.$carriedCount) { count in
             carriedMailCount = count
         }
+        .onReceive(BoardStore.shared.$postsSnapshot) { posts in
+            boardPosts = posts
+        }
         .sheet(isPresented: $appChromeModel.isLocationChannelsSheetPresented) {
             LocationChannelsSheet(isPresented: $appChromeModel.isLocationChannelsSheetPresented)
                 .environmentObject(locationChannelsModel)
@@ -297,6 +323,27 @@ private extension ContentHeaderView {
             return .geo
         }
         return .mesh
+    }
+
+    /// The geo scope the notices sheet would open on: the selected location
+    /// channel, or the device's building geohash when chatting on mesh.
+    var noticesGeoScope: String? {
+        if case .location(let channel) = locationChannelsModel.selectedChannel {
+            return channel.geohash
+        }
+        return locationChannelsModel.currentBuildingGeohash
+    }
+
+    /// Whether either tab of the notices sheet currently has content.
+    var scopeHasNotices: Bool {
+        boardPosts.contains { $0.geohash.isEmpty || $0.geohash == noticesGeoScope }
+    }
+
+    /// New pins in either visible scope since the sheet was last opened.
+    var unseenNoticesCount: Int {
+        let meshCount = boardAlertsModel.unseenCount(forGeohash: "")
+        let geoCount = noticesGeoScope.map { boardAlertsModel.unseenCount(forGeohash: $0) } ?? 0
+        return meshCount + geoCount
     }
 
     /// Whether anyone is actually reachable on the current channel — the

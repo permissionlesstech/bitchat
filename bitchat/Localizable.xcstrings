@@ -1,6 +1,9 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "#%@" : {
+
+    },
     "%@" : {
       "comment" : "Non-localizable symbol used in code",
       "extractionState" : "manual",
@@ -5019,12 +5022,6 @@
       "comment" : "Legend entry for the nosign glyph",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "blocked"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5041,6 +5038,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "blockiert"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "blocked"
           }
         },
         "es" : {
@@ -5175,12 +5178,6 @@
       "comment" : "Legend entry for the lock glyph",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "end-to-end encrypted session"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5197,6 +5194,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "end-to-end-verschlüsselte sitzung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "end-to-end encrypted session"
           }
         },
         "es" : {
@@ -5331,12 +5334,6 @@
       "comment" : "Legend entry for the failed-encryption lock-slash glyph",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "encryption failed — messages not secured"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5353,6 +5350,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "verschlüsselung fehlgeschlagen — nachrichten nicht gesichert"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "encryption failed — messages not secured"
           }
         },
         "es" : {
@@ -5487,12 +5490,6 @@
       "comment" : "Legend entry for the star glyph",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "favorite — enables offline messages via nostr when mutual"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5509,6 +5506,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "favorit — ermöglicht offline-nachrichten über nostr, wenn beidseitig"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favorite — enables offline messages via nostr when mutual"
           }
         },
         "es" : {
@@ -5643,12 +5646,6 @@
       "comment" : "Legend entry for the map pin glyph",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "physically in this location channel's area"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5665,6 +5662,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "physisch im gebiet dieses standortkanals"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "physically in this location channel's area"
           }
         },
         "es" : {
@@ -5799,12 +5802,6 @@
       "comment" : "Legend entry for the antenna glyph",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "connected directly over bluetooth"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5821,6 +5818,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "direkt über bluetooth verbunden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "connected directly over bluetooth"
           }
         },
         "es" : {
@@ -5955,12 +5958,6 @@
       "comment" : "Legend entry for the relayed-mesh glyph",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "reachable through the mesh, relayed by others"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5977,6 +5974,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "über das mesh erreichbar, von anderen weitergeleitet"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "reachable through the mesh, relayed by others"
           }
         },
         "es" : {
@@ -6111,12 +6114,6 @@
       "comment" : "Legend entry for the globe glyph",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "reachable over the internet (nostr) — mutual favorites only"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6133,6 +6130,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "über das internet erreichbar (nostr) — nur bei beidseitigen favoriten"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "reachable over the internet (nostr) — mutual favorites only"
           }
         },
         "es" : {
@@ -6267,12 +6270,6 @@
       "comment" : "Legend entry for the offline person glyph",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "offline — not currently reachable"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6289,6 +6286,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "offline — derzeit nicht erreichbar"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "offline — not currently reachable"
           }
         },
         "es" : {
@@ -6423,12 +6426,6 @@
       "comment" : "Legend entry for the teleported glyph",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "teleported — joined the channel from somewhere else"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6445,6 +6442,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "teleportiert — dem kanal von woanders beigetreten"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "teleported — joined the channel from somewhere else"
           }
         },
         "es" : {
@@ -6579,12 +6582,6 @@
       "comment" : "Section header for the symbols legend in app info",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "SYMBOLS"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6601,6 +6598,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "SYMBOLE"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SYMBOLS"
           }
         },
         "es" : {
@@ -6735,12 +6738,6 @@
       "comment" : "Legend entry for the envelope glyph",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "unread private messages"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6757,6 +6754,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "ungelesene private nachrichten"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "unread private messages"
           }
         },
         "es" : {
@@ -6891,12 +6894,6 @@
       "comment" : "Legend entry for the verified seal glyph",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "identity verified"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6913,6 +6910,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "identität verifiziert"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "identity verified"
           }
         },
         "es" : {
@@ -7047,12 +7050,6 @@
       "comment" : "Section header for network diagnostics in the app info sheet",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "NETWORK"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7069,6 +7066,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "NETZWERK"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "NETWORK"
           }
         },
         "es" : {
@@ -7203,12 +7206,6 @@
       "comment" : "Row description for the mesh topology map",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "map of peers and links learned from mesh announces"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7225,6 +7222,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "karte der peers und verbindungen, aus mesh-announces gelernt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "map of peers and links learned from mesh announces"
           }
         },
         "es" : {
@@ -7359,12 +7362,6 @@
       "comment" : "Accessibility hint for the mesh topology row",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "opens the mesh topology map"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7381,6 +7378,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "öffnet die mesh-topologie-karte"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "opens the mesh topology map"
           }
         },
         "es" : {
@@ -7515,12 +7518,6 @@
       "comment" : "Row title opening the mesh topology map",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "mesh topology"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7537,6 +7534,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "mesh-topologie"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh topology"
           }
         },
         "es" : {
@@ -9457,6 +9460,186 @@
         }
       }
     },
+    "Choose an image" : {
+      "comment" : "A label displayed above a button that allows the user to choose an image to send.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اختر صورة"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "একটি ছবি নির্বাচন করুন"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bild auswählen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose an image"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige una imagen"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pumili ng larawan"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisir une image"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "בחר תמונה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "एक चित्र चुनें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pilih gambar"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scegli un’immagine"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "画像を選択"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이미지를 선택하세요"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pilih imej"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "एउटा तस्वीर चयन गर्नुहोस्"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kies een afbeelding"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wybierz obraz"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escolher uma imagem"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escolha uma imagem"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выберите изображение"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Välj en bild"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ஒரு படத்தைத் தேர்ந்தெடுக்கவும்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เลือกภาพ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bir görüntü seç"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Виберіть зображення"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ایک تصویر منتخب کریں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chọn một hình ảnh"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择图像"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選擇圖像"
+          }
+        }
+      }
+    },
     "close" : {
       "comment" : "Button to dismiss fullscreen media viewer",
       "localizations" : {
@@ -11072,12 +11255,6 @@
       "comment" : "Accessibility hint on the bitchat/ logo explaining a tap opens app info",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "shows app info"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11094,6 +11271,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "zeigt app-infos"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "shows app info"
           }
         },
         "es" : {
@@ -11228,12 +11411,6 @@
       "comment" : "Accessibility label for the photo attachment button",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "attach photo"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11250,6 +11427,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "foto anhängen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "attach photo"
           }
         },
         "es" : {
@@ -11384,12 +11567,6 @@
       "comment" : "Accessibility hint explaining the attachment button opens the photo library",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "opens the photo library; use the take photo action for the camera"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11406,6 +11583,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "öffnet die fotobibliothek; nutze die aktion foto aufnehmen für die kamera"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "opens the photo library; use the take photo action for the camera"
           }
         },
         "es" : {
@@ -11898,12 +12081,6 @@
       "comment" : "Accessibility label for the macOS photo picker button",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "choose photo"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11920,6 +12097,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "foto auswählen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "choose photo"
           }
         },
         "es" : {
@@ -12233,12 +12416,6 @@
       "comment" : "Accessibility hint for the delivery status glyph explaining a tap reveals details",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tap to show delivery details"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -12255,6 +12432,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "tippe, um zustelldetails anzuzeigen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tap to show delivery details"
           }
         },
         "es" : {
@@ -12568,12 +12751,6 @@
       "comment" : "Accessibility label for the internet gateway indicator",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Internet gateway active, sharing your connection with the mesh"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -12590,6 +12767,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Internet-gateway aktiv, teilt deine verbindung mit dem mesh"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Internet gateway active, sharing your connection with the mesh"
           }
         },
         "es" : {
@@ -12723,12 +12906,6 @@
     "content.accessibility.group_chat" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Group chat"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -12745,6 +12922,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Gruppenchat"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Group chat"
           }
         },
         "es" : {
@@ -12879,12 +13062,6 @@
       "comment" : "Accessibility label for the jump to latest messages button",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "jump to latest messages"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -12901,6 +13078,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "zu den neuesten nachrichten springen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "jump to latest messages"
           }
         },
         "es" : {
@@ -13572,12 +13755,6 @@
       "comment" : "Accessibility value when peers are reachable",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "connected"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -13594,6 +13771,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "verbunden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "connected"
           }
         },
         "es" : {
@@ -13728,12 +13911,6 @@
       "comment" : "Accessibility value when no peers are reachable",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "no one reachable"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -13750,6 +13927,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "niemand erreichbar"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no one reachable"
           }
         },
         "es" : {
@@ -14805,12 +14988,6 @@
       "comment" : "Accessibility hint explaining double-tap toggles voice recording",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "double-tap to start recording, double-tap again to send"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -14827,6 +15004,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "doppeltippen zum aufnehmen, erneut doppeltippen zum senden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "double-tap to start recording, double-tap again to send"
           }
         },
         "es" : {
@@ -14961,12 +15144,6 @@
       "comment" : "Accessibility label for the voice note button",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "record voice note"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -14983,6 +15160,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "sprachnachricht aufnehmen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "record voice note"
           }
         },
         "es" : {
@@ -15117,12 +15300,6 @@
       "comment" : "Accessibility value announced while a voice note is recording",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "recording"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -15139,6 +15316,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "aufnahme"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "recording"
           }
         },
         "es" : {
@@ -15989,12 +16172,6 @@
       "comment" : "Accessibility action name for taking a photo with the camera",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "take photo with camera"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -16011,6 +16188,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "foto mit kamera aufnehmen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "take photo with camera"
           }
         },
         "es" : {
@@ -16503,12 +16686,6 @@
       "comment" : "Accessibility label for the verification QR button",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "verify encryption"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -16525,6 +16702,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "verschlüsselung verifizieren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "verify encryption"
           }
         },
         "es" : {
@@ -17554,12 +17737,6 @@
       "comment" : "Context menu action that resends a failed private message",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "resend"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -17576,6 +17753,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "erneut senden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "resend"
           }
         },
         "es" : {
@@ -19321,12 +19504,6 @@
       "comment" : "Destructive confirmation button that clears the current chat",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "clear chat"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -19343,6 +19520,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "chat leeren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "clear chat"
           }
         },
         "es" : {
@@ -19477,12 +19660,6 @@
       "comment" : "Title of the confirmation dialog shown before clearing the current chat",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "clear this chat?"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -19499,6 +19676,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "diesen chat leeren?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "clear this chat?"
           }
         },
         "es" : {
@@ -20169,12 +20352,6 @@
     "content.commands.group" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "create or manage private groups"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -20191,6 +20368,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "private gruppen erstellen oder verwalten"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "create or manage private groups"
           }
         },
         "es" : {
@@ -20325,12 +20508,6 @@
       "comment" : "Description of the /help command in the suggestions panel",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "show available commands"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -20347,6 +20524,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "verfügbare befehle anzeigen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "show available commands"
           }
         },
         "es" : {
@@ -20839,12 +21022,6 @@
       "comment" : "Autocomplete description for the /pay command that sends a Cashu ecash token",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "send a cashu ecash token in this chat"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -20861,6 +21038,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "einen cashu-ecash-token in diesem chat senden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "send a cashu ecash token in this chat"
           }
         },
         "es" : {
@@ -20995,12 +21178,6 @@
       "comment" : "Description of the /ping command in the suggestions panel",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "measure round-trip time to a mesh peer"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -21017,6 +21194,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "die roundtrip-zeit zu einem mesh-peer messen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "measure round-trip time to a mesh peer"
           }
         },
         "es" : {
@@ -21330,12 +21513,6 @@
       "comment" : "Description of the /trace command in the suggestions panel",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "estimate the mesh path to a peer"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -21352,6 +21529,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "den mesh-pfad zu einem peer schätzen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "estimate the mesh path to a peer"
           }
         },
         "es" : {
@@ -22914,172 +23097,10 @@
         }
       }
     },
-    "content.delivery.reason.not_delivered" : {
-      "comment" : "Failure reason shown when the router gave up delivering a message",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "not delivered"
-          }
-        },
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "لم يُسلَّم"
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "পৌঁছায়নি"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "nicht zugestellt"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "no entregado"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "non livré"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "לא נמסר"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "डिलीवर नहीं हुआ"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "tidak terkirim"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "non consegnato"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "未配信"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "전송되지 않음"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "tidak dihantar"
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "डेलिभर भएन"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "niet bezorgd"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "nie dostarczono"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "não entregue"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "не доставлено"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "inte levererat"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "வழங்கப்படவில்லை"
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ยังไม่ได้ส่ง"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "teslim edilmedi"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "не доставлено"
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "نہیں پہنچا"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "chưa gửi được"
-          }
-        }
-      }
-    },
     "content.delivery.reason.encryption_failed" : {
       "comment" : "Failure reason shown when a message could not be encrypted for the peer",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "encryption failed"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23096,6 +23117,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "verschlüsselung fehlgeschlagen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "encryption failed"
           }
         },
         "es" : {
@@ -23226,314 +23253,158 @@
         }
       }
     },
-    "content.delivery.reason.voice_too_large" : {
-      "comment" : "Failure reason shown when a voice note exceeds the size limit",
+    "content.delivery.reason.not_delivered" : {
+      "comment" : "Failure reason shown when the router gave up delivering a message",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "voice note too large"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "الملاحظة الصوتية كبيرة جدًا"
+            "value" : "لم يُسلَّم"
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "ভয়েস নোট খুব বড়"
+            "value" : "পৌঁছায়নি"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "sprachnachricht zu groß"
+            "value" : "nicht zugestellt"
           }
         },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "nota de voz demasiado grande"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "note vocale trop volumineuse"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ההערה הקולית גדולה מדי"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "वॉइस नोट बहुत बड़ा"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "catatan suara terlalu besar"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "nota vocale troppo grande"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ボイスメモが大きすぎます"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "음성 메모가 너무 큼"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "nota suara terlalu besar"
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "भ्वाइस नोट धेरै ठूलो"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "spraakbericht te groot"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "notatka głosowa zbyt duża"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "nota de voz demasiado grande"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "голосовое сообщение слишком большое"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "röstmeddelandet är för stort"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "குரல் குறிப்பு மிகப் பெரியது"
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ข้อความเสียงใหญ่เกินไป"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "sesli not çok büyük"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "голосова нотатка завелика"
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "وائس نوٹ بہت بڑا ہے"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ghi chú giọng nói quá lớn"
-          }
-        }
-      }
-    },
-    "content.delivery.reason.voice_send_failed" : {
-      "comment" : "Failure reason shown when a voice note could not be sent",
-      "extractionState" : "manual",
-      "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "voice note failed to send"
-          }
-        },
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "فشل إرسال الملاحظة الصوتية"
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ভয়েস নোট পাঠানো যায়নি"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "sprachnachricht konnte nicht gesendet werden"
+            "value" : "not delivered"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "no se pudo enviar la nota de voz"
+            "value" : "no entregado"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "échec de l'envoi de la note vocale"
+            "value" : "non livré"
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "שליחת ההערה הקולית נכשלה"
+            "value" : "לא נמסר"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "वॉइस नोट भेजने में विफल"
+            "value" : "डिलीवर नहीं हुआ"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "catatan suara gagal dikirim"
+            "value" : "tidak terkirim"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "invio della nota vocale non riuscito"
+            "value" : "non consegnato"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "ボイスメモの送信に失敗"
+            "value" : "未配信"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "음성 메모 전송 실패"
+            "value" : "전송되지 않음"
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "nota suara gagal dihantar"
+            "value" : "tidak dihantar"
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "भ्वाइस नोट पठाउन असफल"
+            "value" : "डेलिभर भएन"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "spraakbericht kon niet worden verzonden"
+            "value" : "niet bezorgd"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "nie udało się wysłać notatki głosowej"
+            "value" : "nie dostarczono"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "falha ao enviar a nota de voz"
+            "value" : "não entregue"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "не удалось отправить голосовое сообщение"
+            "value" : "не доставлено"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "röstmeddelandet kunde inte skickas"
+            "value" : "inte levererat"
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "குரல் குறிப்பு அனுப்ப முடியவில்லை"
+            "value" : "வழங்கப்படவில்லை"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "ส่งข้อความเสียงไม่สำเร็จ"
+            "value" : "ยังไม่ได้ส่ง"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "sesli not gönderilemedi"
+            "value" : "teslim edilmedi"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "не вдалося надіслати голосову нотатку"
+            "value" : "не доставлено"
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "وائس نوٹ بھیجنے میں ناکام"
+            "value" : "نہیں پہنچا"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "gửi ghi chú giọng nói thất bại"
+            "value" : "chưa gửi được"
           }
         }
       }
@@ -24254,16 +24125,322 @@
         }
       }
     },
+    "content.delivery.reason.voice_send_failed" : {
+      "comment" : "Failure reason shown when a voice note could not be sent",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "فشل إرسال الملاحظة الصوتية"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ভয়েস নোট পাঠানো যায়নি"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "sprachnachricht konnte nicht gesendet werden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "voice note failed to send"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no se pudo enviar la nota de voz"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "échec de l'envoi de la note vocale"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "שליחת ההערה הקולית נכשלה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "वॉइस नोट भेजने में विफल"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "catatan suara gagal dikirim"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "invio della nota vocale non riuscito"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ボイスメモの送信に失敗"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "음성 메모 전송 실패"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nota suara gagal dihantar"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "भ्वाइस नोट पठाउन असफल"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "spraakbericht kon niet worden verzonden"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nie udało się wysłać notatki głosowej"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "falha ao enviar a nota de voz"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "не удалось отправить голосовое сообщение"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "röstmeddelandet kunde inte skickas"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "குரல் குறிப்பு அனுப்ப முடியவில்லை"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ส่งข้อความเสียงไม่สำเร็จ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "sesli not gönderilemedi"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "не вдалося надіслати голосову нотатку"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "وائس نوٹ بھیجنے میں ناکام"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "gửi ghi chú giọng nói thất bại"
+          }
+        }
+      }
+    },
+    "content.delivery.reason.voice_too_large" : {
+      "comment" : "Failure reason shown when a voice note exceeds the size limit",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "الملاحظة الصوتية كبيرة جدًا"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ভয়েস নোট খুব বড়"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "sprachnachricht zu groß"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "voice note too large"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nota de voz demasiado grande"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "note vocale trop volumineuse"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ההערה הקולית גדולה מדי"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "वॉइस नोट बहुत बड़ा"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "catatan suara terlalu besar"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nota vocale troppo grande"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ボイスメモが大きすぎます"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "음성 메모가 너무 큼"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nota suara terlalu besar"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "भ्वाइस नोट धेरै ठूलो"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "spraakbericht te groot"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "notatka głosowa zbyt duża"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nota de voz demasiado grande"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "голосовое сообщение слишком большое"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "röstmeddelandet är för stort"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "குரல் குறிப்பு மிகப் பெரியது"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ข้อความเสียงใหญ่เกินไป"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "sesli not çok büyük"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "голосова нотатка завелика"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "وائس نوٹ بہت بڑا ہے"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ghi chú giọng nói quá lớn"
+          }
+        }
+      }
+    },
     "content.delivery.sending" : {
       "comment" : "Delivery status description while a private message is being sent",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "sending..."
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24280,6 +24457,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "wird gesendet ..."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sending..."
           }
         },
         "es" : {
@@ -24414,12 +24597,6 @@
       "comment" : "Delivery status description for a sent but not yet confirmed private message",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "sent — no delivery confirmation yet"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24436,6 +24613,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "gesendet — noch keine zustellbestätigung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sent — no delivery confirmation yet"
           }
         },
         "es" : {
@@ -24570,12 +24753,6 @@
       "comment" : "First line of an empty geohash timeline naming the channel",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "you're in #%@ — a public location channel over the internet"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24592,6 +24769,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "du bist in #%@ — ein öffentlicher standortkanal über das internet"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "you're in #%@ — a public location channel over the internet"
           }
         },
         "es" : {
@@ -24726,12 +24909,6 @@
       "comment" : "First line of the empty mesh timeline explaining what the mesh channel is",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "you're on #mesh — reaches people within bluetooth range"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24748,6 +24925,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "du bist auf #mesh — erreicht menschen in bluetooth-reichweite"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "you're on #mesh — reaches people within bluetooth range"
           }
         },
         "es" : {
@@ -24882,12 +25065,6 @@
       "comment" : "Second line of the empty mesh timeline saying no peers are in range yet",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "nobody in range yet... messages appear here"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24904,6 +25081,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "noch niemand in reichweite ... nachrichten erscheinen hier"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nobody in range yet... messages appear here"
           }
         },
         "es" : {
@@ -25038,12 +25221,6 @@
       "comment" : "Empty timeline hint pointing at the channel switcher and the help screen",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tap the channel name above to switch · tap bitchat/ for help"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -25060,6 +25237,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "tippe oben auf den kanalnamen zum wechseln · tippe bitchat/ für hilfe"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tap the channel name above to switch · tap bitchat/ for help"
           }
         },
         "es" : {
@@ -25194,12 +25377,6 @@
       "comment" : "Tooltip for the internet gateway indicator",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sharing your internet connection with nearby mesh peers"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -25216,6 +25393,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "teilt deine internetverbindung mit nahen mesh-peers"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sharing your internet connection with nearby mesh peers"
           }
         },
         "es" : {
@@ -25707,12 +25890,6 @@
     "content.input.group_placeholder" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "create|invite|leave|list"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -25728,6 +25905,12 @@
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
+            "value" : "create|invite|leave|list"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "create|invite|leave|list"
           }
         },
@@ -25855,786 +26038,6 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "create|invite|leave|list"
-          }
-        }
-      }
-    },
-    "content.input.placeholder.location" : {
-      "comment" : "Composer placeholder for a public geohash channel, naming it",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "message #%@ — public"
-          }
-        },
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "رسالة #%@ — عام"
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "#%@-এ বার্তা — পাবলিক"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "nachricht an #%@ — öffentlich"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "mensaje #%@ — público"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "message vers #%@ — public"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "הודעה ל-#%@ — ציבורי"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "संदेश #%@ — सार्वजनिक"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "pesan #%@ — publik"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "messaggio a #%@ — pubblico"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "#%@ にメッセージ — 公開"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "#%@ 에 메시지 — 공개"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "pesan #%@ — awam"
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "#%@ मा सन्देश — सार्वजनिक"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "bericht naar #%@ — openbaar"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "wiadomość #%@ — publiczna"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "mensagem para #%@ — público"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "сообщение в #%@ — публичное"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "meddelande #%@ — publikt"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "#%@ க்கு செய்தி — பொது"
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ส่งข้อความถึง #%@ — สาธารณะ"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "mesaj #%@ — herkese açık"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "повідомлення #%@ — публічне"
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "پیغام #%@ — عوامی"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "nhắn #%@ — công khai"
-          }
-        }
-      }
-    },
-    "content.input.placeholder.mesh" : {
-      "comment" : "Composer placeholder for the public mesh channel",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "message #mesh — public, nearby"
-          }
-        },
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "رسالة #mesh — عام، قريب"
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "#mesh-এ বার্তা — পাবলিক, কাছাকাছি"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "nachricht an #mesh — öffentlich, in der nähe"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "mensaje #mesh — público, cerca"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "message vers #mesh — public, à proximité"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "הודעה ל-#mesh — ציבורי, קרוב"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "संदेश #mesh — सार्वजनिक, आसपास"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "pesan #mesh — publik, terdekat"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "messaggio a #mesh — pubblico, nelle vicinanze"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "#mesh にメッセージ — 公開、近くの人へ"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "#mesh 에 메시지 — 공개, 근처"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "pesan #mesh — awam, berdekatan"
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "#mesh मा सन्देश — सार्वजनिक, नजिकको"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "bericht naar #mesh — openbaar, in de buurt"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "wiadomość #mesh — publiczna, w pobliżu"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "mensagem para #mesh — público, próximo"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "сообщение в #mesh — публичное, рядом"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "meddelande #mesh — publikt, i närheten"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "#mesh க்கு செய்தி — பொது, அருகில்"
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ส่งข้อความถึง #mesh — สาธารณะ, ใกล้เคียง"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "mesaj #mesh — herkese açık, yakında"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "повідомлення #mesh — публічне, поблизу"
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "پیغام #mesh — عوامی، قریبی"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "nhắn #mesh — công khai, gần đây"
-          }
-        }
-      }
-    },
-    "content.input.placeholder.private" : {
-      "comment" : "Composer placeholder inside a private chat, naming the conversation partner",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "message %@ — private"
-          }
-        },
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "رسالة %@ — خاص"
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "%@-কে বার্তা — ব্যক্তিগত"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "nachricht an %@ — privat"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "mensaje %@ — privado"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "message à %@ — privé"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "הודעה ל-%@ — פרטי"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "संदेश %@ — निजी"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "pesan %@ — pribadi"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "messaggio a %@ — privato"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "%@ にメッセージ — プライベート"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "%@ 에게 메시지 — 비공개"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "pesan %@ — peribadi"
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "%@ लाई सन्देश — निजी"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "bericht naar %@ — privé"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "wiadomość do %@ — prywatna"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "mensagem para %@ — privado"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "сообщение для %@ — личное"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "meddelande %@ — privat"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "%@ க்கு செய்தி — தனிப்பட்டது"
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ส่งข้อความถึง %@ — ส่วนตัว"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "mesaj %@ — özel"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "повідомлення %@ — приватне"
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "پیغام %@ — نجی"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "nhắn %@ — riêng tư"
-          }
-        }
-      }
-    },
-    "content.private.caption" : {
-      "comment" : "Caption above the private chat composer before encryption is established",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "private conversation"
-          }
-        },
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "محادثة خاصة"
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ব্যক্তিগত কথোপকথন"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "privates gespräch"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "conversación privada"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "conversation privée"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "שיחה פרטית"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "निजी बातचीत"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "percakapan pribadi"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "conversazione privata"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "プライベートな会話"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "비공개 대화"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "perbualan peribadi"
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "निजी कुराकानी"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "privégesprek"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "rozmowa prywatna"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "conversa privada"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "личный разговор"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "privat konversation"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "தனிப்பட்ட உரையாடல்"
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "การสนทนาส่วนตัว"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "özel konuşma"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "приватна розмова"
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "نجی گفتگو"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "cuộc trò chuyện riêng tư"
-          }
-        }
-      }
-    },
-    "content.private.caption_encrypted" : {
-      "comment" : "Caption above the private chat composer once the session is end-to-end encrypted",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "private · end-to-end encrypted"
-          }
-        },
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "خاص · مشفّر من طرف إلى طرف"
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ব্যক্তিগত · এন্ড-টু-এন্ড এনক্রিপ্টেড"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "privat · end-to-end-verschlüsselt"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "privado · cifrado de extremo a extremo"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "privé · chiffré de bout en bout"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "פרטי · מוצפן מקצה לקצה"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "निजी · एंड-टू-एंड एन्क्रिप्टेड"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "pribadi · terenkripsi ujung ke ujung"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "privato · cifrato end-to-end"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "プライベート · エンドツーエンド暗号化"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "비공개 · 종단간 암호화"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "peribadi · terenkripsi ujung ke ujung"
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "निजी · एन्ड-टु-एन्ड सङ्केत"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "privé · end-to-end-versleuteld"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "prywatna · szyfrowana end-to-end"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "privado · encriptado ponta a ponta"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "лично · сквозное шифрование"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "privat · end-to-end-krypterad"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "தனிப்பட்டது · முனை-முதல்-முனை குறியாக்கம்"
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ส่วนตัว · เข้ารหัสแบบครบวงจร"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "özel · uçtan uca şifreli"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "приватна · наскрізно зашифрована"
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "نجی · اینڈ ٹو اینڈ خفیہ"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "riêng tư · mã hóa đầu cuối"
           }
         }
       }
@@ -26818,16 +26221,478 @@
         }
       }
     },
+    "content.input.placeholder.location" : {
+      "comment" : "Composer placeholder for a public geohash channel, naming it",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "رسالة #%@ — عام"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "#%@-এ বার্তা — পাবলিক"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nachricht an #%@ — öffentlich"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "message #%@ — public"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mensaje #%@ — público"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "message vers #%@ — public"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "הודעה ל-#%@ — ציבורי"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "संदेश #%@ — सार्वजनिक"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "pesan #%@ — publik"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "messaggio a #%@ — pubblico"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "#%@ にメッセージ — 公開"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "#%@ 에 메시지 — 공개"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "pesan #%@ — awam"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "#%@ मा सन्देश — सार्वजनिक"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "bericht naar #%@ — openbaar"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "wiadomość #%@ — publiczna"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mensagem para #%@ — público"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "сообщение в #%@ — публичное"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "meddelande #%@ — publikt"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "#%@ க்கு செய்தி — பொது"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ส่งข้อความถึง #%@ — สาธารณะ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mesaj #%@ — herkese açık"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "повідомлення #%@ — публічне"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "پیغام #%@ — عوامی"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nhắn #%@ — công khai"
+          }
+        }
+      }
+    },
+    "content.input.placeholder.mesh" : {
+      "comment" : "Composer placeholder for the public mesh channel",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "رسالة #mesh — عام، قريب"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "#mesh-এ বার্তা — পাবলিক, কাছাকাছি"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nachricht an #mesh — öffentlich, in der nähe"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "message #mesh — public, nearby"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mensaje #mesh — público, cerca"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "message vers #mesh — public, à proximité"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "הודעה ל-#mesh — ציבורי, קרוב"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "संदेश #mesh — सार्वजनिक, आसपास"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "pesan #mesh — publik, terdekat"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "messaggio a #mesh — pubblico, nelle vicinanze"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "#mesh にメッセージ — 公開、近くの人へ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "#mesh 에 메시지 — 공개, 근처"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "pesan #mesh — awam, berdekatan"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "#mesh मा सन्देश — सार्वजनिक, नजिकको"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "bericht naar #mesh — openbaar, in de buurt"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "wiadomość #mesh — publiczna, w pobliżu"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mensagem para #mesh — público, próximo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "сообщение в #mesh — публичное, рядом"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "meddelande #mesh — publikt, i närheten"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "#mesh க்கு செய்தி — பொது, அருகில்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ส่งข้อความถึง #mesh — สาธารณะ, ใกล้เคียง"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mesaj #mesh — herkese açık, yakında"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "повідомлення #mesh — публічне, поблизу"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "پیغام #mesh — عوامی، قریبی"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nhắn #mesh — công khai, gần đây"
+          }
+        }
+      }
+    },
+    "content.input.placeholder.private" : {
+      "comment" : "Composer placeholder inside a private chat, naming the conversation partner",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "رسالة %@ — خاص"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@-কে বার্তা — ব্যক্তিগত"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nachricht an %@ — privat"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "message %@ — private"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mensaje %@ — privado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "message à %@ — privé"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "הודעה ל-%@ — פרטי"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "संदेश %@ — निजी"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "pesan %@ — pribadi"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "messaggio a %@ — privato"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ にメッセージ — プライベート"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ 에게 메시지 — 비공개"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "pesan %@ — peribadi"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ लाई सन्देश — निजी"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "bericht naar %@ — privé"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "wiadomość do %@ — prywatna"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mensagem para %@ — privado"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "сообщение для %@ — личное"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "meddelande %@ — privat"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ க்கு செய்தி — தனிப்பட்டது"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ส่งข้อความถึง %@ — ส่วนตัว"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mesaj %@ — özel"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "повідомлення %@ — приватне"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "پیغام %@ — نجی"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nhắn %@ — riêng tư"
+          }
+        }
+      }
+    },
     "content.input.token_placeholder" : {
       "comment" : "Placeholder shown after /pay in the command suggestion panel",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "token"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -26843,6 +26708,12 @@
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
+            "value" : "token"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "token"
           }
         },
@@ -26978,12 +26849,6 @@
       "comment" : "Count of messages that arrived while scrolled up, shown in the jump-to-latest pill",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld new"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27000,6 +26865,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "%lld neu"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld new"
           }
         },
         "es" : {
@@ -28387,12 +28258,6 @@
       "comment" : "Context menu action copying a Cashu token to the pasteboard",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "copy token"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28409,6 +28274,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "token kopieren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "copy token"
           }
         },
         "es" : {
@@ -28722,12 +28593,6 @@
       "comment" : "Context menu action opening a Cashu token in an ecash wallet app",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "redeem in wallet"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28744,6 +28609,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "in wallet einlösen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "redeem in wallet"
           }
         },
         "es" : {
@@ -28878,12 +28749,6 @@
       "comment" : "Context menu action opening a Cashu token in the web redemption page",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "redeem on web"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28900,6 +28765,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "im web einlösen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "redeem on web"
           }
         },
         "es" : {
@@ -29030,15 +28901,321 @@
         }
       }
     },
-    "content.private.caption_group" : {
+    "content.private.caption" : {
+      "comment" : "Caption above the private chat composer before encryption is established",
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "محادثة خاصة"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ব্যক্তিগত কথোপকথন"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "privates gespräch"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "encrypted group · members only"
+            "value" : "private conversation"
           }
         },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "conversación privada"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "conversation privée"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "שיחה פרטית"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "निजी बातचीत"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "percakapan pribadi"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "conversazione privata"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "プライベートな会話"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "비공개 대화"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "perbualan peribadi"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "निजी कुराकानी"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "privégesprek"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "rozmowa prywatna"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "conversa privada"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "личный разговор"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "privat konversation"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "தனிப்பட்ட உரையாடல்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "การสนทนาส่วนตัว"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "özel konuşma"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "приватна розмова"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "نجی گفتگو"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "cuộc trò chuyện riêng tư"
+          }
+        }
+      }
+    },
+    "content.private.caption_encrypted" : {
+      "comment" : "Caption above the private chat composer once the session is end-to-end encrypted",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "خاص · مشفّر من طرف إلى طرف"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ব্যক্তিগত · এন্ড-টু-এন্ড এনক্রিপ্টেড"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "privat · end-to-end-verschlüsselt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "private · end-to-end encrypted"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "privado · cifrado de extremo a extremo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "privé · chiffré de bout en bout"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "פרטי · מוצפן מקצה לקצה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "निजी · एंड-टू-एंड एन्क्रिप्टेड"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "pribadi · terenkripsi ujung ke ujung"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "privato · cifrato end-to-end"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "プライベート · エンドツーエンド暗号化"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "비공개 · 종단간 암호화"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "peribadi · terenkripsi ujung ke ujung"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "निजी · एन्ड-टु-एन्ड सङ्केत"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "privé · end-to-end-versleuteld"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "prywatna · szyfrowana end-to-end"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "privado · encriptado ponta a ponta"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "лично · сквозное шифрование"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "privat · end-to-end-krypterad"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "தனிப்பட்டது · முனை-முதல்-முனை குறியாக்கம்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ส่วนตัว · เข้ารหัสแบบครบวงจร"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "özel · uçtan uca şifreli"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "приватна · наскрізно зашифрована"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "نجی · اینڈ ٹو اینڈ خفیہ"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "riêng tư · mã hóa đầu cuối"
+          }
+        }
+      }
+    },
+    "content.private.caption_group" : {
+      "extractionState" : "manual",
+      "localizations" : {
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -29055,6 +29232,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "verschlüsselte gruppe · nur mitglieder"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "encrypted group · members only"
           }
         },
         "es" : {
@@ -31695,12 +31878,6 @@
       "comment" : "Badge shown when a peer is vouched for by people the user verified but not directly verified",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "✓ VOUCHED"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -31717,6 +31894,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "✓ VERBÜRGT"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✓ VOUCHED"
           }
         },
         "es" : {
@@ -32388,6 +32571,24 @@
       "comment" : "How many people the user verified have vouched for this peer",
       "extractionState" : "manual",
       "localizations" : {
+        "bn" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "আপনি যাচাই করেছেন এমন %d জনের দ্বারা সমর্থিত"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "needs_review",
+                  "value" : "আপনি যাচাই করেছেন এমন %d জনের দ্বারা সমর্থিত"
+                }
+              }
+            }
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -32411,24 +32612,6 @@
                       "value" : "%d people"
                     }
                   }
-                }
-              }
-            }
-          }
-        },
-        "bn" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "needs_review",
-                  "value" : "আপনি যাচাই করেছেন এমন %d জনের দ্বারা সমর্থিত"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "needs_review",
-                  "value" : "আপনি যাচাই করেছেন এমন %d জনের দ্বারা সমর্থিত"
                 }
               }
             }
@@ -32609,12 +32792,6 @@
               "formatSpecifier" : "lld",
               "variations" : {
                 "plural" : {
-                  "one" : {
-                    "stringUnit" : {
-                      "state" : "needs_review",
-                      "value" : "%d человек"
-                    }
-                  },
                   "few" : {
                     "stringUnit" : {
                       "state" : "needs_review",
@@ -32622,6 +32799,12 @@
                     }
                   },
                   "many" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d человек"
+                    }
+                  },
+                  "one" : {
                     "stringUnit" : {
                       "state" : "needs_review",
                       "value" : "%d человек"
@@ -33780,12 +33963,6 @@
       "comment" : "State label for someone physically in the location channel's area",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "in this area"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -33802,6 +33979,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "in diesem gebiet"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "in this area"
           }
         },
         "es" : {
@@ -33936,12 +34119,6 @@
       "comment" : "State label for someone who joined the location channel from elsewhere",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "teleported from elsewhere"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -33958,6 +34135,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "von woanders teleportiert"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "teleported from elsewhere"
           }
         },
         "es" : {
@@ -34092,12 +34275,6 @@
       "comment" : "State label marking your own row in the people list",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "you"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -34114,6 +34291,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "du"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "you"
           }
         },
         "es" : {
@@ -34605,12 +34788,6 @@
     "groups.accessibility.open_group_hint" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Opens the group chat"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -34627,6 +34804,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Öffnet den gruppenchat"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens the group chat"
           }
         },
         "es" : {
@@ -34760,12 +34943,6 @@
     "groups.member_count %@" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "(%@)"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -34781,6 +34958,12 @@
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
+            "value" : "(%@)"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "(%@)"
           }
         },
@@ -34915,12 +35098,6 @@
     "groups.section.header" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "groups"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -34937,6 +35114,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "gruppen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "groups"
           }
         },
         "es" : {
@@ -35070,12 +35253,6 @@
     "groups.state.creator" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Creator"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -35092,6 +35269,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Ersteller"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Creator"
           }
         },
         "es" : {
@@ -35222,16 +35405,189 @@
         }
       }
     },
+    "Images are only available in mesh chats." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الصور متاحة فقط في محادثات الميش."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ছবি শুধু মেশ চ্যাটে উপলব্ধ।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bilder sind nur im Mesh-Chat verfügbar."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Images are only available in mesh chats."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las imágenes solo están disponibles en los chats de mesh."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ang mga larawan ay available lamang sa mga mesh chat."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les images sont uniquement disponibles dans les discussions mesh."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "תמונות זמינות רק בצ׳אט של mesh."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "चित्र केवल मेश चैट में ही उपलब्ध हैं।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gambar hanya tersedia di obrolan mesh."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le immagini sono disponibili solo nelle chat mesh."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "画像はメッシュチャットでのみ利用できます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이미지는 메쉬 채팅에서만 사용할 수 있습니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Imej hanya tersedia dalam sembang mesh."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "तस्बिरहरू केवल मेष च्याटमा मात्र उपलब्ध छन्।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afbeeldingen zijn alleen beschikbaar in mesh-chats."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Obrazy są dostępne tylko na czatach mesh."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "As imagens só estão disponíveis nos chats mesh."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "As imagens só estão disponíveis nos chats mesh."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Изображения доступны только в mesh-чатах."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bilder är bara tillgängliga i mesh-chattar."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "படங்கள் மெஷ் உரையாடல்களில் மட்டுமே கிடைக்கும்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "รูปภาพใช้งานได้เฉพาะในแชต mesh เท่านั้น"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Görseller yalnızca mesh sohbetlerinde kullanılabilir."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Зображення доступні лише в mesh-чатах."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تصاویر صرف میش چیٹس میں دستیاب ہیں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hình ảnh chỉ khả dụng trong các cuộc trò chuyện mesh."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "图片仅可在 mesh 聊天中使用。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "圖片僅能在 mesh 聊天中使用。"
+          }
+        }
+      }
+    },
     "location_channels.accessibility.add_bookmark" : {
       "comment" : "Accessibility action name for bookmarking a channel",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "bookmark channel"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -35248,6 +35604,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "kanal mit lesezeichen versehen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bookmark channel"
           }
         },
         "es" : {
@@ -35382,12 +35744,6 @@
       "comment" : "Accessibility action name for removing a channel bookmark",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "remove bookmark"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -35404,6 +35760,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "lesezeichen entfernen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "remove bookmark"
           }
         },
         "es" : {
@@ -35538,12 +35900,6 @@
       "comment" : "Accessibility hint on a channel row explaining activation switches to it",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "switches to this channel"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -35560,6 +35916,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "wechselt zu diesem kanal"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "switches to this channel"
           }
         },
         "es" : {
@@ -36947,12 +37309,6 @@
       "comment" : "Explanation under the internet gateway toggle",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "share your internet with nearby mesh peers so their geohash messages reach the network"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36969,6 +37325,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "teile dein internet mit nahen mesh-peers, damit ihre geohash-nachrichten das netzwerk erreichen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "share your internet with nearby mesh peers so their geohash messages reach the network"
           }
         },
         "es" : {
@@ -37103,12 +37465,6 @@
       "comment" : "Title for the internet gateway toggle in the location channels sheet",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "internet gateway"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37125,6 +37481,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "internet-gateway"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "internet gateway"
           }
         },
         "es" : {
@@ -43218,12 +43580,6 @@
       "comment" : "Accessibility label for the cancel button on an in-flight media send",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "cancel sending"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -43240,6 +43596,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "senden abbrechen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cancel sending"
           }
         },
         "es" : {
@@ -43374,12 +43736,6 @@
       "comment" : "Accessibility label for a blurred incoming image",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "hidden image"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -43396,6 +43752,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "verstecktes bild"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hidden image"
           }
         },
         "es" : {
@@ -43530,12 +43892,6 @@
       "comment" : "Accessibility hint for a revealed image; activating it opens the image full screen",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "opens the image full screen"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -43552,6 +43908,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "öffnet das bild im vollbild"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "opens the image full screen"
           }
         },
         "es" : {
@@ -43686,12 +44048,6 @@
       "comment" : "Accessibility hint for a blurred image; activating it reveals the image",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "reveals the image"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -43708,6 +44064,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "zeigt das bild"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "reveals the image"
           }
         },
         "es" : {
@@ -43842,12 +44204,6 @@
       "comment" : "Accessibility label for a revealed image",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "image"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -43864,6 +44220,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "bild"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "image"
           }
         },
         "es" : {
@@ -43998,12 +44360,6 @@
       "comment" : "Accessibility label for an image that is still sending",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "sending image"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -44020,6 +44376,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "bild wird gesendet"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sending image"
           }
         },
         "es" : {
@@ -44150,16 +44512,166 @@
         }
       }
     },
+    "media.image.accessibility.unavailable" : {
+      "comment" : "Accessibility label for an image whose file could not be loaded",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "الصورة غير متاحة"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ছবি অনুপলব্ধ"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "bild nicht verfügbar"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "image unavailable"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "imagen no disponible"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "image indisponible"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "התמונה לא זמינה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "चित्र उपलब्ध नहीं"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "gambar tidak tersedia"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "immagine non disponibile"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "画像を利用できません"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "이미지를 사용할 수 없음"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "imej tidak tersedia"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "तस्बिर उपलब्ध छैन"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "afbeelding niet beschikbaar"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "obraz niedostępny"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "imagem indisponível"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "изображение недоступно"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "bild otillgänglig"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "படம் கிடைக்கவில்லை"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ไม่สามารถใช้รูปภาพได้"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "görsel kullanılamıyor"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "зображення недоступне"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "تصویر دستیاب نہیں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "hình ảnh không khả dụng"
+          }
+        }
+      }
+    },
     "media.image.action.delete" : {
       "comment" : "Context menu action that deletes a received image",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "delete image"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -44176,6 +44688,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "bild löschen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "delete image"
           }
         },
         "es" : {
@@ -44310,12 +44828,6 @@
       "comment" : "Context menu action that re-blurs a revealed image",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "hide image"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -44332,6 +44844,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "bild verbergen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hide image"
           }
         },
         "es" : {
@@ -44466,12 +44984,6 @@
       "comment" : "Context menu action that opens an image full screen",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "open image"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -44488,6 +45000,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "bild öffnen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "open image"
           }
         },
         "es" : {
@@ -44622,12 +45140,6 @@
       "comment" : "Context menu action that reveals a blurred image",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "reveal image"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -44644,6 +45156,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "bild anzeigen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "reveal image"
           }
         },
         "es" : {
@@ -44778,12 +45296,6 @@
       "comment" : "Body of the confirmation dialog before deleting a received image",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "this cannot be undone — the sender may not be in range to send it again."
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -44800,6 +45312,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "das kann nicht rückgängig gemacht werden — der absender ist möglicherweise nicht in reichweite, um es erneut zu senden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "this cannot be undone — the sender may not be in range to send it again."
           }
         },
         "es" : {
@@ -44934,12 +45452,6 @@
       "comment" : "Title of the confirmation dialog before deleting a received image",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "delete this image?"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -44956,6 +45468,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "dieses bild löschen?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "delete this image?"
           }
         },
         "es" : {
@@ -45090,12 +45608,6 @@
       "comment" : "Caption on a blurred incoming image inviting a tap to reveal it",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tap to reveal"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -45112,6 +45624,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "zum anzeigen tippen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tap to reveal"
           }
         },
         "es" : {
@@ -45246,12 +45764,6 @@
       "comment" : "Accessibility label for pausing voice note playback",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "pause voice note"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -45268,6 +45780,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "sprachnachricht pausieren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pause voice note"
           }
         },
         "es" : {
@@ -45402,12 +45920,6 @@
       "comment" : "Accessibility label for playing a voice note",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "play voice note"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -45424,6 +45936,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "sprachnachricht abspielen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "play voice note"
           }
         },
         "es" : {
@@ -45558,12 +46076,6 @@
       "comment" : "Accessibility hint on a peer row explaining activation opens a private chat",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "opens a private chat"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -45580,6 +46092,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "öffnet einen privaten chat"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "opens a private chat"
           }
         },
         "es" : {
@@ -45714,12 +46232,6 @@
       "comment" : "Context menu action that shows a peer's fingerprint/verification screen",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "show fingerprint"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -45736,6 +46248,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "fingerabdruck anzeigen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "show fingerprint"
           }
         },
         "es" : {
@@ -45870,12 +46388,6 @@
       "comment" : "State label for a blocked peer",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "blocked"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -45892,6 +46404,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "blockiert"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "blocked"
           }
         },
         "es" : {
@@ -46026,12 +46544,6 @@
       "comment" : "State label for a favorited peer",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "favorite"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -46048,6 +46560,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "favorit"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "favorite"
           }
         },
         "es" : {
@@ -46182,12 +46700,6 @@
       "comment" : "State label for a peer that is not currently reachable",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "offline"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -46203,6 +46715,12 @@
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
+            "value" : "offline"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "offline"
           }
         },
@@ -46338,12 +46856,6 @@
       "comment" : "State label for a peer with unread private messages",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "new messages"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -46360,6 +46872,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "neue nachrichten"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "new messages"
           }
         },
         "es" : {
@@ -46494,12 +47012,6 @@
       "comment" : "State label for a peer vouched for by someone the user verified",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "vouched"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -46516,6 +47028,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "verbürgt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "vouched"
           }
         },
         "es" : {
@@ -46829,12 +47347,6 @@
       "comment" : "Tooltip for the vouched (unfilled seal) badge next to a peer",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "vouched for by someone you verified"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -46851,6 +47363,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "verbürgt von jemandem, den du verifiziert hast"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "vouched for by someone you verified"
           }
         },
         "es" : {
@@ -48417,12 +48935,6 @@
       "comment" : "System message when a geohash message was handed to a mesh internet gateway because no relay is reachable",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "sent via mesh gateway"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -48439,6 +48951,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "über mesh-gateway gesendet"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sent via mesh gateway"
           }
         },
         "es" : {
@@ -48930,12 +49448,6 @@
     "system.group.already_member" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ is already a member"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -48952,6 +49464,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "%@ ist bereits mitglied"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ is already a member"
           }
         },
         "es" : {
@@ -49085,12 +49603,6 @@
     "system.group.cannot_remove_creator" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "the creator cannot be removed"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -49107,6 +49619,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "der ersteller kann nicht entfernt werden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the creator cannot be removed"
           }
         },
         "es" : {
@@ -49240,12 +49758,6 @@
     "system.group.create_failed" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "could not create the group"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -49262,6 +49774,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "die gruppe konnte nicht erstellt werden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "could not create the group"
           }
         },
         "es" : {
@@ -49395,12 +49913,6 @@
     "system.group.created" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "created group '%@' — use /group invite @name to add people"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -49417,6 +49929,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "gruppe '%@' erstellt — nutze /group invite @name, um leute hinzuzufügen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "created group '%@' — use /group invite @name to add people"
           }
         },
         "es" : {
@@ -49550,12 +50068,6 @@
     "system.group.creator_only" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "only the group creator can do that"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -49572,6 +50084,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "nur der gruppenersteller kann das tun"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "only the group creator can do that"
           }
         },
         "es" : {
@@ -49705,12 +50223,6 @@
     "system.group.full" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "group is full (max %@ members)"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -49727,6 +50239,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "gruppe ist voll (max. %@ mitglieder)"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "group is full (max %@ members)"
           }
         },
         "es" : {
@@ -49860,12 +50378,6 @@
     "system.group.identity_unavailable" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "your identity keys are not ready yet"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -49882,6 +50394,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "deine identitätsschlüssel sind noch nicht bereit"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "your identity keys are not ready yet"
           }
         },
         "es" : {
@@ -50015,12 +50533,6 @@
     "system.group.invite_failed" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "could not build the group invite"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -50037,6 +50549,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "die gruppeneinladung konnte nicht erstellt werden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "could not build the group invite"
           }
         },
         "es" : {
@@ -50170,12 +50688,6 @@
     "system.group.invited" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "invited %1$@ to '%2$@'"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -50192,6 +50704,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "%1$@ zu '%2$@' eingeladen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "invited %1$@ to '%2$@'"
           }
         },
         "es" : {
@@ -50325,12 +50843,6 @@
     "system.group.joined" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "you were added to group '%1$@' by %2$@ — it now appears in your people list"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -50347,6 +50859,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "du wurdest von %2$@ zur gruppe '%1$@' hinzugefügt — sie erscheint jetzt in deiner personenliste"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "you were added to group '%1$@' by %2$@ — it now appears in your people list"
           }
         },
         "es" : {
@@ -50480,12 +50998,6 @@
     "system.group.left" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "left group '%@'"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -50502,6 +51014,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "gruppe '%@' verlassen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "left group '%@'"
           }
         },
         "es" : {
@@ -50635,12 +51153,6 @@
     "system.group.list_header" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "your groups:"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -50657,6 +51169,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "deine gruppen:"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "your groups:"
           }
         },
         "es" : {
@@ -50790,12 +51308,6 @@
     "system.group.member_not_found" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "'%@' is not a member of this group"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -50812,6 +51324,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "'%@' ist kein mitglied dieser gruppe"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "'%@' is not a member of this group"
           }
         },
         "es" : {
@@ -50945,12 +51463,6 @@
     "system.group.name_too_long" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "group names are limited to 40 characters"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -50967,6 +51479,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "gruppennamen sind auf 40 zeichen begrenzt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "group names are limited to 40 characters"
           }
         },
         "es" : {
@@ -51100,12 +51618,6 @@
     "system.group.none" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "you are not in any groups — /group create <name> to start one"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -51122,6 +51634,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "du bist in keiner gruppe — /group create <name>, um eine zu starten"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "you are not in any groups — /group create <name> to start one"
           }
         },
         "es" : {
@@ -51255,12 +51773,6 @@
     "system.group.not_in_group" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "open a group chat first"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -51277,6 +51789,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "öffne zuerst einen gruppenchat"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "open a group chat first"
           }
         },
         "es" : {
@@ -51410,12 +51928,6 @@
     "system.group.peer_identity_unknown" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "cannot verify %@'s identity yet — wait for their announce"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -51432,6 +51944,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "%@s identität kann noch nicht verifiziert werden — warte auf deren announce"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cannot verify %@'s identity yet — wait for their announce"
           }
         },
         "es" : {
@@ -51565,12 +52083,6 @@
     "system.group.peer_not_connected" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ must be connected over mesh to be invited"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -51587,6 +52099,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "%@ muss über mesh verbunden sein, um eingeladen zu werden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ must be connected over mesh to be invited"
           }
         },
         "es" : {
@@ -51720,12 +52238,6 @@
     "system.group.peer_not_found" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "'%@' not found"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -51742,6 +52254,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "'%@' nicht gefunden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "'%@' not found"
           }
         },
         "es" : {
@@ -51875,12 +52393,6 @@
     "system.group.removed_from" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "you were removed from group '%@'"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -51897,6 +52409,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "du wurdest aus der gruppe '%@' entfernt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "you were removed from group '%@'"
           }
         },
         "es" : {
@@ -52030,12 +52548,6 @@
     "system.group.removed_member" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "removed %@ and rotated the group key"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -52052,6 +52564,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "%@ entfernt und den gruppenschlüssel rotiert"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "removed %@ and rotated the group key"
           }
         },
         "es" : {
@@ -52185,12 +52703,6 @@
     "system.group.rotate_failed" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "could not rotate the group key"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -52207,6 +52719,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "der gruppenschlüssel konnte nicht rotiert werden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "could not rotate the group key"
           }
         },
         "es" : {
@@ -52340,12 +52858,6 @@
     "system.group.send_failed" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "could not encrypt the message"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -52362,6 +52874,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "die nachricht konnte nicht verschlüsselt werden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "could not encrypt the message"
           }
         },
         "es" : {
@@ -52495,12 +53013,6 @@
     "system.group.unknown" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "you are no longer in this group"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -52517,6 +53029,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "du bist nicht mehr in dieser gruppe"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "you are no longer in this group"
           }
         },
         "es" : {
@@ -52650,12 +53168,6 @@
     "system.group.usage_create" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "usage: /group create <name>"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -52672,6 +53184,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "verwendung: /group create <name>"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "usage: /group create <name>"
           }
         },
         "es" : {
@@ -52805,12 +53323,6 @@
     "system.group.usage_invite" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "usage: /group invite @name"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -52827,6 +53339,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "verwendung: /group invite @name"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "usage: /group invite @name"
           }
         },
         "es" : {
@@ -52960,12 +53478,6 @@
     "system.group.usage_remove" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "usage: /group remove @name"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -52982,6 +53494,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "verwendung: /group remove @name"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "usage: /group remove @name"
           }
         },
         "es" : {
@@ -53474,12 +53992,6 @@
       "comment" : "System message shown when a mesh peer cannot be blocked",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "cannot block %@: not found or unable to verify identity"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -53496,6 +54008,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "%@ kann nicht blockiert werden: nicht gefunden oder identität nicht verifizierbar"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cannot block %@: not found or unable to verify identity"
           }
         },
         "es" : {
@@ -53630,12 +54148,6 @@
       "comment" : "System message shown when a mesh peer is blocked",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "blocked %@. you will no longer receive messages from them"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -53652,6 +54164,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "%@ blockiert. du erhältst keine nachrichten mehr von ihnen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "blocked %@. you will no longer receive messages from them"
           }
         },
         "es" : {
@@ -53786,12 +54304,6 @@
       "comment" : "System message shown when a mesh peer cannot be unblocked",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "cannot unblock %@: not found"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -53808,6 +54320,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "%@ kann nicht entsperrt werden: nicht gefunden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cannot unblock %@: not found"
           }
         },
         "es" : {
@@ -53942,12 +54460,6 @@
       "comment" : "System message shown when a mesh peer is unblocked",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "unblocked %@"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -53964,6 +54476,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "%@ entsperrt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "unblocked %@"
           }
         },
         "es" : {
@@ -54993,12 +55511,6 @@
       "comment" : "Caption under the mesh topology map",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "estimated from gossiped neighbor lists (up to 10 per peer) — your device is highlighted"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -55015,6 +55527,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "geschätzt aus verbreiteten nachbarlisten (bis zu 10 pro peer) — dein gerät ist hervorgehoben"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "estimated from gossiped neighbor lists (up to 10 per peer) — your device is highlighted"
           }
         },
         "es" : {
@@ -55149,12 +55667,6 @@
       "comment" : "Empty state of the mesh topology map",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "no mesh links yet — the map fills in as peer announces arrive"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -55171,6 +55683,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "noch keine mesh-verbindungen — die karte füllt sich, sobald peer-announces eintreffen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no mesh links yet — the map fills in as peer announces arrive"
           }
         },
         "es" : {
@@ -55305,12 +55823,6 @@
       "comment" : "Accessibility label of the topology refresh button",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "refresh topology"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -55327,6 +55839,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "topologie aktualisieren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "refresh topology"
           }
         },
         "es" : {
@@ -55461,12 +55979,6 @@
       "comment" : "Topology map summary: number of peers and links",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$ld peers · %2$ld links"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -55483,6 +55995,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "%1$ld peers · %2$ld verbindungen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$ld peers · %2$ld links"
           }
         },
         "es" : {
@@ -55617,12 +56135,6 @@
       "comment" : "Title of the mesh topology map sheet",
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "mesh topology"
-          }
-        },
         "ar" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -55639,6 +56151,12 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "mesh-topologie"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh topology"
           }
         },
         "es" : {
@@ -57734,521 +58252,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "語音訊息僅能在 mesh 聊天中使用。"
-          }
-        }
-      }
-    },
-    "Images are only available in mesh chats." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "الصور متاحة فقط في محادثات الميش."
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ছবি শুধু মেশ চ্যাটে উপলব্ধ।"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bilder sind nur im Mesh-Chat verfügbar."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Images are only available in mesh chats."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Las imágenes solo están disponibles en los chats de mesh."
-          }
-        },
-        "fil" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ang mga larawan ay available lamang sa mga mesh chat."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Les images sont uniquement disponibles dans les discussions mesh."
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "תמונות זמינות רק בצ׳אט של mesh."
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "चित्र केवल मेश चैट में ही उपलब्ध हैं।"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gambar hanya tersedia di obrolan mesh."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Le immagini sono disponibili solo nelle chat mesh."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "画像はメッシュチャットでのみ利用できます。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "이미지는 메쉬 채팅에서만 사용할 수 있습니다."
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Imej hanya tersedia dalam sembang mesh."
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "तस्बिरहरू केवल मेष च्याटमा मात्र उपलब्ध छन्।"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Afbeeldingen zijn alleen beschikbaar in mesh-chats."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Obrazy są dostępne tylko na czatach mesh."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "As imagens só estão disponíveis nos chats mesh."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "As imagens só estão disponíveis nos chats mesh."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Изображения доступны только в mesh-чатах."
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bilder är bara tillgängliga i mesh-chattar."
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "படங்கள் மெஷ் உரையாடல்களில் மட்டுமே கிடைக்கும்."
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "รูปภาพใช้งานได้เฉพาะในแชต mesh เท่านั้น"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Görseller yalnızca mesh sohbetlerinde kullanılabilir."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Зображення доступні лише в mesh-чатах."
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "تصاویر صرف میش چیٹس میں دستیاب ہیں۔"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hình ảnh chỉ khả dụng trong các cuộc trò chuyện mesh."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "图片仅可在 mesh 聊天中使用。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "圖片僅能在 mesh 聊天中使用。"
-          }
-        }
-      }
-    },
-    "Choose an image" : {
-      "comment" : "A label displayed above a button that allows the user to choose an image to send.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "اختر صورة"
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "একটি ছবি নির্বাচন করুন"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bild auswählen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choose an image"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Elige una imagen"
-          }
-        },
-        "fil" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pumili ng larawan"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choisir une image"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "בחר תמונה"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "एक चित्र चुनें"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pilih gambar"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Scegli un’immagine"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "画像を選択"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "이미지를 선택하세요"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pilih imej"
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "एउटा तस्वीर चयन गर्नुहोस्"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Kies een afbeelding"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wybierz obraz"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Escolher uma imagem"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Escolha uma imagem"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Выберите изображение"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Välj en bild"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ஒரு படத்தைத் தேர்ந்தெடுக்கவும்"
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "เลือกภาพ"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bir görüntü seç"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Виберіть зображення"
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ایک تصویر منتخب کریں"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Chọn một hình ảnh"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选择图像"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "選擇圖像"
-          }
-        }
-      }
-    },
-    "media.image.accessibility.unavailable" : {
-      "comment" : "Accessibility label for an image whose file could not be loaded",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "image unavailable"
-          }
-        },
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "الصورة غير متاحة"
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ছবি অনুপলব্ধ"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "bild nicht verfügbar"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "imagen no disponible"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "image indisponible"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "התמונה לא זמינה"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "चित्र उपलब्ध नहीं"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "gambar tidak tersedia"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "immagine non disponibile"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "画像を利用できません"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "이미지를 사용할 수 없음"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "imej tidak tersedia"
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "तस्बिर उपलब्ध छैन"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "afbeelding niet beschikbaar"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "obraz niedostępny"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "imagem indisponível"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "изображение недоступно"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "bild otillgänglig"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "படம் கிடைக்கவில்லை"
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ไม่สามารถใช้รูปภาพได้"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "görsel kullanılamıyor"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "зображення недоступне"
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "تصویر دستیاب نہیں"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "hình ảnh không khả dụng"
           }
         }
       }

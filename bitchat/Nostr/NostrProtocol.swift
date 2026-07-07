@@ -257,15 +257,21 @@ struct NostrProtocol {
     }
 
     /// Create a persistent location note (kind 1: text note) tagged to a street-level geohash.
+    /// An optional `expiresAt` adds a NIP-40 expiration tag so honoring relays
+    /// drop the note in step with a bridged board post's expiry.
     static func createGeohashTextNote(
         content: String,
         geohash: String,
         senderIdentity: NostrIdentity,
-        nickname: String? = nil
+        nickname: String? = nil,
+        expiresAt: Date? = nil
     ) throws -> NostrEvent {
         var tags = [["g", geohash]]
         if let nickname = nickname?.trimmedOrNilIfEmpty {
             tags.append(["n", nickname])
+        }
+        if let expiresAt {
+            tags.append(["expiration", String(Int(expiresAt.timeIntervalSince1970))])
         }
         let event = NostrEvent(
             pubkey: senderIdentity.publicKeyHex,

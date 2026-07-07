@@ -28,6 +28,7 @@ final class AppRuntime: ObservableObject {
     let locationChannelsModel: LocationChannelsModel
     let peerListModel: PeerListModel
     let appChromeModel: AppChromeModel
+    let boardAlertsModel: BoardAlertsModel
 
     private let idBridge: NostrIdentityBridge
     private var cancellables = Set<AnyCancellable>()
@@ -90,6 +91,23 @@ final class AppRuntime: ObservableObject {
         self.appChromeModel = AppChromeModel(
             chatViewModel: self.chatViewModel,
             privateInboxModel: self.privateInboxModel
+        )
+        let chatViewModel = self.chatViewModel
+        self.boardAlertsModel = BoardAlertsModel(
+            arrivals: BoardStore.shared.postArrivals.eraseToAnyPublisher(),
+            dependencies: BoardAlertsModel.Dependencies(
+                isOwnPost: { post in
+                    let key = chatViewModel.meshService.noiseSigningPublicKeyData()
+                    return !key.isEmpty && key == post.authorSigningKey
+                },
+                emitSystemLine: { content, geohash in
+                    if geohash.isEmpty {
+                        chatViewModel.addMeshOnlySystemMessage(content)
+                    } else {
+                        chatViewModel.addGeohashSystemMessage(content, geohash: geohash)
+                    }
+                }
+            )
         )
 
         GeoRelayDirectory.shared.prefetchIfNeeded()

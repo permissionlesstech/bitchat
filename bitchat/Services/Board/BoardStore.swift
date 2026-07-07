@@ -78,6 +78,12 @@ final class BoardStore {
     /// Live posts, published on the main thread for the board UI.
     @Published private(set) var postsSnapshot: [BoardPostPacket] = []
 
+    /// Fires on the main thread for each post newly accepted from the wire
+    /// (radio, sync, or local echo) — not for disk restores. Drives the
+    /// local new-pin chat alerts; duplicates never fire twice because the
+    /// store rejects them.
+    let postArrivals = PassthroughSubject<BoardPostPacket, Never>()
+
     private var posts: [StoredPost] = []
     private var tombstones: [StoredTombstone] = []
     private let queue = DispatchQueue(label: "chat.bitchat.board.store")
@@ -104,6 +110,11 @@ final class BoardStore {
             let result = ingestLocked(wire, packet: packet, rawPacket: rawPacket, nowMs: nowMs)
             if result == .accepted {
                 persistLocked()
+                if case .post(let post) = wire {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.postArrivals.send(post)
+                    }
+                }
             }
             return result
         }
