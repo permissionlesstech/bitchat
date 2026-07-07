@@ -313,7 +313,7 @@ final class GossipSyncManager {
     private func sendPeriodicSync(for types: SyncTypeFlags) {
         // Unicast sync to connected peers to allow RSR attribution
         if let connectedPeers = delegate?.getConnectedPeers(), !connectedPeers.isEmpty {
-            SecureLogger.debug("Sending periodic sync to \(connectedPeers.count) connected peers", category: .sync)
+            SecureLogger.debug("Sending periodic sync (\(types.logDescription)) to \(connectedPeers.count) connected peers", category: .sync)
             for peerID in connectedPeers {
                 sendRequestSync(to: peerID, types: types)
             }

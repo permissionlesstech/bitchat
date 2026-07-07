@@ -15,7 +15,50 @@ final class KeychainManager: KeychainManagerProtocol {
     // Use consistent service name for all keychain items
     private let service = BitchatApp.bundleID
     private let appGroup = "group.\(BitchatApp.bundleID)"
-    
+
+    // AfterFirstUnlock, not WhenUnlocked: the mesh keeps running with the
+    // device locked (identity-cache saves failed with -25308 throughout
+    // locked-phone testing), and a wake-on-proximity relaunch via BLE state
+    // restoration must be able to read the noise keys before the user
+    // unlocks. Backup/sync semantics are unchanged (not ThisDeviceOnly).
+    private static let itemAccessibility = kSecAttrAccessibleAfterFirstUnlock
+
+    init() {
+        #if os(iOS)
+        migrateAccessibilityIfNeeded()
+        #endif
+    }
+
+    #if os(iOS)
+    /// One-time upgrade of items created under WhenUnlocked. New saves get
+    /// the right class on their own (saves are delete-then-add), but the
+    /// long-lived identity keys are written once and would otherwise stay
+    /// unreadable while the device is locked.
+    private func migrateAccessibilityIfNeeded() {
+        let flag = "keychain.accessibility.afterFirstUnlock.migrated"
+        guard !UserDefaults.standard.bool(forKey: flag) else { return }
+
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service
+        ]
+        let update: [String: Any] = [
+            kSecAttrAccessible as String: Self.itemAccessibility
+        ]
+        let status = SecItemUpdate(query as CFDictionary, update as CFDictionary)
+        switch status {
+        case errSecSuccess, errSecItemNotFound:
+            // Nothing to migrate on a fresh install; both are terminal.
+            UserDefaults.standard.set(true, forKey: flag)
+            SecureLogger.info("Keychain accessibility migrated to AfterFirstUnlock (status \(status))", category: .keychain)
+        default:
+            // Likely errSecInteractionNotAllowed (relaunched while locked) —
+            // leave the flag unset so the next launch retries.
+            SecureLogger.warning("Keychain accessibility migration deferred (status \(status))", category: .keychain)
+        }
+    }
+    #endif
+
     // MARK: - Identity Keys
     
     func saveIdentityKey(_ keyData: Data, forKey key: String) -> Bool {
@@ -62,7 +105,7 @@ final class KeychainManager: KeychainManagerProtocol {
             kSecAttrAccount as String: key,
             kSecValueData as String: data,
             kSecAttrService as String: service,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked,
+            kSecAttrAccessible as String: Self.itemAccessibility,
             kSecAttrLabel as String: "bitchat-\(key)"
         ]
         #if os(macOS)
@@ -227,7 +270,7 @@ final class KeychainManager: KeychainManagerProtocol {
             kSecAttrAccount as String: key,
             kSecValueData as String: data,
             kSecAttrService as String: service,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked,
+            kSecAttrAccessible as String: Self.itemAccessibility,
             kSecAttrLabel as String: "bitchat-\(key)"
         ]
         #if os(macOS)

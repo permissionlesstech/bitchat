@@ -115,6 +115,15 @@ struct SyncTypeFlags: OptionSet {
         SyncTypeFlags(rawValue: rawValue & other.rawValue)
     }
 
+    /// Compact form for logs, e.g. "message+fragment". Without this, the
+    /// per-schedule periodic sync rounds log identical lines and read as
+    /// duplicated sends (misdiagnosed twice during July 2026 device testing).
+    var logDescription: String {
+        let types = toMessageTypes()
+        guard !types.isEmpty else { return "none" }
+        return types.map { String(describing: $0) }.joined(separator: "+")
+    }
+
     func toMessageTypes() -> [MessageType] {
         guard rawValue != 0 else { return [] }
         var types: [MessageType] = []

@@ -227,8 +227,27 @@ extension ChatViewModel: ChatPrivateConversationContext {
 final class ChatPrivateConversationCoordinator {
     private unowned let context: any ChatPrivateConversationContext
 
+    // Outbox retries re-wrap the same message in fresh gift-wrap events, so
+    // relay-level event-ID dedup can't catch them; track inbound GeoDM
+    // message IDs so each copy past the first costs one (already-deduped)
+    // ack check and nothing else.
+    private var seenInboundGeoDMIDs: Set<String> = []
+    private var seenInboundGeoDMOrder: [String] = []
+    private static let seenInboundGeoDMCap = 512
+
     init(context: any ChatPrivateConversationContext) {
         self.context = context
+    }
+
+    /// Returns `false` if this GeoDM message ID was already handled.
+    private func markInboundGeoDMSeen(_ messageId: String) -> Bool {
+        guard !seenInboundGeoDMIDs.contains(messageId) else { return false }
+        seenInboundGeoDMIDs.insert(messageId)
+        seenInboundGeoDMOrder.append(messageId)
+        if seenInboundGeoDMOrder.count > Self.seenInboundGeoDMCap {
+            seenInboundGeoDMIDs.remove(seenInboundGeoDMOrder.removeFirst())
+        }
+        return true
     }
 
     func sendPrivateMessage(_ content: String, to peerID: PeerID) {
@@ -408,9 +427,14 @@ final class ChatPrivateConversationCoordinator {
         guard let pm = PrivateMessagePacket.decode(from: payload.data) else { return }
         let messageId = pm.messageID
 
-        SecureLogger.info("GeoDM: recv PM <- sender=\(senderPubkey.prefix(8))… mid=\(messageId.prefix(8))…", category: .session)
-
+        // Ack before the dedup guard: a re-sent copy means the sender may not
+        // have our DELIVERED yet, and markGeoDeliveryAckSent dedups the
+        // actual sends.
         sendDeliveryAckIfNeeded(to: messageId, senderPubKey: senderPubkey, from: id)
+
+        guard markInboundGeoDMSeen(messageId) else { return }
+
+        SecureLogger.info("GeoDM: recv PM <- sender=\(senderPubkey.prefix(8))… mid=\(messageId.prefix(8))…", category: .session)
 
         if context.isNostrBlocked(pubkeyHexLowercased: senderPubkey) {
             return
