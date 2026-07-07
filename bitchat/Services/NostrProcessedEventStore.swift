@@ -21,13 +21,47 @@ import Foundation
 /// Wiped on panic via the dedup service's clear paths.
 final class NostrProcessedEventStore {
     private let fileURL: URL?
+    // All file access is serialized here: appends are read-modify-write, and
+    // overlapping debounced flushes would otherwise race and drop IDs.
+    private let ioQueue = DispatchQueue(label: "chat.bitchat.nostr-processed-events", qos: .utility)
 
     init(fileURL: URL? = nil) {
         self.fileURL = fileURL ?? Self.defaultFileURL()
     }
 
-    /// Processed event IDs, oldest first (LRU insertion order).
+    /// Processed event IDs, oldest first (insertion order).
     func load() -> [String] {
+        ioQueue.sync { loadLocked() }
+    }
+
+    /// Merge new IDs onto the persisted record, oldest-first, trimming from
+    /// the front past `cap`. Append-merge (not snapshot-overwrite) so the
+    /// in-memory cache being cleared transiently (channel switches) can
+    /// never shrink the on-disk record.
+    func append(_ newIDs: [String], cap: Int) {
+        guard !newIDs.isEmpty else { return }
+        ioQueue.async { [self] in
+            var merged = loadLocked()
+            var known = Set(merged)
+            for id in newIDs where !known.contains(id) {
+                merged.append(id)
+                known.insert(id)
+            }
+            if merged.count > cap {
+                merged.removeFirst(merged.count - cap)
+            }
+            saveLocked(merged)
+        }
+    }
+
+    func wipe() {
+        ioQueue.async { [self] in
+            guard let fileURL else { return }
+            try? FileManager.default.removeItem(at: fileURL)
+        }
+    }
+
+    private func loadLocked() -> [String] {
         guard let fileURL,
               let data = try? Data(contentsOf: fileURL),
               let ids = try? JSONDecoder().decode([String].self, from: data) else {
@@ -36,7 +70,7 @@ final class NostrProcessedEventStore {
         return ids
     }
 
-    func save(_ eventIDs: [String]) {
+    private func saveLocked(_ eventIDs: [String]) {
         guard let fileURL else { return }
         guard !eventIDs.isEmpty else {
             try? FileManager.default.removeItem(at: fileURL)
@@ -56,11 +90,6 @@ final class NostrProcessedEventStore {
         } catch {
             SecureLogger.error("Failed to persist processed Nostr events: \(error)", category: .session)
         }
-    }
-
-    func wipe() {
-        guard let fileURL else { return }
-        try? FileManager.default.removeItem(at: fileURL)
     }
 
     private static func defaultFileURL() -> URL? {

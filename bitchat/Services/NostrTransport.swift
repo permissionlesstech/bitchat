@@ -19,6 +19,36 @@ final class NostrTransport: Transport, @unchecked Sendable {
         /// doesn't count: DM sends target the default relay set and would
         /// still queue.
         let relayConnectivity: @MainActor () -> AnyPublisher<Bool, Never>
+        /// Paces outbound acks. Defaults to an isolated pacer so tests don't
+        /// serialize behind each other; `live` passes the process-wide one.
+        let ackPacer: AckPacer
+
+        init(
+            notificationCenter: NotificationCenter,
+            loadFavorites: @escaping @MainActor () -> [Data: FavoritesPersistenceService.FavoriteRelationship],
+            favoriteStatusForNoiseKey: @escaping @MainActor (Data) -> FavoritesPersistenceService.FavoriteRelationship?,
+            favoriteStatusForPeerID: @escaping @MainActor (PeerID) -> FavoritesPersistenceService.FavoriteRelationship?,
+            currentIdentity: @escaping @MainActor () throws -> NostrIdentity?,
+            registerPendingGiftWrap: @escaping @MainActor (String) -> Void,
+            sendEvent: @escaping @MainActor (NostrEvent) -> Void,
+            scheduleAfter: @escaping @Sendable (TimeInterval, @escaping @Sendable () -> Void) -> Void,
+            relayConnectivity: @escaping @MainActor () -> AnyPublisher<Bool, Never>,
+            ackPacer: AckPacer? = nil
+        ) {
+            self.notificationCenter = notificationCenter
+            self.loadFavorites = loadFavorites
+            self.favoriteStatusForNoiseKey = favoriteStatusForNoiseKey
+            self.favoriteStatusForPeerID = favoriteStatusForPeerID
+            self.currentIdentity = currentIdentity
+            self.registerPendingGiftWrap = registerPendingGiftWrap
+            self.sendEvent = sendEvent
+            self.scheduleAfter = scheduleAfter
+            self.relayConnectivity = relayConnectivity
+            // Default pacer drives its throttle through the same injected
+            // scheduler, so tests that step scheduleAfter manually keep
+            // control of the ack cadence.
+            self.ackPacer = ackPacer ?? AckPacer(scheduleAfter: scheduleAfter)
+        }
 
         @MainActor
         static func live(idBridge: NostrIdentityBridge) -> Dependencies {
@@ -33,7 +63,8 @@ final class NostrTransport: Transport, @unchecked Sendable {
                 scheduleAfter: { delay, action in
                     DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: action)
                 },
-                relayConnectivity: { NostrRelayManager.shared.$isDMRelayConnected.eraseToAnyPublisher() }
+                relayConnectivity: { NostrRelayManager.shared.$isDMRelayConnected.eraseToAnyPublisher() },
+                ackPacer: NostrTransport.sharedAckPacer
             )
         }
     }
@@ -51,9 +82,51 @@ final class NostrTransport: Transport, @unchecked Sendable {
         case deliveredGeohash(messageID: String, recipientHex: String, identity: NostrIdentity)
         case readGeohash(messageID: String, recipientHex: String, identity: NostrIdentity)
     }
-    private var ackQueue: [QueuedAck] = []
-    private var isSendingAcks = false
-    private let ackInterval: TimeInterval = TransportConfig.nostrReadAckInterval
+
+    /// Ack pacing shared across transport instances. Geohash acks are sent
+    /// through short-lived transports created per ack
+    /// (`makeGeohashNostrTransport()`), so a per-instance queue would only
+    /// ever hold one item and never pace a burst (flagged by Codex on
+    /// #1398). Production wires `sharedAckPacer` via `Dependencies.live`;
+    /// tests get an isolated instance per `Dependencies` by default.
+    final class AckPacer {
+        typealias Scheduler = @Sendable (TimeInterval, @escaping @Sendable () -> Void) -> Void
+
+        private let queue = DispatchQueue(label: "chat.bitchat.nostr-ack-pacer")
+        private var pending: [() -> Void] = []
+        private var isSending = false
+        private let interval: TimeInterval = TransportConfig.nostrReadAckInterval
+        private let scheduleAfter: Scheduler
+
+        init(scheduleAfter: @escaping Scheduler = { delay, action in
+            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + delay, execute: action)
+        }) {
+            self.scheduleAfter = scheduleAfter
+        }
+
+        func enqueue(_ send: @escaping () -> Void) {
+            queue.async {
+                self.pending.append(send)
+                self.processNext()
+            }
+        }
+
+        /// Must be called on `queue`.
+        private func processNext() {
+            guard !isSending, !pending.isEmpty else { return }
+            isSending = true
+            let send = pending.removeFirst()
+            send()
+            scheduleAfter(interval) { [weak self] in
+                guard let self else { return }
+                self.queue.async {
+                    self.isSending = false
+                    self.processNext()
+                }
+            }
+        }
+    }
+    static let sharedAckPacer = AckPacer()
     private let keychain: KeychainManagerProtocol
     private let idBridge: NostrIdentityBridge
     private let dependencies: Dependencies
@@ -195,12 +268,11 @@ final class NostrTransport: Transport, @unchecked Sendable {
         enqueueAck(.readDirect(receipt, peerID))
     }
 
-    /// Enqueue an ack for paced sending (barrier-synchronized on `queue`).
+    /// Enqueue an ack for paced sending. Captures self strongly on purpose:
+    /// geohash acks ride throwaway transport instances that must stay alive
+    /// until their ack leaves the queue.
     private func enqueueAck(_ ack: QueuedAck) {
-        queue.async(flags: .barrier) {
-            self.ackQueue.append(ack)
-            self.processAckQueueIfNeeded()
-        }
+        dependencies.ackPacer.enqueue { self.sendAckItem(ack) }
     }
 
     func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {
@@ -280,19 +352,10 @@ extension NostrTransport {
         dependencies.sendEvent(event)
     }
 
-    /// Must be called within a barrier on `queue`
-    private func processAckQueueIfNeeded() {
-        guard !isSendingAcks else { return }
-        guard !ackQueue.isEmpty else { return }
-        isSendingAcks = true
-        let item = ackQueue.removeFirst()
-        sendAckItem(item)
-    }
 
-    /// Sends a single ack item (called after extraction from queue within barrier)
+    /// Sends a single ack item (invoked by the pacer, one per interval)
     private func sendAckItem(_ item: QueuedAck) {
         Task { @MainActor in
-            defer { scheduleNextAck() }
             switch item {
             case .readDirect(let receipt, let peerID):
                 guard let recipientNpub = resolveRecipientNpub(for: peerID),
@@ -325,15 +388,6 @@ extension NostrTransport {
                 SecureLogger.debug("GeoDM: send READ mid=\(messageID.prefix(8))…", category: .session)
                 guard let embedded = NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(type: .readReceipt, messageID: messageID, senderPeerID: senderPeerID) else { return }
                 sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: identity, registerPending: true)
-            }
-        }
-    }
-
-    private func scheduleNextAck() {
-        dependencies.scheduleAfter(ackInterval) { [weak self] in
-            self?.queue.async(flags: .barrier) { [weak self] in
-                self?.isSendingAcks = false
-                self?.processAckQueueIfNeeded()
             }
         }
     }

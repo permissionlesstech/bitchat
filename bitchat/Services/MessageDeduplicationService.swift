@@ -64,11 +64,6 @@ final class LRUDeduplicationCache<Value> {
         head = 0
     }
 
-    /// Active keys in insertion order (oldest first), for persistence.
-    func snapshotKeysOldestFirst() -> [String] {
-        order[head...].filter { map[$0] != nil }
-    }
-
     // MARK: - Private
 
     private func trimIfNeeded() {
@@ -183,7 +178,9 @@ final class MessageDeduplicationService {
     /// each relaunch reprocesses old PMs and acks. Nil (tests, macOS callers
     /// that don't opt in) keeps the cache purely in-memory.
     private let nostrEventStore: NostrProcessedEventStore?
+    private let nostrEventCapacity: Int
     private var persistScheduled = false
+    private var pendingPersistIDs: [String] = []
 
     /// Creates a new deduplication service with specified capacities.
     /// - Parameters:
@@ -200,6 +197,7 @@ final class MessageDeduplicationService {
         self.nostrEventCache = LRUDeduplicationCache(capacity: nostrEventCapacity)
         self.nostrAckCache = LRUDeduplicationCache(capacity: nostrEventCapacity)
         self.nostrEventStore = nostrEventStore
+        self.nostrEventCapacity = nostrEventCapacity
         if let nostrEventStore {
             for eventID in nostrEventStore.load() {
                 nostrEventCache.record(eventID, value: true)
@@ -261,12 +259,15 @@ final class MessageDeduplicationService {
     /// - Parameter eventId: The event ID
     func recordNostrEvent(_ eventId: String) {
         nostrEventCache.record(eventId, value: true)
-        schedulePersistIfNeeded()
+        if nostrEventStore != nil {
+            pendingPersistIDs.append(eventId)
+            schedulePersistIfNeeded()
+        }
     }
 
     /// Debounced persistence: bursts of inbound events (reconnect redelivery)
-    /// collapse into one write, snapshotted on the main actor and written off
-    /// it.
+    /// collapse into one append. Append-merge rather than snapshot, so a
+    /// transient in-memory clear between flushes can't shrink the disk record.
     private func schedulePersistIfNeeded() {
         guard let nostrEventStore, !persistScheduled else { return }
         persistScheduled = true
@@ -274,10 +275,9 @@ final class MessageDeduplicationService {
             try? await Task.sleep(nanoseconds: 2_000_000_000)
             guard let self else { return }
             self.persistScheduled = false
-            let snapshot = self.nostrEventCache.snapshotKeysOldestFirst()
-            Task.detached(priority: .utility) {
-                nostrEventStore.save(snapshot)
-            }
+            let newIDs = self.pendingPersistIDs
+            self.pendingPersistIDs.removeAll()
+            nostrEventStore.append(newIDs, cap: self.nostrEventCapacity)
         }
     }
 
@@ -303,18 +303,22 @@ final class MessageDeduplicationService {
 
     // MARK: - Clear
 
-    /// Clears all caches
+    /// Clears all caches. This is the wipe/panic path: the persisted
+    /// gift-wrap record goes with everything else.
     func clearAll() {
         contentCache.clear()
         nostrEventCache.clear()
         nostrAckCache.clear()
+        pendingPersistIDs.removeAll()
         nostrEventStore?.wipe()
     }
 
-    /// Clears only the Nostr caches (events and ACKs)
+    /// Clears only the in-memory Nostr caches (events and ACKs). Runs on
+    /// every geohash channel switch, so the disk record deliberately
+    /// survives — wiping it here would forfeit cross-launch gift-wrap dedup
+    /// each time the user changes channels (flagged by Codex on #1398).
     func clearNostrCaches() {
         nostrEventCache.clear()
         nostrAckCache.clear()
-        nostrEventStore?.wipe()
     }
 }
