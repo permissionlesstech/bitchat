@@ -43,6 +43,10 @@ struct SyncTypeFlags: OptionSet {
         // Ping/pong are ephemeral directed probes; replaying them via gossip
         // sync would only produce stale, unanswerable echoes.
         case .ping, .pong: return nil
+        // Gateway carriers are ephemeral live traffic (uplinks are directed,
+        // downlinks are rate-budgeted rebroadcasts); replaying them via sync
+        // would waste airtime and extend their lifetime.
+        case .nostrCarrier: return nil
         }
     }
 

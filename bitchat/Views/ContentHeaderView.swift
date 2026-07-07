@@ -94,6 +94,19 @@ struct ContentHeaderView: View {
             }()
 
             HStack(spacing: 2) {
+                if locationChannelsModel.gatewayEnabled {
+                    Image(systemName: "globe")
+                        .font(.bitchatSystem(size: 12))
+                        .foregroundColor(palette.secondary.opacity(0.8))
+                        .headerTapTarget()
+                        .accessibilityLabel(
+                            String(localized: "content.accessibility.gateway_active", defaultValue: "Internet gateway active, sharing your connection with the mesh", comment: "Accessibility label for the internet gateway indicator")
+                        )
+                        .help(
+                            String(localized: "content.header.gateway_active", defaultValue: "Sharing your internet connection with nearby mesh peers", comment: "Tooltip for the internet gateway indicator")
+                        )
+                }
+
                 if carriedMailCount > 0 {
                     Image(systemName: "figure.walk")
                         .font(.bitchatSystem(size: 12))

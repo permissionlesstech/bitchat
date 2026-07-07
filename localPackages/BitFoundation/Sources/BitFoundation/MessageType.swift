@@ -30,6 +30,10 @@ public enum MessageType: UInt8 {
     case ping = 0x26            // Directed echo request (nonce + origin TTL)
     case pong = 0x27            // Directed echo reply (echoed nonce + origin TTL)
 
+    // Gateway mode: signed Nostr event ferried between a mesh-only peer and
+    // an internet gateway peer.
+    case nostrCarrier = 0x28
+
     public var description: String {
         switch self {
         case .announce: return "announce"
@@ -44,6 +48,7 @@ public enum MessageType: UInt8 {
         case .boardPost: return "boardPost"
         case .ping: return "ping"
         case .pong: return "pong"
+        case .nostrCarrier: return "nostrCarrier"
         }
     }
 }
