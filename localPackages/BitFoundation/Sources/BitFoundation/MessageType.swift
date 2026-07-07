@@ -7,7 +7,7 @@
 //
 
 /// Simplified BitChat protocol message types.
-/// Reduced from 24 types to just 6 essential ones.
+/// Consolidated from the original 24 wire types down to the 9 cases below.
 /// All private communication metadata (receipts, status) is embedded in noiseEncrypted payloads.
 public enum MessageType: UInt8 {
     // Public messages (unencrypted)
@@ -24,10 +24,17 @@ public enum MessageType: UInt8 {
     // Fragmentation (simplified)
     case fragment = 0x20        // Single fragment type for large messages
     case fileTransfer = 0x22    // Binary file/audio/image payloads
-
-    // 0x23, 0x25-0x28 reserved for in-flight protocol work.
+    case boardPost = 0x23       // Signed geohash bulletin-board post or tombstone
     case prekeyBundle = 0x24    // Signed batch of one-time prekeys (gossiped)
-    
+
+    // Mesh diagnostics
+    case ping = 0x26            // Directed echo request (nonce + origin TTL)
+    case pong = 0x27            // Directed echo reply (echoed nonce + origin TTL)
+
+    // Gateway mode: signed Nostr event ferried between a mesh-only peer and
+    // an internet gateway peer.
+    case nostrCarrier = 0x28
+
     public var description: String {
         switch self {
         case .announce: return "announce"
@@ -39,7 +46,11 @@ public enum MessageType: UInt8 {
         case .noiseEncrypted: return "noiseEncrypted"
         case .fragment: return "fragment"
         case .fileTransfer: return "fileTransfer"
+        case .boardPost: return "boardPost"
         case .prekeyBundle: return "prekeyBundle"
+        case .ping: return "ping"
+        case .pong: return "pong"
+        case .nostrCarrier: return "nostrCarrier"
         }
     }
 }

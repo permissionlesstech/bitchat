@@ -16,6 +16,11 @@ enum TransportConfig {
     static let bleFragmentRelayTtlCap: UInt8 = 7
     static let bleFragmentRelayTtlCapDense: UInt8 = 5       // Contain fragment floods in dense graphs
 
+    // Mesh diagnostics (/ping)
+    static let meshPingTimeoutSeconds: TimeInterval = 10    // Give up on a probe after this window
+    static let meshPingInboundMaxPerLink: Int = 5           // Inbound ping budget per ingress link (claimed sender is spoofable)...
+    static let meshPingInboundWindowSeconds: TimeInterval = 10 // ...per sliding window (anti-amplification)
+
     // UI / Storage Caps
     static let privateChatCap: Int = 1337
     static let meshTimelineCap: Int = 1337
@@ -207,6 +212,25 @@ enum TransportConfig {
     static let bleSubscriptionRateLimitMaxBackoffSeconds: TimeInterval = 30.0  // Maximum backoff period
     static let bleSubscriptionRateLimitWindowSeconds: TimeInterval = 60.0   // Window for tracking subscription attempts
     static let bleSubscriptionRateLimitMaxAttempts: Int = 5                 // Max attempts before extended cooldown
+
+    // Source routing (v2 directed packets)
+    // Longest path we will originate, in intermediate hops between us and the
+    // recipient. Keep small: every hop must be a fresh, confirmed, v2-capable
+    // node, and long stale paths fail more often than floods.
+    static let bleSourceRouteMaxIntermediateHops: Int = 4
+    // A routed send with no inbound traffic from the recipient within this
+    // window counts as a route failure.
+    static let bleSourceRouteConfirmationWindowSeconds: TimeInterval = 10.0
+    // After a route failure, directed sends to that recipient flood instead
+    // of routing until this lapses.
+    static let bleSourceRouteSuppressionSeconds: TimeInterval = 60.0
+
+    // Targeted fragment resync (REQUEST_SYNC fragmentIdFilter)
+    // A broadcast reassembly with no new fragment for this long is stalled
+    // and triggers a targeted REQUEST_SYNC naming its fragment stream.
+    static let bleFragmentResyncStallSeconds: TimeInterval = 5.0
+    // Minimum spacing between targeted resync requests for the same stream.
+    static let bleFragmentResyncRetrySeconds: TimeInterval = 10.0
 
     // Store-and-forward for directed packets at relays. Spooled packets retry
     // on each maintenance flush until the window lapses; a longer window lets

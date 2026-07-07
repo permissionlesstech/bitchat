@@ -37,6 +37,14 @@ struct FingerprintView: View {
         }
         static let markVerified: LocalizedStringKey = "fingerprint.action.mark_verified"
         static let removeVerification: LocalizedStringKey = "fingerprint.action.remove_verification"
+        static let vouchedBadge: LocalizedStringKey = "fingerprint.badge.vouched"
+        static func vouchedBy(_ count: Int) -> String {
+            String(
+                format: String(localized: "fingerprint.message.vouched_by", comment: "How many people the user verified have vouched for this peer"),
+                locale: .current,
+                count
+            )
+        }
         static func unknownPeer() -> String {
             String(localized: "common.unknown", comment: "Label for an unknown peer")
         }
@@ -146,6 +154,41 @@ struct FingerprintView: View {
                         }
                 }
                 
+                // Vouched (transitively verified) status: shown whenever the
+                // peer isn't explicitly verified but people I verified vouch
+                // for them, independent of the current session state.
+                if fingerprintState.isVouched && !fingerprintState.isVerified {
+                    VStack(spacing: 8) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "checkmark.seal")
+                                .font(.bitchatSystem(size: 14))
+                                .foregroundColor(.teal)
+                            Text(Strings.vouchedBadge)
+                                .bitchatFont(size: 14, weight: .bold)
+                                .foregroundColor(.teal)
+                        }
+                        .frame(maxWidth: .infinity)
+
+                        Text(Strings.vouchedBy(fingerprintState.voucherCount))
+                            .bitchatFont(size: 12)
+                            .foregroundColor(textColor.opacity(0.7))
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity)
+
+                        if !fingerprintState.voucherNames.isEmpty {
+                            Text(fingerprintState.voucherNames.joined(separator: ", "))
+                                .bitchatFont(size: 12)
+                                .foregroundColor(textColor.opacity(0.7))
+                                .multilineTextAlignment(.center)
+                                .lineLimit(nil)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+                    .padding(.top, 8)
+                    .accessibilityElement(children: .combine)
+                }
+
                 // Verification status
                 if fingerprintState.canToggleVerification {
                     VStack(spacing: 12) {

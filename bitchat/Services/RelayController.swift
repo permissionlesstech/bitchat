@@ -19,6 +19,7 @@ struct RelayController {
                        isHandshake: Bool,
                        isAnnounce: Bool,
                        isRequestSync: Bool = false,
+                       isUrgentBoardPost: Bool = false,
                        degree: Int,
                        highDegreeThreshold: Int) -> RelayDecision {
         let ttlCap = min(ttl, TransportConfig.messageTTLDefault)
@@ -64,7 +65,7 @@ struct RelayController {
         // - Dense graphs: keep lower but still allow multi-hop bridging
         // - Thin chains (degree <= 2): every hop counts and flood cost is
         //   minimal, so relay at full incoming depth
-        // - Announces get a bit more headroom
+        // - Announces (and urgent board posts) get a bit more headroom
         let ttlLimit: UInt8 = {
             if degree >= highDegreeThreshold {
                 return max(UInt8(2), min(ttlCap, UInt8(5)))
@@ -72,7 +73,7 @@ struct RelayController {
             if degree <= 2 {
                 return ttlCap
             }
-            let preferred = UInt8(isAnnounce ? 7 : 6)
+            let preferred = UInt8((isAnnounce || isUrgentBoardPost) ? 7 : 6)
             return max(UInt8(2), min(ttlCap, preferred))
         }()
         let newTTL = ttlLimit &- 1

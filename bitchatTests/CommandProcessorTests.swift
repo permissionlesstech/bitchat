@@ -370,6 +370,173 @@ struct CommandProcessorTests {
         }
     }
 
+    // MARK: - /pay
+
+    @MainActor
+    @Test func payWithoutArgumentsPrintsUsage() {
+        let processor = makePayProcessor(context: MockCommandContextProvider())
+        switch processor.process("/pay") {
+        case .success(let message):
+            #expect(message?.contains("usage: /pay") == true)
+        default:
+            Issue.record("Expected success (usage) result")
+        }
+    }
+
+    @MainActor
+    @Test func payRejectsInvalidToken() {
+        let context = MockCommandContextProvider()
+        let processor = makePayProcessor(context: context)
+        for bad in ["/pay nonsense", "/pay cashuAshort", "/pay cashuA!!!!!!!!!!!!!!!!"] {
+            switch processor.process(bad) {
+            case .error:
+                break
+            default:
+                Issue.record("Expected error for \(bad)")
+            }
+        }
+        #expect(context.sentPrivateMessages.isEmpty)
+        #expect(context.sentPublicMessages.isEmpty)
+    }
+
+    @MainActor
+    @Test func paySendsBareTokenInPrivateChat() {
+        let context = MockCommandContextProvider()
+        let peerID = PeerID(str: "abcd1234abcd1234")
+        context.selectedPrivateChatPeer = peerID
+        let processor = makePayProcessor(context: context)
+
+        // cashu: URI form must be normalized to the bare token before sending
+        switch processor.process("/pay cashu:\(Self.validV3Token)") {
+        case .success(let message):
+            #expect(message?.contains("21 sat") == true)
+        default:
+            Issue.record("Expected success result")
+        }
+        #expect(context.sentPrivateMessages.count == 1)
+        #expect(context.sentPrivateMessages.first?.content == Self.validV3Token)
+        #expect(context.sentPrivateMessages.first?.peerID == peerID)
+        #expect(context.sentPublicMessages.isEmpty)
+    }
+
+    @MainActor
+    @Test func payInPublicChannelRequiresExplicitConfirm() {
+        let context = MockCommandContextProvider()
+        let processor = makePayProcessor(context: context)
+
+        switch processor.process("/pay \(Self.validV3Token)") {
+        case .error(let message):
+            #expect(message.contains("public") == true)
+        default:
+            Issue.record("Expected error without confirm")
+        }
+        #expect(context.sentPublicMessages.isEmpty)
+
+        switch processor.process("/pay \(Self.validV3Token) public") {
+        case .success:
+            break
+        default:
+            Issue.record("Expected success with confirm")
+        }
+        #expect(context.sentPublicMessages == [Self.validV3Token])
+        #expect(context.sentPrivateMessages.isEmpty)
+    }
+
+    @MainActor
+    @Test func payRejectsTruncatedOrJunkV4Token() {
+        let context = MockCommandContextProvider()
+        context.selectedPrivateChatPeer = PeerID(str: "abcd1234abcd1234")
+        let processor = makePayProcessor(context: context)
+
+        // Truncated V4 (definite-length CBOR can no longer be walked) and
+        // pure base64 junk under the cashuB prefix must both be refused.
+        let truncatedV4 = String(Self.validV4Token.prefix(Self.validV4Token.count - 12))
+        let junkV4 = "cashuB" + String(repeating: "Q", count: 40)
+        for bad in ["/pay \(truncatedV4)", "/pay \(junkV4)"] {
+            switch processor.process(bad) {
+            case .error(let message):
+                #expect(message.contains("invalid cashu token") == true)
+            default:
+                Issue.record("Expected error for \(bad)")
+            }
+        }
+        #expect(context.sentPrivateMessages.isEmpty)
+        #expect(context.sentPublicMessages.isEmpty)
+    }
+
+    @MainActor
+    @Test func paySendsValidDefiniteLengthV4Token() {
+        let context = MockCommandContextProvider()
+        let peerID = PeerID(str: "abcd1234abcd1234")
+        context.selectedPrivateChatPeer = peerID
+        let processor = makePayProcessor(context: context)
+
+        switch processor.process("/pay \(Self.validV4Token)") {
+        case .success(let message):
+            #expect(message?.contains("21 sat") == true)
+        default:
+            Issue.record("Expected success result for valid V4 token")
+        }
+        #expect(context.sentPrivateMessages.count == 1)
+        #expect(context.sentPrivateMessages.first?.content == Self.validV4Token)
+    }
+
+    /// 21-sat single-mint V3 token (proofs of 1+4+16).
+    private static let validV3Token: String = {
+        let json: [String: Any] = [
+            "token": [[
+                "mint": "https://mint.example.com",
+                "proofs": [1, 4, 16].map { ["amount": $0, "id": "009a1f293253e41e", "secret": "s", "C": "02c"] }
+            ]],
+            "unit": "sat"
+        ]
+        let data = try! JSONSerialization.data(withJSONObject: json)
+        let b64 = data.base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        return "cashuA" + b64
+    }()
+
+    /// 21-sat single-mint definite-length V4 (CBOR) token (proofs of 1+4+16).
+    private static let validV4Token: String = {
+        func head(_ major: UInt8, _ value: UInt64) -> [UInt8] {
+            switch value {
+            case 0...23: return [(major << 5) | UInt8(value)]
+            case 24...0xFF: return [(major << 5) | 24, UInt8(value)]
+            default: return [(major << 5) | 25, UInt8(value >> 8), UInt8(value & 0xFF)]
+            }
+        }
+        func text(_ s: String) -> [UInt8] { head(3, UInt64(s.utf8.count)) + Array(s.utf8) }
+        func bytes(_ b: [UInt8]) -> [UInt8] { head(2, UInt64(b.count)) + b }
+        func uint(_ v: UInt64) -> [UInt8] { head(0, v) }
+        func array(_ items: [[UInt8]]) -> [UInt8] { head(4, UInt64(items.count)) + items.flatMap { $0 } }
+        func map(_ pairs: [(String, [UInt8])]) -> [UInt8] { head(5, UInt64(pairs.count)) + pairs.flatMap { text($0.0) + $0.1 } }
+
+        let proofs = [UInt64(1), 4, 16].map { amount in
+            map([("a", uint(amount)), ("s", text("secret")), ("c", bytes([0x02, 0xAB, 0xCD]))])
+        }
+        let cbor = map([
+            ("m", text("https://mint.example.com")),
+            ("u", text("sat")),
+            ("t", array([map([("i", bytes([0x00, 0xAD, 0x26, 0x8C])), ("p", array(proofs))])]))
+        ])
+        let b64 = Data(cbor).base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        return "cashuB" + b64
+    }()
+
+    @MainActor
+    private func makePayProcessor(context: MockCommandContextProvider) -> CommandProcessor {
+        CommandProcessor(
+            contextProvider: context,
+            meshService: MockTransport(),
+            identityManager: MockIdentityManager(MockKeychain())
+        )
+    }
+
     @MainActor
     private func withSelectedChannel<T>(
         _ channel: ChannelID,
@@ -435,6 +602,8 @@ private final class MockCommandContextProvider: CommandContextProvider {
     private(set) var sentPublicRawMessages: [String] = []
     private(set) var localPrivateSystemMessages: [(content: String, peerID: PeerID)] = []
     private(set) var publicSystemMessages: [String] = []
+    private(set) var commandOutputs: [String] = []
+    private(set) var commandOutputDestinations: [CommandOutputDestination] = []
     private(set) var toggledFavorites: [PeerID] = []
     private(set) var favoriteNotifications: [(peerID: PeerID, isFavorite: Bool)] = []
 
@@ -477,12 +646,29 @@ private final class MockCommandContextProvider: CommandContextProvider {
         sentPublicRawMessages.append(content)
     }
 
+    private(set) var sentPublicMessages: [String] = []
+    func sendPublicMessage(_ content: String) {
+        sentPublicMessages.append(content)
+    }
+
     func addLocalPrivateSystemMessage(_ content: String, to peerID: PeerID) {
         localPrivateSystemMessages.append((content, peerID))
     }
 
     func addPublicSystemMessage(_ content: String) {
         publicSystemMessages.append(content)
+    }
+
+    func currentCommandDestination() -> CommandOutputDestination {
+        if let peerID = selectedPrivateChatPeer {
+            return .privateChat(peerID)
+        }
+        return .meshTimeline
+    }
+
+    func addCommandOutput(_ content: String, to destination: CommandOutputDestination) {
+        commandOutputs.append(content)
+        commandOutputDestinations.append(destination)
     }
 
     func toggleFavorite(peerID: PeerID) {

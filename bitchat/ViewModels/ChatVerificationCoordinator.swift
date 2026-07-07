@@ -24,6 +24,10 @@ protocol ChatVerificationContext: AnyObject {
     func setStoredVerified(_ fingerprint: String, verified: Bool)
     func isVerifiedFingerprint(_ fingerprint: String) -> Bool
     func saveIdentityState()
+    /// After a fingerprint becomes verified, run a transitive-vouch pass over
+    /// currently connected peers (so verifying a peer you're already connected
+    /// to sends vouches immediately, and the new identity propagates onward).
+    func vouchToConnectedVerifiedPeers()
 
     // MARK: Encryption status
     func setEncryptionStatus(_ status: EncryptionStatus?, for peerID: PeerID)
@@ -84,6 +88,10 @@ extension ChatViewModel: ChatVerificationContext {
 
     func setStoredVerified(_ fingerprint: String, verified: Bool) {
         peerIdentityStore.setVerified(fingerprint, verified: verified)
+    }
+
+    func vouchToConnectedVerifiedPeers() {
+        vouchCoordinator.vouchToConnectedVerifiedPeers()
     }
 
     var unifiedPeers: [BitchatPeer] {
@@ -148,6 +156,9 @@ final class ChatVerificationCoordinator {
         context.saveIdentityState()
         context.setStoredVerified(fingerprint, verified: true)
         context.updateEncryptionStatus(for: peerID)
+        // Verifying a peer is a vouch trigger: push attestations to my other
+        // connected verified peers (and to this one if already connected).
+        context.vouchToConnectedVerifiedPeers()
     }
 
     func unverifyFingerprint(for peerID: PeerID) {
@@ -340,6 +351,8 @@ final class ChatVerificationCoordinator {
         }
 
         context.updateEncryptionStatus(for: peerID)
+        // QR verification just completed — same vouch trigger as manual verify.
+        context.vouchToConnectedVerifiedPeers()
     }
 }
 

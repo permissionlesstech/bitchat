@@ -12,7 +12,7 @@ enum BLEOutboundPacketPolicy {
         switch MessageType(rawValue: packetType) {
         case .noiseEncrypted, .noiseHandshake:
             return true
-        case .none, .announce, .message, .leave, .requestSync, .fragment, .fileTransfer, .courierEnvelope, .prekeyBundle:
+        case .none, .announce, .message, .leave, .requestSync, .fragment, .fileTransfer, .courierEnvelope, .boardPost, .ping, .pong, .nostrCarrier, .prekeyBundle:
             return false
         }
     }

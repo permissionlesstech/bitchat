@@ -76,6 +76,11 @@ final class GossipSyncManager {
         var fragmentSyncIntervalSeconds: TimeInterval = 30.0
         var fileTransferSyncIntervalSeconds: TimeInterval = 60.0
         var messageSyncIntervalSeconds: TimeInterval = 15.0
+        // Board posts are few but long-lived (days, until each post's own
+        // expiry), so they get a slow round with their own capacity instead
+        // of competing with the 15-minute message window.
+        var boardCapacity: Int = 200
+        var boardSyncIntervalSeconds: TimeInterval = 60.0
         var responseRateLimitMaxResponses: Int = 8
         var responseRateLimitWindowSeconds: TimeInterval = 30.0
         // Prekey bundles: one per peer, own sync round, long freshness so
@@ -91,11 +96,17 @@ final class GossipSyncManager {
     private let archive: GossipMessageArchive?
     weak var delegate: Delegate?
 
+    /// Source of raw signed board packets (posts + tombstones). The board
+    /// store is the single owner of board retention (expiry, tombstones,
+    /// caps, persistence), so sync rounds query it instead of keeping a
+    /// second copy here. Must be thread-safe; set before `start()`.
+    var boardPacketsProvider: (() -> [BitchatPacket])?
+
     // Storage: broadcast packets by type, and latest announce per sender
     private var messages = PacketStore()
     private var fragments = PacketStore()
     private var fileTransfers = PacketStore()
-    private var latestAnnouncementByPeer: [PeerID: (id: String, packet: BitchatPacket)] = [:]
+    private var latestAnnouncementByPeer: [PeerID: BitchatPacket] = [:]
     // Latest verified prekey bundle per owner. Unlike announces, bundles are
     // NOT dropped on leave/stale peer: their whole purpose is reaching a
     // sender while the owner is away.
@@ -130,6 +141,9 @@ final class GossipSyncManager {
         }
         if config.prekeyBundleCapacity > 0 && config.prekeyBundleSyncIntervalSeconds > 0 {
             schedules.append(SyncSchedule(types: .prekeyBundle, interval: config.prekeyBundleSyncIntervalSeconds, lastSent: .distantPast))
+        }
+        if config.boardCapacity > 0 && config.boardSyncIntervalSeconds > 0 {
+            schedules.append(SyncSchedule(types: .board, interval: config.boardSyncIntervalSeconds, lastSent: .distantPast))
         }
         syncSchedules = schedules
 
@@ -169,6 +183,9 @@ final class GossipSyncManager {
             }
             if self.config.prekeyBundleCapacity > 0 && self.config.prekeyBundleSyncIntervalSeconds > 0 {
                 types.formUnion(.prekeyBundle)
+            }
+            if self.config.boardCapacity > 0 && self.config.boardSyncIntervalSeconds > 0 && self.boardPacketsProvider != nil {
+                types.formUnion(.board)
             }
             self.sendRequestSync(to: peerID, types: types)
         }
@@ -227,9 +244,8 @@ final class GossipSyncManager {
                 removeState(for: sender)
                 return
             }
-            let idHex = PacketIdUtil.computeId(packet).hexEncodedString()
             let sender = PeerID(hexData: packet.senderID)
-            latestAnnouncementByPeer[sender] = (id: idHex, packet: packet)
+            latestAnnouncementByPeer[sender] = packet
         case .message:
             guard isBroadcastRecipient else { return }
             guard isPacketFresh(packet) else { return }
@@ -302,11 +318,29 @@ final class GossipSyncManager {
         delegate?.sendPacket(signed)
     }
 
-    private func sendRequestSync(to peerID: PeerID, types: SyncTypeFlags) {
+    /// Targeted fragment recovery: ask connected peers for the specific
+    /// fragment streams whose reassembly has stalled, instead of waiting on
+    /// the next periodic GCS fragment round to cover them.
+    func requestMissingFragments(fragmentIDs: [Data]) {
+        queue.async { [weak self] in
+            self?._requestMissingFragments(fragmentIDs)
+        }
+    }
+
+    private func _requestMissingFragments(_ fragmentIDs: [Data]) {
+        guard let filter = RequestSyncPacket.encodeFragmentIdFilter(fragmentIDs) else { return }
+        guard let connectedPeers = delegate?.getConnectedPeers(), !connectedPeers.isEmpty else { return }
+        SecureLogger.debug("Requesting \(fragmentIDs.count) stalled fragment stream(s) from \(connectedPeers.count) peer(s)", category: .sync)
+        for peerID in connectedPeers {
+            sendRequestSync(to: peerID, types: .fragment, fragmentIdFilter: filter)
+        }
+    }
+
+    private func sendRequestSync(to peerID: PeerID, types: SyncTypeFlags, fragmentIdFilter: String? = nil) {
         // Register the request for RSR validation
         requestSyncManager.registerRequest(to: peerID)
-        
-        let payload = buildGcsPayload(for: types)
+
+        let payload = buildGcsPayload(for: types, fragmentIdFilter: fragmentIdFilter)
         var recipient = Data()
         var temp = peerID.id
         while temp.count >= 2 && recipient.count < 8 {
@@ -356,10 +390,9 @@ final class GossipSyncManager {
         // keys needed to verify everything else, and there is at most one per
         // peer, so the resend cost is negligible.
         if requestedTypes.contains(.announce) {
-            for (_, pair) in latestAnnouncementByPeer {
-                let (idHex, pkt) = pair
+            for (_, pkt) in latestAnnouncementByPeer {
                 guard isPacketFresh(pkt) else { continue }
-                let idBytes = Data(hexString: idHex) ?? Data()
+                let idBytes = PacketIdUtil.computeId(pkt)
                 if !mightContain(idBytes) {
                     var toSend = pkt
                     toSend.ttl = 0
@@ -384,9 +417,19 @@ final class GossipSyncManager {
         }
 
         if requestedTypes.contains(.fragment) {
+            // A fragment-ID filter narrows the diff to exactly the named
+            // fragment streams (targeted resync for stalled reassemblies)
+            // and bypasses the since-cursor for them; the GCS filter still
+            // excludes the pieces the requester already holds. Fragment
+            // payloads start with the 8-byte stream ID.
+            let fragmentIdFilter = RequestSyncPacket.decodeFragmentIdFilter(request.fragmentIdFilter)
             let frags = fragments.allPackets(isFresh: isPacketFresh)
             for pkt in frags {
-                if let since, pkt.timestamp < since { continue }
+                if let fragmentIdFilter {
+                    guard fragmentIdFilter.contains(Data(pkt.payload.prefix(8))) else { continue }
+                } else if let since, pkt.timestamp < since {
+                    continue
+                }
                 let idBytes = PacketIdUtil.computeId(pkt)
                 if !mightContain(idBytes) {
                     var toSend = pkt
@@ -428,14 +471,29 @@ final class GossipSyncManager {
                 }
             }
         }
+        if requestedTypes.contains(.boardPost) {
+            // The board store already filters to live posts and tombstones;
+            // no freshness window applies (posts sync until their own expiry).
+            let boardPackets = boardPacketsProvider?() ?? []
+            for pkt in boardPackets {
+                if let since, pkt.timestamp < since { continue }
+                let idBytes = PacketIdUtil.computeId(pkt)
+                if !mightContain(idBytes) {
+                    var toSend = pkt
+                    toSend.ttl = 0
+                    toSend.isRSR = true // Mark as solicited response
+                    delegate?.sendPacket(to: peerID, packet: toSend)
+                }
+            }
+        }
     }
 
     // Build REQUEST_SYNC payload using current candidates and GCS params
-    private func buildGcsPayload(for types: SyncTypeFlags) -> Data {
+    private func buildGcsPayload(for types: SyncTypeFlags, fragmentIdFilter: String? = nil) -> Data {
         var candidates: [BitchatPacket] = []
         if types.contains(.announce) {
-            for (_, pair) in latestAnnouncementByPeer where isPacketFresh(pair.packet) {
-                candidates.append(pair.packet)
+            for (_, pkt) in latestAnnouncementByPeer where isPacketFresh(pkt) {
+                candidates.append(pkt)
             }
         }
         if types.contains(.message) {
@@ -452,9 +510,12 @@ final class GossipSyncManager {
                 candidates.append(pair.packet)
             }
         }
+        if types.contains(.boardPost) {
+            candidates.append(contentsOf: boardPacketsProvider?() ?? [])
+        }
         if candidates.isEmpty {
             let p = GCSFilter.deriveP(targetFpr: config.gcsTargetFpr)
-            let req = RequestSyncPacket(p: p, m: 1, data: Data(), types: types)
+            let req = RequestSyncPacket(p: p, m: 1, data: Data(), types: types, fragmentIdFilter: fragmentIdFilter)
             return req.encode()
         }
 
@@ -470,12 +531,14 @@ final class GossipSyncManager {
             cap = max(1, config.fileTransferCapacity)
         } else if types == .prekeyBundle {
             cap = max(1, config.prekeyBundleCapacity)
+        } else if types == .board {
+            cap = max(1, config.boardCapacity)
         } else {
             cap = max(1, config.seenCapacity)
         }
         let takeN = min(candidates.count, min(nMax, cap))
         if takeN <= 0 {
-            let req = RequestSyncPacket(p: p, m: 1, data: Data(), types: types)
+            let req = RequestSyncPacket(p: p, m: 1, data: Data(), types: types, fragmentIdFilter: fragmentIdFilter)
             return req.encode()
         }
         let included = Array(candidates.prefix(takeN))
@@ -493,15 +556,15 @@ final class GossipSyncManager {
         let sinceTimestamp: UInt64? = (covered < candidates.count && covered > 0)
             ? included[covered - 1].timestamp
             : nil
-        let req = RequestSyncPacket(p: params.p, m: params.m, data: params.data, types: types, sinceTimestamp: sinceTimestamp)
+        let req = RequestSyncPacket(p: params.p, m: params.m, data: params.data, types: types, sinceTimestamp: sinceTimestamp, fragmentIdFilter: fragmentIdFilter)
         return req.encode()
     }
 
     // Periodic cleanup of expired messages and announcements
     private func cleanupExpiredMessages() {
         // Remove expired announcements
-        latestAnnouncementByPeer = latestAnnouncementByPeer.filter { _, pair in
-            isPacketFresh(pair.packet)
+        latestAnnouncementByPeer = latestAnnouncementByPeer.filter { _, pkt in
+            isPacketFresh(pkt)
         }
 
         let messageCountBefore = messages.packets.count
@@ -564,6 +627,9 @@ final class GossipSyncManager {
         // fragment traffic can't crowd messages out of the filter.
         for index in syncSchedules.indices {
             guard syncSchedules[index].interval > 0 else { continue }
+            // No board source wired up means nothing to offer or store;
+            // skip the round entirely.
+            if syncSchedules[index].types == .board && boardPacketsProvider == nil { continue }
             if syncSchedules[index].lastSent == .distantPast || now.timeIntervalSince(syncSchedules[index].lastSent) >= syncSchedules[index].interval {
                 syncSchedules[index].lastSent = now
                 sendPeriodicSync(for: syncSchedules[index].types)
@@ -584,8 +650,8 @@ final class GossipSyncManager {
         let nowMs = UInt64(now.timeIntervalSince1970 * 1000)
         guard nowMs >= timeoutMs else { return }
         let cutoff = nowMs - timeoutMs
-        let stalePeerIDs = latestAnnouncementByPeer.compactMap { peerID, pair in
-            pair.packet.timestamp < cutoff ? peerID : nil
+        let stalePeerIDs = latestAnnouncementByPeer.compactMap { peerID, pkt in
+            pkt.timestamp < cutoff ? peerID : nil
         }
         guard !stalePeerIDs.isEmpty else { return }
         for peerKey in stalePeerIDs {

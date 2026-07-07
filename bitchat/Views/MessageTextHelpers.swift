@@ -21,17 +21,20 @@ extension String {
         return current >= threshold
     }
 
-    // Extract up to `max` Cashu tokens (cashuA/cashuB). Allow dot '.' and shorter lengths.
+    // Extract up to `max` distinct Cashu tokens (cashuA/cashuB), as the bare
+    // bearer strings. Allow dot '.' and shorter lengths. The `cashu:` URI
+    // form matches too — the token embedded after the scheme is the match.
     func extractCashuLinks(max: Int = 3) -> [String] {
         let regex = MessageFormattingEngine.Patterns.cashu
         let ns = self as NSString
         let range = NSRange(location: 0, length: ns.length)
         var found: [String] = []
-        for m in regex.matches(in: self, range: range) {
-            if m.numberOfRanges > 0 {
-                let token = ns.substring(with: m.range(at: 0))
-                let enc = token.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-_"))) ?? token
-                found.append("cashu:\(enc)")
+        for m in regex.matches(in: self, range: range) where m.numberOfRanges > 0 {
+            let token = ns.substring(with: m.range(at: 0))
+            // Dedup: repeated tokens are one bearer instrument (and duplicate
+            // ForEach IDs) — one chip is enough.
+            if !found.contains(token) {
+                found.append(token)
                 if found.count >= max { break }
             }
         }

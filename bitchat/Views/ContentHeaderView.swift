@@ -25,6 +25,9 @@ struct ContentHeaderView: View {
     /// Courier envelopes this device is carrying for offline third parties.
     @State private var carriedMailCount = 0
 
+    /// Bulletin board sheet for the current channel context.
+    @State private var showBoard = false
+
     var body: some View {
         HStack(spacing: 0) {
             Text(verbatim: "bitchat/")
@@ -91,6 +94,19 @@ struct ContentHeaderView: View {
             }()
 
             HStack(spacing: 2) {
+                if locationChannelsModel.gatewayEnabled {
+                    Image(systemName: "globe")
+                        .font(.bitchatSystem(size: 12))
+                        .foregroundColor(palette.secondary.opacity(0.8))
+                        .headerTapTarget()
+                        .accessibilityLabel(
+                            String(localized: "content.accessibility.gateway_active", defaultValue: "Internet gateway active, sharing your connection with the mesh", comment: "Accessibility label for the internet gateway indicator")
+                        )
+                        .help(
+                            String(localized: "content.header.gateway_active", defaultValue: "Sharing your internet connection with nearby mesh peers", comment: "Tooltip for the internet gateway indicator")
+                        )
+                }
+
                 if carriedMailCount > 0 {
                     Image(systemName: "figure.walk")
                         .font(.bitchatSystem(size: 12))
@@ -138,6 +154,20 @@ struct ContentHeaderView: View {
                         String(localized: "content.accessibility.location_notes", comment: "Accessibility label for location notes button")
                     )
                 }
+
+                Button(action: { showBoard = true }) {
+                    Image(systemName: "pin")
+                        .font(.bitchatSystem(size: 12))
+                        .foregroundColor(palette.secondary.opacity(0.9))
+                        .headerTapTarget()
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(
+                    String(localized: "content.accessibility.board", defaultValue: "Bulletin board", comment: "Accessibility label for the bulletin board button")
+                )
+                .help(
+                    String(localized: "content.header.board", defaultValue: "Bulletin board: persistent notices for this channel", comment: "Tooltip for the bulletin board button")
+                )
 
                 if case .location(let channel) = locationChannelsModel.selectedChannel {
                     Button(action: { locationChannelsModel.toggleBookmark(channel.geohash) }) {
@@ -242,6 +272,13 @@ struct ContentHeaderView: View {
                 .environmentObject(locationChannelsModel)
                 .environmentObject(peerListModel)
         }
+        .sheet(isPresented: $showBoard) {
+            BoardView(
+                geohash: boardGeohash,
+                senderNickname: appChromeModel.nickname,
+                board: appChromeModel.boardManager
+            )
+        }
         .sheet(isPresented: $showLocationNotes, onDismiss: {
             notesGeohash = nil
         }) {
@@ -309,6 +346,15 @@ private extension View {
 private extension ContentHeaderView {
     var headerLineLimit: Int? {
         dynamicTypeSize.isAccessibilitySize ? 2 : 1
+    }
+
+    /// The board scope for the current channel: the geohash channel's board,
+    /// or the mesh-local board ("") in mesh chat.
+    var boardGeohash: String {
+        if case .location(let channel) = locationChannelsModel.selectedChannel {
+            return channel.geohash
+        }
+        return ""
     }
 
     /// Whether anyone is actually reachable on the current channel — the

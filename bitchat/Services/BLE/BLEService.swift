@@ -53,6 +53,8 @@ final class BLEService: NSObject {
     // reject. Injectable for tests; main-actor policy because favorites live
     // on the main actor.
     var courierStore: CourierStore = .shared
+    // Bulletin-board posts this device carries; injectable for tests.
+    var boardStore: BoardStore = .shared
     var courierDepositPolicy: @MainActor (Data, Bool) -> CourierDepositTier? = { depositorNoiseKey, isVerifiedPeer in
         if FavoritesPersistenceService.shared.isMutualFavorite(depositorNoiseKey) { return .favorite }
         return isVerifiedPeer ? .verified : nil
@@ -73,6 +75,13 @@ final class BLEService: NSObject {
     // Guarded by collectionsQueue barriers.
     private var pendingPrekeyBundles: [PeerID: BitchatPacket] = [:]
     private static let pendingPrekeyBundleCap = 64
+    // Gateway mode: sink for received nostrCarrier packets (set by app
+    // wiring, called on the main actor after transport-level checks) and the
+    // runtime-toggled capability bits ORed into `PeerCapabilities.localSupported`
+    // for every announce. `directedToUs` distinguishes an uplink deposit
+    // addressed to this device from a downlink broadcast.
+    var onNostrCarrierPacket: (@MainActor (_ payload: Data, _ from: PeerID, _ directedToUs: Bool) -> Void)?
+    private var runtimeCapabilities: PeerCapabilities = []  // collectionsQueue
 
     #if DEBUG
     // Test-only tap on the outbound pipeline so multi-node tests can ferry
@@ -81,7 +90,27 @@ final class BLEService: NSObject {
     #endif
     private var selfBroadcastTracker = BLESelfBroadcastTracker()
     private let meshTopology = MeshTopologyTracker()
-    
+    // Route health for originated source routes; guarded by collectionsQueue.
+    private var sourceRouteFailures = BLESourceRouteFailureCache()
+
+    // Mesh diagnostics: outstanding /ping probes keyed by nonce, plus the
+    // inbound ping budget — keyed by the ingress link (the directly connected
+    // peer that delivered the packet), since the unsigned claimed sender is
+    // spoofable — so a directed unencrypted probe cannot be turned into an
+    // amplification primitive. Both are owned by collectionsQueue barriers
+    // like the other mutable collections.
+    private struct PendingMeshPing {
+        let peerID: PeerID
+        let sentAt: Date
+        let completion: @MainActor (MeshPingResult?) -> Void
+        let timeout: DispatchWorkItem
+    }
+    private var pendingMeshPings: [Data: PendingMeshPing] = [:]
+    private var meshPingResponseLimiter = SyncResponseRateLimiter(
+        maxResponses: TransportConfig.meshPingInboundMaxPerLink,
+        window: TransportConfig.meshPingInboundWindowSeconds
+    )
+
     // 5. Fragment Reassembly (necessary for messages > MTU)
     private var fragmentAssemblyBuffer = BLEFragmentAssemblyBuffer()
     private var outboundFragmentTransfers = BLEOutboundFragmentTransferScheduler()
@@ -314,6 +343,14 @@ final class BLEService: NSObject {
         let archive = meshBackgroundEnabled ? GossipMessageArchive() : nil
         let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: requestSyncManager, archive: archive)
         manager.delegate = self
+        // Board posts sync from the board store (their retention owner) so
+        // deleted/expired posts drop out of rounds immediately. Real sessions
+        // only, matching the archive: unit tests stay hermetic.
+        if meshBackgroundEnabled {
+            manager.boardPacketsProvider = { [weak self] in
+                self?.boardStore.syncCandidates() ?? []
+            }
+        }
         // Only start the periodic sync timers when real Bluetooth exists. In unit
         // tests there is no mesh to sync with, and the periodic sign/broadcast
         // churn just keeps the process busy and aggravates flaky exit hangs.
@@ -595,6 +632,7 @@ final class BLEService: NSObject {
             let entries = outboundFragmentTransfers.removeAll().map { ($0.id, $0.workItems) }
             peerRegistry.removeAll()
             fragmentAssemblyBuffer.removeAll()
+            sourceRouteFailures = BLESourceRouteFailureCache()
             // Also clear pending message queues to avoid stale state across sessions
             pendingNoiseSessionQueues.removeAll()
             pendingDirectedRelays.removeAll()
@@ -642,6 +680,32 @@ final class BLEService: NSObject {
     /// Empty for peers that predate the capabilities TLV.
     func peerCapabilities(_ peerID: PeerID) -> PeerCapabilities {
         collectionsQueue.sync { peerRegistry.capabilities(for: peerID) }
+    }
+
+    /// Enables or disables a runtime-advertised capability bit (e.g. the
+    /// internet-gateway toggle) and re-announces so peers learn promptly.
+    /// Build-time bits stay in `PeerCapabilities.localSupported`.
+    func setLocalCapability(_ capability: PeerCapabilities, enabled: Bool) {
+        let changed: Bool = collectionsQueue.sync(flags: .barrier) {
+            let before = runtimeCapabilities
+            if enabled {
+                runtimeCapabilities.insert(capability)
+            } else {
+                runtimeCapabilities.remove(capability)
+            }
+            return runtimeCapabilities != before
+        }
+        guard changed else { return }
+        sendAnnounce(forceSend: true)
+    }
+
+    /// Reachable peers currently advertising the `.gateway` capability.
+    func reachableGatewayPeers() -> [PeerID] {
+        let now = Date()
+        return collectionsQueue.sync {
+            peerRegistry.peers(advertising: .gateway)
+                .filter { peerRegistry.isReachable($0, now: now) }
+        }
     }
 
     func getPeerNicknames() -> [PeerID: String] {
@@ -1278,16 +1342,16 @@ final class BLEService: NSObject {
         let noisePub = noiseService.getStaticPublicKeyData()  // For noise handshakes and peer identification
         let signingPub = noiseService.getSigningPublicKeyData()  // For signature verification
         
-        let connectedPeerIDs: [Data] = collectionsQueue.sync {
-            peerRegistry.connectedRoutingData
+        let (connectedPeerIDs, advertisedCapabilities): ([Data], PeerCapabilities) = collectionsQueue.sync {
+            (peerRegistry.connectedRoutingData, PeerCapabilities.localSupported.union(runtimeCapabilities))
         }
-        
+
         let announcement = AnnouncementPacket(
             nickname: myNickname,
             noisePublicKey: noisePub,
             signingPublicKey: signingPub,
             directNeighbors: connectedPeerIDs,
-            capabilities: PeerCapabilities.localSupported
+            capabilities: advertisedCapabilities
         )
         
         guard let payload = announcement.encode() else {
@@ -1338,6 +1402,18 @@ final class BLEService: NSObject {
     func sendVerifyResponse(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {
         guard let payload = VerificationService.shared.buildVerifyResponse(noiseKeyHex: noiseKeyHex, nonceA: nonceA) else { return }
         sendNoisePayload(payload, to: peerID)
+    }
+
+    // MARK: Vouching over Noise
+
+    func sendVouchAttestations(_ payload: Data, to peerID: PeerID) {
+        sendNoisePayload(NoisePayload(type: .vouch, data: payload).encode(), to: peerID)
+    }
+
+    func addPeerAuthenticatedObserver(_ handler: @escaping (PeerID, String) -> Void) {
+        // Appends to the encryption service's handler array, so this never
+        // displaces the callbacks installed by installNoiseSessionCallbacks.
+        noiseService.addOnPeerAuthenticatedHandler(handler)
     }
 }
 
@@ -2409,13 +2485,31 @@ extension BLEService {
     }
 
     private func computeRoute(to peerID: PeerID) -> [Data]? {
-        meshTopology.computeRoute(from: myPeerIDData, to: routingData(for: peerID))
+        // Version-gated: every hop and the recipient must have been observed
+        // speaking v2, since a v1-only node drops v2 frames on decode.
+        meshTopology.computeRoute(
+            from: myPeerIDData,
+            to: routingData(for: peerID),
+            maxHops: TransportConfig.bleSourceRouteMaxIntermediateHops,
+            requiringVersion: 2
+        )
     }
 
     private func applyRouteIfAvailable(_ packet: BitchatPacket, to recipient: PeerID) -> BitchatPacket {
-        guard let route = computeRoute(to: recipient), route.count >= 1 else {
-            return packet
-        }
+        let now = Date()
+        let route = BLESourceRouteOriginationPolicy.route(
+            for: packet,
+            to: recipient,
+            localPeerIDData: myPeerIDData,
+            isRecipientConnected: { self.isPeerConnected($0) },
+            shouldAttemptRoute: { peer in
+                self.collectionsQueue.sync(flags: .barrier) {
+                    self.sourceRouteFailures.shouldAttemptRoute(to: peer, now: now)
+                }
+            },
+            computeRoute: { self.computeRoute(to: $0) }
+        )
+        guard let route else { return packet }
         // Create new packet with route applied and version upgraded to 2
         let routedPacket = BitchatPacket(
             type: packet.type,
@@ -2433,11 +2527,158 @@ extension BLEService {
             SecureLogger.error("❌ Failed to re-sign packet with route", category: .security)
             return packet // Return original packet if signing fails
         }
+        collectionsQueue.sync(flags: .barrier) {
+            sourceRouteFailures.noteRoutedSend(to: recipient, now: now)
+        }
         return signedPacket
     }
 
     private func routingPeer(from data: Data) -> PeerID? {
         PeerID(routingData: data)
+    }
+
+    // MARK: - Mesh Diagnostics (/ping, /trace, topology map)
+
+    /// Sends a directed unencrypted ping probe (8-byte nonce + origin TTL).
+    /// The completion fires exactly once on the main actor: with RTT/hops
+    /// when the matching pong returns, or nil after the timeout window.
+    func sendMeshPing(to peerID: PeerID, completion: @escaping @MainActor (MeshPingResult?) -> Void) {
+        messageQueue.async { [weak self] in
+            guard let self,
+                  let recipientData = peerID.toShort().routingData,
+                  let payload = MeshPingPayload(
+                    nonce: Data((0..<MeshPingPayload.nonceLength).map { _ in UInt8.random(in: .min ... .max) }),
+                    originTTL: self.messageTTL
+                  ) else {
+                Task { @MainActor in completion(nil) }
+                return
+            }
+            let nonce = payload.nonce
+            let packet = BitchatPacket(
+                type: MessageType.ping.rawValue,
+                senderID: self.myPeerIDData,
+                recipientID: recipientData,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: payload.encode(),
+                signature: nil,
+                ttl: self.messageTTL
+            )
+            let timeout = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                let expired = self.collectionsQueue.sync(flags: .barrier) {
+                    self.pendingMeshPings.removeValue(forKey: nonce)
+                }
+                guard let expired else { return }
+                Task { @MainActor in expired.completion(nil) }
+            }
+            self.collectionsQueue.sync(flags: .barrier) {
+                self.pendingMeshPings[nonce] = PendingMeshPing(
+                    peerID: PeerID(hexData: recipientData),
+                    sentAt: Date(),
+                    completion: completion,
+                    timeout: timeout
+                )
+            }
+            self.messageQueue.asyncAfter(
+                deadline: .now() + TransportConfig.meshPingTimeoutSeconds,
+                execute: timeout
+            )
+            self.broadcastPacket(packet)
+        }
+    }
+
+    /// Answers a ping addressed to us with a pong echoing its nonce; pings
+    /// addressed elsewhere are left to the generic directed-relay path.
+    ///
+    /// `linkPeerID` is the directly connected peer that delivered the packet
+    /// (the ingress link), NOT the packet's claimed sender: pings are
+    /// unsigned, so `packet.senderID` is attacker-controlled, and keying the
+    /// response budget on it would let one connected peer rotate forged
+    /// sender IDs to emit unbounded pongs. The budget is per physical link;
+    /// the pong still goes to the claimed sender (that's the protocol).
+    private func handleMeshPing(_ packet: BitchatPacket, fromLink linkPeerID: PeerID) {
+        guard packet.recipientID == myPeerIDData else { return }
+        guard let ping = MeshPingPayload.decode(packet.payload) else {
+            SecureLogger.debug("⚠️ Malformed ping via \(linkPeerID.id.prefix(8))…", category: .session)
+            return
+        }
+        let allowed = collectionsQueue.sync(flags: .barrier) {
+            meshPingResponseLimiter.shouldRespond(to: linkPeerID, now: Date())
+        }
+        guard allowed else {
+            if logRateLimiter.shouldLog(key: "ping-limit:\(linkPeerID.id)") {
+                SecureLogger.warning("🚫 Rate-limiting pings via link \(linkPeerID.id.prefix(8))…", category: .security)
+            }
+            return
+        }
+        guard let pong = MeshPingPayload(nonce: ping.nonce, originTTL: messageTTL) else { return }
+        let reply = BitchatPacket(
+            type: MessageType.pong.rawValue,
+            senderID: myPeerIDData,
+            recipientID: packet.senderID,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: pong.encode(),
+            signature: nil,
+            ttl: messageTTL
+        )
+        broadcastPacket(reply)
+    }
+
+    /// Resolves a pong against its outstanding probe. The unguessable echoed
+    /// nonce plus the sender check bind the reply to the probed peer; hops
+    /// come from the pong's TTL decrements on the return path.
+    private func handleMeshPong(_ packet: BitchatPacket, from peerID: PeerID) {
+        guard packet.recipientID == myPeerIDData else { return }
+        guard let pong = MeshPingPayload.decode(packet.payload) else { return }
+        let pending = collectionsQueue.sync(flags: .barrier) { () -> PendingMeshPing? in
+            guard pendingMeshPings[pong.nonce]?.peerID == peerID else { return nil }
+            return pendingMeshPings.removeValue(forKey: pong.nonce)
+        }
+        guard let pending else { return }
+        pending.timeout.cancel()
+        let rttMs = Int((Date().timeIntervalSince(pending.sentAt) * 1000).rounded())
+        let result = MeshPingResult(
+            rttMs: max(0, rttMs),
+            hops: MeshPingPayload.hopCount(originTTL: pong.originTTL, receivedTTL: packet.ttl)
+        )
+        Task { @MainActor in pending.completion(result) }
+    }
+
+    /// Estimated intermediate hops toward `peerID`, BFS over gossiped
+    /// bidirectionally-confirmed neighbor claims ([] = direct, nil = none).
+    func computeMeshPath(to peerID: PeerID) -> [PeerID]? {
+        refreshLocalTopology()
+        if let route = computeRoute(to: peerID) {
+            return route.compactMap { PeerID(routingData: $0) }
+        }
+        // Confirmed claims can lag a brand-new link (the peer's next announce
+        // hasn't arrived yet); a live direct connection is still a known path.
+        return isPeerConnected(peerID) ? [] : nil
+    }
+
+    /// Mesh graph for the topology map. Edges are advisory: announces cap
+    /// neighbor lists at 10, so an edge claimed by either endpoint counts.
+    func currentMeshTopology() -> MeshTopologySnapshot? {
+        refreshLocalTopology()
+        let claims = meshTopology.adjacencySnapshot()
+        var nodes = Set<PeerID>()
+        var edges = Set<MeshTopologyEdge>()
+        for (source, neighbors) in claims {
+            guard let sourcePeer = PeerID(routingData: source) else { continue }
+            nodes.insert(sourcePeer)
+            for neighborData in neighbors {
+                guard let neighborPeer = PeerID(routingData: neighborData),
+                      neighborPeer != sourcePeer else { continue }
+                nodes.insert(neighborPeer)
+                edges.insert(MeshTopologyEdge(sourcePeer, neighborPeer))
+            }
+        }
+        nodes.insert(myPeerID)
+        return MeshTopologySnapshot(
+            localPeerID: myPeerID,
+            nodes: nodes.sorted(),
+            edges: edges.sorted { ($0.a, $0.b) < ($1.a, $1.b) }
+        )
     }
 
     private func forwardAlongRouteIfNeeded(_ packet: BitchatPacket) -> Bool {
@@ -2938,6 +3179,81 @@ extension BLEService {
         return nil
     }
 
+    // MARK: Gateway carrier (nostrCarrier)
+
+    /// Sign and send an encoded `toGateway` carrier payload directed at a
+    /// gateway peer. The packet is signed so the gateway can key its uplink
+    /// quotas to an authenticated depositor; the carried Nostr event has its
+    /// own Schnorr signature for content authenticity. Returns false when
+    /// the gateway is not reachable or signing fails.
+    func sendNostrCarrier(_ payload: Data, to gatewayPeer: PeerID) -> Bool {
+        guard isPeerReachable(gatewayPeer) else { return false }
+        let packet = BitchatPacket(
+            type: MessageType.nostrCarrier.rawValue,
+            senderID: myPeerIDData,
+            recipientID: Data(hexString: gatewayPeer.id),
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: payload,
+            signature: nil,
+            ttl: messageTTL
+        )
+        guard let signed = noiseService.signPacket(packet) else { return false }
+        messageQueue.async { [weak self] in
+            // broadcastPacket applies a known route when one exists and
+            // otherwise floods the directed packet like a DM, so a gateway
+            // that is reachable but multi-hop still gets the deposit.
+            self?.broadcastPacket(signed)
+        }
+        return true
+    }
+
+    /// Broadcast an encoded `fromGateway` carrier payload on the mesh with
+    /// the default TTL. Unsigned at the packet layer — receivers verify the
+    /// carried event's own Schnorr signature.
+    func broadcastNostrCarrier(_ payload: Data) {
+        let packet = BitchatPacket(
+            type: MessageType.nostrCarrier.rawValue,
+            senderID: myPeerIDData,
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: payload,
+            signature: nil,
+            ttl: messageTTL
+        )
+        messageQueue.async { [weak self] in
+            self?.broadcastPacket(packet)
+        }
+    }
+
+    /// Transport-level handling for a received nostrCarrier packet; policy
+    /// (verification of the carried event, quotas, loop prevention) lives in
+    /// `GatewayService` behind `onNostrCarrierPacket`.
+    private func handleNostrCarrier(_ packet: BitchatPacket, from peerID: PeerID) {
+        let senderID = PeerID(hexData: packet.senderID)
+        let directedToUs: Bool
+        if let recipientID = packet.recipientID {
+            // Carriers addressed elsewhere ride the generic relay path untouched.
+            guard recipientID == myPeerIDData else { return }
+            // Uplink deposit: quotas are keyed by the depositor, so the
+            // packet signature must verify against the sender's announced
+            // signing key. Unlike courier deposits the depositor may be
+            // multi-hop away, so ingress-link identity is not required.
+            let signingKey = collectionsQueue.sync { peerRegistry.info(for: senderID)?.signingPublicKey }
+            guard let signingKey,
+                  noiseService.verifyPacketSignature(packet, publicKey: signingKey) else {
+                SecureLogger.debug("🌐 nostrCarrier uplink from \(senderID.id.prefix(8))… rejected (missing/invalid packet signature)", category: .security)
+                return
+            }
+            directedToUs = true
+        } else {
+            directedToUs = false
+        }
+        let payload = packet.payload
+        notifyUI { [weak self] in
+            self?.onNostrCarrierPacket?(payload, senderID, directedToUs)
+        }
+    }
+
     // MARK: Link capability snapshots (thread-safe via bleQueue)
 
     private func readLinkState<T>(_ body: (BLELinkStateStore) -> T) -> T {
@@ -3399,13 +3715,23 @@ extension BLEService {
         // Update peer info without verbose logging - update the peer we received from, not the original sender
         updatePeerLastSeen(peerID)
 
-        // Track recent traffic timestamps for adaptive behavior
+        // Track recent traffic timestamps for adaptive behavior; the same
+        // barrier hop confirms route health for the packet's originator.
         collectionsQueue.async(flags: .barrier) { [weak self] in
             guard let self = self else { return }
             self.recentTrafficTracker.recordPacket(at: Date())
+            self.sourceRouteFailures.noteInboundActivity(from: senderID)
         }
 
-        
+        // Per-peer protocol version: originated source routes only use hops
+        // observed speaking v2 (a v1-only node cannot decode v2 frames).
+        if packet.version >= 2 {
+            meshTopology.recordObservedVersion(packet.version, for: packet.senderID)
+            if peerID != senderID {
+                meshTopology.recordObservedVersion(packet.version, for: routingData(for: peerID))
+            }
+        }
+
         // Process by type
         switch context.messageType {
         case .announce:
@@ -3434,6 +3760,21 @@ extension BLEService {
 
         case .prekeyBundle:
             handlePrekeyBundle(packet, from: senderID)
+
+        case .boardPost:
+            // Invalid or deleted posts must not spread; skip the relay step.
+            guard handleBoardPost(packet, from: senderID) else { return }
+        case .nostrCarrier:
+            handleNostrCarrier(packet, from: peerID)
+
+        case .ping:
+            // Rate limiting must key on the ingress link (`peerID`), not the
+            // packet-claimed sender: pings are unsigned, so `senderID` is
+            // attacker-controlled and rotating it would reset the budget.
+            handleMeshPing(packet, fromLink: peerID)
+
+        case .pong:
+            handleMeshPong(packet, from: senderID)
 
         case .leave:
             handleLeave(packet, from: senderID)
@@ -3611,6 +3952,63 @@ extension BLEService {
                 }
             }
         )
+    }
+
+    // MARK: - Board (geohash bulletin board)
+
+    /// Validates and stores an incoming board post or tombstone. Returns
+    /// whether the packet is worth relaying onward.
+    private func handleBoardPost(_ packet: BitchatPacket, from peerID: PeerID) -> Bool {
+        guard let wire = BoardWire.decode(from: packet.payload) else {
+            SecureLogger.warning("⚠️ Malformed board packet from \(peerID.id.prefix(8))…", category: .session)
+            return false
+        }
+        // Posts are self-authenticating: the payload embeds the author's
+        // Ed25519 key and signature, so verification does not depend on the
+        // author still being around to announce.
+        guard wire.verifySignature() else {
+            if logRateLimiter.shouldLog(key: "board-sig:\(peerID.id)") {
+                SecureLogger.warning("🚫 Dropping board packet with invalid signature from \(peerID.id.prefix(8))…", category: .security)
+            }
+            return false
+        }
+        switch boardStore.ingest(wire, packet: packet) {
+        case .accepted, .duplicate:
+            return true
+        case .rejected:
+            return false
+        }
+    }
+
+    /// Broadcasts a pre-signed board payload (post or tombstone) built by the
+    /// board manager, and ingests it locally so it shows up on our own board
+    /// and joins gossip sync immediately.
+    func sendBoardPayload(_ payload: Data) {
+        guard let wire = BoardWire.decode(from: payload), wire.verifySignature() else {
+            SecureLogger.error("❌ Refusing to send invalid board payload", category: .session)
+            return
+        }
+        messageQueue.async { [weak self] in
+            guard let self = self else { return }
+            let basePacket = BitchatPacket(
+                type: MessageType.boardPost.rawValue,
+                senderID: Data(hexString: self.myPeerID.id) ?? Data(),
+                recipientID: nil,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: payload,
+                signature: nil,
+                ttl: self.messageTTL
+            )
+            guard let signedPacket = self.noiseService.signPacket(basePacket) else {
+                SecureLogger.error("❌ Failed to sign board packet", category: .security)
+                return
+            }
+            // Pre-mark our own broadcast as processed to avoid handling a relayed self copy
+            let dedupID = BLESelfBroadcastTracker.dedupID(for: signedPacket)
+            self.messageDeduplicator.markProcessed(dedupID)
+            self.boardStore.ingest(wire, packet: signedPacket)
+            self.broadcastPacket(signedPacket)
+        }
     }
 
     // Handle REQUEST_SYNC: decode payload and respond with missing packets via sync manager
@@ -3920,10 +4318,21 @@ extension BLEService {
         // Clean old processed messages efficiently
         messageDeduplicator.cleanup()
         
-        // Clean old fragments (> configured seconds old)
-        collectionsQueue.sync(flags: .barrier) {
+        // Clean old fragments (> configured seconds old), then ask peers for
+        // the specific fragment streams whose reassembly has stalled instead
+        // of waiting for the next periodic GCS fragment round.
+        let stalledFragmentIDs = collectionsQueue.sync(flags: .barrier) { () -> [Data] in
             let cutoff = now.addingTimeInterval(-TransportConfig.bleFragmentLifetimeSeconds)
             fragmentAssemblyBuffer.removeExpired(before: cutoff)
+            sourceRouteFailures.prune(now: now)
+            return fragmentAssemblyBuffer.stalledBroadcastFragmentIDs(
+                stalledAfter: TransportConfig.bleFragmentResyncStallSeconds,
+                retryAfter: TransportConfig.bleFragmentResyncRetrySeconds,
+                now: now
+            )
+        }
+        if !stalledFragmentIDs.isEmpty {
+            gossipSyncManager?.requestMissingFragments(fragmentIDs: stalledFragmentIDs)
         }
 
         // Clean old connection timeout backoff entries (> window)
