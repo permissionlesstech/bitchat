@@ -1523,15 +1523,10 @@ extension BLEService: CBCentralManagerDelegate {
             // Restored peripherals are the freshest wake-on-proximity
             // candidates we have after a relaunch — without this the cache
             // starts empty and backgrounding right after a restore arms
-            // nothing.
+            // nothing. Service rediscovery for restored-connected links waits
+            // for poweredOn: CoreBluetooth drops commands issued during
+            // restoration (API MISUSE warnings).
             recentPeripheralCache.record(peripheral, peripheralID: identifier, at: Date())
-
-            // A link restored as connected has no characteristic in the new
-            // process; without rediscovery it would sit connected-but-unusable
-            // (no writes, no notifications) until the peer disconnects.
-            if peripheral.state == .connected && characteristic == nil {
-                peripheral.discoverServices([BLEService.serviceUUID])
-            }
         }
 
         captureBluetoothStatus(context: "central-restore")
@@ -1547,6 +1542,17 @@ extension BLEService: CBCentralManagerDelegate {
 
         switch central.state {
         case .poweredOn:
+            // Links restored as connected have no characteristic in the new
+            // process; without rediscovery they sit connected-but-unusable
+            // until the peer disconnects. Runs here (not willRestoreState)
+            // because commands issued before poweredOn are dropped.
+            for state in linkStateStore.peripheralStates where state.isConnected
+                && state.characteristic == nil
+                && state.peripheral.state == .connected {
+                SecureLogger.info("♻️ Rediscovering services on restored link: \(state.peripheral.identifier.uuidString.prefix(8))…", category: .session)
+                state.peripheral.discoverServices([BLEService.serviceUUID])
+            }
+
             // Start scanning - use allow duplicates for faster discovery when active
             startScanning()
 
