@@ -38,7 +38,11 @@ import Foundation
 ///    original broadcast packet is the TTL relay's job, not ours.
 /// 2. An uplink deposit is published at most once (`publishedEventIDs`) and
 ///    a relay event is rebroadcast at most once (`rebroadcastEventIDs`), so
-///    repeat deposits and relay echoes are absorbed.
+///    repeat deposits and relay echoes are absorbed. An event this gateway
+///    itself uplinked (`publishedEventIDs`) is additionally never
+///    downlink-rebroadcast: it originated on this mesh, so echoing it back
+///    when our own relay subscription redelivers it would double BLE airtime
+///    (the device-confirmed self-echo bug).
 /// 3. Uplink is only attempted for locally composed events at the send site
 ///    (`GeohashSubscriptionManager.sendGeohash`); events received over the
 ///    carrier never re-enter the uplink path. This is a call-site convention;
@@ -297,12 +301,17 @@ final class GatewayService: ObservableObject {
             return
         }
         // Loop rule 1: never rebroadcast mesh-carried events back onto the
-        // mesh. Loop rule 2: rebroadcast each relay event at most once — but
-        // mark only AFTER it is actually sent (in `drainPendingDownlinks`), so
-        // an event dropped by the queue overflow stays retryable on relay
+        // mesh. Loop rule 2 (self-echo): never rebroadcast an event this
+        // gateway itself uplinked (`publishedEventIDs`) — it originated on this
+        // very mesh, so our own relay subscription echoing it back must not
+        // double the BLE airtime by pushing it out again. Loop rule 2
+        // (downlink): rebroadcast each genuine inbound relay event at most once
+        // — but mark only AFTER it is actually sent (in `drainPendingDownlinks`),
+        // so an event dropped by the queue overflow stays retryable on relay
         // redelivery. Guard against a redelivery re-queueing an event that is
         // still waiting to be sent.
         guard !meshBroadcastEventIDs.contains(event.id),
+              !publishedEventIDs.contains(event.id),
               !rebroadcastEventIDs.contains(event.id),
               !pendingDownlinks.contains(where: { $0.event.id == event.id }) else {
             return

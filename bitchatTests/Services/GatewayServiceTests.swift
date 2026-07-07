@@ -337,6 +337,33 @@ struct GatewayServiceTests {
         #expect(decoded.event()?.id == event.id)
     }
 
+    @Test("never downlink-rebroadcasts an event it uplinked and saw echo back")
+    func uplinkedEventNotSelfEchoed() throws {
+        let fixture = Fixture()
+        let event = try makeEvent()
+
+        // A mesh-only peer deposits an event; the gateway uplinks (publishes)
+        // it to the relays (loop rule 2 records it in publishedEventIDs).
+        try deposit(event, into: fixture)
+        #expect(fixture.published.map(\.event.id) == [event.id])
+
+        // The gateway's own geohash subscription now delivers that same event
+        // right back (~0.15s later on device). It originated on this mesh, so
+        // rebroadcasting it would double BLE airtime — the device-confirmed
+        // self-echo. It must be suppressed.
+        fixture.service.rebroadcastRelayEvent(event, geohash: Self.geohash)
+        #expect(fixture.broadcasts.isEmpty)
+
+        // Sanity: a genuine inbound-from-internet event (never uplinked here)
+        // still downlink-rebroadcasts normally.
+        let inbound = try makeEvent()
+        fixture.service.rebroadcastRelayEvent(inbound, geohash: Self.geohash)
+        #expect(fixture.broadcasts.count == 1)
+        let payload = try #require(fixture.broadcasts.first)
+        let decoded = try #require(NostrCarrierPacket.decode(payload))
+        #expect(decoded.event()?.id == inbound.id)
+    }
+
     @Test("a forged broadcast cannot poison the loop-prevention set")
     func forgedBroadcastDoesNotPoison() throws {
         let fixture = Fixture()
