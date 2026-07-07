@@ -507,6 +507,98 @@ struct GossipSyncManagerTests {
         #expect(sentPackets[0].type == MessageType.fragment.rawValue)
     }
 
+    // MARK: - Fragment-ID filter (targeted resync)
+
+    private func makeFragmentPacket(sender: Data, fragmentID: Data, index: UInt16, timestamp: UInt64) -> BitchatPacket {
+        // Fragment payload: 8-byte stream ID + index + total + original type.
+        var payload = fragmentID
+        payload.append(contentsOf: withUnsafeBytes(of: index.bigEndian) { Data($0) })
+        payload.append(contentsOf: withUnsafeBytes(of: UInt16(4).bigEndian) { Data($0) })
+        payload.append(MessageType.fileTransfer.rawValue)
+        payload.append(Data([0xEE]))
+        return BitchatPacket(
+            type: MessageType.fragment.rawValue,
+            senderID: sender,
+            recipientID: nil,
+            timestamp: timestamp,
+            payload: payload,
+            signature: nil,
+            ttl: 1
+        )
+    }
+
+    @Test func handleRequestSyncHonorsFragmentIdFilter() async throws {
+        var config = GossipSyncManager.Config()
+        config.fragmentCapacity = 10
+        config.messageSyncIntervalSeconds = 0
+        config.fragmentSyncIntervalSeconds = 0
+        config.fileTransferSyncIntervalSeconds = 0
+
+        let requestSyncManager = RequestSyncManager()
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: requestSyncManager)
+        let delegate = RecordingDelegate()
+        manager.delegate = delegate
+
+        let sender = try #require(Data(hexString: "aabbccddeeff0011"))
+        let wantedID = try #require(Data(hexString: "0102030405060708"))
+        let otherID = try #require(Data(hexString: "1112131415161718"))
+        let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
+
+        let wanted = makeFragmentPacket(sender: sender, fragmentID: wantedID, index: 1, timestamp: nowMs - 60_000)
+        let other = makeFragmentPacket(sender: sender, fragmentID: otherID, index: 2, timestamp: nowMs)
+        manager.onPublicPacketSeen(wanted)
+        manager.onPublicPacketSeen(other)
+
+        // The since-cursor sits after both fragments; without the filter the
+        // responder would send nothing for `wanted`. The filter both bypasses
+        // the cursor and restricts the diff to exactly the named stream.
+        let request = RequestSyncPacket(
+            p: 7,
+            m: 1,
+            data: Data(),
+            types: .fragment,
+            sinceTimestamp: nowMs + 1,
+            fragmentIdFilter: RequestSyncPacket.encodeFragmentIdFilter([wantedID])
+        )
+        manager.handleRequestSync(from: PeerID(str: "FFFFFFFFFFFFFFFF"), request: request)
+
+        try await TestHelpers.waitFor({ delegate.packets.count == 1 }, timeout: TestConstants.shortTimeout)
+        // Barrier: flush the sync queue so a late second packet would be visible.
+        manager._performMaintenanceSynchronously(now: Date())
+        let sentPackets = delegate.packets
+        #expect(sentPackets.count == 1)
+        let sent = try #require(sentPackets.first)
+        #expect(sent.type == MessageType.fragment.rawValue)
+        #expect(sent.payload.prefix(8) == wantedID)
+        #expect(sent.ttl == 0)
+        #expect(sent.isRSR)
+    }
+
+    @Test func requestMissingFragmentsSendsFilteredRequestToConnectedPeers() async throws {
+        var config = GossipSyncManager.Config()
+        config.messageSyncIntervalSeconds = 0
+        config.fragmentSyncIntervalSeconds = 0
+        config.fileTransferSyncIntervalSeconds = 0
+
+        let requestSyncManager = RequestSyncManager()
+        let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: requestSyncManager)
+        let delegate = RecordingDelegate()
+        delegate.connectedPeers = [PeerID(str: "FFFFFFFFFFFFFFFF")]
+        manager.delegate = delegate
+
+        let stalledID = try #require(Data(hexString: "0102030405060708"))
+        manager.requestMissingFragments(fragmentIDs: [stalledID])
+
+        try await TestHelpers.waitFor({ delegate.packets.count == 1 }, timeout: TestConstants.shortTimeout)
+        let sent = try #require(delegate.packets.first)
+        #expect(sent.type == MessageType.requestSync.rawValue)
+        #expect(sent.ttl == 0)
+        let request = try #require(RequestSyncPacket.decode(from: sent.payload))
+        #expect(request.types == .fragment)
+        let ids = try #require(RequestSyncPacket.decodeFragmentIdFilter(request.fragmentIdFilter))
+        #expect(ids == Set([stalledID]))
+    }
+
     // MARK: - Archive persistence
 
     @Test func publicMessagesRestoreFromArchiveAcrossRestart() async throws {
@@ -583,6 +675,7 @@ struct GossipSyncManagerTests {
 
 private final class RecordingDelegate: GossipSyncManager.Delegate {
     var onSend: (() -> Void)?
+    var connectedPeers: [PeerID] = []
     private(set) var lastPacket: BitchatPacket?
     private(set) var packets: [BitchatPacket] = []
     private let lock = NSLock()
@@ -604,6 +697,6 @@ private final class RecordingDelegate: GossipSyncManager.Delegate {
     }
     
     func getConnectedPeers() -> [PeerID] {
-        return []
+        return connectedPeers
     }
 }

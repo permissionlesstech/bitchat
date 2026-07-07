@@ -20,9 +20,11 @@ The new implementation introduces a **RequestSyncManager** to track outgoing syn
 
 ### Request Sync Payload
 The `REQUEST_SYNC` packet payload (TLV encoded) has been updated to include:
-*   **Future Filters**:
-    *   `sinceTimestamp` (Type 0x05): To request packets since a certain time (UInt64 big-endian).
-    *   `fragmentIdFilter` (Type 0x06): To request specific fragments (UTF-8 string).
+*   `sinceTimestamp` (Type 0x05): filter-coverage cursor (UInt64 big-endian). The requester's GCS filter only covers packets at or after this timestamp; the responder skips older packets instead of re-sending them every round.
+*   `fragmentIdFilter` (Type 0x06): targeted fragment resync (UTF-8 string). Comma-separated 16-hex-char (8-byte) fragment **stream IDs** — the ID that prefixes every fragment payload.
+    *   **Requester**: when a broadcast reassembly stalls (no new fragment for 5 s), the fragment assembler reports the stream ID and a `REQUEST_SYNC` with `types = fragment` and this filter goes to each connected peer (re-requested at most every 10 s per stream). Directed reassemblies are excluded — peers only archive broadcast fragments for sync.
+    *   **Responder**: when the filter is present, the fragment diff is restricted to exactly the named streams and the `sinceTimestamp` cursor is bypassed for them; the GCS filter still excludes pieces the requester already holds. Responses keep RSR marking, TTL 0, per-peer response rate limiting (8/30 s), and `REQUEST_SYNC` itself remains link-local (TTL 0, never relayed).
+    *   **Bounds**: at most 60 IDs per request. Each ID encodes as 16 hex chars plus a comma separator, so the largest value is 60 × 17 − 1 = 1019 bytes, within the decoder's 1024-byte acceptance cap; oversized filter values are ignored (the rest of the request still decodes).
 
 ## Architecture
 

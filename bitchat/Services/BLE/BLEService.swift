@@ -69,7 +69,9 @@ final class BLEService: NSObject {
     #endif
     private var selfBroadcastTracker = BLESelfBroadcastTracker()
     private let meshTopology = MeshTopologyTracker()
-    
+    // Route health for originated source routes; guarded by collectionsQueue.
+    private var sourceRouteFailures = BLESourceRouteFailureCache()
+
     // 5. Fragment Reassembly (necessary for messages > MTU)
     private var fragmentAssemblyBuffer = BLEFragmentAssemblyBuffer()
     private var outboundFragmentTransfers = BLEOutboundFragmentTransferScheduler()
@@ -586,6 +588,7 @@ final class BLEService: NSObject {
             let entries = outboundFragmentTransfers.removeAll().map { ($0.id, $0.workItems) }
             peerRegistry.removeAll()
             fragmentAssemblyBuffer.removeAll()
+            sourceRouteFailures = BLESourceRouteFailureCache()
             // Also clear pending message queues to avoid stale state across sessions
             pendingNoiseSessionQueues.removeAll()
             pendingDirectedRelays.removeAll()
@@ -2404,13 +2407,31 @@ extension BLEService {
     }
 
     private func computeRoute(to peerID: PeerID) -> [Data]? {
-        meshTopology.computeRoute(from: myPeerIDData, to: routingData(for: peerID))
+        // Version-gated: every hop and the recipient must have been observed
+        // speaking v2, since a v1-only node drops v2 frames on decode.
+        meshTopology.computeRoute(
+            from: myPeerIDData,
+            to: routingData(for: peerID),
+            maxHops: TransportConfig.bleSourceRouteMaxIntermediateHops,
+            requiringVersion: 2
+        )
     }
 
     private func applyRouteIfAvailable(_ packet: BitchatPacket, to recipient: PeerID) -> BitchatPacket {
-        guard let route = computeRoute(to: recipient), route.count >= 1 else {
-            return packet
-        }
+        let now = Date()
+        let route = BLESourceRouteOriginationPolicy.route(
+            for: packet,
+            to: recipient,
+            localPeerIDData: myPeerIDData,
+            isRecipientConnected: { self.isPeerConnected($0) },
+            shouldAttemptRoute: { peer in
+                self.collectionsQueue.sync(flags: .barrier) {
+                    self.sourceRouteFailures.shouldAttemptRoute(to: peer, now: now)
+                }
+            },
+            computeRoute: { self.computeRoute(to: $0) }
+        )
+        guard let route else { return packet }
         // Create new packet with route applied and version upgraded to 2
         let routedPacket = BitchatPacket(
             type: packet.type,
@@ -2427,6 +2448,9 @@ extension BLEService {
         guard let signedPacket = noiseService.signPacket(routedPacket) else {
             SecureLogger.error("❌ Failed to re-sign packet with route", category: .security)
             return packet // Return original packet if signing fails
+        }
+        collectionsQueue.sync(flags: .barrier) {
+            sourceRouteFailures.noteRoutedSend(to: recipient, now: now)
         }
         return signedPacket
     }
@@ -3199,13 +3223,23 @@ extension BLEService {
         // Update peer info without verbose logging - update the peer we received from, not the original sender
         updatePeerLastSeen(peerID)
 
-        // Track recent traffic timestamps for adaptive behavior
+        // Track recent traffic timestamps for adaptive behavior; the same
+        // barrier hop confirms route health for the packet's originator.
         collectionsQueue.async(flags: .barrier) { [weak self] in
             guard let self = self else { return }
             self.recentTrafficTracker.recordPacket(at: Date())
+            self.sourceRouteFailures.noteInboundActivity(from: senderID)
         }
 
-        
+        // Per-peer protocol version: originated source routes only use hops
+        // observed speaking v2 (a v1-only node cannot decode v2 frames).
+        if packet.version >= 2 {
+            meshTopology.recordObservedVersion(packet.version, for: packet.senderID)
+            if peerID != senderID {
+                meshTopology.recordObservedVersion(packet.version, for: routingData(for: peerID))
+            }
+        }
+
         // Process by type
         switch context.messageType {
         case .announce:
@@ -3772,10 +3806,21 @@ extension BLEService {
         // Clean old processed messages efficiently
         messageDeduplicator.cleanup()
         
-        // Clean old fragments (> configured seconds old)
-        collectionsQueue.sync(flags: .barrier) {
+        // Clean old fragments (> configured seconds old), then ask peers for
+        // the specific fragment streams whose reassembly has stalled instead
+        // of waiting for the next periodic GCS fragment round.
+        let stalledFragmentIDs = collectionsQueue.sync(flags: .barrier) { () -> [Data] in
             let cutoff = now.addingTimeInterval(-TransportConfig.bleFragmentLifetimeSeconds)
             fragmentAssemblyBuffer.removeExpired(before: cutoff)
+            sourceRouteFailures.prune(now: now)
+            return fragmentAssemblyBuffer.stalledBroadcastFragmentIDs(
+                stalledAfter: TransportConfig.bleFragmentResyncStallSeconds,
+                retryAfter: TransportConfig.bleFragmentResyncRetrySeconds,
+                now: now
+            )
+        }
+        if !stalledFragmentIDs.isEmpty {
+            gossipSyncManager?.requestMissingFragments(fragmentIDs: stalledFragmentIDs)
         }
 
         // Clean old connection timeout backoff entries (> window)
