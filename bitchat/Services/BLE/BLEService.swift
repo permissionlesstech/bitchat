@@ -1707,7 +1707,9 @@ extension BLEService: CBCentralManagerDelegate {
         if !isAppActive {
             bleQueue.asyncAfter(deadline: .now() + TransportConfig.bleDisconnectDiscoveryIgnoreSeconds) { [weak self] in
                 guard let self, !self.isAppActive else { return }
-                self.armPendingBackgroundConnects()
+                // Reserve 0: use the slot this disconnect freed even in a
+                // dense mesh, so the lost peer can wake us when it returns.
+                self.armPendingBackgroundConnects(slotReserve: 0)
             }
         }
         #endif
@@ -3496,12 +3498,17 @@ extension BLEService {
     /// backgrounding. Pending connects live in the Bluetooth controller's
     /// allowlist — no scanning and no app CPU — and complete whenever a peer
     /// comes into range, waking (or relaunching) the app. A couple of central
-    /// slots stay reserved for connects driven by live background discovery.
-    private func armPendingBackgroundConnects() {
+    /// slots stay reserved for connects driven by live background discovery —
+    /// except on the disconnect re-arm path, which may consume the slot the
+    /// disconnect itself just freed (a dense mesh with 4+ remaining links
+    /// would otherwise compute a zero budget and never re-arm the lost peer).
+    private func armPendingBackgroundConnects(
+        slotReserve: Int = TransportConfig.bleBackgroundPendingConnectSlotReserve
+    ) {
         bleQueue.async { [weak self] in
             guard let self, let central = self.centralManager, central.state == .poweredOn else { return }
             let budget = TransportConfig.bleMaxCentralLinks
-                - TransportConfig.bleBackgroundPendingConnectSlotReserve
+                - slotReserve
                 - self.linkStateStore.connectedOrConnectingPeripheralCount
             let now = Date()
             let targets = self.recentPeripheralCache.reconnectTargets(now: now, limit: budget) { peripheralID in
