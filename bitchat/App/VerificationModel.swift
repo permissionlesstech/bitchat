@@ -9,6 +9,14 @@ struct FingerprintPresentationState: Equatable {
     let theirFingerprint: String?
     let myFingerprint: String
     let isVerified: Bool
+    /// Number of currently-valid vouches from peers the user verified
+    /// (0 when the peer is explicitly verified — the stronger badge wins).
+    let voucherCount: Int
+    /// Display names of the (verified) vouchers, where known.
+    let voucherNames: [String]
+
+    /// Vouched for by ≥1 peer the user verified (and not explicitly verified).
+    var isVouched: Bool { voucherCount > 0 }
 
     var canToggleVerification: Bool {
         encryptionStatus == .noiseSecured || encryptionStatus == .noiseVerified
@@ -82,6 +90,24 @@ final class VerificationModel: ObservableObject {
         let encryptionStatus = chatViewModel.getEncryptionStatus(for: statusPeerID)
         let theirFingerprint = chatViewModel.getFingerprint(for: statusPeerID)
         let peerNickname = resolveDisplayName(for: peerID, statusPeerID: statusPeerID)
+        let isVerified = theirFingerprint.map { peerIdentityStore.isVerified($0) } ?? false
+
+        // Vouch state is recomputed on read: only vouchers still in the
+        // verified set count, so removing a verification silently retires the
+        // vouches that peer gave.
+        let vouchers: [VouchRecord]
+        if !isVerified, let theirFingerprint {
+            vouchers = chatViewModel.identityManager.validVouchers(for: theirFingerprint)
+        } else {
+            vouchers = []
+        }
+        let voucherNames = vouchers.compactMap { record -> String? in
+            guard let social = chatViewModel.identityManager.getSocialIdentity(for: record.voucherFingerprint) else {
+                return nil
+            }
+            if let petname = social.localPetname, !petname.isEmpty { return petname }
+            return social.claimedNickname.isEmpty ? nil : social.claimedNickname
+        }
 
         return FingerprintPresentationState(
             statusPeerID: statusPeerID,
@@ -89,7 +115,9 @@ final class VerificationModel: ObservableObject {
             encryptionStatus: encryptionStatus,
             theirFingerprint: theirFingerprint,
             myFingerprint: chatViewModel.getMyFingerprint(),
-            isVerified: theirFingerprint.map { peerIdentityStore.isVerified($0) } ?? false
+            isVerified: isVerified,
+            voucherCount: vouchers.count,
+            voucherNames: voucherNames
         )
     }
 
@@ -117,6 +145,17 @@ final class VerificationModel: ObservableObject {
             .store(in: &cancellables)
 
         chatViewModel.$allPeers
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+
+        // Vouch state changes (ChatVouchCoordinator.notifyPeerTrustChanged)
+        // are signalled via this notification rather than a published
+        // property, so an open fingerprint sheet refreshes its vouched badge
+        // live when a vouch batch is accepted.
+        NotificationCenter.default.publisher(for: Notification.Name("peerStatusUpdated"))
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.objectWillChange.send()

@@ -7,7 +7,7 @@
 //
 
 /// Simplified BitChat protocol message types.
-/// Reduced from 24 types to just 6 essential ones.
+/// Consolidated from the original 24 wire types down to the 9 cases below.
 /// All private communication metadata (receipts, status) is embedded in noiseEncrypted payloads.
 public enum MessageType: UInt8 {
     // Public messages (unencrypted)
@@ -24,8 +24,9 @@ public enum MessageType: UInt8 {
     // Fragmentation (simplified)
     case fragment = 0x20        // Single fragment type for large messages
     case fileTransfer = 0x22    // Binary file/audio/image payloads
+    case boardPost = 0x23       // Signed geohash bulletin-board post or tombstone
 
-    // Mesh diagnostics (0x23-0x25 and 0x28 are reserved by other features)
+    // Mesh diagnostics
     case ping = 0x26            // Directed echo request (nonce + origin TTL)
     case pong = 0x27            // Directed echo reply (echoed nonce + origin TTL)
 
@@ -40,6 +41,7 @@ public enum MessageType: UInt8 {
         case .noiseEncrypted: return "noiseEncrypted"
         case .fragment: return "fragment"
         case .fileTransfer: return "fileTransfer"
+        case .boardPost: return "boardPost"
         case .ping: return "ping"
         case .pong: return "pong"
         }

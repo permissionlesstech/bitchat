@@ -53,6 +53,8 @@ final class BLEService: NSObject {
     // reject. Injectable for tests; main-actor policy because favorites live
     // on the main actor.
     var courierStore: CourierStore = .shared
+    // Bulletin-board posts this device carries; injectable for tests.
+    var boardStore: BoardStore = .shared
     var courierDepositPolicy: @MainActor (Data, Bool) -> CourierDepositTier? = { depositorNoiseKey, isVerifiedPeer in
         if FavoritesPersistenceService.shared.isMutualFavorite(depositorNoiseKey) { return .favorite }
         return isVerifiedPeer ? .verified : nil
@@ -67,6 +69,8 @@ final class BLEService: NSObject {
     #endif
     private var selfBroadcastTracker = BLESelfBroadcastTracker()
     private let meshTopology = MeshTopologyTracker()
+    // Route health for originated source routes; guarded by collectionsQueue.
+    private var sourceRouteFailures = BLESourceRouteFailureCache()
 
     // Mesh diagnostics: outstanding /ping probes keyed by nonce, plus the
     // inbound ping budget — keyed by the ingress link (the directly connected
@@ -85,7 +89,7 @@ final class BLEService: NSObject {
         maxResponses: TransportConfig.meshPingInboundMaxPerLink,
         window: TransportConfig.meshPingInboundWindowSeconds
     )
-    
+
     // 5. Fragment Reassembly (necessary for messages > MTU)
     private var fragmentAssemblyBuffer = BLEFragmentAssemblyBuffer()
     private var outboundFragmentTransfers = BLEOutboundFragmentTransferScheduler()
@@ -315,6 +319,14 @@ final class BLEService: NSObject {
         let archive = meshBackgroundEnabled ? GossipMessageArchive() : nil
         let manager = GossipSyncManager(myPeerID: myPeerID, config: config, requestSyncManager: requestSyncManager, archive: archive)
         manager.delegate = self
+        // Board posts sync from the board store (their retention owner) so
+        // deleted/expired posts drop out of rounds immediately. Real sessions
+        // only, matching the archive: unit tests stay hermetic.
+        if meshBackgroundEnabled {
+            manager.boardPacketsProvider = { [weak self] in
+                self?.boardStore.syncCandidates() ?? []
+            }
+        }
         // Only start the periodic sync timers when real Bluetooth exists. In unit
         // tests there is no mesh to sync with, and the periodic sign/broadcast
         // churn just keeps the process busy and aggravates flaky exit hangs.
@@ -594,6 +606,7 @@ final class BLEService: NSObject {
             let entries = outboundFragmentTransfers.removeAll().map { ($0.id, $0.workItems) }
             peerRegistry.removeAll()
             fragmentAssemblyBuffer.removeAll()
+            sourceRouteFailures = BLESourceRouteFailureCache()
             // Also clear pending message queues to avoid stale state across sessions
             pendingNoiseSessionQueues.removeAll()
             pendingDirectedRelays.removeAll()
@@ -635,6 +648,12 @@ final class BLEService: NSObject {
         collectionsQueue.sync {
             peerRegistry.nickname(for: peerID, connectedOnly: true)
         }
+    }
+
+    /// Capabilities the peer advertised in its last verified announce.
+    /// Empty for peers that predate the capabilities TLV.
+    func peerCapabilities(_ peerID: PeerID) -> PeerCapabilities {
+        collectionsQueue.sync { peerRegistry.capabilities(for: peerID) }
     }
 
     func getPeerNicknames() -> [PeerID: String] {
@@ -1279,7 +1298,8 @@ final class BLEService: NSObject {
             nickname: myNickname,
             noisePublicKey: noisePub,
             signingPublicKey: signingPub,
-            directNeighbors: connectedPeerIDs
+            directNeighbors: connectedPeerIDs,
+            capabilities: PeerCapabilities.localSupported
         )
         
         guard let payload = announcement.encode() else {
@@ -1326,6 +1346,18 @@ final class BLEService: NSObject {
     func sendVerifyResponse(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {
         guard let payload = VerificationService.shared.buildVerifyResponse(noiseKeyHex: noiseKeyHex, nonceA: nonceA) else { return }
         sendNoisePayload(payload, to: peerID)
+    }
+
+    // MARK: Vouching over Noise
+
+    func sendVouchAttestations(_ payload: Data, to peerID: PeerID) {
+        sendNoisePayload(NoisePayload(type: .vouch, data: payload).encode(), to: peerID)
+    }
+
+    func addPeerAuthenticatedObserver(_ handler: @escaping (PeerID, String) -> Void) {
+        // Appends to the encryption service's handler array, so this never
+        // displaces the callbacks installed by installNoiseSessionCallbacks.
+        noiseService.addOnPeerAuthenticatedHandler(handler)
     }
 }
 
@@ -2393,13 +2425,31 @@ extension BLEService {
     }
 
     private func computeRoute(to peerID: PeerID) -> [Data]? {
-        meshTopology.computeRoute(from: myPeerIDData, to: routingData(for: peerID))
+        // Version-gated: every hop and the recipient must have been observed
+        // speaking v2, since a v1-only node drops v2 frames on decode.
+        meshTopology.computeRoute(
+            from: myPeerIDData,
+            to: routingData(for: peerID),
+            maxHops: TransportConfig.bleSourceRouteMaxIntermediateHops,
+            requiringVersion: 2
+        )
     }
 
     private func applyRouteIfAvailable(_ packet: BitchatPacket, to recipient: PeerID) -> BitchatPacket {
-        guard let route = computeRoute(to: recipient), route.count >= 1 else {
-            return packet
-        }
+        let now = Date()
+        let route = BLESourceRouteOriginationPolicy.route(
+            for: packet,
+            to: recipient,
+            localPeerIDData: myPeerIDData,
+            isRecipientConnected: { self.isPeerConnected($0) },
+            shouldAttemptRoute: { peer in
+                self.collectionsQueue.sync(flags: .barrier) {
+                    self.sourceRouteFailures.shouldAttemptRoute(to: peer, now: now)
+                }
+            },
+            computeRoute: { self.computeRoute(to: $0) }
+        )
+        guard let route else { return packet }
         // Create new packet with route applied and version upgraded to 2
         let routedPacket = BitchatPacket(
             type: packet.type,
@@ -2416,6 +2466,9 @@ extension BLEService {
         guard let signedPacket = noiseService.signPacket(routedPacket) else {
             SecureLogger.error("❌ Failed to re-sign packet with route", category: .security)
             return packet // Return original packet if signing fails
+        }
+        collectionsQueue.sync(flags: .barrier) {
+            sourceRouteFailures.noteRoutedSend(to: recipient, now: now)
         }
         return signedPacket
     }
@@ -3332,13 +3385,23 @@ extension BLEService {
         // Update peer info without verbose logging - update the peer we received from, not the original sender
         updatePeerLastSeen(peerID)
 
-        // Track recent traffic timestamps for adaptive behavior
+        // Track recent traffic timestamps for adaptive behavior; the same
+        // barrier hop confirms route health for the packet's originator.
         collectionsQueue.async(flags: .barrier) { [weak self] in
             guard let self = self else { return }
             self.recentTrafficTracker.recordPacket(at: Date())
+            self.sourceRouteFailures.noteInboundActivity(from: senderID)
         }
 
-        
+        // Per-peer protocol version: originated source routes only use hops
+        // observed speaking v2 (a v1-only node cannot decode v2 frames).
+        if packet.version >= 2 {
+            meshTopology.recordObservedVersion(packet.version, for: packet.senderID)
+            if peerID != senderID {
+                meshTopology.recordObservedVersion(packet.version, for: routingData(for: peerID))
+            }
+        }
+
         // Process by type
         switch context.messageType {
         case .announce:
@@ -3364,6 +3427,10 @@ extension BLEService {
 
         case .courierEnvelope:
             handleCourierEnvelope(packet, from: peerID)
+
+        case .boardPost:
+            // Invalid or deleted posts must not spread; skip the relay step.
+            guard handleBoardPost(packet, from: senderID) else { return }
 
         case .ping:
             // Rate limiting must key on the ingress link (`peerID`), not the
@@ -3486,7 +3553,8 @@ extension BLEService {
                     noisePublicKey: announcement.noisePublicKey,
                     signingPublicKey: announcement.signingPublicKey,
                     isConnected: isConnected,
-                    now: now
+                    now: now,
+                    capabilities: announcement.capabilities ?? []
                 ) ?? BLEPeerAnnounceUpdate(isNewPeer: false, wasDisconnected: false, previousNickname: nil)
             },
             shouldEmitReconnectLog: { [weak self] peerID, now in
@@ -3543,6 +3611,63 @@ extension BLEService {
                 }
             }
         )
+    }
+
+    // MARK: - Board (geohash bulletin board)
+
+    /// Validates and stores an incoming board post or tombstone. Returns
+    /// whether the packet is worth relaying onward.
+    private func handleBoardPost(_ packet: BitchatPacket, from peerID: PeerID) -> Bool {
+        guard let wire = BoardWire.decode(from: packet.payload) else {
+            SecureLogger.warning("⚠️ Malformed board packet from \(peerID.id.prefix(8))…", category: .session)
+            return false
+        }
+        // Posts are self-authenticating: the payload embeds the author's
+        // Ed25519 key and signature, so verification does not depend on the
+        // author still being around to announce.
+        guard wire.verifySignature() else {
+            if logRateLimiter.shouldLog(key: "board-sig:\(peerID.id)") {
+                SecureLogger.warning("🚫 Dropping board packet with invalid signature from \(peerID.id.prefix(8))…", category: .security)
+            }
+            return false
+        }
+        switch boardStore.ingest(wire, packet: packet) {
+        case .accepted, .duplicate:
+            return true
+        case .rejected:
+            return false
+        }
+    }
+
+    /// Broadcasts a pre-signed board payload (post or tombstone) built by the
+    /// board manager, and ingests it locally so it shows up on our own board
+    /// and joins gossip sync immediately.
+    func sendBoardPayload(_ payload: Data) {
+        guard let wire = BoardWire.decode(from: payload), wire.verifySignature() else {
+            SecureLogger.error("❌ Refusing to send invalid board payload", category: .session)
+            return
+        }
+        messageQueue.async { [weak self] in
+            guard let self = self else { return }
+            let basePacket = BitchatPacket(
+                type: MessageType.boardPost.rawValue,
+                senderID: Data(hexString: self.myPeerID.id) ?? Data(),
+                recipientID: nil,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: payload,
+                signature: nil,
+                ttl: self.messageTTL
+            )
+            guard let signedPacket = self.noiseService.signPacket(basePacket) else {
+                SecureLogger.error("❌ Failed to sign board packet", category: .security)
+                return
+            }
+            // Pre-mark our own broadcast as processed to avoid handling a relayed self copy
+            let dedupID = BLESelfBroadcastTracker.dedupID(for: signedPacket)
+            self.messageDeduplicator.markProcessed(dedupID)
+            self.boardStore.ingest(wire, packet: signedPacket)
+            self.broadcastPacket(signedPacket)
+        }
     }
 
     // Handle REQUEST_SYNC: decode payload and respond with missing packets via sync manager
@@ -3852,10 +3977,21 @@ extension BLEService {
         // Clean old processed messages efficiently
         messageDeduplicator.cleanup()
         
-        // Clean old fragments (> configured seconds old)
-        collectionsQueue.sync(flags: .barrier) {
+        // Clean old fragments (> configured seconds old), then ask peers for
+        // the specific fragment streams whose reassembly has stalled instead
+        // of waiting for the next periodic GCS fragment round.
+        let stalledFragmentIDs = collectionsQueue.sync(flags: .barrier) { () -> [Data] in
             let cutoff = now.addingTimeInterval(-TransportConfig.bleFragmentLifetimeSeconds)
             fragmentAssemblyBuffer.removeExpired(before: cutoff)
+            sourceRouteFailures.prune(now: now)
+            return fragmentAssemblyBuffer.stalledBroadcastFragmentIDs(
+                stalledAfter: TransportConfig.bleFragmentResyncStallSeconds,
+                retryAfter: TransportConfig.bleFragmentResyncRetrySeconds,
+                now: now
+            )
+        }
+        if !stalledFragmentIDs.isEmpty {
+            gossipSyncManager?.requestMissingFragments(fragmentIDs: stalledFragmentIDs)
         }
 
         // Clean old connection timeout backoff entries (> window)

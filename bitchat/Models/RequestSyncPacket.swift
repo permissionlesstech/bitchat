@@ -1,16 +1,50 @@
+import BitFoundation
 import Foundation
 
 // REQUEST_SYNC payload TLV (type, length16, value)
 //  - 0x01: P (uint8) — Golomb-Rice parameter
 //  - 0x02: M (uint32, big-endian) — hash range (N * 2^P)
 //  - 0x03: data (opaque) — GR bitstream bytes (MSB-first)
+//  - 0x04: types (SyncTypeFlags) — packet types the filter covers
+//  - 0x05: sinceTimestamp (uint64, big-endian) — filter coverage cursor
+//  - 0x06: fragmentIdFilter (UTF-8) — comma-separated 16-hex-char (8-byte)
+//          fragment stream IDs; restricts the fragment diff to exactly those
+//          streams (targeted resync for stalled reassemblies)
 struct RequestSyncPacket {
+    /// Maximum fragment IDs one 0x06 filter may carry. Each ID encodes as
+    /// 16 hex chars plus a comma separator, so the largest encoded value is
+    /// 60 * 17 - 1 = 1019 bytes, which fits the 1024-byte decoder cap.
+    static let maxFragmentIdFilterCount = 60
+
     let p: Int
     let m: UInt32
     let data: Data
     let types: SyncTypeFlags?
     let sinceTimestamp: UInt64?
     let fragmentIdFilter: String?
+
+    /// Encodes 8-byte fragment stream IDs as the 0x06 filter string,
+    /// dropping malformed IDs and capping at `maxFragmentIdFilterCount`.
+    static func encodeFragmentIdFilter(_ fragmentIDs: [Data]) -> String? {
+        let tokens = fragmentIDs
+            .filter { $0.count == 8 }
+            .prefix(maxFragmentIdFilterCount)
+            .map { $0.hexEncodedString() }
+        guard !tokens.isEmpty else { return nil }
+        return tokens.joined(separator: ",")
+    }
+
+    /// Decodes a 0x06 filter string back into 8-byte fragment stream IDs,
+    /// ignoring malformed tokens and capping at `maxFragmentIdFilterCount`.
+    static func decodeFragmentIdFilter(_ filter: String?) -> Set<Data>? {
+        guard let filter else { return nil }
+        var ids: Set<Data> = []
+        for token in filter.split(separator: ",").prefix(maxFragmentIdFilterCount) {
+            guard token.count == 16, let id = Data(hexString: String(token)) else { continue }
+            ids.insert(id)
+        }
+        return ids.isEmpty ? nil : ids
+    }
 
     init(p: Int, m: UInt32, data: Data, types: SyncTypeFlags? = nil, sinceTimestamp: UInt64? = nil, fragmentIdFilter: String? = nil) {
         self.p = p
@@ -88,7 +122,9 @@ struct RequestSyncPacket {
                     sinceTimestamp = ts
                 }
             case 0x06:
-                if let fid = String(data: v, encoding: .utf8) {
+                // Same acceptance cap as the GCS payload; an oversized filter
+                // is ignored rather than failing the whole request.
+                if v.count <= maxAcceptBytes, let fid = String(data: v, encoding: .utf8) {
                     fragmentIdFilter = fid
                 }
             default:

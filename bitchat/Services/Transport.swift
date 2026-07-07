@@ -158,6 +158,10 @@ protocol Transport: AnyObject {
     // transport cannot courier (no connected courier, or unsupported).
     func sendCourierMessage(_ content: String, messageID: String, recipientNoiseKey: Data, via couriers: [PeerID]) -> Bool
 
+    // Bulletin board (mesh transports only): broadcast a pre-signed board
+    // payload (post or tombstone) so it spreads over relay and gossip sync.
+    func sendBoardPayload(_ payload: Data)
+
     // Mesh diagnostics (optional for transports). Defaults are inert so
     // queue-backed transports (e.g. NostrTransport) stay untouched.
     /// Sends a directed ping probe; the completion fires exactly once on the
@@ -172,6 +176,18 @@ protocol Transport: AnyObject {
     // QR verification (optional for transports)
     func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data)
     func sendVerifyResponse(to peerID: PeerID, noiseKeyHex: String, nonceA: Data)
+
+    // Vouching / transitive verification (optional for transports)
+    /// Capabilities the peer advertised in its last verified announce;
+    /// empty for peers that predate the capabilities TLV.
+    func peerCapabilities(_ peerID: PeerID) -> PeerCapabilities
+    /// Sends an encoded vouch-attestation batch inside the Noise session.
+    func sendVouchAttestations(_ payload: Data, to peerID: PeerID)
+    /// Appends a peer-authenticated observer. Unlike
+    /// `installNoiseSessionCallbacks` this never touches the (single-slot)
+    /// handshake-required callback, so secondary features can observe
+    /// session establishment without disturbing the primary registration.
+    func addPeerAuthenticatedObserver(_ handler: @escaping (PeerID, String) -> Void)
 
     // Pending file management (BCH-01-002: files held in memory until user accepts)
     func acceptPendingFile(id: String) -> URL?
@@ -198,7 +214,11 @@ extension Transport {
 
     func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {}
     func sendVerifyResponse(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {}
+    func peerCapabilities(_ peerID: PeerID) -> PeerCapabilities { [] }
+    func sendVouchAttestations(_ payload: Data, to peerID: PeerID) {}
+    func addPeerAuthenticatedObserver(_ handler: @escaping (PeerID, String) -> Void) {}
     func sendCourierMessage(_ content: String, messageID: String, recipientNoiseKey: Data, via couriers: [PeerID]) -> Bool { false }
+    func sendBoardPayload(_ payload: Data) {}
 
     // Mesh diagnostics are mesh-transport-only; other transports report
     // "no reply"/"no path" rather than pretending to measure anything.

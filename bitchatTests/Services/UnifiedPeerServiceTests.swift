@@ -292,4 +292,37 @@ private final class TestIdentityManager: SecureIdentityStateManagerProtocol {
     func getVerifiedFingerprints() -> Set<String> {
         verified
     }
+
+    // MARK: Vouching (unused by these tests)
+
+    @discardableResult
+    func recordVouch(voucheeFingerprint: String, voucherFingerprint: String, timestamp: Date) -> Bool {
+        false
+    }
+
+    func validVouchers(for fingerprint: String) -> [VouchRecord] {
+        []
+    }
+
+    func isVouched(fingerprint: String) -> Bool {
+        false
+    }
+
+    func effectiveTrustLevel(for fingerprint: String) -> TrustLevel {
+        verified.contains(fingerprint) ? .verified : .unknown
+    }
+
+    func lastVouchBatchSent(to fingerprint: String) -> Date? {
+        nil
+    }
+
+    func markVouchBatchSent(to fingerprint: String, at date: Date) {}
+
+    func signingPublicKey(forFingerprint fingerprint: String) -> Data? {
+        nil
+    }
+
+    func mostRecentlyVerifiedFingerprints(limit: Int, excluding fingerprint: String) -> [String] {
+        []
+    }
 }
