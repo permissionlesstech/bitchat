@@ -65,6 +65,59 @@ struct BlockRevealImageView: View {
     }
 
     var body: some View {
+        // The DM sheet wraps the conversation in a high-priority
+        // swipe-to-close DragGesture (ContentSheetViews). An ancestor
+        // high-priority gesture starves descendant TapGestures, but Button
+        // actions still fire — the reveal/open tap must stay a Button or
+        // received DM images become untappable.
+        Button(action: handleTap) {
+            imageContent
+        }
+        .buttonStyle(.plain)
+        .simultaneousGesture(hideSwipe)
+        .onAppear {
+            isBlurred = initiallyBlurred
+            loadImage()
+        }
+        .onChange(of: url) { _ in
+            isBlurred = initiallyBlurred
+            loadImage()
+        }
+        .contextMenu {
+            if isSending {
+                cancelSendAction
+            } else {
+                imageActions
+            }
+        }
+        .confirmationDialog(
+            Strings.deleteConfirmTitle,
+            isPresented: $showDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(Strings.delete, role: .destructive) {
+                onDelete?()
+            }
+            Button("common.cancel", role: .cancel) {}
+        } message: {
+            Text(verbatim: Strings.deleteConfirmMessage)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabelText)
+        .accessibilityHint(accessibilityHintText)
+        .accessibilityAddTraits(isSending || loadFailed ? [] : .isButton)
+        .accessibilityActions {
+            if isSending {
+                // children: .ignore collapses the visible cancel button, so
+                // expose it as an action while the send is in flight.
+                cancelSendAction
+            } else {
+                imageActions
+            }
+        }
+    }
+
+    private var imageContent: some View {
         ZStack(alignment: .topTrailing) {
             if let image = platformImage {
                 Image(platformImage: image)
@@ -128,47 +181,6 @@ struct BlockRevealImageView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Strings.cancelSend)
-            }
-        }
-        .onAppear {
-            isBlurred = initiallyBlurred
-            loadImage()
-        }
-        .onChange(of: url) { _ in
-            isBlurred = initiallyBlurred
-            loadImage()
-        }
-        .gesture(mainGesture)
-        .contextMenu {
-            if isSending {
-                cancelSendAction
-            } else {
-                imageActions
-            }
-        }
-        .confirmationDialog(
-            Strings.deleteConfirmTitle,
-            isPresented: $showDeleteConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button(Strings.delete, role: .destructive) {
-                onDelete?()
-            }
-            Button("common.cancel", role: .cancel) {}
-        } message: {
-            Text(verbatim: Strings.deleteConfirmMessage)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityLabelText)
-        .accessibilityHint(accessibilityHintText)
-        .accessibilityAddTraits(isSending || loadFailed ? [] : .isButton)
-        .accessibilityActions {
-            if isSending {
-                // children: .ignore collapses the visible cancel button, so
-                // expose it as an action while the send is in flight.
-                cancelSendAction
-            } else {
-                imageActions
             }
         }
     }
@@ -235,18 +247,19 @@ struct BlockRevealImageView: View {
     // photo gesture on mobile, racing the reveal tap, with no confirmation
     // and no way to get the file back. Delete now lives in the context menu
     // behind a confirmation; taps only reveal and open.
-    private var mainGesture: some Gesture {
-        let singleTap = TapGesture().onEnded {
-            guard !isSending, !loadFailed else { return }
-            if isBlurred {
-                withAnimation(.easeOut(duration: 0.2)) {
-                    isBlurred = false
-                }
-            } else {
-                onOpen?()
+    private func handleTap() {
+        guard !isSending, !loadFailed else { return }
+        if isBlurred {
+            withAnimation(.easeOut(duration: 0.2)) {
+                isBlurred = false
             }
+        } else {
+            onOpen?()
         }
-        let swipe = DragGesture(minimumDistance: 20, coordinateSpace: .local).onEnded { value in
+    }
+
+    private var hideSwipe: some Gesture {
+        DragGesture(minimumDistance: 20, coordinateSpace: .local).onEnded { value in
             guard !isSending, !loadFailed else { return }
             let horizontal = value.translation.width
             let vertical = value.translation.height
@@ -257,7 +270,6 @@ struct BlockRevealImageView: View {
                 }
             }
         }
-        return singleTap.simultaneously(with: swipe)
     }
 }
 
