@@ -1,3 +1,4 @@
+import BitFoundation
 import Foundation
 import ImageIO
 import UniformTypeIdentifiers
@@ -13,11 +14,28 @@ enum ImageUtilsError: Error {
 }
 
 enum ImageUtils {
-    private static let compressionQuality: CGFloat = 0.82
-    private static let targetImageBytes: Int = 45_000
+    private static let compressionQuality: CGFloat = 0.85
+    // Upper bound for the compressed JPEG. This is only a ceiling: the encoder
+    // keeps whatever a photo naturally weighs at `defaultMaxDimension` and
+    // `compressionQuality`, and only steps quality down when a payload would
+    // exceed this budget. It stays well under `FileTransferLimits.maxImageBytes`
+    // (512 KiB) so the BLE path never overruns its cap.
+    //
+    // Wi-Fi bulk relevance: the old 45 KB / 448 px budget crushed every photo
+    // to ~40 KB — below `TransportConfig.wifiBulkMinPayloadBytes` (64 KiB) — so
+    // `WifiBulkPolicy.shouldOffer` never fired and the AWDL data plane was dead
+    // in production. A genuinely detailed photo at `defaultMaxDimension` now
+    // weighs well over 64 KiB, so it becomes Wi-Fi-bulk eligible to a capable
+    // direct peer while still riding BLE fragmentation for everyone else.
+    private static let targetImageBytes: Int = 200_000
     private static let maxSourceImageBytes: Int = 10 * 1024 * 1024
+    // Longest-side ceiling for shared photos. 448 px was thumbnail-tier and
+    // (together with the tiny byte budget) forced every photo below the Wi-Fi
+    // bulk threshold. 1024 px keeps a shared photo legible and lets detailed
+    // images clear 64 KiB, without approaching the 512 KiB hard cap.
+    static let defaultMaxDimension: CGFloat = 1024
 
-    static func processImage(at url: URL, maxDimension: CGFloat = 448, outputDirectory: URL? = nil) throws -> URL {
+    static func processImage(at url: URL, maxDimension: CGFloat = defaultMaxDimension, outputDirectory: URL? = nil) throws -> URL {
         try validateImageSource(at: url)
 
         let data = try Data(contentsOf: url)
@@ -47,34 +65,33 @@ enum ImageUtils {
     }
 
     #if os(iOS)
-    static func processImage(_ image: UIImage, maxDimension: CGFloat = 448, outputDirectory: URL? = nil) throws -> URL {
+    static func processImage(_ image: UIImage, maxDimension: CGFloat = defaultMaxDimension, outputDirectory: URL? = nil) throws -> URL {
         return try autoreleasepool {
-            // Scale the image first
-            let scaled = scaledImage(image, maxDimension: maxDimension)
-
-            // Get CGImage from UIImage - this is the key to stripping metadata
-            guard let cgImage = scaled.cgImage else {
-                throw ImageUtilsError.encodingFailed
-            }
-
-            // Use CGImageDestination to encode without metadata (same as macOS)
-            var quality = compressionQuality
-            guard var jpegData = encodeJPEG(from: cgImage, quality: quality) else {
-                throw ImageUtilsError.encodingFailed
-            }
-
-            // Compress to target size
-            while jpegData.count > targetImageBytes && quality > 0.3 {
-                quality -= 0.1
-                autoreleasepool {
-                    if let next = encodeJPEG(from: cgImage, quality: quality) {
-                        jpegData = next
-                    }
+            var dimension = maxDimension
+            var jpegData: Data?
+            // Downscale-and-compress until the payload fits the hard image cap.
+            // A normal photo converges on the first pass; this loop only kicks
+            // in for near-incompressible inputs (e.g. full-frame noise) that
+            // would otherwise overrun `maxImageBytes` at the raised dimension.
+            while true {
+                let scaled = scaledImage(image, maxDimension: dimension)
+                // Get CGImage from UIImage - this is the key to stripping metadata
+                guard let cgImage = scaled.cgImage else {
+                    throw ImageUtilsError.encodingFailed
                 }
+                guard let data = compressToBudget(cgImage) else {
+                    throw ImageUtilsError.encodingFailed
+                }
+                jpegData = data
+                if data.count <= FileTransferLimits.maxImageBytes || dimension <= minRetryDimension {
+                    break
+                }
+                dimension = (dimension * dimensionRetryFactor).rounded(.down)
             }
+            guard let finalData = jpegData else { throw ImageUtilsError.encodingFailed }
 
             let outputURL = try makeOutputURL(outputDirectory: outputDirectory)
-            try jpegData.write(to: outputURL, options: .atomic)
+            try finalData.write(to: outputURL, options: .atomic)
             return outputURL
         }
     }
@@ -93,66 +110,49 @@ enum ImageUtils {
         UIGraphicsEndImageContext()
         return rendered ?? image
     }
-
-    // Shared EXIF-stripping JPEG encoder for both iOS and macOS
-    private static func encodeJPEG(from cgImage: CGImage, quality: CGFloat) -> Data? {
-        guard let data = CFDataCreateMutable(nil, 0) else {
-            return nil
-        }
-        guard let destination = CGImageDestinationCreateWithData(data, UTType.jpeg.identifier as CFString, 1, nil) else {
-            return nil
-        }
-        // Security: Strip ALL metadata (EXIF, GPS, TIFF, IPTC, XMP)
-        // By only specifying compression quality and no metadata keys,
-        // we ensure a clean JPEG with no privacy-leaking information
-        let options: [CFString: Any] = [
-            kCGImageDestinationLossyCompressionQuality: quality
-        ]
-        CGImageDestinationAddImage(destination, cgImage, options as CFDictionary)
-        guard CGImageDestinationFinalize(destination) else {
-            return nil
-        }
-        return data as Data
-    }
     #else
-    static func processImage(_ image: NSImage, maxDimension: CGFloat = 448, outputDirectory: URL? = nil) throws -> URL {
+    static func processImage(_ image: NSImage, maxDimension: CGFloat = defaultMaxDimension, outputDirectory: URL? = nil) throws -> URL {
         return try autoreleasepool {
-            let scaled = scaledImage(image, maxDimension: maxDimension)
-            guard let inputCG = scaled.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-                throw ImageUtilsError.encodingFailed
-            }
-            let width = inputCG.width
-            let height = inputCG.height
-            let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
-            guard let context = CGContext(
-                data: nil,
-                width: width,
-                height: height,
-                bitsPerComponent: 8,
-                bytesPerRow: 0,
-                space: colorSpace,
-                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-            ) else {
-                throw ImageUtilsError.encodingFailed
-            }
-            context.draw(inputCG, in: CGRect(x: 0, y: 0, width: width, height: height))
-            guard let cgImage = context.makeImage() else {
-                throw ImageUtilsError.encodingFailed
-            }
-            var quality = compressionQuality
-            guard var jpegData = encodeJPEG(from: cgImage, quality: quality) else {
-                throw ImageUtilsError.encodingFailed
-            }
-            while jpegData.count > targetImageBytes && quality > 0.3 {
-                quality -= 0.1
-                autoreleasepool {
-                    if let next = encodeJPEG(from: cgImage, quality: quality) {
-                        jpegData = next
-                    }
+            var dimension = maxDimension
+            var jpegData: Data?
+            // See the iOS path: normal photos converge immediately; the loop
+            // only shrinks further for near-incompressible inputs so the
+            // output never overruns `maxImageBytes`.
+            while true {
+                let scaled = scaledImage(image, maxDimension: dimension)
+                guard let inputCG = scaled.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+                    throw ImageUtilsError.encodingFailed
                 }
+                let width = inputCG.width
+                let height = inputCG.height
+                let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+                guard let context = CGContext(
+                    data: nil,
+                    width: width,
+                    height: height,
+                    bitsPerComponent: 8,
+                    bytesPerRow: 0,
+                    space: colorSpace,
+                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                ) else {
+                    throw ImageUtilsError.encodingFailed
+                }
+                context.draw(inputCG, in: CGRect(x: 0, y: 0, width: width, height: height))
+                guard let cgImage = context.makeImage() else {
+                    throw ImageUtilsError.encodingFailed
+                }
+                guard let data = compressToBudget(cgImage) else {
+                    throw ImageUtilsError.encodingFailed
+                }
+                jpegData = data
+                if data.count <= FileTransferLimits.maxImageBytes || dimension <= minRetryDimension {
+                    break
+                }
+                dimension = (dimension * dimensionRetryFactor).rounded(.down)
             }
+            guard let finalData = jpegData else { throw ImageUtilsError.encodingFailed }
             let outputURL = try makeOutputURL(outputDirectory: outputDirectory)
-            try jpegData.write(to: outputURL, options: .atomic)
+            try finalData.write(to: outputURL, options: .atomic)
             return outputURL
         }
     }
@@ -172,6 +172,31 @@ enum ImageUtils {
         scaledImage.unlockFocus()
         return scaledImage
     }
+    #endif
+
+    // When even the quality floor can't get an image under the byte budget,
+    // shrink the longest side by this factor and re-encode. Bounded below so
+    // the retry loop always terminates.
+    private static let dimensionRetryFactor: CGFloat = 0.75
+    private static let minRetryDimension: CGFloat = 256
+
+    /// Encodes `cgImage` to JPEG, stepping quality down toward
+    /// `targetImageBytes`. Shared by both platforms.
+    private static func compressToBudget(_ cgImage: CGImage) -> Data? {
+        var quality = compressionQuality
+        guard var jpegData = encodeJPEG(from: cgImage, quality: quality) else {
+            return nil
+        }
+        while jpegData.count > targetImageBytes && quality > 0.3 {
+            quality -= 0.1
+            autoreleasepool {
+                if let next = encodeJPEG(from: cgImage, quality: quality) {
+                    jpegData = next
+                }
+            }
+        }
+        return jpegData
+    }
 
     // Shared EXIF-stripping JPEG encoder for both iOS and macOS
     private static func encodeJPEG(from cgImage: CGImage, quality: CGFloat) -> Data? {
@@ -193,7 +218,6 @@ enum ImageUtils {
         }
         return data as Data
     }
-    #endif
 
     private static func makeOutputURL(outputDirectory: URL? = nil) throws -> URL {
         let formatter = DateFormatter()
