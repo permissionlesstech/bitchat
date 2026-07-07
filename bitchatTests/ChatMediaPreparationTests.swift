@@ -1,6 +1,9 @@
 import BitFoundation
+import CoreGraphics
 import Foundation
+import ImageIO
 import Testing
+import UniformTypeIdentifiers
 #if os(iOS)
 import UIKit
 #else
@@ -58,6 +61,25 @@ struct ChatMediaPreparationTests {
         #expect(prepared.packet.fileSize == UInt64(prepared.packet.content.count))
         #expect(prepared.packet.encode() != nil)
     }
+
+    /// A genuinely detailed photo must prepare to more than
+    /// `TransportConfig.wifiBulkMinPayloadBytes` (64 KiB); otherwise the Wi-Fi
+    /// bulk (AWDL) data plane is never offered in production because
+    /// `WifiBulkPolicy.shouldOffer` requires `payloadBytes > 64 KiB`.
+    /// Regression guard for the ~40 KB over-compression gap (PR #1385).
+    @Test
+    func prepareImagePacket_detailedImageExceedsWifiBulkThreshold() throws {
+        let sourceURL = try makeDetailedImageURL(dimension: 1200)
+        defer { try? FileManager.default.removeItem(at: sourceURL) }
+
+        let prepared = try ChatMediaPreparation.prepareImagePacket(from: sourceURL)
+        defer { try? FileManager.default.removeItem(at: prepared.outputURL) }
+
+        // Comfortably above the 64 KiB Wi-Fi bulk offer threshold...
+        #expect(prepared.packet.content.count > TransportConfig.wifiBulkMinPayloadBytes)
+        // ...and still within the hard image cap for the BLE path.
+        #expect(prepared.packet.content.count <= FileTransferLimits.maxImageBytes)
+    }
 }
 
 private func makeTemporaryImageURL() throws -> URL {
@@ -84,6 +106,50 @@ private func makeTemporaryImageURL() throws -> URL {
     }
     #endif
     try data.write(to: url, options: .atomic)
+    return url
+}
+
+/// Builds a random-noise PNG. Noise is incompressible, so the JPEG the prep
+/// pipeline produces stays large — a faithful stand-in for a detailed photo,
+/// unlike a flat solid-color image which would compress to a few KB regardless
+/// of dimension.
+private func makeDetailedImageURL(dimension: Int) throws -> URL {
+    let width = dimension
+    let height = dimension
+    let bytesPerPixel = 4
+    let bytesPerRow = width * bytesPerPixel
+
+    var pixels = [UInt8](repeating: 0, count: bytesPerRow * height)
+    for index in pixels.indices {
+        pixels[index] = UInt8.random(in: 0...255)
+    }
+
+    let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+    guard let context = CGContext(
+        data: &pixels,
+        width: width,
+        height: height,
+        bitsPerComponent: 8,
+        bytesPerRow: bytesPerRow,
+        space: colorSpace,
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+    ), let cgImage = context.makeImage() else {
+        throw ChatMediaPreparationTestError.imageEncodingFailed
+    }
+
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent("detailed-\(UUID().uuidString).png")
+    guard let destination = CGImageDestinationCreateWithURL(
+        url as CFURL,
+        UTType.png.identifier as CFString,
+        1,
+        nil
+    ) else {
+        throw ChatMediaPreparationTestError.imageEncodingFailed
+    }
+    CGImageDestinationAddImage(destination, cgImage, nil)
+    guard CGImageDestinationFinalize(destination) else {
+        throw ChatMediaPreparationTestError.imageEncodingFailed
+    }
     return url
 }
 
