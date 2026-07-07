@@ -95,6 +95,7 @@ final class AppRuntime: ObservableObject {
         let chatViewModel = self.chatViewModel
         self.boardAlertsModel = BoardAlertsModel(
             arrivals: BoardStore.shared.postArrivals.eraseToAnyPublisher(),
+            wipes: BoardStore.shared.didWipe.eraseToAnyPublisher(),
             dependencies: BoardAlertsModel.Dependencies(
                 isOwnPost: { post in
                     let key = chatViewModel.meshService.noiseSigningPublicKeyData()

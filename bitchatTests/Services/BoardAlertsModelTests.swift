@@ -166,17 +166,36 @@ struct BoardAlertsModelTests {
     }
 
     @Test
-    func markAllSeen_clearsBadges() {
+    func markSeen_clearsOnlyVisibleScopes() {
         let harness = Harness()
         let model = makeModel(harness: harness)
 
         model.handleArrival(makePost(geohash: ""))
         model.handleArrival(makePost(geohash: "9q8yy"))
-        #expect(model.unseenCount(forGeohash: "") == 1)
+        model.handleArrival(makePost(geohash: "u4pruyd"))
 
-        model.markAllSeen()
+        // Opening the sheet on mesh + 9q8yy must not eat the badge for the
+        // never-shown u4pruyd channel.
+        model.markSeen(forScopes: ["", "9q8yy"])
 
         #expect(model.unseenCount(forGeohash: "") == 0)
+        #expect(model.unseenCount(forGeohash: "9q8yy") == 0)
+        #expect(model.unseenCount(forGeohash: "u4pruyd") == 1)
+    }
+
+    @Test
+    func reset_dropsPendingUrgentLinesAndBadges() {
+        let harness = Harness()
+        let model = makeModel(harness: harness)
+
+        model.handleArrival(makePost(content: "pre-wipe secret", urgent: true))
+        #expect(harness.pendingFlushes.count == 1)
+
+        // Panic wipe lands before the collapse flush fires.
+        model.reset()
+        harness.flushAll()
+
+        #expect(harness.lines.isEmpty)
         #expect(model.unseenCount(forGeohash: "9q8yy") == 0)
     }
 

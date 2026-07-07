@@ -139,7 +139,11 @@ struct ContentHeaderView: View {
                 }
 
                 Button(action: {
-                    boardAlertsModel.markAllSeen()
+                    var scopes: Set<String> = [""]
+                    if let geoScope = noticesGeoScope {
+                        scopes.insert(geoScope)
+                    }
+                    boardAlertsModel.markSeen(forScopes: scopes)
                     showNotices = true
                 }) {
                     // Fill marks unseen new pins; the tint says the current

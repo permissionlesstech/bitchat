@@ -55,6 +55,7 @@ final class BoardAlertsModel: ObservableObject {
     private var flushScheduled = false
     private let dependencies: Dependencies
     private var cancellable: AnyCancellable?
+    private var wipeCancellable: AnyCancellable?
 
     private enum Strings {
         static func urgentSingle(author: String, content: String) -> String {
@@ -76,6 +77,7 @@ final class BoardAlertsModel: ObservableObject {
 
     init(
         arrivals: AnyPublisher<BoardPostPacket, Never>,
+        wipes: AnyPublisher<Void, Never> = Empty(completeImmediately: false).eraseToAnyPublisher(),
         dependencies: Dependencies
     ) {
         self.dependencies = dependencies
@@ -84,14 +86,30 @@ final class BoardAlertsModel: ObservableObject {
             .sink { [weak self] post in
                 self?.handleArrival(post)
             }
+        wipeCancellable = wipes
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                self?.reset()
+            }
     }
 
     func unseenCount(forGeohash geohash: String) -> Int {
         unseenPostScopes.values.reduce(0) { $0 + ($1 == geohash ? 1 : 0) }
     }
 
-    /// The notices sheet shows everything; opening it clears the badge.
-    func markAllSeen() {
+    /// Marks pins in the given scopes as seen — only the scopes the notices
+    /// sheet actually shows, so unseen pins for other geohash channels keep
+    /// their badge until visited.
+    func markSeen(forScopes scopes: Set<String>) {
+        guard unseenPostScopes.contains(where: { scopes.contains($0.value) }) else { return }
+        unseenPostScopes = unseenPostScopes.filter { !scopes.contains($0.value) }
+    }
+
+    /// Panic wipe: drop everything derived from pre-wipe posts, including
+    /// urgent lines still waiting on the collapse flush.
+    func reset() {
+        pendingUrgent.removeAll()
+        handledPostIDs.removeAll()
         guard !unseenPostScopes.isEmpty else { return }
         unseenPostScopes.removeAll()
     }

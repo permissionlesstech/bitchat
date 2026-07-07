@@ -37,14 +37,16 @@ struct UnifiedNoticesTests {
     private func makeNote(
         content: String,
         nickname: String? = "alice",
-        createdAt: Date? = nil
+        createdAt: Date? = nil,
+        geohash: String = "9q8yy"
     ) -> LocationNotesManager.Note {
         LocationNotesManager.Note(
             id: UUID().uuidString,
             pubkey: "ab" + UUID().uuidString.replacingOccurrences(of: "-", with: ""),
             content: content,
             createdAt: createdAt ?? baseDate,
-            nickname: nickname
+            nickname: nickname,
+            geohash: geohash
         )
     }
 
@@ -68,6 +70,18 @@ struct UnifiedNoticesTests {
         )
 
         let merged = UnifiedNotices.merge(posts: [post], notes: [oldNote])
+
+        #expect(merged.count == 2)
+    }
+
+    @Test
+    func merge_keepsSameTextNoteFromNeighborCell() {
+        // The notes subscription covers the center cell plus 8 neighbors; a
+        // matching note posted to a *neighbor* is not the bridged copy.
+        let post = makePost(content: "free couch on 5th")
+        let neighborNote = makeNote(content: "free couch on 5th", createdAt: baseDate.addingTimeInterval(30), geohash: "9q8yz")
+
+        let merged = UnifiedNotices.merge(posts: [post], notes: [neighborNote])
 
         #expect(merged.count == 2)
     }
@@ -115,7 +129,8 @@ struct UnifiedNoticesTests {
             pubkey: "deadbeef",
             content: "hi",
             createdAt: baseDate,
-            nickname: "dave"
+            nickname: "dave",
+            geohash: "9q8yy"
         )
 
         let item = NoticeItem(note: note)

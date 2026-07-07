@@ -84,6 +84,10 @@ final class BoardStore {
     /// store rejects them.
     let postArrivals = PassthroughSubject<BoardPostPacket, Never>()
 
+    /// Fires on the main thread after a panic wipe so derived state (pending
+    /// alerts, unseen badges) is dropped along with the posts themselves.
+    let didWipe = PassthroughSubject<Void, Never>()
+
     private var posts: [StoredPost] = []
     private var tombstones: [StoredTombstone] = []
     private let queue = DispatchQueue(label: "chat.bitchat.board.store")
@@ -159,6 +163,9 @@ final class BoardStore {
                 try? FileManager.default.removeItem(at: fileURL)
             }
             publishSnapshotLocked()
+        }
+        DispatchQueue.main.async { [weak self] in
+            self?.didWipe.send()
         }
     }
 

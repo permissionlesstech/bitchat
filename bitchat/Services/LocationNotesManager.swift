@@ -67,6 +67,9 @@ final class LocationNotesManager: ObservableObject {
         let content: String
         let createdAt: Date
         let nickname: String?
+        /// The matched `g` tag: the cell the note was posted to, which can be
+        /// a neighbor of the subscribed geohash.
+        let geohash: String
 
         var displayName: String {
             let suffix = String(pubkey.suffix(4))
@@ -195,14 +198,14 @@ final class LocationNotesManager: ObservableObject {
             guard let self = self else { return }
             guard event.kind == NostrProtocol.EventKind.textNote.rawValue else { return }
             // Ensure matching tag - accept any of our 9 geohashes
-            guard event.tags.contains(where: { tag in
+            guard let matchedGeohash = event.tags.first(where: { tag in
                 tag.count >= 2 && tag[0].lowercased() == "g" && validGeohashes.contains(tag[1].lowercased())
-            }) else { return }
+            })?[1].lowercased() else { return }
             guard !self.noteIDs.contains(event.id) else { return }
             self.noteIDs.insert(event.id)
             let nick = event.tags.first(where: { $0.first?.lowercased() == "n" && $0.count >= 2 })?.dropFirst().first
             let ts = Date(timeIntervalSince1970: TimeInterval(event.created_at))
-            let note = Note(id: event.id, pubkey: event.pubkey, content: event.content, createdAt: ts, nickname: nick)
+            let note = Note(id: event.id, pubkey: event.pubkey, content: event.content, createdAt: ts, nickname: nick, geohash: matchedGeohash)
             self.notes.append(note)
             self.notes.sort { $0.createdAt > $1.createdAt }
             self.enforceMemoryCap()
@@ -241,7 +244,8 @@ final class LocationNotesManager: ObservableObject {
                 pubkey: id.publicKeyHex,
                 content: trimmed,
                 createdAt: Date(timeIntervalSince1970: TimeInterval(event.created_at)),
-                nickname: nickname
+                nickname: nickname,
+                geohash: geohash
             )
             self.noteIDs.insert(event.id)
             self.notes.insert(echo, at: 0)

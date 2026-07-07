@@ -63,16 +63,18 @@ enum UnifiedNotices {
     /// Returns board posts and notes as one list, urgent posts first, then
     /// newest first. Notes that look like bridged copies of a board post are
     /// dropped — the board copy wins because it carries urgency and supports
-    /// merged deletion.
+    /// merged deletion. The geohash must match exactly: the notes
+    /// subscription also surfaces neighboring cells, and a same-text note
+    /// from a neighbor is not the bridged copy.
     static func merge(posts: [BoardPostPacket], notes: [LocationNotesManager.Note]) -> [NoticeItem] {
         var items = posts.map(NoticeItem.init(post:))
-        let boardItems = items
         for note in notes {
             let noteNickname = note.nickname?.trimmedOrNilIfEmpty ?? "anon"
-            let isBridgedCopy = boardItems.contains { post in
-                post.content == note.content
-                    && post.author == noteNickname
-                    && abs(post.createdAt.timeIntervalSince(note.createdAt)) <= bridgeDedupeWindow
+            let isBridgedCopy = posts.contains { post in
+                post.geohash == note.geohash
+                    && post.content == note.content
+                    && (post.authorNickname.trimmedOrNilIfEmpty ?? "anon") == noteNickname
+                    && abs(Date(timeIntervalSince1970: TimeInterval(post.createdAt) / 1000).timeIntervalSince(note.createdAt)) <= bridgeDedupeWindow
             }
             if !isBridgedCopy {
                 items.append(NoticeItem(note: note))
