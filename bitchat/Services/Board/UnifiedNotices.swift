@@ -1,0 +1,86 @@
+//
+// UnifiedNotices.swift
+// bitchat
+//
+// This is free and unencumbered software released into the public domain.
+// For more information, see <https://unlicense.org>
+//
+
+import Foundation
+
+/// One row in the unified notices sheet: a mesh board post or a Nostr
+/// location note, normalized for display.
+struct NoticeItem: Identifiable, Equatable {
+    enum Source: Equatable {
+        /// Signed board post carried by the mesh.
+        case board(BoardPostPacket)
+        /// Kind-1 location note seen on geo relays.
+        case nostr(LocationNotesManager.Note)
+    }
+
+    let id: String
+    let author: String
+    let content: String
+    let createdAt: Date
+    let isUrgent: Bool
+    let source: Source
+
+    var isBoardPost: Bool {
+        if case .board = source { return true }
+        return false
+    }
+
+    init(post: BoardPostPacket) {
+        id = post.postID.hexEncodedString()
+        author = post.authorNickname.trimmedOrNilIfEmpty ?? "anon"
+        content = post.content
+        createdAt = Date(timeIntervalSince1970: TimeInterval(post.createdAt) / 1000)
+        isUrgent = post.isUrgent
+        source = .board(post)
+    }
+
+    init(note: LocationNotesManager.Note) {
+        id = note.id
+        let display = note.displayName
+        author = display.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false)
+            .first.map(String.init) ?? display
+        content = note.content
+        createdAt = note.createdAt
+        isUrgent = false
+        source = .nostr(note)
+    }
+}
+
+/// Merges mesh board posts and Nostr location notes into one deduplicated
+/// list for the notices sheet's geo tab.
+enum UnifiedNotices {
+    /// Board posts on geohash channels are bridged to Nostr as kind-1 notes at
+    /// post time, so the same notice arrives twice. The copies share content
+    /// and nickname but are signed by unlinkable keys; match them
+    /// heuristically by content + author within a time window.
+    static let bridgeDedupeWindow: TimeInterval = 15 * 60
+
+    /// Returns board posts and notes as one list, urgent posts first, then
+    /// newest first. Notes that look like bridged copies of a board post are
+    /// dropped — the board copy wins because it carries urgency and supports
+    /// merged deletion.
+    static func merge(posts: [BoardPostPacket], notes: [LocationNotesManager.Note]) -> [NoticeItem] {
+        var items = posts.map(NoticeItem.init(post:))
+        let boardItems = items
+        for note in notes {
+            let noteNickname = note.nickname?.trimmedOrNilIfEmpty ?? "anon"
+            let isBridgedCopy = boardItems.contains { post in
+                post.content == note.content
+                    && post.author == noteNickname
+                    && abs(post.createdAt.timeIntervalSince(note.createdAt)) <= bridgeDedupeWindow
+            }
+            if !isBridgedCopy {
+                items.append(NoticeItem(note: note))
+            }
+        }
+        return items.sorted {
+            if $0.isUrgent != $1.isUrgent { return $0.isUrgent }
+            return $0.createdAt > $1.createdAt
+        }
+    }
+}

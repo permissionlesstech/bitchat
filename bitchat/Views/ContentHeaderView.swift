@@ -1,7 +1,4 @@
 import SwiftUI
-#if os(iOS)
-import UIKit
-#endif
 
 struct ContentHeaderView: View {
     @EnvironmentObject private var appChromeModel: AppChromeModel
@@ -14,8 +11,6 @@ struct ContentHeaderView: View {
 
     @Binding var showSidebar: Bool
     @Binding var showVerifySheet: Bool
-    @Binding var showLocationNotes: Bool
-    @Binding var notesGeohash: String?
     var isNicknameFieldFocused: FocusState<Bool>.Binding
 
     let headerHeight: CGFloat
@@ -25,8 +20,9 @@ struct ContentHeaderView: View {
     /// Courier envelopes this device is carrying for offline third parties.
     @State private var carriedMailCount = 0
 
-    /// Bulletin board sheet for the current channel context.
-    @State private var showBoard = false
+    /// Unified notices sheet (board posts + location notes) for the current
+    /// channel context.
+    @State private var showNotices = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -137,25 +133,7 @@ struct ContentHeaderView: View {
                     )
                 }
 
-                if case .mesh = locationChannelsModel.selectedChannel,
-                   locationChannelsModel.permissionState == .authorized {
-                    Button(action: {
-                        locationChannelsModel.enableAndRefresh()
-                        notesGeohash = locationChannelsModel.currentBuildingGeohash
-                        showLocationNotes = true
-                    }) {
-                        Image(systemName: "note.text")
-                            .font(.bitchatSystem(size: 12))
-                            .foregroundColor(Color.orange.opacity(0.8))
-                            .headerTapTarget()
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(
-                        String(localized: "content.accessibility.location_notes", comment: "Accessibility label for location notes button")
-                    )
-                }
-
-                Button(action: { showBoard = true }) {
+                Button(action: { showNotices = true }) {
                     Image(systemName: "pin")
                         .font(.bitchatSystem(size: 12))
                         .foregroundColor(palette.secondary.opacity(0.9))
@@ -163,10 +141,10 @@ struct ContentHeaderView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(
-                    String(localized: "content.accessibility.board", defaultValue: "Bulletin board", comment: "Accessibility label for the bulletin board button")
+                    String(localized: "content.accessibility.notices", defaultValue: "Notices", comment: "Accessibility label for the notices button")
                 )
                 .help(
-                    String(localized: "content.header.board", defaultValue: "Bulletin board: persistent notices for this channel", comment: "Tooltip for the bulletin board button")
+                    String(localized: "content.header.notices", defaultValue: "Notices: pinned posts for this area and the mesh", comment: "Tooltip for the notices button")
                 )
 
                 if case .location(let channel) = locationChannelsModel.selectedChannel {
@@ -272,49 +250,13 @@ struct ContentHeaderView: View {
                 .environmentObject(locationChannelsModel)
                 .environmentObject(peerListModel)
         }
-        .sheet(isPresented: $showBoard) {
-            BoardView(
-                geohash: boardGeohash,
+        .sheet(isPresented: $showNotices) {
+            NoticesView(
                 senderNickname: appChromeModel.nickname,
-                board: appChromeModel.boardManager
+                board: appChromeModel.boardManager,
+                initialTab: initialNoticesTab
             )
-        }
-        .sheet(isPresented: $showLocationNotes, onDismiss: {
-            notesGeohash = nil
-        }) {
-            Group {
-                if let geohash = notesGeohash ?? locationChannelsModel.currentBuildingGeohash {
-                    LocationNotesView(
-                        geohash: geohash,
-                        senderNickname: appChromeModel.nickname
-                    )
-                    .environmentObject(locationChannelsModel)
-                } else {
-                    ContentLocationNotesUnavailableView(
-                        showLocationNotes: $showLocationNotes,
-                        headerHeight: headerHeight
-                    )
-                    .environmentObject(locationChannelsModel)
-                }
-            }
-            .onAppear {
-                locationChannelsModel.enableLocationChannels()
-                locationChannelsModel.beginLiveRefresh()
-            }
-            .onDisappear {
-                locationChannelsModel.endLiveRefresh()
-            }
-            .onChange(of: locationChannelsModel.availableChannels) { channels in
-                if let current = channels.first(where: { $0.level == .building })?.geohash,
-                   notesGeohash != current {
-                    notesGeohash = current
-                    #if os(iOS)
-                    let generator = UIImpactFeedbackGenerator(style: .light)
-                    generator.prepare()
-                    generator.impactOccurred()
-                    #endif
-                }
-            }
+            .environmentObject(locationChannelsModel)
         }
         .onAppear {
             locationChannelsModel.refreshMeshChannelsIfNeeded()
@@ -348,13 +290,13 @@ private extension ContentHeaderView {
         dynamicTypeSize.isAccessibilitySize ? 2 : 1
     }
 
-    /// The board scope for the current channel: the geohash channel's board,
-    /// or the mesh-local board ("") in mesh chat.
-    var boardGeohash: String {
-        if case .location(let channel) = locationChannelsModel.selectedChannel {
-            return channel.geohash
+    /// Open the notices sheet on the tab matching the current channel: the
+    /// geohash channel's notices, or the mesh-local board in mesh chat.
+    var initialNoticesTab: NoticesView.Tab {
+        if case .location = locationChannelsModel.selectedChannel {
+            return .geo
         }
-        return ""
+        return .mesh
     }
 
     /// Whether anyone is actually reachable on the current channel — the
@@ -378,39 +320,5 @@ private extension ContentHeaderView {
             let color: Color = peerListModel.connectedMeshPeerCount > 0 ? meshBlue : palette.secondary
             return (peerListModel.reachableMeshPeerCount, color)
         }
-    }
-}
-
-private struct ContentLocationNotesUnavailableView: View {
-    @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
-    @ThemedPalette private var palette
-
-    @Binding var showLocationNotes: Bool
-
-    let headerHeight: CGFloat
-
-    var body: some View {
-        VStack(spacing: 12) {
-            HStack {
-                Text("content.notes.title")
-                    .bitchatFont(size: 16, weight: .bold)
-                Spacer()
-                SheetCloseButton { showLocationNotes = false }
-                    .foregroundColor(palette.primary)
-            }
-            .frame(minHeight: headerHeight)
-            .padding(.horizontal, 12)
-            .themedChromePanel(edge: .top)
-            Text("content.notes.location_unavailable")
-                .bitchatFont(size: 14)
-                .foregroundColor(palette.secondary)
-            Button("content.location.enable") {
-                locationChannelsModel.enableAndRefresh()
-            }
-            .buttonStyle(.bordered)
-            Spacer()
-        }
-        .themedSheetBackground()
-        .foregroundColor(palette.primary)
     }
 }

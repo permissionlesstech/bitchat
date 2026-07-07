@@ -395,9 +395,17 @@ struct ViewSmokeTests {
     }
 
     @Test
-    func locationNotesView_rendersNoRelayAndLoadedStates() throws {
-        let (viewModel, _, _) = makeSmokeViewModel()
+    func noticesView_rendersNoRelayAndLoadedStates() throws {
+        let (viewModel, transport, _) = makeSmokeViewModel()
         let featureModels = makeSmokeFeatureModels(for: viewModel)
+        featureModels.locationChannelsModel.select(.location(GeohashChannel(level: .building, geohash: "u4pruydq")))
+        defer { featureModels.locationChannelsModel.select(.mesh) }
+        let board = BoardManager(
+            transport: transport,
+            store: BoardStore(persistsToDisk: false, fileURL: nil, now: { Date() }),
+            publishToNostr: { _, _, _ in nil },
+            deleteFromNostr: { _, _ in }
+        )
 
         let noRelayManager = LocationNotesManager(
             geohash: "u4pruydq",
@@ -440,18 +448,28 @@ struct ViewSmokeTests {
         eose?()
 
         _ = mount(
-            LocationNotesView(
-                geohash: "u4pruydq",
+            NoticesView(
                 senderNickname: viewModel.nickname,
-                manager: noRelayManager
+                board: board,
+                initialTab: .geo,
+                notesManager: noRelayManager
             )
             .environmentObject(featureModels.locationChannelsModel)
         )
         _ = mount(
-            LocationNotesView(
-                geohash: "u4pruydq",
+            NoticesView(
                 senderNickname: viewModel.nickname,
-                manager: loadedManager
+                board: board,
+                initialTab: .geo,
+                notesManager: loadedManager
+            )
+            .environmentObject(featureModels.locationChannelsModel)
+        )
+        _ = mount(
+            NoticesView(
+                senderNickname: viewModel.nickname,
+                board: board,
+                initialTab: .mesh
             )
             .environmentObject(featureModels.locationChannelsModel)
         )

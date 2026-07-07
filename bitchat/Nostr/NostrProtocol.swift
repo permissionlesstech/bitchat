@@ -19,6 +19,7 @@ struct NostrProtocol {
         case giftWrap = 1059 // NIP-59 gift wrap
         case ephemeralEvent = 20000
         case geohashPresence = 20001
+        case deletion = 5 // NIP-09 event deletion request
     }
     
     /// Create a NIP-17 private message
@@ -276,7 +277,25 @@ struct NostrProtocol {
         let schnorrKey = try senderIdentity.schnorrSigningKey()
         return try event.sign(with: schnorrKey)
     }
-    
+
+    /// Create a NIP-09 deletion request for one of our own events. Relays that
+    /// honor NIP-09 drop the referenced event; it must be signed by the same
+    /// key that signed the original.
+    static func createDeleteEvent(
+        ofEventID eventID: String,
+        senderIdentity: NostrIdentity
+    ) throws -> NostrEvent {
+        let event = NostrEvent(
+            pubkey: senderIdentity.publicKeyHex,
+            createdAt: Date(),
+            kind: .deletion,
+            tags: [["e", eventID]],
+            content: ""
+        )
+        let schnorrKey = try senderIdentity.schnorrSigningKey()
+        return try event.sign(with: schnorrKey)
+    }
+
     // MARK: - Private Methods
     
     private static func createSeal(

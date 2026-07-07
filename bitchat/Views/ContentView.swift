@@ -49,8 +49,6 @@ struct ContentView: View {
     @State private var isAtBottomPrivate = true
     @State private var autocompleteDebounceTimer: Timer?
     @State private var showVerifySheet = false
-    @State private var showLocationNotes = false
-    @State private var notesGeohash: String?
     @State private var imagePreviewURL: URL?
     #if os(iOS)
     @State private var showImagePicker = false
@@ -269,8 +267,6 @@ struct ContentView: View {
         ContentHeaderView(
             showSidebar: $showSidebar,
             showVerifySheet: $showVerifySheet,
-            showLocationNotes: $showLocationNotes,
-            notesGeohash: $notesGeohash,
             isNicknameFieldFocused: $isNicknameFieldFocused,
             headerHeight: headerHeight,
             headerPeerIconSize: headerPeerIconSize,
