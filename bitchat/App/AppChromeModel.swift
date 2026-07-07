@@ -18,6 +18,9 @@ final class AppChromeModel: ObservableObject {
     private let chatViewModel: ChatViewModel
     private var cancellables = Set<AnyCancellable>()
 
+    /// Bulletin-board coordinator, created on first use of the board sheet.
+    private(set) lazy var boardManager = BoardManager(transport: chatViewModel.meshService)
+
     init(chatViewModel: ChatViewModel, privateInboxModel: PrivateInboxModel) {
         self.chatViewModel = chatViewModel
         self.nickname = chatViewModel.nickname

@@ -7,7 +7,7 @@
 //
 
 /// Simplified BitChat protocol message types.
-/// Reduced from 24 types to just 6 essential ones.
+/// Consolidated from the original 24 wire types down to the 9 cases below.
 /// All private communication metadata (receipts, status) is embedded in noiseEncrypted payloads.
 public enum MessageType: UInt8 {
     // Public messages (unencrypted)
@@ -24,7 +24,8 @@ public enum MessageType: UInt8 {
     // Fragmentation (simplified)
     case fragment = 0x20        // Single fragment type for large messages
     case fileTransfer = 0x22    // Binary file/audio/image payloads
-    
+    case boardPost = 0x23       // Signed geohash bulletin-board post or tombstone
+
     public var description: String {
         switch self {
         case .announce: return "announce"
@@ -36,6 +37,7 @@ public enum MessageType: UInt8 {
         case .noiseEncrypted: return "noiseEncrypted"
         case .fragment: return "fragment"
         case .fileTransfer: return "fileTransfer"
+        case .boardPost: return "boardPost"
         }
     }
 }

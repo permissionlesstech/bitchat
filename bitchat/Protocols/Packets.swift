@@ -1,3 +1,4 @@
+import BitFoundation
 import Foundation
 
 // MARK: - Protocol TLV Packets
@@ -7,12 +8,28 @@ struct AnnouncementPacket {
     let noisePublicKey: Data            // Noise static public key (Curve25519.KeyAgreement)
     let signingPublicKey: Data          // Ed25519 public key for signing
     let directNeighbors: [Data]?        // 8-byte peer IDs
+    let capabilities: PeerCapabilities? // advertised feature bits; nil when absent (old clients)
+
+    init(
+        nickname: String,
+        noisePublicKey: Data,
+        signingPublicKey: Data,
+        directNeighbors: [Data]?,
+        capabilities: PeerCapabilities? = nil
+    ) {
+        self.nickname = nickname
+        self.noisePublicKey = noisePublicKey
+        self.signingPublicKey = signingPublicKey
+        self.directNeighbors = directNeighbors
+        self.capabilities = capabilities
+    }
 
     private enum TLVType: UInt8 {
         case nickname = 0x01
         case noisePublicKey = 0x02
         case signingPublicKey = 0x03
         case directNeighbors = 0x04
+        case capabilities = 0x05
     }
 
     func encode() -> Data? {
@@ -48,6 +65,15 @@ struct AnnouncementPacket {
             }
         }
 
+        // TLV for capabilities (optional)
+        if let capabilities = capabilities {
+            let capabilityBytes = capabilities.encoded()
+            guard capabilityBytes.count <= 255 else { return nil }
+            data.append(TLVType.capabilities.rawValue)
+            data.append(UInt8(capabilityBytes.count))
+            data.append(capabilityBytes)
+        }
+
         return data
     }
 
@@ -57,6 +83,7 @@ struct AnnouncementPacket {
         var noisePublicKey: Data?
         var signingPublicKey: Data?
         var directNeighbors: [Data]?
+        var capabilities: PeerCapabilities?
 
         while offset + 2 <= data.count {
             let typeRaw = data[offset]
@@ -87,6 +114,8 @@ struct AnnouncementPacket {
                         }
                         directNeighbors = neighbors
                     }
+                case .capabilities:
+                    capabilities = PeerCapabilities(encoded: Data(value))
                 }
             } else {
                 // Unknown TLV; skip (tolerant decoder for forward compatibility)
@@ -99,7 +128,8 @@ struct AnnouncementPacket {
             nickname: nickname,
             noisePublicKey: noisePublicKey,
             signingPublicKey: signingPublicKey,
-            directNeighbors: directNeighbors
+            directNeighbors: directNeighbors,
+            capabilities: capabilities
         )
     }
 }
