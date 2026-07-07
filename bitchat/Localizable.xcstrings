@@ -2,7 +2,9 @@
   "sourceLanguage" : "en",
   "strings" : {
     "#%@" : {
-
+      "comment" : "Non-localizable channel hashtag format used in code",
+      "extractionState" : "manual",
+      "shouldTranslate" : false
     },
     "%@" : {
       "comment" : "Non-localizable symbol used in code",
@@ -5052,6 +5054,12 @@
             "value" : "bloqueado"
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "na-block"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5124,6 +5132,12 @@
             "value" : "bloqueado"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "bloqueado"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5171,6 +5185,18 @@
             "state" : "needs_review",
             "value" : "đã chặn"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "已屏蔽"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "已屏蔽"
+          }
         }
       }
     },
@@ -5206,6 +5232,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "sesión cifrada de extremo a extremo"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "end-to-end na naka-encrypt na session"
           }
         },
         "fr" : {
@@ -5280,6 +5312,12 @@
             "value" : "sessão encriptada ponta a ponta"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "sessão criptografada ponto a ponto"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5327,6 +5365,18 @@
             "state" : "needs_review",
             "value" : "phiên mã hóa đầu cuối"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "端到端加密会话"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "端到端加密會話"
+          }
         }
       }
     },
@@ -5362,6 +5412,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "cifrado fallido — mensajes no protegidos"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nabigo ang pag-encrypt — hindi ligtas ang mga mensahe"
           }
         },
         "fr" : {
@@ -5436,6 +5492,12 @@
             "value" : "falha na encriptação — mensagens não protegidas"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "falha na criptografia — mensagens sem proteção"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5483,6 +5545,18 @@
             "state" : "needs_review",
             "value" : "mã hóa thất bại — tin nhắn không được bảo mật"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "加密失败 — 消息未受保护"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "加密失敗 — 訊息未受保護"
+          }
         }
       }
     },
@@ -5518,6 +5592,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "favorito — habilita mensajes sin conexión vía Nostr cuando es mutuo"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "paborito — nagbibigay-daan sa offline na mensahe sa nostr kapag mutual"
           }
         },
         "fr" : {
@@ -5592,6 +5672,12 @@
             "value" : "favorito — ativa mensagens offline via nostr quando for mútuo"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "favorito — habilita mensagens offline via nostr quando mútuo"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5639,6 +5725,18 @@
             "state" : "needs_review",
             "value" : "yêu thích — bật tin nhắn ngoại tuyến qua nostr khi cả hai cùng thích"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "收藏 — 互相收藏后可通过 nostr 发送离线消息"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "收藏 — 互相收藏後可透過 nostr 收發離線訊息"
+          }
         }
       }
     },
@@ -5674,6 +5772,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "físicamente en el área de este canal de ubicación"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "pisikal na nasa lugar ng channel ng lokasyon na ito"
           }
         },
         "fr" : {
@@ -5748,6 +5852,12 @@
             "value" : "fisicamente na área deste canal de localização"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "fisicamente na área deste canal de localização"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5795,6 +5905,18 @@
             "state" : "needs_review",
             "value" : "hiện đang ở trong khu vực của kênh vị trí này"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "本人就在此位置频道的区域内"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "實際位於此位置頻道的區域內"
+          }
         }
       }
     },
@@ -5830,6 +5952,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "conectado directamente por Bluetooth"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "direktang nakakonekta sa bluetooth"
           }
         },
         "fr" : {
@@ -5904,6 +6032,12 @@
             "value" : "ligado diretamente por bluetooth"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "conectado diretamente por bluetooth"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5951,6 +6085,18 @@
             "state" : "needs_review",
             "value" : "kết nối trực tiếp qua Bluetooth"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "通过 bluetooth 直接连接"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "透過 bluetooth 直接連線"
+          }
         }
       }
     },
@@ -5986,6 +6132,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "alcanzable a través del mesh, retransmitido por otros"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "maabot sa pamamagitan ng mesh, ipinapasa ng iba"
           }
         },
         "fr" : {
@@ -6060,6 +6212,12 @@
             "value" : "acessível através da mesh, retransmitido por outros"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "alcançável pelo mesh, retransmitido por outros"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6107,6 +6265,18 @@
             "state" : "needs_review",
             "value" : "có thể tiếp cận qua mesh, được người khác chuyển tiếp"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "可通过 mesh 到达，由他人中继"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "可透過 mesh 到達，由其他人中繼"
+          }
         }
       }
     },
@@ -6142,6 +6312,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "alcanzable por internet (Nostr) — solo favoritos mutuos"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "maabot sa internet (nostr) — mutual na paborito lamang"
           }
         },
         "fr" : {
@@ -6216,6 +6392,12 @@
             "value" : "acessível pela internet (nostr) — apenas favoritos mútuos"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "alcançável pela internet (nostr) — apenas favoritos mútuos"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6263,6 +6445,18 @@
             "state" : "needs_review",
             "value" : "có thể tiếp cận qua internet (nostr) — chỉ khi cả hai cùng thích"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "可通过互联网 (nostr) 到达 — 仅限互相收藏"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "可透過網際網路 (nostr) 到達 — 僅限互相收藏"
+          }
         }
       }
     },
@@ -6298,6 +6492,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "sin conexión — no alcanzable ahora"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "offline — kasalukuyang hindi maabot"
           }
         },
         "fr" : {
@@ -6372,6 +6572,12 @@
             "value" : "offline — atualmente inacessível"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "offline — inalcançável no momento"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6419,6 +6625,18 @@
             "state" : "needs_review",
             "value" : "ngoại tuyến — hiện không thể tiếp cận"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "离线 — 当前不可达"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "離線 — 目前無法到達"
+          }
         }
       }
     },
@@ -6454,6 +6672,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "teletransportado — se unió al canal desde otro lugar"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nag-teleport — sumali sa channel mula sa ibang lugar"
           }
         },
         "fr" : {
@@ -6528,6 +6752,12 @@
             "value" : "teletransportado — entrou no canal a partir de outro sítio"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "teletransportado — entrou no canal de outro lugar"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6575,6 +6805,18 @@
             "state" : "needs_review",
             "value" : "đã dịch chuyển — tham gia kênh từ nơi khác"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "已瞬移 — 从别处加入此频道"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "瞬移 — 從其他地方加入此頻道"
+          }
         }
       }
     },
@@ -6610,6 +6852,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "SÍMBOLOS"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "MGA SIMBOLO"
           }
         },
         "fr" : {
@@ -6684,6 +6932,12 @@
             "value" : "SÍMBOLOS"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "SÍMBOLOS"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6731,6 +6985,18 @@
             "state" : "needs_review",
             "value" : "KÝ HIỆU"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "符号"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "符號"
+          }
         }
       }
     },
@@ -6766,6 +7032,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "mensajes privados sin leer"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "hindi pa nababasang mga pribadong mensahe"
           }
         },
         "fr" : {
@@ -6840,6 +7112,12 @@
             "value" : "mensagens privadas não lidas"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mensagens privadas não lidas"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6887,6 +7165,18 @@
             "state" : "needs_review",
             "value" : "tin nhắn riêng tư chưa đọc"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "未读私信"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "未讀私信"
+          }
         }
       }
     },
@@ -6922,6 +7212,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "identidad verificada"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "beripikado ang pagkakakilanlan"
           }
         },
         "fr" : {
@@ -6996,6 +7292,12 @@
             "value" : "identidade verificada"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "identidade verificada"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7043,6 +7345,18 @@
             "state" : "needs_review",
             "value" : "danh tính đã xác minh"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "身份已验证"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "身份已驗證"
+          }
         }
       }
     },
@@ -7078,6 +7392,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "RED"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "NETWORK"
           }
         },
         "fr" : {
@@ -7152,6 +7472,12 @@
             "value" : "REDE"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "REDE"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7199,6 +7525,18 @@
             "state" : "needs_review",
             "value" : "MẠNG"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "网络"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "網路"
+          }
         }
       }
     },
@@ -7234,6 +7572,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "mapa de peers y enlaces obtenidos de los anuncios del mesh"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mapa ng mga peer at link na natutunan mula sa mga mesh announce"
           }
         },
         "fr" : {
@@ -7308,6 +7652,12 @@
             "value" : "mapa de pares e ligações obtido dos announces mesh"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mapa de pares e conexões aprendido dos anúncios do mesh"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7355,6 +7705,18 @@
             "state" : "needs_review",
             "value" : "bản đồ các nút ngang hàng và liên kết học được từ các announce mesh"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "根据 mesh 广播获知的同伴与链路地图"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "根據 mesh 宣告得知的同伴與連線地圖"
+          }
         }
       }
     },
@@ -7390,6 +7752,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "abre el mapa de topología del mesh"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "binubuksan ang mapa ng mesh topology"
           }
         },
         "fr" : {
@@ -7464,6 +7832,12 @@
             "value" : "abre o mapa de topologia mesh"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "abre o mapa de topologia do mesh"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7511,6 +7885,18 @@
             "state" : "needs_review",
             "value" : "mở bản đồ cấu trúc mesh"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "打开 mesh 拓扑图"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "打開 mesh 拓撲地圖"
+          }
         }
       }
     },
@@ -7546,6 +7932,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "topología del mesh"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mesh topology"
           }
         },
         "fr" : {
@@ -7620,6 +8012,12 @@
             "value" : "topologia mesh"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "topologia do mesh"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7666,6 +8064,18 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "cấu trúc mesh"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mesh 拓扑"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mesh 拓撲"
           }
         }
       }
@@ -11285,6 +11695,12 @@
             "value" : "muestra la información de la app"
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ipinapakita ang impormasyon ng app"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11357,6 +11773,12 @@
             "value" : "mostra as informações da app"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mostra informações do app"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11404,6 +11826,18 @@
             "state" : "needs_review",
             "value" : "hiển thị thông tin ứng dụng"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "显示应用信息"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "顯示應用程式資訊"
+          }
         }
       }
     },
@@ -11439,6 +11873,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "adjuntar foto"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "maglakip ng larawan"
           }
         },
         "fr" : {
@@ -11513,6 +11953,12 @@
             "value" : "anexar foto"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "anexar foto"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11560,6 +12006,18 @@
             "state" : "needs_review",
             "value" : "đính kèm ảnh"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "附加照片"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "附加照片"
+          }
         }
       }
     },
@@ -11595,6 +12053,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "abre la fototeca; usa la acción tomar foto para la cámara"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "binubuksan ang photo library; gamitin ang aksyong kumuha ng larawan para sa camera"
           }
         },
         "fr" : {
@@ -11669,6 +12133,12 @@
             "value" : "abre a biblioteca de fotos; usa a ação tirar foto para a câmara"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "abre a biblioteca de fotos; use a ação tirar foto para a câmera"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11715,6 +12185,18 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "mở thư viện ảnh; dùng thao tác chụp ảnh cho máy ảnh"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "打开照片图库；使用拍照操作可调用相机"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "打開照片圖庫；要用相機請使用拍照操作"
           }
         }
       }
@@ -12111,6 +12593,12 @@
             "value" : "elegir foto"
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "pumili ng larawan"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -12183,6 +12671,12 @@
             "value" : "escolher foto"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "escolher foto"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -12229,6 +12723,18 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "chọn ảnh"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "选择照片"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "選擇照片"
           }
         }
       }
@@ -12446,6 +12952,12 @@
             "value" : "toca para ver los detalles de entrega"
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "i-tap para makita ang mga detalye ng paghahatid"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -12518,6 +13030,12 @@
             "value" : "toca para mostrar os detalhes de entrega"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "toque para ver detalhes da entrega"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -12564,6 +13082,18 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "chạm để xem chi tiết gửi"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "轻点显示送达详情"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "輕點顯示送達詳情"
           }
         }
       }
@@ -12781,6 +13311,12 @@
             "value" : "Puerta de enlace a internet activa, compartiendo tu conexión con el mesh"
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aktibo ang internet gateway, ibinabahagi ang koneksyon mo sa mesh"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -12853,6 +13389,12 @@
             "value" : "gateway de internet ativo, a partilhar a tua ligação com a mesh"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Gateway de internet ativo, compartilhando sua conexão com o mesh"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -12900,6 +13442,18 @@
             "state" : "needs_review",
             "value" : "cổng internet đang hoạt động, chia sẻ kết nối của bạn với mesh"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "互联网网关已激活，正在与 mesh 共享你的连接"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "網際網路閘道已啟用，正在與 mesh 分享你的連線"
+          }
         }
       }
     },
@@ -12934,6 +13488,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Chat de grupo"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Group chat"
           }
         },
         "fr" : {
@@ -13008,6 +13568,12 @@
             "value" : "Conversa de grupo"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Chat de grupo"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -13055,6 +13621,18 @@
             "state" : "needs_review",
             "value" : "trò chuyện nhóm"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "群聊"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "群組聊天"
+          }
         }
       }
     },
@@ -13090,6 +13668,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ir a los mensajes más recientes"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "tumalon sa pinakabagong mga mensahe"
           }
         },
         "fr" : {
@@ -13164,6 +13748,12 @@
             "value" : "ir para as mensagens mais recentes"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "pular para as mensagens mais recentes"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -13210,6 +13800,18 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "nhảy đến tin nhắn mới nhất"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "跳到最新消息"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "跳至最新訊息"
           }
         }
       }
@@ -14145,6 +14747,12 @@
             "value" : "conectado"
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nakakonekta"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -14217,6 +14825,12 @@
             "value" : "ligado"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "conectado"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -14264,6 +14878,18 @@
             "state" : "needs_review",
             "value" : "đã kết nối"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "已连接"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "已連線"
+          }
         }
       }
     },
@@ -14299,6 +14925,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "nadie alcanzable"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "walang taong maabot"
           }
         },
         "fr" : {
@@ -14373,6 +15005,12 @@
             "value" : "ninguém acessível"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ninguém alcançável"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -14419,6 +15057,18 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "không ai có thể tiếp cận"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "没有可达的人"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "沒有可到達的人"
           }
         }
       }
@@ -15378,6 +16028,12 @@
             "value" : "toca dos veces para empezar a grabar, toca dos veces de nuevo para enviar"
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "i-double tap para simulan ang pagre-record, i-double tap ulit para ipadala"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -15450,6 +16106,12 @@
             "value" : "toca duas vezes para começar a gravar, toca duas vezes de novo para enviar"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "toque duas vezes para começar a gravar, toque duas vezes de novo para enviar"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -15497,6 +16159,18 @@
             "state" : "needs_review",
             "value" : "chạm hai lần để bắt đầu ghi, chạm hai lần nữa để gửi"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "双击开始录音，再次双击发送"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "雙擊開始錄音，再次雙擊發送"
+          }
         }
       }
     },
@@ -15532,6 +16206,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "grabar nota de voz"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mag-record ng voice note"
           }
         },
         "fr" : {
@@ -15606,6 +16286,12 @@
             "value" : "gravar nota de voz"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "gravar mensagem de voz"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -15653,6 +16339,18 @@
             "state" : "needs_review",
             "value" : "ghi chú giọng nói"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "录制语音消息"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "錄製語音訊息"
+          }
         }
       }
     },
@@ -15688,6 +16386,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "grabando"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nagre-record"
           }
         },
         "fr" : {
@@ -15762,6 +16466,12 @@
             "value" : "a gravar"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "gravando"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -15808,6 +16518,18 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "đang ghi"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "录音中"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "錄音中"
           }
         }
       }
@@ -16562,6 +17284,12 @@
             "value" : "tomar foto con la cámara"
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "kumuha ng larawan gamit ang camera"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -16634,6 +17362,12 @@
             "value" : "tirar foto com a câmara"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "tirar foto com a câmera"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -16680,6 +17414,18 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "chụp ảnh bằng máy ảnh"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "用相机拍照"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "用相機拍照"
           }
         }
       }
@@ -17076,6 +17822,12 @@
             "value" : "verificar cifrado"
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "beripikahin ang pag-encrypt"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -17148,6 +17900,12 @@
             "value" : "verificar a encriptação"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "verificar criptografia"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -17194,6 +17952,18 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "xác minh mã hóa"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "验证加密"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "驗證加密"
           }
         }
       }
@@ -18127,6 +18897,12 @@
             "value" : "reenviar"
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ipadala muli"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -18199,6 +18975,12 @@
             "value" : "reenviar"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "reenviar"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -18245,6 +19027,18 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "gửi lại"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "重新发送"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "重新發送"
           }
         }
       }
@@ -19894,6 +20688,12 @@
             "value" : "limpiar chat"
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "burahin ang chat"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -19966,6 +20766,12 @@
             "value" : "limpar conversa"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "limpar chat"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -20013,6 +20819,18 @@
             "state" : "needs_review",
             "value" : "xóa cuộc trò chuyện"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "清除聊天"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "清除聊天"
+          }
         }
       }
     },
@@ -20048,6 +20866,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "¿limpiar este chat?"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "burahin ang chat na ito?"
           }
         },
         "fr" : {
@@ -20122,6 +20946,12 @@
             "value" : "limpar esta conversa?"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "limpar este chat?"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -20168,6 +20998,18 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "xóa cuộc trò chuyện này?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "清除此聊天？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "清除此聊天？"
           }
         }
       }
@@ -20742,6 +21584,12 @@
             "value" : "crear o gestionar grupos privados"
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "lumikha o mamahala ng mga pribadong grupo"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -20814,6 +21662,12 @@
             "value" : "criar ou gerir grupos privados"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "criar ou gerenciar grupos privados"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -20861,6 +21715,18 @@
             "state" : "needs_review",
             "value" : "tạo hoặc quản lý nhóm riêng tư"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "创建或管理私密群组"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "建立或管理私密群組"
+          }
         }
       }
     },
@@ -20896,6 +21762,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "mostrar los comandos disponibles"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ipakita ang mga available na utos"
           }
         },
         "fr" : {
@@ -20970,6 +21842,12 @@
             "value" : "mostrar os comandos disponíveis"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mostrar comandos disponíveis"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -21016,6 +21894,18 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "hiển thị các lệnh khả dụng"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "显示可用指令"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "顯示可用指令"
           }
         }
       }
@@ -21412,6 +22302,12 @@
             "value" : "enviar un token de ecash Cashu en este chat"
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "magpadala ng cashu ecash token sa chat na ito"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -21484,6 +22380,12 @@
             "value" : "enviar um token ecash cashu nesta conversa"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "enviar um token ecash cashu neste chat"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -21531,6 +22433,18 @@
             "state" : "needs_review",
             "value" : "gửi token cashu ecash trong cuộc trò chuyện này"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "在此聊天中发送 cashu ecash 代币"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "在此聊天中發送 cashu ecash 代幣"
+          }
         }
       }
     },
@@ -21566,6 +22480,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "medir el tiempo de ida y vuelta a un peer del mesh"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "sukatin ang round-trip time papunta sa isang mesh peer"
           }
         },
         "fr" : {
@@ -21640,6 +22560,12 @@
             "value" : "medir o tempo de ida e volta até um par mesh"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "medir o tempo de ida e volta até um par do mesh"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -21686,6 +22612,18 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "đo thời gian khứ hồi đến một nút mesh"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "测量到 mesh 同伴的往返时间"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "測量到 mesh 同伴的往返時間"
           }
         }
       }
@@ -21903,6 +22841,12 @@
             "value" : "estimar la ruta del mesh hasta un peer"
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "tantiyahin ang mesh path papunta sa isang peer"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -21975,6 +22919,12 @@
             "value" : "estimar o caminho mesh até um par"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "estimar o caminho no mesh até um par"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -22021,6 +22971,18 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "ước tính đường đi mesh đến một nút"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "估计到某个同伴的 mesh 路径"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "估算到同伴的 mesh 路徑"
           }
         }
       }
@@ -23491,6 +24453,12 @@
             "value" : "cifrado fallido"
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nabigo ang pag-encrypt"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23563,6 +24531,12 @@
             "value" : "falha na encriptação"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "falha na criptografia"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23610,6 +24584,18 @@
             "state" : "needs_review",
             "value" : "mã hóa thất bại"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "加密失败"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "加密失敗"
+          }
         }
       }
     },
@@ -23645,6 +24631,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "no entregado"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "hindi naihatid"
           }
         },
         "fr" : {
@@ -23719,6 +24711,12 @@
             "value" : "não entregue"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "não entregue"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23765,6 +24763,18 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "chưa gửi được"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "未送达"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "未送達"
           }
         }
       }
@@ -24519,6 +25529,12 @@
             "value" : "no se pudo enviar la nota de voz"
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nabigong maipadala ang voice note"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24591,6 +25607,12 @@
             "value" : "falha ao enviar a nota de voz"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "não foi possível enviar a mensagem de voz"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24638,6 +25660,18 @@
             "state" : "needs_review",
             "value" : "gửi ghi chú giọng nói thất bại"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "语音消息发送失败"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "語音訊息發送失敗"
+          }
         }
       }
     },
@@ -24673,6 +25707,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "nota de voz demasiado grande"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "masyadong malaki ang voice note"
           }
         },
         "fr" : {
@@ -24747,6 +25787,12 @@
             "value" : "nota de voz demasiado grande"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mensagem de voz grande demais"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24794,6 +25840,18 @@
             "state" : "needs_review",
             "value" : "ghi chú giọng nói quá lớn"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "语音消息过大"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "語音訊息過大"
+          }
         }
       }
     },
@@ -24829,6 +25887,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "enviando..."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ipinapadala..."
           }
         },
         "fr" : {
@@ -24903,6 +25967,12 @@
             "value" : "a enviar..."
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "enviando..."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24950,6 +26020,18 @@
             "state" : "needs_review",
             "value" : "đang gửi..."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "发送中..."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "發送中..."
+          }
         }
       }
     },
@@ -24985,6 +26067,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "enviado — aún sin confirmación de entrega"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "naipadala — wala pang kumpirmasyon ng paghahatid"
           }
         },
         "fr" : {
@@ -25059,6 +26147,12 @@
             "value" : "enviado — ainda sem confirmação de entrega"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "enviada — ainda sem confirmação de entrega"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -25106,6 +26200,18 @@
             "state" : "needs_review",
             "value" : "đã gửi — chưa có xác nhận nhận được"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "已发送 — 尚无送达确认"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "已發送 — 尚無送達確認"
+          }
         }
       }
     },
@@ -25141,6 +26247,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "estás en #%@ — un canal de ubicación público por internet"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nasa #%@ ka — isang pampublikong channel ng lokasyon sa internet"
           }
         },
         "fr" : {
@@ -25215,6 +26327,12 @@
             "value" : "estás em #%@ — um canal de localização público pela internet"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "você está em #%@ — um canal público de localização pela internet"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -25262,6 +26380,18 @@
             "state" : "needs_review",
             "value" : "bạn đang ở #%@ — một kênh vị trí công khai qua internet"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "你在 #%@ — 一个通过互联网的公共位置频道"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "你在 #%@ — 一個透過網際網路的公開位置頻道"
+          }
         }
       }
     },
@@ -25297,6 +26427,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "estás en #mesh — llega a personas dentro del alcance de Bluetooth"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nasa #mesh ka — umaabot sa mga taong nasa saklaw ng bluetooth"
           }
         },
         "fr" : {
@@ -25371,6 +26507,12 @@
             "value" : "estás em #mesh — alcança pessoas dentro do alcance bluetooth"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "você está no #mesh — alcança pessoas dentro do alcance do bluetooth"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -25418,6 +26560,18 @@
             "state" : "needs_review",
             "value" : "bạn đang ở #mesh — tiếp cận mọi người trong phạm vi Bluetooth"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "你在 #mesh — 可触达 bluetooth 范围内的人"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "你在 #mesh — 可到達 bluetooth 範圍內的人"
+          }
         }
       }
     },
@@ -25453,6 +26607,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "nadie a tu alcance todavía... los mensajes aparecerán aquí"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "wala pang tao sa saklaw... dito lalabas ang mga mensahe"
           }
         },
         "fr" : {
@@ -25527,6 +26687,12 @@
             "value" : "ainda ninguém ao alcance... as mensagens aparecem aqui"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ninguém no alcance ainda... as mensagens aparecem aqui"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -25574,6 +26740,18 @@
             "state" : "needs_review",
             "value" : "chưa có ai trong phạm vi... tin nhắn sẽ xuất hiện ở đây"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "范围内还没有人... 消息会显示在这里"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "範圍內還沒有人... 訊息會顯示在這裡"
+          }
         }
       }
     },
@@ -25609,6 +26787,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "toca el nombre del canal de arriba para cambiar · toca bitchat/ para ayuda"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "i-tap ang pangalan ng channel sa itaas para magpalit · i-tap ang bitchat/ para sa tulong"
           }
         },
         "fr" : {
@@ -25683,6 +26867,12 @@
             "value" : "toca no nome do canal acima para trocar · toca em bitchat/ para ajuda"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "toque o nome do canal acima para trocar · toque bitchat/ para ajuda"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -25730,6 +26920,18 @@
             "state" : "needs_review",
             "value" : "chạm tên kênh phía trên để chuyển · chạm bitchat/ để được trợ giúp"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "轻点上方频道名切换 · 轻点 bitchat/ 获取帮助"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "輕點上方頻道名稱切換 · 輕點 bitchat/ 取得協助"
+          }
         }
       }
     },
@@ -25765,6 +26967,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Compartiendo tu conexión a internet con peers cercanos del mesh"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ibinabahagi ang iyong koneksyon sa internet sa mga kalapit na mesh peer"
           }
         },
         "fr" : {
@@ -25839,6 +27047,12 @@
             "value" : "a partilhar a tua ligação à internet com pares mesh próximos"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Compartilhando sua conexão de internet com pares do mesh por perto"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -25885,6 +27099,18 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "chia sẻ kết nối internet của bạn với các nút mesh gần đó"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "正在与附近 mesh 同伴共享你的互联网连接"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "正在與附近的 mesh 同伴分享你的網際網路連線"
           }
         }
       }
@@ -26460,6 +27686,12 @@
             "value" : "create|invite|leave|list"
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "create|invite|leave|list"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -26532,6 +27764,12 @@
             "value" : "create|invite|leave|list"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "create|invite|leave|list"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -26575,6 +27813,18 @@
           }
         },
         "vi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "create|invite|leave|list"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "create|invite|leave|list"
+          }
+        },
+        "zh-Hant" : {
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "create|invite|leave|list"
@@ -26795,6 +28045,12 @@
             "value" : "mensaje #%@ — público"
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mensahe sa #%@ — pampubliko"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -26867,6 +28123,12 @@
             "value" : "mensagem para #%@ — público"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mensagem para #%@ — público"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -26914,6 +28176,18 @@
             "state" : "needs_review",
             "value" : "nhắn #%@ — công khai"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "发消息到 #%@ — 公开"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "發訊息到 #%@ — 公開"
+          }
         }
       }
     },
@@ -26949,6 +28223,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "mensaje #mesh — público, cerca"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mensahe sa #mesh — pampubliko, malapit"
           }
         },
         "fr" : {
@@ -27023,6 +28303,12 @@
             "value" : "mensagem para #mesh — público, próximo"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mensagem para #mesh — público, por perto"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27070,6 +28356,18 @@
             "state" : "needs_review",
             "value" : "nhắn #mesh — công khai, gần đây"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "发消息到 #mesh — 公开、附近"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "發訊息到 #mesh — 公開、附近"
+          }
         }
       }
     },
@@ -27105,6 +28403,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "mensaje %@ — privado"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mensahe kay %@ — pribado"
           }
         },
         "fr" : {
@@ -27179,6 +28483,12 @@
             "value" : "mensagem para %@ — privado"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mensagem para %@ — privado"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27226,6 +28536,18 @@
             "state" : "needs_review",
             "value" : "nhắn %@ — riêng tư"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "发消息给 %@ — 私密"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "發訊息給 %@ — 私密"
+          }
         }
       }
     },
@@ -27260,6 +28582,12 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
+            "value" : "token"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
             "value" : "token"
           }
         },
@@ -27335,6 +28663,12 @@
             "value" : "token"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "token"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27382,6 +28716,18 @@
             "state" : "needs_review",
             "value" : "token"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "代币"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "token"
+          }
         }
       }
     },
@@ -27417,6 +28763,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld nuevos"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%lld bago"
           }
         },
         "fr" : {
@@ -27491,6 +28843,12 @@
             "value" : "%lld novas"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%lld novas"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27537,6 +28895,18 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "%lld mới"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%lld 条新消息"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%lld 則新訊息"
           }
         }
       }
@@ -28828,6 +30198,12 @@
             "value" : "copiar token"
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "kopyahin ang token"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28900,6 +30276,12 @@
             "value" : "copiar token"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "copiar token"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28946,6 +30328,18 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "sao chép token"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "复制代币"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "複製代幣"
           }
         }
       }
@@ -29163,6 +30557,12 @@
             "value" : "canjear en la cartera"
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "i-redeem sa wallet"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -29235,6 +30635,12 @@
             "value" : "resgatar na wallet"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "resgatar na carteira"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -29282,6 +30688,18 @@
             "state" : "needs_review",
             "value" : "đổi trong ví"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "在钱包中兑换"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "在錢包中兌換"
+          }
         }
       }
     },
@@ -29317,6 +30735,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "canjear en la web"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "i-redeem sa web"
           }
         },
         "fr" : {
@@ -29391,6 +30815,12 @@
             "value" : "resgatar na web"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "resgatar na web"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -29438,6 +30868,18 @@
             "state" : "needs_review",
             "value" : "đổi trên web"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "在网页上兑换"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "在網頁上兌換"
+          }
         }
       }
     },
@@ -29473,6 +30915,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "conversación privada"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "pribadong pag-uusap"
           }
         },
         "fr" : {
@@ -29547,6 +30995,12 @@
             "value" : "conversa privada"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "conversa privada"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -29594,6 +31048,18 @@
             "state" : "needs_review",
             "value" : "cuộc trò chuyện riêng tư"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "私密对话"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "私密對話"
+          }
         }
       }
     },
@@ -29629,6 +31095,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "privado · cifrado de extremo a extremo"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "pribado · end-to-end na naka-encrypt"
           }
         },
         "fr" : {
@@ -29703,6 +31175,12 @@
             "value" : "privado · encriptado ponta a ponta"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "privado · criptografado ponto a ponto"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -29750,6 +31228,18 @@
             "state" : "needs_review",
             "value" : "riêng tư · mã hóa đầu cuối"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "私密 · 端到端加密"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "私密 · 端到端加密"
+          }
         }
       }
     },
@@ -29784,6 +31274,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "grupo cifrado · solo miembros"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "naka-encrypt na grupo · mga miyembro lamang"
           }
         },
         "fr" : {
@@ -29858,6 +31354,12 @@
             "value" : "grupo encriptado · apenas membros"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "grupo criptografado · apenas membros"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -29904,6 +31406,18 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "nhóm mã hóa · chỉ thành viên"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "加密群组 · 仅限成员"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "加密群組 · 僅限成員"
           }
         }
       }
@@ -32448,6 +33962,12 @@
             "value" : "✓ AVALADO"
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "✓ GINARANTIYAHAN"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -32520,6 +34040,12 @@
             "value" : "✓ ATESTADO"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "✓ ENDOSSADO"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -32566,6 +34092,18 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "✓ ĐÃ BẢO CHỨNG"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "✓ 已担保"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "✓ 已擔保"
           }
         }
       }
@@ -33111,6 +34649,58 @@
       "comment" : "How many people the user verified have vouched for this peer",
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "زكّاه %#@people@ ممن تحققت منهم"
+          },
+          "substitutions" : {
+            "people" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "zero" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d أشخاص"
+                    }
+                  },
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d شخص"
+                    }
+                  },
+                  "two" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d شخصان"
+                    }
+                  },
+                  "few" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d أشخاص"
+                    }
+                  },
+                  "many" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d شخصًا"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d شخص"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
         "bn" : {
           "variations" : {
             "plural" : {
@@ -33124,6 +34714,34 @@
                 "stringUnit" : {
                   "state" : "needs_review",
                   "value" : "আপনি যাচাই করেছেন এমন %d জনের দ্বারা সমর্থিত"
+                }
+              }
+            }
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "verbürgt von %#@people@, die du verifiziert hast"
+          },
+          "substitutions" : {
+            "people" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d Person"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d Personen"
+                    }
+                  }
                 }
               }
             }
@@ -33185,6 +34803,102 @@
             }
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ginarantiyahan ng %#@people@ na na-verify mo"
+          },
+          "substitutions" : {
+            "people" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d tao"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d tao"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "recommandé par %#@people@ que tu as vérifiées"
+          },
+          "substitutions" : {
+            "people" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d personne"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d personnes"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ערבו לו %#@people@ שאימתת"
+          },
+          "substitutions" : {
+            "people" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d אדם"
+                    }
+                  },
+                  "two" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d אנשים"
+                    }
+                  },
+                  "many" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d אנשים"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d אנשים"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
         "hi" : {
           "variations" : {
             "plural" : {
@@ -33224,6 +34938,34 @@
                     "stringUnit" : {
                       "state" : "needs_review",
                       "value" : "%d orang"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "garantito da %#@people@ che hai verificato"
+          },
+          "substitutions" : {
+            "people" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d persona"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d persone"
                     }
                   }
                 }
@@ -33321,6 +35063,130 @@
             }
           }
         },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "aanbevolen door %#@people@ die je hebt geverifieerd"
+          },
+          "substitutions" : {
+            "people" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d persoon"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d personen"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "poręczone przez %#@people@, które zweryfikowano"
+          },
+          "substitutions" : {
+            "people" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d osobę"
+                    }
+                  },
+                  "few" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d osoby"
+                    }
+                  },
+                  "many" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d osób"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d osoby"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "avalizado por %#@people@ que verificaste"
+          },
+          "substitutions" : {
+            "people" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d pessoa"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d pessoas"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "avalizado por %#@people@ que você verificou"
+          },
+          "substitutions" : {
+            "people" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d pessoa"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d pessoas"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -33354,6 +35220,34 @@
                     "stringUnit" : {
                       "state" : "needs_review",
                       "value" : "%d человека"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "intygad av %#@people@ som du har verifierat"
+          },
+          "substitutions" : {
+            "people" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d person"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d personer"
                     }
                   }
                 }
@@ -33401,6 +35295,102 @@
             }
           }
         },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "doğruladığın %#@people@ kefil oldu"
+          },
+          "substitutions" : {
+            "people" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d kişi"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d kişi"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "за нього поручилися %#@people@, яких ти перевірив"
+          },
+          "substitutions" : {
+            "people" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d особа"
+                    }
+                  },
+                  "few" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d особи"
+                    }
+                  },
+                  "many" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d осіб"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d особи"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "آپ کے تصدیق شدہ %#@people@ نے ضمانت دی ہے"
+          },
+          "substitutions" : {
+            "people" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d شخص"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d افراد"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
         "vi" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -33416,6 +35406,50 @@
                     "stringUnit" : {
                       "state" : "needs_review",
                       "value" : "%d người"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "由你验证过的 %#@people@ 担保"
+          },
+          "substitutions" : {
+            "people" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d 人"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "由你驗證過的 %#@people@ 擔保"
+          },
+          "substitutions" : {
+            "people" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d 人"
                     }
                   }
                 }
@@ -34533,6 +36567,12 @@
             "value" : "en esta zona"
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nasa lugar na ito"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -34605,6 +36645,12 @@
             "value" : "nesta área"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nesta área"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -34652,6 +36698,18 @@
             "state" : "needs_review",
             "value" : "trong khu vực này"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "在此区域内"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "在此區域內"
+          }
         }
       }
     },
@@ -34687,6 +36745,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "teletransportado desde otro lugar"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nag-teleport mula sa ibang lugar"
           }
         },
         "fr" : {
@@ -34761,6 +36825,12 @@
             "value" : "teletransportado de outro lugar"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "teletransportado de outro lugar"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -34808,6 +36878,18 @@
             "state" : "needs_review",
             "value" : "dịch chuyển từ nơi khác"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "从别处瞬移而来"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "從其他地方瞬移而來"
+          }
         }
       }
     },
@@ -34843,6 +36925,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "tú"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ikaw"
           }
         },
         "fr" : {
@@ -34917,6 +37005,12 @@
             "value" : "tu"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "você"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -34963,6 +37057,18 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "bạn"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "你"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "你"
           }
         }
       }
@@ -35358,6 +37464,12 @@
             "value" : "Abre el chat de grupo"
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Binubuksan ang group chat"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -35430,6 +37542,12 @@
             "value" : "Abre a conversa de grupo"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abre o chat do grupo"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -35477,6 +37595,18 @@
             "state" : "needs_review",
             "value" : "mở cuộc trò chuyện nhóm"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "打开该群聊"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "打開群組聊天"
+          }
         }
       }
     },
@@ -35510,6 +37640,12 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
+            "value" : "(%@)"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
             "value" : "(%@)"
           }
         },
@@ -35585,6 +37721,12 @@
             "value" : "(%@)"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "(%@)"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -35632,6 +37774,18 @@
             "state" : "needs_review",
             "value" : "(%@)"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "(%@)"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "(%@)"
+          }
         }
       }
     },
@@ -35666,6 +37820,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "grupos"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mga grupo"
           }
         },
         "fr" : {
@@ -35740,6 +37900,12 @@
             "value" : "grupos"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "grupos"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -35787,6 +37953,18 @@
             "state" : "needs_review",
             "value" : "nhóm"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "群组"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "群組"
+          }
         }
       }
     },
@@ -35821,6 +37999,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Creador"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tagalikha"
           }
         },
         "fr" : {
@@ -35895,6 +38079,12 @@
             "value" : "Criador"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Criador"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -35941,6 +38131,18 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "người tạo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "创建者"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "建立者"
           }
         }
       }
@@ -36158,6 +38360,12 @@
             "value" : "marcar canal"
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "i-bookmark ang channel"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36230,6 +38438,12 @@
             "value" : "marcar canal"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "marcar canal"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36277,6 +38491,18 @@
             "state" : "needs_review",
             "value" : "đánh dấu kênh"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "为频道添加书签"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "將頻道加入書簽"
+          }
         }
       }
     },
@@ -36312,6 +38538,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "quitar marcador"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "alisin ang bookmark"
           }
         },
         "fr" : {
@@ -36386,6 +38618,12 @@
             "value" : "remover marcador"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "remover marcador"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36433,6 +38671,18 @@
             "state" : "needs_review",
             "value" : "bỏ đánh dấu"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "移除书签"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "移除書簽"
+          }
         }
       }
     },
@@ -36468,6 +38718,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "cambia a este canal"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "lumilipat sa channel na ito"
           }
         },
         "fr" : {
@@ -36542,6 +38798,12 @@
             "value" : "muda para este canal"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "troca para este canal"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36588,6 +38850,18 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "chuyển sang kênh này"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "切换到此频道"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "切換到此頻道"
           }
         }
       }
@@ -37879,6 +40153,12 @@
             "value" : "comparte tu internet con peers cercanos del mesh para que sus mensajes geohash lleguen a la red"
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ibahagi ang iyong internet sa mga kalapit na mesh peer para makarating sa network ang kanilang mga geohash na mensahe"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37951,6 +40231,12 @@
             "value" : "partilha a tua internet com pares mesh próximos para que as mensagens geohash deles cheguem à rede"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "compartilhe sua internet com pares do mesh por perto para que as mensagens geohash deles cheguem à rede"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37998,6 +40284,18 @@
             "state" : "needs_review",
             "value" : "chia sẻ internet của bạn với các nút mesh gần đó để tin nhắn geohash của họ đến được mạng"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "与附近 mesh 同伴共享你的互联网，让他们的 geohash 消息能到达网络"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "與附近的 mesh 同伴分享你的網際網路，讓他們的 geohash 訊息能傳到網路上"
+          }
         }
       }
     },
@@ -38033,6 +40331,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "puerta de enlace a internet"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "internet gateway"
           }
         },
         "fr" : {
@@ -38107,6 +40411,12 @@
             "value" : "gateway de internet"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "gateway de internet"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -38153,6 +40463,18 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "cổng internet"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "互联网网关"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "網際網路閘道"
           }
         }
       }
@@ -44150,6 +46472,12 @@
             "value" : "cancelar envío"
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "kanselahin ang pagpapadala"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -44222,6 +46550,12 @@
             "value" : "cancelar envio"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "cancelar envio"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -44269,6 +46603,18 @@
             "state" : "needs_review",
             "value" : "hủy gửi"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "取消发送"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "取消發送"
+          }
         }
       }
     },
@@ -44304,6 +46650,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "imagen oculta"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nakatagong larawan"
           }
         },
         "fr" : {
@@ -44378,6 +46730,12 @@
             "value" : "imagem oculta"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "imagem oculta"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -44425,6 +46783,18 @@
             "state" : "needs_review",
             "value" : "hình ảnh ẩn"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "已隐藏的图片"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "隱藏的圖片"
+          }
         }
       }
     },
@@ -44460,6 +46830,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "abre la imagen a pantalla completa"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "binubuksan ang larawan nang full screen"
           }
         },
         "fr" : {
@@ -44534,6 +46910,12 @@
             "value" : "abre a imagem em ecrã inteiro"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "abre a imagem em tela cheia"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -44581,6 +46963,18 @@
             "state" : "needs_review",
             "value" : "mở hình ảnh toàn màn hình"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "全屏打开图片"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "全螢幕打開圖片"
+          }
         }
       }
     },
@@ -44616,6 +47010,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "revela la imagen"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ipinapakita ang larawan"
           }
         },
         "fr" : {
@@ -44690,6 +47090,12 @@
             "value" : "revela a imagem"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "revela a imagem"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -44737,6 +47143,18 @@
             "state" : "needs_review",
             "value" : "hiện hình ảnh"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "显示图片"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "顯示圖片"
+          }
         }
       }
     },
@@ -44772,6 +47190,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "imagen"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "larawan"
           }
         },
         "fr" : {
@@ -44846,6 +47270,12 @@
             "value" : "imagem"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "imagem"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -44893,6 +47323,18 @@
             "state" : "needs_review",
             "value" : "hình ảnh"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "图片"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "圖片"
+          }
         }
       }
     },
@@ -44928,6 +47370,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "enviando imagen"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ipinapadala ang larawan"
           }
         },
         "fr" : {
@@ -45002,6 +47450,12 @@
             "value" : "a enviar imagem"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "enviando imagem"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -45049,6 +47503,18 @@
             "state" : "needs_review",
             "value" : "đang gửi hình ảnh"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "正在发送图片"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "圖片發送中"
+          }
         }
       }
     },
@@ -45084,6 +47550,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "imagen no disponible"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "hindi magagamit ang larawan"
           }
         },
         "fr" : {
@@ -45158,6 +47630,12 @@
             "value" : "imagem indisponível"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "imagem indisponível"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -45205,6 +47683,18 @@
             "state" : "needs_review",
             "value" : "hình ảnh không khả dụng"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "图片不可用"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "圖片不可用"
+          }
         }
       }
     },
@@ -45240,6 +47730,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "eliminar imagen"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "burahin ang larawan"
           }
         },
         "fr" : {
@@ -45314,6 +47810,12 @@
             "value" : "eliminar imagem"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "apagar imagem"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -45361,6 +47863,18 @@
             "state" : "needs_review",
             "value" : "xóa hình ảnh"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "删除图片"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "刪除圖片"
+          }
         }
       }
     },
@@ -45396,6 +47910,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ocultar imagen"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "itago ang larawan"
           }
         },
         "fr" : {
@@ -45470,6 +47990,12 @@
             "value" : "ocultar imagem"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ocultar imagem"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -45517,6 +48043,18 @@
             "state" : "needs_review",
             "value" : "ẩn hình ảnh"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "隐藏图片"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "隱藏圖片"
+          }
         }
       }
     },
@@ -45552,6 +48090,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "abrir imagen"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "buksan ang larawan"
           }
         },
         "fr" : {
@@ -45626,6 +48170,12 @@
             "value" : "abrir imagem"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "abrir imagem"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -45673,6 +48223,18 @@
             "state" : "needs_review",
             "value" : "mở hình ảnh"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "打开图片"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "打開圖片"
+          }
         }
       }
     },
@@ -45708,6 +48270,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "revelar imagen"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ipakita ang larawan"
           }
         },
         "fr" : {
@@ -45782,6 +48350,12 @@
             "value" : "revelar imagem"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "revelar imagem"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -45829,6 +48403,18 @@
             "state" : "needs_review",
             "value" : "hiện hình ảnh"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "显示图片"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "顯示圖片"
+          }
         }
       }
     },
@@ -45864,6 +48450,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "esto no se puede deshacer — puede que el remitente no esté a tu alcance para enviarla de nuevo."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "hindi na ito maibabalik — maaaring wala na sa saklaw ang nagpadala para maipadala itong muli."
           }
         },
         "fr" : {
@@ -45938,6 +48530,12 @@
             "value" : "isto não pode ser anulado — o remetente pode não estar ao alcance para a enviar de novo."
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "isso não pode ser desfeito — quem enviou pode não estar no alcance para enviar de novo."
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -45985,6 +48583,18 @@
             "state" : "needs_review",
             "value" : "không thể hoàn tác — người gửi có thể không trong phạm vi để gửi lại."
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "此操作无法撤销 — 发送者可能不在范围内，无法再次发送。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "此操作無法復原 — 發送者可能不在範圍內，無法再次發送。"
+          }
         }
       }
     },
@@ -46020,6 +48630,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "¿eliminar esta imagen?"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "burahin ang larawang ito?"
           }
         },
         "fr" : {
@@ -46094,6 +48710,12 @@
             "value" : "eliminar esta imagem?"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "apagar esta imagem?"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -46141,6 +48763,18 @@
             "state" : "needs_review",
             "value" : "xóa hình ảnh này?"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "删除此图片？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "刪除此圖片？"
+          }
         }
       }
     },
@@ -46176,6 +48810,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "toca para revelar"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "i-tap para ipakita"
           }
         },
         "fr" : {
@@ -46250,6 +48890,12 @@
             "value" : "toca para revelar"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "toque para revelar"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -46297,6 +48943,18 @@
             "state" : "needs_review",
             "value" : "chạm để hiện"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "轻点显示"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "輕點顯示"
+          }
         }
       }
     },
@@ -46332,6 +48990,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "pausar nota de voz"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "i-pause ang voice note"
           }
         },
         "fr" : {
@@ -46406,6 +49070,12 @@
             "value" : "colocar a nota de voz em pausa"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "pausar mensagem de voz"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -46453,6 +49123,18 @@
             "state" : "needs_review",
             "value" : "tạm dừng ghi chú giọng nói"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "暂停语音消息"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "暫停語音訊息"
+          }
         }
       }
     },
@@ -46488,6 +49170,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "reproducir nota de voz"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "i-play ang voice note"
           }
         },
         "fr" : {
@@ -46562,6 +49250,12 @@
             "value" : "reproduzir a nota de voz"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "reproduzir mensagem de voz"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -46609,6 +49303,18 @@
             "state" : "needs_review",
             "value" : "phát ghi chú giọng nói"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "播放语音消息"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "播放語音訊息"
+          }
         }
       }
     },
@@ -46644,6 +49350,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "abre un chat privado"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "binubuksan ang isang pribadong chat"
           }
         },
         "fr" : {
@@ -46718,6 +49430,12 @@
             "value" : "abre uma conversa privada"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "abre um chat privado"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -46765,6 +49483,18 @@
             "state" : "needs_review",
             "value" : "mở cuộc trò chuyện riêng tư"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "打开私聊"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "打開私聊"
+          }
         }
       }
     },
@@ -46800,6 +49530,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "mostrar huella"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ipakita ang fingerprint"
           }
         },
         "fr" : {
@@ -46874,6 +49610,12 @@
             "value" : "mostrar impressão digital"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mostrar impressão digital"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -46921,6 +49663,18 @@
             "state" : "needs_review",
             "value" : "hiện vân tay"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "显示指纹"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "顯示指紋"
+          }
         }
       }
     },
@@ -46956,6 +49710,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "bloqueado"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "na-block"
           }
         },
         "fr" : {
@@ -47030,6 +49790,12 @@
             "value" : "bloqueado"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "bloqueado"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -47077,6 +49843,18 @@
             "state" : "needs_review",
             "value" : "đã chặn"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "已屏蔽"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "已屏蔽"
+          }
         }
       }
     },
@@ -47112,6 +49890,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "favorito"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "paborito"
           }
         },
         "fr" : {
@@ -47186,6 +49970,12 @@
             "value" : "favorito"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "favorito"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -47233,6 +50023,18 @@
             "state" : "needs_review",
             "value" : "yêu thích"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "收藏"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "收藏"
+          }
         }
       }
     },
@@ -47268,6 +50070,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "sin conexión"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "offline"
           }
         },
         "fr" : {
@@ -47342,6 +50150,12 @@
             "value" : "offline"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "offline"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -47389,6 +50203,18 @@
             "state" : "needs_review",
             "value" : "ngoại tuyến"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "离线"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "離線"
+          }
         }
       }
     },
@@ -47424,6 +50250,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "mensajes nuevos"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "may bagong mensahe"
           }
         },
         "fr" : {
@@ -47498,6 +50330,12 @@
             "value" : "novas mensagens"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "novas mensagens"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -47545,6 +50383,18 @@
             "state" : "needs_review",
             "value" : "tin nhắn mới"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "新消息"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "新訊息"
+          }
         }
       }
     },
@@ -47580,6 +50430,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "avalado"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ginarantiyahan"
           }
         },
         "fr" : {
@@ -47654,6 +50510,12 @@
             "value" : "atestado"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "endossado"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -47700,6 +50562,18 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "đã bảo chứng"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "已担保"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "已擔保"
           }
         }
       }
@@ -47917,6 +50791,12 @@
             "value" : "avalado por alguien que verificaste"
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ginarantiyahan ng taong na-beripika mo"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -47989,6 +50869,12 @@
             "value" : "atestado por alguém que verificaste"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "endossado por alguém que você verificou"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -48035,6 +50921,18 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "được bảo chứng bởi người bạn đã xác minh"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "由你已验证的人担保"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "由你驗證過的人擔保"
           }
         }
       }
@@ -51305,6 +54203,12 @@
             "value" : "enviado por la puerta de enlace del mesh"
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "naipadala sa pamamagitan ng mesh gateway"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -51377,6 +54281,12 @@
             "value" : "enviado através do gateway mesh"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "enviado pelo gateway do mesh"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -51423,6 +54333,18 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "đã gửi qua cổng mesh"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "已通过 mesh 网关发送"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "已透過 mesh 閘道發送"
           }
         }
       }
@@ -51818,6 +54740,12 @@
             "value" : "%@ ya es miembro"
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "miyembro na si %@"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -51890,6 +54818,12 @@
             "value" : "%@ já é membro"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ já é membro"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -51937,6 +54871,18 @@
             "state" : "needs_review",
             "value" : "%@ đã là thành viên"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ 已是成员"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ 已是成員"
+          }
         }
       }
     },
@@ -51971,6 +54917,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "no se puede eliminar al creador"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "hindi maaaring alisin ang tagalikha"
           }
         },
         "fr" : {
@@ -52045,6 +54997,12 @@
             "value" : "o criador não pode ser removido"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "o criador não pode ser removido"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -52092,6 +55050,18 @@
             "state" : "needs_review",
             "value" : "không thể xóa người tạo"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "创建者无法被移除"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "無法移除建立者"
+          }
         }
       }
     },
@@ -52126,6 +55096,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "no se pudo crear el grupo"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "hindi malikha ang grupo"
           }
         },
         "fr" : {
@@ -52200,6 +55176,12 @@
             "value" : "não foi possível criar o grupo"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "não foi possível criar o grupo"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -52247,6 +55229,18 @@
             "state" : "needs_review",
             "value" : "không thể tạo nhóm"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "无法创建群组"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "無法建立群組"
+          }
         }
       }
     },
@@ -52281,6 +55275,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "grupo '%@' creado — usa /group invite @name para añadir personas"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nalikha ang grupong '%@' — gamitin ang /group invite @name para magdagdag ng tao"
           }
         },
         "fr" : {
@@ -52355,6 +55355,12 @@
             "value" : "grupo '%@' criado — usa /group invite @name para adicionar pessoas"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "grupo '%@' criado — use /group invite @nome para adicionar pessoas"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -52402,6 +55408,18 @@
             "state" : "needs_review",
             "value" : "đã tạo nhóm '%@' — dùng /group invite @name để thêm người"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "已创建群组 '%@' — 使用 /group invite @name 添加成员"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "已建立群組「%@」— 使用 /group invite @name 添加成員"
+          }
         }
       }
     },
@@ -52436,6 +55454,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "solo el creador del grupo puede hacer eso"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "tanging ang tagalikha ng grupo ang maaaring gumawa niyan"
           }
         },
         "fr" : {
@@ -52510,6 +55534,12 @@
             "value" : "só o criador do grupo pode fazer isso"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "só o criador do grupo pode fazer isso"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -52557,6 +55587,18 @@
             "state" : "needs_review",
             "value" : "chỉ người tạo nhóm mới có thể làm điều đó"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "只有群组创建者才能执行该操作"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "只有群組建立者可以這麼做"
+          }
         }
       }
     },
@@ -52591,6 +55633,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "el grupo está lleno (máx. %@ miembros)"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "puno na ang grupo (max %@ miyembro)"
           }
         },
         "fr" : {
@@ -52665,6 +55713,12 @@
             "value" : "o grupo está cheio (máx. %@ membros)"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "o grupo está cheio (máx. %@ membros)"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -52712,6 +55766,18 @@
             "state" : "needs_review",
             "value" : "nhóm đã đầy (tối đa %@ thành viên)"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "群组已满（最多 %@ 名成员）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "群組已滿（最多 %@ 位成員）"
+          }
         }
       }
     },
@@ -52746,6 +55812,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "tus claves de identidad aún no están listas"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "hindi pa handa ang iyong mga identity key"
           }
         },
         "fr" : {
@@ -52820,6 +55892,12 @@
             "value" : "as tuas chaves de identidade ainda não estão prontas"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "suas chaves de identidade ainda não estão prontas"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -52867,6 +55945,18 @@
             "state" : "needs_review",
             "value" : "khóa danh tính của bạn chưa sẵn sàng"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "你的身份密钥尚未就绪"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "你的身份金鑰尚未就緒"
+          }
         }
       }
     },
@@ -52901,6 +55991,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "no se pudo generar la invitación al grupo"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "hindi mabuo ang imbitasyon sa grupo"
           }
         },
         "fr" : {
@@ -52975,6 +56071,12 @@
             "value" : "não foi possível criar o convite do grupo"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "não foi possível montar o convite do grupo"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -53022,6 +56124,18 @@
             "state" : "needs_review",
             "value" : "không thể tạo lời mời nhóm"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "无法生成群组邀请"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "無法建立群組邀請"
+          }
         }
       }
     },
@@ -53056,6 +56170,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "invitaste a %1$@ a '%2$@'"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "inimbitahan si %1$@ sa '%2$@'"
           }
         },
         "fr" : {
@@ -53130,6 +56250,12 @@
             "value" : "%1$@ convidado para '%2$@'"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@ foi convidado para '%2$@'"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -53177,6 +56303,18 @@
             "state" : "needs_review",
             "value" : "đã mời %1$@ vào '%2$@'"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "已邀请 %1$@ 加入 '%2$@'"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "已邀請 %1$@ 加入「%2$@」"
+          }
         }
       }
     },
@@ -53211,6 +56349,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%2$@ te añadió al grupo '%1$@' — ahora aparece en tu lista de personas"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "idinagdag ka ni %2$@ sa grupong '%1$@' — lalabas na ito sa iyong listahan ng mga tao"
           }
         },
         "fr" : {
@@ -53285,6 +56429,12 @@
             "value" : "foste adicionado ao grupo '%1$@' por %2$@ — agora aparece na tua lista de pessoas"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "você foi adicionado ao grupo '%1$@' por %2$@ — ele agora aparece na sua lista de pessoas"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -53332,6 +56482,18 @@
             "state" : "needs_review",
             "value" : "bạn đã được %2$@ thêm vào nhóm '%1$@' — nó giờ xuất hiện trong danh sách người của bạn"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%2$@ 已将你加入群组 '%1$@' — 现在它会显示在你的成员列表中"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%2$@ 將你加入了群組「%1$@」— 現在會顯示在你的成員列表中"
+          }
         }
       }
     },
@@ -53366,6 +56528,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "saliste del grupo '%@'"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "umalis sa grupong '%@'"
           }
         },
         "fr" : {
@@ -53440,6 +56608,12 @@
             "value" : "saíste do grupo '%@'"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "você saiu do grupo '%@'"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -53487,6 +56661,18 @@
             "state" : "needs_review",
             "value" : "đã rời nhóm '%@'"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "已退出群组 '%@'"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "已離開群組「%@」"
+          }
         }
       }
     },
@@ -53521,6 +56707,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "tus grupos:"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mga grupo mo:"
           }
         },
         "fr" : {
@@ -53595,6 +56787,12 @@
             "value" : "os teus grupos:"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "seus grupos:"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -53642,6 +56840,18 @@
             "state" : "needs_review",
             "value" : "nhóm của bạn:"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "你的群组："
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "你的群組："
+          }
         }
       }
     },
@@ -53676,6 +56886,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "'%@' no es miembro de este grupo"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "hindi miyembro ng grupong ito si '%@'"
           }
         },
         "fr" : {
@@ -53750,6 +56966,12 @@
             "value" : "'%@' não é membro deste grupo"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "'%@' não é membro deste grupo"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -53797,6 +57019,18 @@
             "state" : "needs_review",
             "value" : "'%@' không phải là thành viên của nhóm này"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "'%@' 不是此群组的成员"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "「%@」不是此群組的成員"
+          }
         }
       }
     },
@@ -53831,6 +57065,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "los nombres de grupo están limitados a 40 caracteres"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "hanggang 40 character lamang ang pangalan ng grupo"
           }
         },
         "fr" : {
@@ -53905,6 +57145,12 @@
             "value" : "os nomes de grupo estão limitados a 40 caracteres"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nomes de grupo são limitados a 40 caracteres"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -53952,6 +57198,18 @@
             "state" : "needs_review",
             "value" : "tên nhóm giới hạn 40 ký tự"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "群组名最多 40 个字符"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "群組名稱最多 40 個字元"
+          }
         }
       }
     },
@@ -53986,6 +57244,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "no estás en ningún grupo — /group create <name> para crear uno"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "wala ka sa anumang grupo — /group create <name> para magsimula"
           }
         },
         "fr" : {
@@ -54060,6 +57324,12 @@
             "value" : "não estás em nenhum grupo — /group create <name> para começar um"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "você não está em nenhum grupo — /group create <nome> para começar um"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -54107,6 +57377,18 @@
             "state" : "needs_review",
             "value" : "bạn không ở trong nhóm nào — /group create <name> để tạo một nhóm"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "你不在任何群组中 — 使用 /group create <name> 创建一个"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "你不在任何群組中 — 使用 /group create <name> 建立一個"
+          }
         }
       }
     },
@@ -54141,6 +57423,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "abre primero un chat de grupo"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "magbukas muna ng group chat"
           }
         },
         "fr" : {
@@ -54215,6 +57503,12 @@
             "value" : "abre primeiro uma conversa de grupo"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "abra um chat de grupo primeiro"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -54262,6 +57556,18 @@
             "state" : "needs_review",
             "value" : "mở một cuộc trò chuyện nhóm trước"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "请先打开一个群聊"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "請先打開一個群組聊天"
+          }
         }
       }
     },
@@ -54296,6 +57602,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "aún no se puede verificar la identidad de %@ — espera su anuncio"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "hindi pa ma-beripika ang pagkakakilanlan ni %@ — hintayin ang kanilang announce"
           }
         },
         "fr" : {
@@ -54370,6 +57682,12 @@
             "value" : "ainda não é possível verificar a identidade de %@ — aguarda o announce dele"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "ainda não é possível verificar a identidade de %@ — aguarde o anúncio dessa pessoa"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -54417,6 +57735,18 @@
             "state" : "needs_review",
             "value" : "chưa thể xác minh danh tính của %@ — chờ announce của họ"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "暂时无法验证 %@ 的身份 — 请等待对方的广播"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "尚無法驗證 %@ 的身份 — 請等待對方的宣告"
+          }
         }
       }
     },
@@ -54451,6 +57781,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ debe estar conectado por mesh para ser invitado"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "kailangang nakakonekta sa mesh si %@ para maimbitahan"
           }
         },
         "fr" : {
@@ -54525,6 +57861,12 @@
             "value" : "%@ tem de estar ligado por mesh para ser convidado"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ precisa estar conectado pelo mesh para ser convidado"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -54572,6 +57914,18 @@
             "state" : "needs_review",
             "value" : "%@ phải được kết nối qua mesh để được mời"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ 必须通过 mesh 连接才能被邀请"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ 必須透過 mesh 連線才能被邀請"
+          }
         }
       }
     },
@@ -54606,6 +57960,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "'%@' no encontrado"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "hindi nahanap si '%@'"
           }
         },
         "fr" : {
@@ -54680,6 +58040,12 @@
             "value" : "'%@' não encontrado"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "'%@' não encontrado"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -54727,6 +58093,18 @@
             "state" : "needs_review",
             "value" : "không tìm thấy '%@'"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "未找到 '%@'"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "找不到「%@」"
+          }
         }
       }
     },
@@ -54761,6 +58139,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "fuiste eliminado del grupo '%@'"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "inalis ka sa grupong '%@'"
           }
         },
         "fr" : {
@@ -54835,6 +58219,12 @@
             "value" : "foste removido do grupo '%@'"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "você foi removido do grupo '%@'"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -54882,6 +58272,18 @@
             "state" : "needs_review",
             "value" : "bạn đã bị xóa khỏi nhóm '%@'"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "你已被移出群组 '%@'"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "你已被移出群組「%@」"
+          }
         }
       }
     },
@@ -54916,6 +58318,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "se eliminó a %@ y se rotó la clave del grupo"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "inalis si %@ at ni-rotate ang group key"
           }
         },
         "fr" : {
@@ -54990,6 +58398,12 @@
             "value" : "%@ removido e chave do grupo rodada"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ foi removido e a chave do grupo foi rotacionada"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -55037,6 +58451,18 @@
             "state" : "needs_review",
             "value" : "đã xóa %@ và xoay khóa nhóm"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "已移除 %@ 并轮换了群组密钥"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "已移除 %@ 並輪換了群組金鑰"
+          }
         }
       }
     },
@@ -55071,6 +58497,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "no se pudo rotar la clave del grupo"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "hindi ma-rotate ang group key"
           }
         },
         "fr" : {
@@ -55145,6 +58577,12 @@
             "value" : "não foi possível rodar a chave do grupo"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "não foi possível rotacionar a chave do grupo"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -55192,6 +58630,18 @@
             "state" : "needs_review",
             "value" : "không thể xoay khóa nhóm"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "无法轮换群组密钥"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "無法輪換群組金鑰"
+          }
         }
       }
     },
@@ -55226,6 +58676,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "no se pudo cifrar el mensaje"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "hindi ma-encrypt ang mensahe"
           }
         },
         "fr" : {
@@ -55300,6 +58756,12 @@
             "value" : "não foi possível encriptar a mensagem"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "não foi possível criptografar a mensagem"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -55347,6 +58809,18 @@
             "state" : "needs_review",
             "value" : "không thể mã hóa tin nhắn"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "无法加密该消息"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "無法加密訊息"
+          }
         }
       }
     },
@@ -55381,6 +58855,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ya no estás en este grupo"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "wala ka na sa grupong ito"
           }
         },
         "fr" : {
@@ -55455,6 +58935,12 @@
             "value" : "já não estás neste grupo"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "você não está mais neste grupo"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -55502,6 +58988,18 @@
             "state" : "needs_review",
             "value" : "bạn không còn ở trong nhóm này"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "你已不在此群组中"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "你已不在此群組中"
+          }
         }
       }
     },
@@ -55536,6 +59034,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "uso: /group create <name>"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "paggamit: /group create <name>"
           }
         },
         "fr" : {
@@ -55610,6 +59114,12 @@
             "value" : "utilização: /group create <name>"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "uso: /group create <nome>"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -55657,6 +59167,18 @@
             "state" : "needs_review",
             "value" : "cách dùng: /group create <name>"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "用法：/group create <name>"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "用法：/group create <name>"
+          }
         }
       }
     },
@@ -55691,6 +59213,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "uso: /group invite @name"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "paggamit: /group invite @name"
           }
         },
         "fr" : {
@@ -55765,6 +59293,12 @@
             "value" : "utilização: /group invite @name"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "uso: /group invite @nome"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -55812,6 +59346,18 @@
             "state" : "needs_review",
             "value" : "cách dùng: /group invite @name"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "用法：/group invite @name"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "用法：/group invite @name"
+          }
         }
       }
     },
@@ -55846,6 +59392,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "uso: /group remove @name"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "paggamit: /group remove @name"
           }
         },
         "fr" : {
@@ -55920,6 +59472,12 @@
             "value" : "utilização: /group remove @name"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "uso: /group remove @nome"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -55966,6 +59524,18 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "cách dùng: /group remove @name"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "用法：/group remove @name"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "用法：/group remove @name"
           }
         }
       }
@@ -56362,6 +59932,12 @@
             "value" : "no se puede bloquear a %@: no encontrado o no se pudo verificar la identidad"
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "hindi ma-block si %@: hindi nahanap o hindi ma-beripika ang pagkakakilanlan"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -56434,6 +60010,12 @@
             "value" : "não é possível bloquear %@: não encontrado ou identidade não verificável"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "não é possível bloquear %@: não encontrado ou identidade não verificável"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -56481,6 +60063,18 @@
             "state" : "needs_review",
             "value" : "không thể chặn %@: không tìm thấy hoặc không thể xác minh danh tính"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "无法屏蔽 %@：未找到或无法验证身份"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "無法屏蔽 %@：未找到或無法驗證身份"
+          }
         }
       }
     },
@@ -56516,6 +60110,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "se bloqueó a %@. ya no recibirás mensajes suyos"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "na-block si %@. hindi ka na makakatanggap ng mensahe mula sa kanila"
           }
         },
         "fr" : {
@@ -56590,6 +60190,12 @@
             "value" : "%@ bloqueado. deixarás de receber mensagens desta pessoa"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ foi bloqueado. você não vai mais receber mensagens dessa pessoa"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -56637,6 +60243,18 @@
             "state" : "needs_review",
             "value" : "đã chặn %@. bạn sẽ không còn nhận tin nhắn từ họ nữa"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "已屏蔽 %@。你将不再收到对方的消息"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "已屏蔽 %@。你將不再收到對方的訊息"
+          }
         }
       }
     },
@@ -56672,6 +60290,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "no se puede desbloquear a %@: no encontrado"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "hindi ma-unblock si %@: hindi nahanap"
           }
         },
         "fr" : {
@@ -56746,6 +60370,12 @@
             "value" : "não é possível desbloquear %@: não encontrado"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "não é possível desbloquear %@: não encontrado"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -56793,6 +60423,18 @@
             "state" : "needs_review",
             "value" : "không thể bỏ chặn %@: không tìm thấy"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "无法取消屏蔽 %@：未找到"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "無法取消屏蔽 %@：未找到"
+          }
         }
       }
     },
@@ -56828,6 +60470,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "se desbloqueó a %@"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "in-unblock si %@"
           }
         },
         "fr" : {
@@ -56902,6 +60550,12 @@
             "value" : "%@ desbloqueado"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%@ foi desbloqueado"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -56948,6 +60602,18 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "đã bỏ chặn %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "已取消屏蔽 %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "已取消屏蔽 %@"
           }
         }
       }
@@ -57881,6 +61547,12 @@
             "value" : "estimado a partir de listas de vecinos difundidas (hasta 10 por peer) — tu dispositivo está resaltado"
           }
         },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "tinantiya mula sa mga ibinahaging listahan ng kapitbahay (hanggang 10 bawat peer) — naka-highlight ang iyong device"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -57953,6 +61625,12 @@
             "value" : "estimado a partir de listas de vizinhos difundidas (até 10 por par) — o teu dispositivo está destacado"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "estimado a partir das listas de vizinhos divulgadas (até 10 por par) — seu dispositivo está destacado"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -58000,6 +61678,18 @@
             "state" : "needs_review",
             "value" : "ước tính từ danh sách hàng xóm được gossip (tối đa 10 mỗi nút) — thiết bị của bạn được làm nổi bật"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "根据传播的邻居列表估算（每个同伴最多 10 个）— 你的设备已高亮显示"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "根據同伴間流傳的鄰居列表估算（每位同伴最多 10 個）— 你的裝置已高亮顯示"
+          }
         }
       }
     },
@@ -58035,6 +61725,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "aún no hay enlaces del mesh — el mapa se completa a medida que llegan los anuncios de peers"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "wala pang mesh link — napupuno ang mapa habang dumarating ang mga announce ng peer"
           }
         },
         "fr" : {
@@ -58109,6 +61805,12 @@
             "value" : "ainda sem ligações mesh — o mapa preenche-se à medida que chegam os announces dos pares"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "nenhuma conexão do mesh ainda — o mapa se preenche conforme os anúncios dos pares chegam"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -58156,6 +61858,18 @@
             "state" : "needs_review",
             "value" : "chưa có liên kết mesh nào — bản đồ sẽ được điền khi các announce của nút đến"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "尚无 mesh 链路 — 随着同伴广播到达，地图会逐渐填充"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "尚無 mesh 連線 — 地圖會隨著同伴宣告到達而逐漸填滿"
+          }
         }
       }
     },
@@ -58191,6 +61905,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "actualizar topología"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "i-refresh ang topology"
           }
         },
         "fr" : {
@@ -58265,6 +61985,12 @@
             "value" : "atualizar topologia"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "atualizar topologia"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -58312,6 +62038,18 @@
             "state" : "needs_review",
             "value" : "làm mới cấu trúc"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "刷新拓扑"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "重新整理拓撲"
+          }
         }
       }
     },
@@ -58347,6 +62085,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$ld peers · %2$ld enlaces"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$ld peer · %2$ld link"
           }
         },
         "fr" : {
@@ -58421,6 +62165,12 @@
             "value" : "%1$ld pares · %2$ld ligações"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$ld pares · %2$ld conexões"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -58468,6 +62218,18 @@
             "state" : "needs_review",
             "value" : "%1$ld nút · %2$ld liên kết"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$ld 个同伴 · %2$ld 条链路"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$ld 位同伴 · %2$ld 條連線"
+          }
         }
       }
     },
@@ -58503,6 +62265,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "topología del mesh"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mesh topology"
           }
         },
         "fr" : {
@@ -58577,6 +62345,12 @@
             "value" : "topologia mesh"
           }
         },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "topologia do mesh"
+          }
+        },
         "ru" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -58623,6 +62397,18 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "cấu trúc mesh"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mesh 拓扑"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "mesh 拓撲"
           }
         }
       }
