@@ -124,6 +124,10 @@ protocol Transport: AnyObject {
     // transport cannot courier (no connected courier, or unsupported).
     func sendCourierMessage(_ content: String, messageID: String, recipientNoiseKey: Data, via couriers: [PeerID]) -> Bool
 
+    // Bulletin board (mesh transports only): broadcast a pre-signed board
+    // payload (post or tombstone) so it spreads over relay and gossip sync.
+    func sendBoardPayload(_ payload: Data)
+
     // QR verification (optional for transports)
     func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data)
     func sendVerifyResponse(to peerID: PeerID, noiseKeyHex: String, nonceA: Data)
@@ -169,6 +173,7 @@ extension Transport {
     func sendVouchAttestations(_ payload: Data, to peerID: PeerID) {}
     func addPeerAuthenticatedObserver(_ handler: @escaping (PeerID, String) -> Void) {}
     func sendCourierMessage(_ content: String, messageID: String, recipientNoiseKey: Data, via couriers: [PeerID]) -> Bool { false }
+    func sendBoardPayload(_ payload: Data) {}
     func sendFileBroadcast(_ packet: BitchatFilePacket, transferId: String) {}
     func sendFilePrivate(_ packet: BitchatFilePacket, to peerID: PeerID, transferId: String) {}
     func cancelTransfer(_ transferId: String) {}

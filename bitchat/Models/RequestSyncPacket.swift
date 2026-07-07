@@ -4,6 +4,15 @@ import Foundation
 //  - 0x01: P (uint8) — Golomb-Rice parameter
 //  - 0x02: M (uint32, big-endian) — hash range (N * 2^P)
 //  - 0x03: data (opaque) — GR bitstream bytes (MSB-first)
+//  - 0x04: types (bitfield) — SyncTypeFlags of covered message types
+//  - 0x05: sinceTimestamp (uint64, big-endian) — oldest ts the filter covers
+//  - 0x06: fragmentIdFilter (utf8) — reserved
+//
+// TODO(v2): fragmentIdFilter (0x06) is parsed and re-serialized but never
+// populated or honored — it's the reserved surface for incremental fragment
+// sync (request the missing fragments of one file by ID instead of diffing the
+// whole fragment set). Either wire it into buildGcsPayload/_handleRequestSync
+// or drop the field; don't leave it as silent dead protocol surface.
 struct RequestSyncPacket {
     let p: Int
     let m: UInt32

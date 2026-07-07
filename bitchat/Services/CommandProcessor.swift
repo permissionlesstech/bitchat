@@ -45,6 +45,8 @@ protocol CommandContextProvider: AnyObject {
     /// Empties the peer's chat (single-writer store intent for `/clear`).
     func clearPrivateChat(_ peerID: PeerID)
     func sendPublicRaw(_ content: String)
+    /// Sends a normal public message (with local echo) to the active channel.
+    func sendPublicMessage(_ content: String)
 
     // MARK: - System Messages
     func addLocalPrivateSystemMessage(_ content: String, to peerID: PeerID)
@@ -106,6 +108,8 @@ final class CommandProcessor {
         case "/unfav":
             if inGeoPublic || inGeoDM { return .error(message: "favorites are only for mesh peers in #mesh") }
             return handleFavorite(args, add: false)
+        case "/pay":
+            return handlePay(args)
         case "/help":
             return .success(message: Self.helpText)
         default:
@@ -125,6 +129,7 @@ final class CommandProcessor {
     /slap @name — slap with a large trout
     /block @name · /unblock @name
     /fav @name · /unfav @name — favorites (mesh only)
+    /pay <token> — send a cashu ecash token in this chat
     /help — this list
     """
 
@@ -331,6 +336,42 @@ final class CommandProcessor {
         return .error(message: "cannot unblock \(nickname): not found")
     }
     
+    /// `/pay <cashu-token>` — validates the token decodes, then sends it as
+    /// the message body in the current chat. Cashu tokens are bearer
+    /// instruments (whoever redeems first gets the funds), so posting one to
+    /// a public channel requires an explicit `/pay <token> public` confirm.
+    /// The app never contacts a mint; it only relays the string.
+    private func handlePay(_ args: String) -> CommandResult {
+        var parts = args.trimmed.split(separator: " ").map(String.init)
+        guard !parts.isEmpty else {
+            return .success(message: "usage: /pay <token> — paste a cashu token: /pay cashuA…")
+        }
+
+        let confirmedPublic = parts.count > 1 && parts.last?.lowercased() == "public"
+        if confirmedPublic { parts.removeLast() }
+
+        guard parts.count == 1, let token = CashuTokenDecoder.bareToken(from: parts[0]) else {
+            return .error(message: "that doesn't look like a cashu token — expected cashuA… or cashuB…")
+        }
+        guard let info = CashuTokenDecoder.decode(token, strict: true) else {
+            return .error(message: "invalid cashu token — it doesn't decode to a known token with an amount, not sending it")
+        }
+
+        let summary = info.displayAmount ?? "a cashu token"
+
+        if let peerID = contextProvider?.selectedPrivateChatPeer {
+            contextProvider?.sendPrivateMessage(token, to: peerID)
+            return .success(message: "sent \(summary) — cashu is a bearer token; whoever redeems it first gets the funds")
+        }
+
+        guard confirmedPublic else {
+            return .error(message: "this is a public channel — anyone reading it can redeem the token. send anyway: /pay <token> public")
+        }
+
+        contextProvider?.sendPublicMessage(token)
+        return .success(message: "sent \(summary) to the public channel — anyone here can redeem it")
+    }
+
     private func handleFavorite(_ args: String, add: Bool) -> CommandResult {
         let targetName = args.trimmed
         guard !targetName.isEmpty else {
