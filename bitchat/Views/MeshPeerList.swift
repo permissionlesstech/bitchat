@@ -25,6 +25,8 @@ struct MeshPeerList: View {
         static let favorite = String(localized: "mesh_peers.state.favorite", comment: "State label for a favorited peer")
         static let unread = String(localized: "mesh_peers.state.unread", comment: "State label for a peer with unread private messages")
         static let blocked = String(localized: "mesh_peers.state.blocked", comment: "State label for a blocked peer")
+        static let vouched = String(localized: "mesh_peers.state.vouched", comment: "State label for a peer vouched for by someone the user verified")
+        static let vouchedTooltip = String(localized: "mesh_peers.tooltip.vouched", comment: "Tooltip for the vouched (unfilled seal) badge next to a peer")
         static let addFavorite = String(localized: "content.accessibility.add_favorite", comment: "Accessibility label to add a favorite")
         static let removeFavorite = String(localized: "content.accessibility.remove_favorite", comment: "Accessibility label to remove a favorite")
         static let showFingerprint = String(localized: "mesh_peers.action.fingerprint", comment: "Context menu action that shows a peer's fingerprint/verification screen")
@@ -134,6 +136,16 @@ struct MeshPeerList: View {
                                         .foregroundColor(baseColor)
                                 }
                             }
+
+                            // Vouched (transitively verified): unfilled seal,
+                            // deliberately distinct from verified's filled one.
+                            // Never shown alongside a verified badge.
+                            if peer.showsVouchedBadge {
+                                Image(systemName: "checkmark.seal")
+                                    .font(.bitchatSystem(size: 10))
+                                    .foregroundColor(baseColor)
+                                    .help(Strings.vouchedTooltip)
+                            }
                         }
 
                         Spacer()
@@ -241,6 +253,7 @@ struct MeshPeerList: View {
                 parts.append(Strings.offline)
             }
         }
+        if peer.showsVouchedBadge { parts.append(Strings.vouched) }
         if peer.isFavorite { parts.append(Strings.favorite) }
         if peer.hasUnread { parts.append(Strings.unread) }
         if peer.isBlocked { parts.append(Strings.blocked) }

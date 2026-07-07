@@ -293,6 +293,11 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
         context.clearPublicConversation(ConversationID(channelID: context.activeChannel))
 
         Task.detached(priority: .utility) {
+            // Skipped under tests: the test process shares the user's real
+            // ~/Library/Application Support/files tree, and this detached
+            // wipe fires at a nondeterministic time — racing tests that
+            // write media there (see the same guard in panicClearAllData).
+            guard !TestEnvironment.isRunningTests else { return }
             do {
                 let base = try FileManager.default.url(
                     for: .applicationSupportDirectory,

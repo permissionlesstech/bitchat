@@ -177,6 +177,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     lazy var nostrCoordinator = ChatNostrCoordinator(context: self)
     lazy var mediaTransferCoordinator = ChatMediaTransferCoordinator(context: self)
     lazy var verificationCoordinator = ChatVerificationCoordinator(context: self)
+    lazy var vouchCoordinator = ChatVouchCoordinator(context: self)
 
     // Computed properties for compatibility
     @MainActor
@@ -1280,6 +1281,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
 
         // Delete ALL media files (incoming and outgoing) in background
         Task.detached(priority: .utility) {
+            // Skipped under tests: the test process shares the user's real
+            // ~/Library/Application Support/files tree, and this detached
+            // utility-priority wipe fires at a nondeterministic time —
+            // deleting media that concurrently running tests (e.g. the
+            // sendImage flow) just wrote there, and the developer's real
+            // app data with it.
+            guard !TestEnvironment.isRunningTests else { return }
             do {
                 let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
                 let filesDir = base.appendingPathComponent("files", isDirectory: true)
@@ -1492,6 +1500,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
 
     func setupNoiseCallbacks() {
         verificationCoordinator.setupNoiseCallbacks()
+        vouchCoordinator.setupNoiseCallbacks()
+    }
+
+    /// Whether the fingerprint currently counts as vouched (≥1 valid vouch
+    /// from a voucher I verified, and no explicit verification of mine).
+    @MainActor
+    func isVouchedFingerprint(_ fingerprint: String) -> Bool {
+        identityManager.isVouched(fingerprint: fingerprint)
     }
 
     // MARK: - BitchatDelegate Methods
@@ -1589,6 +1605,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
 
     func didUpdatePeerList(_ peers: [PeerID]) {
         peerListCoordinator.didUpdatePeerList(peers)
+        // A peer-list update follows every verified announce, which is where a
+        // peer's `.vouch` capability actually arrives — retry vouching now that
+        // capabilities may finally be known (closes the auth-time capability race).
+        Task { @MainActor [weak self] in
+            self?.vouchCoordinator.peersUpdated(peers)
+        }
     }
 
     @MainActor

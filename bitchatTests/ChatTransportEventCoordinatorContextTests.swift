@@ -156,6 +156,12 @@ private final class MockChatTransportEventContext: ChatTransportEventContext {
     func handleVerifyResponsePayload(from peerID: PeerID, payload: Data) {
         verifyResponsePayloads.append((peerID, payload))
     }
+
+    private(set) var vouchPayloads: [(peerID: PeerID, payload: Data)] = []
+
+    func handleVouchPayload(from peerID: PeerID, payload: Data) {
+        vouchPayloads.append((peerID, payload))
+    }
 }
 
 // MARK: - Helpers

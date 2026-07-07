@@ -77,7 +77,9 @@ enum NoisePayloadType: UInt8 {
     // Verification (QR-based OOB binding)
     case verifyChallenge = 0x10     // Verification challenge
     case verifyResponse  = 0x11     // Verification response
-    
+    // Transitive verification (web of trust)
+    case vouch = 0x12               // Batch of vouch attestations
+
     var description: String {
         switch self {
         case .privateMessage: return "privateMessage"
@@ -85,6 +87,7 @@ enum NoisePayloadType: UInt8 {
         case .delivered: return "delivered"
         case .verifyChallenge: return "verifyChallenge"
         case .verifyResponse: return "verifyResponse"
+        case .vouch: return "vouch"
         }
     }
 }

@@ -303,7 +303,7 @@ final class NostrInboundPipeline {
             context.handleDelivered(noisePayload, senderPubkey: senderPubkey, convKey: convKey)
         case .readReceipt:
             context.handleReadReceipt(noisePayload, senderPubkey: senderPubkey, convKey: convKey)
-        case .verifyChallenge, .verifyResponse:
+        case .verifyChallenge, .verifyResponse, .vouch:
             break
         }
     }
@@ -355,7 +355,7 @@ final class NostrInboundPipeline {
             context.handleDelivered(payload, senderPubkey: senderPubkey, convKey: convKey)
         case .readReceipt:
             context.handleReadReceipt(payload, senderPubkey: senderPubkey, convKey: convKey)
-        case .verifyChallenge, .verifyResponse:
+        case .verifyChallenge, .verifyResponse, .vouch:
             break
         }
     }
@@ -434,7 +434,7 @@ final class NostrInboundPipeline {
                             context.handleDelivered(payload, senderPubkey: senderPubkey, convKey: targetPeerID)
                         case .readReceipt:
                             context.handleReadReceipt(payload, senderPubkey: senderPubkey, convKey: targetPeerID)
-                        case .verifyChallenge, .verifyResponse:
+                        case .verifyChallenge, .verifyResponse, .vouch:
                             break
                         }
                     }
