@@ -758,4 +758,37 @@ struct ChatPrivateConversationCoordinatorContextTests {
         #expect(context.privateChats[peerID]?.first?.deliveryStatus == .sent)
         #expect(context.systemMessages.isEmpty)
     }
+
+    /// A NON-mutual favorite that carries a Nostr key must NOT be routed while
+    /// offline. The Nostr transport marks any favorite with an npub reachable
+    /// without a mutuality check, so routing it would deliver a DM that the
+    /// prompt-path gate — which admits Nostr only via `isMutualFavorite &&
+    /// hasNostrKey` — deliberately excludes. It must fail immediately (matching
+    /// the pre-existing behavior), not slip through the offline-queue path.
+    @Test @MainActor
+    func sendPrivateMessage_nonMutualNostrFavorite_failsAndDoesNotRouteWhenOffline() async {
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+        let noiseKey = Data(repeating: 0xD3, count: 32)
+        let peerID = PeerID(hexData: noiseKey)
+        // We favorited them, but they have not favorited us back → non-mutual,
+        // yet we still hold their Nostr key.
+        context.favoriteRelationshipsByNoiseKey[noiseKey] = makeFavoriteRelationship(
+            noiseKey: noiseKey,
+            nostrPublicKey: "npub1mallory",
+            nickname: "mallory",
+            isFavorite: true,
+            theyFavoritedUs: false
+        )
+
+        coordinator.sendPrivateMessage("should not send over nostr", to: peerID)
+
+        // Never routed, and surfaced as an unreachable failure — the gate holds.
+        #expect(context.routedPrivateMessages.isEmpty)
+        #expect(context.systemMessages.count == 1)
+        guard case .failed = context.privateChats[peerID]?.first?.deliveryStatus else {
+            Issue.record("expected .failed delivery status")
+            return
+        }
+    }
 }

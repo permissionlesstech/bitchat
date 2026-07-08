@@ -315,10 +315,20 @@ final class ChatPrivateConversationCoordinator {
                 messageID: messageID
             )
             context.setPrivateDeliveryStatus(.sent, forMessageID: messageID, peerID: peerID)
-        } else if noiseKey != nil {
+        } else if noiseKey != nil && !(hasNostrKey && !isMutualFavorite) {
             // Recipient is identifiable but offline: hand to the router so it
             // enqueues to the outbox + attempts courier deposit. Leave status
             // at .sending; carried/delivered/failed callbacks drive it onward.
+            //
+            // The `!(hasNostrKey && !isMutualFavorite)` guard preserves the
+            // mutual-favorite requirement for Nostr delivery. A non-mutual
+            // favorite that carries an Nostr key is reachable over Nostr (the
+            // transport marks any favorite with an npub reachable, without a
+            // mutuality check), so routing here would deliver a DM that the
+            // prompt-path gate — which only admits Nostr via
+            // `isMutualFavorite && hasNostrKey` — deliberately excludes. Such
+            // a send falls through to the un-routable branch below, matching
+            // the pre-existing behavior.
             context.routePrivateMessage(
                 content,
                 to: peerID,
@@ -326,7 +336,8 @@ final class ChatPrivateConversationCoordinator {
                 messageID: messageID
             )
         } else {
-            // Truly un-routable (no noise key): fail immediately, as before.
+            // Truly un-routable (no noise key, or a non-mutual Nostr-only
+            // favorite the gate excludes): fail immediately, as before.
             context.setPrivateDeliveryStatus(
                 .failed(
                     reason: String(localized: "content.delivery.reason.unreachable", comment: "Failure reason when a peer is unreachable")
