@@ -189,7 +189,10 @@ private struct ContentPeopleListView: View {
             .themedSurface()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 6) {
+                // spacing 0: every section supplies its own rhythm (header
+                // top 12 / bottom 4, rows vertical 4), so inter-child spacing
+                // here would make the first section's gap read differently.
+                VStack(alignment: .leading, spacing: 0) {
                     if case .location = locationChannelsModel.selectedChannel {
                         GeohashPeopleList(
                             onTapPerson: {

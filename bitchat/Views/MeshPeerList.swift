@@ -175,7 +175,6 @@ struct MeshPeerList: View {
                     }
                     .padding(.horizontal)
                     .padding(.vertical, 4)
-                    .padding(.top, idx == 0 ? 10 : 0)
                     .contentShape(Rectangle())
                     // count:2 must attach before count:1 or the single tap
                     // shadows it (same ordering the header logo relies on).
