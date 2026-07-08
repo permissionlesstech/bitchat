@@ -24,10 +24,19 @@ final class KeychainManager: KeychainManagerProtocol {
         // asset excluded from archive builds — release code must not
         // reference it. Tests always run Debug, so the guard is lossless.
         #if DEBUG
-        if TestEnvironment.isRunningTests { return PreviewKeychainManager() }
+        if TestEnvironment.isRunningTests { return sharedTestKeychain }
         #endif
         return KeychainManager()
     }
+
+    #if DEBUG
+    /// One store per process, mirroring the real keychain: separate
+    /// default-constructed components (e.g. two NostrIdentityBridge
+    /// instances in BoardManager's publish and delete paths) must see each
+    /// other's writes, or they would derive different Nostr identities
+    /// under test.
+    private static let sharedTestKeychain = PreviewKeychainManager()
+    #endif
 
     // Use consistent service name for all keychain items
     private let service = BitchatApp.bundleID
