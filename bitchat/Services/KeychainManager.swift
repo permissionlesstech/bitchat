@@ -12,6 +12,23 @@ import Foundation
 import Security
 
 final class KeychainManager: KeychainManagerProtocol {
+    /// Default keychain for components that construct their own rather than
+    /// having one injected. Under test this is an in-memory keychain: the
+    /// xctest runner's code signature changes every build, so any read of a
+    /// real login-keychain item triggers a macOS password prompt that
+    /// "Always Allow" can never satisfy — and tests must never read or
+    /// mutate the developer's real keychain (`SecItemCopyMatching` can also
+    /// hang in test environments). Production behavior is unchanged.
+    static func makeDefault() -> KeychainManagerProtocol {
+        // PreviewKeychainManager lives in _PreviewHelpers, a development
+        // asset excluded from archive builds — release code must not
+        // reference it. Tests always run Debug, so the guard is lossless.
+        #if DEBUG
+        if TestEnvironment.isRunningTests { return PreviewKeychainManager() }
+        #endif
+        return KeychainManager()
+    }
+
     // Use consistent service name for all keychain items
     private let service = BitchatApp.bundleID
     private let appGroup = "group.\(BitchatApp.bundleID)"
@@ -539,5 +556,31 @@ final class KeychainManager: KeychainManagerProtocol {
         ]
 
         SecItemDelete(query as CFDictionary)
+    }
+
+    /// Delete every item stored under a custom service
+    func deleteAll(service customService: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: customService,
+            kSecMatchLimit as String: kSecMatchLimitAll,
+            kSecReturnAttributes as String: true
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess, let items = result as? [[String: Any]] else {
+            return
+        }
+        for item in items {
+            var deleteQuery: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: customService
+            ]
+            if let account = item[kSecAttrAccount as String] as? String {
+                deleteQuery[kSecAttrAccount as String] = account
+            }
+            SecItemDelete(deleteQuery as CFDictionary)
+        }
     }
 }

@@ -34,6 +34,8 @@ public protocol KeychainManagerProtocol {
     func load(key: String, service: String) -> Data?
     /// Delete data from a custom service
     func delete(key: String, service: String)
+    /// Delete every item stored under a custom service
+    func deleteAll(service: String)
 }
 
 // MARK: - Keychain Error Types

@@ -40,7 +40,7 @@ final class AppRuntime: ObservableObject {
     #endif
 
     init(
-        keychain: KeychainManagerProtocol = KeychainManager(),
+        keychain: KeychainManagerProtocol = KeychainManager.makeDefault(),
         idBridge: NostrIdentityBridge = NostrIdentityBridge()
     ) {
         self.idBridge = idBridge
