@@ -174,6 +174,7 @@ final class BridgeService: ObservableObject {
     private var pendingDownlinks: [(event: NostrEvent, cell: String)] = []
     private var downlinkDrainScheduled = false
     private var presenceTimerArmed = false
+    private var lastPresenceAt = Date.distantPast
 
     /// pubkey -> (lastSeen, attributed-to-local-island).
     private var participants: [String: (lastSeen: Date, isLocal: Bool)] = [:]
@@ -287,9 +288,13 @@ final class BridgeService: ObservableObject {
     }
 
     /// Publishes a presence heartbeat so silent participants still register
-    /// across the bridge.
+    /// across the bridge. Throttled: several triggers (enable, cell change,
+    /// relay reconnect) can coincide, and same-second heartbeats are
+    /// byte-identical events anyway.
     func publishPresence() {
         guard isEnabled, let cell = activeCell, relaysConnected?() ?? false else { return }
+        guard now().timeIntervalSince(lastPresenceAt) >= 30 else { return }
+        lastPresenceAt = now()
         guard let identity = try? deriveIdentity?(cell),
               let event = try? NostrProtocol.createBridgePresenceEvent(cell: cell, senderIdentity: identity) else { return }
         publishedEventIDs.insert(event.id)
@@ -341,6 +346,9 @@ final class BridgeService: ObservableObject {
             recordParticipant(event.pubkey, isLocal: false)
         case .message(let message):
             let isLocalRadioCopy = isMessageSeenLocally?(message.messageID) ?? false
+            if isLocalRadioCopy {
+                SecureLogger.debug("🌉 Bridge: radio copy of \(message.messageID.prefix(8))… already present; sender counted as local", category: .session)
+            }
             recordParticipant(event.pubkey, isLocal: isLocalRadioCopy)
             inject(message)
             // Gateway duty: carry remote islands' messages onto the radio for
@@ -463,6 +471,7 @@ final class BridgeService: ObservableObject {
             guard let carrier = NostrCarrierPacket(direction: .fromBridge, geohash: cell, event: event),
                   let payload = carrier.encode() else { continue }
             broadcastToMesh?(payload)
+            SecureLogger.debug("🌉 Bridge: downlinked remote event \(event.id.prefix(8))… onto the mesh", category: .session)
             // Mark-after-send (loop rule 3): a queue-overflow drop stays
             // retryable on relay redelivery.
             rebroadcastEventIDs.insert(event.id)
@@ -517,6 +526,7 @@ final class BridgeService: ObservableObject {
     private func inject(_ message: InboundBridgeMessage) {
         guard injectedMessageIDs.insert(message.messageID) else { return }
         guard !(isMessageSeenLocally?(message.messageID) ?? false) else { return }
+        SecureLogger.info("🌉 Bridge: injected bridged message \(message.messageID.prefix(8))… from \(message.senderNickname)", category: .session)
         injectInbound?(message)
     }
 

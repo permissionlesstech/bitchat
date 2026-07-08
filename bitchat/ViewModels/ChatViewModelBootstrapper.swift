@@ -367,7 +367,10 @@ private extension ChatViewModelBootstrapper {
         }
 
         // Uplinks deposited while relays were unreachable flush on reconnect.
+        // The publisher re-emits `true` on every relay state recompute, so
+        // dedupe: field logs showed presence published 5x in one second.
         NostrRelayManager.shared.$isConnected
+            .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .sink { connected in
                 if connected {
@@ -549,7 +552,10 @@ private extension ChatViewModelBootstrapper {
         }
 
         // Relay connectivity gates everything; refresh (re)opens or closes.
+        // Deduped: refresh() resubscribes, and the raw publisher re-emits on
+        // every relay state recompute (6x in 300ms in field logs).
         NostrRelayManager.shared.$isConnected
+            .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .sink { _ in BridgeCourierService.shared.refresh() }
             .store(in: &viewModel.cancellables)
