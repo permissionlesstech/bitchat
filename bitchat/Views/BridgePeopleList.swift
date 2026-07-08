@@ -39,7 +39,6 @@ struct PeopleSectionHeader: View {
 struct BridgePeopleList: View {
     @ObservedObject private var bridgeService = BridgeService.shared
     @ThemedPalette private var palette
-    @Environment(\.appTheme) private var theme
 
     private enum Strings {
         static let sectionTitle = String(localized: "bridge_people.section_title", defaultValue: "across the bridge", comment: "Section header in the people sheet for participants reachable via the mesh bridge")

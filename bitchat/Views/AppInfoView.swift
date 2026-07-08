@@ -149,14 +149,11 @@ struct AppInfoView: View {
         }
 
         enum Location {
-            static let title: LocalizedStringKey = "app_info.location.title"
             static let notes = AppInfoFeatureInfo(
                 icon: "mappin.and.ellipse",
                 title: "app_info.location.notes.title",
                 description: "app_info.location.notes.description"
             )
-            static let enable: LocalizedStringKey = "app_info.location.enable"
-            static let openSettings: LocalizedStringKey = "app_info.location.open_settings"
         }
 
         enum Network {

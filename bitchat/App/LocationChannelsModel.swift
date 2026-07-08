@@ -100,10 +100,6 @@ final class LocationChannelsModel: ObservableObject {
         network.setUserTorEnabled(enabled)
     }
 
-    func setGatewayEnabled(_ enabled: Bool) {
-        gateway.setEnabled(enabled)
-    }
-
     func refreshMeshChannelsIfNeeded() {
         guard case .mesh = selectedChannel,
               permissionState == .authorized,
