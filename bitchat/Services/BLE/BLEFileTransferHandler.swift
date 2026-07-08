@@ -113,7 +113,13 @@ final class BLEFileTransferHandler {
             originalSender: nil,
             isPrivate: deliveryPlan.isPrivateMessage,
             recipientNickname: nil,
-            senderPeerID: peerID
+            senderPeerID: peerID,
+            // Received messages need an explicit status: BitchatMessage
+            // defaults private messages to .sending, which the media views
+            // render as an in-flight send (empty reveal mask, disabled tap).
+            deliveryStatus: deliveryPlan.isPrivateMessage
+                ? .delivered(to: env.localNickname(), at: ts)
+                : nil
         )
 
         SecureLogger.debug("📁 Stored incoming media from \(peerID.id.prefix(8))… -> \(destination.lastPathComponent)", category: .session)

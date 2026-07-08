@@ -77,6 +77,7 @@ struct BLEFileTransferHandlerTests {
         #expect(message?.isPrivate == false)
         #expect(message?.senderPeerID == remotePeerID)
         #expect(message?.timestamp == Date(timeIntervalSince1970: 900))
+        #expect(message?.deliveryStatus == nil)
     }
 
     @Test
@@ -157,6 +158,10 @@ struct BLEFileTransferHandlerTests {
         #expect(recorder.lastSeenUpdates == [remotePeerID])
         #expect(recorder.deliveredMessages.count == 1)
         #expect(recorder.deliveredMessages.first?.isPrivate == true)
+        // Must be explicit: BitchatMessage defaults private messages to
+        // .sending, which the media views render as an in-flight send
+        // (empty reveal mask, disabled reveal tap).
+        #expect(recorder.deliveredMessages.first?.deliveryStatus == .delivered(to: "Me", at: Date(timeIntervalSince1970: 900)))
     }
 
     @Test

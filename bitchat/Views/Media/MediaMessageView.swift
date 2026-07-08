@@ -33,8 +33,8 @@ struct MediaMessageView: View {
     }
 
     var body: some View {
-        let state = mediaSendState(for: deliveryStatus)
         let isFromMe = conversationUIModel.isMediaMessageFromCurrentUser(message)
+        let state = mediaSendState(for: deliveryStatus, isFromMe: isFromMe)
         let cancelAction: (() -> Void)? = state.canCancel ? { conversationUIModel.cancelMediaSend(messageID: message.id) } : nil
 
         // Baseline alignment (via the header text inside the VStack) keeps the
@@ -127,7 +127,11 @@ struct MediaMessageView: View {
         }
     }
 
-    private func mediaSendState(for deliveryStatus: DeliveryStatus?) -> (isSending: Bool, progress: Double?, canCancel: Bool) {
+    private func mediaSendState(for deliveryStatus: DeliveryStatus?, isFromMe: Bool) -> (isSending: Bool, progress: Double?, canCancel: Bool) {
+        // A received message is never in a send state: BitchatMessage defaults
+        // private messages to .sending, so an incoming message's status must
+        // not drive the reveal mask or disable the reveal tap.
+        guard isFromMe else { return (false, nil, false) }
         var isSending = false
         var progress: Double?
         if let status = deliveryStatus {
