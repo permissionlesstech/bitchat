@@ -91,6 +91,9 @@ private final class MockChatVerificationContext: ChatVerificationContext {
         stablePeerIDCache[shortPeerID] = stablePeerID
     }
 
+    private(set) var flushedOutboxPeerIDs: [PeerID] = []
+    func flushRouterOutbox(for peerID: PeerID) { flushedOutboxPeerIDs.append(peerID) }
+
     // Noise sessions & verification transport
     var myNoiseStaticKey = Data(repeating: 0x42, count: 32)
     var establishedNoiseSessions: Set<PeerID> = []
@@ -282,6 +285,54 @@ struct ChatVerificationCoordinatorContextTests {
         callbacks?.onHandshakeRequired(peerID)
         await waitForMainQueue()
         #expect(context.encryptionStatuses[peerID] == .noiseHandshaking)
+    }
+
+    // Cold-restart case: nothing is cached short->stable yet (the map is lost on
+    // restart), but the session key is now available post-handshake. Authenticating
+    // must derive the stable id AND flush mail queued under it.
+    @Test @MainActor
+    func onPeerAuthenticated_flushesOutboxUnderDerivedStableID_onColdRestart() async {
+        let context = MockChatVerificationContext()
+        let coordinator = ChatVerificationCoordinator(context: context)
+        let peerID = PeerID(str: "1122334455667788")
+        let noiseKey = Data(repeating: 0x55, count: 32)
+        let stablePeerID = PeerID(hexData: noiseKey)
+        // No prior short->stable mapping; only the freshly-established session key.
+        context.noiseSessionKeysByPeerID[peerID] = noiseKey
+
+        coordinator.setupNoiseCallbacks()
+        let callbacks = try? #require(context.installedCallbacks)
+        callbacks?.onPeerAuthenticated(peerID, "fp")
+        await waitForMainQueue()
+
+        // Derived stable id (distinct from the short peerID) gets the outbox flush.
+        #expect(stablePeerID != peerID)
+        #expect(context.stablePeerIDCache[peerID] == stablePeerID)
+        #expect(context.flushedOutboxPeerIDs == [stablePeerID])
+    }
+
+    // Guard: no stable flush when the resolved stable id equals the short peerID,
+    // and none when nothing resolves (no cache, no session key).
+    @Test @MainActor
+    func onPeerAuthenticated_skipsFlushWhenNoDistinctStableID() async {
+        let peerID = PeerID(str: "1122334455667788")
+
+        // Stable id already equals the short peerID -> no stable flush.
+        let sameContext = MockChatVerificationContext()
+        sameContext.cacheStablePeerID(peerID, for: peerID)
+        let sameCoordinator = ChatVerificationCoordinator(context: sameContext)
+        sameCoordinator.setupNoiseCallbacks()
+        sameContext.installedCallbacks?.onPeerAuthenticated(peerID, "fp")
+        await waitForMainQueue()
+        #expect(sameContext.flushedOutboxPeerIDs.isEmpty)
+
+        // Nothing resolves (no cache, no session key) -> no flush.
+        let noneContext = MockChatVerificationContext()
+        let noneCoordinator = ChatVerificationCoordinator(context: noneContext)
+        noneCoordinator.setupNoiseCallbacks()
+        noneContext.installedCallbacks?.onPeerAuthenticated(peerID, "fp")
+        await waitForMainQueue()
+        #expect(noneContext.flushedOutboxPeerIDs.isEmpty)
     }
 
     @Test @MainActor

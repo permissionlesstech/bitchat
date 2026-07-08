@@ -45,6 +45,9 @@ protocol ChatVerificationContext: AnyObject {
     func resolveNickname(for peerID: PeerID) -> String
     func cachedStablePeerID(for shortPeerID: PeerID) -> PeerID?
     func cacheStablePeerID(_ stablePeerID: PeerID, for shortPeerID: PeerID)
+    /// Flushes the message router's disk outbox for the given (stable) key so
+    /// mail queued while the peer was offline delivers once it authenticates.
+    func flushRouterOutbox(for peerID: PeerID)
 
     // MARK: Noise sessions & verification transport
     /// Installs the Noise service's session callbacks (single registration point).
@@ -73,7 +76,8 @@ extension ChatViewModel: ChatVerificationContext {
     // `isVerifiedFingerprint(_:)`, `setEncryptionStatus(_:for:)`,
     // `resolveNickname(for:)`, `cachedStablePeerID(for:)`,
     // `cacheStablePeerID(_:for:)`, `noiseSessionPublicKeyData(for:)`,
-    // `hasEstablishedNoiseSession(with:)`, and `triggerHandshake(with:)` are
+    // `hasEstablishedNoiseSession(with:)`, `triggerHandshake(with:)`, and
+    // `flushRouterOutbox(for:)` (shared with `ChatTransportEventContext`) are
     // shared requirements with the other contexts or satisfied by existing
     // `ChatViewModel` members. The members below flatten nested service
     // accesses into intent-named calls.
@@ -215,6 +219,14 @@ final class ChatVerificationCoordinator {
                             "🗺️ Mapped short peerID to Noise key for header continuity: \(peerID) -> \(stablePeerID.id.prefix(8))…",
                             category: .session
                         )
+                    }
+
+                    // The link is now authenticated and the stable identity is known; flush any
+                    // mail queued under the stable 64-hex key so a DM composed while this peer was
+                    // offline (including across an app restart) delivers now, not at the TTL.
+                    if let stablePeerID = self.context.cachedStablePeerID(for: peerID),
+                       stablePeerID != peerID {
+                        self.context.flushRouterOutbox(for: stablePeerID)
                     }
 
                     if var pending = self.pendingQRVerifications[peerID], pending.sent == false {
