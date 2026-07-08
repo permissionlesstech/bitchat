@@ -522,9 +522,9 @@ private struct ContentPrivateHeaderInfoButton: View {
                             .foregroundColor(.purple)
                             .accessibilityLabel(String(localized: "content.accessibility.available_nostr", comment: "Accessibility label for Nostr-available peer indicator"))
                     case .offline:
-                        // Same offline mark the mesh list uses; the explicit
-                        // word rides after the name (leading text read as part
-                        // of the name: "sin conexión bob").
+                        // Same dimmed offline mark the mesh list uses; icon
+                        // only — a leading text label read as part of the
+                        // name ("sin conexión bob"). VoiceOver still says it.
                         Image(systemName: "person")
                             .font(.bitchatSystem(size: 14))
                             .foregroundColor(palette.secondary)
@@ -564,13 +564,6 @@ private struct ContentPrivateHeaderInfoButton: View {
                         )
                 }
 
-                // Trailing status tag: name and its identity marks first, the
-                // transient state last, visually subordinate.
-                if !headerState.isGroupConversation, headerState.availability == .offline {
-                    Text("mesh_peers.state.offline")
-                        .bitchatFont(size: 11)
-                        .foregroundColor(palette.secondary)
-                }
             }
         }
         .buttonStyle(.plain)
