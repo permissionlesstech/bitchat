@@ -337,8 +337,16 @@ final class BridgeService: ObservableObject {
         guard let kind = classify(event, cell: cell) else { return }
         // Events we published come back from our own subscription; they are
         // presence-neutral (we never count ourselves) and never re-injected
-        // or rebroadcast.
+        // or rebroadcast. Two layers: the published-ID cache (this session)
+        // and pubkey self-recognition — the rendezvous identity is derived
+        // deterministically, so even after a relaunch wipes the cache our
+        // own relay-backfilled events are recognized (field bug: own
+        // pre-restart messages re-rendered as bridged).
         guard !publishedEventIDs.contains(event.id) else { return }
+        if isOwnRendezvousEvent(event, cell: cell) {
+            publishedEventIDs.insert(event.id) // never downlink it either
+            return
+        }
         guard event.isValidSignature() else { return }
 
         switch kind {
@@ -508,6 +516,7 @@ final class BridgeService: ObservableObject {
         // the channel said. Publishing/subscribing remain opt-in.
         guard let event = structurallyValidEvent(from: carrier),
               !publishedEventIDs.contains(event.id),
+              !isOwnRendezvousEvent(event, cell: carrier.geohash),
               event.isValidSignature() else {
             return
         }
@@ -601,5 +610,14 @@ final class BridgeService: ObservableObject {
 
     private func isFresh(_ event: NostrEvent) -> Bool {
         abs(now().timeIntervalSince1970 - TimeInterval(event.created_at)) <= Limits.maxEventAgeSeconds
+    }
+
+    /// True when the event was signed by this device's own derived
+    /// rendezvous identity for the cell. Survives relaunches (unlike the
+    /// published-ID cache) because the derivation is deterministic; the
+    /// underlying identity cache makes this cheap.
+    private func isOwnRendezvousEvent(_ event: NostrEvent, cell: String) -> Bool {
+        guard let identity = try? deriveIdentity?(cell) else { return false }
+        return identity.publicKeyHex.lowercased() == event.pubkey.lowercased()
     }
 }

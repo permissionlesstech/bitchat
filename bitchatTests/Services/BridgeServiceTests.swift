@@ -226,6 +226,28 @@ struct BridgeServiceTests {
         #expect(carrier.geohash == Self.cell)
     }
 
+    @Test func ownRelayBackfilledEventIsIgnoredAfterRestart() throws {
+        // Field bug: a relaunch wipes the published-ID cache, and relay
+        // backfill then re-delivered the device's own pre-restart events as
+        // "bridged". Self-recognition by the deterministic rendezvous pubkey
+        // must catch them with no cache state at all.
+        let fixture = Fixture(enabled: true)
+        fixture.service.refreshRendezvous()
+        let ownOldEvent = try NostrProtocol.createBridgeMeshEvent(
+            content: "sent before the restart",
+            cell: Self.cell,
+            senderIdentity: fixture.identity, // == deriveIdentity(cell)
+            nickname: "tester",
+            meshMessageID: UUID().uuidString
+        )
+
+        fixture.service.handleRendezvousEvent(ownOldEvent)
+
+        #expect(fixture.injected.isEmpty)
+        #expect(fixture.broadcasts.isEmpty)
+        #expect(fixture.service.bridgedPeerCount == 0)
+    }
+
     @Test func ownEventComingBackFromSubscriptionIsIgnored() {
         let fixture = Fixture(enabled: true)
         fixture.service.refreshRendezvous()
