@@ -216,13 +216,6 @@ private struct ContentPeopleListView: View {
                             }
                         )
                     } else {
-                        GroupChatList(
-                            groups: peerListModel.groupRows,
-                            onTapGroup: { peerID in
-                                peerListModel.startConversation(with: peerID)
-                                showSidebar = true
-                            }
-                        )
                         MeshPeerList(
                             onTapPeer: { peerID in
                                 peerListModel.startConversation(with: peerID)
@@ -240,6 +233,16 @@ private struct ContentPeopleListView: View {
                                 } else {
                                     conversationUIModel.block(peerID: peer.peerID, displayName: peer.displayName)
                                 }
+                            }
+                        )
+                        // People in this area but beyond radio range, and
+                        // private groups: one sheet for the whole room.
+                        BridgePeopleList()
+                        GroupChatList(
+                            groups: peerListModel.groupRows,
+                            onTapGroup: { peerID in
+                                peerListModel.startConversation(with: peerID)
+                                showSidebar = true
                             }
                         )
                     }

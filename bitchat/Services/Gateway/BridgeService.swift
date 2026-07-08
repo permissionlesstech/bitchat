@@ -95,6 +95,20 @@ final class BridgeService: ObservableObject {
         let timestamp: Date
     }
 
+    /// A person currently visible across the bridge (fresh, not attributed
+    /// to the local island), for the people sheet.
+    struct BridgedParticipant: Identifiable, Equatable {
+        let pubkey: String
+        let nickname: String?
+        let lastSeen: Date
+        var id: String { pubkey }
+        /// Geohash-chat convention: nickname#last-4-of-pubkey, so two remote
+        /// "anon"s stay distinguishable.
+        var displayName: String {
+            (nickname?.trimmedOrNilIfEmpty ?? "anon") + "#" + String(pubkey.suffix(4))
+        }
+    }
+
     static let shared = BridgeService()
 
     /// The user toggle. While true this device publishes its own public mesh
@@ -105,6 +119,8 @@ final class BridgeService: ObservableObject {
     /// matching their events' mesh message IDs against the local timeline,
     /// which cannot attribute silent (presence-only) local peers.
     @Published private(set) var bridgedPeerCount: Int = 0
+    /// The people behind the count, newest activity first.
+    @Published private(set) var bridgedParticipants: [BridgedParticipant] = []
     /// The rendezvous cell currently in use, when the bridge is active.
     @Published private(set) var activeCell: String?
     /// Per-session compose flag: while true, outgoing messages stay on the
@@ -176,8 +192,8 @@ final class BridgeService: ObservableObject {
     private var presenceTimerArmed = false
     private var lastPresenceAt = Date.distantPast
 
-    /// pubkey -> (lastSeen, attributed-to-local-island).
-    private var participants: [String: (lastSeen: Date, isLocal: Bool)] = [:]
+    /// pubkey -> (lastSeen, attributed-to-local-island, last known nickname).
+    private var participants: [String: (lastSeen: Date, isLocal: Bool, nickname: String?)] = [:]
 
     private let defaults: UserDefaults
     private let now: () -> Date
@@ -205,6 +221,7 @@ final class BridgeService: ObservableObject {
             uplinkDepositTimes.removeAll()
             participants.removeAll()
             bridgedPeerCount = 0
+            bridgedParticipants = []
         }
         SecureLogger.info("🌉 Bridge mode \(enabled ? "enabled" : "disabled")", category: .session)
         refreshRendezvous()
@@ -351,13 +368,13 @@ final class BridgeService: ObservableObject {
 
         switch kind {
         case .presence:
-            recordParticipant(event.pubkey, isLocal: false)
+            recordParticipant(event.pubkey, isLocal: false, nickname: nil)
         case .message(let message):
             let isLocalRadioCopy = isMessageSeenLocally?(message.messageID) ?? false
             if isLocalRadioCopy {
                 SecureLogger.debug("🌉 Bridge: radio copy of \(message.messageID.prefix(8))… already present; sender counted as local", category: .session)
             }
-            recordParticipant(event.pubkey, isLocal: isLocalRadioCopy)
+            recordParticipant(event.pubkey, isLocal: isLocalRadioCopy, nickname: message.senderNickname)
             inject(message)
             // Gateway duty: carry remote islands' messages onto the radio for
             // mesh-only peers. Local-origin events are skipped — the island
@@ -526,7 +543,7 @@ final class BridgeService: ObservableObject {
         guard case .message(let message)? = classify(event, cell: carrier.geohash) else {
             return
         }
-        recordParticipant(event.pubkey, isLocal: false)
+        recordParticipant(event.pubkey, isLocal: false, nickname: message.senderNickname)
         inject(message)
     }
 
@@ -539,11 +556,16 @@ final class BridgeService: ObservableObject {
         injectInbound?(message)
     }
 
-    private func recordParticipant(_ pubkey: String, isLocal: Bool) {
-        let wasLocal = participants[pubkey]?.isLocal ?? false
+    private func recordParticipant(_ pubkey: String, isLocal: Bool, nickname: String?) {
+        let previous = participants[pubkey]
         // Local attribution is sticky: one radio-confirmed message marks the
-        // pubkey as an islander for as long as they stay fresh.
-        participants[pubkey] = (lastSeen: now(), isLocal: wasLocal || isLocal)
+        // pubkey as an islander for as long as they stay fresh. Presence
+        // events carry no nickname, so a known name is never forgotten.
+        participants[pubkey] = (
+            lastSeen: now(),
+            isLocal: (previous?.isLocal ?? false) || isLocal,
+            nickname: nickname?.trimmedOrNilIfEmpty ?? previous?.nickname
+        )
         recomputeBridgedCount()
     }
 
@@ -555,9 +577,15 @@ final class BridgeService: ObservableObject {
 
     private func recomputeBridgedCount() {
         let cutoff = now().addingTimeInterval(-Limits.participantFreshnessSeconds)
-        let count = participants.filter { $0.value.lastSeen >= cutoff && !$0.value.isLocal }.count
-        if count != bridgedPeerCount {
-            bridgedPeerCount = count
+        let visible = participants
+            .filter { $0.value.lastSeen >= cutoff && !$0.value.isLocal }
+            .map { BridgedParticipant(pubkey: $0.key, nickname: $0.value.nickname, lastSeen: $0.value.lastSeen) }
+            .sorted { $0.lastSeen > $1.lastSeen }
+        if visible.count != bridgedPeerCount {
+            bridgedPeerCount = visible.count
+        }
+        if visible != bridgedParticipants {
+            bridgedParticipants = visible
         }
     }
 
