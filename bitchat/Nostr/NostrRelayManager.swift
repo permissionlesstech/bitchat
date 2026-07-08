@@ -950,8 +950,19 @@ final class NostrRelayManager: ObservableObject {
             toSend[id] = state.messageString
         }
         for (id, messageString) in toSend {
-            if self.subscriptions[relayUrl]?.contains(id) == true { continue }
+            if self.subscriptions[relayUrl]?.contains(id) == true {
+                // Already subscribed on this relay (e.g. a tracker promoted
+                // after an earlier flush): its EOSE is coming, count it.
+                markEOSESubscribed(id: id, relayUrl: relayUrl)
+                continue
+            }
             startPendingEOSETrackingIfNeeded(id: id)
+            // Mark at send *initiation*, not in the async completion: a fast
+            // relay's EOSE could otherwise complete the tracker while this
+            // relay — REQ already on the wire — still sat in awaitingSend.
+            // If the send fails the socket is going down with it, and the
+            // disconnect settle (or the fallback timer) releases the wait.
+            markEOSESubscribed(id: id, relayUrl: relayUrl)
             connection.send(.string(messageString)) { [weak self, weak connection] error in
                 Task { @MainActor [weak self] in
                     guard let self else { return }
@@ -965,7 +976,6 @@ final class NostrRelayManager: ObservableObject {
                         guard let connection, self.connections[relayUrl] === connection else { return }
                         self.subscriptions[relayUrl, default: []].insert(id)
                         self.pendingSubscriptions[relayUrl]?.removeValue(forKey: id)
-                        self.markEOSESubscribed(id: id, relayUrl: relayUrl)
                     }
                 }
             }
