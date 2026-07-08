@@ -72,6 +72,8 @@ final class LocationNotesManager: ObservableObject {
         let geohash: String
         /// NIP-40 expiration, when the note carries one (dead drops do).
         let expiresAt: Date?
+        /// Carries a `["t","urgent"]` tag (parity with urgent board posts).
+        let isUrgent: Bool
 
         init(
             id: String,
@@ -80,7 +82,8 @@ final class LocationNotesManager: ObservableObject {
             createdAt: Date,
             nickname: String?,
             geohash: String,
-            expiresAt: Date? = nil
+            expiresAt: Date? = nil,
+            isUrgent: Bool = false
         ) {
             self.id = id
             self.pubkey = pubkey
@@ -89,6 +92,7 @@ final class LocationNotesManager: ObservableObject {
             self.nickname = nickname
             self.geohash = geohash
             self.expiresAt = expiresAt
+            self.isUrgent = isUrgent
         }
 
         var displayName: String {
@@ -110,6 +114,7 @@ final class LocationNotesManager: ObservableObject {
     private var subscriptionID: String?
     private var noteIDs = Set<String>() // O(1) duplicate detection
     private var directoryUpdateCancellable: AnyCancellable?
+    private var expiryPruneTimer: Timer?
     private let dependencies: LocationNotesDependencies
     private let maxNotesInMemory = 500 // Defensive cap (relay limit is 200)
 
@@ -143,6 +148,33 @@ final class LocationNotesManager: ObservableObject {
                     self.subscribe()
                 }
             }
+        // NIP-40 notes can expire while displayed (a 24h dead drop crossing
+        // its boundary); ingest-time filtering alone would keep it visible
+        // until the subscription is recreated.
+        expiryPruneTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.pruneExpiredNotes()
+            }
+        }
+    }
+
+    deinit {
+        expiryPruneTimer?.invalidate()
+    }
+
+    /// Drops notes whose NIP-40 expiry has passed. Their ids stay in
+    /// `noteIDs` so a relay replay cannot resurrect them.
+    func pruneExpiredNotes() {
+        let now = dependencies.now()
+        let expired = notes.contains { note in
+            if let expiresAt = note.expiresAt { return expiresAt <= now }
+            return false
+        }
+        guard expired else { return }
+        notes.removeAll { note in
+            if let expiresAt = note.expiresAt { return expiresAt <= now }
+            return false
+        }
     }
 
     func setGeohash(_ newGeohash: String) {
@@ -229,7 +261,8 @@ final class LocationNotesManager: ObservableObject {
             self.noteIDs.insert(event.id)
             let nick = event.tags.first(where: { $0.first?.lowercased() == "n" && $0.count >= 2 })?.dropFirst().first
             let ts = Date(timeIntervalSince1970: TimeInterval(event.created_at))
-            let note = Note(id: event.id, pubkey: event.pubkey, content: event.content, createdAt: ts, nickname: nick, geohash: matchedGeohash, expiresAt: expiresAt)
+            let urgent = event.tags.contains { $0.count >= 2 && $0[0].lowercased() == "t" && $0[1].lowercased() == "urgent" }
+            let note = Note(id: event.id, pubkey: event.pubkey, content: event.content, createdAt: ts, nickname: nick, geohash: matchedGeohash, expiresAt: expiresAt, isUrgent: urgent)
             self.notes.append(note)
             self.notes.sort { $0.createdAt > $1.createdAt }
             self.enforceMemoryCap()
@@ -372,6 +405,8 @@ final class LocationNotesManager: ObservableObject {
             dependencies.unsubscribe(sub)
             subscriptionID = nil
         }
+        expiryPruneTimer?.invalidate()
+        expiryPruneTimer = nil
         state = .idle
         errorMessage = nil
     }

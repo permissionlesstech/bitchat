@@ -28,6 +28,10 @@ struct ContentHeaderView: View {
     /// current scope has notices.
     @State private var boardPosts: [BoardPostPacket] = []
 
+    /// Nostr-only location notes at this place (live while the empty mesh
+    /// timeline is showing) — they should light the pin too.
+    @ObservedObject private var nearbyNotes = NearbyNotesCounter.shared
+
     var body: some View {
         HStack(spacing: 0) {
             Text(verbatim: "bitchat/")
@@ -158,9 +162,9 @@ struct ContentHeaderView: View {
                     boardAlertsModel.markSeen(forScopes: scopes)
                     appChromeModel.presentNotices()
                 }) {
-                    // Fill marks unseen new pins; the tint says the current
-                    // scope has notices at all.
-                    Image(systemName: unseenNoticesCount > 0 ? "pin.fill" : "pin")
+                    // Filled whenever the current scope has notices at all
+                    // (matching the orange tint); hollow means nothing here.
+                    Image(systemName: scopeHasNotices || unseenNoticesCount > 0 ? "pin.fill" : "pin")
                         .font(.bitchatSystem(size: 12))
                         .foregroundColor(
                             scopeHasNotices || unseenNoticesCount > 0
@@ -357,9 +361,12 @@ private extension ContentHeaderView {
         return locationChannelsModel.currentBuildingGeohash
     }
 
-    /// Whether either tab of the notices sheet currently has content.
+    /// Whether either tab of the notices sheet currently has content: board
+    /// posts in scope, plus Nostr-only location notes when the nearby-notes
+    /// counter happens to be live (it runs with the empty mesh timeline).
     var scopeHasNotices: Bool {
         boardPosts.contains { $0.geohash.isEmpty || $0.geohash == noticesGeoScope }
+            || nearbyNotes.noteCount > 0
     }
 
     /// New pins in either visible scope since the sheet was last opened.

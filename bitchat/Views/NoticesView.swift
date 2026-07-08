@@ -262,32 +262,30 @@ struct NoticesView: View {
                 .disabled(!sendEnabled)
                 .accessibilityLabel(Strings.send)
             }
-            // Urgency and expiry only travel with the mesh copy — the bridged
-            // Nostr note carries neither, so relay-side readers would never
-            // see them. Offer the controls only where they fully apply.
-            if tab == .mesh {
-                HStack(spacing: 12) {
-                    Toggle(isOn: $urgent) {
-                        Text(Strings.urgentToggle)
-                            .bitchatFont(size: 12)
-                            .foregroundColor(urgent ? palette.alertRed : palette.secondary)
-                    }
-                    .toggleStyle(.switch)
-                    .fixedSize()
-                    .accessibilityLabel(Strings.urgentToggle)
-                    Spacer()
-                    Text(Strings.expiryLabel)
+            // Urgency and expiry travel with both copies now: board posts
+            // carry flags + expiresAt on the mesh, and the bridged Nostr
+            // note mirrors them via a ["t","urgent"] tag and NIP-40.
+            HStack(spacing: 12) {
+                Toggle(isOn: $urgent) {
+                    Text(Strings.urgentToggle)
                         .bitchatFont(size: 12)
-                        .foregroundColor(palette.secondary)
-                    Picker(Strings.expiryLabel, selection: $expiryDays) {
-                        ForEach([1, 3, 7], id: \.self) { days in
-                            Text(Strings.expiryDaysOption(days)).tag(days)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .fixedSize()
-                    .accessibilityLabel(Strings.expiryLabel)
+                        .foregroundColor(urgent ? palette.alertRed : palette.secondary)
                 }
+                .toggleStyle(.switch)
+                .fixedSize()
+                .accessibilityLabel(Strings.urgentToggle)
+                Spacer()
+                Text(Strings.expiryLabel)
+                    .bitchatFont(size: 12)
+                    .foregroundColor(palette.secondary)
+                Picker(Strings.expiryLabel, selection: $expiryDays) {
+                    ForEach([1, 3, 7], id: \.self) { days in
+                        Text(Strings.expiryDaysOption(days)).tag(days)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .fixedSize()
+                .accessibilityLabel(Strings.expiryLabel)
             }
         }
         .padding(.horizontal, 16)
@@ -304,13 +302,14 @@ struct NoticesView: View {
     private func send() {
         guard let geohash = activeGeohash, let content = draft.trimmedOrNilIfEmpty else { return }
         // Geo posts go to the board and are bridged to Nostr by BoardManager,
-        // so mesh and internet see the same notice. They always use the
-        // defaults: non-urgent, 7-day expiry (NIP-40 on the bridged copy).
+        // so mesh and internet see the same notice — urgency and expiry
+        // included (flags/expiresAt on mesh, ["t","urgent"] + NIP-40 on the
+        // bridged note).
         let sent = board.createPost(
             content: content,
             geohash: geohash,
-            urgent: tab == .mesh && urgent,
-            expiryDays: tab == .mesh ? expiryDays : 7,
+            urgent: urgent,
+            expiryDays: expiryDays,
             nickname: senderNickname
         )
         if sent {

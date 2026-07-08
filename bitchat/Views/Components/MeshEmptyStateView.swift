@@ -12,6 +12,10 @@
 import SwiftUI
 
 struct MeshEmptyStateView: View {
+    /// Visible chat height to fill; the radar centers in the space left
+    /// below the narration. Zero (previews) keeps a compact layout.
+    var fillHeight: CGFloat = 0
+
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @EnvironmentObject private var appChromeModel: AppChromeModel
     @ObservedObject private var activityTracker = GeohashChatActivityTracker.shared
@@ -70,8 +74,6 @@ struct MeshEmptyStateView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            MeshRadarView()
-                .padding(.bottom, 2)
             narrationLine(Strings.meshIntro)
             narrationLine(Strings.meshWaiting)
             if sightingsTracker.todayCount > 0 {
@@ -84,7 +86,14 @@ struct MeshEmptyStateView: View {
                 notesHint
             }
             narrationLine(Strings.switchHint)
+
+            // The radar centers in whatever space is left below the text —
+            // the flexible spacers split it evenly.
+            Spacer(minLength: 24)
+            MeshRadarView()
+            Spacer(minLength: 12)
         }
+        .frame(minHeight: fillHeight, alignment: .top)
         .onAppear { NearbyNotesCounter.shared.activate() }
         .onDisappear { NearbyNotesCounter.shared.deactivate() }
         .onReceive(refreshTimer) { _ in refreshTick += 1 }

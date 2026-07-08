@@ -21,6 +21,7 @@ final class NearbyNotesCounter: ObservableObject {
     private var manager: LocationNotesManager?
     private var managerCancellable: AnyCancellable?
     private var channelsCancellable: AnyCancellable?
+    private var settingCancellable: AnyCancellable?
     private var activeHolders = 0
     private let locationManager: LocationChannelManager
 
@@ -37,6 +38,12 @@ final class NearbyNotesCounter: ObservableObject {
         channelsCancellable = locationManager.$availableChannels
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.retarget() }
+        // The app-info kill switch must take effect immediately, not on the
+        // next location change or remount.
+        settingCancellable = NotificationCenter.default
+            .publisher(for: LocationNotesSettings.didChangeNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.retarget() }
         retarget()
     }
 
@@ -44,6 +51,7 @@ final class NearbyNotesCounter: ObservableObject {
         activeHolders = max(0, activeHolders - 1)
         guard activeHolders == 0 else { return }
         channelsCancellable = nil
+        settingCancellable = nil
         managerCancellable = nil
         manager?.cancel()
         manager = nil

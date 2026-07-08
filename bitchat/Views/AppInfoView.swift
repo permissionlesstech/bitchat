@@ -101,7 +101,6 @@ struct AppInfoView: View {
             )
             static let enable: LocalizedStringKey = "app_info.location.enable"
             static let openSettings: LocalizedStringKey = "app_info.location.open_settings"
-            static let granted: LocalizedStringKey = "app_info.location.granted"
         }
 
         enum Network {
@@ -382,9 +381,8 @@ private extension AppInfoView {
                     .bitchatFont(size: 13)
                     .foregroundColor(palette.accent)
             case .authorized:
-                Text(Strings.Location.granted)
-                    .bitchatFont(size: 12)
-                    .foregroundColor(secondaryTextColor)
+                // Granted needs no status line — the toggle being on says it.
+                EmptyView()
             }
         }
     }

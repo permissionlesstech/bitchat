@@ -15,8 +15,15 @@ import Foundation
 enum LocationNotesSettings {
     private static let enabledKey = "locationNotes.enabled"
 
+    /// Fired on every toggle write so live consumers (the nearby-notes
+    /// counter) can drop or restart their relay subscription immediately.
+    static let didChangeNotification = Notification.Name("bitchat.locationNotesSettingsDidChange")
+
     static var enabled: Bool {
         get { UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? true }
-        set { UserDefaults.standard.set(newValue, forKey: enabledKey) }
+        set {
+            UserDefaults.standard.set(newValue, forKey: enabledKey)
+            NotificationCenter.default.post(name: didChangeNotification, object: nil)
+        }
     }
 }

@@ -7540,186 +7540,6 @@
         }
       }
     },
-    "app_info.location.granted" : {
-      "comment" : "Status line in app info when location permission is granted",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "تم منح الوصول إلى الموقع"
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "অবস্থান অ্যাক্সেস দেওয়া হয়েছে"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "standortzugriff gewährt"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "location access granted"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "acceso a la ubicación concedido"
-          }
-        },
-        "fil" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "naibigay na ang access sa lokasyon"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "accès à la localisation accordé"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ניתנה גישה למיקום"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "स्थान एक्सेस दी गई"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "akses lokasi diberikan"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "accesso alla posizione consentito"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "位置情報へのアクセスが許可されています"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "위치 접근 허용됨"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "akses lokasi diberikan"
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "स्थान पहुँच प्रदान गरिएको छ"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "locatietoegang verleend"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "dostęp do lokalizacji przyznany"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "acesso à localização concedido"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "acesso à localização concedido"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "доступ к геолокации предоставлен"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "platsåtkomst beviljad"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "இருப்பிட அணுகல் வழங்கப்பட்டது"
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ได้รับสิทธิ์เข้าถึงตำแหน่งที่ตั้งแล้ว"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "konum erişimi verildi"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "доступ до місцезнаходження надано"
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "مقام تک رسائی مل گئی"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "đã cấp quyền truy cập vị trí"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已授予位置权限"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已授予位置權限"
-          }
-        }
-      }
-    },
     "app_info.location.notes.description" : {
       "comment" : "Description of the location notes toggle in app info",
       "extractionState" : "manual",
@@ -7727,175 +7547,175 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "اترك ملاحظة مثبتة في هذا المكان باستخدام /drop — يمكن لأي شخص يمر خلال الـ 24 ساعة القادمة قراءتها. تعرض أيضًا الملاحظات التي تركها الآخرون قريبًا. يتطلب الوصول إلى الموقع."
+            "value" : "ثبّت ملاحظات في الأماكن باستخدام /drop، يقرؤها أي مارّ خلال 24 ساعة. يتطلب الموقع."
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "/drop দিয়ে এই জায়গায় একটি নোট পিন করে রাখুন — আগামী 24 ঘণ্টায় যারা এখান দিয়ে যাবে তারা পড়তে পারবে। কাছাকাছি অন্যদের রাখা নোটও দেখায়। অবস্থান অ্যাক্সেস প্রয়োজন।"
+            "value" : "/drop দিয়ে জায়গায় নোট পিন করুন, 24 ঘণ্টা ধরে পাশ দিয়ে যাওয়া যে কেউ পড়তে পারবে। অবস্থান প্রয়োজন।"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "hinterlasse mit /drop eine notiz an diesem ort — wer in den nächsten 24 stunden vorbeikommt, kann sie lesen. zeigt auch notizen, die andere in der nähe hinterlassen haben. benötigt standortzugriff."
+            "value" : "hefte notizen mit /drop an orte, 24h lesbar für alle, die vorbeikommen. benötigt standort."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "leave a note pinned to this place with /drop — anyone passing through in the next 24 hours can read it. also surfaces notes others left nearby. needs location access."
+            "value" : "pin notes to places with /drop, readable by anyone passing by for 24h. needs location."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "deja una nota fijada en este lugar con /drop — cualquiera que pase en las próximas 24 horas podrá leerla. también muestra notas que otros dejaron cerca. necesita acceso a la ubicación."
+            "value" : "fija notas en lugares con /drop, legibles por cualquiera que pase durante 24h. necesita ubicación."
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "mag-iwan ng note na naka-pin sa lugar na ito gamit ang /drop — mababasa ito ng sinumang dadaan sa susunod na 24 na oras. ipinapakita rin ang mga note na iniwan ng iba sa malapit. kailangan ng access sa lokasyon."
+            "value" : "mag-pin ng mga note sa mga lugar gamit ang /drop, mababasa ng sinumang dadaan sa loob ng 24h. kailangan ng lokasyon."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "laisse une note épinglée à cet endroit avec /drop — quiconque passe dans les 24 prochaines heures peut la lire. affiche aussi les notes laissées par d'autres à proximité. nécessite l'accès à la localisation."
+            "value" : "épinglez des notes à des lieux avec /drop, lisibles par quiconque passe pendant 24h. nécessite la localisation."
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "השאר פתק מוצמד למקום הזה עם /drop — כל מי שעובר ב-24 השעות הקרובות יכול לקרוא אותו. מציג גם פתקים שאחרים השאירו בקרבת מקום. דורש גישה למיקום."
+            "value" : "הצמד פתקים למקומות עם /drop, קריאים לכל מי שעובר במשך 24 שעות. דורש מיקום."
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "/drop से इस जगह पर एक नोट पिन करें — अगले 24 घंटों में यहाँ से गुज़रने वाला कोई भी इसे पढ़ सकता है। आस-पास दूसरों के छोड़े नोट भी दिखाता है। स्थान एक्सेस चाहिए।"
+            "value" : "/drop से जगहों पर नोट पिन करें, 24 घंटे तक वहां से गुजरने वाला कोई भी पढ़ सकता है। स्थान आवश्यक।"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tinggalkan catatan yang disematkan di tempat ini dengan /drop — siapa pun yang lewat dalam 24 jam ke depan bisa membacanya. juga menampilkan catatan yang ditinggalkan orang lain di dekat sini. perlu akses lokasi."
+            "value" : "sematkan catatan di tempat dengan /drop, dapat dibaca siapa pun yang lewat selama 24 jam. perlu lokasi."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "lascia una nota fissata in questo luogo con /drop — chiunque passi nelle prossime 24 ore può leggerla. mostra anche le note lasciate da altri nelle vicinanze. richiede l'accesso alla posizione."
+            "value" : "fissa note nei luoghi con /drop, leggibili da chiunque passi per 24h. richiede la posizione."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "/drop でこの場所にメモをピン留め — 今後24時間以内に通りかかった人が読めます。近くに残された他の人のメモも表示します。位置情報へのアクセスが必要です。"
+            "value" : "/drop で場所にメモをピン留め。24時間、通りかかった誰でも読めます。位置情報が必要です。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "/drop 으로 이 장소에 쪽지를 고정하세요 — 앞으로 24시간 동안 지나가는 누구나 읽을 수 있어요. 근처에 다른 사람이 남긴 쪽지도 보여줘요. 위치 접근 권한이 필요해요."
+            "value" : "/drop로 장소에 메모를 고정하세요. 24시간 동안 지나가는 누구나 읽을 수 있습니다. 위치 필요."
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tinggalkan nota yang dipin di tempat ini dengan /drop — sesiapa yang lalu dalam 24 jam akan datang boleh membacanya. turut memaparkan nota yang ditinggalkan orang lain berdekatan. perlukan akses lokasi."
+            "value" : "pinkan nota di tempat dengan /drop, boleh dibaca sesiapa yang lalu selama 24 jam. perlukan lokasi."
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "/drop प्रयोग गरेर यस ठाउँमा नोट पिन गर्नुहोस् — आगामी 24 घण्टामा यहाँबाट जाने जोकोहीले पढ्न सक्छ। नजिकै अरूले छोडेका नोटहरू पनि देखाउँछ। स्थान पहुँच चाहिन्छ।"
+            "value" : "/drop ले ठाउँहरूमा नोट पिन गर्नुहोस्, 24 घण्टासम्म त्यहाँबाट जाने जोकोहीले पढ्न सक्छ। स्थान आवश्यक।"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "laat met /drop een notitie achter op deze plek — iedereen die de komende 24 uur langskomt kan hem lezen. toont ook notities die anderen in de buurt achterlieten. vereist locatietoegang."
+            "value" : "pin notities aan plekken met /drop, 24 uur leesbaar voor iedereen die langskomt. vereist locatie."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "zostaw notatkę przypiętą do tego miejsca za pomocą /drop — każdy, kto przejdzie tędy w ciągu następnych 24 godzin, może ją przeczytać. pokazuje też notatki zostawione przez innych w pobliżu. wymaga dostępu do lokalizacji."
+            "value" : "przypinaj notatki do miejsc za pomocą /drop, czytelne dla każdego przechodzącego przez 24h. wymaga lokalizacji."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "deixa uma nota fixada neste local com /drop — quem passar nas próximas 24 horas pode lê-la. também mostra notas que outros deixaram por perto. precisa de acesso à localização."
+            "value" : "fixe notas em locais com /drop, legíveis por quem passar durante 24h. requer localização."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "deixe uma nota fixada neste lugar com /drop — quem passar nas próximas 24 horas pode ler. também mostra notas que outros deixaram por perto. precisa de acesso à localização."
+            "value" : "fixe notas em lugares com /drop, legíveis por quem passar durante 24h. precisa de localização."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "оставьте заметку, закреплённую в этом месте, с помощью /drop — любой, кто пройдёт здесь в ближайшие 24 часа, сможет её прочитать. также показывает заметки, оставленные другими поблизости. требуется доступ к геолокации."
+            "value" : "закрепляйте заметки в местах с помощью /drop — 24 часа их сможет прочитать любой, кто проходит мимо. нужна геолокация."
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "lämna en anteckning fäst på den här platsen med /drop — alla som passerar under de kommande 24 timmarna kan läsa den. visar också anteckningar som andra lämnat i närheten. kräver platsåtkomst."
+            "value" : "fäst anteckningar på platser med /drop, läsbara av alla som passerar i 24h. kräver plats."
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "/drop மூலம் இந்த இடத்தில் ஒரு குறிப்பை பொருத்தி விடுங்கள் — அடுத்த 24 மணி நேரத்தில் கடந்து செல்லும் யாரும் படிக்கலாம். அருகில் மற்றவர்கள் விட்ட குறிப்புகளையும் காட்டும். இருப்பிட அணுகல் தேவை."
+            "value" : "/drop மூலம் இடங்களில் குறிப்புகளை பின் செய்யுங்கள், 24 மணி நேரம் கடந்து செல்லும் யாரும் படிக்கலாம். இருப்பிடம் தேவை."
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ฝากโน้ตปักไว้ที่นี่ด้วย /drop — ใครที่ผ่านมาใน 24 ชั่วโมงข้างหน้าจะอ่านได้ และยังแสดงโน้ตที่คนอื่นทิ้งไว้ใกล้ๆ ด้วย ต้องใช้สิทธิ์เข้าถึงตำแหน่งที่ตั้ง"
+            "value" : "ปักโน้ตไว้ตามสถานที่ด้วย /drop ใครผ่านมาก็อ่านได้ตลอด 24 ชั่วโมง ต้องใช้ตำแหน่งที่ตั้ง"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "/drop ile bu yere sabitlenmiş bir not bırak — önümüzdeki 24 saat içinde geçen herkes okuyabilir. başkalarının yakında bıraktığı notları da gösterir. konum erişimi gerektirir."
+            "value" : "/drop ile yerlere not sabitle, 24 saat boyunca yoldan geçen herkes okuyabilir. konum gerekir."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "залиште нотатку, закріплену в цьому місці, за допомогою /drop — будь-хто, хто проходитиме тут у найближчі 24 години, зможе її прочитати. також показує нотатки, залишені іншими поблизу. потрібен доступ до місцезнаходження."
+            "value" : "закріплюйте нотатки в місцях за допомогою /drop — 24 години їх зможе прочитати будь-хто, хто проходить повз. потрібне місцезнаходження."
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "/drop سے اس جگہ پر ایک نوٹ پن کر کے چھوڑیں — اگلے 24 گھنٹوں میں یہاں سے گزرنے والا کوئی بھی اسے پڑھ سکتا ہے۔ قریب میں دوسروں کے چھوڑے نوٹ بھی دکھاتا ہے۔ مقام تک رسائی درکار ہے۔"
+            "value" : "/drop سے جگہوں پر نوٹ پن کریں، 24 گھنٹے تک وہاں سے گزرنے والا کوئی بھی پڑھ سکتا ہے۔ مقام درکار ہے۔"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "để lại một ghi chú ghim tại nơi này bằng /drop — ai đi qua trong 24 giờ tới đều có thể đọc. cũng hiển thị ghi chú người khác để lại gần đây. cần quyền truy cập vị trí."
+            "value" : "ghim ghi chú vào địa điểm bằng /drop, ai đi ngang cũng đọc được trong 24h. cần vị trí."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "用 /drop 在此地留下一条固定留言 — 未来 24 小时内经过的人都能读到。也会显示他人在附近留下的留言。需要位置权限。"
+            "value" : "用 /drop 把便签钉在地点，24小时内路过的任何人都能读到。需要位置权限。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "用 /drop 在此地留下一則固定留言 — 未來 24 小時內經過的人都能讀到。也會顯示他人在附近留下的留言。需要位置權限。"
+            "value" : "用 /drop 將便箋釘在地點，24小時內路過的任何人都能讀到。需要位置權限。"
           }
         }
       }
@@ -8279,31 +8099,31 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "standort"
+            "value" : "STANDORT"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "location"
+            "value" : "LOCATION"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ubicación"
+            "value" : "UBICACIÓN"
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "lokasyon"
+            "value" : "LOKASYON"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "localisation"
+            "value" : "LOCALISATION"
           }
         },
         "he" : {
@@ -8321,13 +8141,13 @@
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "lokasi"
+            "value" : "LOKASI"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "posizione"
+            "value" : "POSIZIONE"
           }
         },
         "ja" : {
@@ -8345,7 +8165,7 @@
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "lokasi"
+            "value" : "LOKASI"
           }
         },
         "ne" : {
@@ -8357,37 +8177,37 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "locatie"
+            "value" : "LOCATIE"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "lokalizacja"
+            "value" : "LOKALIZACJA"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "localização"
+            "value" : "LOCALIZAÇÃO"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "localização"
+            "value" : "LOCALIZAÇÃO"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "геолокация"
+            "value" : "ГЕОЛОКАЦИЯ"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "plats"
+            "value" : "PLATS"
           }
         },
         "ta" : {
@@ -8405,13 +8225,13 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "konum"
+            "value" : "KONUM"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "місцезнаходження"
+            "value" : "МІСЦЕЗНАХОДЖЕННЯ"
           }
         },
         "ur" : {
@@ -8423,7 +8243,7 @@
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "vị trí"
+            "value" : "VỊ TRÍ"
           }
         },
         "zh-Hans" : {
@@ -10598,175 +10418,175 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "بث الرسائل الصوتية أثناء التحدث عندما يكون المستلم متاحًا؛ يتم تشغيل الصوت المباشر الوارد تلقائيًا في المحادثة المفتوحة"
+            "value" : "يُبث أثناء التحدث؛ الصوت المباشر الوارد يُشغَّل تلقائيًا"
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "প্রাপক নাগালের মধ্যে থাকলে কথা বলার সাথে সাথে ভয়েস বার্তা স্ট্রিম হয়; খোলা চ্যাটে আগত লাইভ ভয়েস স্বয়ংক্রিয়ভাবে চলে"
+            "value" : "কথা বলার সাথে সাথে স্ট্রিম হয়; আগত লাইভ ভয়েস স্বয়ংক্রিয়ভাবে চলে"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "sprachnachrichten werden beim sprechen live übertragen, wenn der empfänger erreichbar ist; eingehende live-stimme wird im geöffneten chat automatisch abgespielt"
+            "value" : "überträgt live beim sprechen; eingehende live-stimme wird automatisch abgespielt"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "stream voice messages as you speak when the recipient is reachable; incoming live voice plays automatically in the open chat"
+            "value" : "streams as you speak; incoming live voice plays automatically"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "transmite mensajes de voz mientras hablas cuando el destinatario está disponible; la voz en vivo entrante se reproduce automáticamente en el chat abierto"
+            "value" : "transmite mientras hablas; la voz en vivo entrante se reproduce automáticamente"
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ini-stream ang mga voice message habang nagsasalita kapag maaabot ang tatanggap; awtomatikong tumutugtog ang papasok na live na boses sa bukas na chat"
+            "value" : "nag-i-stream habang nagsasalita ka; awtomatikong tumutugtog ang papasok na live na boses"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "diffuse les messages vocaux pendant que vous parlez lorsque le destinataire est joignable ; la voix en direct entrante est lue automatiquement dans la discussion ouverte"
+            "value" : "diffuse pendant que vous parlez ; la voix en direct entrante est lue automatiquement"
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "משדר הודעות קוליות בזמן שאתה מדבר כשהנמען זמין; קול חי נכנס מושמע אוטומטית בצ'אט הפתוח"
+            "value" : "משדר בזמן שאתה מדבר; קול חי נכנס מושמע אוטומטית"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "प्राप्तकर्ता पहुंच में होने पर बोलते समय वॉयस संदेश स्ट्रीम होते हैं; खुली चैट में आने वाली लाइव आवाज़ अपने आप चलती है"
+            "value" : "बोलते समय स्ट्रीम होता है; आने वाली लाइव आवाज़ अपने आप चलती है"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "streaming pesan suara saat Anda berbicara ketika penerima terjangkau; suara langsung yang masuk diputar otomatis di obrolan yang terbuka"
+            "value" : "streaming saat Anda berbicara; suara langsung yang masuk diputar otomatis"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "trasmette i messaggi vocali mentre parli quando il destinatario è raggiungibile; la voce in diretta in arrivo viene riprodotta automaticamente nella chat aperta"
+            "value" : "trasmette mentre parli; la voce in diretta in arrivo viene riprodotta automaticamente"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "受信者に到達可能なとき、話しながら音声メッセージをライブ配信します。受信したライブ音声は開いているチャットで自動再生されます"
+            "value" : "話しながらライブ配信。受信したライブ音声は自動再生されます"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "상대방이 연결되어 있으면 말하는 동안 음성 메시지가 실시간 전송됩니다. 수신된 라이브 음성은 열려 있는 채팅에서 자동 재생됩니다"
+            "value" : "말하는 동안 실시간 전송됩니다. 수신된 라이브 음성은 자동 재생됩니다"
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "strim mesej suara semasa anda bercakap apabila penerima boleh dihubungi; suara langsung masuk dimainkan secara automatik dalam sembang terbuka"
+            "value" : "strim semasa anda bercakap; suara langsung masuk dimainkan secara automatik"
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "प्रापक पहुँचयोग्य हुँदा बोल्दै गर्दा भ्वाइस सन्देशहरू स्ट्रिम हुन्छन्; खुला च्याटमा आगमन लाइभ आवाज स्वतः बज्छ"
+            "value" : "बोल्दै गर्दा स्ट्रिम हुन्छ; आगमन लाइभ आवाज स्वतः बज्छ"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "streamt spraakberichten terwijl je praat wanneer de ontvanger bereikbaar is; inkomende live spraak wordt automatisch afgespeeld in de geopende chat"
+            "value" : "streamt terwijl je praat; inkomende live spraak wordt automatisch afgespeeld"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "przesyła wiadomości głosowe na żywo podczas mówienia, gdy odbiorca jest osiągalny; przychodzący głos na żywo odtwarza się automatycznie w otwartym czacie"
+            "value" : "przesyła na żywo podczas mówienia; przychodzący głos na żywo odtwarza się automatycznie"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "transmite mensagens de voz enquanto fala quando o destinatário está acessível; a voz ao vivo recebida é reproduzida automaticamente na conversa aberta"
+            "value" : "transmite enquanto fala; a voz ao vivo recebida é reproduzida automaticamente"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "transmite mensagens de voz enquanto você fala quando o destinatário está acessível; a voz ao vivo recebida toca automaticamente na conversa aberta"
+            "value" : "transmite enquanto você fala; a voz ao vivo recebida toca automaticamente"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "передаёт голосовые сообщения в реальном времени, пока вы говорите, если получатель доступен; входящий живой голос автоматически воспроизводится в открытом чате"
+            "value" : "передаёт, пока вы говорите; входящий живой голос воспроизводится автоматически"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "strömmar röstmeddelanden medan du pratar när mottagaren är nåbar; inkommande live-röst spelas upp automatiskt i den öppna chatten"
+            "value" : "strömmar medan du pratar; inkommande live-röst spelas upp automatiskt"
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "பெறுநர் அணுகக்கூடியதாக இருக்கும்போது நீங்கள் பேசும்போதே குரல் செய்திகள் நேரலையாக அனுப்பப்படும்; உள்வரும் நேரலை குரல் திறந்த அரட்டையில் தானாக ஒலிக்கும்"
+            "value" : "நீங்கள் பேசும்போதே நேரலையாக அனுப்பப்படும்; உள்வரும் நேரலை குரல் தானாக ஒலிக்கும்"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "สตรีมข้อความเสียงขณะพูดเมื่อติดต่อผู้รับได้ เสียงสดขาเข้าจะเล่นอัตโนมัติในแชทที่เปิดอยู่"
+            "value" : "สตรีมขณะพูด เสียงสดขาเข้าจะเล่นอัตโนมัติ"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "alıcı erişilebilir olduğunda sesli mesajlar siz konuşurken canlı iletilir; gelen canlı ses açık sohbette otomatik çalınır"
+            "value" : "siz konuşurken canlı iletilir; gelen canlı ses otomatik çalınır"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "передає голосові повідомлення наживо, поки ви говорите, якщо одержувач доступний; вхідний живий голос автоматично відтворюється у відкритому чаті"
+            "value" : "передає, поки ви говорите; вхідний живий голос відтворюється автоматично"
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "جب وصول کنندہ قابل رسائی ہو تو بولتے وقت صوتی پیغامات لائیو نشر ہوتے ہیں؛ موصول ہونے والی لائیو آواز کھلی چیٹ میں خود بخود چلتی ہے"
+            "value" : "بولتے وقت لائیو نشر ہوتا ہے؛ موصول ہونے والی لائیو آواز خود بخود چلتی ہے"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "phát trực tiếp tin nhắn thoại khi bạn nói nếu người nhận trong tầm kết nối; giọng nói trực tiếp đến sẽ tự phát trong cuộc trò chuyện đang mở"
+            "value" : "phát trực tiếp khi bạn nói; giọng nói trực tiếp đến sẽ tự phát"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "当接收方可达时，语音消息会在你说话的同时实时传输；收到的实时语音会在打开的聊天中自动播放"
+            "value" : "边说边实时传输；收到的实时语音会自动播放"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "當接收方可達時，語音訊息會在你說話的同時即時傳輸；收到的即時語音會在開啟的聊天中自動播放"
+            "value" : "邊說邊即時傳輸；收到的即時語音會自動播放"
           }
         }
       }

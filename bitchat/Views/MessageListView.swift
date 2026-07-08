@@ -72,10 +72,11 @@ struct MessageListView: View {
             return MessageDisplayItem(id: "\(contextKey)|\(message.id)", message: message)
         }
 
+        GeometryReader { geometry in
         ScrollViewReader { proxy in
             ScrollView {
                 if messageItems.isEmpty && privatePeer == nil {
-                    publicEmptyState
+                    publicEmptyState(fillHeight: geometry.size.height)
                 }
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(messageItems) { item in
@@ -246,6 +247,7 @@ struct MessageListView: View {
                 scrollThrottleTimer?.invalidate()
             }
         }
+        }
         .environment(\.openURL, OpenURLAction { url in
             // Intercept custom cashu: links created in attributed text
             if let scheme = url.scheme?.lowercased(), scheme == "cashu" || scheme == "lightning" {
@@ -273,11 +275,13 @@ private extension MessageListView {
     /// Terminal-styled narration for an empty public timeline: says which
     /// channel this is, that the app is waiting for peers, and where to go
     /// next. Rendered inside the ScrollView; disappears with the first row.
-    var publicEmptyState: some View {
+    /// The mesh case fills the visible chat height so its radar can center
+    /// in the space below the text.
+    func publicEmptyState(fillHeight: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             switch locationChannelsModel.selectedChannel {
             case .mesh:
-                MeshEmptyStateView()
+                MeshEmptyStateView(fillHeight: max(0, fillHeight - 24))
             case .location(let channel):
                 emptyStateLine(
                     String(

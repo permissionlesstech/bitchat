@@ -303,6 +303,39 @@ struct LocationNotesManagerTests {
         #expect(!LocationNotesManager.postDrop(content: "hi", nickname: "x", geohash: "u4pruydq", dependencies: deps))
     }
 
+    @Test
+    func pruneExpiredNotes_dropsNotesWhoseExpiryPassed() throws {
+        var storedHandler: ((NostrEvent) -> Void)?
+        var currentNow = Date(timeIntervalSince1970: 1_700_000_000)
+        let deps = LocationNotesDependencies(
+            relayLookup: { _, _ in ["wss://relay.one"] },
+            subscribe: { _, _, _, handler, _ in
+                storedHandler = handler
+            },
+            unsubscribe: { _ in },
+            sendEvent: { _, _ in },
+            deriveIdentity: { _ in throw TestError.shouldNotDerive },
+            now: { currentNow }
+        )
+
+        let manager = LocationNotesManager(geohash: "u4pruydq", dependencies: deps)
+        let identity = try NostrIdentity.generate()
+        let note = NostrEvent(
+            pubkey: identity.publicKeyHex,
+            createdAt: currentNow,
+            kind: .textNote,
+            tags: [["g", "u4pruydq"], ["expiration", String(Int(currentNow.timeIntervalSince1970) + 60)]],
+            content: "short lived"
+        )
+        storedHandler?(try note.sign(with: identity.schnorrSigningKey()))
+        #expect(manager.notes.count == 1)
+
+        currentNow = currentNow.addingTimeInterval(120)
+        manager.pruneExpiredNotes()
+
+        #expect(manager.notes.isEmpty)
+    }
+
     private enum TestError: Error {
         case shouldNotDerive
     }

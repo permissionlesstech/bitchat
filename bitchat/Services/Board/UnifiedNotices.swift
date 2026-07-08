@@ -52,7 +52,7 @@ struct NoticeItem: Identifiable, Equatable {
             .first.map(String.init) ?? display
         content = note.content
         createdAt = note.createdAt
-        isUrgent = false
+        isUrgent = note.isUrgent
         expiresAt = note.expiresAt
         source = .nostr(note)
     }
