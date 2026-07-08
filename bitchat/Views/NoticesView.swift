@@ -629,19 +629,18 @@ private struct NoticesList: View {
     private static func timestampText(for date: Date) -> String {
         let now = Date()
         if let days = Calendar.current.dateComponents([.day], from: date, to: now).day, days < 7 {
-            let rel = relativeFormatter.string(from: date, to: now) ?? ""
-            return rel.isEmpty ? "" : "\(rel) ago"
+            // The whole "3 hr ago" phrase must come from the formatter —
+            // gluing an English "ago" onto a localized duration ships the
+            // wrong word order to most locales ("hace 3 h", "vor 3 Std").
+            return relativeFormatter.localizedString(for: date, relativeTo: now)
         }
         let sameYear = Calendar.current.isDate(date, equalTo: now, toGranularity: .year)
         return (sameYear ? absDateFormatter : absDateYearFormatter).string(from: date)
     }
 
-    private static let relativeFormatter: DateComponentsFormatter = {
-        let f = DateComponentsFormatter()
-        f.allowedUnits = [.day, .hour, .minute]
-        f.maximumUnitCount = 1
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
         f.unitsStyle = .abbreviated
-        f.collapsesLargestUnit = true
         return f
     }()
 
