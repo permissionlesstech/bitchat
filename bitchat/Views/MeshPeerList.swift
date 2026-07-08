@@ -60,9 +60,38 @@ struct MeshPeerList: View {
                     HStack(spacing: 4) {
                         let assigned = peerListModel.colorForMeshPeer(id: peer.peerID, isDark: colorScheme == .dark)
                         let baseColor = isMe ? Color.orange : assigned
-                        // No leading transport glyph: the section header says
-                        // what kind of row this is, and the trailing badges
-                        // carry per-peer state.
+                        // Mesh rows keep their leading glyph: unlike the
+                        // homogeneous bridge/groups sections, it encodes HOW
+                        // the peer is reachable (radio, relayed, nostr-only).
+                        if isMe {
+                            Image(systemName: "person.fill")
+                                .font(.bitchatSystem(size: 10))
+                                .foregroundColor(baseColor)
+                        } else if peer.isConnected {
+                            // Mesh-connected peer: radio icon
+                            Image(systemName: "antenna.radiowaves.left.and.right")
+                                .font(.bitchatSystem(size: 10))
+                                .foregroundColor(baseColor)
+                                .help(Strings.connected)
+                        } else if peer.isReachable {
+                            // Mesh-reachable (relayed): point.3 icon
+                            Image(systemName: "point.3.filled.connected.trianglepath.dotted")
+                                .font(.bitchatSystem(size: 10))
+                                .foregroundColor(baseColor)
+                                .help(Strings.reachable)
+                        } else if peer.isMutualFavorite {
+                            // Mutual favorite reachable via Nostr: globe icon (purple)
+                            Image(systemName: "globe")
+                                .font(.bitchatSystem(size: 10))
+                                .foregroundColor(.purple)
+                                .help(Strings.nostr)
+                        } else {
+                            // Fallback icon for others (dimmed)
+                            Image(systemName: "person")
+                                .font(.bitchatSystem(size: 10))
+                                .foregroundColor(palette.secondary)
+                                .help(Strings.offline)
+                        }
 
                         let (base, suffix) = peer.displayName.splitSuffix()
                         HStack(spacing: 0) {
