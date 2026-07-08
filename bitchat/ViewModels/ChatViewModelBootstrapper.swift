@@ -236,7 +236,10 @@ private extension ChatViewModelBootstrapper {
                 }
 
                 if let firstTimestamp = archived.map(\.timestamp).min() {
+                    // Echo-prefixed ID so the divider joins the tinted,
+                    // dimmed echo block in the timeline.
                     let divider = BitchatMessage(
+                        id: BitchatMessage.archivedEchoIDPrefix + "divider",
                         sender: "system",
                         content: String(localized: "content.echoes.divider", comment: "System line shown above dimmed archived messages replayed on the mesh timeline at launch"),
                         timestamp: firstTimestamp.addingTimeInterval(-1),

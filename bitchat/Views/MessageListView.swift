@@ -151,10 +151,23 @@ struct MessageListView: View {
                             }
                             .padding(.horizontal, 12)
                             .padding(.vertical, 1)
+                            // Archived echoes read as one tinted block, not
+                            // just faded rows.
+                            .background(message.isArchivedEcho ? palette.secondary.opacity(0.08) : Color.clear)
                     }
                 }
                 .transaction { tx in if conversationUIModel.isBatchingPublic { tx.disablesAnimations = true } }
                 .padding(.vertical, 2)
+
+                // Only carried history on screen: the ambient layer (radar,
+                // sightings, live hints) stays visible below it instead of
+                // vanishing the moment echoes exist.
+                if privatePeer == nil, showsAmbientFooter(messageItems: messageItems) {
+                    MeshEmptyStateView(compact: true)
+                        .padding(.horizontal, 12)
+                        .padding(.top, 20)
+                        .padding(.bottom, 8)
+                }
             }
             .overlay(alignment: .bottomTrailing) {
                 if !isAtBottom && !messageItems.isEmpty {
@@ -270,6 +283,15 @@ private extension MessageListView {
             return "dm:\(peer)"
         }
         return locationChannelsModel.selectedChannel.contextKey
+    }
+
+    /// True when the mesh timeline holds nothing but archived echoes and
+    /// system lines — no live conversation yet, so the ambient layer still
+    /// applies.
+    private func showsAmbientFooter(messageItems: [MessageDisplayItem]) -> Bool {
+        guard case .mesh = locationChannelsModel.selectedChannel,
+              !messageItems.isEmpty else { return false }
+        return messageItems.allSatisfy { $0.message.isArchivedEcho || $0.message.sender == "system" }
     }
 
     /// Terminal-styled narration for an empty public timeline: says which
