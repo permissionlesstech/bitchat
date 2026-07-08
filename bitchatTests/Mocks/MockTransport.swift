@@ -26,9 +26,6 @@ final class MockTransport: Transport {
     var myNickname: String = "TestUser"
 
     private let peerSnapshotSubject = CurrentValueSubject<[TransportPeerSnapshot], Never>([])
-    var peerSnapshotPublisher: AnyPublisher<[TransportPeerSnapshot], Never> {
-        peerSnapshotSubject.eraseToAnyPublisher()
-    }
 
     // MARK: - Recording Properties (for test assertions)
 

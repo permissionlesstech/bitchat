@@ -70,7 +70,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     }
 
     // TransportPeerEventsDelegate
-    func didUpdatePeerSnapshots(_ peers: [TransportPeerSnapshot]) {
+    func didUpdatePeerSnapshots(_: [TransportPeerSnapshot]) {
         updatePeers()
     }
     
@@ -367,12 +367,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     }
     
     // MARK: - Compatibility Methods (for easy migration)
-    
-    var allPeers: [BitchatPeer] { peers }
-    var connectedPeers: Set<PeerID> { connectedPeerIDs }
-    var favoritePeers: Set<String> {
-        Set(favorites.compactMap { getFingerprint(for: $0.peerID) })
-    }
+
     var blockedUsers: Set<String> {
         Set(peers.compactMap { peer in
             isBlocked(peer.peerID) ? getFingerprint(for: peer.peerID) : nil

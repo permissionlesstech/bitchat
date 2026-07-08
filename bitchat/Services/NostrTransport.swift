@@ -13,7 +13,6 @@ final class NostrTransport: Transport, @unchecked Sendable {
         let currentIdentity: @MainActor () throws -> NostrIdentity?
         let registerPendingGiftWrap: @MainActor (String) -> Void
         let sendEvent: @MainActor (NostrEvent) -> Void
-        let scheduleAfter: @Sendable (TimeInterval, @escaping @Sendable () -> Void) -> Void
         /// Emits whether a relay that carries private messages is up
         /// (fail-closed behind Tor). A connected geohash/custom relay alone
         /// doesn't count: DM sends target the default relay set and would
@@ -42,7 +41,6 @@ final class NostrTransport: Transport, @unchecked Sendable {
             self.currentIdentity = currentIdentity
             self.registerPendingGiftWrap = registerPendingGiftWrap
             self.sendEvent = sendEvent
-            self.scheduleAfter = scheduleAfter
             self.relayConnectivity = relayConnectivity
             // Default pacer drives its throttle through the same injected
             // scheduler, so tests that step scheduleAfter manually keep
@@ -130,8 +128,6 @@ final class NostrTransport: Transport, @unchecked Sendable {
         }
     }
     static let sharedAckPacer = AckPacer()
-    private let keychain: KeychainManagerProtocol
-    private let idBridge: NostrIdentityBridge
     private let dependencies: Dependencies
     private var favoriteStatusObserver: NSObjectProtocol?
 
@@ -145,12 +141,10 @@ final class NostrTransport: Transport, @unchecked Sendable {
 
     @MainActor
     init(
-        keychain: KeychainManagerProtocol,
+        keychain _: KeychainManagerProtocol,
         idBridge: NostrIdentityBridge,
         dependencies: Dependencies? = nil
     ) {
-        self.keychain = keychain
-        self.idBridge = idBridge
         self.dependencies = dependencies ?? .live(idBridge: idBridge)
         
         setupObservers()
@@ -207,9 +201,6 @@ final class NostrTransport: Transport, @unchecked Sendable {
     weak var eventDelegate: TransportEventDelegate?
     weak var peerEventsDelegate: TransportPeerEventsDelegate?
 
-    var peerSnapshotPublisher: AnyPublisher<[TransportPeerSnapshot], Never> {
-        Just([]).eraseToAnyPublisher()
-    }
     func currentPeerSnapshots() -> [TransportPeerSnapshot] { [] }
 
     var myPeerID: PeerID { senderPeerID }

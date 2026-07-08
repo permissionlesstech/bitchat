@@ -11,18 +11,11 @@ import BitFoundation
 @testable import bitchat
 
 final class MockIdentityManager: SecureIdentityStateManagerProtocol {
-    private let keychain: KeychainManagerProtocol
     private var blockedFingerprints: Set<String> = []
     private var blockedNostrPubkeys: Set<String> = []
     private var socialIdentities: [String: SocialIdentity] = [:]
-    
-    init(_ keychain: KeychainManagerProtocol) {
-        self.keychain = keychain
-    }
-    
-    func loadIdentityCache() {}
-    
-    func saveIdentityCache() {}
+
+    init(_: KeychainManagerProtocol) {}
     
     func forceSave() {}
     
@@ -44,12 +37,6 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
             blockedFingerprints.remove(identity.fingerprint)
         }
     }
-    
-    func getFavorites() -> Set<String> {
-        Set()
-    }
-    
-    func setFavorite(_ fingerprint: String, isFavorite: Bool) {}
     
     func isFavorite(fingerprint: String) -> Bool {
         false
@@ -99,9 +86,7 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
     }
     
     func registerEphemeralSession(peerID: PeerID, handshakeState: HandshakeState) {}
-    
-    func updateHandshakeState(peerID: PeerID, state: HandshakeState) {}
-    
+
     func clearAllIdentityData() {}
     
     func removeEphemeralSession(peerID: PeerID) {}
@@ -137,10 +122,6 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
 
     func isVouched(fingerprint: String) -> Bool {
         !(vouchesByVouchee[fingerprint] ?? []).isEmpty
-    }
-
-    func effectiveTrustLevel(for fingerprint: String) -> TrustLevel {
-        socialIdentities[fingerprint]?.trustLevel ?? .unknown
     }
 
     func lastVouchBatchSent(to fingerprint: String) -> Date? {

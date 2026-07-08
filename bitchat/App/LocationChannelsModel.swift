@@ -1,4 +1,3 @@
-import BitFoundation
 import Combine
 import Foundation
 
@@ -17,7 +16,6 @@ final class LocationChannelsModel: ObservableObject {
     private let manager: LocationChannelManager
     private let network: NetworkActivationService
     private let gateway: GatewayService
-    private var cancellables = Set<AnyCancellable>()
 
     init(
         manager: LocationChannelManager? = nil,

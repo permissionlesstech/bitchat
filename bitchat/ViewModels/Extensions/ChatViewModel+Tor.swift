@@ -54,7 +54,7 @@ extension ChatViewModel {
         }
     }
 
-    @objc func handleTorPreferenceChanged(_ notification: Notification) {
+    @objc func handleTorPreferenceChanged(_: Notification) {
         Task { @MainActor in
             self.torStatusAnnounced = false
             self.torInitialReadyAnnounced = false

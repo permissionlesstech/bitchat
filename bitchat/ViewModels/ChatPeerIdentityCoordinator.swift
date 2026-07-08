@@ -29,7 +29,6 @@ protocol ChatPeerIdentityContext: AnyObject {
     func migratePrivateChat(from oldPeerID: PeerID, to newPeerID: PeerID)
     var selectedPrivateChatPeer: PeerID? { get set }
     var selectedPrivateChatFingerprint: String? { get set }
-    var nickname: String { get }
     var myPeerID: PeerID { get }
     var activeChannel: ChannelID { get }
     /// Signals that message state changed so observers refresh (e.g. `objectWillChange.send()`).
@@ -104,7 +103,7 @@ protocol ChatPeerIdentityContext: AnyObject {
 
 extension ChatViewModel: ChatPeerIdentityContext {
     // `privateChats`, `unreadPrivateMessages`, `selectedPrivateChatPeer`,
-    // `selectedPrivateChatFingerprint`, `nickname`, `myPeerID`,
+    // `selectedPrivateChatFingerprint`, `myPeerID`,
     // `activeChannel`, `connectedPeers`, `geoNicknames`, `notifyUIChanged()`,
     // `addSystemMessage(_:)`, `peerNickname(for:)`, `meshPeerNicknames()`,
     // `ephemeralPeerID(forNoiseKey:)`, `unifiedPeer(for:)`,

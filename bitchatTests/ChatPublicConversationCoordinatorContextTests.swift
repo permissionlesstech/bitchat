@@ -58,11 +58,6 @@ private final class MockChatPublicConversationContext: ChatPublicConversationCon
         return true
     }
 
-    @discardableResult
-    func appendGeohashMessageIfAbsent(_ message: BitchatMessage, toGeohash geohash: String) -> Bool {
-        appendPublicMessage(message, to: .geohash(geohash.lowercased()))
-    }
-
     func publicConversationContainsMessage(withID messageID: String, in conversationID: ConversationID) -> Bool {
         conversations[conversationID]?.contains(where: { $0.id == messageID }) == true
     }

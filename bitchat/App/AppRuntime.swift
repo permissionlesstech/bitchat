@@ -18,8 +18,6 @@ final class AppRuntime: ObservableObject {
     /// (docs/CONVERSATION-STORE-DESIGN.md). Owned here; the feature models
     /// and `ChatViewModel` observe and mutate it through its intent API.
     let conversations: ConversationStore
-    let peerIdentityStore: PeerIdentityStore
-    let locationPresenceStore: LocationPresenceStore
     let publicChatModel: PublicChatModel
     let privateInboxModel: PrivateInboxModel
     let privateConversationModel: PrivateConversationModel
@@ -51,8 +49,6 @@ final class AppRuntime: ObservableObject {
         let locationPresenceStore = LocationPresenceStore()
         let locationManager = LocationChannelManager.shared
         self.conversations = conversations
-        self.peerIdentityStore = peerIdentityStore
-        self.locationPresenceStore = locationPresenceStore
         self.chatViewModel = ChatViewModel(
             keychain: keychain,
             idBridge: idBridge,

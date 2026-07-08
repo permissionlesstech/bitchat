@@ -100,11 +100,6 @@ private final class MockChatPrivateConversationContext: ChatPrivateConversationC
         unreadPrivateMessages.remove(peerID)
     }
 
-    func removePrivateChat(_ peerID: PeerID) {
-        privateChats.removeValue(forKey: peerID)
-        unreadPrivateMessages.remove(peerID)
-    }
-
     func migratePrivateChat(from oldPeerID: PeerID, to newPeerID: PeerID) {
         migratedChats.append((oldPeerID, newPeerID))
         guard oldPeerID != newPeerID, let source = privateChats[oldPeerID] else { return }
@@ -177,12 +172,10 @@ private final class MockChatPrivateConversationContext: ChatPrivateConversationC
     // Routing & acknowledgements
     private(set) var routedPrivateMessages: [(content: String, peerID: PeerID, messageID: String)] = []
     private(set) var routedReadReceipts: [(messageID: String, peerID: PeerID)] = []
-    private(set) var routedFavoriteNotifications: [(peerID: PeerID, isFavorite: Bool)] = []
     private(set) var meshReadReceipts: [(messageID: String, peerID: PeerID)] = []
     private(set) var geoPrivateMessages: [(content: String, recipientHex: String, messageID: String)] = []
     private(set) var geoDeliveryAcks: [(messageID: String, recipientHex: String)] = []
     private(set) var geoReadReceipts: [(messageID: String, recipientHex: String)] = []
-    private(set) var embeddedDeliveryAckMessageIDs: [String] = []
 
     func routePrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) {
         routedPrivateMessages.append((content, peerID, messageID))
@@ -190,10 +183,6 @@ private final class MockChatPrivateConversationContext: ChatPrivateConversationC
 
     func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {
         routedReadReceipts.append((receipt.originalMessageID, peerID))
-    }
-
-    func routeFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {
-        routedFavoriteNotifications.append((peerID, isFavorite))
     }
 
     func sendMeshReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {
@@ -210,10 +199,6 @@ private final class MockChatPrivateConversationContext: ChatPrivateConversationC
 
     func sendGeohashReadReceipt(_ messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity) {
         geoReadReceipts.append((messageID, recipientHex))
-    }
-
-    func sendDeliveryAckViaNostrEmbedded(_ message: BitchatMessage, wasReadBefore: Bool, senderPubkey: String, key: Data?) {
-        embeddedDeliveryAckMessageIDs.append(message.id)
     }
 
     // Favorites & notifications

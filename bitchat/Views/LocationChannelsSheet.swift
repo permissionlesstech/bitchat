@@ -13,8 +13,6 @@ struct LocationChannelsSheet: View {
     @State private var customGeohash: String = ""
     @State private var customError: String? = nil
 
-    private var backgroundColor: Color { palette.background }
-
     private enum Strings {
         static let title: LocalizedStringKey = "location_channels.title"
         static let description: LocalizedStringKey = "location_channels.description"
@@ -401,7 +399,7 @@ struct LocationChannelsSheet: View {
         title: String,
         subtitlePrefix: String,
         subtitleName: String? = nil,
-        subtitleNameBold: Bool = false,
+        subtitleNameBold _: Bool = false,
         isSelected: Bool,
         titleColor: Color? = nil,
         titleBold: Bool = false,

@@ -52,18 +52,6 @@ final class MessageDeduplicator {
         return false
     }
 
-    /// Record an ID with a specific timestamp (for content key tracking)
-    func record(_ id: String, timestamp: Date) {
-        lock.lock()
-        defer { lock.unlock() }
-
-        if lookup[id] == nil {
-            entries.append(Entry(id: id, timestamp: timestamp))
-        }
-        lookup[id] = timestamp
-        trimIfNeeded()
-    }
-
     /// Add an ID without checking (for announce-back tracking)
     func markProcessed(_ id: String) {
         lock.lock()
@@ -81,13 +69,6 @@ final class MessageDeduplicator {
         lock.lock()
         defer { lock.unlock() }
         return lookup[id] != nil
-    }
-
-    /// Get timestamp for an ID (for content deduplication time-window checks)
-    func timestampFor(_ id: String) -> Date? {
-        lock.lock()
-        defer { lock.unlock() }
-        return lookup[id]
     }
 
     private func trimIfNeeded() {

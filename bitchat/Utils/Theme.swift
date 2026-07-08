@@ -96,7 +96,7 @@ struct ThemePalette {
         )
     }
 
-    static func liquidGlass(_ colorScheme: ColorScheme) -> ThemePalette {
+    static func liquidGlass(_: ColorScheme) -> ThemePalette {
         ThemePalette(
             background: systemBackground,
             primary: .primary,

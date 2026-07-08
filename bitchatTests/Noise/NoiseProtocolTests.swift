@@ -31,11 +31,8 @@ struct NoiseTestVector: Codable {
     let init_prologue: String
     let init_static: String
     let init_ephemeral: String
-    let init_psks: [String]?
-    let resp_prologue: String
     let resp_static: String
     let resp_ephemeral: String
-    let resp_psks: [String]?
     let handshake_hash: String?
     let messages: [TestMessage]
     

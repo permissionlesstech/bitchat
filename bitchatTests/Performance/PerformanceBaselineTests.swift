@@ -610,7 +610,6 @@ private final class PerfNostrContext: ChatNostrContext {
     func appendGeohashMessageIfAbsent(_ message: BitchatMessage, toGeohash geohash: String) -> Bool { true }
 
     private(set) var handledPublicMessageCount = 0
-    func handlePublicMessage(_ message: BitchatMessage) { handledPublicMessageCount += 1 }
     func handlePublicMessage(_ message: BitchatMessage, powBits: Int) { handledPublicMessageCount += 1 }
     func checkForMentions(_ message: BitchatMessage) {}
     func sendHapticFeedback(for message: BitchatMessage) {}
@@ -668,8 +667,6 @@ private final class PerfNostrContext: ChatNostrContext {
 
     func favoriteRelationship(forNoiseKey noiseKey: Data) -> FavoritesPersistenceService.FavoriteRelationship? { nil }
     func allFavoriteRelationships() -> [FavoritesPersistenceService.FavoriteRelationship] { [] }
-    func addFavorite(noiseKey: Data, nostrPublicKey: String?, nickname: String) {}
-    func postLocalNotification(title: String, body: String, identifier: String) {}
     func notifyGeohashActivity(geohash: String, bodyPreview: String) {}
 }
 
@@ -779,7 +776,6 @@ private final class PerfDeliveryContext: ChatDeliveryContext {
 @MainActor
 private final class PerfPipelineFixture {
     let viewModel: ChatViewModel
-    let transport: MockTransport
     let conversations: ConversationStore
     let privateInbox: PrivateInboxModel
     let publicChat: PublicChatModel
@@ -791,7 +787,6 @@ private final class PerfPipelineFixture {
         let transport = MockTransport()
         let conversations = ConversationStore()
 
-        self.transport = transport
         self.conversations = conversations
         self.viewModel = ChatViewModel(
             keychain: keychain,

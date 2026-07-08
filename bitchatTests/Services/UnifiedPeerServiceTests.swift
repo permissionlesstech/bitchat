@@ -214,18 +214,6 @@ private final class TestIdentityManager: SecureIdentityStateManagerProtocol {
         socialIdentities[identity.fingerprint] = identity
     }
 
-    func getFavorites() -> Set<String> {
-        favorites
-    }
-
-    func setFavorite(_ fingerprint: String, isFavorite: Bool) {
-        if isFavorite {
-            favorites.insert(fingerprint)
-        } else {
-            favorites.remove(fingerprint)
-        }
-    }
-
     func isFavorite(fingerprint: String) -> Bool {
         favorites.contains(fingerprint)
     }
@@ -266,8 +254,6 @@ private final class TestIdentityManager: SecureIdentityStateManagerProtocol {
 
     func registerEphemeralSession(peerID: PeerID, handshakeState: HandshakeState) {}
 
-    func updateHandshakeState(peerID: PeerID, state: HandshakeState) {}
-
     func clearAllIdentityData() {
         socialIdentities.removeAll()
         favorites.removeAll()
@@ -306,10 +292,6 @@ private final class TestIdentityManager: SecureIdentityStateManagerProtocol {
 
     func isVouched(fingerprint: String) -> Bool {
         false
-    }
-
-    func effectiveTrustLevel(for fingerprint: String) -> TrustLevel {
-        verified.contains(fingerprint) ? .verified : .unknown
     }
 
     func lastVouchBatchSent(to fingerprint: String) -> Date? {

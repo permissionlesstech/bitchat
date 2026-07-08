@@ -156,6 +156,7 @@ struct NostrProtocolTests {
         }
     }
 
+    @Test
     func testAckRoundTripNIP44V2_Delivered() throws {
         // Identities
         let sender = try NostrIdentity.generate()

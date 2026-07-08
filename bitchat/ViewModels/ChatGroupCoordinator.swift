@@ -387,7 +387,7 @@ final class ChatGroupCoordinator {
     /// Decrypt-verify path for an incoming 0x25 broadcast. Drops silently for
     /// unknown groups (non-members relay but never read), wrong epochs, bad
     /// sender signatures, and senders missing from the pinned roster.
-    func handleGroupMessagePayload(_ payload: Data, timestamp: Date) {
+    func handleGroupMessagePayload(_ payload: Data, timestamp _: Date) {
         guard let envelope = GroupMessageEnvelope.decode(payload) else { return }
         guard let group = context.groupStore.group(withID: envelope.groupID) else { return }
         guard envelope.epoch == group.epoch else {

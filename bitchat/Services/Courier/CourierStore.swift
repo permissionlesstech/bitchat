@@ -272,14 +272,6 @@ final class CourierStore {
 
     // MARK: - Maintenance
 
-    func pruneExpired() {
-        let date = now()
-        queue.sync {
-            pruneExpiredLocked(at: date)
-            persistLocked()
-        }
-    }
-
     /// Panic wipe: drop all carried mail from memory and disk.
     func wipe() {
         queue.sync {

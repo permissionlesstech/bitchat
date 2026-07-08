@@ -108,8 +108,6 @@ protocol SecureIdentityStateManagerProtocol {
     func updateSocialIdentity(_ identity: SocialIdentity)
     
     // MARK: Favorites Management
-    func getFavorites() -> Set<String>
-    func setFavorite(_ fingerprint: String, isFavorite: Bool)
     func isFavorite(fingerprint: String) -> Bool
     
     // MARK: Blocked Users Management
@@ -123,8 +121,7 @@ protocol SecureIdentityStateManagerProtocol {
     
     // MARK: Ephemeral Session Management
     func registerEphemeralSession(peerID: PeerID, handshakeState: HandshakeState)
-    func updateHandshakeState(peerID: PeerID, state: HandshakeState)
-    
+
     // MARK: Cleanup
     func clearAllIdentityData()
     func removeEphemeralSession(peerID: PeerID)
@@ -139,7 +136,6 @@ protocol SecureIdentityStateManagerProtocol {
     func recordVouch(voucheeFingerprint: String, voucherFingerprint: String, timestamp: Date) -> Bool
     func validVouchers(for fingerprint: String) -> [VouchRecord]
     func isVouched(fingerprint: String) -> Bool
-    func effectiveTrustLevel(for fingerprint: String) -> TrustLevel
     func lastVouchBatchSent(to fingerprint: String) -> Date?
     func markVouchBatchSent(to fingerprint: String, at date: Date)
     func signingPublicKey(forFingerprint fingerprint: String) -> Data?
@@ -322,21 +318,13 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
                         fingerprint: fingerprint,
                         publicKey: noisePublicKey,
                         signingPublicKey: signingPublicKey ?? existing.signingPublicKey,
-                        firstSeen: existing.firstSeen,
-                        lastHandshake: now
+                        firstSeen: existing.firstSeen
                     )
                     self.cryptographicIdentities[fingerprint] = existing
                 } else {
-                    // Update signing key and lastHandshake
+                    // Update signing key
                     existing.signingPublicKey = signingPublicKey ?? existing.signingPublicKey
-                    let updated = CryptographicIdentity(
-                        fingerprint: existing.fingerprint,
-                        publicKey: existing.publicKey,
-                        signingPublicKey: existing.signingPublicKey,
-                        firstSeen: existing.firstSeen,
-                        lastHandshake: now
-                    )
-                    self.cryptographicIdentities[fingerprint] = updated
+                    self.cryptographicIdentities[fingerprint] = existing
                 }
                 // Persist updated state (already assigned in branches above)
             } else {
@@ -345,8 +333,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
                     fingerprint: fingerprint,
                     publicKey: noisePublicKey,
                     signingPublicKey: signingPublicKey,
-                    firstSeen: now,
-                    lastHandshake: now
+                    firstSeen: now
                 )
                 self.cryptographicIdentities[fingerprint] = entry
             }
@@ -511,11 +498,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     
     func registerEphemeralSession(peerID: PeerID, handshakeState: HandshakeState = .none) {
         queue.async(flags: .barrier) {
-            self.ephemeralSessions[peerID] = EphemeralIdentity(
-                peerID: peerID,
-                sessionStart: Date(),
-                handshakeState: handshakeState
-            )
+            self.ephemeralSessions[peerID] = EphemeralIdentity(handshakeState: handshakeState)
         }
     }
     

@@ -61,7 +61,6 @@ struct BLEFragmentAssemblyBuffer {
     }
 
     private struct Metadata {
-        let type: UInt8
         let total: Int
         let timestamp: Date
         let isBroadcast: Bool
@@ -150,7 +149,6 @@ struct BLEFragmentAssemblyBuffer {
 
         fragmentsByKey[header.key] = [:]
         metadataByKey[header.key] = Metadata(
-            type: header.originalType,
             total: header.total,
             timestamp: now,
             isBroadcast: header.isBroadcastFragment,

@@ -96,7 +96,6 @@ protocol Transport: AnyObject {
     var peerEventsDelegate: TransportPeerEventsDelegate? { get set }
     
     // Peer snapshots (for non-UI services)
-    var peerSnapshotPublisher: AnyPublisher<[TransportPeerSnapshot], Never> { get }
     func currentPeerSnapshots() -> [TransportPeerSnapshot]
 
     // Identity
@@ -265,7 +264,7 @@ extension Transport {
 }
 
 protocol TransportPeerEventsDelegate: AnyObject {
-    @MainActor func didUpdatePeerSnapshots(_ peers: [TransportPeerSnapshot])
+    @MainActor func didUpdatePeerSnapshots(_: [TransportPeerSnapshot])
 }
 
 extension BitchatDelegate {

@@ -27,7 +27,6 @@ enum TransportConfig {
     static let pttJitterBufferSeconds: TimeInterval = 0.35  // buffered audio before live playback starts
     static let pttJitterDeadlineSeconds: TimeInterval = 0.5 // start anyway after this wall-clock wait
     static let pttBurstEndTimeoutSeconds: TimeInterval = 3.0 // no frames -> burst considered ended
-    static let pttAssemblyStaleSeconds: TimeInterval = 30.0 // drop half-open assemblies after this
     static let pttMaxConcurrentAssemblies: Int = 8          // concurrent inbound bursts cap
     static let pttMaxBurstBytes: Int = 384 * 1024           // 120s at ~2KB/s + generous slack
     static let pttFinishedBurstRegistrySeconds: TimeInterval = 600 // window to absorb the finalized note
@@ -93,8 +92,7 @@ enum TransportConfig {
 
     // UI thresholds
     static let uiProcessedNostrEventsCap: Int = 2000
-    static let uiChannelInactivityThresholdSeconds: TimeInterval = 9 * 60
-    
+
     // UI rate limiters (token buckets)
     static let uiSenderRateBucketCapacity: Double = 5
     static let uiSenderRateBucketRefillPerSec: Double = 1.0
@@ -103,17 +101,13 @@ enum TransportConfig {
 
     // UI sleeps/delays
     static let uiStartupInitialDelaySeconds: TimeInterval = 1.0
-    static let uiStartupShortSleepNs: UInt64 = 200_000_000
     static let uiStartupPhaseDurationSeconds: TimeInterval = 2.0
     static let uiAsyncShortSleepNs: UInt64 = 100_000_000
-    static let uiAsyncMediumSleepNs: UInt64 = 500_000_000
     static let uiReadReceiptRetryShortSeconds: TimeInterval = 0.1
     static let uiReadReceiptRetryLongSeconds: TimeInterval = 0.5
     static let uiBatchDispatchStaggerSeconds: TimeInterval = 0.15
     static let uiScrollThrottleSeconds: TimeInterval = 0.5
-    static let uiAnimationShortSeconds: TimeInterval = 0.15
     static let uiAnimationMediumSeconds: TimeInterval = 0.2
-    static let uiAnimationSidebarSeconds: TimeInterval = 0.25
     static let uiRecentCutoffFiveMinutesSeconds: TimeInterval = 5 * 60
     static let uiMeshEmptyConfirmationSeconds: TimeInterval = 30.0
 
@@ -178,10 +172,6 @@ enum TransportConfig {
     static let nostrGeohashSampleLookbackSeconds: TimeInterval = 300
     static let nostrGeohashSampleLimit: Int = 100
     static let nostrDMSubscribeLookbackSeconds: TimeInterval = 86400
-
-    // Nostr helpers
-    static let nostrShortKeyDisplayLength: Int = 8
-    static let nostrConvKeyPrefixLength: Int = 16
 
     // Message deduplication
     static let messageDedupMaxAgeSeconds: TimeInterval = 300
@@ -294,12 +284,7 @@ enum TransportConfig {
     static let uiVeryLongTokenThreshold: Int = 512
     static let uiLongMessageLineLimit: Int = 30
     static let uiFingerprintSampleCount: Int = 3
-    
-    // UI swipe/gesture thresholds
-    static let uiBackSwipeTranslationLarge: CGFloat = 50
-    static let uiBackSwipeTranslationSmall: CGFloat = 30
-    static let uiBackSwipeVelocityThreshold: CGFloat = 300
-    
+
     // UI color tuning
     static let uiColorHueAvoidanceDelta: Double = 0.05
     static let uiColorHueOffset: Double = 0.12

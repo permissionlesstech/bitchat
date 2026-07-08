@@ -590,9 +590,6 @@ private final class CourierCaptureTransport: Transport {
     private(set) var courierSends: [(messageID: String, recipientKey: Data, couriers: [PeerID])] = []
     private(set) var directSends: [String] = []
 
-    var peerSnapshotPublisher: AnyPublisher<[TransportPeerSnapshot], Never> {
-        Just(snapshots).eraseToAnyPublisher()
-    }
     func currentPeerSnapshots() -> [TransportPeerSnapshot] { snapshots }
 
     var myPeerID = PeerID(str: "00000000000000aa")

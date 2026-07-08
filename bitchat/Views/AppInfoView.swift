@@ -15,8 +15,6 @@ struct AppInfoView: View {
         AppTheme(rawValue: appThemeRawValue) ?? .matrix
     }
 
-    private var backgroundColor: Color { palette.background }
-
     private var textColor: Color { palette.primary }
 
     private var secondaryTextColor: Color { palette.secondary }

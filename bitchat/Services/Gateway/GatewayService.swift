@@ -82,7 +82,6 @@ final class GatewayService: ObservableObject {
         let depositor: PeerID
         let geohash: String
         let event: NostrEvent
-        let queuedAt: Date
     }
 
     static let shared = GatewayService()
@@ -221,7 +220,7 @@ final class GatewayService: ObservableObject {
             publish(event, geohash: carrier.geohash)
             accepted = true
         } else {
-            accepted = enqueueUplink(QueuedUplink(depositor: depositor, geohash: carrier.geohash, event: event, queuedAt: now()))
+            accepted = enqueueUplink(QueuedUplink(depositor: depositor, geohash: carrier.geohash, event: event))
         }
 
         // Only render on our own timeline what we actually accepted for

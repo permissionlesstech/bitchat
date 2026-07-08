@@ -120,7 +120,6 @@ final class NetworkActivationServiceTests: XCTestCase {
         return NetworkActivationTestContext(
             service: service,
             storage: storage,
-            permissionSubject: permissionSubject,
             favoritesSubject: favoritesSubject,
             torController: torController,
             relayController: relayController,
@@ -148,7 +147,6 @@ final class NetworkActivationServiceTests: XCTestCase {
 private struct NetworkActivationTestContext {
     let service: NetworkActivationService
     let storage: UserDefaults
-    let permissionSubject: CurrentValueSubject<LocationChannelManager.PermissionState, Never>
     let favoritesSubject: CurrentValueSubject<Set<Data>, Never>
     let torController: MockNetworkActivationTorController
     let relayController: MockNetworkActivationRelayController
