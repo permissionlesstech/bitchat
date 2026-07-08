@@ -284,6 +284,10 @@ struct NoticesView: View {
                     }
                 }
                 .pickerStyle(.segmented)
+                // macOS segmented pickers render their own label; the themed
+                // Text alongside already carries it (and accessibility keeps
+                // the explicit label below).
+                .labelsHidden()
                 .fixedSize()
                 .accessibilityLabel(Strings.expiryLabel)
             }
