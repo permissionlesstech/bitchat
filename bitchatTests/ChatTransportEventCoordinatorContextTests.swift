@@ -271,7 +271,8 @@ struct ChatTransportEventCoordinatorContextTests {
         #expect(context.isConnected)
         #expect(context.registeredEphemeralSessions == [peerID])
         #expect(context.stablePeerIDCache[peerID] == PeerID(hexData: noiseKey))
-        #expect(context.flushedOutboxPeerIDs == [peerID])
+        // Both the short peerID and the distinct stable 64-hex key are flushed.
+        #expect(context.flushedOutboxPeerIDs == [peerID, PeerID(hexData: noiseKey)])
         #expect(context.notifyUIChangedCount == 1)
 
         // Their messages' read receipts are un-marked on disconnect so READ
@@ -286,6 +287,85 @@ struct ChatTransportEventCoordinatorContextTests {
         #expect(context.removedEphemeralSessions == [peerID])
         #expect(context.unmarkedReadReceiptBatches == [["theirs-1", "theirs-2"]])
         #expect(context.notifyUIChangedCount == 2)
+    }
+
+    /// A DM queued under a peer's stable 64-hex key is flushed when that peer
+    /// reconnects directly over BLE — the reconnect flushes the stable key, not
+    /// only the short peerID, so queued mail doesn't wait for the TTL to drop it.
+    @Test @MainActor
+    func didConnectToPeer_flushesStableKeyOutboxDistinctFromShortPeerID() async {
+        let context = MockChatTransportEventContext()
+        let coordinator = ChatTransportEventCoordinator(context: context)
+        let peerID = PeerID(str: "1122334455667788")
+        let noiseKey = Data(repeating: 0x77, count: 32)
+        let stablePeerID = PeerID(hexData: noiseKey)
+        context.peersByID[peerID] = BitchatPeer(peerID: peerID, noisePublicKey: noiseKey, nickname: "alice")
+
+        coordinator.didConnectToPeer(peerID)
+        await drainMainActorTasks()
+
+        // Both keys are drained for the outbox, short first then the distinct
+        // stable key; courier retry only targets the short peerID.
+        #expect(context.flushedOutboxPeerIDs == [peerID, stablePeerID])
+        #expect(context.courierRetryPeerIDs == [peerID])
+    }
+
+    /// When unified-peer state isn't populated yet at connect, the stable key is
+    /// recovered from the cache and its outbox is still flushed — the production
+    /// ordering where a direct BLE reconnect precedes unified-peer state.
+    @Test @MainActor
+    func didConnectToPeer_withCachedStableID_flushesStableKeyOutbox() async {
+        let context = MockChatTransportEventContext()
+        let coordinator = ChatTransportEventCoordinator(context: context)
+        let peerID = PeerID(str: "1122334455667788")
+        let noiseKey = Data(repeating: 0x5A, count: 32)
+        let stablePeerID = PeerID(hexData: noiseKey)
+
+        // No unified peer yet; only the cached stable mapping exists.
+        context.cacheStablePeerID(stablePeerID, for: peerID)
+
+        coordinator.didConnectToPeer(peerID)
+        await drainMainActorTasks()
+
+        #expect(context.unifiedPeer(for: peerID) == nil)
+        #expect(context.flushedOutboxPeerIDs == [peerID, stablePeerID])
+    }
+
+    /// When neither a unified peer nor a cached mapping exists, the stable key
+    /// is derived from the Noise session key and its outbox is still flushed,
+    /// and the derived mapping is cached for later.
+    @Test @MainActor
+    func didConnectToPeer_withNoiseSessionKey_flushesStableKeyOutbox() async {
+        let context = MockChatTransportEventContext()
+        let coordinator = ChatTransportEventCoordinator(context: context)
+        let peerID = PeerID(str: "1122334455667788")
+        let noiseKey = Data(repeating: 0x6B, count: 32)
+        let stablePeerID = PeerID(hexData: noiseKey)
+
+        // No unified peer, no cached mapping — only the Noise session key.
+        context.noiseSessionKeysByPeerID[peerID] = noiseKey
+
+        coordinator.didConnectToPeer(peerID)
+        await drainMainActorTasks()
+
+        #expect(context.unifiedPeer(for: peerID) == nil)
+        #expect(context.flushedOutboxPeerIDs == [peerID, stablePeerID])
+        #expect(context.stablePeerIDCache[peerID] == stablePeerID)
+    }
+
+    /// When the stable key resolves equal to the short peerID (no distinct
+    /// unified-peer noise key), the reconnect flush must not double-flush.
+    @Test @MainActor
+    func didConnectToPeer_withNoUnifiedPeer_flushesOnlyShortPeerID() async {
+        let context = MockChatTransportEventContext()
+        let coordinator = ChatTransportEventCoordinator(context: context)
+        let peerID = PeerID(str: "1122334455667788")
+
+        coordinator.didConnectToPeer(peerID)
+        await drainMainActorTasks()
+
+        #expect(context.flushedOutboxPeerIDs == [peerID])
+        #expect(context.courierRetryPeerIDs == [peerID])
     }
 
     @Test @MainActor

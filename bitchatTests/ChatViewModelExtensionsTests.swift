@@ -74,8 +74,9 @@ struct ChatViewModelPrivateChatExtensionTests {
     @Test @MainActor
     func sendPrivateMessage_unreachable_setsFailedStatus() async {
         let (viewModel, _) = makeTestableViewModel()
-        let validHex = "0102030405060708090a0b0c0d0e0f100102030405060708090a0b0c0d0e0f10"
-        let peerID = PeerID(str: validHex)
+        // A short 16-hex peer has no derivable Noise key, so it is genuinely
+        // un-routable (not a queueable offline favorite) and must fail, not queue.
+        let peerID = PeerID(str: "0102030405060708")
 
         viewModel.sendPrivateMessage("Hello", to: peerID)
 

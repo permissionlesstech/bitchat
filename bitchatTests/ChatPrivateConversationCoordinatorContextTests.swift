@@ -695,11 +695,16 @@ struct ChatPrivateConversationCoordinatorContextTests {
         #expect(context.systemMessages.isEmpty)
     }
 
+    /// A truly un-routable send — offline, no mutual favorite, and no
+    /// resolvable noise key (short mesh ID with no favorite mapping) — still
+    /// fails immediately and posts the unreachable system message.
     @Test @MainActor
-    func sendPrivateMessage_failsWhenOfflineWithoutMutualFavorite() async {
+    func sendPrivateMessage_failsWhenOfflineAndNotRoutable() async {
         let context = MockChatPrivateConversationContext()
         let coordinator = ChatPrivateConversationCoordinator(context: context)
-        let peerID = PeerID(hexData: Data(repeating: 0xCD, count: 32))
+        // Short 16-hex mesh ID: `noiseKey` is nil and no favorite maps it, so
+        // the recipient is not identifiable → the un-routable failure branch.
+        let peerID = PeerID(str: "0102030405060708")
 
         coordinator.sendPrivateMessage("hello?", to: peerID)
 
@@ -709,5 +714,48 @@ struct ChatPrivateConversationCoordinatorContextTests {
             Issue.record("expected .failed delivery status")
             return
         }
+    }
+
+    /// An offline recipient that is still identifiable (resolvable noise key)
+    /// but has no prompt path (not connected/reachable, no mutual Nostr
+    /// favorite) is enqueued to the router and left at `.sending`.
+    @Test @MainActor
+    func sendPrivateMessage_queuesOfflineIdentifiableRecipientAndStaysSending() async {
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+        // Full 64-hex noise-key ID: identifiable, but offline with no favorite.
+        let peerID = PeerID(hexData: Data(repeating: 0xC1, count: 32))
+
+        coordinator.sendPrivateMessage("queued hi", to: peerID)
+
+        // Routed into the outbox exactly once, no false failure/system message.
+        #expect(context.routedPrivateMessages.map(\.content) == ["queued hi"])
+        #expect(context.systemMessages.isEmpty)
+        // Status stays .sending until a real carried/delivered/failed signal.
+        #expect(context.privateChats[peerID]?.first?.deliveryStatus == .sending)
+    }
+
+    /// A mutual favorite with a Nostr key and no mesh connectivity is still
+    /// stamped `.sent` at send time — the queueable path must not downgrade
+    /// this Nostr-favorite delivery.
+    @Test @MainActor
+    func sendPrivateMessage_nostrFavoritePath_stillStampsSentWhenOffline() async {
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+        let noiseKey = Data(repeating: 0xB2, count: 32)
+        let peerID = PeerID(hexData: noiseKey)
+        context.favoriteRelationshipsByNoiseKey[noiseKey] = makeFavoriteRelationship(
+            noiseKey: noiseKey,
+            nostrPublicKey: "npub1bob",
+            nickname: "bob",
+            isFavorite: true,
+            theyFavoritedUs: true
+        )
+
+        coordinator.sendPrivateMessage("hi bob", to: peerID)
+
+        #expect(context.routedPrivateMessages.map(\.content) == ["hi bob"])
+        #expect(context.privateChats[peerID]?.first?.deliveryStatus == .sent)
+        #expect(context.systemMessages.isEmpty)
     }
 }

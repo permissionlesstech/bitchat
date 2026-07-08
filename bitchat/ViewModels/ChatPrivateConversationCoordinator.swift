@@ -306,7 +306,8 @@ final class ChatPrivateConversationCoordinator {
         context.appendPrivateMessage(message, to: peerID)
         context.notifyUIChanged()
 
-        if isConnected || isReachable || (isMutualFavorite && hasNostrKey) {
+        let promptPath = isConnected || isReachable || (isMutualFavorite && hasNostrKey)
+        if promptPath {
             context.routePrivateMessage(
                 content,
                 to: peerID,
@@ -314,7 +315,18 @@ final class ChatPrivateConversationCoordinator {
                 messageID: messageID
             )
             context.setPrivateDeliveryStatus(.sent, forMessageID: messageID, peerID: peerID)
+        } else if noiseKey != nil {
+            // Recipient is identifiable but offline: hand to the router so it
+            // enqueues to the outbox + attempts courier deposit. Leave status
+            // at .sending; carried/delivered/failed callbacks drive it onward.
+            context.routePrivateMessage(
+                content,
+                to: peerID,
+                recipientNickname: recipientNickname ?? "user",
+                messageID: messageID
+            )
         } else {
+            // Truly un-routable (no noise key): fail immediately, as before.
             context.setPrivateDeliveryStatus(
                 .failed(
                     reason: String(localized: "content.delivery.reason.unreachable", comment: "Failure reason when a peer is unreachable")

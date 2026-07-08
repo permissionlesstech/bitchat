@@ -225,13 +225,30 @@ final class ChatTransportEventCoordinator {
             context.registerEphemeralSession(peerID: peerID)
             context.notifyUIChanged()
 
+            // Resolve the stable key robustly: unified-peer state may not be
+            // populated yet at connect time, so fall back to the cache and then
+            // to the noise session key (mirroring the disconnect path).
+            var stablePeerID: PeerID?
             if let peer = context.unifiedPeer(for: peerID) {
-                let stablePeerID = PeerID(hexData: peer.noisePublicKey)
-                context.cacheStablePeerID(stablePeerID, for: peerID)
+                let resolved = PeerID(hexData: peer.noisePublicKey)
+                context.cacheStablePeerID(resolved, for: peerID)
+                stablePeerID = resolved
+            } else if let cached = context.cachedStablePeerID(for: peerID) {
+                stablePeerID = cached
+            } else if let key = context.noiseSessionPublicKeyData(for: peerID) {
+                let derived = PeerID(hexData: key)
+                context.cacheStablePeerID(derived, for: peerID)
+                stablePeerID = derived
             }
 
             context.flushRouterOutbox(for: peerID)
             context.retryCourierDeposits(via: peerID)
+
+            // Also flush under the stable 64-hex key: a DM queued against the
+            // stable favorite key isn't reached by the short-peerID flush above.
+            if let stablePeerID, stablePeerID != peerID {
+                context.flushRouterOutbox(for: stablePeerID)
+            }
         }
     }
 
