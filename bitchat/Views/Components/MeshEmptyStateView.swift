@@ -21,10 +21,8 @@ struct MeshEmptyStateView: View {
     var compact: Bool = false
 
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
-    @EnvironmentObject private var appChromeModel: AppChromeModel
     @ObservedObject private var activityTracker = GeohashChatActivityTracker.shared
     @ObservedObject private var sightingsTracker = MeshSightingsTracker.shared
-    @ObservedObject private var nearbyNotes = NearbyNotesCounter.shared
 
     @ThemedPalette private var palette
 
@@ -37,7 +35,6 @@ struct MeshEmptyStateView: View {
 
     private enum Strings {
         static let meshIntro = String(localized: "content.empty.mesh_intro", comment: "First line of the empty mesh timeline explaining what the mesh channel is")
-        static let meshWaiting = String(localized: "content.empty.mesh_waiting", comment: "Second line of the empty mesh timeline saying no peers are in range yet")
         static let switchHint = String(localized: "content.empty.switch_hint", comment: "Empty timeline hint pointing at the channel switcher and the help screen")
         static let sightingsOne = String(localized: "content.empty.sightings_one", comment: "Empty mesh timeline stat when exactly one device came within range today")
 
@@ -65,15 +62,6 @@ struct MeshEmptyStateView: View {
             )
         }
 
-        static let notesOne = String(localized: "content.empty.notes_one", comment: "Empty mesh timeline hint when exactly one note was left at this place")
-
-        static func notesMany(_ count: Int) -> String {
-            String(
-                format: String(localized: "content.empty.notes_many", comment: "Empty mesh timeline hint counting notes left at this place"),
-                locale: .current,
-                count
-            )
-        }
     }
 
     var body: some View {
@@ -83,19 +71,15 @@ struct MeshEmptyStateView: View {
                 if let conversation = nearbyConversation {
                     conversationHint(conversation)
                 }
-                if nearbyNotes.noteCount > 0 {
-                    notesHint
-                }
             } else {
+                // The radar + tally already say "scanning, nobody yet", so
+                // the narration stays to two lines with the live hint after
+                // them, not wedged in between.
                 narrationLine(Strings.meshIntro)
-                narrationLine(Strings.meshWaiting)
+                narrationLine(Strings.switchHint)
                 if let conversation = nearbyConversation {
                     conversationHint(conversation)
                 }
-                if nearbyNotes.noteCount > 0 {
-                    notesHint
-                }
-                narrationLine(Strings.switchHint)
 
                 // The radar centers in whatever space is left below the
                 // text — the flexible spacers split it evenly.
@@ -105,8 +89,6 @@ struct MeshEmptyStateView: View {
             }
         }
         .frame(minHeight: compact ? 0 : fillHeight, alignment: .top)
-        .onAppear { NearbyNotesCounter.shared.activate() }
-        .onDisappear { NearbyNotesCounter.shared.deactivate() }
         .onReceive(refreshTimer) { _ in refreshTick += 1 }
     }
 
@@ -150,20 +132,6 @@ private extension MeshEmptyStateView {
                 narrationLine("  \(previewText(for: conversation.lastMessage))")
             }
             .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    var notesHint: some View {
-        let text = nearbyNotes.noteCount == 1
-            ? Strings.notesOne
-            : Strings.notesMany(nearbyNotes.noteCount)
-
-        return Button {
-            appChromeModel.presentNotices(geoTab: true)
-        } label: {
-            actionLine("📍 \(text)")
-                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
