@@ -568,6 +568,7 @@ private extension ChatViewModelBootstrapper {
         viewModel.messageRouter.bridgeCourierDeposit = { content, messageID, recipientKey in
             BridgeCourierService.shared.depositDrop(content: content, messageID: messageID, recipientNoiseKey: recipientKey)
         }
+        viewModel.messageRouter.startBridgeDepositSweep()
         bleService.onVerifiedPeerAnnounce = { _ in
             Task { @MainActor in
                 BridgeCourierService.shared.refreshAfterVerifiedAnnounce()

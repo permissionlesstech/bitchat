@@ -58,6 +58,41 @@ final class MessageRouter {
     /// (not instead of) mesh couriers; receivers dedup by message ID.
     var bridgeCourierDeposit: ((_ content: String, _ messageID: String, _ recipientNoiseKey: Data) -> Void)?
 
+    /// Re-attempts bridge drops for retained messages whose recipient no
+    /// transport can promptly reach anymore. Covers sends that raced the BLE
+    /// reachability retention window: a peer stays "reachable" for a minute
+    /// after its radio disappears, so the original send trusted the mesh and
+    /// skipped the deposit — and nothing else ever retried (field-found).
+    /// Safe to call often: the drop layer dedups by message ID.
+    func retryBridgeCourierDeposits() {
+        guard bridgeCourierDeposit != nil else { return }
+        for (peerID, queue) in outbox {
+            guard let recipientKey = courierDirectory.noiseKey(peerID) else { continue }
+            let promptlyDeliverable = transports.contains {
+                $0.isPeerReachable(peerID) && $0.canDeliverPromptly(to: peerID)
+            }
+            guard !promptlyDeliverable else { continue }
+            for message in queue where now().timeIntervalSince(message.timestamp) <= Self.messageTTLSeconds {
+                bridgeCourierDeposit?(message.content, message.messageID, recipientKey)
+            }
+        }
+    }
+
+    /// Arms the periodic sweep behind `retryBridgeCourierDeposits`. Called
+    /// once by the bootstrapper after the deposit closure is wired; separate
+    /// from init so tests drive the retry directly.
+    func startBridgeDepositSweep(interval: TimeInterval = 120) {
+        bridgeSweepTask?.cancel()
+        bridgeSweepTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+                self?.retryBridgeCourierDeposits()
+            }
+        }
+    }
+
+    private var bridgeSweepTask: Task<Void, Never>?
+
     private var outbox: [PeerID: [QueuedMessage]] = [:]
 
     // Outbox limits to prevent unbounded memory growth

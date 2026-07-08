@@ -672,6 +672,45 @@ struct MessageRouterCourierTests {
         #expect(carried == ["m1"])
     }
 
+    /// Field-found: a DM sent while the recipient sits in the BLE
+    /// reachability retention window (radio gone, still "reachable" for a
+    /// minute) trusts the mesh and skips every deposit — and nothing
+    /// retried. The periodic sweep must publish the bridge drop once the
+    /// window lapses.
+    @Test @MainActor
+    func sweepDropsQueuedMessageOnceReachabilityLapses() {
+        let bobKey = Data(repeating: 0xB0, count: 32)
+        let bobID = PeerID(publicKey: bobKey)
+        let transport = CourierCaptureTransport()
+        transport.reachablePeers = [bobID] // retention window: stale but "reachable"
+        transport.promptDelivery = true
+
+        let directory = CourierDirectory(
+            noiseKey: { peerID in peerID == bobID ? bobKey : nil },
+            isTrustedCourier: { _ in false }
+        )
+        let router = MessageRouter(transports: [transport], courierDirectory: directory)
+        var drops: [(content: String, messageID: String, key: Data)] = []
+        router.bridgeCourierDeposit = { content, messageID, key in
+            drops.append((content, messageID, key))
+        }
+
+        router.sendPrivate("hi bob", to: bobID, recipientNickname: "bob", messageID: "m9")
+        #expect(drops.isEmpty) // send trusted the (stale) mesh reachability
+
+        // Still inside the window: the sweep must not spam relays.
+        router.retryBridgeCourierDeposits()
+        #expect(drops.isEmpty)
+
+        // Window lapses; the sweep publishes the retained copy as a drop.
+        transport.reachablePeers = []
+        router.retryBridgeCourierDeposits()
+        #expect(drops.count == 1)
+        #expect(drops.first?.messageID == "m9")
+        #expect(drops.first?.content == "hi bob")
+        #expect(drops.first?.key == bobKey)
+    }
+
     @Test @MainActor
     func noCourierDepositWithoutKnownRecipientKey() {
         let transport = CourierCaptureTransport()
