@@ -66,7 +66,7 @@ struct BLEFileTransferHandlerTests {
         let content = Data("%PDF-1.7".utf8)
         let packet = try makeFileTransferPacket(sender: remotePeerID, mimeType: "application/pdf", content: content)
 
-        handler.handle(packet, from: remotePeerID)
+        #expect(handler.handle(packet, from: remotePeerID))
 
         #expect(recorder.signatureVerifyCount == 1)
         #expect(recorder.signedNameQueries.isEmpty)
@@ -94,7 +94,9 @@ struct BLEFileTransferHandlerTests {
         let handler = makeHandler(recorder: recorder)
         let packet = try makeFileTransferPacket(sender: localPeerID, mimeType: "application/pdf", content: Data("%PDF-1.7".utf8), ttl: 3)
 
-        handler.handle(packet, from: localPeerID)
+        // The relay pipeline already suppresses self-originated packets, so the
+        // handler reports "relayable" rather than treating the echo as forged.
+        #expect(handler.handle(packet, from: localPeerID))
 
         expectNoSideEffects(recorder)
     }
@@ -105,7 +107,7 @@ struct BLEFileTransferHandlerTests {
         let handler = makeHandler(recorder: recorder)
         let packet = try makeFileTransferPacket(sender: remotePeerID, mimeType: "application/pdf", content: Data("%PDF-1.7".utf8))
 
-        handler.handle(packet, from: remotePeerID)
+        #expect(!handler.handle(packet, from: remotePeerID))
 
         #expect(recorder.signedNameQueries == [remotePeerID])
         #expect(recorder.trackedPackets.isEmpty)
@@ -119,7 +121,9 @@ struct BLEFileTransferHandlerTests {
         let handler = makeHandler(recorder: recorder)
         let packet = try makeFileTransferPacket(sender: remotePeerID, mimeType: "application/pdf", content: Data("%PDF-1.7".utf8))
 
-        handler.handle(packet, from: remotePeerID)
+        // Failed sender authentication must also stop the packet from being
+        // relayed to downstream nodes.
+        #expect(!handler.handle(packet, from: remotePeerID))
 
         // Broadcast files carry an attacker-controllable senderID, so — like
         // public messages — a connected-but-unverified peer must present a valid
@@ -140,7 +144,7 @@ struct BLEFileTransferHandlerTests {
         let handler = makeHandler(recorder: recorder)
         let packet = try makeFileTransferPacket(sender: remotePeerID, mimeType: "application/pdf", content: Data("%PDF-1.7".utf8))
 
-        handler.handle(packet, from: remotePeerID)
+        #expect(handler.handle(packet, from: remotePeerID))
 
         #expect(recorder.signedNameQueries == [remotePeerID])
         #expect(recorder.deliveredMessages.count == 1)
@@ -162,7 +166,7 @@ struct BLEFileTransferHandlerTests {
             ttl: 0
         )
 
-        handler.handle(packet, from: localPeerID)
+        #expect(handler.handle(packet, from: localPeerID))
 
         #expect(recorder.signatureVerifyCount == 0)
         #expect(recorder.signedNameQueries.isEmpty)
@@ -177,7 +181,7 @@ struct BLEFileTransferHandlerTests {
         let handler = makeHandler(recorder: recorder)
         let packet = try makeFileTransferPacket(sender: remotePeerID, mimeType: "application/pdf", content: Data("%PDF-1.7".utf8))
 
-        handler.handle(packet, from: remotePeerID)
+        #expect(handler.handle(packet, from: remotePeerID))
 
         // Peer absent from the registry: fall back to the persisted-identity
         // signature lookup (mirrors BLEPublicMessageHandler).
@@ -203,7 +207,8 @@ struct BLEFileTransferHandlerTests {
             fileName: "voice_1122334455667788"
         )
 
-        handler.handle(packet, from: remotePeerID)
+        // The spoofed note must be dropped locally AND not relayed onward.
+        #expect(!handler.handle(packet, from: remotePeerID))
 
         #expect(recorder.deliveredMessages.isEmpty)
     }
@@ -220,7 +225,7 @@ struct BLEFileTransferHandlerTests {
             recipientID: Data(hexString: localPeerID.id)
         )
 
-        handler.handle(packet, from: remotePeerID)
+        #expect(handler.handle(packet, from: remotePeerID))
 
         // Directed transfers keep the lenient connected-peer path (no broadcast
         // exposure); no signature check is required.
@@ -242,7 +247,8 @@ struct BLEFileTransferHandlerTests {
             recipientID: Data(hexString: "AABBCCDDEEFF0011")
         )
 
-        handler.handle(packet, from: remotePeerID)
+        // Not for us, but it must keep relaying toward the real recipient.
+        #expect(handler.handle(packet, from: remotePeerID))
 
         #expect(recorder.trackedPackets.isEmpty)
         #expect(recorder.quotaReservations.isEmpty)
@@ -262,7 +268,7 @@ struct BLEFileTransferHandlerTests {
             recipientID: Data(hexString: localPeerID.id)
         )
 
-        handler.handle(packet, from: remotePeerID)
+        #expect(handler.handle(packet, from: remotePeerID))
 
         // Directed transfers are not tracked for gossip sync.
         #expect(recorder.trackedPackets.isEmpty)
@@ -287,7 +293,8 @@ struct BLEFileTransferHandlerTests {
             ttl: TransportConfig.messageTTLDefault
         )
 
-        handler.handle(packet, from: remotePeerID)
+        // Local decode failures are not proof of forgery; the packet stays relayable.
+        #expect(handler.handle(packet, from: remotePeerID))
 
         // Sync tracking happens before payload validation, matching the original order.
         #expect(recorder.trackedPackets.count == 1)
@@ -304,7 +311,7 @@ struct BLEFileTransferHandlerTests {
         let handler = makeHandler(recorder: recorder)
         let packet = try makeFileTransferPacket(sender: remotePeerID, mimeType: nil, content: Data([0x4D, 0x5A, 0x00, 0x00]))
 
-        handler.handle(packet, from: remotePeerID)
+        #expect(handler.handle(packet, from: remotePeerID))
 
         #expect(recorder.trackedPackets.count == 1)
         #expect(recorder.quotaReservations.isEmpty)
@@ -321,7 +328,8 @@ struct BLEFileTransferHandlerTests {
         let handler = makeHandler(recorder: recorder)
         let packet = try makeFileTransferPacket(sender: remotePeerID, mimeType: "application/pdf", content: Data("%PDF-1.7".utf8))
 
-        handler.handle(packet, from: remotePeerID)
+        // A local save failure must not stop the mesh relay.
+        #expect(handler.handle(packet, from: remotePeerID))
 
         #expect(recorder.quotaReservations.count == 1)
         #expect(recorder.saveCalls.count == 1)

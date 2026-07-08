@@ -46,12 +46,18 @@ final class BLEFileTransferHandler {
         self.environment = environment
     }
 
-    func handle(_ packet: BitchatPacket, from peerID: PeerID) {
+    /// Returns `false` when the packet fails sender authentication and must
+    /// not be relayed onward. Every other outcome returns `true`: files
+    /// directed to another peer are forwarded untouched, and local-only drops
+    /// (malformed payload, quota, save failure) don't affect multi-hop
+    /// delivery to nodes that may handle them fine.
+    @discardableResult
+    func handle(_ packet: BitchatPacket, from peerID: PeerID) -> Bool {
         let env = environment
-        if BLEFileTransferPolicy.isSelfEcho(packet: packet, from: peerID, localPeerID: env.localPeerID()) { return }
+        if BLEFileTransferPolicy.isSelfEcho(packet: packet, from: peerID, localPeerID: env.localPeerID()) { return true }
 
         guard let deliveryPlan = BLEFileTransferPolicy.deliveryPlan(packet: packet, localPeerID: env.localPeerID()) else {
-            return
+            return true
         }
 
         let peersSnapshot = env.peersSnapshot()
@@ -63,7 +69,7 @@ final class BLEFileTransferHandler {
             env: env
         ) else {
             SecureLogger.warning("🚫 Dropping file transfer from unverified or unknown peer \(peerID.id.prefix(8))…", category: .security)
-            return
+            return false
         }
 
         if deliveryPlan.shouldTrackForSync {
@@ -78,16 +84,16 @@ final class BLEFileTransferHandler {
             mime = acceptance.mime
         case .failure(.malformedPayload):
             SecureLogger.error("❌ Failed to decode file transfer payload", category: .session)
-            return
+            return true
         case .failure(.payloadTooLarge(let bytes)):
             SecureLogger.warning("🚫 Dropping file transfer exceeding size cap (\(bytes) bytes)", category: .security)
-            return
+            return true
         case .failure(.unsupportedMime(let mimeType, let bytes)):
             SecureLogger.warning("🚫 MIME REJECT: '\(mimeType ?? "<empty>")' not supported. Size=\(bytes)b from \(peerID.id.prefix(8))...", category: .security)
-            return
+            return true
         case .failure(.magicMismatch(let mime, let bytes, let prefixHex)):
             SecureLogger.warning("🚫 MAGIC REJECT: MIME='\(mime)' size=\(bytes)b prefix=[\(prefixHex)] from \(peerID.id.prefix(8))...", category: .security)
-            return
+            return true
         }
 
         // BCH-01-002: Enforce storage quota before saving
@@ -100,7 +106,7 @@ final class BLEFileTransferHandler {
             mime.defaultExtension,
             mime.category.rawValue
         ) else {
-            return
+            return true
         }
 
         if deliveryPlan.isPrivateMessage {
@@ -122,6 +128,7 @@ final class BLEFileTransferHandler {
         SecureLogger.debug("📁 Stored incoming media from \(peerID.id.prefix(8))… -> \(destination.lastPathComponent)", category: .session)
 
         env.deliverMessage(message)
+        return true
     }
 
     /// Resolves the authenticated display name for a file transfer's sender.

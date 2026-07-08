@@ -1228,7 +1228,7 @@ final class BLEService: NSObject {
         return nil
     }
 
-    private func handleFileTransfer(_ packet: BitchatPacket, from peerID: PeerID) {
+    private func handleFileTransfer(_ packet: BitchatPacket, from peerID: PeerID) -> Bool {
         fileTransferHandler.handle(packet, from: peerID)
     }
 
@@ -3999,7 +3999,10 @@ extension BLEService {
             handleFragment(packet, from: senderID)
             
         case .fileTransfer:
-            handleFileTransfer(packet, from: senderID)
+            // Broadcast files that fail sender authentication must not spread
+            // to downstream (possibly older, ungated) nodes; skip the relay
+            // step below, like invalid board posts and voice frames.
+            guard handleFileTransfer(packet, from: senderID) else { return }
 
         case .courierEnvelope:
             handleCourierEnvelope(packet, from: peerID)
