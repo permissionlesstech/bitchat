@@ -20,7 +20,11 @@ final class PTTCaptureEngine {
     /// engine keeps running (the UI owns the gesture) but stops encoding.
     private static let maxCaptureDuration: TimeInterval = 120
 
-    private let engine = AVAudioEngine()
+    /// Recreated on every `start()`: an engine whose input unit was
+    /// instantiated against an earlier (playback-only or inactive) audio
+    /// session keeps reporting a dead 0 Hz / 2 ch input format and fails to
+    /// enable the mic (AURemoteIO -10851, observed on iPhone field tests).
+    private var engine = AVAudioEngine()
     private let queue = DispatchQueue(label: "chat.bitchat.ptt.capture", qos: .userInitiated)
 
     // Capture-queue-confined state.
@@ -36,6 +40,7 @@ final class PTTCaptureEngine {
     var onFrames: (([Data]) -> Void)?
 
     enum CaptureError: Error {
+        case inputUnavailable
         case audioSetupFailed
     }
 
@@ -44,9 +49,15 @@ final class PTTCaptureEngine {
         try Self.configureAudioSession()
         #endif
 
+        // Fresh engine per capture so its input unit binds to the session
+        // that is active *now* (see `engine` doc comment).
+        engine = AVAudioEngine()
         let inputFormat = engine.inputNode.outputFormat(forBus: 0)
-        guard inputFormat.sampleRate > 0,
-              let resampler = PTTInputResampler(inputFormat: inputFormat),
+        guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
+            SecureLogger.error("PTT: capture input unavailable (input reports \(Int(inputFormat.sampleRate)) Hz, \(inputFormat.channelCount) ch)", category: .session)
+            throw CaptureError.inputUnavailable
+        }
+        guard let resampler = PTTInputResampler(inputFormat: inputFormat),
               let encoder = PTTFrameEncoder(),
               let pcmFormat = PTTAudioFormat.pcmFormat
         else { throw CaptureError.audioSetupFailed }

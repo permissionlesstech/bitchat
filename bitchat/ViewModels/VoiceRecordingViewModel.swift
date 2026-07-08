@@ -99,6 +99,29 @@ final class VoiceRecordingViewModel: ObservableObject {
                 SecureLogger.error("Voice recording failed to start: \(error)", category: .session)
                 await session.cancel()
                 guard state == .preparing, activeSession === session else { return }
+                // The live engine and the classic recorder are separate
+                // capture stacks: when the live one hits an audio-route
+                // glitch, fall back within the same hold so the user still
+                // gets a voice note instead of an error.
+                if session.isLive {
+                    let fallback = VoiceNoteCaptureSession()
+                    activeSession = fallback
+                    do {
+                        try await fallback.start()
+                        guard state == .preparing, activeSession === fallback else {
+                            await fallback.cancel()
+                            return
+                        }
+                        SecureLogger.warning("PTT: live capture failed — fell back to classic voice note", category: .session)
+                        state = .recording(startDate: Date())
+                        isLiveStreaming = false
+                        return
+                    } catch {
+                        SecureLogger.error("Voice recording fallback failed to start: \(error)", category: .session)
+                        await fallback.cancel()
+                        guard state == .preparing else { return }
+                    }
+                }
                 activeSession = nil
                 state = .error(message: "Could not start recording.")
             }

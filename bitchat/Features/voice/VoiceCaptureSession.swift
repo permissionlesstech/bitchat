@@ -116,7 +116,16 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
                 sendPacket(packet)
             }
         }
-        try capture.start(outputURL: outputURL)
+        do {
+            try capture.start(outputURL: outputURL)
+        } catch {
+            // The HAL can briefly report a dead input right after the audio
+            // session (re)activates while the route settles; one retry after
+            // a short pause covers it (observed on iPhone field tests).
+            SecureLogger.warning("PTT: capture start failed (\(error)) — retrying once after route settle", category: .session)
+            try? await Task.sleep(nanoseconds: 150_000_000)
+            try capture.start(outputURL: outputURL)
+        }
         startDate = Date()
         SecureLogger.info("PTT: live burst \(burstID.hexEncodedString()) capture started", category: .session)
     }
