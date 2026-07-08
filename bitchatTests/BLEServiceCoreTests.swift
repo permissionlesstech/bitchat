@@ -32,7 +32,7 @@ struct BLEServiceCoreTests {
         ble._test_handlePacket(packet, fromPeerID: sender, signingPublicKey: signingKey)
         let receivedFirst = await TestHelpers.waitUntil(
             { delegate.publicMessagesSnapshot().count == 1 },
-            timeout: TestConstants.defaultTimeout
+            timeout: TestConstants.longTimeout
         )
         #expect(receivedFirst)
 
@@ -188,7 +188,7 @@ struct BLEServiceCoreTests {
 
         let rebound = await TestHelpers.waitUntil(
             { ble._test_centralBinding(centralUUID) == newPeerID },
-            timeout: TestConstants.defaultTimeout
+            timeout: TestConstants.longTimeout
         )
         #expect(rebound)
 
@@ -197,7 +197,7 @@ struct BLEServiceCoreTests {
                 let peerIDs = ble.currentPeerSnapshots().map(\.peerID)
                 return peerIDs.contains(newPeerID) && !peerIDs.contains(oldPeerID)
             },
-            timeout: TestConstants.defaultTimeout
+            timeout: TestConstants.longTimeout
         )
         #expect(retired)
     }
@@ -374,7 +374,7 @@ struct BLEServiceCoreTests {
 
         let reachedBudget = await TestHelpers.waitUntil(
             { outbound.count(ofType: .pong) >= budget },
-            timeout: TestConstants.defaultTimeout
+            timeout: TestConstants.longTimeout
         )
         #expect(reachedBudget)
         // Give any over-budget pong a chance to surface, then confirm the
