@@ -1460,6 +1460,29 @@ struct NostrFilter: Encodable {
         filter.limit = limit
         return filter
     }
+
+    // For the mesh bridge: rendezvous messages (kind 20000) and presence
+    // (kind 20001) tagged `#r` with one or more cells (own + neighbors).
+    static func bridgeRendezvous(_ cells: [String], since: Date? = nil, limit: Int = 200) -> NostrFilter {
+        var filter = NostrFilter()
+        filter.kinds = [20000, 20001]
+        filter.since = since?.timeIntervalSince1970.toInt()
+        filter.tagFilters = ["r": cells]
+        filter.limit = limit
+        return filter
+    }
+
+    // For courier drops: sealed envelopes (kind 1401) parked under rotating
+    // recipient tags (`#x`, hex). Callers pass every candidate tag (adjacent
+    // UTC days x recipients) in one filter.
+    static func courierDrops(recipientTagsHex: [String], since: Date? = nil, limit: Int = 100) -> NostrFilter {
+        var filter = NostrFilter()
+        filter.kinds = [NostrProtocol.EventKind.courierDrop.rawValue]
+        filter.since = since?.timeIntervalSince1970.toInt()
+        filter.tagFilters = ["x": recipientTagsHex]
+        filter.limit = limit
+        return filter
+    }
 }
 
 // Dynamic coding key for tag filters

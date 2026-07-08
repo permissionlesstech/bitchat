@@ -42,6 +42,8 @@ final class CourierStore {
         var sprayedTo: Set<Data>
         /// Last speculative multi-hop handover toward a relayed announce.
         var lastRemoteHandoverAt: Date?
+        /// Last publish of this envelope as a bridge courier drop on relays.
+        var lastBridgePublishAt: Date?
         /// Prekey-sealed (envelope v2) discriminator; nil for static-sealed v1.
         let prekeyID: UInt32?
 
@@ -59,6 +61,7 @@ final class CourierStore {
             copies: UInt8,
             sprayedTo: Set<Data> = [],
             lastRemoteHandoverAt: Date? = nil,
+            lastBridgePublishAt: Date? = nil,
             prekeyID: UInt32? = nil
         ) {
             self.recipientTag = recipientTag
@@ -70,6 +73,7 @@ final class CourierStore {
             self.copies = copies
             self.sprayedTo = sprayedTo
             self.lastRemoteHandoverAt = lastRemoteHandoverAt
+            self.lastBridgePublishAt = lastBridgePublishAt
             self.prekeyID = prekeyID
         }
 
@@ -86,6 +90,7 @@ final class CourierStore {
             copies = try container.decodeIfPresent(UInt8.self, forKey: .copies) ?? 1
             sprayedTo = try container.decodeIfPresent(Set<Data>.self, forKey: .sprayedTo) ?? []
             lastRemoteHandoverAt = try container.decodeIfPresent(Date.self, forKey: .lastRemoteHandoverAt)
+            lastBridgePublishAt = try container.decodeIfPresent(Date.self, forKey: .lastBridgePublishAt)
             prekeyID = try container.decodeIfPresent(UInt32.self, forKey: .prekeyID)
         }
     }
@@ -235,6 +240,30 @@ final class CourierStore {
                 }
                 envelopes[index].lastRemoteHandoverAt = date
                 // The delivered copy carries no spray budget.
+                matched.append(envelopes[index].envelope.withCopies(1))
+            }
+            if !matched.isEmpty { persistLocked() }
+            return matched
+        }
+    }
+
+    /// Envelopes to park on relays as bridge courier drops. Non-destructive
+    /// like remote handover — the relay copy is speculative, so the carried
+    /// copy stays until direct handover or expiry. The per-envelope cooldown
+    /// keeps relay churn from republishing the same mail; publishing relays
+    /// dedup identical events by ID anyway.
+    func envelopesForBridgePublish(cooldown: TimeInterval) -> [CourierEnvelope] {
+        let date = now()
+        return queue.sync {
+            pruneExpiredLocked(at: date)
+            var matched: [CourierEnvelope] = []
+            for index in envelopes.indices {
+                if let last = envelopes[index].lastBridgePublishAt,
+                   date.timeIntervalSince(last) < cooldown {
+                    continue
+                }
+                envelopes[index].lastBridgePublishAt = date
+                // The relay copy carries no spray budget.
                 matched.append(envelopes[index].envelope.withCopies(1))
             }
             if !matched.isEmpty { persistLocked() }

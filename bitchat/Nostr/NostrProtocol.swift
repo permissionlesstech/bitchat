@@ -20,6 +20,10 @@ struct NostrProtocol {
         case ephemeralEvent = 20000
         case geohashPresence = 20001
         case deletion = 5 // NIP-09 event deletion request
+        /// Sealed courier envelope parked on relays under its rotating
+        /// recipient tag (`#x`). Regular (stored) kind so it survives until
+        /// its NIP-40 expiration — the whole point is store-and-forward.
+        case courierDrop = 1401
     }
     
     /// Create a NIP-17 private message
@@ -251,6 +255,84 @@ struct NostrProtocol {
             kind: .geohashPresence,
             tags: tags,
             content: ""
+        )
+        let schnorrKey = try senderIdentity.schnorrSigningKey()
+        return try event.sign(with: schnorrKey)
+    }
+
+    // MARK: - Mesh bridge (rendezvous) events
+
+    /// Create a mesh-bridge public message (kind 20000) for a geohash-cell
+    /// rendezvous. The distinct `r` tag keeps bridge traffic out of geohash
+    /// channel subscriptions (which filter on `#g`); `m` carries the original
+    /// mesh message ID so receivers dedup the bridged copy against the radio
+    /// copy by timeline ID.
+    static func createBridgeMeshEvent(
+        content: String,
+        cell: String,
+        senderIdentity: NostrIdentity,
+        nickname: String? = nil,
+        meshMessageID: String? = nil
+    ) throws -> NostrEvent {
+        var tags = [["r", cell]]
+        if let nickname = nickname?.trimmedOrNilIfEmpty {
+            tags.append(["n", nickname])
+        }
+        if let meshMessageID = meshMessageID?.trimmedOrNilIfEmpty {
+            tags.append(["m", meshMessageID])
+        }
+        let event = NostrEvent(
+            pubkey: senderIdentity.publicKeyHex,
+            createdAt: Date(),
+            kind: .ephemeralEvent,
+            tags: tags,
+            content: content
+        )
+        let schnorrKey = try senderIdentity.schnorrSigningKey()
+        return try event.sign(with: schnorrKey)
+    }
+
+    /// Create a mesh-bridge presence heartbeat (kind 20001) on a rendezvous
+    /// cell: empty content, `r` tag only — the bridge analogue of geohash
+    /// presence, counted into "people across the bridge".
+    static func createBridgePresenceEvent(
+        cell: String,
+        senderIdentity: NostrIdentity
+    ) throws -> NostrEvent {
+        let event = NostrEvent(
+            pubkey: senderIdentity.publicKeyHex,
+            createdAt: Date(),
+            kind: .geohashPresence,
+            tags: [["r", cell]],
+            content: ""
+        )
+        let schnorrKey = try senderIdentity.schnorrSigningKey()
+        return try event.sign(with: schnorrKey)
+    }
+
+    /// Create a courier drop (kind 1401): an opaque sealed courier envelope
+    /// parked on relays. `x` is the hex recipient tag the recipient (or a
+    /// gateway acting for them) subscribes for; the NIP-40 expiration tracks
+    /// the envelope expiry so honoring relays garbage-collect the drop. The
+    /// signing identity should be a throwaway — the envelope authenticates
+    /// its sender internally via Noise-X, and linking drops to a stable
+    /// publisher key would leak courier traffic patterns.
+    static func createCourierDropEvent(
+        envelope: Data,
+        recipientTagHex: String,
+        expiresAt: Date,
+        senderIdentity: NostrIdentity
+    ) throws -> NostrEvent {
+        let tags = [
+            ["x", recipientTagHex],
+            ["expiration", String(Int(expiresAt.timeIntervalSince1970))],
+        ]
+        let event = NostrEvent(
+            pubkey: senderIdentity.publicKeyHex,
+            createdAt: Date(),
+            kind: .courierDrop,
+            tags: tags,
+            content: envelope.base64EncodedString()
         )
         let schnorrKey = try senderIdentity.schnorrSigningKey()
         return try event.sign(with: schnorrKey)

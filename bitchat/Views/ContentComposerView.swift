@@ -7,6 +7,7 @@ struct ContentComposerView: View {
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
+    @ObservedObject private var bridgeService = BridgeService.shared
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
 
@@ -89,6 +90,10 @@ struct ContentComposerView: View {
                 }
 
                 HStack(alignment: .center, spacing: 4) {
+                    if showsNearbyOnlyToggle {
+                        nearbyOnlyToggle
+                    }
+
                     if conversationUIModel.canSendMediaInCurrentContext {
                         attachmentButton
                     }
@@ -108,6 +113,41 @@ struct ContentComposerView: View {
 }
 
 private extension ContentComposerView {
+    /// The nearby-only scope toggle appears only where it means something:
+    /// the public mesh channel with the bridge on.
+    var showsNearbyOnlyToggle: Bool {
+        guard bridgeService.isEnabled,
+              privateConversationModel.selectedHeaderState == nil,
+              case .mesh = locationChannelsModel.selectedChannel else {
+            return false
+        }
+        return true
+    }
+
+    /// Scope control for outgoing messages: bridged (default, crosses to
+    /// other islands in this area) vs nearby-only (radio range, no internet
+    /// copy exists for any gateway to carry).
+    var nearbyOnlyToggle: some View {
+        Button(action: { bridgeService.nearbyOnly.toggle() }) {
+            Image(systemName: bridgeService.nearbyOnly ? "antenna.radiowaves.left.and.right" : "network")
+                .font(.bitchatSystem(size: 16))
+                .foregroundColor(bridgeService.nearbyOnly ? palette.secondary : Color.cyan.opacity(0.9))
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(
+            bridgeService.nearbyOnly
+            ? String(localized: "content.accessibility.nearby_only_on", defaultValue: "Nearby only: messages stay within radio range", comment: "Accessibility label for the compose scope toggle when messages stay local")
+            : String(localized: "content.accessibility.nearby_only_off", defaultValue: "Bridged: messages also reach people across the bridge", comment: "Accessibility label for the compose scope toggle when messages cross the mesh bridge")
+        )
+        .help(
+            bridgeService.nearbyOnly
+            ? String(localized: "content.composer.nearby_only_on", defaultValue: "Nearby only — this message won't cross the bridge", comment: "Tooltip for the compose scope toggle when messages stay local")
+            : String(localized: "content.composer.nearby_only_off", defaultValue: "Bridged — reaches people beyond radio range in this area", comment: "Tooltip for the compose scope toggle when messages cross the mesh bridge")
+        )
+    }
+
     /// States where a message will land: the DM partner's name for private
     /// chats, the channel (and its public nature) otherwise — so a stressed
     /// user never has to guess who can read what they're typing.

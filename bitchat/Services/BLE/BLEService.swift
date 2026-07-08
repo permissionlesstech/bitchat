@@ -84,7 +84,11 @@ final class BLEService: NSObject {
     // for every announce. `directedToUs` distinguishes an uplink deposit
     // addressed to this device from a downlink broadcast.
     var onNostrCarrierPacket: (@MainActor (_ payload: Data, _ from: PeerID, _ directedToUs: Bool) -> Void)?
+    /// Fired (off-main) when a signature-verified announce is processed —
+    /// the bridge courier watch refreshes its tag set on new arrivals.
+    var onVerifiedPeerAnnounce: ((_ peerID: PeerID) -> Void)?
     private var runtimeCapabilities: PeerCapabilities = []  // collectionsQueue
+    private var localBridgeGeohash: String?  // collectionsQueue
 
     #if DEBUG
     // Test-only tap on the outbound pipeline so multi-node tests can ferry
@@ -706,6 +710,33 @@ final class BLEService: NSObject {
             peerRegistry.peers(advertising: .gateway)
                 .filter { peerRegistry.isReachable($0, now: now) }
         }
+    }
+
+    /// Reachable peers currently advertising the `.bridge` capability.
+    func reachableBridgePeers() -> [PeerID] {
+        let now = Date()
+        return collectionsQueue.sync {
+            peerRegistry.peers(advertising: .bridge)
+                .filter { peerRegistry.isReachable($0, now: now) }
+        }
+    }
+
+    /// A rendezvous cell advertised by a bridge-capable peer's announce.
+    func advertisedBridgeGeohash() -> String? {
+        collectionsQueue.sync { peerRegistry.advertisedBridgeGeohash() }
+    }
+
+    /// The rendezvous cell this device advertises in its own announces while
+    /// bridging with the gateway toggle on. Set from the main actor; the
+    /// value rides the next (forced) announce.
+    func setLocalBridgeGeohash(_ cell: String?) {
+        let changed: Bool = collectionsQueue.sync(flags: .barrier) {
+            guard localBridgeGeohash != cell else { return false }
+            localBridgeGeohash = cell
+            return true
+        }
+        guard changed else { return }
+        sendAnnounce(forceSend: true)
     }
 
     func getPeerNicknames() -> [PeerID: String] {
@@ -1345,8 +1376,12 @@ final class BLEService: NSObject {
         let noisePub = noiseService.getStaticPublicKeyData()  // For noise handshakes and peer identification
         let signingPub = noiseService.getSigningPublicKeyData()  // For signature verification
         
-        let (connectedPeerIDs, advertisedCapabilities): ([Data], PeerCapabilities) = collectionsQueue.sync {
-            (peerRegistry.connectedRoutingData, PeerCapabilities.localSupported.union(runtimeCapabilities))
+        let (connectedPeerIDs, advertisedCapabilities, advertisedBridgeCell): ([Data], PeerCapabilities, String?) = collectionsQueue.sync {
+            (
+                peerRegistry.connectedRoutingData,
+                PeerCapabilities.localSupported.union(runtimeCapabilities),
+                runtimeCapabilities.contains(.bridge) ? localBridgeGeohash : nil
+            )
         }
 
         let announcement = AnnouncementPacket(
@@ -1354,7 +1389,8 @@ final class BLEService: NSObject {
             noisePublicKey: noisePub,
             signingPublicKey: signingPub,
             directNeighbors: connectedPeerIDs,
-            capabilities: advertisedCapabilities
+            capabilities: advertisedCapabilities,
+            bridgeGeohash: advertisedBridgeCell
         )
         
         guard let payload = announcement.encode() else {
@@ -3016,6 +3052,92 @@ extension BLEService {
         return true
     }
 
+    // MARK: Courier over the bridge
+
+    /// Seals `content` into a courier envelope for relay parking (a bridge
+    /// courier drop). Same sealing rules as `sendCourierMessage` — prekey
+    /// (v2) when a verified bundle is cached, static Noise X (v1) otherwise —
+    /// but carry-only: a relay copy never sprays.
+    func sealBridgeCourierEnvelope(_ content: String, messageID: String, recipientNoiseKey: Data) -> CourierEnvelope? {
+        guard let typedPayload = BLENoisePayloadFactory.privateMessage(content: content, messageID: messageID) else {
+            return nil
+        }
+        do {
+            let now = Date()
+            let sealed: Data
+            let prekeyID: UInt32?
+            if let prekey = assignRecipientPrekey(messageID: messageID, recipientNoiseKey: recipientNoiseKey) {
+                sealed = try noiseService.sealPrekeyPayload(typedPayload, recipientPrekey: prekey)
+                prekeyID = prekey.id
+            } else {
+                sealed = try noiseService.sealCourierPayload(typedPayload, recipientStaticKey: recipientNoiseKey)
+                prekeyID = nil
+            }
+            return CourierEnvelope(
+                recipientTag: CourierEnvelope.recipientTag(
+                    noiseStaticKey: recipientNoiseKey,
+                    epochDay: CourierEnvelope.epochDay(for: now)
+                ),
+                expiry: UInt64((now.timeIntervalSince1970 + CourierEnvelope.maxLifetimeSeconds) * 1000),
+                ciphertext: sealed,
+                copies: 1,
+                prekeyID: prekeyID
+            )
+        } catch {
+            SecureLogger.error("Failed to seal bridge courier envelope: \(error)", category: .encryption)
+            return nil
+        }
+    }
+
+    /// Opens a courier envelope that arrived as a bridge drop (relay fetch,
+    /// not a directed mesh packet). Returns false when the rotating tag does
+    /// not match our static key — a drop for someone else, or a stale tag.
+    /// The inner Noise X seal authenticates the sender; there is no packet
+    /// signature to check on this path.
+    @discardableResult
+    func openBridgedCourierEnvelope(_ envelope: CourierEnvelope) -> Bool {
+        guard !envelope.isExpired else { return false }
+        let myKey = noiseService.getStaticPublicKeyData()
+        guard CourierEnvelope.candidateTags(noiseStaticKey: myKey, around: Date()).contains(envelope.recipientTag) else {
+            return false
+        }
+        openCourierEnvelope(envelope)
+        return true
+    }
+
+    /// Hands a bridge-fetched envelope directly to the matching local peer
+    /// as a directed courier packet. Delivery-only by design: the recipient's
+    /// tag matched, so this never lands in a stranger's carry quota.
+    @discardableResult
+    func deliverBridgedEnvelope(_ envelope: CourierEnvelope, to peerID: PeerID) -> Bool {
+        guard isPeerConnected(peerID) || isPeerReachable(peerID) else { return false }
+        guard let payload = envelope.encode() else { return false }
+        let packet = makeCourierPacket(payload, to: peerID)
+        messageQueue.async { [weak self] in
+            self?.sendPacketDirected(packet, to: peerID)
+        }
+        return true
+    }
+
+    /// Our own Noise static public key (for computing our courier tags).
+    func myNoiseStaticPublicKey() -> Data {
+        noiseService.getStaticPublicKeyData()
+    }
+
+    /// Verified reachable peers with known Noise keys — the set a bridge
+    /// gateway watches courier drops for.
+    func verifiedPeersWithNoiseKeys() -> [(peerID: PeerID, noiseKey: Data)] {
+        let now = Date()
+        return collectionsQueue.sync {
+            peerRegistry.snapshotByID.values.compactMap { info in
+                guard info.isVerifiedNickname,
+                      let key = info.noisePublicKey,
+                      peerRegistry.isReachable(info.peerID, now: now) else { return nil }
+                return (info.peerID, key)
+            }
+        }
+    }
+
     /// The prekey to seal a courier message with, or nil to fall back to
     /// static sealing. The real signal is a verified, unexpired bundle with a
     /// spare prekey; the advertised `.prekeys` capability only acts as a veto
@@ -4135,6 +4257,12 @@ extension BLEService {
             rebindLinkAfterVerifiedDirectAnnounce(packet, to: result.peerID)
         }
 
+        // Bridge courier watch: a verified announce may add a peer whose
+        // relay-parked drops we should start watching for.
+        if let result, result.isVerified {
+            onVerifiedPeerAnnounce?(result.peerID)
+        }
+
         // Courier work: an announce is the moment we learn a peer's Noise
         // static key, so check whether we're carrying mail addressed to them
         // (or spray-able mail they could carry). Verified announces only.
@@ -4264,7 +4392,8 @@ extension BLEService {
                     signingPublicKey: announcement.signingPublicKey,
                     isConnected: isConnected,
                     now: now,
-                    capabilities: announcement.capabilities ?? []
+                    capabilities: announcement.capabilities ?? [],
+                    bridgeGeohash: announcement.bridgeGeohash
                 ) ?? BLEPeerAnnounceUpdate(isNewPeer: false, wasDisconnected: false, previousNickname: nil)
             },
             shouldEmitReconnectLog: { [weak self] peerID, now in

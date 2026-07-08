@@ -52,6 +52,12 @@ final class MessageRouter {
     /// message until an ack arrives.
     var onMessageCarried: ((_ messageID: String, _ peerID: PeerID) -> Void)?
 
+    /// Parallel deposit into the internet bridge: park a sealed copy on
+    /// relays as a courier drop, so delivery stops requiring a physical
+    /// courier encounter. No-op unless the bridge is enabled. Runs alongside
+    /// (not instead of) mesh couriers; receivers dedup by message ID.
+    var bridgeCourierDeposit: ((_ content: String, _ messageID: String, _ recipientNoiseKey: Data) -> Void)?
+
     private var outbox: [PeerID: [QueuedMessage]] = [:]
 
     // Outbox limits to prevent unbounded memory growth
@@ -160,6 +166,9 @@ final class MessageRouter {
     private func attemptCourierDeposit(messageID: String, for peerID: PeerID) {
         guard let recipientKey = courierDirectory.noiseKey(peerID),
               let entry = queuedMessage(messageID, for: peerID) else { return }
+        // The bridge drop needs no connected courier — only the recipient
+        // key — so it runs before the courier-slot bookkeeping.
+        bridgeCourierDeposit?(entry.content, messageID, recipientKey)
         let remainingSlots = Self.maxCouriersPerMessage - entry.depositedCourierKeys.count
         guard remainingSlots > 0 else { return }
 

@@ -1261,6 +1261,364 @@
         }
       }
     },
+    "app_info.features.bridge.description" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يربط جزر mesh القريبة عبر الإنترنت حتى لا ينقسم الحشد الواحد بسبب مدى الراديو"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "কাছাকাছি মেশ দ্বীপগুলোকে ইন্টারনেটের মাধ্যমে যুক্ত করে, যাতে রেডিও পরিসরের কারণে একই ভিড় ভাগ না হয়"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "verbindet nahe mesh-inseln über das internet, damit eine menge nicht durch die funkreichweite geteilt wird"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "links nearby mesh islands through the internet so one crowd isn't split by radio range"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "une islas mesh cercanas a través de internet para que una multitud no quede dividida por el alcance de radio"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iniuugnay ang mga kalapit na mesh island sa pamamagitan ng internet para hindi mahati ng saklaw ng radyo ang iisang grupo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "relie les îlots mesh voisins via internet pour qu'une même foule ne soit pas coupée par la portée radio"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מקשר איי mesh קרובים דרך האינטרנט כדי שקהל אחד לא יתפצל בגלל טווח הרדיו"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "आसपास के मेश द्वीपों को इंटरनेट से जोड़ता है ताकि एक ही भीड़ रेडियो दायरे से बँट न जाए"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "menghubungkan pulau-pulau mesh terdekat lewat internet agar satu kerumunan tidak terbelah oleh jangkauan radio"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "collega le isole mesh vicine tramite internet così una folla non viene divisa dalla portata radio"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "近くのmeshの島々をインターネットでつなぎ、電波範囲で人の輪が分断されないようにします"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "근처의 mesh 섬들을 인터넷으로 연결해 한 무리가 전파 범위 때문에 갈라지지 않게 합니다"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "menghubungkan pulau-pulau mesh berdekatan melalui internet supaya satu kumpulan tidak terpisah oleh jangkauan radio"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "नजिकका mesh टापुहरूलाई इन्टरनेटमार्फत जोड्छ ताकि एउटै भीड रेडियो पहुँचले नबाँडियोस्"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "verbindt nabije mesh-eilanden via internet zodat één groep niet door radiobereik wordt gesplitst"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "łączy pobliskie wyspy mesh przez internet, aby jeden tłum nie był dzielony przez zasięg radiowy"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "liga ilhas mesh próximas através da internet para que uma multidão não fique dividida pelo alcance de rádio"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "liga ilhas mesh próximas pela internet para que uma multidão não fique dividida pelo alcance de rádio"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "связывает соседние mesh-острова через интернет, чтобы одна толпа не делилась радиусом радиосвязи"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "länkar närliggande mesh-öar via internet så att en folkmassa inte delas av radioräckvidden"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "அருகிலுள்ள mesh தீவுகளை இணையம் வழியாக இணைக்கிறது, ஒரே கூட்டம் ரேடியோ வரம்பால் பிரியாமல் இருக்க"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เชื่อมเกาะ mesh ที่อยู่ใกล้กันผ่านอินเทอร์เน็ต เพื่อให้ฝูงชนเดียวกันไม่ถูกแบ่งด้วยระยะวิทยุ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yakındaki mesh adalarını internet üzerinden birbirine bağlar, böylece bir kalabalık telsiz menziliyle bölünmez"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "з'єднує сусідні mesh-острови через інтернет, щоб один натовп не ділився радіусом радіозв'язку"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "قریبی mesh جزیروں کو انٹرنیٹ کے ذریعے جوڑتا ہے تاکہ ایک ہجوم ریڈیو رینج سے تقسیم نہ ہو"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "liên kết các đảo mesh gần nhau qua internet để một đám đông không bị chia cắt bởi phạm vi sóng"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通过互联网连接附近的 mesh 孤岛，让同一群人不被无线电范围隔开"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "透過網際網路連接附近的 mesh 孤島，讓同一群人不被無線電範圍隔開"
+          }
+        }
+      }
+    },
+    "app_info.features.bridge.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "جسور mesh"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "মেশ ব্রিজিং"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh-bridging"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh bridging"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "puentes mesh"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh bridging"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pontage mesh"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "גישור mesh"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "मेश ब्रिजिंग"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "jembatan mesh"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bridging mesh"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "meshブリッジング"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh 브리징"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "jambatan mesh"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh ब्रिजिङ"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh-bridging"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mostkowanie mesh"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pontes mesh"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pontes mesh"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh-мосты"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh-bryggning"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh பாலம்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "การบริดจ์ mesh"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh köprüleme"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh-мости"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh پل"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cầu nối mesh"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh 桥接"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh 橋接"
+          }
+        }
+      }
+    },
     "app_info.features.encryption.description" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -5017,6 +5375,185 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "已屏蔽"
+          }
+        }
+      }
+    },
+    "app_info.legend.bridged" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "وصلت الرسالة عبر جسر mesh"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "বার্তাটি মেশ ব্রিজ পেরিয়ে এসেছে"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nachricht kam über eine mesh-brücke an"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "message arrived across a mesh bridge"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "el mensaje llegó a través de un puente mesh"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dumating ang mensahe sa pamamagitan ng mesh bridge"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "message arrivé via un pont mesh"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ההודעה הגיעה דרך גשר mesh"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "संदेश मेश ब्रिज से होकर आया"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pesan tiba lewat jembatan mesh"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "messaggio arrivato attraverso un ponte mesh"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "meshブリッジ経由で届いたメッセージ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh 브리지를 거쳐 도착한 메시지"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pesan tiba melalui jambatan mesh"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सन्देश mesh पुल हुँदै आइपुग्यो"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bericht kwam via een mesh-brug binnen"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wiadomość dotarła przez most mesh"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mensagem chegou através de uma ponte mesh"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mensagem chegou por uma ponte mesh"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "сообщение пришло через mesh-мост"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "meddelandet kom via en mesh-brygga"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "செய்தி mesh பாலம் வழியாக வந்தது"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ข้อความมาถึงผ่านบริดจ์ mesh"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesaj bir mesh köprüsü üzerinden geldi"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "повідомлення надійшло через mesh-міст"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پیغام mesh پل کے ذریعے پہنچا"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tin nhắn đến qua cầu nối mesh"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "消息经 mesh 桥接送达"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "訊息經 mesh 橋接送達"
           }
         }
       }
@@ -9154,6 +9691,2333 @@
         }
       }
     },
+    "app_info.settings.bridge.cell" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "خلية اللقاء: %@"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "মিলনস্থল সেল: %@"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "rendezvous-zelle: %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "rendezvous cell: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "celda de encuentro: %@"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "rendezvous cell: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cellule de rendez-vous : %@"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "תא מפגש: %@"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "मिलन सेल: %@"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sel titik temu: %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cella di incontro: %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ランデブーセル: %@"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "랑데부 셀: %@"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sel titik temu: %@"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "भेट हुने सेल: %@"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ontmoetingscel: %@"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "komórka spotkania: %@"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "célula de encontro: %@"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "célula de encontro: %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ячейка встречи: %@"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mötescell: %@"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "சந்திப்பு செல்: %@"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เซลล์นัดพบ: %@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "buluşma hücresi: %@"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "комірка зустрічі: %@"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ملاقات سیل: %@"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ô hẹn gặp: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会合单元：%@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "會合單元：%@"
+          }
+        }
+      }
+    },
+    "app_info.settings.bridge.no_cell" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لا توجد خلية لقاء بعد — يلزم صلاحية الموقع أو قرين جسر قريب"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "এখনও কোনো মিলনস্থল সেল নেই — লোকেশন অ্যাক্সেস বা কাছাকাছি একটি ব্রিজ পিয়ার দরকার"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "noch keine rendezvous-zelle — braucht standortzugriff oder einen brücken-peer in der nähe"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no rendezvous cell yet — needs location access or a nearby bridge peer"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "aún no hay celda de encuentro — necesita acceso a la ubicación o un peer puente cercano"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wala pang rendezvous cell — kailangan ng access sa lokasyon o kalapit na bridge peer"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pas encore de cellule de rendez-vous — nécessite l'accès localisation ou un pair pont à proximité"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "עדיין אין תא מפגש — נדרשת גישת מיקום או עמית גשר קרוב"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "अभी कोई मिलन सेल नहीं — लोकेशन एक्सेस या आसपास का कोई ब्रिज पीयर चाहिए"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "belum ada sel titik temu — perlu akses lokasi atau peer jembatan terdekat"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ancora nessuna cella di incontro — serve l'accesso alla posizione o un peer ponte vicino"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ランデブーセルはまだありません — 位置アクセスか近くのブリッジピアが必要です"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "아직 랑데부 셀이 없습니다 — 위치 접근 권한이나 근처의 브리지 피어가 필요합니다"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "belum ada sel titik temu — perlu capaian lokasi atau peer jambatan berdekatan"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "अहिलेसम्म भेट हुने सेल छैन — स्थान पहुँच वा नजिकैको bridge peer चाहिन्छ"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nog geen ontmoetingscel — vereist toegang tot locatie of een brug-peer in de buurt"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nie ma jeszcze komórki spotkania — potrzebny dostęp do lokalizacji lub pobliski peer mostu"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ainda sem célula de encontro — precisa de acesso à localização ou de um par ponte próximo"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ainda sem célula de encontro — precisa de acesso à localização ou de um par ponte por perto"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ячейки встречи пока нет — нужен доступ к локации или ближайший пир-мост"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ingen mötescell ännu — kräver platsåtkomst eller en brygg-peer i närheten"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "இன்னும் சந்திப்பு செல் இல்லை — இட அணுகல் அல்லது அருகிலுள்ள பாலம் peer தேவை"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ยังไม่มีเซลล์นัดพบ — ต้องมีสิทธิ์เข้าถึงตำแหน่งหรือเพียร์บริดจ์ที่อยู่ใกล้"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "henüz buluşma hücresi yok — konum erişimi veya yakında bir köprü eşi gerekiyor"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "комірки зустрічі поки немає — потрібен доступ до локації або ближній пір-міст"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ابھی کوئی ملاقات سیل نہیں — لوکیشن رسائی یا قریبی پل ہم منصب درکار ہے"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "chưa có ô hẹn gặp — cần quyền truy cập vị trí hoặc một nút cầu nối gần đó"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚无会合单元 — 需要位置访问或附近有桥接同伴"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚無會合單元 — 需要位置存取權或附近有橋接同伴"
+          }
+        }
+      }
+    },
+    "app_info.settings.bridge.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رسائلك العامة في mesh تصل أيضًا عبر الإنترنت إلى مستخدمي bitchat خارج مدى الراديو في منطقتك، وترى رسائلهم (معلَّمة برمز شبكة)"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "আপনার পাবলিক মেশ বার্তা ইন্টারনেটের মাধ্যমে আপনার এলাকার রেডিও পরিসরের বাইরের bitchat ব্যবহারকারীদের কাছেও পৌঁছায়, আর আপনি তাদেরটাও দেখেন (নেটওয়ার্ক চিহ্ন দিয়ে চিহ্নিত)"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "deine öffentlichen mesh-nachrichten erreichen über das internet auch bitchat-nutzer außerhalb der funkreichweite in deiner gegend, und du siehst ihre (markiert mit einem netzwerk-symbol)"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "your public mesh messages also reach bitchat users beyond radio range in your area via the internet, and you see theirs (marked with a network glyph)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tus mensajes públicos del mesh también llegan por internet a usuarios de bitchat fuera del alcance de radio en tu zona, y tú ves los suyos (marcados con un símbolo de red)"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ang iyong mga pampublikong mensahe sa mesh ay umaabot din sa mga bitchat user na lampas sa saklaw ng radyo sa iyong lugar sa pamamagitan ng internet, at nakikita mo rin ang sa kanila (may markang simbolo ng network)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tes messages publics du mesh atteignent aussi via internet les utilisateurs de bitchat hors de portée radio dans ta zone, et tu vois les leurs (marqués d'un symbole réseau)"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ההודעות הציבוריות שלך ב-mesh מגיעות דרך האינטרנט גם למשתמשי bitchat מעבר לטווח הרדיו באזורך, ואתה רואה את שלהם (מסומנות בסמל רשת)"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "आपके सार्वजनिक मेश संदेश इंटरनेट के ज़रिए आपके क्षेत्र में रेडियो दायरे से बाहर के bitchat उपयोगकर्ताओं तक भी पहुँचते हैं, और आप उनके संदेश भी देखते हैं (नेटवर्क चिह्न से चिह्नित)"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pesan publik mesh-mu juga sampai lewat internet ke pengguna bitchat di luar jangkauan radio di areamu, dan kamu melihat pesan mereka (ditandai dengan simbol jaringan)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "i tuoi messaggi pubblici della mesh raggiungono via internet anche gli utenti bitchat oltre la portata radio nella tua zona, e tu vedi i loro (contrassegnati con un simbolo di rete)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "あなたの公開meshメッセージはインターネット経由でエリア内の電波範囲外にいるbitchatユーザーにも届き、相手のメッセージも見えます（ネットワーク記号付き）"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "내 공개 mesh 메시지가 인터넷을 통해 이 지역의 전파 범위 밖 bitchat 사용자에게도 전달되고, 그들의 메시지도 볼 수 있습니다 (네트워크 기호로 표시)"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pesan awam mesh-mu juga sampai melalui internet kepada pengguna bitchat di luar jangkauan radio di kawasanmu, dan kamu melihat pesan mereka (ditanda dengan simbol rangkaian)"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "तिम्रा सार्वजनिक mesh सन्देशहरू इन्टरनेटमार्फत तिम्रो क्षेत्रमा रेडियो पहुँचभन्दा बाहिरका bitchat प्रयोगकर्तासम्म पनि पुग्छन्, र तिमी उनीहरूका पनि देख्छौ (नेटवर्क चिन्हले चिन्हित)"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "je openbare mesh-berichten bereiken via internet ook bitchat-gebruikers buiten radiobereik in jouw omgeving, en jij ziet die van hen (gemarkeerd met een netwerksymbool)"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "twoje publiczne wiadomości mesh docierają przez internet także do użytkowników bitchat poza zasięgiem radiowym w twojej okolicy, a ty widzisz ich wiadomości (oznaczone symbolem sieci)"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "as tuas mensagens públicas da mesh também chegam pela internet a utilizadores do bitchat fora do alcance de rádio na tua zona, e tu vês as deles (marcadas com um símbolo de rede)"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "suas mensagens públicas do mesh também chegam pela internet a usuários do bitchat fora do alcance de rádio na sua área, e você vê as deles (marcadas com um símbolo de rede)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "твои публичные mesh-сообщения через интернет доходят и до пользователей bitchat за пределами радиуса радиосвязи в твоём районе, а ты видишь их сообщения (помечены символом сети)"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dina publika mesh-meddelanden når via internet även bitchat-användare utom radioräckvidd i ditt område, och du ser deras (markerade med en nätverkssymbol)"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "உங்கள் பொது mesh செய்திகள் இணையம் வழியாக உங்கள் பகுதியில் ரேடியோ வரம்புக்கு அப்பாலுள்ள bitchat பயனர்களையும் சென்றடைகின்றன, அவர்களுடையதையும் நீங்கள் காண்கிறீர்கள் (நெட்வொர்க் சின்னத்துடன் குறிக்கப்பட்டவை)"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ข้อความ mesh สาธารณะของคุณยังส่งผ่านอินเทอร์เน็ตไปถึงผู้ใช้ bitchat ที่อยู่นอกระยะวิทยุในพื้นที่ของคุณ และคุณก็เห็นข้อความของพวกเขาด้วย (มีสัญลักษณ์เครือข่ายกำกับ)"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "herkese açık mesh mesajların internet üzerinden bölgendeki telsiz menzili dışındaki bitchat kullanıcılarına da ulaşır, onlarınkini de görürsün (ağ simgesiyle işaretli)"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "твої публічні mesh-повідомлення через інтернет доходять і до користувачів bitchat поза радіусом радіозв'язку у твоєму районі, а ти бачиш їхні (позначені символом мережі)"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "آپ کے عوامی mesh پیغامات انٹرنیٹ کے ذریعے آپ کے علاقے میں ریڈیو رینج سے باہر bitchat صارفین تک بھی پہنچتے ہیں، اور آپ ان کے پیغامات بھی دیکھتے ہیں (نیٹ ورک علامت سے نشان زد)"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tin nhắn mesh công khai của bạn cũng đến được người dùng bitchat ngoài phạm vi sóng trong khu vực qua internet, và bạn cũng thấy tin nhắn của họ (đánh dấu bằng ký hiệu mạng)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的公开 mesh 消息也会通过互联网送达本地区无线电范围之外的 bitchat 用户，你也能看到他们的消息（带网络符号标记）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的公開 mesh 訊息也會透過網際網路送達本地區無線電範圍之外的 bitchat 使用者，你也能看到他們的訊息（帶網路符號標記）"
+          }
+        }
+      }
+    },
+    "app_info.settings.bridge.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "جسر mesh"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "মেশ ব্রিজ"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh-brücke"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh bridge"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "puente mesh"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh bridge"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pont mesh"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "גשר mesh"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "मेश ब्रिज"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "jembatan mesh"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ponte mesh"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "meshブリッジ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh 브리지"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "jambatan mesh"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh पुल"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh-brug"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "most mesh"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ponte mesh"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ponte mesh"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh-мост"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh-brygga"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh பாலம்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "บริดจ์ mesh"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh köprüsü"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh-міст"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh پل"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cầu nối mesh"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh 桥接"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh 橋接"
+          }
+        }
+      }
+    },
+    "app_info.settings.connectivity.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الاتصال"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "সংযোগ"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "KONNEKTIVITÄT"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CONNECTIVITY"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CONECTIVIDAD"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "KONEKTIBIDAD"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CONNECTIVITÉ"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "קישוריות"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "कनेक्टिविटी"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "KONEKTIVITAS"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CONNETTIVITÀ"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "接続"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "연결"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "KESAMBUNGAN"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "जडान"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CONNECTIVITEIT"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ŁĄCZNOŚĆ"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CONECTIVIDADE"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CONECTIVIDADE"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "СВЯЗЬ"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ANSLUTNING"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "இணைப்பு"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "การเชื่อมต่อ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BAĞLANTI"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ЗВ'ЯЗОК"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "کنیکٹیویٹی"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "KẾT NỐI"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "连接"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "連線"
+          }
+        }
+      }
+    },
+    "app_info.settings.danger.panic_button" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مسح الذعر"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "প্যানিক ওয়াইপ"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "panik-löschung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "panic wipe"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "borrado de pánico"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "panic wipe"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "effacement panique"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מחיקת בהלה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "पैनिक वाइप"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hapus panik"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cancellazione panico"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "パニック消去"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "패닉 삭제"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hapus panik"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "घबराहट मेटाइ"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "paniekwissen"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "awaryjne wymazanie"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "limpeza de pânico"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "limpeza de pânico"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "экстренное стирание"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "panikradering"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "பதற்ற அழிப்பு"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ล้างข้อมูลฉุกเฉิน"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "panik silme"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "екстрене стирання"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پینک وائپ"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "xóa khẩn cấp"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "紧急抹除"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "緊急抹除"
+          }
+        }
+      }
+    },
+    "app_info.settings.danger.panic_confirm_action" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مسح كل شيء"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "সব মুছে ফেলুন"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alles löschen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wipe everything"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "borrar todo"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "burahin lahat"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tout effacer"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מחק הכול"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सब कुछ मिटाएँ"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hapus semuanya"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cancella tutto"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "すべて消去"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "모두 지우기"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hapus semuanya"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सबै मेट"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alles wissen"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wymaż wszystko"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "limpar tudo"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "apagar tudo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "стереть всё"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "radera allt"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "அனைத்தையும் அழி"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ล้างทั้งหมด"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "her şeyi sil"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "стерти все"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "سب کچھ مٹا دیں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "xóa tất cả"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "抹除全部"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "抹除全部"
+          }
+        }
+      }
+    },
+    "app_info.settings.danger.panic_confirm_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مسح كل البيانات؟"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "সব ডেটা মুছবেন?"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alle daten löschen?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wipe all data?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿borrar todos los datos?"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "burahin ang lahat ng data?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "effacer toutes les données ?"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "למחוק את כל הנתונים?"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सारा डेटा मिटाएँ?"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hapus semua data?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cancellare tutti i dati?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全データを消去しますか？"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "모든 데이터를 지울까요?"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hapus semua data?"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सबै डाटा मेट्ने हो?"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alle data wissen?"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wymazać wszystkie dane?"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "limpar todos os dados?"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "apagar todos os dados?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "стереть все данные?"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "radera all data?"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "எல்லா தரவையும் அழிக்கவா?"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ล้างข้อมูลทั้งหมด?"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tüm veriler silinsin mi?"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "стерти всі дані?"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تمام ڈیٹا مٹا دیں؟"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "xóa toàn bộ dữ liệu?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "抹除全部数据？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "抹除全部資料？"
+          }
+        }
+      }
+    },
+    "app_info.settings.danger.panic_note" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يمسح كل الرسائل والمفاتيح والهوية. النقر ثلاث مرات على شعار bitchat/ يفعل الشيء نفسه فورًا."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "সব বার্তা, কী ও পরিচয় মুছে দেয়। bitchat/ লোগোতে তিনবার ট্যাপ করলেও সঙ্গে সঙ্গে একই কাজ হয়।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "löscht alle nachrichten, schlüssel und identität. dreimaliges tippen auf das bitchat/-logo macht dasselbe, sofort."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "erases all messages, keys, and identity. triple-tapping the bitchat/ logo does the same, instantly."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "borra todos los mensajes, claves e identidad. tocar tres veces el logotipo de bitchat/ hace lo mismo, al instante."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "binubura ang lahat ng mensahe, key, at pagkakakilanlan. ang pag-tap nang tatlong beses sa logo ng bitchat/ ay pareho ang ginagawa, agad-agad."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "efface tous les messages, les clés et l'identité. taper trois fois sur le logo bitchat/ fait la même chose, instantanément."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מוחק את כל ההודעות, המפתחות והזהות. הקשה משולשת על הלוגו של bitchat/ עושה את אותו הדבר, מייד."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सभी संदेश, कुंजियाँ और पहचान मिटा देता है। bitchat/ लोगो पर तीन बार टैप करने से भी तुरंत यही होता है।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "menghapus semua pesan, kunci, dan identitas. mengetuk logo bitchat/ tiga kali melakukan hal yang sama, seketika."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cancella tutti i messaggi, le chiavi e l'identità. toccare tre volte il logo bitchat/ fa lo stesso, all'istante."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "すべてのメッセージ、鍵、アイデンティティを消去します。bitchat/ ロゴを3回タップしても同じことが即座に行われます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "모든 메시지, 키, 신원을 지웁니다. bitchat/ 로고를 세 번 탭해도 즉시 같은 동작이 실행됩니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "menghapus semua pesan, kunci, dan identiti. mengetuk logo bitchat/ tiga kali melakukan perkara yang sama, serta-merta."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सबै सन्देश, कुञ्जी र पहिचान मेटाउँछ। bitchat/ लोगोमा तीन पटक ट्याप गर्दा पनि तुरुन्तै त्यही हुन्छ।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wist alle berichten, sleutels en identiteit. drie keer tikken op het bitchat/-logo doet hetzelfde, direct."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "usuwa wszystkie wiadomości, klucze i tożsamość. trzykrotne stuknięcie logo bitchat/ robi to samo, natychmiast."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "apaga todas as mensagens, chaves e identidade. tocar três vezes no logótipo bitchat/ faz o mesmo, de imediato."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "apaga todas as mensagens, chaves e identidade. tocar três vezes no logo bitchat/ faz o mesmo, instantaneamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "стирает все сообщения, ключи и личность. тройной тап по логотипу bitchat/ делает то же самое, мгновенно."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "raderar alla meddelanden, nycklar och identitet. att trycka tre gånger på bitchat/-logotypen gör detsamma, direkt."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "எல்லா செய்திகள், சாவிகள், அடையாளத்தையும் அழிக்கிறது. bitchat/ லோகோவை மூன்று முறைத் தட்டினாலும் உடனடியாக அதுவே நடக்கும்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ลบข้อความ กุญแจ และตัวตนทั้งหมด การแตะโลโก้ bitchat/ สามครั้งก็ทำแบบเดียวกันทันที"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tüm mesajları, anahtarları ve kimliği siler. bitchat/ logosuna üç kez dokunmak da aynısını anında yapar."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "стирає всі повідомлення, ключі та особистість. потрійний дотик до логотипа bitchat/ робить те саме, миттєво."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تمام پیغامات، کلیدیں اور شناخت مٹا دیتا ہے۔ bitchat/ لوگو پر تین بار ٹیپ کرنے سے بھی فوراً یہی ہوتا ہے۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "xóa toàn bộ tin nhắn, khóa và danh tính. chạm ba lần vào logo bitchat/ cũng làm điều tương tự, ngay lập tức."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "抹除所有消息、密钥和身份。三击 bitchat/ 标志也会立即执行相同操作。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "抹除所有訊息、金鑰和身分。三擊 bitchat/ 標誌也會立即執行相同操作。"
+          }
+        }
+      }
+    },
+    "app_info.settings.danger.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "منطقة الخطر"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "বিপদ অঞ্চল"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GEFAHRENZONE"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DANGER ZONE"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ZONA DE PELIGRO"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DANGER ZONE"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ZONE DE DANGER"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אזור סכנה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "खतरे का क्षेत्र"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ZONA BERBAHAYA"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ZONA PERICOLOSA"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "危険ゾーン"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "위험 구역"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ZON BAHAYA"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "खतरा क्षेत्र"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GEVARENZONE"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "STREFA ZAGROŻENIA"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ZONA DE PERIGO"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ZONA DE PERIGO"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ОПАСНАЯ ЗОНА"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "FARLIG ZON"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ஆபத்து மண்டலம்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "โซนอันตราย"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TEHLİKELİ BÖLGE"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "НЕБЕЗПЕЧНА ЗОНА"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "خطرے کا علاقہ"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VÙNG NGUY HIỂM"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "危险区域"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "危險區域"
+          }
+        }
+      }
+    },
+    "app_info.tab.info" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "معلومات"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "তথ্য"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "info"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "info"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "info"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "impormasyon"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "infos"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מידע"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "जानकारी"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "info"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "info"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "情報"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "정보"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "info"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "जानकारी"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "info"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "informacje"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "info"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "informações"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "инфо"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "info"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "தகவல்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ข้อมูล"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bilgi"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "інфо"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "معلومات"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "thông tin"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "信息"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "資訊"
+          }
+        }
+      }
+    },
+    "app_info.tab.picker_label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عرض"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ভিউ"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ansicht"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "view"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "vista"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "view"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "vue"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "תצוגה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "दृश्य"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tampilan"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "vista"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "表示"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "보기"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "paparan"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "दृश्य"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "weergave"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "widok"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "vista"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "exibição"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "вид"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "vy"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "காட்சி"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "มุมมอง"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "görünüm"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "вигляд"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "منظر"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "chế độ xem"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "视图"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "檢視"
+          }
+        }
+      }
+    },
+    "app_info.tab.settings" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الإعدادات"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "সেটিংস"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "einstellungen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "settings"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ajustes"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "settings"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "réglages"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הגדרות"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सेटिंग्स"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pengaturan"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "impostazioni"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "設定"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "설정"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tetapan"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सेटिङ"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "instellingen"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ustawienia"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "definições"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ajustes"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "настройки"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "inställningar"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "அமைப்புகள்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ตั้งค่า"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ayarlar"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "налаштування"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "سیٹنگز"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cài đặt"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设置"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "設定"
+          }
+        }
+      }
+    },
     "app_info.tagline" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -12559,6 +15423,364 @@
         }
       }
     },
+    "content.accessibility.bridged_count" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld أشخاص آخرون عبر الجسر"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ব্রিজের ওপারে আরও %lld জন"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld weitere personen über die brücke"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld more people across the bridge"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld personas más al otro lado del puente"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld pang tao sa kabila ng bridge"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld personnes de plus via le pont"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "עוד %lld אנשים מעבר לגשר"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ब्रिज के पार %lld और लोग"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld orang lagi di seberang jembatan"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "altre %lld persone oltre il ponte"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ブリッジの先にさらに%lld人"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "브리지 너머 %lld명 더"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld lagi orang di seberang jambatan"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "पुलपारि थप %lld जना"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld extra mensen via de brug"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld więcej osób po drugiej stronie mostu"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mais %lld pessoas do outro lado da ponte"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mais %lld pessoas do outro lado da ponte"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ещё %lld человек по ту сторону моста"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld personer till via bryggan"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "பாலத்தின் அப்பால் மேலும் %lld பேர்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "อีก %lld คนที่อีกฝั่งของบริดจ์"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "köprünün ötesinde %lld kişi daha"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ще %lld людей по той бік мосту"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پل کے پار %lld مزید لوگ"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "thêm %lld người bên kia cầu"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "桥另一侧还有 %lld 人"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "橋另一側還有 %lld 人"
+          }
+        }
+      }
+    },
+    "content.accessibility.bridged_message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "وصلت عبر جسر mesh"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "মেশ ব্রিজ পেরিয়ে এসেছে"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Über eine mesh-brücke angekommen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrived across a mesh bridge"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Llegó a través de un puente mesh"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dumating sa pamamagitan ng mesh bridge"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrivé via un pont mesh"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הגיעה דרך גשר mesh"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "मेश ब्रिज से होकर आया"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tiba lewat jembatan mesh"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrivato attraverso un ponte mesh"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "meshブリッジ経由で届きました"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh 브리지를 거쳐 도착함"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tiba melalui jambatan mesh"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh पुल हुँदै आइपुग्यो"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Via een mesh-brug binnengekomen"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dotarła przez most mesh"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chegou através de uma ponte mesh"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chegou por uma ponte mesh"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пришло через mesh-мост"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kom via en mesh-brygga"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh பாலம் வழியாக வந்தது"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "มาถึงผ่านบริดจ์ mesh"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bir mesh köprüsü üzerinden geldi"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Надійшло через mesh-міст"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh پل کے ذریعے پہنچا"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Đến qua cầu nối mesh"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "经 mesh 桥接送达"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "經 mesh 橋接送達"
+          }
+        }
+      }
+    },
     "content.accessibility.choose_photo" : {
       "comment" : "Accessibility label for the macOS photo picker button",
       "extractionState" : "manual",
@@ -13457,182 +16679,181 @@
         }
       }
     },
-    "content.accessibility.gateway_hint" : {
-      "comment" : "Accessibility hint for the internet gateway indicator explaining a tap opens the channel sheet",
+    "content.accessibility.gateway_settings_hint" : {
       "extractionState" : "manual",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "يفتح إعدادات القنوات لتشغيل البوابة أو إيقافها"
+            "state" : "translated",
+            "value" : "يفتح الإعدادات لتشغيل البوابة أو إيقافها"
           }
         },
         "bn" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "গেটওয়ে চালু বা বন্ধ করতে চ্যানেল সেটিংস খোলে"
+            "state" : "translated",
+            "value" : "গেটওয়ে চালু বা বন্ধ করতে সেটিংস খোলে"
           }
         },
         "de" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Öffnet die kanaleinstellungen, um das gateway ein- oder auszuschalten"
+            "state" : "translated",
+            "value" : "Öffnet die einstellungen, um das gateway ein- oder auszuschalten"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Opens channel settings to turn the gateway on or off"
+            "value" : "Opens settings to turn the gateway on or off"
           }
         },
         "es" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Abre los ajustes de canales para activar o desactivar la puerta de enlace"
+            "state" : "translated",
+            "value" : "Abre los ajustes para activar o desactivar la puerta de enlace"
           }
         },
         "fil" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Binubuksan ang mga setting ng channel para i-on o i-off ang gateway"
+            "state" : "translated",
+            "value" : "Binubuksan ang mga setting para i-on o i-off ang gateway"
           }
         },
         "fr" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Ouvre les réglages des canaux pour activer ou désactiver la passerelle"
+            "state" : "translated",
+            "value" : "Ouvre les réglages pour activer ou désactiver la passerelle"
           }
         },
         "he" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "פותח את הגדרות הערוצים כדי להפעיל או לכבות את השער"
+            "state" : "translated",
+            "value" : "פותח את ההגדרות כדי להפעיל או לכבות את השער"
           }
         },
         "hi" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "गेटवे चालू या बंद करने के लिए चैनल सेटिंग्स खोलता है"
+            "state" : "translated",
+            "value" : "गेटवे चालू या बंद करने के लिए सेटिंग्स खोलता है"
           }
         },
         "id" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Membuka pengaturan kanal untuk menyalakan atau mematikan gateway"
+            "state" : "translated",
+            "value" : "Membuka pengaturan untuk menyalakan atau mematikan gateway"
           }
         },
         "it" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Apre le impostazioni dei canali per attivare o disattivare il gateway"
+            "state" : "translated",
+            "value" : "Apre le impostazioni per attivare o disattivare il gateway"
           }
         },
         "ja" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "チャンネル設定を開いてゲートウェイのオン/オフを切り替えます"
+            "state" : "translated",
+            "value" : "設定を開いてゲートウェイのオン/オフを切り替えます"
           }
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "채널 설정을 열어 게이트웨이를 켜거나 끕니다"
+            "state" : "translated",
+            "value" : "설정을 열어 게이트웨이를 켜거나 끕니다"
           }
         },
         "ms" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Membuka tetapan saluran untuk menghidupkan atau mematikan gateway"
+            "state" : "translated",
+            "value" : "Membuka tetapan untuk menghidupkan atau mematikan gateway"
           }
         },
         "ne" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "गेटवे खोल्न वा बन्द गर्न च्यानल सेटिङहरू खोल्छ"
+            "state" : "translated",
+            "value" : "गेटवे खोल्न वा बन्द गर्न सेटिङहरू खोल्छ"
           }
         },
         "nl" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Opent kanaalinstellingen om de gateway aan of uit te zetten"
+            "state" : "translated",
+            "value" : "Opent instellingen om de gateway aan of uit te zetten"
           }
         },
         "pl" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Otwiera ustawienia kanałów, aby włączyć lub wyłączyć bramę"
+            "state" : "translated",
+            "value" : "Otwiera ustawienia, aby włączyć lub wyłączyć bramę"
           }
         },
         "pt" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Abre as definições de canais para ligar ou desligar o gateway"
+            "state" : "translated",
+            "value" : "Abre as definições para ligar ou desligar o gateway"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Abre as configurações de canais para ligar ou desligar o gateway"
+            "state" : "translated",
+            "value" : "Abre as configurações para ligar ou desligar o gateway"
           }
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Открывает настройки каналов, чтобы включить или выключить шлюз"
+            "state" : "translated",
+            "value" : "Открывает настройки, чтобы включить или выключить шлюз"
           }
         },
         "sv" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Öppnar kanalinställningar för att slå på eller av gatewayen"
+            "state" : "translated",
+            "value" : "Öppnar inställningar för att slå på eller av gatewayen"
           }
         },
         "ta" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "கேட்வேயை இயக்க அல்லது அணைக்க சேனல் அமைப்புகளைத் திறக்கிறது"
+            "state" : "translated",
+            "value" : "கேட்வேயை இயக்க அல்லது அணைக்க அமைப்புகளைத் திறக்கிறது"
           }
         },
         "th" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "เปิดการตั้งค่าช่องเพื่อเปิดหรือปิดเกตเวย์"
+            "state" : "translated",
+            "value" : "เปิดการตั้งค่าเพื่อเปิดหรือปิดเกตเวย์"
           }
         },
         "tr" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Ağ geçidini açmak veya kapatmak için kanal ayarlarını açar"
+            "state" : "translated",
+            "value" : "Ağ geçidini açmak veya kapatmak için ayarları açar"
           }
         },
         "uk" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Відкриває налаштування каналів, щоб увімкнути або вимкнути шлюз"
+            "state" : "translated",
+            "value" : "Відкриває налаштування, щоб увімкнути або вимкнути шлюз"
           }
         },
         "ur" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "گیٹ وے کو آن یا آف کرنے کے لیے چینل کی ترتیبات کھولتا ہے"
+            "state" : "translated",
+            "value" : "گیٹ وے کو آن یا آف کرنے کے لیے ترتیبات کھولتا ہے"
           }
         },
         "vi" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Mở cài đặt kênh để bật hoặc tắt gateway"
+            "state" : "translated",
+            "value" : "Mở cài đặt để bật hoặc tắt gateway"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "打开频道设置以开启或关闭网关"
+            "state" : "translated",
+            "value" : "打开设置以开启或关闭网关"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "開啟頻道設定以開啟或關閉閘道"
+            "state" : "translated",
+            "value" : "開啟設定以開啟或關閉閘道"
           }
         }
       }
@@ -14171,6 +17392,364 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "位置頻道"
+          }
+        }
+      }
+    },
+    "content.accessibility.nearby_only_off" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "موصول بالجسر: تصل الرسائل أيضًا إلى من هم عبر الجسر"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ব্রিজযুক্ত: বার্তা ব্রিজের ওপারের মানুষের কাছেও পৌঁছায়"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Überbrückt: nachrichten erreichen auch personen über die brücke"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bridged: messages also reach people across the bridge"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Con puente: los mensajes también llegan a personas al otro lado del puente"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Naka-bridge: umaabot din ang mga mensahe sa mga tao sa kabila ng bridge"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pont actif : les messages atteignent aussi les gens de l'autre côté du pont"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מגושר: ההודעות מגיעות גם לאנשים מעבר לגשר"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ब्रिज सक्रिय: संदेश ब्रिज के पार के लोगों तक भी पहुँचते हैं"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terjembatani: pesan juga sampai ke orang di seberang jembatan"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Con ponte: i messaggi raggiungono anche le persone oltre il ponte"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ブリッジ中: メッセージはブリッジの先の人にも届きます"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "브리지 사용: 메시지가 브리지 너머 사람들에게도 전달됩니다"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Berjambatan: pesan juga sampai kepada orang di seberang jambatan"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "पुल जोडिएको: सन्देशहरू पुलपारिका मानिससम्म पनि पुग्छन्"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Overbrugd: berichten bereiken ook mensen via de brug"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zmostkowane: wiadomości docierają też do osób po drugiej stronie mostu"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Com ponte: as mensagens também chegam a pessoas do outro lado da ponte"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Com ponte: as mensagens também chegam a pessoas do outro lado da ponte"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Через мост: сообщения доходят и до людей по ту сторону моста"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bryggad: meddelanden når även personer via bryggan"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "பாலம் இணைந்தது: செய்திகள் பாலத்தின் அப்பாலுள்ளவர்களையும் சென்றடையும்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "บริดจ์อยู่: ข้อความยังไปถึงคนที่อีกฝั่งของบริดจ์ด้วย"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Köprülü: mesajlar köprünün ötesindeki kişilere de ulaşır"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Через міст: повідомлення доходять і до людей по той бік мосту"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پل فعال: پیغامات پل کے پار لوگوں تک بھی پہنچتے ہیں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Đã bắc cầu: tin nhắn cũng đến người bên kia cầu"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已桥接：消息也会送达桥另一侧的人"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已橋接：訊息也會送達橋另一側的人"
+          }
+        }
+      }
+    },
+    "content.accessibility.nearby_only_on" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "قريب فقط: تبقى الرسائل ضمن مدى الراديو"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "শুধু কাছাকাছি: বার্তা রেডিও পরিসরের মধ্যেই থাকে"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nur in der nähe: nachrichten bleiben innerhalb der funkreichweite"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nearby only: messages stay within radio range"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solo cerca: los mensajes se quedan dentro del alcance de radio"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Malapit lamang: nananatili ang mga mensahe sa loob ng saklaw ng radyo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proximité uniquement : les messages restent à portée radio"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "קרוב בלבד: ההודעות נשארות בטווח הרדיו"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "केवल आसपास: संदेश रेडियो दायरे के भीतर रहते हैं"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hanya terdekat: pesan tetap dalam jangkauan radio"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solo vicinanze: i messaggi restano entro la portata radio"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "近くのみ: メッセージは電波範囲内にとどまります"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "근처 전용: 메시지가 전파 범위 안에만 머뭅니다"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Berdekatan sahaja: pesan kekal dalam jangkauan radio"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "नजिक मात्र: सन्देशहरू रेडियो पहुँचभित्रै रहन्छन्"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alleen dichtbij: berichten blijven binnen radiobereik"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tylko w pobliżu: wiadomości pozostają w zasięgu radiowym"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Só por perto: as mensagens ficam dentro do alcance de rádio"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Só por perto: as mensagens ficam dentro do alcance de rádio"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Только рядом: сообщения остаются в радиусе радиосвязи"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Endast i närheten: meddelanden stannar inom radioräckvidd"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "அருகில் மட்டும்: செய்திகள் ரேடியோ வரம்புக்குள் இருக்கும்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เฉพาะใกล้เคียง: ข้อความอยู่ภายในระยะวิทยุ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yalnızca yakın: mesajlar telsiz menzili içinde kalır"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Лише поблизу: повідомлення залишаються в радіусі радіозв'язку"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صرف قریبی: پیغامات ریڈیو رینج کے اندر رہتے ہیں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chỉ gần đây: tin nhắn ở trong phạm vi sóng"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仅限附近：消息只在无线电范围内传播"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "僅限附近：訊息只在無線電範圍內傳播"
           }
         }
       }
@@ -23521,6 +27100,364 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "查看誰在線"
+          }
+        }
+      }
+    },
+    "content.composer.nearby_only_off" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "موصول بالجسر — تصل إلى أشخاص خارج مدى الراديو في هذه المنطقة"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ব্রিজযুক্ত — এই এলাকায় রেডিও পরিসরের বাইরের মানুষের কাছেও পৌঁছায়"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Überbrückt — erreicht personen außerhalb der funkreichweite in dieser gegend"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bridged — reaches people beyond radio range in this area"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Con puente — llega a personas fuera del alcance de radio en esta zona"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Naka-bridge — umaabot sa mga taong lampas sa saklaw ng radyo sa lugar na ito"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pont actif — atteint les gens hors de portée radio dans cette zone"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מגושר — מגיעה לאנשים מעבר לטווח הרדיו באזור הזה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ब्रिज सक्रिय — इस क्षेत्र में रेडियो दायरे से बाहर के लोगों तक पहुँचता है"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terjembatani — sampai ke orang di luar jangkauan radio di area ini"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Con ponte — raggiunge persone oltre la portata radio in questa zona"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ブリッジ中 — このエリアの電波範囲外の人にも届きます"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "브리지 사용 — 이 지역의 전파 범위 밖 사람들에게도 전달됩니다"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Berjambatan — sampai kepada orang di luar jangkauan radio di kawasan ini"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "पुल जोडिएको — यस क्षेत्रमा रेडियो पहुँचभन्दा बाहिरका मानिससम्म पुग्छ"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Overbrugd — bereikt mensen buiten radiobereik in deze omgeving"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zmostkowane — dociera do osób poza zasięgiem radiowym w tej okolicy"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Com ponte — chega a pessoas fora do alcance de rádio nesta zona"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Com ponte — chega a pessoas fora do alcance de rádio nesta área"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Через мост — доходит до людей за пределами радиуса радиосвязи в этом районе"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bryggad — når personer utom radioräckvidd i det här området"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "பாலம் இணைந்தது — இந்தப் பகுதியில் ரேடியோ வரம்புக்கு அப்பாலுள்ளவர்களைச் சென்றடையும்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "บริดจ์อยู่ — ไปถึงคนที่อยู่นอกระยะวิทยุในพื้นที่นี้"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Köprülü — bu bölgedeki telsiz menzili dışındaki kişilere ulaşır"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Через міст — доходить до людей поза радіусом радіозв'язку в цьому районі"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پل فعال — اس علاقے میں ریڈیو رینج سے باہر لوگوں تک پہنچتا ہے"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Đã bắc cầu — đến được người ngoài phạm vi sóng trong khu vực này"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已桥接 — 可送达本地区无线电范围之外的人"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已橋接 — 可送達本地區無線電範圍之外的人"
+          }
+        }
+      }
+    },
+    "content.composer.nearby_only_on" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "قريب فقط — لن تعبر هذه الرسالة الجسر"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "শুধু কাছাকাছি — এই বার্তা ব্রিজ পার হবে না"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nur in der nähe — diese nachricht überquert die brücke nicht"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nearby only — this message won't cross the bridge"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solo cerca — este mensaje no cruzará el puente"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Malapit lamang — hindi tatawid sa bridge ang mensaheng ito"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proximité uniquement — ce message ne franchira pas le pont"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "קרוב בלבד — ההודעה הזו לא תחצה את הגשר"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "केवल आसपास — यह संदेश ब्रिज पार नहीं करेगा"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hanya terdekat — pesan ini tidak akan menyeberangi jembatan"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solo vicinanze — questo messaggio non attraverserà il ponte"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "近くのみ — このメッセージはブリッジを越えません"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "근처 전용 — 이 메시지는 브리지를 건너지 않습니다"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Berdekatan sahaja — pesan ini tidak akan menyeberangi jambatan"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "नजिक मात्र — यो सन्देश पुल तर्दैन"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alleen dichtbij — dit bericht gaat de brug niet over"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tylko w pobliżu — ta wiadomość nie przejdzie przez most"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Só por perto — esta mensagem não vai atravessar a ponte"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Só por perto — esta mensagem não vai atravessar a ponte"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Только рядом — это сообщение не пересечёт мост"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Endast i närheten — det här meddelandet korsar inte bryggan"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "அருகில் மட்டும் — இந்தச் செய்தி பாலத்தைத் தாண்டாது"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เฉพาะใกล้เคียง — ข้อความนี้จะไม่ข้ามบริดจ์"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yalnızca yakın — bu mesaj köprüyü geçmeyecek"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Лише поблизу — це повідомлення не перетне міст"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صرف قریبی — یہ پیغام پل پار نہیں کرے گا"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chỉ gần đây — tin nhắn này sẽ không qua cầu"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仅限附近 — 这条消息不会跨越桥接"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "僅限附近 — 這則訊息不會跨越橋接"
           }
         }
       }

@@ -9,19 +9,25 @@ struct AnnouncementPacket {
     let signingPublicKey: Data          // Ed25519 public key for signing
     let directNeighbors: [Data]?        // 8-byte peer IDs
     let capabilities: PeerCapabilities? // advertised feature bits; nil when absent (old clients)
+    /// Rendezvous geohash cell this peer bridges, when advertising `.bridge`.
+    /// Coarse (cell-level) by design; lets mesh-only peers compose correctly
+    /// tagged rendezvous events without their own location fix.
+    let bridgeGeohash: String?
 
     init(
         nickname: String,
         noisePublicKey: Data,
         signingPublicKey: Data,
         directNeighbors: [Data]?,
-        capabilities: PeerCapabilities? = nil
+        capabilities: PeerCapabilities? = nil,
+        bridgeGeohash: String? = nil
     ) {
         self.nickname = nickname
         self.noisePublicKey = noisePublicKey
         self.signingPublicKey = signingPublicKey
         self.directNeighbors = directNeighbors
         self.capabilities = capabilities
+        self.bridgeGeohash = bridgeGeohash
     }
 
     private enum TLVType: UInt8 {
@@ -30,6 +36,7 @@ struct AnnouncementPacket {
         case signingPublicKey = 0x03
         case directNeighbors = 0x04
         case capabilities = 0x05
+        case bridgeGeohash = 0x06
     }
 
     func encode() -> Data? {
@@ -74,6 +81,15 @@ struct AnnouncementPacket {
             data.append(capabilityBytes)
         }
 
+        // TLV for bridge rendezvous cell (optional; old clients skip it)
+        if let bridgeGeohash = bridgeGeohash,
+           let cellData = bridgeGeohash.data(using: .utf8),
+           !cellData.isEmpty, cellData.count <= 12 {
+            data.append(TLVType.bridgeGeohash.rawValue)
+            data.append(UInt8(cellData.count))
+            data.append(cellData)
+        }
+
         return data
     }
 
@@ -84,6 +100,7 @@ struct AnnouncementPacket {
         var signingPublicKey: Data?
         var directNeighbors: [Data]?
         var capabilities: PeerCapabilities?
+        var bridgeGeohash: String?
 
         while offset + 2 <= data.count {
             let typeRaw = data[offset]
@@ -116,6 +133,10 @@ struct AnnouncementPacket {
                     }
                 case .capabilities:
                     capabilities = PeerCapabilities(encoded: Data(value))
+                case .bridgeGeohash:
+                    if length <= 12 {
+                        bridgeGeohash = String(data: value, encoding: .utf8)
+                    }
                 }
             } else {
                 // Unknown TLV; skip (tolerant decoder for forward compatibility)
@@ -129,7 +150,8 @@ struct AnnouncementPacket {
             noisePublicKey: noisePublicKey,
             signingPublicKey: signingPublicKey,
             directNeighbors: directNeighbors,
-            capabilities: capabilities
+            capabilities: capabilities,
+            bridgeGeohash: bridgeGeohash
         )
     }
 }

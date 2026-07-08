@@ -32,6 +32,14 @@ struct NostrCarrierPacket: Equatable {
     enum Direction: UInt8 {
         case toGateway = 0x01
         case fromGateway = 0x02
+        /// Mesh-bridge uplink: a mesh-only peer asks a bridge gateway to
+        /// publish its signed rendezvous event. Directed, like `toGateway`.
+        case toBridge = 0x03
+        /// Mesh-bridge downlink: a bridge gateway rebroadcasts a rendezvous
+        /// event from a remote island. Broadcast, like `fromGateway`.
+        /// Old clients fail the Direction decode on 0x03/0x04 and drop the
+        /// carrier quietly — bridge traffic degrades to invisible, not junk.
+        case fromBridge = 0x04
     }
 
     let direction: Direction

@@ -20,6 +20,10 @@ public struct PeerCapabilities: OptionSet, Equatable, Hashable, Sendable {
     public static let board = PeerCapabilities(rawValue: 1 << 4)
     public static let vouch = PeerCapabilities(rawValue: 1 << 5)
     public static let meshDiagnostics = PeerCapabilities(rawValue: 1 << 6)
+    /// Bridges the local mesh channel to the geohash-cell rendezvous on Nostr
+    /// (uplink/downlink carriers for mesh-only peers). Advertised alongside
+    /// a `bridgeGeohash` TLV carrying the rendezvous cell.
+    public static let bridge = PeerCapabilities(rawValue: 1 << 7)
 
     /// Minimal little-endian byte encoding; always at least one byte so an
     /// empty set is distinguishable from an absent TLV.

@@ -178,6 +178,10 @@ final class GatewayService: ObservableObject {
             // Downlink rides broadcast only; a directed fromGateway is malformed.
             guard !directedToUs else { return }
             handleDownlinkBroadcast(carrier)
+        case .toBridge, .fromBridge:
+            // Mesh-bridge carriers are BridgeService territory; the ingress
+            // router dispatches them there.
+            return
         }
     }
 
@@ -460,32 +464,5 @@ final class GatewayService: ObservableObject {
         let allowed = Set("0123456789bcdefghjkmnpqrstuvwxyz")
         return (1...NostrCarrierPacket.maxGeohashLength).contains(geohash.count)
             && geohash.allSatisfy { allowed.contains($0) }
-    }
-}
-
-/// Insertion-ordered string set with a fixed capacity; the oldest entry is
-/// evicted when full.
-private struct BoundedIDSet {
-    private var members: Set<String> = []
-    private var order: [String] = []
-    let capacity: Int
-
-    init(capacity: Int) {
-        self.capacity = capacity
-    }
-
-    func contains(_ id: String) -> Bool {
-        members.contains(id)
-    }
-
-    /// Returns false when the ID was already present.
-    @discardableResult
-    mutating func insert(_ id: String) -> Bool {
-        guard members.insert(id).inserted else { return false }
-        order.append(id)
-        if order.count > capacity {
-            members.remove(order.removeFirst())
-        }
-        return true
     }
 }

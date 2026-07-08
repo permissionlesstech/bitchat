@@ -6,6 +6,7 @@ struct ContentHeaderView: View {
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @EnvironmentObject private var peerListModel: PeerListModel
     @EnvironmentObject private var boardAlertsModel: BoardAlertsModel
+    @ObservedObject private var bridgeService = BridgeService.shared
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
@@ -28,6 +29,12 @@ struct ContentHeaderView: View {
     /// Board posts mirrored from the store so the pin icon can show when the
     /// current scope has notices.
     @State private var boardPosts: [BoardPostPacket] = []
+
+    /// The bridged-people count belongs to the mesh channel only.
+    private var showBridgedPeerCount: Bool {
+        if case .location = locationChannelsModel.selectedChannel { return false }
+        return bridgeService.isEnabled && bridgeService.bridgedPeerCount > 0
+    }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -103,7 +110,9 @@ struct ContentHeaderView: View {
 
             HStack(spacing: 2) {
                 if locationChannelsModel.gatewayEnabled {
-                    Button(action: { appChromeModel.isLocationChannelsSheetPresented = true }) {
+                    // The gateway toggle lives in the App Info settings pane
+                    // now, so the indicator deep-links there.
+                    Button(action: { appChromeModel.presentAppInfo() }) {
                         Image(systemName: "globe")
                             .font(.bitchatSystem(size: 12))
                             .foregroundColor(palette.secondary.opacity(0.8))
@@ -114,7 +123,7 @@ struct ContentHeaderView: View {
                         String(localized: "content.accessibility.gateway_active", defaultValue: "Internet gateway active, sharing your connection with the mesh", comment: "Accessibility label for the internet gateway indicator")
                     )
                     .accessibilityHint(
-                        String(localized: "content.accessibility.gateway_hint", defaultValue: "Opens channel settings to turn the gateway on or off", comment: "Accessibility hint for the internet gateway indicator explaining a tap opens the channel sheet")
+                        String(localized: "content.accessibility.gateway_settings_hint", defaultValue: "Opens settings to turn the gateway on or off", comment: "Accessibility hint for the internet gateway indicator explaining a tap opens the settings sheet")
                     )
                     .help(
                         String(localized: "content.header.gateway_active", defaultValue: "Sharing your internet connection with nearby mesh peers", comment: "Tooltip for the internet gateway indicator")
@@ -245,6 +254,17 @@ struct ContentHeaderView: View {
                         Text("\(headerOtherPeersCount)")
                             .font(.system(size: headerPeerCountFontSize, weight: .regular, design: theme.bodyFontDesign))
                             .accessibilityHidden(true)
+                        // People across the bridge: shown only on the mesh
+                        // channel while the bridge sees remote participants.
+                        if showBridgedPeerCount {
+                            Image(systemName: "network")
+                                .font(.system(size: headerPeerIconSize - 2, weight: .regular))
+                                .foregroundColor(Color.cyan.opacity(0.9))
+                            Text("\(bridgeService.bridgedPeerCount)")
+                                .font(.system(size: headerPeerCountFontSize, weight: .regular, design: theme.bodyFontDesign))
+                                .foregroundColor(Color.cyan.opacity(0.9))
+                                .accessibilityHidden(true)
+                        }
                     }
                     .foregroundColor(headerCountColor)
                     .lineLimit(headerLineLimit)
@@ -262,11 +282,17 @@ struct ContentHeaderView: View {
                     )
                 )
                 // Connected-vs-nobody is otherwise encoded only in the icon's
-                // color; say it.
+                // color; say it. With a live bridge, also say who's across it.
                 .accessibilityValue(
-                    headerPeersReachable
-                    ? String(localized: "content.accessibility.peers_connected", comment: "Accessibility value when peers are reachable")
-                    : String(localized: "content.accessibility.peers_none", comment: "Accessibility value when no peers are reachable")
+                    showBridgedPeerCount
+                    ? String(
+                        format: String(localized: "content.accessibility.bridged_count", defaultValue: "%lld more people across the bridge", comment: "Accessibility value announcing the number of people reachable via the mesh bridge"),
+                        locale: .current,
+                        bridgeService.bridgedPeerCount
+                    )
+                    : (headerPeersReachable
+                        ? String(localized: "content.accessibility.peers_connected", comment: "Accessibility value when peers are reachable")
+                        : String(localized: "content.accessibility.peers_none", comment: "Accessibility value when no peers are reachable"))
                 )
             }
             .layoutPriority(3)

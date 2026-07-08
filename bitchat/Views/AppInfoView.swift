@@ -1,15 +1,32 @@
 import SwiftUI
 
+/// The sheet behind the "bitchat/" logo: a segmented Settings/Info surface.
+/// Settings gathers every user preference (appearance, voice, connectivity
+/// toggles, panic wipe); Info keeps the about content (how-to, features,
+/// privacy, symbols legend).
 struct AppInfoView: View {
     @Environment(\.dismiss) var dismiss
     @ThemedPalette private var palette
     @AppStorage(AppTheme.storageKey) private var appThemeRawValue = AppTheme.matrix.rawValue
+    @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
+    @ObservedObject private var bridgeService = BridgeService.shared
 
     /// Supplies the mesh topology map data. Nil (previews, missing wiring)
     /// hides the topology row entirely.
     var topologyProvider: (@MainActor () -> MeshTopologyDisplayModel)?
+    /// Wipes all local data. Nil (previews, missing wiring) hides the danger
+    /// zone entirely.
+    var onPanicWipe: (@MainActor () -> Void)?
+
     @State private var showTopology = false
     @State private var liveVoiceEnabled = PTTSettings.liveVoiceEnabled
+    @State private var selectedPane: Pane = .settings
+    @State private var showPanicConfirmation = false
+
+    private enum Pane: Hashable {
+        case settings
+        case info
+    }
 
     private var selectedTheme: AppTheme {
         AppTheme(rawValue: appThemeRawValue) ?? .matrix
@@ -18,12 +35,47 @@ struct AppInfoView: View {
     private var textColor: Color { palette.primary }
 
     private var secondaryTextColor: Color { palette.secondary }
-    
+
     // MARK: - Constants
     private enum Strings {
         static let appName: LocalizedStringKey = "app_info.app_name"
         static let tagline: LocalizedStringKey = "app_info.tagline"
         static let appearanceTitle: LocalizedStringKey = "app_info.appearance.title"
+
+        /// New keys carry their English copy inline (defaultValue) until the
+        /// i18n pass lands them in the catalog; moved keys keep their homes.
+        enum Settings {
+            static let tabPickerLabel = String(localized: "app_info.tab.picker_label", defaultValue: "view", comment: "Accessibility label for the segmented control switching between the settings and info panes of the app info sheet")
+            static let tabSettings = String(localized: "app_info.tab.settings", defaultValue: "settings", comment: "Segmented control label for the settings pane of the app info sheet")
+            static let tabInfo = String(localized: "app_info.tab.info", defaultValue: "info", comment: "Segmented control label for the info pane of the app info sheet")
+
+            static let connectivityTitle = String(localized: "app_info.settings.connectivity.title", defaultValue: "CONNECTIVITY", comment: "Section header (uppercase) for the connectivity toggles: mesh bridge, internet gateway, tor routing")
+
+            static let bridgeTitle = String(localized: "app_info.settings.bridge.title", defaultValue: "mesh bridge", comment: "Title of the mesh bridge toggle in settings")
+            static let bridgeSubtitle = String(localized: "app_info.settings.bridge.subtitle", defaultValue: "your public mesh messages also reach bitchat users beyond radio range in your area via the internet, and you see theirs (marked with a network glyph)", comment: "Subtitle explaining what the mesh bridge toggle does")
+            static func bridgeCell(_ cell: String) -> String {
+                String(
+                    format: String(localized: "app_info.settings.bridge.cell", defaultValue: "rendezvous cell: %@", comment: "Caption under the mesh bridge toggle showing the geohash cell the bridge is meeting on"),
+                    locale: .current,
+                    cell
+                )
+            }
+            static let bridgeNoCell = String(localized: "app_info.settings.bridge.no_cell", defaultValue: "no rendezvous cell yet — needs location access or a nearby bridge peer", comment: "Caption under the mesh bridge toggle when the bridge is on but has no geohash cell to meet on")
+
+            // Moved from LocationChannelsSheet; keys unchanged.
+            static let torTitle: LocalizedStringKey = "location_channels.tor.title"
+            static let torSubtitle: LocalizedStringKey = "location_channels.tor.subtitle"
+            static let gatewayTitle: LocalizedStringKey = "location_channels.gateway.title"
+            static let gatewaySubtitle: LocalizedStringKey = "location_channels.gateway.subtitle"
+            static let toggleOn: LocalizedStringKey = "common.toggle.on"
+            static let toggleOff: LocalizedStringKey = "common.toggle.off"
+
+            static let dangerTitle = String(localized: "app_info.settings.danger.title", defaultValue: "DANGER ZONE", comment: "Section header (uppercase) for destructive actions in settings")
+            static let panicButton = String(localized: "app_info.settings.danger.panic_button", defaultValue: "panic wipe", comment: "Button in the settings danger zone that erases all local data after confirmation")
+            static let panicNote = String(localized: "app_info.settings.danger.panic_note", defaultValue: "erases all messages, keys, and identity. triple-tapping the bitchat/ logo does the same, instantly.", comment: "Caption under the panic wipe button explaining what it does and the triple-tap shortcut")
+            static let panicConfirmTitle = String(localized: "app_info.settings.danger.panic_confirm_title", defaultValue: "wipe all data?", comment: "Title of the confirmation dialog before a panic wipe")
+            static let panicConfirmAction = String(localized: "app_info.settings.danger.panic_confirm_action", defaultValue: "wipe everything", comment: "Destructive confirmation button that performs the panic wipe")
+        }
 
         enum Features {
             static let title: LocalizedStringKey = "app_info.features.title"
@@ -57,25 +109,32 @@ struct AppInfoView: View {
                 title: "app_info.features.geohash.title",
                 description: "app_info.features.geohash.description"
             )
+            static let bridge = AppInfoFeatureInfo(
+                icon: "network",
+                resolvedTitle: String(localized: "app_info.features.bridge.title", defaultValue: "mesh bridging", comment: "Feature row title for the mesh bridge in the app info sheet"),
+                resolvedDescription: String(localized: "app_info.features.bridge.description", defaultValue: "links nearby mesh islands through the internet so one crowd isn't split by radio range", comment: "Feature row description for the mesh bridge in the app info sheet")
+            )
         }
 
         enum Legend {
             static let title: LocalizedStringKey = "app_info.legend.title"
             /// Every glyph the peer lists and headers use, in one place —
-            /// nothing else in the app defines them.
-            static let items: [(icon: String, text: LocalizedStringKey)] = [
-                ("antenna.radiowaves.left.and.right", "app_info.legend.mesh_connected"),
-                ("point.3.filled.connected.trianglepath.dotted", "app_info.legend.mesh_relayed"),
-                ("globe", "app_info.legend.nostr"),
-                ("person", "app_info.legend.offline"),
-                ("mappin.and.ellipse", "app_info.legend.location_nearby"),
-                ("face.dashed", "app_info.legend.teleported"),
-                ("lock.fill", "app_info.legend.encrypted"),
-                ("lock.slash", "app_info.legend.encryption_failed"),
-                ("checkmark.seal.fill", "app_info.legend.verified"),
-                ("star.fill", "app_info.legend.favorite"),
-                ("envelope.fill", "app_info.legend.unread"),
-                ("nosign", "app_info.legend.blocked")
+            /// nothing else in the app defines them. A nil color renders in
+            /// the theme's primary text color.
+            static let items: [(icon: String, color: Color?, text: String)] = [
+                ("antenna.radiowaves.left.and.right", nil, String(localized: "app_info.legend.mesh_connected")),
+                ("point.3.filled.connected.trianglepath.dotted", nil, String(localized: "app_info.legend.mesh_relayed")),
+                ("globe", nil, String(localized: "app_info.legend.nostr")),
+                ("network", Color.cyan, String(localized: "app_info.legend.bridged", defaultValue: "message arrived across a mesh bridge", comment: "Symbols legend entry for the cyan network glyph shown on messages carried across a mesh bridge")),
+                ("person", nil, String(localized: "app_info.legend.offline")),
+                ("mappin.and.ellipse", nil, String(localized: "app_info.legend.location_nearby")),
+                ("face.dashed", nil, String(localized: "app_info.legend.teleported")),
+                ("lock.fill", nil, String(localized: "app_info.legend.encrypted")),
+                ("lock.slash", nil, String(localized: "app_info.legend.encryption_failed")),
+                ("checkmark.seal.fill", nil, String(localized: "app_info.legend.verified")),
+                ("star.fill", nil, String(localized: "app_info.legend.favorite")),
+                ("envelope.fill", nil, String(localized: "app_info.legend.unread")),
+                ("nosign", nil, String(localized: "app_info.legend.blocked"))
             ]
         }
 
@@ -136,7 +195,7 @@ struct AppInfoView: View {
         }
 
     }
-    
+
     var body: some View {
         #if os(macOS)
         VStack(spacing: 0) {
@@ -152,8 +211,12 @@ struct AppInfoView: View {
             }
             .themedSurface(opacity: 0.95)
 
-            ScrollView {
-                infoContent
+            VStack(spacing: 0) {
+                panePicker
+
+                ScrollView {
+                    paneContent
+                }
             }
             .themedSheetBackground()
         }
@@ -165,8 +228,12 @@ struct AppInfoView: View {
         }
         #else
         NavigationView {
-            ScrollView {
-                infoContent
+            VStack(spacing: 0) {
+                panePicker
+
+                ScrollView {
+                    paneContent
+                }
             }
             .themedSheetBackground()
             .navigationBarTitleDisplayMode(.inline)
@@ -184,33 +251,35 @@ struct AppInfoView: View {
         }
         #endif
     }
-    
+
+    // MARK: - Pane switching
+
+    private var panePicker: some View {
+        Picker(Strings.Settings.tabPickerLabel, selection: $selectedPane) {
+            Text(Strings.Settings.tabSettings).tag(Pane.settings)
+            Text(Strings.Settings.tabInfo).tag(Pane.info)
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .padding(.horizontal)
+        .padding(.top, 12)
+    }
+
     @ViewBuilder
-    private var infoContent: some View {
+    private var paneContent: some View {
+        switch selectedPane {
+        case .settings:
+            settingsContent
+        case .info:
+            infoContent
+        }
+    }
+
+    // MARK: - Settings pane
+
+    @ViewBuilder
+    private var settingsContent: some View {
         VStack(alignment: .leading, spacing: 24) {
-            // Header
-            VStack(alignment: .center, spacing: 8) {
-                Text(Strings.appName)
-                    .bitchatFont(size: 32, weight: .bold)
-                    .foregroundColor(textColor)
-                
-                Text(Strings.tagline)
-                    .bitchatFont(size: 16)
-                    .foregroundColor(secondaryTextColor)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical)
-
-            // How to Use
-            VStack(alignment: .leading, spacing: 16) {
-                SectionHeader(Strings.HowToUse.title)
-
-                Text(verbatim: Strings.HowToUse.paragraph)
-                    .bitchatFont(size: 14)
-                    .foregroundColor(textColor)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
             // Appearance — single row: label left, theme chips right
             HStack(spacing: 12) {
                 SectionHeader(Strings.appearanceTitle)
@@ -241,28 +310,161 @@ struct AppInfoView: View {
 
                 HStack(spacing: 0) {
                     FeatureRow(info: Strings.Voice.live)
-                    Toggle(Strings.Voice.live.title, isOn: $liveVoiceEnabled)
-                        .labelsHidden()
-                        .tint(palette.accent)
-                        .onChange(of: liveVoiceEnabled) { newValue in
-                            PTTSettings.liveVoiceEnabled = newValue
-                        }
+                    Toggle(isOn: $liveVoiceEnabled) {
+                        Strings.Voice.live.title
+                    }
+                    .labelsHidden()
+                    .tint(palette.accent)
+                    .onChange(of: liveVoiceEnabled) { newValue in
+                        PTTSettings.liveVoiceEnabled = newValue
+                    }
                 }
             }
 
-            // Voice
-            VStack(alignment: .leading, spacing: 16) {
-                SectionHeader(Strings.Voice.title)
+            // Connectivity: mesh bridge, internet gateway, tor routing
+            VStack(alignment: .leading, spacing: 12) {
+                SectionHeader(verbatim: Strings.Settings.connectivityTitle)
 
-                HStack(spacing: 0) {
-                    FeatureRow(info: Strings.Voice.live)
-                    Toggle(Strings.Voice.live.title, isOn: $liveVoiceEnabled)
-                        .labelsHidden()
-                        .tint(palette.accent)
-                        .onChange(of: liveVoiceEnabled) { newValue in
-                            PTTSettings.liveVoiceEnabled = newValue
-                        }
+                settingsCard {
+                    connectivityToggle(
+                        title: Text(Strings.Settings.bridgeTitle),
+                        subtitle: Text(Strings.Settings.bridgeSubtitle),
+                        isOn: bridgeToggleBinding
+                    )
+                    // Where the bridge meets: the geohash rendezvous cell, or
+                    // a hint about why there isn't one yet (no location and no
+                    // bridge peer advertising a cell).
+                    if bridgeService.isEnabled {
+                        Text(bridgeService.activeCell.map(Strings.Settings.bridgeCell) ?? Strings.Settings.bridgeNoCell)
+                            .bitchatFont(size: 11)
+                            .foregroundColor(secondaryTextColor)
+                    }
                 }
+
+                settingsCard {
+                    connectivityToggle(
+                        title: Text(Strings.Settings.gatewayTitle),
+                        subtitle: Text(Strings.Settings.gatewaySubtitle),
+                        isOn: gatewayToggleBinding
+                    )
+                }
+
+                settingsCard {
+                    connectivityToggle(
+                        title: Text(Strings.Settings.torTitle),
+                        subtitle: Text(Strings.Settings.torSubtitle),
+                        isOn: torToggleBinding
+                    )
+                }
+            }
+
+            // Danger zone
+            if onPanicWipe != nil {
+                VStack(alignment: .leading, spacing: 12) {
+                    SectionHeader(verbatim: Strings.Settings.dangerTitle)
+
+                    Button(action: { showPanicConfirmation = true }) {
+                        Text(Strings.Settings.panicButton)
+                            .bitchatFont(size: 12)
+                            .foregroundColor(palette.alertRed)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                            .background(Color.red.opacity(0.08))
+                            .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                    .confirmationDialog(
+                        Strings.Settings.panicConfirmTitle,
+                        isPresented: $showPanicConfirmation,
+                        titleVisibility: .visible
+                    ) {
+                        Button(Strings.Settings.panicConfirmAction, role: .destructive) {
+                            onPanicWipe?()
+                        }
+                        Button("common.cancel", role: .cancel) {}
+                    }
+
+                    Text(Strings.Settings.panicNote)
+                        .bitchatFont(size: 11)
+                        .foregroundColor(secondaryTextColor)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .padding()
+    }
+
+    private var bridgeToggleBinding: Binding<Bool> {
+        Binding(
+            get: { bridgeService.isEnabled },
+            set: { bridgeService.setEnabled($0) }
+        )
+    }
+
+    private var torToggleBinding: Binding<Bool> {
+        Binding(
+            get: { locationChannelsModel.userTorEnabled },
+            set: { locationChannelsModel.setUserTorEnabled($0) }
+        )
+    }
+
+    private var gatewayToggleBinding: Binding<Bool> {
+        Binding(
+            get: { locationChannelsModel.gatewayEnabled },
+            set: { locationChannelsModel.setGatewayEnabled($0) }
+        )
+    }
+
+    /// The padded card every connectivity setting sits in (moved look from
+    /// LocationChannelsSheet's toggle sections).
+    private func settingsCard<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8, content: content)
+            .padding(12)
+            .background(palette.secondary.opacity(0.12))
+            .cornerRadius(8)
+    }
+
+    /// A title+subtitle row driving an IRC-style on/off pill.
+    private func connectivityToggle(title: Text, subtitle: Text, isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            VStack(alignment: .leading, spacing: 2) {
+                title
+                    .bitchatFont(size: 12, weight: .semibold)
+                    .foregroundColor(textColor)
+                subtitle
+                    .bitchatFont(size: 11)
+                    .foregroundColor(secondaryTextColor)
+            }
+        }
+        .toggleStyle(IRCToggleStyle(accent: palette.accent, onLabel: Strings.Settings.toggleOn, offLabel: Strings.Settings.toggleOff))
+    }
+
+    // MARK: - Info pane
+
+    @ViewBuilder
+    private var infoContent: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            // Header
+            VStack(alignment: .center, spacing: 8) {
+                Text(Strings.appName)
+                    .bitchatFont(size: 32, weight: .bold)
+                    .foregroundColor(textColor)
+
+                Text(Strings.tagline)
+                    .bitchatFont(size: 16)
+                    .foregroundColor(secondaryTextColor)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical)
+
+            // How to Use
+            VStack(alignment: .leading, spacing: 16) {
+                SectionHeader(Strings.HowToUse.title)
+
+                Text(verbatim: Strings.HowToUse.paragraph)
+                    .bitchatFont(size: 14)
+                    .foregroundColor(textColor)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             // Network diagnostics
@@ -296,6 +498,8 @@ struct AppInfoView: View {
 
                 FeatureRow(info: Strings.Features.extendedRange)
 
+                FeatureRow(info: Strings.Features.bridge)
+
                 FeatureRow(info: Strings.Features.favorites)
 
                 FeatureRow(info: Strings.Features.geohash)
@@ -322,7 +526,7 @@ struct AppInfoView: View {
                     HStack(alignment: .top, spacing: 12) {
                         Image(systemName: item.icon)
                             .font(.bitchatSystem(size: 14))
-                            .foregroundColor(textColor)
+                            .foregroundColor(item.color ?? textColor)
                             .frame(width: 30)
 
                         Text(item.text)
@@ -342,22 +546,42 @@ struct AppInfoView: View {
 
 struct AppInfoFeatureInfo {
     let icon: String
-    let title: LocalizedStringKey
-    let description: LocalizedStringKey
+    let title: Text
+    let description: Text
+
+    /// Catalog-backed strings (existing keys).
+    init(icon: String, title: LocalizedStringKey, description: LocalizedStringKey) {
+        self.icon = icon
+        self.title = Text(title)
+        self.description = Text(description)
+    }
+
+    /// Pre-resolved strings — new keys that carry their English defaultValue
+    /// inline until the i18n pass adds them to the catalog.
+    init(icon: String, resolvedTitle: String, resolvedDescription: String) {
+        self.icon = icon
+        self.title = Text(resolvedTitle)
+        self.description = Text(resolvedDescription)
+    }
 }
 
 struct SectionHeader: View {
-    let title: LocalizedStringKey
+    private let title: Text
     @ThemedPalette private var palette
 
     private var textColor: Color { palette.primary }
 
     init(_ title: LocalizedStringKey) {
-        self.title = title
+        self.title = Text(title)
     }
-    
+
+    /// For pre-resolved strings (new keys with inline defaultValue).
+    init(verbatim title: String) {
+        self.title = Text(title)
+    }
+
     var body: some View {
-        Text(title)
+        title
             .bitchatFont(size: 16, weight: .bold)
             .foregroundColor(textColor)
             .padding(.top, 8)
@@ -378,18 +602,18 @@ struct FeatureRow: View {
                 .font(.bitchatSystem(size: 20))
                 .foregroundColor(textColor)
                 .frame(width: 30)
-            
+
             VStack(alignment: .leading, spacing: 4) {
-                Text(info.title)
+                info.title
                     .bitchatFont(size: 14, weight: .semibold)
                     .foregroundColor(textColor)
-                
-                Text(info.description)
+
+                info.description
                     .bitchatFont(size: 12)
                     .foregroundColor(secondaryTextColor)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            
+
             Spacer()
         }
     }
@@ -397,14 +621,17 @@ struct FeatureRow: View {
 
 #Preview("Default") {
     AppInfoView()
+        .environmentObject(LocationChannelsModel())
 }
 
 #Preview("Dynamic Type XXL") {
     AppInfoView()
+        .environmentObject(LocationChannelsModel())
         .environment(\.sizeCategory, .accessibilityExtraExtraExtraLarge)
 }
 
 #Preview("Dynamic Type XS") {
     AppInfoView()
+        .environmentObject(LocationChannelsModel())
         .environment(\.sizeCategory, .extraSmall)
 }

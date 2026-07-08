@@ -77,6 +77,8 @@ final class ChatViewModelBootstrapper {
         bindTransferProgress()
         configureGeoChannels()
         configureGateway()
+        configureBridge()
+        configureBridgeCourier()
         bindTeleportState()
         requestNotifications()
         registerObservers()
@@ -296,7 +298,18 @@ private extension ChatViewModelBootstrapper {
             bleService?.setLocalCapability(.gateway, enabled: enabled)
         }
         bleService.onNostrCarrierPacket = { payload, from, directedToUs in
-            GatewayService.shared.handleMeshCarrier(payload, from: from, directedToUs: directedToUs)
+            // One decode, two policy engines: geohash-channel carriers go to
+            // the gateway, mesh-bridge carriers to the bridge.
+            guard let carrier = NostrCarrierPacket.decode(payload) else {
+                SecureLogger.debug("🌐 Gateway: dropping undecodable carrier from \(from.id.prefix(8))…", category: .session)
+                return
+            }
+            switch carrier.direction {
+            case .toGateway, .fromGateway:
+                GatewayService.shared.handleMeshCarrier(payload, from: from, directedToUs: directedToUs)
+            case .toBridge, .fromBridge:
+                BridgeService.shared.handleMeshCarrier(carrier, from: from, directedToUs: directedToUs)
+            }
         }
 
         // Uplinks deposited while relays were unreachable flush on reconnect.
@@ -305,6 +318,8 @@ private extension ChatViewModelBootstrapper {
             .sink { connected in
                 if connected {
                     GatewayService.shared.flushQueuedUplinks()
+                    BridgeService.shared.flushQueuedUplinks()
+                    BridgeService.shared.publishPresence()
                 }
             }
             .store(in: &viewModel.cancellables)
@@ -314,6 +329,193 @@ private extension ChatViewModelBootstrapper {
             bleService.setLocalCapability(.gateway, enabled: true)
         }
     }
+
+    /// Wires the mesh-bridge policy layer (`BridgeService`) to the mesh
+    /// transport, the relay manager, location, and the public timeline. Same
+    /// closure-injection style as `configureGateway`.
+    func configureBridge() {
+        guard let bleService = viewModel.meshService as? BLEService else { return }
+        let bridge = BridgeService.shared
+        let idBridge = viewModel.idBridge
+
+        bridge.publishToRelays = { event, cell in
+            let relays = GeoRelayDirectory.shared.closestRelays(
+                toGeohash: cell,
+                count: TransportConfig.nostrGeoRelayCount
+            )
+            guard !relays.isEmpty else {
+                SecureLogger.warning("🌉 Bridge: no geo relays for cell \(cell); not publishing", category: .session)
+                return
+            }
+            NostrRelayManager.shared.sendEvent(event, to: relays)
+        }
+        bridge.openSubscription = { cells in
+            guard let cell = cells.first else { return }
+            let relays = GeoRelayDirectory.shared.closestRelays(
+                toGeohash: cell,
+                count: TransportConfig.nostrGeoRelayCount
+            )
+            NostrRelayManager.shared.subscribe(
+                filter: .bridgeRendezvous(cells, since: Date().addingTimeInterval(-BridgeService.Limits.maxEventAgeSeconds)),
+                id: Self.bridgeSubscriptionID,
+                relayUrls: relays.isEmpty ? nil : relays,
+                handler: { event in
+                    BridgeService.shared.handleRendezvousEvent(event)
+                }
+            )
+        }
+        bridge.closeSubscription = {
+            NostrRelayManager.shared.unsubscribe(id: Self.bridgeSubscriptionID)
+        }
+        bridge.relaysConnected = { NostrRelayManager.shared.isConnected }
+        bridge.locationCell = { [weak viewModel] in
+            viewModel?.locationManager.availableChannels
+                .first { $0.level == .neighborhood }?
+                .geohash
+        }
+        bridge.meshAdvertisedCell = { [weak bleService] in
+            bleService?.advertisedBridgeGeohash()
+        }
+        bridge.sendToBridgePeer = { [weak bleService] payload, peer in
+            bleService?.sendNostrCarrier(payload, to: peer) ?? false
+        }
+        bridge.availableBridgePeers = { [weak bleService] in
+            bleService?.reachableBridgePeers() ?? []
+        }
+        bridge.broadcastToMesh = { [weak bleService] payload in
+            bleService?.broadcastNostrCarrier(payload)
+        }
+        bridge.injectInbound = { [weak viewModel] inbound in
+            viewModel?.handlePublicMessage(BitchatMessage(
+                id: inbound.messageID,
+                sender: inbound.senderNickname,
+                content: inbound.content,
+                timestamp: inbound.timestamp,
+                isRelay: false,
+                senderPeerID: PeerID(bridge: inbound.senderPubkey),
+                isBridged: true
+            ))
+        }
+        bridge.isMessageSeenLocally = { [weak viewModel] messageID in
+            viewModel?.publicConversationContainsMessage(withID: messageID, in: .mesh) ?? false
+        }
+        bridge.gatewayEnabled = { GatewayService.shared.isEnabled }
+        bridge.deriveIdentity = { cell in
+            try idBridge.deriveIdentity(forBridgeRendezvous: cell)
+        }
+        bridge.myNickname = { [weak viewModel] in viewModel?.nickname ?? "" }
+
+        // The `.bridge` capability + cell TLV advertise gateway duty: "send
+        // me deposits, and this is the island's cell". Both toggles required.
+        let updateAdvertisement: @MainActor () -> Void = { [weak bleService] in
+            let advertise = BridgeService.shared.isEnabled
+                && GatewayService.shared.isEnabled
+                && BridgeService.shared.activeCell != nil
+            bleService?.setLocalBridgeGeohash(advertise ? BridgeService.shared.activeCell : nil)
+            bleService?.setLocalCapability(.bridge, enabled: advertise)
+        }
+        bridge.onEnabledChanged = { _ in updateAdvertisement() }
+        bridge.onActiveCellChanged = { _ in updateAdvertisement() }
+        GatewayService.shared.$isEnabled
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { _ in updateAdvertisement() }
+            .store(in: &viewModel.cancellables)
+
+        // Location fixes (or losing them) move the rendezvous cell.
+        viewModel.locationManager.$availableChannels
+            .receive(on: DispatchQueue.main)
+            .sink { _ in BridgeService.shared.refreshRendezvous() }
+            .store(in: &viewModel.cancellables)
+
+        // Apply the persisted toggle at launch.
+        if bridge.isEnabled {
+            bridge.refreshRendezvous()
+            updateAdvertisement()
+        }
+    }
+
+    /// Wires courier-over-bridge (`BridgeCourierService`) to the relay
+    /// manager, the mesh transport's sealing/opening primitives, the courier
+    /// store, and the message router's deposit path.
+    func configureBridgeCourier() {
+        guard let bleService = viewModel.meshService as? BLEService else { return }
+        let courier = BridgeCourierService.shared
+
+        courier.bridgeEnabled = { BridgeService.shared.isEnabled }
+        courier.gatewayEnabled = { GatewayService.shared.isEnabled }
+        courier.relaysConnected = { NostrRelayManager.shared.isConnected }
+        courier.publishEvent = { event in
+            // Default (DM) relays: drops need the standing global relay set,
+            // not geo relays — sender and recipient share no cell.
+            NostrRelayManager.shared.sendEvent(event)
+        }
+        courier.openSubscription = { tagsHex in
+            NostrRelayManager.shared.unsubscribe(id: Self.courierDropSubscriptionID)
+            NostrRelayManager.shared.subscribe(
+                filter: .courierDrops(
+                    recipientTagsHex: tagsHex,
+                    since: Date().addingTimeInterval(-CourierEnvelope.maxLifetimeSeconds)
+                ),
+                id: Self.courierDropSubscriptionID,
+                handler: { event in
+                    BridgeCourierService.shared.handleDropEvent(event)
+                }
+            )
+        }
+        courier.closeSubscription = {
+            NostrRelayManager.shared.unsubscribe(id: Self.courierDropSubscriptionID)
+        }
+        courier.myNoiseKey = { [weak bleService] in
+            bleService?.myNoiseStaticPublicKey()
+        }
+        courier.localVerifiedPeers = { [weak bleService] in
+            bleService?.verifiedPeersWithNoiseKeys() ?? []
+        }
+        courier.sealEnvelope = { [weak bleService] content, messageID, recipientKey in
+            bleService?.sealBridgeCourierEnvelope(content, messageID: messageID, recipientNoiseKey: recipientKey)
+        }
+        courier.openEnvelope = { [weak bleService] envelope in
+            bleService?.openBridgedCourierEnvelope(envelope)
+        }
+        courier.deliverToPeer = { [weak bleService] envelope, peerID in
+            bleService?.deliverBridgedEnvelope(envelope, to: peerID)
+        }
+        courier.heldEnvelopes = { cooldown in
+            CourierStore.shared.envelopesForBridgePublish(cooldown: cooldown)
+        }
+
+        viewModel.messageRouter.bridgeCourierDeposit = { content, messageID, recipientKey in
+            BridgeCourierService.shared.depositDrop(content: content, messageID: messageID, recipientNoiseKey: recipientKey)
+        }
+        bleService.onVerifiedPeerAnnounce = { _ in
+            Task { @MainActor in
+                BridgeCourierService.shared.refreshAfterVerifiedAnnounce()
+            }
+        }
+
+        // Relay connectivity gates everything; refresh (re)opens or closes.
+        NostrRelayManager.shared.$isConnected
+            .receive(on: DispatchQueue.main)
+            .sink { _ in BridgeCourierService.shared.refresh() }
+            .store(in: &viewModel.cancellables)
+        // Toggle changes re-evaluate the watch set.
+        BridgeService.shared.$isEnabled
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { _ in BridgeCourierService.shared.refresh() }
+            .store(in: &viewModel.cancellables)
+        GatewayService.shared.$isEnabled
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { _ in BridgeCourierService.shared.refresh() }
+            .store(in: &viewModel.cancellables)
+
+        courier.refresh()
+    }
+
+    private static let bridgeSubscriptionID = "bridge-rendezvous"
+    private static let courierDropSubscriptionID = "bridge-courier-drops"
 
     func bindTeleportState() {
         viewModel.locationManager.$teleported

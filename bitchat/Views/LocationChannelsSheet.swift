@@ -23,12 +23,6 @@ struct LocationChannelsSheet: View {
         static let teleport: LocalizedStringKey = "location_channels.action.teleport"
         static let bookmarked: LocalizedStringKey = "location_channels.bookmarked_section_title"
         static let removeAccess: LocalizedStringKey = "location_channels.action.remove_access"
-        static let torTitle: LocalizedStringKey = "location_channels.tor.title"
-        static let torSubtitle: LocalizedStringKey = "location_channels.tor.subtitle"
-        static let gatewayTitle: LocalizedStringKey = "location_channels.gateway.title"
-        static let gatewaySubtitle: LocalizedStringKey = "location_channels.gateway.subtitle"
-        static let toggleOn: LocalizedStringKey = "common.toggle.on"
-        static let toggleOff: LocalizedStringKey = "common.toggle.off"
 
         static let invalidGeohash = String(localized: "location_channels.error.invalid_geohash", comment: "Error shown when a custom geohash is invalid")
         static let switchChannelHint = String(localized: "location_channels.accessibility.switch_hint", comment: "Accessibility hint on a channel row explaining activation switches to it")
@@ -242,10 +236,6 @@ struct LocationChannelsSheet: View {
 
                 if locationChannelsModel.permissionState == .authorized {
                     sectionDivider
-                    torToggleSection
-                        .padding(.top, 12)
-                    gatewayToggleSection
-                        .padding(.top, 8)
                     Button(action: SystemSettings.location.open) {
                         Text(Strings.removeAccess)
                             .bitchatFont(size: 12)
@@ -482,92 +472,12 @@ struct LocationChannelsSheet: View {
     }
 }
 
-// MARK: - TOR Toggle & Standardized Colors
+// MARK: - Standardized Colors
+// (The tor and internet-gateway toggles moved to AppInfoView's Settings pane;
+// IRCToggleStyle now lives in Views/Components.)
 extension LocationChannelsSheet {
-    private var torToggleBinding: Binding<Bool> {
-        Binding(
-            get: { locationChannelsModel.userTorEnabled },
-            set: { locationChannelsModel.setUserTorEnabled($0) }
-        )
-    }
-
-    private var torToggleSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Toggle(isOn: torToggleBinding) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(Strings.torTitle)
-                        .bitchatFont(size: 12, weight: .semibold)
-                        .foregroundColor(palette.primary)
-                    Text(Strings.torSubtitle)
-                        .bitchatFont(size: 11)
-                        .foregroundColor(palette.secondary)
-                }
-            }
-            .toggleStyle(IRCToggleStyle(accent: palette.accent, onLabel: Strings.toggleOn, offLabel: Strings.toggleOff))
-        }
-        .padding(12)
-        .background(palette.secondary.opacity(0.12))
-        .cornerRadius(8)
-    }
-
-    private var gatewayToggleBinding: Binding<Bool> {
-        Binding(
-            get: { locationChannelsModel.gatewayEnabled },
-            set: { locationChannelsModel.setGatewayEnabled($0) }
-        )
-    }
-
-    private var gatewayToggleSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Toggle(isOn: gatewayToggleBinding) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(Strings.gatewayTitle)
-                        .bitchatFont(size: 12, weight: .semibold)
-                        .foregroundColor(palette.primary)
-                    Text(Strings.gatewaySubtitle)
-                        .bitchatFont(size: 11)
-                        .foregroundColor(palette.secondary)
-                }
-            }
-            .toggleStyle(IRCToggleStyle(accent: palette.accent, onLabel: Strings.toggleOn, offLabel: Strings.toggleOff))
-        }
-        .padding(12)
-        .background(palette.secondary.opacity(0.12))
-        .cornerRadius(8)
-    }
-
     private var standardGreen: Color { palette.primary }
     private var standardBlue: Color { palette.accentBlue }
-}
-
-private struct IRCToggleStyle: ToggleStyle {
-    let accent: Color
-    let onLabel: LocalizedStringKey
-    let offLabel: LocalizedStringKey
-
-    func makeBody(configuration: Configuration) -> some View {
-        Button(action: { configuration.isOn.toggle() }) {
-            HStack(spacing: 12) {
-                configuration.label
-                Spacer()
-                Text(configuration.isOn ? onLabel : offLabel)
-                    .textCase(.uppercase)
-                    .bitchatFont(size: 12, weight: .semibold)
-                    .foregroundColor(configuration.isOn ? accent : .secondary)
-                    .padding(.vertical, 4)
-                    .padding(.horizontal, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(accent.opacity(configuration.isOn ? 0.18 : 0.08))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(accent.opacity(configuration.isOn ? 0.35 : 0.15), lineWidth: 1)
-                    )
-            }
-        }
-        .buttonStyle(.plain)
-    }
 }
 
 // MARK: - Coverage helpers

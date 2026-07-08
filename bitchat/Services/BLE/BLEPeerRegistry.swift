@@ -10,6 +10,8 @@ struct BLEPeerInfo: Equatable {
     var isVerifiedNickname: Bool
     var lastSeen: Date
     var capabilities: PeerCapabilities = []
+    /// Rendezvous cell from the peer's announce when it advertises `.bridge`.
+    var bridgeGeohash: String?
 }
 
 struct BLEPeerAnnounceUpdate: Equatable {
@@ -117,6 +119,15 @@ struct BLEPeerRegistry {
         peers.values.filter { $0.capabilities.contains(capability) }.map(\.peerID)
     }
 
+    /// A rendezvous cell advertised by any bridge-capable peer, if one is
+    /// known — lets location-less devices join the island's rendezvous.
+    func advertisedBridgeGeohash() -> String? {
+        peers.values
+            .filter { $0.capabilities.contains(.bridge) }
+            .compactMap(\.bridgeGeohash)
+            .first
+    }
+
     func displayNicknames(selfNickname: String) -> [PeerID: String] {
         let connected = peers.filter { $0.value.isConnected }
         let tuples = connected.map { ($0.key, $0.value.nickname, true) }
@@ -160,7 +171,8 @@ struct BLEPeerRegistry {
         signingPublicKey: Data?,
         isConnected: Bool,
         now: Date,
-        capabilities: PeerCapabilities = []
+        capabilities: PeerCapabilities = [],
+        bridgeGeohash: String? = nil
     ) -> BLEPeerAnnounceUpdate {
         let existing = peers[peerID]
         let update = BLEPeerAnnounceUpdate(
@@ -177,7 +189,8 @@ struct BLEPeerRegistry {
             signingPublicKey: signingPublicKey,
             isVerifiedNickname: true,
             lastSeen: now,
-            capabilities: capabilities
+            capabilities: capabilities,
+            bridgeGeohash: bridgeGeohash
         )
 
         return update

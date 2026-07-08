@@ -37,6 +37,10 @@ public struct PeerID: Equatable, Hashable, Sendable {
         /// `"group_"` (+ 32 characters hex) — virtual conversation ID for a
         /// private group (16-byte group ID). Never routed to a single peer.
         case group = "group_"
+        /// `"bridge:"` (+ 16 characters hex) — a sender reached across a mesh
+        /// bridge, identified by their rendezvous Nostr pubkey. Not a
+        /// routable mesh peer.
+        case bridge = "bridge:"
     }
 
     public let prefix: Prefix
@@ -65,6 +69,12 @@ public extension PeerID {
     /// Convenience init to create GeoChat PeerID by appending `"nostr:"` to the first 8 characters of `pubKey`
     init(nostr pubKey: String) {
         self.init(prefix: .geoChat, bare: pubKey.prefix(Constants.nostrShortKeyDisplayLength))
+    }
+
+    /// Convenience init to create a bridged-sender PeerID by appending
+    /// `"bridge:"` to the first 16 characters of the rendezvous Nostr pubkey.
+    init(bridge pubKey: String) {
+        self.init(prefix: .bridge, bare: pubKey.prefix(Constants.nostrConvKeyPrefixLength))
     }
 
     /// Convenience init to create PeerID from String/Substring by splitting it into prefix and bare parts
@@ -165,6 +175,11 @@ public extension PeerID {
     /// Returns true if `id` starts with "`group_`"
     var isGroup: Bool {
         prefix == .group
+    }
+
+    /// Returns true if `id` starts with "`bridge:`"
+    var isBridge: Bool {
+        prefix == .bridge
     }
 
     func toPercentEncoded() -> String {

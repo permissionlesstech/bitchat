@@ -498,13 +498,15 @@ struct ViewSmokeTests {
             description: "app_info.features.encryption.description"
         )
 
+        // AppInfoView's settings pane reads LocationChannelsModel from the
+        // environment, so it can only render mounted with one installed.
         let appInfo = AppInfoView()
+            .environmentObject(LocationChannelsModel(manager: makeSmokeLocationManager()))
         let header = SectionHeader("app_info.features.title")
         let featureRow = FeatureRow(info: feature)
         let paymentCashu = PaymentChipView(paymentType: .cashu("cashuA_test-token"))
         let paymentLightning = PaymentChipView(paymentType: .lightning("lightning:lnbc1test"))
 
-        _ = appInfo.body
         _ = header.body
         _ = featureRow.body
         _ = paymentCashu.body
