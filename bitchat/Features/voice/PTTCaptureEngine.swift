@@ -35,6 +35,9 @@ final class PTTCaptureEngine {
     private var encodedFrameCount = 0
     private var running = false
     private var captureStart = Date()
+    /// Whether `engine.start()` succeeded for the current capture (main-actor
+    /// callers only; see `stopEngineIfStarted`).
+    private var engineStarted = false
 
     /// Called on the capture queue with each batch of encoded AAC frames.
     var onFrames: (([Data]) -> Void)?
@@ -91,14 +94,14 @@ final class PTTCaptureEngine {
             queue.sync { self.teardown(deleteFile: true) }
             throw error
         }
+        engineStarted = true
         SecureLogger.info("PTT: capture engine running (input: \(Int(inputFormat.sampleRate)) Hz, \(inputFormat.channelCount) ch)", category: .session)
     }
 
     /// Stops capture and finalizes the `.m4a`. Returns the file URL and the
     /// number of encoded AAC frames (each `PTTAudioFormat.frameDuration` long).
     func stop() -> (url: URL?, encodedFrames: Int) {
-        engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
+        stopEngineIfStarted()
         let result: (URL?, Int) = queue.sync {
             let url = fileURL
             let frames = encodedFrameCount
@@ -112,12 +115,21 @@ final class PTTCaptureEngine {
     }
 
     func cancel() {
-        engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
+        stopEngineIfStarted()
         queue.sync { teardown(deleteFile: true) }
         #if os(iOS)
         Self.deactivateAudioSession()
         #endif
+    }
+
+    /// Touching `inputNode` on an engine that never started instantiates its
+    /// input unit against whatever session is active and spams AURemoteIO
+    /// errors — a canceled-before-start hold must not touch the engine.
+    private func stopEngineIfStarted() {
+        guard engineStarted else { return }
+        engineStarted = false
+        engine.inputNode.removeTap(onBus: 0)
+        engine.stop()
     }
 
     // MARK: - Capture queue
