@@ -12,6 +12,10 @@
 import SwiftUI
 
 struct MeshRadarView: View {
+    /// Full size on the empty timeline; the ambient footer under archived
+    /// echoes uses a smaller one.
+    var height: CGFloat = 72
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ThemedPalette private var palette
 
@@ -28,7 +32,7 @@ struct MeshRadarView: View {
                 }
             }
         }
-        .frame(height: 72)
+        .frame(height: height)
         .frame(maxWidth: .infinity)
         .accessibilityHidden(true)
     }

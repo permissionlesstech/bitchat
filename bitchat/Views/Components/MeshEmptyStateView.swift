@@ -15,6 +15,10 @@ struct MeshEmptyStateView: View {
     /// Visible chat height to fill; the radar centers in the space left
     /// below the narration. Zero (previews) keeps a compact layout.
     var fillHeight: CGFloat = 0
+    /// Ambient-footer mode, appended below archived echoes: skips the
+    /// intro/help narration (the timeline isn't empty) and shrinks the
+    /// radar, keeping the sightings tally and the live hints visible.
+    var compact: Bool = false
 
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @EnvironmentObject private var appChromeModel: AppChromeModel
@@ -74,29 +78,50 @@ struct MeshEmptyStateView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            narrationLine(Strings.meshIntro)
-            narrationLine(Strings.meshWaiting)
-            if sightingsTracker.todayCount > 0 {
-                narrationLine(sightingsText)
-            }
-            if let conversation = nearbyConversation {
-                conversationHint(conversation)
-            }
-            if nearbyNotes.noteCount > 0 {
-                notesHint
-            }
-            narrationLine(Strings.switchHint)
+            if compact {
+                radarBlock
+                if let conversation = nearbyConversation {
+                    conversationHint(conversation)
+                }
+                if nearbyNotes.noteCount > 0 {
+                    notesHint
+                }
+            } else {
+                narrationLine(Strings.meshIntro)
+                narrationLine(Strings.meshWaiting)
+                if let conversation = nearbyConversation {
+                    conversationHint(conversation)
+                }
+                if nearbyNotes.noteCount > 0 {
+                    notesHint
+                }
+                narrationLine(Strings.switchHint)
 
-            // The radar centers in whatever space is left below the text —
-            // the flexible spacers split it evenly.
-            Spacer(minLength: 24)
-            MeshRadarView()
-            Spacer(minLength: 12)
+                // The radar centers in whatever space is left below the
+                // text — the flexible spacers split it evenly.
+                Spacer(minLength: 24)
+                radarBlock
+                Spacer(minLength: 12)
+            }
         }
-        .frame(minHeight: fillHeight, alignment: .top)
+        .frame(minHeight: compact ? 0 : fillHeight, alignment: .top)
         .onAppear { NearbyNotesCounter.shared.activate() }
         .onDisappear { NearbyNotesCounter.shared.deactivate() }
         .onReceive(refreshTimer) { _ in refreshTick += 1 }
+    }
+
+    /// The radar with today's tally as its caption — the stat belongs to
+    /// the scanning visual, not the narration lines.
+    private var radarBlock: some View {
+        VStack(spacing: 4) {
+            MeshRadarView(height: compact ? 44 : 72)
+            if sightingsTracker.todayCount > 0 {
+                Text(verbatim: sightingsText)
+                    .bitchatFont(size: 11)
+                    .foregroundColor(palette.secondary.opacity(0.8))
+            }
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 
