@@ -4310,175 +4310,175 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• اضغط أيقونة الأشخاص لفتح الشريط الجانبي"
+            "value" : "• اضغط أيقونة الأشخاص لفتح القائمة"
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• সাইডবার খুলতে মানুষ আইকনে ট্যাপ করুন"
+            "value" : "• তালিকা খুলতে মানুষ আইকনে ট্যাপ করুন"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• tippe auf das personen-icon, um die seitenleiste zu öffnen"
+            "value" : "• tippe auf das personen-icon für die liste"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• tap people icon for sidebar"
+            "value" : "• tap people icon for list"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• toca el ícono de personas para abrir la barra lateral"
+            "value" : "• toca el ícono de personas para ver la lista"
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• i-tap ang icon ng tao para buksan ang sidebar"
+            "value" : "• i-tap ang icon ng tao para sa listahan"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• tape sur l'icône personnes pour ouvrir la barre latérale"
+            "value" : "• tape sur l'icône personnes pour la liste"
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• הקש על אייקון האנשים כדי לפתוח סרגל צד"
+            "value" : "• הקש על אייקון האנשים כדי לפתוח את הרשימה"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• साइडबार खोलने के लिए लोगों वाले आइकन पर टैप करें"
+            "value" : "• सूची खोलने के लिए लोगों वाले आइकन पर टैप करें"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• ketuk ikon orang untuk membuka sidebar"
+            "value" : "• ketuk ikon orang untuk membuka daftar"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• tocca l'icona persone per aprire la barra laterale"
+            "value" : "• tocca l'icona persone per aprire la lista"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• 人アイコンをタップしてサイドバーを開く"
+            "value" : "• 人アイコンをタップして一覧を開く"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• 사람 아이콘을 탭하여 사이드바를 엽니다"
+            "value" : "• 사람 아이콘을 탭하여 목록을 엽니다"
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• ketuk ikon orang untuk membuka sidebar"
+            "value" : "• ketuk ikon orang untuk membuka senarai"
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• साइडबार खोल्न मान्छे आइकन ट्याप गर"
+            "value" : "• सूची खोल्न मान्छे आइकन ट्याप गर"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• tik op het personen-icoon om de zijbalk te openen"
+            "value" : "• tik op het personen-icoon voor de lijst"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• stuknij ikonę osób, aby otworzyć panel boczny"
+            "value" : "• stuknij ikonę osób, aby otworzyć listę"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• toca no ícone das pessoas para abrir a barra lateral"
+            "value" : "• toca no ícone das pessoas para abrir a lista"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• toque o ícone de pessoas para abrir a barra lateral"
+            "value" : "• toque o ícone de pessoas para abrir a lista"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• нажми на иконку людей, чтобы открыть боковое меню"
+            "value" : "• нажми на иконку людей, чтобы открыть список"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• tryck på personikonen för att öppna sidomenyn"
+            "value" : "• tryck på personikonen för att öppna listan"
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• பக்கப்பட்டியைத் திறக்க மனிதர் சின்னத்தைத் தட்டுங்கள்"
+            "value" : "• பட்டியலைத் திறக்க மனிதர் சின்னத்தைத் தட்டுங்கள்"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• แตะไอคอนคนเพื่อเปิดแถบด้านข้าง"
+            "value" : "• แตะไอคอนคนเพื่อเปิดรายชื่อ"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• kenar çubuğunu açmak için insan simgesine dokunun"
+            "value" : "• listeyi açmak için insan simgesine dokunun"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• торкни піктограму людей, щоб відкрити бічну панель"
+            "value" : "• торкни піктограму людей, щоб відкрити список"
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• سائیڈ بار کھولنے کیلئے لوگوں کا آئیکن ٹیپ کریں"
+            "value" : "• فہرست کھولنے کیلئے لوگوں کا آئیکن ٹیپ کریں"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• chạm biểu tượng người để mở thanh bên"
+            "value" : "• chạm biểu tượng người để mở danh sách"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• 轻点人物图标打开侧栏"
+            "value" : "• 轻点人物图标打开列表"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• 輕點人物圖示打開側欄"
+            "value" : "• 輕點人物圖示打開列表"
           }
         }
       }
@@ -4668,175 +4668,175 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• اضغط اسم القرين لبدء رسائل خاصة"
+            "value" : "• اضغط اسم شخص لبدء رسائل خاصة"
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• ডিএম শুরু করতে পিয়ারের নাম ট্যাপ করুন"
+            "value" : "• ডিএম শুরু করতে কোনো ব্যক্তির নাম ট্যাপ করুন"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• tippe auf den namen eines peers, um eine pn zu starten"
+            "value" : "• tippe auf den namen einer person, um eine pn zu starten"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• tap a peer's name to start a DM"
+            "value" : "• tap a person's name to start a DM"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• toca el nombre de un participante para iniciar un MD"
+            "value" : "• toca el nombre de una persona para iniciar un MD"
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• i-tap ang pangalan ng peer para magsimula ng DM"
+            "value" : "• i-tap ang pangalan ng isang tao para magsimula ng DM"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• tape sur le nom d'un pair pour démarrer un mp"
+            "value" : "• tape sur le nom d'une personne pour démarrer un mp"
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• הקש על שם עמית כדי להתחיל הודעה פרטית"
+            "value" : "• הקש על שם של אדם כדי להתחיל הודעה פרטית"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• किसी पीयर का नाम टैप करके DM शुरू करें"
+            "value" : "• किसी व्यक्ति का नाम टैप करके DM शुरू करें"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• ketuk nama peer untuk mulai dm"
+            "value" : "• ketuk nama seseorang untuk mulai dm"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• tocca il nome di un peer per avviare un dm"
+            "value" : "• tocca il nome di una persona per avviare un dm"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• ピアの名前をタップしてdm開始"
+            "value" : "• 人の名前をタップしてdm開始"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• 피어의 이름을 탭하여 DM을 시작합니다"
+            "value" : "• 상대방의 이름을 탭하여 DM을 시작합니다"
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• ketuk nama peer untuk mulai dm"
+            "value" : "• ketuk nama seseorang untuk mulai dm"
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• dm सुरु गर्न कुनै सहकर्मीको नाम ट्याप गर"
+            "value" : "• dm सुरु गर्न कुनै व्यक्तिको नाम ट्याप गर"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• tik op de naam van een peer om een DM te starten"
+            "value" : "• tik op de naam van een persoon om een DM te starten"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• stuknij nazwę peera, aby rozpocząć DM"
+            "value" : "• stuknij czyjeś imię, aby rozpocząć DM"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• toca no nome de um par para iniciar um DM"
+            "value" : "• toca no nome de uma pessoa para iniciar um DM"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• toque o nome de um par para iniciar um dm"
+            "value" : "• toque o nome de uma pessoa para iniciar um dm"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• нажми имя пользователя, чтобы начать лс"
+            "value" : "• нажми имя человека, чтобы начать лс"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• tryck på en peers namn för att starta ett DM"
+            "value" : "• tryck på en persons namn för att starta ett DM"
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• peer பெயரைத் தட்டி DM தொடங்கவும்"
+            "value" : "• ஒருவரின் பெயரைத் தட்டி DM தொடங்கவும்"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• แตะชื่อเพียร์เพื่อเริ่ม DM"
+            "value" : "• แตะชื่อบุคคลเพื่อเริ่ม DM"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• bir eşin adına dokunarak DM başlatın"
+            "value" : "• bir kişinin adına dokunarak DM başlatın"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• торкни ім'я піра, щоб почати приватний чат"
+            "value" : "• торкни ім'я людини, щоб почати приватний чат"
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• DM شروع کرنے کیلئے کسی ہم منصب کے نام پر ٹیپ کریں"
+            "value" : "• DM شروع کرنے کیلئے کسی شخص کے نام پر ٹیپ کریں"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• chạm tên một nút ngang hàng để mở DM"
+            "value" : "• chạm tên một người để mở DM"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• 轻点同伴名字开始 dm"
+            "value" : "• 轻点某人名字开始 dm"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• 輕點同伴名字開始 dm"
+            "value" : "• 輕點某人名字開始 dm"
           }
         }
       }

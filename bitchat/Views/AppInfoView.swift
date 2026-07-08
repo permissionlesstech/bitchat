@@ -120,14 +120,21 @@ struct AppInfoView: View {
 
         enum HowToUse {
             static let title: LocalizedStringKey = "app_info.how_to_use.title"
-            static let instructions: [LocalizedStringKey] = [
-                "app_info.how_to_use.set_nickname",
-                "app_info.how_to_use.change_channels",
-                "app_info.how_to_use.open_sidebar",
-                "app_info.how_to_use.start_dm",
-                "app_info.how_to_use.clear_chat",
-                "app_info.how_to_use.commands"
-            ]
+            /// The instruction strings flowed into one comma-separated
+            /// paragraph. The translations carry their legacy bullet-list
+            /// prefix ("• "), so it is stripped here.
+            static var paragraph: String {
+                [
+                    String(localized: "app_info.how_to_use.set_nickname"),
+                    String(localized: "app_info.how_to_use.change_channels"),
+                    String(localized: "app_info.how_to_use.open_sidebar"),
+                    String(localized: "app_info.how_to_use.start_dm"),
+                    String(localized: "app_info.how_to_use.clear_chat"),
+                    String(localized: "app_info.how_to_use.commands")
+                ]
+                .map { $0.hasPrefix("• ") ? String($0.dropFirst(2)) : $0 }
+                .joined(separator: ", ")
+            }
         }
 
     }
@@ -200,13 +207,10 @@ struct AppInfoView: View {
             VStack(alignment: .leading, spacing: 16) {
                 SectionHeader(Strings.HowToUse.title)
 
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(Array(Strings.HowToUse.instructions.enumerated()), id: \.offset) { _, instruction in
-                        Text(instruction)
-                    }
-                }
-                .bitchatFont(size: 14)
-                .foregroundColor(textColor)
+                Text(verbatim: Strings.HowToUse.paragraph)
+                    .bitchatFont(size: 14)
+                    .foregroundColor(textColor)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             // Appearance — single row: label left, theme chips right
