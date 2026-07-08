@@ -1282,7 +1282,7 @@ final class BLEService: NSObject {
         )
     }
 
-    private func handleFileTransfer(_ packet: BitchatPacket, from peerID: PeerID) {
+    private func handleFileTransfer(_ packet: BitchatPacket, from peerID: PeerID) -> Bool {
         fileTransferHandler.handle(packet, from: peerID)
     }
 
@@ -1300,6 +1300,9 @@ final class BLEService: NSObject {
             peersSnapshot: { [weak self] in
                 guard let self = self else { return [:] }
                 return self.collectionsQueue.sync { self.peerRegistry.snapshotByID }
+            },
+            verifyPacketSignature: { [weak self] packet, signingPublicKey in
+                self?.noiseService.verifyPacketSignature(packet, publicKey: signingPublicKey) ?? false
             },
             signedSenderDisplayName: { [weak self] packet, peerID in
                 self?.signedSenderDisplayName(for: packet, from: peerID)
@@ -4081,7 +4084,10 @@ extension BLEService {
             handleFragment(packet, from: senderID)
             
         case .fileTransfer:
-            handleFileTransfer(packet, from: senderID)
+            // Broadcast files that fail sender authentication must not spread
+            // to downstream (possibly older, ungated) nodes; skip the relay
+            // step below, like invalid board posts and voice frames.
+            guard handleFileTransfer(packet, from: senderID) else { return }
 
         case .courierEnvelope:
             handleCourierEnvelope(packet, from: peerID)

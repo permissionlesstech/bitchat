@@ -94,6 +94,11 @@ struct FragmentationTests {
         let capture = CaptureDelegate()
         ble.delegate = capture
 
+        // Broadcast file transfers must carry a valid sender signature (same
+        // gate as public messages), so sign the packet and preseed the
+        // sender's signing key into the registry.
+        let signer = NoiseEncryptionService(keychain: MockKeychain())
+        let signingKey = signer.getSigningPublicKeyData()
         let remoteID = PeerID(str: "CAFEBABECAFEBABE")
         let fileContent = Data(repeating: 0x42, count: FileTransferLimits.maxPayloadBytes)
         let filePacket = BitchatFilePacket(
@@ -104,15 +109,18 @@ struct FragmentationTests {
         )
         let encoded = try #require(filePacket.encode(), "File packet encoding failed")
 
-        let packet = BitchatPacket(
-            type: MessageType.fileTransfer.rawValue,
-            senderID: Data(hexString: remoteID.id) ?? Data(),
-            recipientID: nil,
-            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-            payload: encoded,
-            signature: nil,
-            ttl: 7,
-            version: 2
+        let packet = try #require(
+            signer.signPacket(BitchatPacket(
+                type: MessageType.fileTransfer.rawValue,
+                senderID: Data(hexString: remoteID.id) ?? Data(),
+                recipientID: nil,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: encoded,
+                signature: nil,
+                ttl: 7,
+                version: 2
+            )),
+            "Failed to sign file transfer packet"
         )
 
         let fragments = fragmentPacket(packet, fragmentSize: 4096, pad: false)
@@ -122,7 +130,7 @@ struct FragmentationTests {
             if i > 0 {
                 try await Task.sleep(for: .milliseconds(5))
             }
-            ble._test_handlePacket(fragment, fromPeerID: remoteID)
+            ble._test_handlePacket(fragment, fromPeerID: remoteID, signingPublicKey: signingKey)
         }
 
         try await capture.waitForReceivedMessages(count: 1, timeout: .seconds(5))
@@ -265,19 +273,32 @@ extension FragmentationTests {
 
             try await withThrowingTaskGroup(of: Void.self) { group in
                 group.addTask {
-                    await withCheckedContinuation { continuation in
-                        let shouldResumeImmediately = self.withLock {
-                            // Recheck count after acquiring lock to avoid race condition
-                            // where message arrives between initial check and continuation install
-                            if self._publicMessages.count >= count {
-                                return true
+                    // withCheckedContinuation itself is not cancellable, so hook
+                    // group.cancelAll() to resume the parked continuation —
+                    // otherwise a timeout leaves the group awaiting this child
+                    // forever and the test run hangs instead of failing.
+                    await withTaskCancellationHandler {
+                        await withCheckedContinuation { continuation in
+                            let shouldResumeImmediately = self.withLock {
+                                // Recheck count after acquiring lock to avoid race condition
+                                // where message arrives between initial check and continuation install
+                                if self._publicMessages.count >= count {
+                                    return true
+                                }
+                                self.publicMessageContinuation = continuation
+                                return false
                             }
-                            self.publicMessageContinuation = continuation
-                            return false
+                            if shouldResumeImmediately {
+                                continuation.resume()
+                            }
                         }
-                        if shouldResumeImmediately {
-                            continuation.resume()
+                    } onCancel: {
+                        let continuation = self.withLock {
+                            let parked = self.publicMessageContinuation
+                            self.publicMessageContinuation = nil
+                            return parked
                         }
+                        continuation?.resume()
                     }
                 }
                 group.addTask {
@@ -304,19 +325,32 @@ extension FragmentationTests {
 
             try await withThrowingTaskGroup(of: Void.self) { group in
                 group.addTask {
-                    await withCheckedContinuation { continuation in
-                        let shouldResumeImmediately = self.withLock {
-                            // Recheck count after acquiring lock to avoid race condition
-                            // where message arrives between initial check and continuation install
-                            if self._receivedMessages.count >= count {
-                                return true
+                    // withCheckedContinuation itself is not cancellable, so hook
+                    // group.cancelAll() to resume the parked continuation —
+                    // otherwise a timeout leaves the group awaiting this child
+                    // forever and the test run hangs instead of failing.
+                    await withTaskCancellationHandler {
+                        await withCheckedContinuation { continuation in
+                            let shouldResumeImmediately = self.withLock {
+                                // Recheck count after acquiring lock to avoid race condition
+                                // where message arrives between initial check and continuation install
+                                if self._receivedMessages.count >= count {
+                                    return true
+                                }
+                                self.receivedMessageContinuation = continuation
+                                return false
                             }
-                            self.receivedMessageContinuation = continuation
-                            return false
+                            if shouldResumeImmediately {
+                                continuation.resume()
+                            }
                         }
-                        if shouldResumeImmediately {
-                            continuation.resume()
+                    } onCancel: {
+                        let continuation = self.withLock {
+                            let parked = self.receivedMessageContinuation
+                            self.receivedMessageContinuation = nil
+                            return parked
                         }
+                        continuation?.resume()
                     }
                 }
                 group.addTask {
