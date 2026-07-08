@@ -249,14 +249,19 @@ private extension ContentComposerView {
         return conversationUIModel.activeLiveVoiceTalker
     }
 
+    /// Recording > floor-busy > live-ready (blue: holding will stream in
+    /// real time) > default accent (holding records a classic note).
+    var micColor: Color {
+        if voiceRecordingVM.state.isActive { return .red }
+        if busyTalker != nil { return Color.red.opacity(0.6) }
+        if conversationUIModel.isLiveVoiceCaptureAvailable() { return .blue }
+        return composerAccentColor
+    }
+
     var micButtonView: some View {
         Image(systemName: "mic.circle.fill")
             .font(.bitchatSystem(size: 24))
-            .foregroundColor(
-                voiceRecordingVM.state.isActive
-                    ? Color.red
-                    : (busyTalker != nil ? Color.red.opacity(0.6) : composerAccentColor)
-            )
+            .foregroundColor(micColor)
             .modifier(PulsingOpacityModifier(active: busyTalker != nil && !voiceRecordingVM.state.isActive))
             .frame(width: 36, height: 36)
             .contentShape(Circle())

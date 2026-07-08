@@ -164,6 +164,11 @@ final class ConversationUIModel: ObservableObject {
         chatViewModel.liveVoiceCoordinator.isLiveVoiceMessage(message)
     }
 
+    /// Whether holding the mic right now would stream live (blue mic).
+    func isLiveVoiceCaptureAvailable() -> Bool {
+        chatViewModel.isLiveVoiceCaptureAvailable
+    }
+
     func cancelMediaSend(messageID: String) {
         chatViewModel.cancelMediaSend(messageID: messageID)
     }

@@ -70,6 +70,42 @@ extension ChatViewModel {
         mediaTransferCoordinator.sendVoiceNote(at: url)
     }
 
+    /// Where a live burst would stream right now, or nil when the hold would
+    /// fall back to a classic voice note.
+    private enum LiveVoiceTarget {
+        case peer(PeerID)
+        case publicMesh
+    }
+
+    @MainActor
+    private func liveVoiceTarget() -> LiveVoiceTarget? {
+        guard PTTSettings.liveVoiceEnabled else { return nil }
+
+        if let selectedPeer = selectedPrivateChatPeer {
+            guard !selectedPeer.isGeoDM, !selectedPeer.isGeoChat, !selectedPeer.isGroup else { return nil }
+            // A conversation can be selected under the stable 64-hex Noise key
+            // (e.g. after migration on disconnect), but Noise sessions are keyed
+            // by the 16-hex routing ID — normalize once and send to that same
+            // short ID, like the private-message/file paths do.
+            let peerID = selectedPeer.toShort()
+            guard meshService.isPeerReachable(peerID),
+                  case .established = meshService.getNoiseSessionState(for: peerID)
+            else { return nil }
+            return .peer(peerID)
+        }
+
+        // Public mesh timeline: signed live broadcast. Geohash channels never
+        // reach here (the composer hides media affordances there).
+        return activeChannel == .mesh ? .publicMesh : nil
+    }
+
+    /// Whether holding the mic right now would stream live (drives the
+    /// composer's blue mic indicator).
+    @MainActor
+    var isLiveVoiceCaptureAvailable: Bool {
+        liveVoiceTarget() != nil
+    }
+
     /// Picks the capture backend for the composer's hold-to-record gesture:
     /// live push-to-talk when the audience can hear it now — a DM peer that
     /// is mesh-reachable with an established Noise session, or the public
@@ -78,34 +114,19 @@ extension ChatViewModel {
     /// `sendVoiceNote(at:)`, which live receivers absorb into the live bubble.
     @MainActor
     func makeVoiceCaptureSession() -> VoiceCaptureSession {
-        guard PTTSettings.liveVoiceEnabled else { return VoiceNoteCaptureSession() }
-
-        if let selectedPeer = selectedPrivateChatPeer {
-            guard !selectedPeer.isGeoDM, !selectedPeer.isGeoChat, !selectedPeer.isGroup else {
-                return VoiceNoteCaptureSession()
-            }
-            // A conversation can be selected under the stable 64-hex Noise key
-            // (e.g. after migration on disconnect), but Noise sessions are keyed
-            // by the 16-hex routing ID — normalize once and send to that same
-            // short ID, like the private-message/file paths do.
-            let peerID = selectedPeer.toShort()
-            guard meshService.isPeerReachable(peerID),
-                  case .established = meshService.getNoiseSessionState(for: peerID)
-            else {
-                SecureLogger.debug("PTT: live unavailable for \(peerID.id.prefix(8))… (reachable=\(meshService.isPeerReachable(peerID))) — using classic voice note", category: .session)
-                return VoiceNoteCaptureSession()
-            }
+        switch liveVoiceTarget() {
+        case .peer(let peerID):
             return PTTLiveVoiceSession(sendPacket: { [meshService] packet in
                 meshService.sendVoiceFrame(packet, to: peerID)
             })
+        case .publicMesh:
+            return PTTLiveVoiceSession(sendPacket: { [meshService] packet in
+                meshService.sendVoiceFrameBroadcast(packet)
+            })
+        case nil:
+            SecureLogger.debug("PTT: live unavailable — using classic voice note", category: .session)
+            return VoiceNoteCaptureSession()
         }
-
-        // Public mesh timeline: signed live broadcast. Geohash channels never
-        // reach here (the composer hides media affordances there).
-        guard activeChannel == .mesh else { return VoiceNoteCaptureSession() }
-        return PTTLiveVoiceSession(sendPacket: { [meshService] packet in
-            meshService.sendVoiceFrameBroadcast(packet)
-        })
     }
 
     /// Inbound handler for `NoisePayloadType.voiceFrame`.
