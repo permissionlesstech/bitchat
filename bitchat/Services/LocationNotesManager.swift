@@ -277,8 +277,9 @@ final class LocationNotesManager: ObservableObject {
     }
 
     /// Send a location note for the current geohash using the per-geohash
-    /// identity, optionally expiring via NIP-40 (dead drops pass 24h).
-    func send(content: String, nickname: String, expiresAt: Date? = nil) {
+    /// identity, optionally expiring via NIP-40 (dead drops pass 24h; the
+    /// composer's ∞ option passes nil) and optionally tagged urgent.
+    func send(content: String, nickname: String, expiresAt: Date? = nil, urgent: Bool = false) {
         guard let trimmed = content.trimmedOrNilIfEmpty else { return }
         let relays = dependencies.relayLookup(geohash, TransportConfig.nostrGeoRelayCount)
         guard !relays.isEmpty else {
@@ -294,7 +295,8 @@ final class LocationNotesManager: ObservableObject {
                 geohash: geohash,
                 senderIdentity: id,
                 nickname: nickname,
-                expiresAt: expiresAt
+                expiresAt: expiresAt,
+                urgent: urgent
             )
             dependencies.sendEvent(event, relays)
             // Optimistic local-echo
@@ -305,7 +307,8 @@ final class LocationNotesManager: ObservableObject {
                 createdAt: Date(timeIntervalSince1970: TimeInterval(event.created_at)),
                 nickname: nickname,
                 geohash: geohash,
-                expiresAt: expiresAt
+                expiresAt: expiresAt,
+                isUrgent: urgent
             )
             self.noteIDs.insert(event.id)
             self.notes.insert(echo, at: 0)
@@ -399,14 +402,14 @@ final class LocationNotesManager: ObservableObject {
         }
     }
 
-    /// Explicitly cancel subscription and release resources.
+    /// Explicitly cancel the subscription. The prune timer stays alive (it
+    /// holds only a weak self) so a reused instance — the notices sheet
+    /// cancels on tab switch and refreshes on return — keeps pruning.
     func cancel() {
         if let sub = subscriptionID {
             dependencies.unsubscribe(sub)
             subscriptionID = nil
         }
-        expiryPruneTimer?.invalidate()
-        expiryPruneTimer = nil
         state = .idle
         errorMessage = nil
     }

@@ -31,10 +31,18 @@ struct NoticesView: View {
     @State private var tab: Tab
     @State private var draft: String = ""
     @State private var urgent = false
-    @State private var expiryDays = 7
+    /// Days until the notice fades; `permanentExpiry` (geo default) means no
+    /// NIP-40 tag — the note stays until its relay drops it.
+    @State private var expiryDays: Int
+
+    /// Sentinel picker tag for the ∞ option (geo tab only).
+    private static let permanentExpiry = 0
 
     /// Injected notes manager for tests; live use derives one per geohash.
     private let notesManager: LocationNotesManager?
+    /// Live manager owned by the sheet so the composer can post pure Nostr
+    /// notes (∞ expiry has no mesh-board copy) and the list can render them.
+    @State private var liveGeoManager: LocationNotesManager?
 
     init(
         senderNickname: String,
@@ -46,6 +54,27 @@ struct NoticesView: View {
         self.board = board
         self.notesManager = notesManager
         _tab = State(initialValue: initialTab)
+        _expiryDays = State(initialValue: initialTab == .geo ? Self.permanentExpiry : 7)
+    }
+
+    private var activeNotesManager: LocationNotesManager? {
+        notesManager ?? liveGeoManager
+    }
+
+    /// Creates (or retargets/revives) the sheet-owned notes manager for the
+    /// current geo scope.
+    private func ensureGeoNotesManager() {
+        guard notesManager == nil, tab == .geo, let geohash = geoGeohash else { return }
+        if let manager = liveGeoManager {
+            if manager.geohash != geohash.lowercased() {
+                manager.setGeohash(geohash)
+            } else if manager.state == .idle {
+                // Cancelled on a tab switch; returning re-subscribes.
+                manager.refresh()
+            }
+        } else {
+            liveGeoManager = LocationNotesManager(geohash: geohash)
+        }
     }
 
     private var maxDraftLines: Int { dynamicTypeSize.isAccessibilitySize ? 5 : 3 }
@@ -90,6 +119,7 @@ struct NoticesView: View {
         static let send = String(localized: "board.accessibility.post", defaultValue: "Post notice", comment: "Accessibility label for the board post button")
         static let deleteAction = String(localized: "board.action.delete", defaultValue: "delete", comment: "Delete action for own board posts")
         static let expiryLabel = String(localized: "board.compose.expiry", defaultValue: "expires in", comment: "Label for the board post expiry picker")
+        static let permanentOption = String(localized: "notices.expiry.permanent", defaultValue: "permanent", comment: "Accessibility label for the ∞ (never expires) option in the geo notes expiry picker")
         static let closeHint = String(localized: "notices.accessibility.close", defaultValue: "Close notices", comment: "Accessibility label for the notices close button")
         static let meshSource = String(localized: "notices.source.mesh", defaultValue: "mesh", comment: "Source badge for notices carried by the mesh")
         static let nostrSource = String(localized: "notices.source.nostr", defaultValue: "net", comment: "Source badge for notices seen on internet relays")
@@ -142,17 +172,28 @@ struct NoticesView: View {
         .frame(minWidth: 420, idealWidth: 440, minHeight: 620, idealHeight: 680)
         #endif
         .themedSheetBackground()
-        .onAppear { beginGeoLocationIfNeeded() }
+        .onAppear {
+            beginGeoLocationIfNeeded()
+            ensureGeoNotesManager()
+        }
         .onChange(of: tab) { newTab in
             if newTab == .geo {
                 beginGeoLocationIfNeeded()
+                ensureGeoNotesManager()
             } else {
                 locationChannelsModel.endLiveRefresh()
             }
+            // Each tab keeps its natural default: geo notes stay until
+            // deleted (∞), mesh board posts fade within a week.
+            expiryDays = newTab == .geo ? Self.permanentExpiry : 7
+            urgent = false
         }
         // Catches permission granted from the geo tab's enable button.
         .onChange(of: locationChannelsModel.permissionState) { _ in
             beginGeoLocationIfNeeded()
+        }
+        .onChange(of: geoGeohash) { _ in
+            ensureGeoNotesManager()
         }
         .onDisappear { locationChannelsModel.endLiveRefresh() }
     }
@@ -217,7 +258,14 @@ struct NoticesView: View {
             )
         case .geo:
             if let geohash = geoGeohash {
-                GeoNoticesList(geohash: geohash, board: board, manager: notesManager)
+                if let manager = activeNotesManager {
+                    GeoNoticesList(geohash: geohash, board: board, manager: manager)
+                } else {
+                    // Manager is created on appear; visible for one frame.
+                    Color.clear
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .onAppear { ensureGeoNotesManager() }
+                }
             } else {
                 locationUnavailableSection
             }
@@ -262,23 +310,31 @@ struct NoticesView: View {
                 .disabled(!sendEnabled)
                 .accessibilityLabel(Strings.send)
             }
-            // Urgency and expiry travel with both copies now: board posts
-            // carry flags + expiresAt on the mesh, and the bridged Nostr
-            // note mirrors them via a ["t","urgent"] tag and NIP-40.
+            // Both tabs pick an expiry (geo notes may be ∞); urgency is a
+            // mesh-board concept — notes are ambient by nature.
             HStack(spacing: 12) {
-                Toggle(isOn: $urgent) {
-                    Text(Strings.urgentToggle)
-                        .bitchatFont(size: 12)
-                        .foregroundColor(urgent ? palette.alertRed : palette.secondary)
+                if tab == .mesh {
+                    Toggle(isOn: $urgent) {
+                        Text(Strings.urgentToggle)
+                            .bitchatFont(size: 12)
+                            .foregroundColor(urgent ? palette.alertRed : palette.secondary)
+                    }
+                    .toggleStyle(.switch)
+                    .fixedSize()
+                    .accessibilityLabel(Strings.urgentToggle)
                 }
-                .toggleStyle(.switch)
-                .fixedSize()
-                .accessibilityLabel(Strings.urgentToggle)
                 Spacer()
                 Text(Strings.expiryLabel)
                     .bitchatFont(size: 12)
                     .foregroundColor(palette.secondary)
                 Picker(Strings.expiryLabel, selection: $expiryDays) {
+                    // Mesh board posts must fade (the wire caps their
+                    // lifetime); only relay-backed geo notes can be ∞.
+                    if tab == .geo {
+                        Text(verbatim: "∞")
+                            .accessibilityLabel(Strings.permanentOption)
+                            .tag(Self.permanentExpiry)
+                    }
                     ForEach([1, 3, 7], id: \.self) { days in
                         Text(Strings.expiryDaysOption(days)).tag(days)
                     }
@@ -305,14 +361,26 @@ struct NoticesView: View {
 
     private func send() {
         guard let geohash = activeGeohash, let content = draft.trimmedOrNilIfEmpty else { return }
-        // Geo posts go to the board and are bridged to Nostr by BoardManager,
-        // so mesh and internet see the same notice — urgency and expiry
-        // included (flags/expiresAt on mesh, ["t","urgent"] + NIP-40 on the
-        // bridged note).
+
+        // ∞ (geo default): a pure relay note with no NIP-40 tag. It skips
+        // the mesh board deliberately — a board copy must fade within days,
+        // which would contradict the permanence the user just picked.
+        if tab == .geo, expiryDays == Self.permanentExpiry {
+            guard let manager = activeNotesManager else { return }
+            manager.send(content: content, nickname: senderNickname, expiresAt: nil)
+            draft = ""
+            urgent = false
+            return
+        }
+
+        // Expiring posts go to the board and are bridged to Nostr by
+        // BoardManager, so mesh and internet see the same notice with the
+        // chosen expiry (expiresAt on mesh, NIP-40 on the bridged note).
+        // Urgency is mesh-only.
         let sent = board.createPost(
             content: content,
             geohash: geohash,
-            urgent: urgent,
+            urgent: tab == .mesh && urgent,
             expiryDays: expiryDays,
             nickname: senderNickname
         )
@@ -323,18 +391,19 @@ struct NoticesView: View {
     }
 }
 
-/// The geo tab's list: owns the Nostr notes subscription for the scope
-/// geohash and merges it with the board posts for the same geohash.
+/// The geo tab's list: renders the sheet-owned Nostr notes subscription
+/// merged with the board posts for the same geohash. The manager lives on
+/// `NoticesView` so the composer can post through the same instance (∞
+/// notes local-echo into this list).
 private struct GeoNoticesList: View {
     let geohash: String
     @ObservedObject var board: BoardManager
-    @StateObject private var notesManager: LocationNotesManager
+    @ObservedObject var notesManager: LocationNotesManager
 
-    init(geohash: String, board: BoardManager, manager: LocationNotesManager? = nil) {
-        let gh = geohash.lowercased()
-        self.geohash = gh
+    init(geohash: String, board: BoardManager, manager: LocationNotesManager) {
+        self.geohash = geohash.lowercased()
         self.board = board
-        _notesManager = StateObject(wrappedValue: manager ?? LocationNotesManager(geohash: gh))
+        self.notesManager = manager
     }
 
     var body: some View {
