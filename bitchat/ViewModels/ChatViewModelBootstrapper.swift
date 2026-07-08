@@ -207,7 +207,11 @@ private extension ChatViewModelBootstrapper {
     private func loadArchivedEchoes() {
         DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiArchivedEchoLoadDelaySeconds) { [weak viewModel] in
             guard let viewModel else { return }
-            viewModel.meshService.collectArchivedPublicMessages { [weak viewModel] archived in
+            viewModel.meshService.collectArchivedPublicMessages { [weak viewModel] allArchived in
+                // A previous /clear dismissed everything heard up to its
+                // watermark; only newer archive entries come back.
+                let clearedThrough = MeshEchoSettings.clearedThrough ?? .distantPast
+                let archived = allArchived.filter { $0.timestamp > clearedThrough }
                 guard let viewModel, !archived.isEmpty else { return }
                 // Seed only an untouched timeline: with live rows already
                 // present (or after /clear) splicing history back in would

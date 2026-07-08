@@ -28198,175 +28198,175 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "سُمعت هنا سابقًا — رسائل محمولة من آخر 6 ساعات"
+            "value" : "سُمع هنا سابقًا · آخر 6 ساعات"
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "আগে এখানে শোনা গেছে — গত 6 ঘণ্টার বহন করা বার্তা"
+            "value" : "আগে এখানে শোনা গেছে · গত ৬ ঘণ্টা"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "hier früher gehört — nachrichten aus den letzten 6 stunden"
+            "value" : "vorhin hier gehört · letzte 6 std."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "heard here earlier — messages carried from the last 6 hours"
+            "value" : "heard here earlier · last 6h"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "escuchado aquí antes — mensajes de las últimas 6 horas"
+            "value" : "escuchado aquí antes · últimas 6 h"
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "narinig dito kanina — mga mensahe mula sa nakaraang 6 na oras"
+            "value" : "narinig dito kanina · huling 6 oras"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "entendu ici plus tôt — messages des 6 dernières heures"
+            "value" : "entendu ici plus tôt · 6 dernières h"
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "נשמע כאן קודם — הודעות מ-6 השעות האחרונות"
+            "value" : "נשמע כאן קודם · 6 שעות אחרונות"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "पहले यहाँ सुना गया — पिछले 6 घंटों के संदेश"
+            "value" : "पहले यहाँ सुना गया · पिछले 6 घंटे"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "terdengar di sini sebelumnya — pesan dari 6 jam terakhir"
+            "value" : "terdengar di sini sebelumnya · 6 jam terakhir"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "sentito qui prima — messaggi delle ultime 6 ore"
+            "value" : "sentito qui prima · ultime 6 ore"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "以前ここで受信 — 過去6時間のメッセージ"
+            "value" : "ここで聞こえた · 過去6時間"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "이전에 여기서 들림 — 지난 6시간 동안 전달된 메시지"
+            "value" : "여기서 들린 대화 · 지난 6시간"
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "didengar di sini sebelum ini — mesej dari 6 jam lepas"
+            "value" : "didengar di sini tadi · 6 jam lepas"
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "पहिले यहाँ सुनियो — पछिल्लो 6 घण्टाका सन्देशहरू"
+            "value" : "पहिले यहाँ सुनिएको · पछिल्लो ६ घण्टा"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "eerder hier gehoord — berichten van de afgelopen 6 uur"
+            "value" : "eerder hier gehoord · afgelopen 6 u"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "słyszane tu wcześniej — wiadomości z ostatnich 6 godzin"
+            "value" : "słyszane tu wcześniej · ostatnie 6 godz."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ouvido aqui antes — mensagens das últimas 6 horas"
+            "value" : "ouvido aqui antes · últimas 6 h"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ouvido aqui antes — mensagens das últimas 6 horas"
+            "value" : "ouvido aqui antes · últimas 6 h"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "услышано здесь ранее — сообщения за последние 6 часов"
+            "value" : "слышано здесь ранее · последние 6 ч"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "hört här tidigare — meddelanden från de senaste 6 timmarna"
+            "value" : "hört här tidigare · senaste 6 tim"
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "முன்பு இங்கே கேட்கப்பட்டது — கடந்த 6 மணி நேர செய்திகள்"
+            "value" : "முன்பு இங்கே கேட்டது · கடந்த 6 மணி"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "เคยได้ยินที่นี่ก่อนหน้านี้ — ข้อความจาก 6 ชั่วโมงที่ผ่านมา"
+            "value" : "ได้ยินที่นี่ก่อนหน้านี้ · 6 ชม.ที่ผ่านมา"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "daha önce burada duyuldu — son 6 saatten taşınan mesajlar"
+            "value" : "daha önce burada duyuldu · son 6 sa"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "почуто тут раніше — повідомлення за останні 6 годин"
+            "value" : "почуто тут раніше · останні 6 год"
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "پہلے یہاں سنا گیا — پچھلے 6 گھنٹوں کے پیغامات"
+            "value" : "پہلے یہاں سنا گیا · گزشتہ 6 گھنٹے"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "đã nghe ở đây trước đó — tin nhắn từ 6 giờ qua"
+            "value" : "đã nghe ở đây trước đó · 6 giờ qua"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "此前在此听到 — 过去 6 小时传递的消息"
+            "value" : "之前在这里听到 · 最近6小时"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "先前在此聽到 — 過去 6 小時傳遞的訊息"
+            "value" : "之前在這裡聽到 · 最近6小時"
           }
         }
       }

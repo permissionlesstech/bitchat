@@ -292,6 +292,15 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
     func clearCurrentPublicTimeline() {
         context.clearPublicConversation(ConversationID(channelID: context.activeChannel))
 
+        // Clearing the mesh timeline also dismisses its archived echoes for
+        // good: the watermark stops the next launch from re-seeding them
+        // (the archive itself keeps carrying the messages for peers), and
+        // the dedup keys go so a cleared message arriving live shows again.
+        if case .mesh = context.activeChannel {
+            MeshEchoSettings.clearedThrough = Date()
+            archivedEchoKeys.removeAll()
+        }
+
         // The SPM test process shares the real Application Support tree, so this
         // detached deletion can land mid-test under parallel scheduling and flake
         // a file-dependent test. Tests never need the on-disk media cleared.

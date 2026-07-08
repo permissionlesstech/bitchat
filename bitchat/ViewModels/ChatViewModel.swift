@@ -1225,10 +1225,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         GossipMessageArchive.wipeDefault()
         StoreAndForwardMetrics.shared.reset()
 
-        // Ambient-liveliness bookkeeping: sampled nearby-chat previews and
-        // the daily sightings tally
+        // Ambient-liveliness bookkeeping: sampled nearby-chat previews, the
+        // daily sightings tally, and the echoes-dismissed watermark
         GeohashChatActivityTracker.shared.clear()
         MeshSightingsTracker.shared.clear()
+        MeshEchoSettings.reset()
 
         // Drop private group keys and rosters (keychain + disk)
         groupStore.wipe()
