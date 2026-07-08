@@ -20,6 +20,7 @@ struct LocationChannelsSheet: View {
         static let permissionDenied: LocalizedStringKey = "location_channels.permission_denied"
         static let openSettings: LocalizedStringKey = "location_channels.action.open_settings"
         static let loadingNearby: LocalizedStringKey = "location_channels.loading_nearby"
+        static let grantToFind: LocalizedStringKey = "location_channels.grant_to_find"
         static let teleport: LocalizedStringKey = "location_channels.action.teleport"
         static let bookmarked: LocalizedStringKey = "location_channels.bookmarked_section_title"
 
@@ -211,7 +212,7 @@ struct LocationChannelsSheet: View {
                         }
                         .padding(.vertical, 6)
                     }
-                } else {
+                } else if locationChannelsModel.permissionState == .authorized {
                     sectionDivider
                     HStack(spacing: 8) {
                         ProgressView()
@@ -220,6 +221,15 @@ struct LocationChannelsSheet: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 10)
+                } else {
+                    // No permission means no fix is coming: an honest hint
+                    // beats a spinner that would never finish.
+                    sectionDivider
+                    Text(Strings.grantToFind)
+                        .bitchatFont(size: 12)
+                        .foregroundColor(palette.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 10)
                 }
 
                 sectionDivider

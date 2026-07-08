@@ -54,7 +54,7 @@ struct AppInfoView: View {
             static let connectivityTitle = String(localized: "app_info.settings.connectivity.title", defaultValue: "CONNECTIVITY", comment: "Section header (uppercase) for the connectivity toggles: mesh bridge, internet gateway, tor routing")
 
             static let bridgeTitle = String(localized: "app_info.settings.bridge.title", defaultValue: "mesh bridge", comment: "Title of the mesh bridge toggle in settings")
-            static let bridgeSubtitle = String(localized: "app_info.settings.bridge.subtitle", defaultValue: "your public mesh messages also reach bitchat users beyond radio range in your area via the internet, and you see theirs (marked with a network glyph)", comment: "Subtitle explaining what the mesh bridge toggle does")
+            static let bridgeSubtitle = String(localized: "app_info.settings.bridge.subtitle", defaultValue: "joins nearby mesh islands over the internet: what you say in the mesh channel also reaches people in your area beyond radio range, and their messages appear here marked with the network glyph", comment: "Subtitle explaining what the mesh bridge toggle does")
             static func bridgeCell(_ cell: String) -> String {
                 String(
                     format: String(localized: "app_info.settings.bridge.cell", defaultValue: "rendezvous cell: %@", comment: "Caption under the mesh bridge toggle showing the geohash cell the bridge is meeting on"),
@@ -68,7 +68,9 @@ struct AppInfoView: View {
             static let torTitle: LocalizedStringKey = "location_channels.tor.title"
             static let torSubtitle: LocalizedStringKey = "location_channels.tor.subtitle"
             static let gatewayTitle: LocalizedStringKey = "location_channels.gateway.title"
-            static let gatewaySubtitle: LocalizedStringKey = "location_channels.gateway.subtitle"
+            // New key: the gateway now carries bridge traffic too, so the old
+            // geohash-only subtitle undersold it.
+            static let gatewaySubtitle = String(localized: "app_info.settings.gateway.subtitle", defaultValue: "shares your internet connection with the mesh around you, carrying location-channel and bridge traffic for phones that have none", comment: "Subtitle explaining what the internet gateway toggle does")
             static let toggleOn: LocalizedStringKey = "common.toggle.on"
             static let toggleOff: LocalizedStringKey = "common.toggle.off"
 
@@ -358,11 +360,13 @@ struct AppInfoView: View {
                     )
                 }
 
-                // Location powers the channels list and the bridge cell;
-                // revoking it lives with the other connectivity controls
-                // (moved from the channels sheet). The button deep-links to
-                // the system permission screen.
-                if locationChannelsModel.permissionState == .authorized {
+                // Location powers the channels list and the bridge cell, so
+                // its control lives with the other connectivity settings.
+                // Platform reality shapes the three states: the app may only
+                // prompt while never-asked; granted/denied both flip in the
+                // system permission screen.
+                switch locationChannelsModel.permissionState {
+                case .authorized:
                     Button(action: SystemSettings.location.open) {
                         Text("location_channels.action.remove_access")
                             .bitchatFont(size: 12)
@@ -373,6 +377,27 @@ struct AppInfoView: View {
                             .cornerRadius(6)
                     }
                     .buttonStyle(.plain)
+                case .notDetermined:
+                    Button(action: { locationChannelsModel.enableLocationChannels() }) {
+                        Text("location_channels.action.request_permissions")
+                            .bitchatFont(size: 12)
+                            .foregroundColor(palette.accent)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                            .background(palette.accent.opacity(0.12))
+                            .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                case .denied, .restricted:
+                    settingsCard {
+                        Text("location_channels.permission_denied")
+                            .bitchatFont(size: 11)
+                            .foregroundColor(secondaryTextColor)
+                        Button("location_channels.action.open_settings", action: SystemSettings.location.open)
+                            .buttonStyle(.plain)
+                            .bitchatFont(size: 12)
+                            .foregroundColor(palette.accent)
+                    }
                 }
             }
 

@@ -10055,175 +10055,175 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "رسائلك العامة في mesh تصل أيضًا عبر الإنترنت إلى مستخدمي bitchat خارج مدى الراديو في منطقتك، وترى رسائلهم (معلَّمة برمز شبكة)"
+            "value" : "يصل جزر mesh القريبة عبر الإنترنت: ما تقوله في قناة mesh يصل أيضًا إلى أشخاص في منطقتك خارج مدى الراديو، وتظهر رسائلهم هنا معلَّمة برمز الشبكة"
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "আপনার পাবলিক মেশ বার্তা ইন্টারনেটের মাধ্যমে আপনার এলাকার রেডিও পরিসরের বাইরের bitchat ব্যবহারকারীদের কাছেও পৌঁছায়, আর আপনি তাদেরটাও দেখেন (নেটওয়ার্ক চিহ্ন দিয়ে চিহ্নিত)"
+            "value" : "কাছাকাছি মেশ দ্বীপগুলোকে ইন্টারনেটের মাধ্যমে যুক্ত করে: মেশ চ্যানেলে আপনি যা বলেন তা আপনার এলাকার রেডিও পরিসরের বাইরের মানুষের কাছেও পৌঁছায়, আর তাদের বার্তা নেটওয়ার্ক চিহ্নসহ এখানে দেখা যায়"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "deine öffentlichen mesh-nachrichten erreichen über das internet auch bitchat-nutzer außerhalb der funkreichweite in deiner gegend, und du siehst ihre (markiert mit einem netzwerk-symbol)"
+            "value" : "verbindet nahe mesh-inseln über das internet: was du im mesh-kanal sagst, erreicht auch personen in deiner gegend außerhalb der funkreichweite, und ihre nachrichten erscheinen hier mit dem netzwerk-symbol markiert"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "your public mesh messages also reach bitchat users beyond radio range in your area via the internet, and you see theirs (marked with a network glyph)"
+            "value" : "joins nearby mesh islands over the internet: what you say in the mesh channel also reaches people in your area beyond radio range, and their messages appear here marked with the network glyph"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tus mensajes públicos del mesh también llegan por internet a usuarios de bitchat fuera del alcance de radio en tu zona, y tú ves los suyos (marcados con un símbolo de red)"
+            "value" : "une islas mesh cercanas a través de internet: lo que dices en el canal mesh también llega a personas de tu zona fuera del alcance de radio, y sus mensajes aparecen aquí marcados con el símbolo de red"
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ang iyong mga pampublikong mensahe sa mesh ay umaabot din sa mga bitchat user na lampas sa saklaw ng radyo sa iyong lugar sa pamamagitan ng internet, at nakikita mo rin ang sa kanila (may markang simbolo ng network)"
+            "value" : "pinagdurugtong ang mga kalapit na mesh island sa pamamagitan ng internet: ang sinasabi mo sa mesh channel ay umaabot din sa mga tao sa iyong lugar na lampas sa saklaw ng radyo, at lumalabas dito ang kanilang mga mensahe na may markang simbolo ng network"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tes messages publics du mesh atteignent aussi via internet les utilisateurs de bitchat hors de portée radio dans ta zone, et tu vois les leurs (marqués d'un symbole réseau)"
+            "value" : "relie les îlots mesh voisins via internet : ce que tu dis dans le canal mesh atteint aussi les personnes de ta zone hors de portée radio, et leurs messages apparaissent ici marqués du symbole réseau"
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ההודעות הציבוריות שלך ב-mesh מגיעות דרך האינטרנט גם למשתמשי bitchat מעבר לטווח הרדיו באזורך, ואתה רואה את שלהם (מסומנות בסמל רשת)"
+            "value" : "מחבר איי mesh קרובים דרך האינטרנט: מה שאתה אומר בערוץ ה-mesh מגיע גם לאנשים באזורך מעבר לטווח הרדיו, וההודעות שלהם מופיעות כאן מסומנות בסמל הרשת"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "आपके सार्वजनिक मेश संदेश इंटरनेट के ज़रिए आपके क्षेत्र में रेडियो दायरे से बाहर के bitchat उपयोगकर्ताओं तक भी पहुँचते हैं, और आप उनके संदेश भी देखते हैं (नेटवर्क चिह्न से चिह्नित)"
+            "value" : "आसपास के मेश द्वीपों को इंटरनेट से जोड़ता है: मेश चैनल में आप जो कहते हैं वह आपके क्षेत्र में रेडियो दायरे से बाहर के लोगों तक भी पहुँचता है, और उनके संदेश यहाँ नेटवर्क चिह्न के साथ दिखते हैं"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "pesan publik mesh-mu juga sampai lewat internet ke pengguna bitchat di luar jangkauan radio di areamu, dan kamu melihat pesan mereka (ditandai dengan simbol jaringan)"
+            "value" : "menyatukan pulau-pulau mesh terdekat lewat internet: yang kamu katakan di kanal mesh juga sampai ke orang-orang di areamu di luar jangkauan radio, dan pesan mereka muncul di sini ditandai dengan simbol jaringan"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "i tuoi messaggi pubblici della mesh raggiungono via internet anche gli utenti bitchat oltre la portata radio nella tua zona, e tu vedi i loro (contrassegnati con un simbolo di rete)"
+            "value" : "unisce le isole mesh vicine tramite internet: ciò che dici nel canale mesh raggiunge anche persone della tua zona oltre la portata radio, e i loro messaggi appaiono qui contrassegnati con il simbolo di rete"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "あなたの公開meshメッセージはインターネット経由でエリア内の電波範囲外にいるbitchatユーザーにも届き、相手のメッセージも見えます（ネットワーク記号付き）"
+            "value" : "近くのmeshの島々をインターネットでつなぎます: meshチャンネルでの発言はエリア内の電波範囲外の人にも届き、相手のメッセージはネットワーク記号付きでここに表示されます"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "내 공개 mesh 메시지가 인터넷을 통해 이 지역의 전파 범위 밖 bitchat 사용자에게도 전달되고, 그들의 메시지도 볼 수 있습니다 (네트워크 기호로 표시)"
+            "value" : "근처의 mesh 섬들을 인터넷으로 연결합니다: mesh 채널에서 말한 내용이 이 지역의 전파 범위 밖 사람들에게도 전달되고, 그들의 메시지는 네트워크 기호가 붙어 여기에 표시됩니다"
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "pesan awam mesh-mu juga sampai melalui internet kepada pengguna bitchat di luar jangkauan radio di kawasanmu, dan kamu melihat pesan mereka (ditanda dengan simbol rangkaian)"
+            "value" : "menyatukan pulau-pulau mesh berdekatan melalui internet: apa yang kamu katakan di kanal mesh juga sampai kepada orang di kawasanmu di luar jangkauan radio, dan pesan mereka muncul di sini ditanda dengan simbol rangkaian"
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "तिम्रा सार्वजनिक mesh सन्देशहरू इन्टरनेटमार्फत तिम्रो क्षेत्रमा रेडियो पहुँचभन्दा बाहिरका bitchat प्रयोगकर्तासम्म पनि पुग्छन्, र तिमी उनीहरूका पनि देख्छौ (नेटवर्क चिन्हले चिन्हित)"
+            "value" : "नजिकका mesh टापुहरूलाई इन्टरनेटमार्फत जोड्छ: mesh च्यानलमा तिमीले भनेको कुरा तिम्रो क्षेत्रमा रेडियो पहुँचभन्दा बाहिरका मानिससम्म पनि पुग्छ, र उनीहरूका सन्देश नेटवर्क चिन्हसहित यहाँ देखिन्छन्"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "je openbare mesh-berichten bereiken via internet ook bitchat-gebruikers buiten radiobereik in jouw omgeving, en jij ziet die van hen (gemarkeerd met een netwerksymbool)"
+            "value" : "verbindt nabije mesh-eilanden via internet: wat je in het mesh-kanaal zegt bereikt ook mensen in jouw omgeving buiten radiobereik, en hun berichten verschijnen hier gemarkeerd met het netwerksymbool"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "twoje publiczne wiadomości mesh docierają przez internet także do użytkowników bitchat poza zasięgiem radiowym w twojej okolicy, a ty widzisz ich wiadomości (oznaczone symbolem sieci)"
+            "value" : "łączy pobliskie wyspy mesh przez internet: to, co mówisz na kanale mesh, dociera też do osób w twojej okolicy poza zasięgiem radiowym, a ich wiadomości pojawiają się tutaj oznaczone symbolem sieci"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "as tuas mensagens públicas da mesh também chegam pela internet a utilizadores do bitchat fora do alcance de rádio na tua zona, e tu vês as deles (marcadas com um símbolo de rede)"
+            "value" : "junta ilhas mesh próximas através da internet: o que dizes no canal mesh também chega a pessoas na tua zona fora do alcance de rádio, e as mensagens delas aparecem aqui marcadas com o símbolo de rede"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "suas mensagens públicas do mesh também chegam pela internet a usuários do bitchat fora do alcance de rádio na sua área, e você vê as deles (marcadas com um símbolo de rede)"
+            "value" : "junta ilhas mesh próximas pela internet: o que você diz no canal mesh também chega a pessoas na sua área fora do alcance de rádio, e as mensagens delas aparecem aqui marcadas com o símbolo de rede"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "твои публичные mesh-сообщения через интернет доходят и до пользователей bitchat за пределами радиуса радиосвязи в твоём районе, а ты видишь их сообщения (помечены символом сети)"
+            "value" : "объединяет соседние mesh-острова через интернет: то, что ты говоришь в mesh-канале, доходит и до людей в твоём районе за пределами радиуса радиосвязи, а их сообщения появляются здесь с пометкой символом сети"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "dina publika mesh-meddelanden når via internet även bitchat-användare utom radioräckvidd i ditt område, och du ser deras (markerade med en nätverkssymbol)"
+            "value" : "kopplar ihop närliggande mesh-öar via internet: det du säger i mesh-kanalen når även personer i ditt område utom radioräckvidd, och deras meddelanden visas här markerade med nätverkssymbolen"
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "உங்கள் பொது mesh செய்திகள் இணையம் வழியாக உங்கள் பகுதியில் ரேடியோ வரம்புக்கு அப்பாலுள்ள bitchat பயனர்களையும் சென்றடைகின்றன, அவர்களுடையதையும் நீங்கள் காண்கிறீர்கள் (நெட்வொர்க் சின்னத்துடன் குறிக்கப்பட்டவை)"
+            "value" : "அருகிலுள்ள mesh தீவுகளை இணையம் வழியாக இணைக்கிறது: mesh சேனலில் நீங்கள் சொல்வது உங்கள் பகுதியில் ரேடியோ வரம்புக்கு அப்பாலுள்ளவர்களையும் சென்றடையும், அவர்களின் செய்திகள் நெட்வொர்க் சின்னத்துடன் இங்கே தோன்றும்"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ข้อความ mesh สาธารณะของคุณยังส่งผ่านอินเทอร์เน็ตไปถึงผู้ใช้ bitchat ที่อยู่นอกระยะวิทยุในพื้นที่ของคุณ และคุณก็เห็นข้อความของพวกเขาด้วย (มีสัญลักษณ์เครือข่ายกำกับ)"
+            "value" : "เชื่อมเกาะ mesh ที่อยู่ใกล้กันผ่านอินเทอร์เน็ต: สิ่งที่คุณพูดในช่อง mesh ยังไปถึงผู้คนในพื้นที่ของคุณที่อยู่นอกระยะวิทยุ และข้อความของพวกเขาจะปรากฏที่นี่พร้อมสัญลักษณ์เครือข่ายกำกับ"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "herkese açık mesh mesajların internet üzerinden bölgendeki telsiz menzili dışındaki bitchat kullanıcılarına da ulaşır, onlarınkini de görürsün (ağ simgesiyle işaretli)"
+            "value" : "yakındaki mesh adalarını internet üzerinden birleştirir: mesh kanalında söylediklerin bölgendeki telsiz menzili dışındaki kişilere de ulaşır ve onların mesajları burada ağ simgesiyle işaretli olarak görünür"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "твої публічні mesh-повідомлення через інтернет доходять і до користувачів bitchat поза радіусом радіозв'язку у твоєму районі, а ти бачиш їхні (позначені символом мережі)"
+            "value" : "об'єднує сусідні mesh-острови через інтернет: те, що ти кажеш у mesh-каналі, доходить і до людей у твоєму районі поза радіусом радіозв'язку, а їхні повідомлення з'являються тут із позначкою символом мережі"
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "آپ کے عوامی mesh پیغامات انٹرنیٹ کے ذریعے آپ کے علاقے میں ریڈیو رینج سے باہر bitchat صارفین تک بھی پہنچتے ہیں، اور آپ ان کے پیغامات بھی دیکھتے ہیں (نیٹ ورک علامت سے نشان زد)"
+            "value" : "قریبی mesh جزیروں کو انٹرنیٹ کے ذریعے جوڑتا ہے: mesh چینل میں آپ جو کہتے ہیں وہ آپ کے علاقے میں ریڈیو رینج سے باہر لوگوں تک بھی پہنچتا ہے، اور ان کے پیغامات یہاں نیٹ ورک علامت کے ساتھ نظر آتے ہیں"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tin nhắn mesh công khai của bạn cũng đến được người dùng bitchat ngoài phạm vi sóng trong khu vực qua internet, và bạn cũng thấy tin nhắn của họ (đánh dấu bằng ký hiệu mạng)"
+            "value" : "nối các đảo mesh gần nhau qua internet: những gì bạn nói trong kênh mesh cũng đến được mọi người trong khu vực ngoài phạm vi sóng, và tin nhắn của họ hiện ở đây kèm ký hiệu mạng"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "你的公开 mesh 消息也会通过互联网送达本地区无线电范围之外的 bitchat 用户，你也能看到他们的消息（带网络符号标记）"
+            "value" : "通过互联网连接附近的 mesh 孤岛：你在 mesh 频道说的话也会送达本地区无线电范围之外的人，他们的消息会带网络符号显示在这里"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "你的公開 mesh 訊息也會透過網際網路送達本地區無線電範圍之外的 bitchat 使用者，你也能看到他們的訊息（帶網路符號標記）"
+            "value" : "透過網際網路連接附近的 mesh 孤島：你在 mesh 頻道說的話也會送達本地區無線電範圍之外的人，他們的訊息會帶網路符號顯示在這裡"
           }
         }
       }
@@ -11477,6 +11477,186 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "危險區域"
+          }
+        }
+      }
+    },
+    "app_info.settings.gateway.subtitle" : {
+      "comment" : "Subtitle explaining what the internet gateway toggle does",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يشارك اتصالك بالإنترنت مع شبكة mesh من حولك، ناقلًا حركة قنوات الموقع والجسر للهواتف التي لا تملك اتصالًا"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "আপনার চারপাশের মেশের সঙ্গে আপনার ইন্টারনেট সংযোগ ভাগ করে, ইন্টারনেটবিহীন ফোনের জন্য লোকেশন-চ্যানেল ও ব্রিজের ট্র্যাফিক বহন করে"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "teilt deine internetverbindung mit dem mesh um dich herum und trägt standortkanal- und brücken-verkehr für handys ohne eigene verbindung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "shares your internet connection with the mesh around you, carrying location-channel and bridge traffic for phones that have none"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "comparte tu conexión a internet con el mesh a tu alrededor, llevando el tráfico de canales de ubicación y del puente para teléfonos que no tienen conexión"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ibinabahagi ang iyong koneksyon sa internet sa mesh sa paligid mo, dinadala ang trapiko ng mga location channel at ng bridge para sa mga teleponong walang koneksyon"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "partage ta connexion internet avec le mesh autour de toi, en acheminant le trafic des canaux de localisation et du pont pour les téléphones qui n'en ont pas"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "משתף את חיבור האינטרנט שלך עם ה-mesh סביבך, ומעביר תעבורת ערוצי מיקום וגשר עבור טלפונים שאין להם חיבור"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "आपके आसपास के मेश के साथ आपका इंटरनेट कनेक्शन साझा करता है, बिना इंटरनेट वाले फोनों के लिए लोकेशन-चैनल और ब्रिज का ट्रैफ़िक पहुँचाता है"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "membagikan koneksi internetmu dengan mesh di sekitarmu, membawa lalu lintas kanal lokasi dan jembatan untuk ponsel yang tidak punya koneksi"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "condivide la tua connessione internet con la mesh intorno a te, trasportando il traffico dei canali di posizione e del ponte per i telefoni che non ne hanno"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "周囲のmeshとインターネット接続を共有し、接続を持たない端末のために位置チャンネルとブリッジの通信を運びます"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "주변 mesh와 인터넷 연결을 공유하여, 연결이 없는 휴대폰을 위해 위치 채널과 브리지 트래픽을 전달합니다"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "berkongsi sambungan internetmu dengan mesh di sekelilingmu, membawa trafik kanal lokasi dan jambatan untuk telefon yang tiada sambungan"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "तिम्रो वरपरको mesh सँग तिम्रो इन्टरनेट जडान साझेदारी गर्छ, इन्टरनेट नभएका फोनहरूका लागि स्थान-च्यानल र पुलको ट्राफिक बोक्छ"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "deelt je internetverbinding met de mesh om je heen en draagt locatiekanaal- en brugverkeer voor telefoons die geen verbinding hebben"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "udostępnia twoje połączenie internetowe sieci mesh wokół ciebie, przenosząc ruch kanałów lokalizacji i mostu dla telefonów, które go nie mają"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "partilha a tua ligação à internet com a mesh à tua volta, transportando o tráfego dos canais de localização e da ponte para telemóveis que não têm ligação"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "compartilha sua conexão de internet com o mesh ao seu redor, levando o tráfego dos canais de localização e da ponte para celulares que não têm conexão"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "раздаёт твоё интернет-соединение mesh-сети вокруг тебя, перенося трафик каналов местоположения и моста для телефонов без связи"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "delar din internetanslutning med mesh omkring dig och bär trafik för platskanaler och bryggan åt telefoner som saknar anslutning"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "உங்களைச் சுற்றியுள்ள mesh உடன் உங்கள் இணைய இணைப்பைப் பகிர்ந்து, இணைப்பு இல்லாத போன்களுக்காக இருப்பிட-சேனல் மற்றும் பாலத்தின் போக்குவரத்தைச் சுமக்கிறது"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "แชร์การเชื่อมต่ออินเทอร์เน็ตของคุณกับ mesh รอบตัว โดยส่งต่อทราฟฟิกของช่องตามตำแหน่งและบริดจ์ให้โทรศัพท์ที่ไม่มีอินเทอร์เน็ต"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "internet bağlantını çevrendeki mesh ile paylaşır, bağlantısı olmayan telefonlar için konum kanalı ve köprü trafiğini taşır"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ділиться твоїм інтернет-з'єднанням з mesh навколо тебе, переносячи трафік каналів локації та мосту для телефонів без зв'язку"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "آپ کے ارد گرد کے mesh کے ساتھ آپ کا انٹرنیٹ کنکشن شیئر کرتا ہے، اور بغیر انٹرنیٹ والے فونز کے لیے لوکیشن چینل اور پل کی ٹریفک پہنچاتا ہے"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "chia sẻ kết nối internet của bạn với mesh xung quanh, chuyển lưu lượng kênh vị trí và cầu nối cho những điện thoại không có kết nối"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "与你周围的 mesh 共享你的互联网连接，为没有网络的手机传送位置频道和桥接流量"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "與你周圍的 mesh 分享你的網際網路連線，為沒有網路的手機傳送位置頻道和橋接流量"
           }
         }
       }
@@ -28184,175 +28364,175 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "المستخدم محظور"
+            "value" : "هذا الشخص محظور"
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ব্যবহারকারী ব্লক করা"
+            "value" : "এই ব্যক্তি ব্লক করা"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "nutzer blockiert"
+            "value" : "diese person ist blockiert"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "user is blocked"
+            "value" : "this person is blocked"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "el usuario está bloqueado"
+            "value" : "esta persona está bloqueada"
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "na-block ang user"
+            "value" : "naka-block ang taong ito"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "utilisateur bloqué"
+            "value" : "cette personne est bloquée"
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "המשתמש חסום"
+            "value" : "האדם הזה חסום"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "उपयोगकर्ता ब्लॉक है"
+            "value" : "यह व्यक्ति ब्लॉक है"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "pengguna diblokir"
+            "value" : "orang ini diblokir"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "utente bloccato"
+            "value" : "questa persona è bloccata"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ユーザーをブロック中"
+            "value" : "この人をブロック中"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "차단된 사용자입니다"
+            "value" : "차단된 사람입니다"
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "pengguna diblokir"
+            "value" : "orang ini diblokir"
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "प्रयोगकर्ता ब्लक गरिएको"
+            "value" : "यो व्यक्ति ब्लक गरिएको छ"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "gebruiker is geblokkeerd"
+            "value" : "deze persoon is geblokkeerd"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "użytkownik zablokowany"
+            "value" : "ta osoba jest zablokowana"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "utilizador bloqueado"
+            "value" : "esta pessoa está bloqueada"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "usuário bloqueado"
+            "value" : "esta pessoa está bloqueada"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "пользователь заблокирован"
+            "value" : "этот человек заблокирован"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "användaren är blockerad"
+            "value" : "den här personen är blockerad"
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "பயனர் தடுக்கப்பட்டுள்ளார்"
+            "value" : "இந்த நபர் தடுக்கப்பட்டுள்ளார்"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ผู้ใช้ถูกบล็อก"
+            "value" : "คนนี้ถูกบล็อก"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "kullanıcı engellendi"
+            "value" : "bu kişi engellendi"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "користувач заблокований"
+            "value" : "цю людину заблоковано"
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "صارف بلاک ہے"
+            "value" : "یہ شخص بلاک ہے"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "người dùng bị chặn"
+            "value" : "người này bị chặn"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "用户已被屏蔽"
+            "value" : "此人已被屏蔽"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "使用者已被屏蔽"
+            "value" : "此人已被屏蔽"
           }
         }
       }
@@ -44057,186 +44237,6 @@
         }
       }
     },
-    "location_channels.gateway.subtitle" : {
-      "comment" : "Explanation under the internet gateway toggle",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "شارك إنترنتك مع أقران mesh القريبين لتصل رسائل geohash الخاصة بهم إلى الشبكة"
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "কাছাকাছি মেশ পিয়ারদের সঙ্গে আপনার ইন্টারনেট ভাগ করুন যাতে তাদের জিওহ্যাশ বার্তা নেটওয়ার্কে পৌঁছায়"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "teile dein internet mit nahen mesh-peers, damit ihre geohash-nachrichten das netzwerk erreichen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "share your internet with nearby mesh peers so their geohash messages reach the network"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "comparte tu internet con peers cercanos del mesh para que sus mensajes geohash lleguen a la red"
-          }
-        },
-        "fil" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ibahagi ang iyong internet sa mga kalapit na mesh peer para makarating sa network ang kanilang mga geohash na mensahe"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "partage ton internet avec les pairs mesh à proximité pour que leurs messages geohash atteignent le réseau"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "שתף את האינטרנט שלך עם עמיתי mesh קרובים כדי שהודעות ה-geohash שלהם יגיעו לרשת"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "अपना इंटरनेट आसपास के मेश पीयरों के साथ साझा करें ताकि उनके जियोहैश संदेश नेटवर्क तक पहुँचें"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "bagikan internetmu ke peer mesh terdekat agar pesan geohash mereka sampai ke jaringan"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "condividi il tuo internet con i peer mesh vicini così i loro messaggi geohash raggiungono la rete"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "近くのmeshピアとインターネットを共有して、そのgeohashメッセージをネットワークに届けます"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "근처 mesh 피어와 인터넷을 공유하여 그들의 geohash 메시지가 네트워크에 도달하도록 합니다"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "kongsi internetmu dengan peer mesh berdekatan supaya pesan geohash mereka sampai ke rangkaian"
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "नजिकका mesh सहकर्मीसँग तिम्रो इन्टरनेट साझेदारी गर ताकि उनीहरूका geohash सन्देश नेटवर्कसम्म पुगून्"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "deel je internet met mesh-peers in de buurt zodat hun geohash-berichten het netwerk bereiken"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "udostępnij internet pobliskim peerom mesh, aby ich wiadomości geohash docierały do sieci"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "partilha a tua internet com pares mesh próximos para que as mensagens geohash deles cheguem à rede"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "compartilhe sua internet com pares do mesh por perto para que as mensagens geohash deles cheguem à rede"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "раздай интернет ближайшим mesh-пирам, чтобы их geohash-сообщения дошли до сети"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "dela ditt internet med mesh-peers i närheten så att deras geohash-meddelanden når nätverket"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "உங்கள் இணையத்தை அருகிலுள்ள mesh peer-களுடன் பகிர்ந்து அவர்களின் geohash செய்திகள் நெட்வொர்க்கை அடையச் செய்யவும்"
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "แชร์อินเทอร์เน็ตของคุณกับเพียร์ mesh ที่อยู่ใกล้เพื่อให้ข้อความ geohash ของพวกเขาไปถึงเครือข่าย"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "geohash mesajlarının ağa ulaşması için internetini yakındaki mesh eşleriyle paylaş"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "поділися інтернетом з ближніми пірами mesh, щоб їхні повідомлення geohash досягали мережі"
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "قریبی mesh ہم منصبوں کے ساتھ اپنا انٹرنیٹ شیئر کریں تاکہ ان کے geohash پیغامات نیٹ ورک تک پہنچیں"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "chia sẻ internet của bạn với các nút mesh gần đó để tin nhắn geohash của họ đến được mạng"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "与附近 mesh 同伴共享你的互联网，让他们的 geohash 消息能到达网络"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "與附近的 mesh 同伴分享你的網際網路，讓他們的 geohash 訊息能傳到網路上"
-          }
-        }
-      }
-    },
     "location_channels.gateway.title" : {
       "comment" : "Title for the internet gateway toggle in the location channels sheet",
       "extractionState" : "manual",
@@ -44413,6 +44413,186 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "網際網路閘道"
+          }
+        }
+      }
+    },
+    "location_channels.grant_to_find" : {
+      "comment" : "Hint shown in the channel list instead of a loading spinner when location permission is missing",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "امنح إذن الموقع للعثور على القنوات القريبة"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "কাছাকাছি চ্যানেল খুঁজতে অবস্থানের অনুমতি দিন"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "standortzugriff erlauben, um kanäle in der nähe zu finden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "grant location access to find nearby channels"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "concede acceso a la ubicación para encontrar canales cercanos"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "payagan ang access sa lokasyon para makahanap ng mga kalapit na channel"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "autorisez l'accès à la position pour trouver les canaux à proximité"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אפשרו גישה למיקום כדי למצוא ערוצים בקרבת מקום"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "आस-पास के चैनल खोजने के लिए स्थान की अनुमति दें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "izinkan akses lokasi untuk menemukan channel terdekat"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "consenti l'accesso alla posizione per trovare i canali vicini"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "近くのチャンネルを見つけるには位置情報へのアクセスを許可してください"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "주변 채널을 찾으려면 위치 접근을 허용하세요"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "benarkan akses lokasi untuk mencari saluran berdekatan"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "नजिकैका च्यानलहरू फेला पार्न स्थान पहुँच दिनुहोस्"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "geef locatietoegang om kanalen in de buurt te vinden"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "przyznaj dostęp do lokalizacji, aby znaleźć pobliskie kanały"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "conceda acesso à localização para encontrar canais próximos"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "conceda acesso à localização para encontrar canais próximos"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "разрешите доступ к геопозиции, чтобы найти каналы поблизости"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ge platsåtkomst för att hitta kanaler i närheten"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "அருகிலுள்ள சேனல்களைக் கண்டறிய இருப்பிட அணுகலை வழங்கவும்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "อนุญาตการเข้าถึงตำแหน่งเพื่อค้นหาช่องใกล้เคียง"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yakındaki kanalları bulmak için konum erişimine izin verin"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "надайте доступ до геолокації, щоб знайти канали поблизу"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "قریبی چینلز تلاش کرنے کے لیے مقام تک رسائی دیں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cấp quyền truy cập vị trí để tìm các kênh gần đây"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "授予位置权限以查找附近的频道"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "授予位置權限以尋找附近的頻道"
           }
         }
       }
