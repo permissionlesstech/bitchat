@@ -33,7 +33,7 @@ struct ContentHeaderView: View {
     /// The bridged-people count belongs to the mesh channel only.
     private var showBridgedPeerCount: Bool {
         if case .location = locationChannelsModel.selectedChannel { return false }
-        return bridgeService.isEnabled && bridgeService.bridgedPeerCount > 0
+        return bridgeService.bridgedPeerCount > 0
     }
 
     var body: some View {
@@ -106,8 +106,9 @@ struct ContentHeaderView: View {
                     return peerListModel.visibleGeohashPeerCount
                 }
                 // One number for the whole room: radio-reachable peers plus
-                // people across the bridge. The people sheet breaks it down.
-                return countAndColor.0 + (bridgeService.isEnabled ? bridgeService.bridgedPeerCount : 0)
+                // people across the bridge (visible via carriers even while
+                // this device's own bridge is off). The sheet breaks it down.
+                return countAndColor.0 + bridgeService.bridgedPeerCount
             }()
 
             HStack(spacing: 2) {

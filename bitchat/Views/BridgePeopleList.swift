@@ -28,6 +28,8 @@ struct PeopleSectionHeader: View {
         .padding(.horizontal)
         .padding(.top, 12)
         .padding(.bottom, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
     }
 }
 
@@ -45,7 +47,11 @@ struct BridgePeopleList: View {
     }
 
     var body: some View {
-        if bridgeService.isEnabled && !bridgeService.bridgedParticipants.isEmpty {
+        // Not gated on the toggle: bridged people arrive over passive radio
+        // (a serving neighbor's carriers) even while this device's own
+        // bridge is off — whoever is visible in the timeline belongs in the
+        // sheet.
+        if !bridgeService.bridgedParticipants.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 PeopleSectionHeader(
                     icon: "network",
