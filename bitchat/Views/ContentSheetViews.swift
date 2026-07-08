@@ -174,32 +174,13 @@ private struct ContentPeopleListView: View {
                     }
                 }
 
-                let activeText = String.localizedStringWithFormat(
-                    String(localized: "%@ active", comment: "Count of active users in the people sheet"),
-                    "\(peopleSheetActiveCount)"
-                )
-
-                if let subtitle = peopleSheetSubtitle {
-                    let subtitleColor: Color = {
-                        switch locationChannelsModel.selectedChannel {
-                        case .mesh:
-                            return palette.accentBlue
-                        case .location:
-                            return palette.locationAccent
-                        }
-                    }()
-
-                    HStack(spacing: 6) {
-                        Text(subtitle)
-                            .foregroundColor(subtitleColor)
-                        Text(activeText)
-                            .foregroundColor(palette.secondary)
-                    }
-                    .bitchatFont(size: 12)
-                } else {
-                    Text(activeText)
+                // The mesh sheet titles its sections inline (#mesh / across
+                // the bridge / groups) — no subtitle or count up here.
+                // Location channels keep their geohash subtitle.
+                if case .location(let channel) = locationChannelsModel.selectedChannel {
+                    Text(verbatim: "#\(channel.geohash.lowercased())")
                         .bitchatFont(size: 12)
-                        .foregroundColor(palette.secondary)
+                        .foregroundColor(palette.locationAccent)
                 }
             }
             .padding(.horizontal, 16)
@@ -216,6 +197,11 @@ private struct ContentPeopleListView: View {
                             }
                         )
                     } else {
+                        PeopleSectionHeader(
+                            icon: "antenna.radiowaves.left.and.right",
+                            iconColor: palette.accentBlue,
+                            title: "#mesh"
+                        )
                         MeshPeerList(
                             onTapPeer: { peerID in
                                 peerListModel.startConversation(with: peerID)
@@ -263,23 +249,6 @@ private extension ContentPeopleListView {
         String(localized: "content.header.people", comment: "Title for the people list sheet").lowercased()
     }
 
-    var peopleSheetSubtitle: String? {
-        switch locationChannelsModel.selectedChannel {
-        case .mesh:
-            return "#mesh"
-        case .location(let channel):
-            return "#\(channel.geohash.lowercased())"
-        }
-    }
-
-    var peopleSheetActiveCount: Int {
-        switch locationChannelsModel.selectedChannel {
-        case .mesh:
-            return peerListModel.reachableMeshPeerCount
-        case .location:
-            return peerListModel.visibleGeohashPeerCount
-        }
-    }
 }
 
 private struct ContentPrivateChatSheetView: View {

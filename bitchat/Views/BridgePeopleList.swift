@@ -8,6 +8,29 @@
 
 import SwiftUI
 
+/// Shared section header for the people sheet: a small glyph + label pair,
+/// identical shape for every section (#mesh, across the bridge, …).
+struct PeopleSectionHeader: View {
+    @ThemedPalette private var palette
+    let icon: String
+    let iconColor: Color
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.bitchatSystem(size: 10))
+                .foregroundColor(iconColor)
+            Text(verbatim: title)
+                .bitchatFont(size: 11, weight: .semibold)
+                .foregroundColor(palette.secondary)
+        }
+        .padding(.horizontal)
+        .padding(.top, 12)
+        .padding(.bottom, 4)
+    }
+}
+
 /// The people-sheet section for participants visible across the mesh bridge:
 /// same place, beyond radio range. Display-only in v1 — bridged identities
 /// are per-cell rendezvous keys with no DM route yet.
@@ -24,17 +47,11 @@ struct BridgePeopleList: View {
     var body: some View {
         if bridgeService.isEnabled && !bridgeService.bridgedParticipants.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 6) {
-                    Image(systemName: "network")
-                        .font(.bitchatSystem(size: 10))
-                        .foregroundColor(Color.cyan.opacity(0.9))
-                    Text(verbatim: Strings.sectionTitle)
-                        .bitchatFont(size: 11, weight: .semibold)
-                        .foregroundColor(palette.secondary)
-                }
-                .padding(.horizontal)
-                .padding(.top, 12)
-                .padding(.bottom, 4)
+                PeopleSectionHeader(
+                    icon: "network",
+                    iconColor: Color.cyan.opacity(0.9),
+                    title: Strings.sectionTitle
+                )
 
                 ForEach(bridgeService.bridgedParticipants) { person in
                     HStack(spacing: 4) {
