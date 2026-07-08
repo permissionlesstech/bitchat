@@ -15,7 +15,7 @@ final class NostrIdentityBridge {
 
     private let keychain: KeychainManagerProtocol
 
-    init(keychain: KeychainManagerProtocol = KeychainManager()) {
+    init(keychain: KeychainManagerProtocol = KeychainManager.makeDefault()) {
         self.keychain = keychain
     }
     
@@ -49,29 +49,10 @@ final class NostrIdentityBridge {
     
     /// Clear all Nostr identity associations and current identity
     func clearAllAssociations() {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: keychainService,
-            kSecMatchLimit as String: kSecMatchLimitAll,
-            kSecReturnAttributes as String: true
-        ]
-
-        var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        if status == errSecSuccess, let items = result as? [[String: Any]] {
-            for item in items {
-                var deleteQuery: [String: Any] = [
-                    kSecClass as String: kSecClassGenericPassword,
-                    kSecAttrService as String: keychainService
-                ]
-                if let account = item[kSecAttrAccount as String] as? String {
-                    deleteQuery[kSecAttrAccount as String] = account
-                }
-                SecItemDelete(deleteQuery as CFDictionary)
-            }
-        } else if status == errSecItemNotFound {
-            // nothing persisted; no action needed
-        }
+        // Must go through the injected keychain, not raw SecItem calls:
+        // under test that keychain is in-memory, and a direct delete here
+        // would wipe the developer's real Nostr identity on every test run.
+        keychain.deleteAll(service: keychainService)
 
         deviceSeedCache = nil
         // Also drop the in-memory derived per-geohash identities. These hold the

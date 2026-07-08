@@ -85,6 +85,10 @@ final class MockKeychain: KeychainManagerProtocol {
     func delete(key: String, service: String) {
         serviceStorage[service]?.removeValue(forKey: key)
     }
+
+    func deleteAll(service: String) {
+        serviceStorage.removeValue(forKey: service)
+    }
 }
 
 /// Typealias for backwards compatibility with tests using MockKeychainHelper
@@ -197,5 +201,9 @@ final class TrackingMockKeychain: KeychainManagerProtocol {
 
     func delete(key: String, service: String) {
         serviceStorage[service]?.removeValue(forKey: key)
+    }
+
+    func deleteAll(service: String) {
+        serviceStorage.removeValue(forKey: service)
     }
 }
