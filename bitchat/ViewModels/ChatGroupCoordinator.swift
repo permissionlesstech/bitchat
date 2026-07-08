@@ -336,7 +336,12 @@ final class ChatGroupCoordinator {
         guard !content.isEmpty, content.count <= InputValidator.Limits.maxMessageLength else { return }
         guard let group = context.groupStore.group(for: groupPeerID),
               let key = context.groupStore.key(forGroupID: group.groupID) else {
-            context.addSystemMessage(String(localized: "system.group.unknown", comment: "System message when sending into an unknown group"))
+            // The person is inside the group thread; the error belongs there,
+            // not on the active public timeline.
+            context.addLocalPrivateSystemMessage(
+                String(localized: "system.group.unknown", comment: "System message when sending into an unknown group"),
+                to: groupPeerID
+            )
             return
         }
 

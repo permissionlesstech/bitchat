@@ -347,20 +347,10 @@ final class ChatPeerIdentityCoordinator {
             return
         }
 
-        if let peer = context.unifiedPeer(for: peerID),
-           peer.isFavorite && !peer.theyFavoritedUs && !peer.isConnected {
-            context.addSystemMessage(
-                String(
-                    format: String(
-                        localized: "system.chat.requires_favorite",
-                        comment: "System message when mutual favorite requirement blocks chat"
-                    ),
-                    locale: .current,
-                    peerNickname
-                )
-            )
-            return
-        }
+        // No mutual-favorite gate: store-and-forward (couriers, bridge drops,
+        // retained outbox) only needs the recipient's noise key, so an
+        // offline non-mutual favorite is still worth writing to — the router
+        // decides what delivery looks like, not chat entry.
 
         _ = context.consolidatePrivateMessages(for: peerID, peerNickname: peerNickname)
 
@@ -553,7 +543,8 @@ final class ChatPeerIdentityCoordinator {
            !favorite.peerNickname.isEmpty {
             return favorite.peerNickname
         }
-        return "user"
+        // "anon" matches the default-nickname convention; "user" is banned copy.
+        return "anon"
     }
 }
 

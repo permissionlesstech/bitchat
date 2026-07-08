@@ -234,6 +234,12 @@ private final class MockChatPrivateConversationContext: ChatPrivateConversationC
         meshOnlySystemMessages.append(content)
     }
 
+    private(set) var privateSystemMessages: [(content: String, peerID: PeerID)] = []
+
+    func addLocalPrivateSystemMessage(_ content: String, to peerID: PeerID) {
+        privateSystemMessages.append((content, peerID))
+    }
+
     static let dummyIdentity = NostrIdentity(
         privateKey: Data(repeating: 0x11, count: 32),
         publicKey: Data(repeating: 0x22, count: 32),
@@ -680,19 +686,21 @@ struct ChatPrivateConversationCoordinatorContextTests {
         #expect(context.systemMessages.isEmpty)
     }
 
+    /// Field-found: pre-judging reachability here marked the message failed
+    /// without ever routing it, so the router's retained outbox, courier
+    /// deposits, and bridge drops never got a chance. A fully unreachable
+    /// non-favorite must still be routed and stay "sending" (the router's
+    /// callbacks later move it to carried/delivered or expire it as failed).
     @Test @MainActor
-    func sendPrivateMessage_failsWhenOfflineWithoutMutualFavorite() async {
+    func sendPrivateMessage_routesAndStaysSendingWhenOfflineWithoutMutualFavorite() async {
         let context = MockChatPrivateConversationContext()
         let coordinator = ChatPrivateConversationCoordinator(context: context)
         let peerID = PeerID(hexData: Data(repeating: 0xCD, count: 32))
 
         coordinator.sendPrivateMessage("hello?", to: peerID)
 
-        #expect(context.routedPrivateMessages.isEmpty)
-        #expect(context.systemMessages.count == 1)
-        guard case .failed = context.privateChats[peerID]?.first?.deliveryStatus else {
-            Issue.record("expected .failed delivery status")
-            return
-        }
+        #expect(context.routedPrivateMessages.map(\.content) == ["hello?"])
+        #expect(context.privateChats[peerID]?.first?.deliveryStatus == .sending)
+        #expect(context.systemMessages.isEmpty)
     }
 }

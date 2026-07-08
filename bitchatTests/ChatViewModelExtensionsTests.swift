@@ -71,8 +71,11 @@ struct ChatViewModelPrivateChatExtensionTests {
         // Check MockTransport implementation... it might need update or verification
     }
 
+    /// An unreachable recipient no longer means instant failure: the message
+    /// is routed anyway so the router's outbox/courier/bridge machinery can
+    /// deliver it, and it stays "sending" until a router callback resolves it.
     @Test @MainActor
-    func sendPrivateMessage_unreachable_setsFailedStatus() async {
+    func sendPrivateMessage_unreachable_staysSendingForStoreAndForward() async {
         let (viewModel, _) = makeTestableViewModel()
         let validHex = "0102030405060708090a0b0c0d0e0f100102030405060708090a0b0c0d0e0f10"
         let peerID = PeerID(str: validHex)
@@ -80,11 +83,7 @@ struct ChatViewModelPrivateChatExtensionTests {
         viewModel.sendPrivateMessage("Hello", to: peerID)
 
         #expect(viewModel.privateChats[peerID]?.count == 1)
-        let status = viewModel.privateChats[peerID]?.last?.deliveryStatus
-        #expect({
-            if case .failed = status { return true }
-            return false
-        }())
+        #expect(viewModel.privateChats[peerID]?.last?.deliveryStatus == .sending)
     }
     
     @Test @MainActor
@@ -780,8 +779,10 @@ struct ChatViewModelGeoDMTests {
         #expect(isFailed(status: viewModel.privateChats[convKey]?.last?.deliveryStatus))
     }
 
+    /// The blocked notice belongs in the DM thread the person is typing in,
+    /// not on the active location-channel timeline.
     @Test @MainActor
-    func sendGeohashDM_blockedRecipient_marksFailedAndAddsSystemMessage() async {
+    func sendGeohashDM_blockedRecipient_marksFailedAndAddsSystemMessageInThread() async {
         let (viewModel, _) = makeTestableViewModel()
         let geohash = "u4pruydq"
         let recipientHex = "0000000000000000000000000000000000000000000000000000000000000003"
@@ -793,9 +794,11 @@ struct ChatViewModelGeoDMTests {
 
         viewModel.sendGeohashDM("hello", to: convKey)
 
-        #expect(viewModel.privateChats[convKey]?.count == 1)
-        #expect(isFailed(status: viewModel.privateChats[convKey]?.last?.deliveryStatus))
-        #expect(viewModel.messages.contains(where: { $0.sender == "system" }))
+        let thread = viewModel.privateChats[convKey] ?? []
+        #expect(thread.count == 2)
+        #expect(isFailed(status: thread.first?.deliveryStatus))
+        #expect(thread.last?.sender == "system")
+        #expect(!viewModel.messages.contains(where: { $0.sender == "system" }))
     }
 
     @Test @MainActor

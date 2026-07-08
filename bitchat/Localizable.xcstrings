@@ -27498,7 +27498,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "desbloquear a un usuario"
+            "value" : "desbloquear a una persona"
           }
         },
         "fil" : {
@@ -30151,185 +30151,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "未知收件人"
-          }
-        }
-      }
-    },
-    "content.delivery.reason.unreachable" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "القرين غير متاح"
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "পিয়ার পৌঁছানো যাচ্ছে না"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "peer nicht erreichbar"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "peer not reachable"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "el destinatario no es alcanzable"
-          }
-        },
-        "fil" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "hindi maabot ang peer"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "pair injoignable"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "עמית לא זמין"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "पीयर पहुंच योग्य नहीं"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "peer tidak dapat dijangkau"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "peer irraggiungibile"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ピアに到達できません"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "피어에 연결할 수 없습니다"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "peer tidak dapat dijangkau"
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "पीयर पहुँचयोग्य छैन"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "peer onbereikbaar"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "peer nieosiągalny"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "par inacessível"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "par inalcançável"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "пир недостижим"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "peer ej nåbar"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "peer அணுக முடியவில்லை"
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ติดต่อเพียร์ไม่ได้"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "eşe ulaşılamıyor"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "пір недосяжний"
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "peer تک رسائی نہیں"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "không liên lạc được với nút"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "同伴不可达"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "同伴不可達"
           }
         }
       }
@@ -58664,7 +58485,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "no se puede iniciar un chat con %@: el usuario está bloqueado."
+            "value" : "no se puede iniciar un chat con %@: esta persona está bloqueada."
           }
         },
         "fil" : {
@@ -58676,7 +58497,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "impossible de démarrer un chat avec %@ : utilisateur bloqué."
+            "value" : "impossible de démarrer un chat avec %@ : cette personne est bloquée."
           }
         },
         "he" : {
@@ -58700,7 +58521,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "impossibile avviare una chat con %@: utente bloccato."
+            "value" : "impossibile avviare una chat con %@: questa persona è bloccata."
           }
         },
         "ja" : {
@@ -58748,7 +58569,7 @@
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "não é possível iniciar chat com %@: usuário bloqueado."
+            "value" : "não é possível iniciar chat com %@: a pessoa está bloqueada."
           }
         },
         "ru" : {
@@ -58813,185 +58634,6 @@
         }
       }
     },
-    "system.chat.requires_favorite" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "لا يمكن بدء دردشة مع %@: يجب أن تكونا مفضلين متبادلين للتشغيل بدون اتصال."
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@-এর সঙ্গে চ্যাট শুরু করা যায় না: অফলাইন মেসেজিংয়ের জন্য পারস্পরিক প্রিয় দরকার।"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "chat mit %@ kann nicht gestartet werden: gegenseitige favoriten für offline nötig."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "cannot start chat with %@: mutual favorite required for offline messaging."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "no se puede iniciar un chat con %@: necesitas ser favoritos mutuos para mensajería sin conexión."
-          }
-        },
-        "fil" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "hindi makapagsimula ng chat kay %@: kailangan ang mutual na paborito para sa offline na mensahe."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "impossible de démarrer un chat avec %@ : favoris mutuels requis pour le hors ligne."
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "לא ניתן להתחיל צ'אט עם %@: נדרשים מועדפים הדדיים לאופליין."
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ के साथ चैट शुरू नहीं कर सकते: ऑफ़लाइन मैसेजिंग के लिए आपसी पसंदीदा आवश्यक है।"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tidak bisa mulai chat dengan %@: butuh favorit bersama untuk offline."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "impossibile avviare una chat con %@: servono preferiti reciproci per l'offline."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@とはチャットできません: オフラインには相互のお気に入りが必要です。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@와 채팅을 시작할 수 없습니다: 오프라인 메시지를 보내려면 서로 즐겨찾기에 추가해야 합니다."
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tidak bisa mulai chat dengan %@: butuh favorit bersama untuk offline."
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ सँग च्याट सुरु गर्न मिलेन: अफलाइनका लागि दुवै मनपर्ने हुनुपर्छ"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "kan chat met %@ niet starten: wederzijds favoriet vereist voor offline berichten."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "nie można rozpocząć czatu z %@: potrzebne wzajemne ulubione dla wiadomości offline."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "não é possível iniciar o chat com %@: precisam de ser favoritos mútuos para mensagens offline."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "não é possível iniciar chat com %@: vocês precisam ser favoritos mútuos para mensagens offline."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "нельзя начать чат с %@: нужны взаимные избранные для офлайна."
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "kan inte starta chatt med %@: ömsesidig favorit krävs för offline-meddelanden."
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ உடன் உரையாடல் தொடங்க முடியாது: ஆஃப்லைன் செய்திகளுக்கு இருபுறமும் பிரியப்பட்டவர்கள் ஆக வேண்டும்."
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ไม่สามารถเริ่มแชทกับ %@: ต้องเป็นรายการโปรดทั้งสองฝ่ายเพื่อใช้งานออฟไลน์"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ ile sohbet başlatılamıyor: çevrimdışı mesajlaşma için karşılıklı favori gerekiyor."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "не можна почати чат з %@: потрібне взаємне вибране для офлайна."
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ کے ساتھ چیٹ شروع نہیں کر سکتے: آفلائن پیغامات کیلئے باہمی پسندیدہ ہونا ضروری ہے۔"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "không thể bắt đầu chat với %@: cần yêu thích lẫn nhau để nhắn ngoại tuyến."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法与 %@ 开始聊天：离线消息需要互相关注。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法與 %@ 開始聊天：離線訊息需要互相關注。"
-          }
-        }
-      }
-    },
     "system.dm.blocked_generic" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -59022,7 +58664,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "no se puede enviar el mensaje: el usuario está bloqueado."
+            "value" : "no se puede enviar el mensaje: esta persona está bloqueada."
           }
         },
         "fil" : {
@@ -59034,7 +58676,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "envoi impossible : utilisateur bloqué."
+            "value" : "envoi impossible : cette personne est bloquée."
           }
         },
         "he" : {
@@ -59058,7 +58700,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "invio non riuscito: utente bloccato."
+            "value" : "invio non riuscito: questa persona è bloccata."
           }
         },
         "ja" : {
@@ -59106,7 +58748,7 @@
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "não foi possível enviar: usuário bloqueado."
+            "value" : "não foi possível enviar: a pessoa está bloqueada."
           }
         },
         "ru" : {
@@ -59201,7 +58843,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "no se puede enviar un mensaje a %@: el usuario está bloqueado."
+            "value" : "no se puede enviar un mensaje a %@: esta persona está bloqueada."
           }
         },
         "fil" : {
@@ -59213,7 +58855,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "impossible d'envoyer à %@ : utilisateur bloqué."
+            "value" : "impossible d'envoyer à %@ : cette personne est bloquée."
           }
         },
         "he" : {
@@ -59237,7 +58879,7 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "impossibile inviare a %@: utente bloccato."
+            "value" : "impossibile inviare a %@: questa persona è bloccata."
           }
         },
         "ja" : {
@@ -59285,7 +58927,7 @@
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "não é possível enviar mensagem para %@: usuário bloqueado."
+            "value" : "não é possível enviar mensagem para %@: a pessoa está bloqueada."
           }
         },
         "ru" : {
@@ -59346,185 +58988,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "無法向 %@ 發送：使用者已被屏蔽。"
-          }
-        }
-      }
-    },
-    "system.dm.unreachable" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "لا يمكن الإرسال إلى %@: المستلم غير متاح عبر mesh أو nostr."
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@-কে বার্তা পাঠানো যায় না - পিয়ার মেশ বা নোস্টরে পৌঁছানো যাচ্ছে না।"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "senden an %@ nicht möglich: empfänger über mesh oder nostr nicht erreichbar."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "cannot send message to %@ - peer is not reachable via mesh or nostr."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "no se puede enviar un mensaje a %@: el destinatario no es alcanzable por mesh ni Nostr."
-          }
-        },
-        "fil" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "hindi maipadala kay %@ - hindi maabot ang peer sa mesh o nostr."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "impossible d'envoyer à %@ : destinataire injoignable via mesh ou nostr."
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "אי אפשר לשלוח ל-%@: הנמען אינו נגיש דרך mesh או nostr."
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ को संदेश नहीं भेज सकते - पीयर मेश या नोस्ट्र पर पहुँच योग्य नहीं।"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tidak bisa mengirim ke %@: penerima tidak dapat dijangkau lewat mesh atau nostr."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "impossibile inviare a %@: destinatario irraggiungibile via mesh o nostr."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@に送れません: 受信者はmeshやnostrで到達できません。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@에게 메시지를 보낼 수 없습니다 - mesh 또는 nostr를 통해 피어에 연결할 수 없습니다."
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tidak bisa menghantar ke %@: penerima tidak dapat dijangkau lewat mesh atau nostr."
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ लाई पठाउन मिलेन: प्राप्तकर्ता mesh वा nostr बाट उपलब्ध छैन"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "kan geen bericht sturen naar %@ – peer niet bereikbaar via mesh of nostr."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "nie można wysłać do %@ – peer nieosiągalny przez mesh ani nostr."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "não é possível enviar mensagem a %@ - o par não está acessível por mesh ou Nostr."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "não é possível enviar mensagem para %@: destinatário inalcançável por mesh ou nostr."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "нельзя отправить %@: адресат недоступен через mesh или nostr."
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "kan inte skicka till %@ – peer nås inte via mesh eller nostr."
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ க்கு செய்தி அனுப்ப முடியவில்லை - peer mesh அல்லது nostr மூலமாக அணுக முடியவில்லை."
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ไม่สามารถส่งข้อความถึง %@ - ติดต่อเพียร์ผ่าน mesh หรือ nostr ไม่ได้"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@'a mesaj gönderilemiyor - eş mesh veya Nostr üzerinden ulaşılamıyor."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "неможливо надіслати %@: одержувач недосяжний через mesh або nostr."
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ کو پیغام نہیں بھیج سکتے - peer mesh یا nostr کے ذریعے دستیاب نہیں۔"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "không thể gửi tin cho %@ - nút không thể liên lạc qua mesh hoặc nostr."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法向 %@ 发送：对方无法通过 mesh 或 Nostr 到达。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法向 %@ 發送：對方無法透過 mesh 或 Nostr 到達。"
           }
         }
       }
