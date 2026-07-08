@@ -21,6 +21,7 @@ struct MeshEmptyStateView: View {
     var compact: Bool = false
 
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
+    @EnvironmentObject private var peerListModel: PeerListModel
     @ObservedObject private var activityTracker = GeohashChatActivityTracker.shared
     @ObservedObject private var sightingsTracker = MeshSightingsTracker.shared
 
@@ -64,10 +65,18 @@ struct MeshEmptyStateView: View {
 
     }
 
+    /// The radar means "searching for people": once anyone is connected or
+    /// reachable on the mesh, the search is over and the sweep goes away.
+    private var isSearchingForPeers: Bool {
+        peerListModel.connectedMeshPeerCount == 0 && peerListModel.reachableMeshPeerCount == 0
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if compact {
-                radarBlock
+                if isSearchingForPeers {
+                    radarBlock
+                }
                 if let conversation = nearbyConversation {
                     conversationHint(conversation)
                 }
@@ -83,9 +92,11 @@ struct MeshEmptyStateView: View {
 
                 // The radar centers in whatever space is left below the
                 // text — the flexible spacers split it evenly.
-                Spacer(minLength: 24)
-                radarBlock
-                Spacer(minLength: 12)
+                if isSearchingForPeers {
+                    Spacer(minLength: 24)
+                    radarBlock
+                    Spacer(minLength: 12)
+                }
             }
         }
         .frame(minHeight: compact ? 0 : fillHeight, alignment: .top)
