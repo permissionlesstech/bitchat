@@ -1247,6 +1247,9 @@ final class BLEService: NSObject {
                 guard let self = self else { return [:] }
                 return self.collectionsQueue.sync { self.peerRegistry.snapshotByID }
             },
+            verifyPacketSignature: { [weak self] packet, signingPublicKey in
+                self?.noiseService.verifyPacketSignature(packet, publicKey: signingPublicKey) ?? false
+            },
             signedSenderDisplayName: { [weak self] packet, peerID in
                 self?.signedSenderDisplayName(for: packet, from: peerID)
             },

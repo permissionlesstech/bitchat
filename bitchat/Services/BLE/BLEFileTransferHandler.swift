@@ -14,6 +14,8 @@ struct BLEFileTransferHandlerEnvironment {
     let localNickname: () -> String
     /// Snapshot of known peers keyed by ID (registry read).
     let peersSnapshot: () -> [PeerID: BLEPeerInfo]
+    /// Verifies a packet's signature against a candidate signing key (registry path).
+    let verifyPacketSignature: (_ packet: BitchatPacket, _ signingPublicKey: Data) -> Bool
     /// Resolves a display name from a verified packet signature for peers missing from the registry.
     let signedSenderDisplayName: (_ packet: BitchatPacket, _ peerID: PeerID) -> String?
     /// Tracks the broadcast file packet for gossip sync.
@@ -48,21 +50,22 @@ final class BLEFileTransferHandler {
         let env = environment
         if BLEFileTransferPolicy.isSelfEcho(packet: packet, from: peerID, localPeerID: env.localPeerID()) { return }
 
+        guard let deliveryPlan = BLEFileTransferPolicy.deliveryPlan(packet: packet, localPeerID: env.localPeerID()) else {
+            return
+        }
+
         let peersSnapshot = env.peersSnapshot()
-        guard let senderNickname = BLEPeerSenderDisplayName.resolveKnownPeer(
-            peerID: peerID,
-            localPeerID: env.localPeerID(),
-            localNickname: env.localNickname(),
+        guard let senderNickname = resolveSenderNickname(
+            packet: packet,
+            from: peerID,
+            isBroadcast: !deliveryPlan.isPrivateMessage,
             peers: peersSnapshot,
-            allowConnectedUnverified: true
-        ) ?? env.signedSenderDisplayName(packet, peerID) else {
+            env: env
+        ) else {
             SecureLogger.warning("🚫 Dropping file transfer from unverified or unknown peer \(peerID.id.prefix(8))…", category: .security)
             return
         }
 
-        guard let deliveryPlan = BLEFileTransferPolicy.deliveryPlan(packet: packet, localPeerID: env.localPeerID()) else {
-            return
-        }
         if deliveryPlan.shouldTrackForSync {
             env.trackPacketSeen(packet)
         }
@@ -119,5 +122,49 @@ final class BLEFileTransferHandler {
         SecureLogger.debug("📁 Stored incoming media from \(peerID.id.prefix(8))… -> \(destination.lastPathComponent)", category: .session)
 
         env.deliverMessage(message)
+    }
+
+    /// Resolves the authenticated display name for a file transfer's sender.
+    ///
+    /// Directed (private) transfers are addressed to us specifically and keep
+    /// the lenient connected-peer path. Broadcast transfers carry an
+    /// attacker-controllable `senderID` exactly like public messages and public
+    /// voice frames — registry membership alone is NOT proof of identity, so a
+    /// valid packet signature from the claimed sender is required before we
+    /// trust it. Without this, a peer that observed a public voice burst could
+    /// spoof a broadcast `voice_<burstID>.m4a` note under the talker's ID and
+    /// overwrite the signature-verified live bubble with attacker audio.
+    private func resolveSenderNickname(
+        packet: BitchatPacket,
+        from peerID: PeerID,
+        isBroadcast: Bool,
+        peers: [PeerID: BLEPeerInfo],
+        env: BLEFileTransferHandlerEnvironment
+    ) -> String? {
+        guard isBroadcast else {
+            return BLEPeerSenderDisplayName.resolveKnownPeer(
+                peerID: peerID,
+                localPeerID: env.localPeerID(),
+                localNickname: env.localNickname(),
+                peers: peers,
+                allowConnectedUnverified: true
+            ) ?? env.signedSenderDisplayName(packet, peerID)
+        }
+
+        // Verify against the signing key already in the (synchronously-updated)
+        // registry first; fall back to the persisted-identity signature lookup
+        // for peers not yet cached there (mirrors `BLEPublicMessageHandler`).
+        let registrySigningKey = peers[peerID]?.signingPublicKey
+        let verifiedViaRegistry = registrySigningKey.map { env.verifyPacketSignature(packet, $0) } ?? false
+        let signedDisplayName = verifiedViaRegistry ? nil : env.signedSenderDisplayName(packet, peerID)
+        guard verifiedViaRegistry || signedDisplayName != nil else { return nil }
+
+        return BLEPeerSenderDisplayName.resolveKnownPeer(
+            peerID: peerID,
+            localPeerID: env.localPeerID(),
+            localNickname: env.localNickname(),
+            peers: peers,
+            allowConnectedUnverified: false
+        ) ?? signedDisplayName
     }
 }
