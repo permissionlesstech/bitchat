@@ -474,12 +474,18 @@ private extension ChatViewModelBootstrapper {
             bleService?.setLocalBridgeGeohash(advertise ? BridgeService.shared.activeCell : nil)
             bleService?.setLocalCapability(.bridge, enabled: advertise)
         }
-        bridge.onEnabledChanged = { enabled in
+        bridge.onEnabledChanged = { [weak viewModel] enabled in
             updateAdvertisement()
             // One switch collapses further: the bridge toggle also drives
             // the geohash-channel gateway — bridging with internet means
             // sharing it with the mesh around you, full stop.
             GatewayService.shared.setEnabled(enabled)
+            // Flipping the switch is the user-initiated moment to ask for
+            // location if it was never asked; otherwise the bridge sits
+            // cell-less with only a settings caption explaining why.
+            if enabled, viewModel?.locationManager.permissionState == .notDetermined {
+                viewModel?.locationManager.enableLocationChannels()
+            }
         }
         bridge.onActiveCellChanged = { _ in updateAdvertisement() }
         // Align a persisted split state (e.g. gateway enabled back when it
@@ -490,6 +496,15 @@ private extension ChatViewModelBootstrapper {
 
         // Location fixes (or losing them) move the rendezvous cell.
         viewModel.locationManager.$availableChannels
+            .receive(on: DispatchQueue.main)
+            .sink { _ in BridgeService.shared.refreshRendezvous() }
+            .store(in: &viewModel.cancellables)
+        // The authorization callback lands asynchronously after launch; the
+        // bootstrap-time location request races it and silently no-ops, so
+        // re-enter when the permission state resolves (field bug: bridge
+        // stayed cell-less for a whole session).
+        viewModel.locationManager.$permissionState
+            .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .sink { _ in BridgeService.shared.refreshRendezvous() }
             .store(in: &viewModel.cancellables)

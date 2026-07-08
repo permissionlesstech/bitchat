@@ -241,7 +241,10 @@ final class BridgeService: ObservableObject {
             requestLocationFix?()
         }
         guard cell != activeCell else {
-            if isEnabled, activeCell != nil { armPresenceTimerIfNeeded() }
+            // The maintenance timer must run even cell-less: it is what
+            // retries the location fix (launch races the permission
+            // callback, so the first request can silently no-op).
+            if isEnabled { armPresenceTimerIfNeeded() }
             return
         }
         if activeCell != nil {
@@ -250,7 +253,10 @@ final class BridgeService: ObservableObject {
         }
         activeCell = cell
         onActiveCellChanged?(cell)
-        guard let cell else { return }
+        guard let cell else {
+            if isEnabled { armPresenceTimerIfNeeded() }
+            return
+        }
         // Own cell + neighbors: islands straddling a cell edge still meet.
         // Publishes go to the own cell only; symmetric because both sides
         // subscribe to each other's cell via the neighbor ring.
@@ -327,17 +333,24 @@ final class BridgeService: ObservableObject {
         publishToRelays?(event, cell)
     }
 
+    /// Maintenance heartbeat while bridging: presence, participant pruning,
+    /// and a location retry. Runs with or without a cell — the cell-less
+    /// case is exactly when the location retry matters.
     private func armPresenceTimerIfNeeded() {
-        guard isEnabled, activeCell != nil, !presenceTimerArmed else { return }
+        guard isEnabled, !presenceTimerArmed else { return }
         presenceTimerArmed = true
         let fire: @MainActor () -> Void = { [weak self] in
             guard let self else { return }
             self.presenceTimerArmed = false
             self.publishPresence()
             self.pruneParticipants()
-            // Piggyback a location refresh so a moving device migrates cells
-            // without depending on any other feature pumping location.
-            self.requestLocationFix?()
+            // Location refresh: migrates cells on a moving device and
+            // recovers a launch that raced the permission callback.
+            if self.activeCell == nil {
+                self.refreshRendezvous()
+            } else {
+                self.requestLocationFix?()
+            }
             self.armPresenceTimerIfNeeded()
         }
         if let scheduleTimer {
