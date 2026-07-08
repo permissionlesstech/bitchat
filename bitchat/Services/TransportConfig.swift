@@ -184,10 +184,6 @@ enum TransportConfig {
     // up); re-subscribes as soon as one comes up.
     static let uiGeoNotesConnectivityRetrySeconds: TimeInterval = 3.0
 
-    // Nostr helpers
-    static let nostrShortKeyDisplayLength: Int = 8
-    static let nostrConvKeyPrefixLength: Int = 16
-
     // Message deduplication
     static let messageDedupMaxAgeSeconds: TimeInterval = 300
     static let messageDedupMaxCount: Int = 1000
