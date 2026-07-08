@@ -27,28 +27,28 @@ private final class TestPipelineDelegate: PublicMessagePipelineDelegate {
         committed.filter { $0.conversationID == conversationID }.map(\.message)
     }
 
-    func pipeline(_ pipeline: PublicMessagePipeline, normalizeContent content: String) -> String {
+    func pipeline(_: PublicMessagePipeline, normalizeContent content: String) -> String {
         dedupService.normalizedContentKey(content)
     }
 
-    func pipeline(_ pipeline: PublicMessagePipeline, contentTimestampForKey key: String) -> Date? {
+    func pipeline(_: PublicMessagePipeline, contentTimestampForKey key: String) -> Date? {
         dedupService.contentTimestamp(forKey: key)
     }
 
-    func pipeline(_ pipeline: PublicMessagePipeline, recordContentKey key: String, timestamp: Date) {
+    func pipeline(_: PublicMessagePipeline, recordContentKey key: String, timestamp: Date) {
         dedupService.recordContentKey(key, timestamp: timestamp)
         recordedContentKeys.append(key)
     }
 
-    func pipeline(_ pipeline: PublicMessagePipeline, commit message: BitchatMessage, to conversationID: ConversationID) -> Bool {
+    func pipeline(_: PublicMessagePipeline, commit message: BitchatMessage, to conversationID: ConversationID) -> Bool {
         guard !rejectedMessageIDs.contains(message.id) else { return false }
         committed.append((message, conversationID))
         return true
     }
 
-    func pipelinePrewarmMessage(_ pipeline: PublicMessagePipeline, message: BitchatMessage) {}
+    func pipelinePrewarmMessage(_: PublicMessagePipeline, message: BitchatMessage) {}
 
-    func pipelineSetBatchingState(_ pipeline: PublicMessagePipeline, isBatching: Bool) {
+    func pipelineSetBatchingState(_: PublicMessagePipeline, isBatching: Bool) {
         batchingStates.append(isBatching)
     }
 }

@@ -88,8 +88,6 @@ import BitFoundation
 /// Represents the ephemeral layer of identity - short-lived peer IDs that provide network privacy.
 /// These IDs rotate periodically to prevent tracking while maintaining cryptographic relationships.
 struct EphemeralIdentity {
-    let peerID: PeerID          // 8 random bytes
-    let sessionStart: Date
     var handshakeState: HandshakeState
 }
 
@@ -98,7 +96,6 @@ enum HandshakeState {
     case initiated
     case inProgress
     case completed(fingerprint: String)
-    case failed(reason: String)
 }
 
 /// Represents the cryptographic layer of identity - the stable Noise Protocol static key pair.
@@ -110,7 +107,6 @@ struct CryptographicIdentity: Codable {
     // Optional Ed25519 signing public key (used to authenticate public messages)
     var signingPublicKey: Data? = nil
     let firstSeen: Date
-    let lastHandshake: Date?
 }
 
 /// Represents the social layer of identity - user-assigned names and trust relationships.
@@ -193,9 +189,6 @@ struct IdentityCache: Codable {
     // Fingerprint -> when we verified it (orders outgoing vouch batches;
     // entries verified before this field exists sort as oldest)
     var verifiedAt: [String: Date]? = nil
-
-    // Schema version for future migrations
-    var version: Int = 1
 }
 
 //

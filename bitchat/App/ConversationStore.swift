@@ -796,16 +796,6 @@ extension ConversationStore {
         return messageIDs
     }
 
-    /// Removes every direct conversation (panic clear).
-    func removeAllDirectConversations() {
-        let directIDs = conversationIDs.filter { id in
-            if case .direct = id { return true }
-            return false
-        }
-        for id in directIDs {
-            removeConversation(id)
-        }
-    }
 }
 
 // MARK: - Diagnostics support

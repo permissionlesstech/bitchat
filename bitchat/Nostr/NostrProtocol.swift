@@ -552,37 +552,6 @@ struct NostrProtocol {
         return sharedSecretData
     }
     
-    // Direct version that doesn't try to add prefixes
-    private static func deriveSharedSecretDirect(
-        privateKey: P256K.Schnorr.PrivateKey,
-        publicKey: Data
-    ) throws -> Data {
-        // Direct shared secret calculation
-        
-        // Convert Schnorr private key to KeyAgreement private key
-        let keyAgreementPrivateKey = try P256K.KeyAgreement.PrivateKey(
-            dataRepresentation: privateKey.dataRepresentation
-        )
-        
-        // Use the public key as-is (should already have prefix)
-        let keyAgreementPublicKey = try P256K.KeyAgreement.PublicKey(
-            dataRepresentation: publicKey,
-            format: .compressed
-        )
-        
-        // Perform ECDH
-        let sharedSecret = try keyAgreementPrivateKey.sharedSecretFromKeyAgreement(
-            with: keyAgreementPublicKey,
-            format: .compressed
-        )
-        
-        // Convert SharedSecret to Data
-        let sharedSecretData = sharedSecret.withUnsafeBytes { Data($0) }
-        
-        // Return raw ECDH shared secret; HKDF is applied by deriveNIP44V2Key
-        return sharedSecretData
-    }
-    
     private static func randomizedTimestamp() -> Date {
         // Add random offset to current time for privacy
         // This prevents timing correlation attacks while the actual message timestamp
@@ -712,11 +681,8 @@ struct NostrEvent: Codable {
 
 enum NostrError: Error {
     case invalidPublicKey
-    case invalidPrivateKey
     case invalidEvent
     case invalidCiphertext
-    case signingFailed
-    case encryptionFailed
 }
 
 // MARK: - NIP-44 v2 helpers (XChaCha20-Poly1305)

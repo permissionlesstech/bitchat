@@ -341,21 +341,3 @@ extension BitchatMessage {
     }
 }
 
-extension Array where Element == BitchatMessage {
-    /// Filters out empty ones and deduplicate by ID while preserving order (from oldest to newest)
-    public func cleanedAndDeduped() -> [Element] {
-        let arr = filter { $0.content.trimmed.isEmpty == false }
-        guard arr.count > 1 else {
-            return arr
-        }
-        var seen = Set<String>()
-        var dedup: [BitchatMessage] = []
-        for m in arr.sorted(by: { $0.timestamp < $1.timestamp }) {
-            if !seen.contains(m.id) {
-                dedup.append(m)
-                seen.insert(m.id)
-            }
-        }
-        return dedup
-    }
-}

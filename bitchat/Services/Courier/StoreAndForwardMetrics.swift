@@ -58,12 +58,6 @@ final class StoreAndForwardMetrics {
         SecureLogger.debug("📊 S&F \(event.rawValue) → \(total)", category: .session)
     }
 
-    func snapshot() -> [String: Int] {
-        lock.lock()
-        defer { lock.unlock() }
-        return counts
-    }
-
     /// Included in the panic wipe alongside the stores it describes.
     func reset() {
         lock.lock()

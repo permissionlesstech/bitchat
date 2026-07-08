@@ -10,7 +10,6 @@ import UIKit
 /// BLEService — Bluetooth Mesh Transport
 /// - Emits events exclusively via `BitchatDelegate` for UI.
 /// - ChatViewModel must consume delegate callbacks (`didReceivePublicMessage`, `didReceiveNoisePayload`).
-/// - A lightweight `peerSnapshotPublisher` is provided for non-UI services.
 final class BLEService: NSObject {
     
     // MARK: - Constants
@@ -493,13 +492,6 @@ final class BLEService: NSObject {
     weak var delegate: BitchatDelegate?
     weak var eventDelegate: TransportEventDelegate?
     weak var peerEventsDelegate: TransportPeerEventsDelegate?
-    
-    // MARK: Peer snapshots publisher (non-UI convenience)
-    
-    private let peerSnapshotSubject = PassthroughSubject<[TransportPeerSnapshot], Never>()
-    var peerSnapshotPublisher: AnyPublisher<[TransportPeerSnapshot], Never> {
-        peerSnapshotSubject.eraseToAnyPublisher()
-    }
 
     func currentPeerSnapshots() -> [TransportPeerSnapshot] {
         collectionsQueue.sync {
@@ -1373,7 +1365,7 @@ final class BLEService: NSObject {
         }
     }
 
-    private func handleLeave(_ packet: BitchatPacket, from peerID: PeerID) {
+    private func handleLeave(_: BitchatPacket, from peerID: PeerID) {
         _ = collectionsQueue.sync(flags: .barrier) {
             // Remove the peer when they leave
             peerRegistry.remove(peerID)
@@ -2224,7 +2216,7 @@ extension BLEService: CBPeripheralDelegate {
         }
     }
 
-    private func processNotificationPacket(_ packet: BitchatPacket, from peripheral: CBPeripheral, peripheralUUID: String, receivedFrom peerID: PeerID) {
+    private func processNotificationPacket(_ packet: BitchatPacket, from _: CBPeripheral, peripheralUUID: String, receivedFrom peerID: PeerID) {
         let senderID = PeerID(hexData: packet.senderID)
 
         if packet.type != MessageType.announce.rawValue {
@@ -3472,7 +3464,7 @@ extension BLEService {
     /// Transport-level handling for a received nostrCarrier packet; policy
     /// (verification of the carried event, quotas, loop prevention) lives in
     /// `GatewayService` behind `onNostrCarrierPacket`.
-    private func handleNostrCarrier(_ packet: BitchatPacket, from peerID: PeerID) {
+    private func handleNostrCarrier(_ packet: BitchatPacket, from _: PeerID) {
         let senderID = PeerID(hexData: packet.senderID)
         let directedToUs: Bool
         if let recipientID = packet.recipientID {
@@ -4526,7 +4518,7 @@ extension BLEService {
     /// gossip backfill and hand the payload to the UI layer, where the group
     /// coordinator decrypts and authenticates against the roster. Non-members
     /// still relay (generic broadcast relay path) but never decode.
-    private func handleGroupMessage(_ packet: BitchatPacket, from peerID: PeerID) {
+    private func handleGroupMessage(_ packet: BitchatPacket, from _: PeerID) {
         let isBroadcastRecipient: Bool = {
             guard let recipient = packet.recipientID else { return true }
             return recipient.count == 8 && recipient.allSatisfy { $0 == 0xFF }
@@ -4686,8 +4678,6 @@ extension BLEService {
         let transportPeers: [TransportPeerSnapshot] = collectionsQueue.sync {
             peerRegistry.transportSnapshots(selfNickname: myNickname)
         }
-        // Notify non-UI listeners
-        peerSnapshotSubject.send(transportPeers)
         // Notify UI on MainActor via delegate
         Task { @MainActor [weak self] in
             self?.peerEventsDelegate?.didUpdatePeerSnapshots(transportPeers)

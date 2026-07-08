@@ -153,11 +153,11 @@ enum EncryptionStatus: Equatable {
 final class NoiseEncryptionService {
     // Static identity key (persistent across sessions)
     private let staticIdentityKey: Curve25519.KeyAgreement.PrivateKey
-    public let staticIdentityPublicKey: Curve25519.KeyAgreement.PublicKey
+    let staticIdentityPublicKey: Curve25519.KeyAgreement.PublicKey
     
     // Ed25519 signing key (persistent across sessions)
     private let signingKey: Curve25519.Signing.PrivateKey
-    public let signingPublicKey: Curve25519.Signing.PublicKey
+    let signingPublicKey: Curve25519.Signing.PublicKey
     
     // Session manager
     private let sessionManager: NoiseSessionManager

@@ -406,7 +406,6 @@ enum GroupCryptoError: Error, Equatable {
     case malformedPayload
     case signingFailed
     case sealFailed
-    case wrongEpoch
     case decryptionFailed
     case badSenderSignature
 }

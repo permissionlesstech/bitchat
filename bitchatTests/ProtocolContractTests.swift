@@ -23,10 +23,6 @@ private final class DefaultTransportProbe: Transport {
     var myNickname = "Tester"
     private(set) var sentMessages: [(content: String, mentions: [String])] = []
 
-    var peerSnapshotPublisher: AnyPublisher<[TransportPeerSnapshot], Never> {
-        subject.eraseToAnyPublisher()
-    }
-
     func currentPeerSnapshots() -> [TransportPeerSnapshot] { subject.value }
     func setNickname(_ nickname: String) { myNickname = nickname }
     func startServices() {}

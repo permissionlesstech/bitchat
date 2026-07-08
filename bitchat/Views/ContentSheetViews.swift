@@ -11,8 +11,6 @@ struct ContentPeopleSheetView: View {
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
     @EnvironmentObject private var verificationModel: VerificationModel
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
-    @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
-    @EnvironmentObject private var peerListModel: PeerListModel
 
     @Binding var showSidebar: Bool
     @Binding var messageText: String
@@ -79,8 +77,7 @@ struct ContentPeopleSheetView: View {
                     #endif
                 } else {
                     ContentPeopleListView(
-                        showSidebar: $showSidebar,
-                        headerHeight: headerHeight
+                        showSidebar: $showSidebar
                     )
                 }
             }
@@ -141,8 +138,6 @@ private struct ContentPeopleListView: View {
     @ThemedPalette private var palette
 
     @Binding var showSidebar: Bool
-
-    let headerHeight: CGFloat
 
     @State private var showVerifySheet = false
 
@@ -285,7 +280,6 @@ private extension ContentPeopleListView {
 }
 
 private struct ContentPrivateChatSheetView: View {
-    @EnvironmentObject private var appChromeModel: AppChromeModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
 
     @Binding var showSidebar: Bool

@@ -117,7 +117,6 @@ final class NostrRelayManager: ObservableObject {
         let url: String
         var isConnected: Bool = false
         var lastError: Error?
-        var lastConnectedAt: Date?
         var messagesSent: Int = 0
         var messagesReceived: Int = 0
         var reconnectAttempts: Int = 0
@@ -362,7 +361,6 @@ final class NostrRelayManager: ObservableObject {
             relays[index].nextReconnectTime = nil
             if resetState {
                 relays[index].lastError = nil
-                relays[index].lastConnectedAt = nil
                 relays[index].lastDisconnectedAt = nil
                 relays[index].messagesSent = 0
                 relays[index].messagesReceived = 0
@@ -1105,7 +1103,6 @@ final class NostrRelayManager: ObservableObject {
             relays[index].isConnected = isConnected
             relays[index].lastError = error
             if isConnected {
-                relays[index].lastConnectedAt = dependencies.now()
                 relays[index].reconnectAttempts = 0  // Reset on successful connection
                 relays[index].nextReconnectTime = nil
             } else {

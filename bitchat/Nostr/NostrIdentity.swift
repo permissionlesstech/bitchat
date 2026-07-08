@@ -6,14 +6,12 @@ struct NostrIdentity: Codable {
     let privateKey: Data
     let publicKey: Data
     let npub: String // Bech32-encoded public key
-    let createdAt: Date
-    
+
     /// Memberwise initializer
-    init(privateKey: Data, publicKey: Data, npub: String, createdAt: Date) {
+    init(privateKey: Data, publicKey: Data, npub: String, createdAt _: Date) {
         self.privateKey = privateKey
         self.publicKey = publicKey
         self.npub = npub
-        self.createdAt = createdAt
     }
     
     /// Generate a new Nostr identity
@@ -39,12 +37,6 @@ struct NostrIdentity: Codable {
         self.privateKey = privateKeyData
         self.publicKey = xOnlyPubkey
         self.npub = try Bech32.encode(hrp: "npub", data: xOnlyPubkey)
-        self.createdAt = Date()
-    }
-    
-    /// Get signing key for event signatures
-    func signingKey() throws -> P256K.Signing.PrivateKey {
-        try P256K.Signing.PrivateKey(dataRepresentation: privateKey)
     }
     
     /// Get Schnorr signing key for Nostr event signatures

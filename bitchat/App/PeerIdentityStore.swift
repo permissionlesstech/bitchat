@@ -25,10 +25,6 @@ final class PeerIdentityStore: ObservableObject {
         stablePeerIDsByShortID[peerID] = stablePeerID
     }
 
-    func replaceStablePeerIDs(_ mappings: [PeerID: PeerID]) {
-        stablePeerIDsByShortID = mappings
-    }
-
     func fingerprint(for peerID: PeerID) -> String? {
         peerFingerprintsByPeerID[peerID]
     }
@@ -92,10 +88,6 @@ final class PeerIdentityStore: ObservableObject {
             encryptionStatuses.removeValue(forKey: peerID)
         }
         invalidateEncryptionCache(for: peerID)
-    }
-
-    func replaceEncryptionStatuses(_ statuses: [PeerID: EncryptionStatus]) {
-        encryptionStatuses = statuses
     }
 
     func setVerifiedFingerprints(_ fingerprints: Set<String>) {

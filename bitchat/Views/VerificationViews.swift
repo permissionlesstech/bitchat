@@ -288,7 +288,6 @@ struct VerificationSheetView: View {
     @State private var showingScanner = false
     @ThemedPalette private var palette
 
-    private var backgroundColor: Color { palette.background }
     private var accentColor: Color { palette.accent }
     private var boxColor: Color { palette.secondary.opacity(0.1) }
 

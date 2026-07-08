@@ -5,7 +5,6 @@ import AVFoundation
 actor VoiceRecorder {
     enum RecorderError: Error {
         case microphoneAccessDenied
-        case recorderInitializationFailed
         case recordingInProgress
     }
 

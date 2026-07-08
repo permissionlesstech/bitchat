@@ -12,7 +12,7 @@ struct RelayController {
     static func decide(ttl: UInt8,
                        senderIsSelf: Bool,
                        recipientIsSelf: Bool = false,
-                       isEncrypted: Bool,
+                       isEncrypted _: Bool,
                        isDirectedEncrypted: Bool,
                        isFragment: Bool,
                        isDirectedFragment: Bool,

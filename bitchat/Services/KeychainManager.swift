@@ -255,11 +255,6 @@ final class KeychainManager: KeychainManagerProtocol {
 
     // MARK: - Generic Operations
     
-    private func save(_ value: String, forKey key: String) -> Bool {
-        guard let data = value.data(using: .utf8) else { return false }
-        return saveData(data, forKey: key)
-    }
-    
     private func saveData(_ data: Data, forKey key: String) -> Bool {
         // Delete any existing item first to ensure clean state
         _ = delete(forKey: key)
@@ -303,11 +298,6 @@ final class KeychainManager: KeychainManagerProtocol {
             SecureLogger.error(NSError(domain: "Keychain", code: Int(status)), context: "Error saving to keychain", category: .keychain)
         }
         return false
-    }
-    
-    private func retrieve(forKey key: String) -> String? {
-        guard let data = retrieveData(forKey: key) else { return nil }
-        return String(data: data, encoding: .utf8)
     }
     
     private func retrieveData(forKey key: String) -> Data? {
@@ -365,22 +355,7 @@ final class KeychainManager: KeychainManagerProtocol {
     }
     
     // MARK: - Cleanup
-    
-    func deleteAllPasswords() -> Bool {
-        var query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword
-        ]
-        
-        // Add service if not empty
-        if !service.isEmpty {
-            query[kSecAttrService as String] = service
-        }
-        
-        let status = SecItemDelete(query as CFDictionary)
-        return status == errSecSuccess || status == errSecItemNotFound
-    }
-    
-    
+
     // Delete ALL keychain data for panic mode
     func deleteAllKeychainData() -> Bool {
         SecureLogger.warning("Panic mode - deleting all keychain data", category: .security)

@@ -79,9 +79,4 @@ struct MessageRateLimiter {
 
         return senderAllowed && contentAllowed
     }
-
-    mutating func reset() {
-        senderBuckets.removeAll()
-        contentBuckets.removeAll()
-    }
 }

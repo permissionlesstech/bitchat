@@ -141,14 +141,6 @@ struct BLEPeerRegistry {
         }
     }
 
-    func collisionResolvedNickname(for peerID: PeerID, selfNickname: String) -> String? {
-        guard let info = peers[peerID], info.isVerifiedNickname else { return nil }
-        let hasCollision = peers.values.contains {
-            $0.isConnected && $0.nickname == info.nickname && $0.peerID != peerID
-        } || selfNickname == info.nickname
-        return hasCollision ? info.nickname + "#" + String(peerID.id.prefix(4)) : info.nickname
-    }
-
     mutating func markDisconnected(_ peerID: PeerID) {
         guard var info = peers[peerID] else { return }
         info.isConnected = false

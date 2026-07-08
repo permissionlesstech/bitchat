@@ -13,8 +13,6 @@ import BitFoundation
 
 final class NoiseSessionManager {
     private var sessions: [PeerID: NoiseSession] = [:]
-    private let localStaticKey: Curve25519.KeyAgreement.PrivateKey
-    private let keychain: KeychainManagerProtocol
     private let sessionFactory: (PeerID, NoiseRole) -> NoiseSession
     private let managerQueue = DispatchQueue(label: "chat.bitchat.noise.manager", attributes: .concurrent)
     
@@ -23,8 +21,6 @@ final class NoiseSessionManager {
     var onSessionFailed: ((PeerID, Error) -> Void)?
     
     init(localStaticKey: Curve25519.KeyAgreement.PrivateKey, keychain: KeychainManagerProtocol) {
-        self.localStaticKey = localStaticKey
-        self.keychain = keychain
         self.sessionFactory = { peerID, role in
             SecureNoiseSession(
                 peerID: peerID,
@@ -37,12 +33,10 @@ final class NoiseSessionManager {
 
     #if DEBUG
     init(
-        localStaticKey: Curve25519.KeyAgreement.PrivateKey,
-        keychain: KeychainManagerProtocol,
+        localStaticKey _: Curve25519.KeyAgreement.PrivateKey,
+        keychain _: KeychainManagerProtocol,
         sessionFactory: @escaping (PeerID, NoiseRole) -> NoiseSession
     ) {
-        self.localStaticKey = localStaticKey
-        self.keychain = keychain
         self.sessionFactory = sessionFactory
     }
     #endif

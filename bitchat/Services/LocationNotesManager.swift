@@ -126,7 +126,10 @@ final class LocationNotesManager: ObservableObject {
     private var noteIDs = Set<String>() // O(1) duplicate detection
     private var directoryUpdateCancellable: AnyCancellable?
     private var expiryPruneTimer: Timer?
+<<<<<<< HEAD
     private var connectivityRetryTimer: Timer?
+=======
+>>>>>>> origin/main
     private let dependencies: LocationNotesDependencies
     private let maxNotesInMemory = 500 // Defensive cap (relay limit is 200)
 
@@ -172,7 +175,10 @@ final class LocationNotesManager: ObservableObject {
 
     deinit {
         expiryPruneTimer?.invalidate()
+<<<<<<< HEAD
         connectivityRetryTimer?.invalidate()
+=======
+>>>>>>> origin/main
     }
 
     /// Drops notes whose NIP-40 expiry has passed. Their ids stay in
@@ -298,6 +304,7 @@ final class LocationNotesManager: ObservableObject {
         })
     }
 
+<<<<<<< HEAD
     /// While `.connecting`, poll for a live target relay and re-subscribe as
     /// soon as one appears (fresh REQ, fresh EOSE tracking). The poll dies
     /// with the state: any subscribe/cancel invalidates it.
@@ -326,6 +333,8 @@ final class LocationNotesManager: ObservableObject {
         refresh()
     }
 
+=======
+>>>>>>> origin/main
     /// Send a location note for the current geohash using the per-geohash
     /// identity, optionally expiring via NIP-40 (dead drops pass 24h; the
     /// composer's ∞ option passes nil) and optionally tagged urgent.

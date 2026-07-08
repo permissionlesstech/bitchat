@@ -20,7 +20,7 @@ enum BLEOutboundPacketPolicy {
         }
     }
 
-    static func priority(for packet: BitchatPacket, data: Data) -> BLEOutboundWritePriority {
+    static func priority(for packet: BitchatPacket, data _: Data) -> BLEOutboundWritePriority {
         guard let messageType = MessageType(rawValue: packet.type) else { return .low }
         switch messageType {
         case .fragment:

@@ -311,13 +311,6 @@ final class MessageRouter {
         }
     }
 
-    func sendDeliveryAck(_ messageID: String, to peerID: PeerID) {
-        if let transport = reachableTransport(for: peerID) {
-            SecureLogger.debug("Routing DELIVERED ack via \(type(of: transport)) to \(peerID.id.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
-            transport.sendDeliveryAck(for: messageID, to: peerID)
-        }
-    }
-
     func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {
         if let transport = connectedTransport(for: peerID) {
             transport.sendFavoriteNotification(to: peerID, isFavorite: isFavorite)

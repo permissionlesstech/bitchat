@@ -17,8 +17,6 @@ struct FingerprintView: View {
 
     private var textColor: Color { palette.primary }
 
-    private var backgroundColor: Color { palette.background }
-
     private enum Strings {
         static let title: LocalizedStringKey = "fingerprint.title"
         static let theirFingerprint: LocalizedStringKey = "fingerprint.their_label"
@@ -44,9 +42,6 @@ struct FingerprintView: View {
                 locale: .current,
                 count
             )
-        }
-        static func unknownPeer() -> String {
-            String(localized: "common.unknown", comment: "Label for an unknown peer")
         }
     }
     

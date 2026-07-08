@@ -36,9 +36,6 @@ protocol ChatPublicConversationContext: AnyObject {
     /// message with the same ID is already in that conversation.
     @discardableResult
     func appendPublicMessage(_ message: BitchatMessage, to conversationID: ConversationID) -> Bool
-    /// Appends a geohash message if absent. Returns `true` when stored.
-    @discardableResult
-    func appendGeohashMessageIfAbsent(_ message: BitchatMessage, toGeohash geohash: String) -> Bool
     func publicConversationContainsMessage(withID messageID: String, in conversationID: ConversationID) -> Bool
     /// Removes a message by ID from whichever public conversation contains it.
     @discardableResult
@@ -109,7 +106,6 @@ extension ChatViewModel: ChatPublicConversationContext {
     // `geoParticipantCount(for:)`, `isNostrBlocked(pubkeyHexLowercased:)`,
     // `deriveNostrIdentity(forGeohash:)`, the public conversation store
     // intents (`appendPublicMessage(_:to:)`,
-    // `appendGeohashMessageIfAbsent(_:toGeohash:)`,
     // `publicConversationContainsMessage(withID:in:)`,
     // `removePublicMessage(withID:)`,
     // `removePublicMessages(fromGeohash:where:)`,
@@ -555,27 +551,27 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
         #endif
     }
 
-    func pipeline(_ pipeline: PublicMessagePipeline, normalizeContent content: String) -> String {
+    func pipeline(_: PublicMessagePipeline, normalizeContent content: String) -> String {
         context.normalizedContentKey(content)
     }
 
-    func pipeline(_ pipeline: PublicMessagePipeline, contentTimestampForKey key: String) -> Date? {
+    func pipeline(_: PublicMessagePipeline, contentTimestampForKey key: String) -> Date? {
         context.contentTimestamp(forKey: key)
     }
 
-    func pipeline(_ pipeline: PublicMessagePipeline, recordContentKey key: String, timestamp: Date) {
+    func pipeline(_: PublicMessagePipeline, recordContentKey key: String, timestamp: Date) {
         context.recordContentKey(key, timestamp: timestamp)
     }
 
-    func pipeline(_ pipeline: PublicMessagePipeline, commit message: BitchatMessage, to conversationID: ConversationID) -> Bool {
+    func pipeline(_: PublicMessagePipeline, commit message: BitchatMessage, to conversationID: ConversationID) -> Bool {
         context.appendPublicMessage(message, to: conversationID)
     }
 
-    func pipelinePrewarmMessage(_ pipeline: PublicMessagePipeline, message: BitchatMessage) {
+    func pipelinePrewarmMessage(_: PublicMessagePipeline, message: BitchatMessage) {
         context.prewarmMessageFormatting(message)
     }
 
-    func pipelineSetBatchingState(_ pipeline: PublicMessagePipeline, isBatching: Bool) {
+    func pipelineSetBatchingState(_: PublicMessagePipeline, isBatching: Bool) {
         context.setPublicBatching(isBatching)
     }
 }

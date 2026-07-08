@@ -19,7 +19,6 @@ final class BoardManager: ObservableObject {
     @Published private(set) var posts: [BoardPostPacket] = []
 
     private let transport: Transport
-    private let store: BoardStore
     /// Publishes a bridged kind-1 note (expiring with the board post via
     /// NIP-40) and returns its Nostr event id, or nil when bridging failed or
     /// was skipped.
@@ -39,7 +38,6 @@ final class BoardManager: ObservableObject {
         deleteFromNostr: ((String, String) -> Void)? = nil
     ) {
         self.transport = transport
-        self.store = store
         self.publishToNostr = publishToNostr ?? Self.livePublishToNostr
         self.deleteFromNostr = deleteFromNostr ?? Self.liveDeleteFromNostr
         cancellable = store.$postsSnapshot

@@ -14,15 +14,15 @@ import Foundation
 
 @MainActor
 protocol PublicMessagePipelineDelegate: AnyObject {
-    func pipeline(_ pipeline: PublicMessagePipeline, normalizeContent content: String) -> String
-    func pipeline(_ pipeline: PublicMessagePipeline, contentTimestampForKey key: String) -> Date?
-    func pipeline(_ pipeline: PublicMessagePipeline, recordContentKey key: String, timestamp: Date)
+    func pipeline(_: PublicMessagePipeline, normalizeContent content: String) -> String
+    func pipeline(_: PublicMessagePipeline, contentTimestampForKey key: String) -> Date?
+    func pipeline(_: PublicMessagePipeline, recordContentKey key: String, timestamp: Date)
     /// Commits a batched message to its conversation in the store.
     /// Returns `false` when the message was already present (ID dedup).
     @discardableResult
-    func pipeline(_ pipeline: PublicMessagePipeline, commit message: BitchatMessage, to conversationID: ConversationID) -> Bool
-    func pipelinePrewarmMessage(_ pipeline: PublicMessagePipeline, message: BitchatMessage)
-    func pipelineSetBatchingState(_ pipeline: PublicMessagePipeline, isBatching: Bool)
+    func pipeline(_: PublicMessagePipeline, commit message: BitchatMessage, to conversationID: ConversationID) -> Bool
+    func pipelinePrewarmMessage(_: PublicMessagePipeline, message: BitchatMessage)
+    func pipelineSetBatchingState(_: PublicMessagePipeline, isBatching: Bool)
 }
 
 @MainActor

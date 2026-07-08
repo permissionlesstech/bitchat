@@ -1483,7 +1483,6 @@ final class NostrRelayManagerTests: XCTestCase {
         return RelayManagerTestContext(
             manager: manager,
             permissionSubject: permissionSubject,
-            favoritesSubject: favoritesSubject,
             sessionFactory: sessionFactory,
             scheduler: scheduler,
             clock: clock,
@@ -1537,7 +1536,6 @@ final class NostrRelayManagerTests: XCTestCase {
 private struct RelayManagerTestContext {
     let manager: NostrRelayManager
     let permissionSubject: CurrentValueSubject<LocationChannelManager.PermissionState, Never>
-    let favoritesSubject: CurrentValueSubject<Set<Data>, Never>
     let sessionFactory: MockRelaySessionFactory
     let scheduler: MockRelayScheduler
     let clock: MutableClock
@@ -1644,7 +1642,6 @@ private final class MockRelaySessionFactory: NostrRelaySessionProtocol {
 }
 
 private final class MockRelayConnection: NostrRelayConnectionProtocol {
-    private let url: String
     private let pingError: Error?
     private let sendError: Error?
     private var receiveHandler: ((Result<URLSessionWebSocketTask.Message, Error>) -> Void)?
@@ -1662,8 +1659,7 @@ private final class MockRelayConnection: NostrRelayConnectionProtocol {
         }
     }
 
-    init(url: String, pingError: Error? = nil, sendError: Error? = nil) {
-        self.url = url
+    init(url _: String, pingError: Error? = nil, sendError: Error? = nil) {
         self.pingError = pingError
         self.sendError = sendError
     }

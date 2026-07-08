@@ -56,16 +56,6 @@ extension ChatViewModel {
     }
 
     @MainActor
-    func sendDeliveryAckIfNeeded(to messageId: String, senderPubKey: String, from id: NostrIdentity) {
-        privateConversationCoordinator.sendDeliveryAckIfNeeded(to: messageId, senderPubKey: senderPubKey, from: id)
-    }
-
-    @MainActor
-    func sendReadReceiptIfNeeded(to messageId: String, senderPubKey: String, from id: NostrIdentity) {
-        privateConversationCoordinator.sendReadReceiptIfNeeded(to: messageId, senderPubKey: senderPubKey, from: id)
-    }
-
-    @MainActor
     func sendVoiceNote(at url: URL) {
         mediaTransferCoordinator.sendVoiceNote(at: url)
     }
@@ -163,11 +153,6 @@ extension ChatViewModel {
     }
 
     @MainActor
-    func handleMediaSendFailure(messageID: String, reason: String) {
-        mediaTransferCoordinator.handleMediaSendFailure(messageID: messageID, reason: reason)
-    }
-
-    @MainActor
     func handleTransferEvent(_ event: TransferProgressManager.Event) {
         mediaTransferCoordinator.handleTransferEvent(event)
     }
@@ -195,59 +180,6 @@ extension ChatViewModel {
     }
 
     @MainActor
-    func isDuplicateMessage(_ messageId: String, targetPeerID: PeerID) -> Bool {
-        privateConversationCoordinator.isDuplicateMessage(messageId, targetPeerID: targetPeerID)
-    }
-
-    @MainActor
-    func addMessageToPrivateChatsIfNeeded(_ message: BitchatMessage, targetPeerID: PeerID) {
-        privateConversationCoordinator.addMessageToPrivateChatsIfNeeded(message, targetPeerID: targetPeerID)
-    }
-
-    @MainActor
-    func mirrorToEphemeralIfNeeded(_ message: BitchatMessage, targetPeerID: PeerID, key: Data?) {
-        privateConversationCoordinator.mirrorToEphemeralIfNeeded(message, targetPeerID: targetPeerID, key: key)
-    }
-
-    @MainActor
-    func handleViewingThisChat(_ message: BitchatMessage, targetPeerID: PeerID, key: Data?, senderPubkey: String) {
-        privateConversationCoordinator.handleViewingThisChat(
-            message,
-            targetPeerID: targetPeerID,
-            key: key,
-            senderPubkey: senderPubkey
-        )
-    }
-
-    @MainActor
-    func markAsUnreadIfNeeded(
-        shouldMarkAsUnread: Bool,
-        targetPeerID: PeerID,
-        key: Data?,
-        isRecentMessage: Bool,
-        senderNickname: String,
-        messageContent: String
-    ) {
-        privateConversationCoordinator.markAsUnreadIfNeeded(
-            shouldMarkAsUnread: shouldMarkAsUnread,
-            targetPeerID: targetPeerID,
-            key: key,
-            isRecentMessage: isRecentMessage,
-            senderNickname: senderNickname,
-            messageContent: messageContent
-        )
-    }
-
-    @MainActor
-    func handleFavoriteNotification(_ content: String, from peerID: PeerID, senderNickname: String) {
-        privateConversationCoordinator.handleFavoriteNotification(
-            content,
-            from: peerID,
-            senderNickname: senderNickname
-        )
-    }
-
-    @MainActor
     func processActionMessage(_ message: BitchatMessage) -> BitchatMessage {
         privateConversationCoordinator.processActionMessage(message)
     }
@@ -255,11 +187,6 @@ extension ChatViewModel {
     @MainActor
     func migratePrivateChatsIfNeeded(for peerID: PeerID, senderNickname: String) {
         privateConversationCoordinator.migratePrivateChatsIfNeeded(for: peerID, senderNickname: senderNickname)
-    }
-
-    @MainActor
-    func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {
-        privateConversationCoordinator.sendFavoriteNotification(to: peerID, isFavorite: isFavorite)
     }
 
     @MainActor

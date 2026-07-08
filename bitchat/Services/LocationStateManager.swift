@@ -101,9 +101,7 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
 
     private let cl: LocationStateManaging
     private let geocoder: LocationStateGeocoding
-    private var lastLocation: CLLocation?
     private var refreshTimer: Timer?
-    private var isGeocoding: Bool = false
 
     // MARK: - Persistence Keys
 
@@ -268,7 +266,7 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
         }
     }
 
-    func beginLiveRefresh(interval: TimeInterval = TransportConfig.locationLiveRefreshInterval) {
+    func beginLiveRefresh(interval _: TimeInterval = TransportConfig.locationLiveRefreshInterval) {
         guard permissionState == .authorized else { return }
         refreshTimer?.invalidate()
         refreshTimer = nil
@@ -385,7 +383,6 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let loc = locations.last else { return }
-        lastLocation = loc
         computeChannels(from: loc.coordinate)
         reverseGeocodeLocation(loc)
     }
@@ -441,10 +438,8 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
 
     private func reverseGeocodeLocation(_ location: CLLocation) {
         geocoder.cancelGeocode()
-        isGeocoding = true
         geocoder.reverseGeocodeLocation(location) { [weak self] placemarks, _ in
             guard let self = self else { return }
-            self.isGeocoding = false
             if let pm = placemarks?.first {
                 let names = self.locationNamesByLevel(from: pm)
                 Task { @MainActor in self.locationNames = names }
@@ -631,16 +626,6 @@ extension LocationStateManager {
     /// Backward compatibility: toggle bookmark (was GeohashBookmarksStore.toggle)
     func toggle(_ geohash: String) {
         toggleBookmark(geohash)
-    }
-
-    /// Backward compatibility: add bookmark (was GeohashBookmarksStore.add)
-    func add(_ geohash: String) {
-        addBookmark(geohash)
-    }
-
-    /// Backward compatibility: remove bookmark (was GeohashBookmarksStore.remove)
-    func remove(_ geohash: String) {
-        removeBookmark(geohash)
     }
 }
 #endif

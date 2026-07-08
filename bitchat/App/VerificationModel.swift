@@ -3,7 +3,6 @@ import Combine
 import Foundation
 
 struct FingerprintPresentationState: Equatable {
-    let statusPeerID: PeerID
     let peerNickname: String
     let encryptionStatus: EncryptionStatus
     let theirFingerprint: String?
@@ -56,10 +55,6 @@ final class VerificationModel: ObservableObject {
         return VerificationService.shared.buildMyQRString(nickname: currentNickname, npub: npub) ?? ""
     }
 
-    func beginQRVerification(with qr: VerificationService.VerificationQR) -> Bool {
-        chatViewModel.beginQRVerification(with: qr)
-    }
-
     func verifyScannedPayload(_ payload: String) -> VerificationScanOutcome {
         guard let qr = VerificationService.shared.verifyScannedQR(payload) else {
             return .invalid
@@ -110,7 +105,6 @@ final class VerificationModel: ObservableObject {
         }
 
         return FingerprintPresentationState(
-            statusPeerID: statusPeerID,
             peerNickname: peerNickname,
             encryptionStatus: encryptionStatus,
             theirFingerprint: theirFingerprint,

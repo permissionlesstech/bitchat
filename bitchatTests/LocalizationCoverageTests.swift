@@ -10,7 +10,6 @@ struct LocalizationCoverageTests {
         .deletingLastPathComponent()  // repo root
 
     private struct Catalog {
-        let sourceLanguage: String
         /// key -> set of locales with a localization entry
         let coverage: [String: Set<String>]
         /// all locales appearing anywhere in the catalog
@@ -22,7 +21,6 @@ struct LocalizationCoverageTests {
         let data = try Data(contentsOf: url)
         let root = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
         let strings = try #require(root["strings"] as? [String: Any])
-        let sourceLanguage = try #require(root["sourceLanguage"] as? String)
 
         var coverage: [String: Set<String>] = [:]
         for (key, value) in strings {
@@ -43,7 +41,7 @@ struct LocalizationCoverageTests {
             }
             coverage[key] = locales
         }
-        return Catalog(sourceLanguage: sourceLanguage, coverage: coverage)
+        return Catalog(coverage: coverage)
     }
 
     @Test func mainCatalogCoversAllLocalesForEveryKey() throws {

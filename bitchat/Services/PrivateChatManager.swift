@@ -28,7 +28,6 @@ final class PrivateChatManager: ObservableObject {
     @Published private(set) var selectedPeer: PeerID? = nil
     private var selectedPeerMirrorCancellable: AnyCancellable? = nil
 
-    private var selectedPeerFingerprint: String? = nil
     var sentReadReceipts: Set<String> = []  // Made accessible for ChatViewModel
 
     weak var meshService: Transport?
@@ -219,17 +218,12 @@ final class PrivateChatManager: ObservableObject {
 
     /// Start a private chat with a peer. Selection is mutated through the
     /// store's intent (the store owns it); the manager keeps its side
-    /// effects (fingerprint tracking, read receipts, unread clearing).
+    /// effects (read receipts, unread clearing).
     @MainActor
     func startChat(with peerID: PeerID) {
         // Also creates the conversation if needed and updates the derived
         // `selectedConversationID`; `selectedPeer` mirrors the change.
         conversationStore?.setSelectedPrivatePeer(peerID)
-
-        // Store fingerprint for persistence across reconnections
-        if let fingerprint = meshService?.getFingerprint(for: peerID) {
-            selectedPeerFingerprint = fingerprint
-        }
 
         // Mark messages as read
         markAsRead(from: peerID)
@@ -239,14 +233,7 @@ final class PrivateChatManager: ObservableObject {
     /// channel's conversation).
     func endChat() {
         conversationStore?.setSelectedPrivatePeer(nil)
-        selectedPeerFingerprint = nil
     }
-
-    /// No-op since the `ConversationStore` cutover: the store maintains
-    /// chronological order and dedups by message ID on every insert, so the
-    /// per-append re-sort/dedup sweep this performed is no longer needed.
-    /// Kept only for API compatibility until step 5 removes the callers.
-    func sanitizeChat(for peerID: PeerID) {}
 
     /// Mark messages from a peer as read
     @MainActor

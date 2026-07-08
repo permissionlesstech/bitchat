@@ -19,7 +19,6 @@ protocol ChatPrivateConversationContext: AnyObject {
     /// lookup on `ChatViewModel` (no `privateChats` dictionary build).
     func privateMessages(for peerID: PeerID) -> [BitchatMessage]
     var sentReadReceipts: Set<String> { get }
-    var unreadPrivateMessages: Set<PeerID> { get }
     var selectedPrivateChatPeer: PeerID? { get }
     var nickname: String { get }
     var activeChannel: ChannelID { get }
@@ -40,8 +39,6 @@ protocol ChatPrivateConversationContext: AnyObject {
     func setPrivateDeliveryStatus(_ status: DeliveryStatus, forMessageID messageID: String, peerID: PeerID) -> Bool
     func markPrivateChatUnread(_ peerID: PeerID)
     func markPrivateChatRead(_ peerID: PeerID)
-    /// Removes the peer's chat entirely, including unread state.
-    func removePrivateChat(_ peerID: PeerID)
     /// Moves all messages from `oldPeerID`'s chat into `newPeerID`'s chat
     /// (dedup by ID, order preserved, unread carried, old chat removed).
     func migratePrivateChat(from oldPeerID: PeerID, to newPeerID: PeerID)
@@ -87,7 +84,6 @@ protocol ChatPrivateConversationContext: AnyObject {
     // MARK: Routing & acknowledgements
     func routePrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String)
     func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID)
-    func routeFavoriteNotification(to peerID: PeerID, isFavorite: Bool)
     func sendMeshReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID)
     func sendGeohashPrivateMessage(_ content: String, toRecipientHex recipientHex: String, from identity: NostrIdentity, messageID: String)
     func sendGeohashDeliveryAck(for messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity)
@@ -606,7 +602,7 @@ final class ChatPrivateConversationCoordinator {
 
     /// O(1)-per-conversation dedup via the store's message-ID indexes
     /// (replaces the full scan over every private chat).
-    func isDuplicateMessage(_ messageId: String, targetPeerID: PeerID) -> Bool {
+    func isDuplicateMessage(_ messageId: String, targetPeerID _: PeerID) -> Bool {
         context.privateChatsContainMessage(withID: messageId)
     }
 
@@ -822,25 +818,6 @@ final class ChatPrivateConversationCoordinator {
             if didMigrate {
                 context.notifyUIChanged()
             }
-        }
-    }
-
-    func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {
-        var noiseKey: Data?
-
-        if let hexKey = Data(hexString: peerID.id) {
-            noiseKey = hexKey
-        } else if let peerNoiseKey = context.noisePublicKey(for: peerID) {
-            noiseKey = peerNoiseKey
-        }
-
-        if context.isPeerConnected(peerID) {
-            context.routeFavoriteNotification(to: peerID, isFavorite: isFavorite)
-            SecureLogger.debug("📤 Sent favorite notification via BLE to \(peerID)", category: .session)
-        } else if let key = noiseKey {
-            context.routeFavoriteNotification(to: PeerID(hexData: key), isFavorite: isFavorite)
-        } else {
-            SecureLogger.warning("⚠️ Cannot send favorite notification - peer not connected and no Nostr pubkey", category: .session)
         }
     }
 

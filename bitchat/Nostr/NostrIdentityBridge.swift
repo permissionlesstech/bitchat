@@ -37,14 +37,6 @@ final class NostrIdentityBridge {
         return nostrIdentity
     }
     
-    /// Associate a Nostr identity with a Noise public key (for favorites)
-    func associateNostrIdentity(_ nostrPubkey: String, with noisePublicKey: Data) {
-        let key = "nostr-noise-\(noisePublicKey.base64EncodedString())"
-        if let data = nostrPubkey.data(using: .utf8) {
-            keychain.save(key: key, data: data, service: keychainService, accessible: nil)
-        }
-    }
-    
     /// Get Nostr public key associated with a Noise public key
     func getNostrPublicKey(for noisePublicKey: Data) -> String? {
         let key = "nostr-noise-\(noisePublicKey.base64EncodedString())"
