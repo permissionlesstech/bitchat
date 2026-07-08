@@ -56,7 +56,11 @@ final class MessageRouter {
     /// relays as a courier drop, so delivery stops requiring a physical
     /// courier encounter. No-op unless the bridge is enabled. Runs alongside
     /// (not instead of) mesh couriers; receivers dedup by message ID.
-    var bridgeCourierDeposit: ((_ content: String, _ messageID: String, _ recipientNoiseKey: Data) -> Void)?
+    /// Returns true when a fresh drop was sealed, so the sender's message
+    /// can show the "carried" state instead of sitting on "sending" forever
+    /// (the delivery ack has no radio route back until the peers next share
+    /// a transport).
+    var bridgeCourierDeposit: ((_ content: String, _ messageID: String, _ recipientNoiseKey: Data) -> Bool)?
 
     /// Re-attempts bridge drops for retained messages whose recipient no
     /// transport can promptly reach anymore. Covers sends that raced the BLE
@@ -73,7 +77,9 @@ final class MessageRouter {
             }
             guard !promptlyDeliverable else { continue }
             for message in queue where now().timeIntervalSince(message.timestamp) <= Self.messageTTLSeconds {
-                bridgeCourierDeposit?(message.content, message.messageID, recipientKey)
+                if bridgeCourierDeposit?(message.content, message.messageID, recipientKey) == true {
+                    onMessageCarried?(message.messageID, peerID)
+                }
             }
         }
     }
@@ -203,7 +209,9 @@ final class MessageRouter {
               let entry = queuedMessage(messageID, for: peerID) else { return }
         // The bridge drop needs no connected courier — only the recipient
         // key — so it runs before the courier-slot bookkeeping.
-        bridgeCourierDeposit?(entry.content, messageID, recipientKey)
+        if bridgeCourierDeposit?(entry.content, messageID, recipientKey) == true {
+            onMessageCarried?(messageID, peerID)
+        }
         let remainingSlots = Self.maxCouriersPerMessage - entry.depositedCourierKeys.count
         guard remainingSlots > 0 else { return }
 

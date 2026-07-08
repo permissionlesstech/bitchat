@@ -103,13 +103,17 @@ final class BridgeCourierService: ObservableObject {
 
     /// Parallel-deposit a sealed copy of an outbound private message as a
     /// relay drop. Called by the message router alongside physical courier
-    /// deposits; idempotent per message ID.
-    func depositDrop(content: String, messageID: String, recipientNoiseKey: Data) {
-        guard bridgeEnabled?() ?? false else { return }
-        guard !publishedDropKeys.contains(messageID) else { return }
-        guard let envelope = sealEnvelope?(content, messageID, recipientNoiseKey) else { return }
+    /// deposits; idempotent per message ID. Returns true when a fresh drop
+    /// was sealed (published now or queued for the next relay connection) —
+    /// the router marks the message "carried" so the sender sees progress.
+    @discardableResult
+    func depositDrop(content: String, messageID: String, recipientNoiseKey: Data) -> Bool {
+        guard bridgeEnabled?() ?? false else { return false }
+        guard !publishedDropKeys.contains(messageID) else { return false }
+        guard let envelope = sealEnvelope?(content, messageID, recipientNoiseKey) else { return false }
         publishedDropKeys.insert(messageID)
         publishDrop(envelope)
+        return true
     }
 
     /// Publishes held envelopes (mail we carry for others) as drops,

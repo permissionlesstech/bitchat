@@ -568,6 +568,8 @@ private extension ChatViewModelBootstrapper {
         viewModel.messageRouter.bridgeCourierDeposit = { content, messageID, recipientKey in
             BridgeCourierService.shared.depositDrop(content: content, messageID: messageID, recipientNoiseKey: recipientKey)
         }
+        // (depositDrop's Bool flows back so a dropped message shows the
+        // "carried" state — a drop's delivery ack can't return over radio.)
         viewModel.messageRouter.startBridgeDepositSweep()
         bleService.onVerifiedPeerAnnounce = { _ in
             Task { @MainActor in

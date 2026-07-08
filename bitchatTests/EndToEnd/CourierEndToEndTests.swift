@@ -693,7 +693,10 @@ struct MessageRouterCourierTests {
         var drops: [(content: String, messageID: String, key: Data)] = []
         router.bridgeCourierDeposit = { content, messageID, key in
             drops.append((content, messageID, key))
+            return true
         }
+        var carried: [String] = []
+        router.onMessageCarried = { messageID, _ in carried.append(messageID) }
 
         router.sendPrivate("hi bob", to: bobID, recipientNickname: "bob", messageID: "m9")
         #expect(drops.isEmpty) // send trusted the (stale) mesh reachability
@@ -702,13 +705,15 @@ struct MessageRouterCourierTests {
         router.retryBridgeCourierDeposits()
         #expect(drops.isEmpty)
 
-        // Window lapses; the sweep publishes the retained copy as a drop.
+        // Window lapses; the sweep publishes the retained copy as a drop and
+        // the sender's message shows "carried" (its ack has no radio route).
         transport.reachablePeers = []
         router.retryBridgeCourierDeposits()
         #expect(drops.count == 1)
         #expect(drops.first?.messageID == "m9")
         #expect(drops.first?.content == "hi bob")
         #expect(drops.first?.key == bobKey)
+        #expect(carried == ["m9"])
     }
 
     @Test @MainActor
