@@ -76,6 +76,7 @@ final class VoiceRecordingViewModel: ObservableObject {
     func start(shouldShow: Bool) {
         guard shouldShow, state == .idle else { return }
         let session = sessionProvider()
+        SecureLogger.info("PTT: mic hold began (backend: \(session.isLive ? "live" : "classic"))", category: .session)
         activeSession = session
         state = .requestingPermission
         Task {
@@ -144,6 +145,10 @@ final class VoiceRecordingViewModel: ObservableObject {
         activeSession = nil
 
         guard case .recording(let startDate) = previousState, let completion, let session else {
+            // A quick press releases before the recorder spins up; that has
+            // always been a silent no-op for voice notes — log it so field
+            // tests can tell "tapped" apart from "capture broke".
+            SecureLogger.info("PTT: mic released before recording started (state was \(previousState)) — hold longer to record", category: .session)
             Task { await session?.cancel() }
             return
         }

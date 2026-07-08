@@ -117,7 +117,7 @@ extension ChatViewModel {
                 meshService.sendVoiceFrameBroadcast(packet)
             })
         case nil:
-            SecureLogger.debug("PTT: live unavailable — using classic voice note", category: .session)
+            SecureLogger.info("PTT: hold uses classic voice note (liveVoiceEnabled=\(PTTSettings.liveVoiceEnabled), dmSelected=\(selectedPrivateChatPeer != nil))", category: .session)
             return VoiceNoteCaptureSession()
         }
     }

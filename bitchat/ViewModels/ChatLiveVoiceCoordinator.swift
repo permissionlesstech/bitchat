@@ -147,7 +147,10 @@ final class ChatLiveVoiceCoordinator {
         // Live voice off means classic-notes-only in both directions: no live
         // bubble, no partial file, no early notification — the finalized
         // voice note still arrives through the normal pipeline.
-        guard PTTSettings.liveVoiceEnabled else { return }
+        guard PTTSettings.liveVoiceEnabled else {
+            SecureLogger.debug("PTT: dropping inbound voice frame — live voice is toggled off", category: .session)
+            return
+        }
         guard let packet = VoiceBurstPacket.decode(payload) else {
             SecureLogger.warning("PTT: undecodable voice frame from \(peerID.id.prefix(8))… (\(payload.count) bytes: \(payload.prefix(16).hexEncodedString())…)", category: .session)
             return
