@@ -105,7 +105,9 @@ struct ContentHeaderView: View {
                 if case .location = locationChannelsModel.selectedChannel {
                     return peerListModel.visibleGeohashPeerCount
                 }
-                return countAndColor.0
+                // One number for the whole room: radio-reachable peers plus
+                // people across the bridge. The people sheet breaks it down.
+                return countAndColor.0 + (bridgeService.isEnabled ? bridgeService.bridgedPeerCount : 0)
             }()
 
             HStack(spacing: 2) {
@@ -254,17 +256,6 @@ struct ContentHeaderView: View {
                         Text("\(headerOtherPeersCount)")
                             .font(.system(size: headerPeerCountFontSize, weight: .regular, design: theme.bodyFontDesign))
                             .accessibilityHidden(true)
-                        // People across the bridge: shown only on the mesh
-                        // channel while the bridge sees remote participants.
-                        if showBridgedPeerCount {
-                            Image(systemName: "network")
-                                .font(.system(size: headerPeerIconSize - 2, weight: .regular))
-                                .foregroundColor(Color.cyan.opacity(0.9))
-                            Text("\(bridgeService.bridgedPeerCount)")
-                                .font(.system(size: headerPeerCountFontSize, weight: .regular, design: theme.bodyFontDesign))
-                                .foregroundColor(Color.cyan.opacity(0.9))
-                                .accessibilityHidden(true)
-                        }
                     }
                     .foregroundColor(headerCountColor)
                     .lineLimit(headerLineLimit)
