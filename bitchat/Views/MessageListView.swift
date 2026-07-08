@@ -19,6 +19,8 @@ struct MessageListView: View {
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
+    @EnvironmentObject private var appChromeModel: AppChromeModel
+    @ObservedObject private var nearbyNotes = NearbyNotesCounter.shared
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.appTheme) private var theme
@@ -45,6 +47,9 @@ struct MessageListView: View {
     /// switches swap the timeline wholesale, so a count delta is only a
     /// "new messages" signal while the context is unchanged.
     @State private var unseenBaselineKey = ""
+    /// Whether this instance holds the nearby-notes counter active (mesh
+    /// public timeline only); balanced against activate/deactivate.
+    @State private var holdsNotesCounter = false
 
     @ThemedPalette private var palette
 
@@ -72,6 +77,14 @@ struct MessageListView: View {
             return MessageDisplayItem(id: "\(contextKey)|\(message.id)", message: message)
         }
 
+        VStack(spacing: 0) {
+        // Notes pinned to this place stay visible while chatting — a
+        // conversation starting must not hide what's left here.
+        if privatePeer == nil,
+           case .mesh = locationChannelsModel.selectedChannel,
+           nearbyNotes.noteCount > 0 {
+            notesHereStrip
+        }
         GeometryReader { geometry in
         ScrollViewReader { proxy in
             ScrollView {
@@ -261,6 +274,11 @@ struct MessageListView: View {
             }
         }
         }
+        }
+        .onAppear { updateNotesCounterHold() }
+        .onDisappear { releaseNotesCounterHold() }
+        .onChange(of: locationChannelsModel.selectedChannel) { _ in updateNotesCounterHold() }
+        .onChange(of: privatePeer) { _ in updateNotesCounterHold() }
         .environment(\.openURL, OpenURLAction { url in
             // Intercept custom cashu: links created in attributed text
             if let scheme = url.scheme?.lowercased(), scheme == "cashu" || scheme == "lightning" {
@@ -283,6 +301,56 @@ private extension MessageListView {
             return "dm:\(peer)"
         }
         return locationChannelsModel.selectedChannel.contextKey
+    }
+
+    /// Tappable strip above the mesh timeline while notes are pinned at this
+    /// place: opens the notices sheet on the geo tab.
+    var notesHereStrip: some View {
+        let text: String = nearbyNotes.noteCount == 1
+            ? String(localized: "content.empty.notes_one", comment: "Hint when exactly one note was left at this place")
+            : String(
+                format: String(localized: "content.empty.notes_many", comment: "Hint counting notes left at this place"),
+                locale: .current,
+                nearbyNotes.noteCount
+            )
+
+        return Button {
+            appChromeModel.presentNotices(geoTab: true)
+        } label: {
+            HStack(spacing: 6) {
+                Text(verbatim: "📍 \(text)")
+                    .bitchatFont(size: 12)
+                    .foregroundColor(palette.primary)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.bitchatSystem(size: 10))
+                    .foregroundColor(palette.secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(palette.secondary.opacity(0.08))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// The nearby-notes counter runs whenever the mesh public timeline is
+    /// showing — the strip needs a live count before it can decide to exist.
+    func updateNotesCounterHold() {
+        let shouldHold = privatePeer == nil && locationChannelsModel.selectedChannel.isMesh
+        guard shouldHold != holdsNotesCounter else { return }
+        holdsNotesCounter = shouldHold
+        if shouldHold {
+            NearbyNotesCounter.shared.activate()
+        } else {
+            NearbyNotesCounter.shared.deactivate()
+        }
+    }
+
+    func releaseNotesCounterHold() {
+        guard holdsNotesCounter else { return }
+        holdsNotesCounter = false
+        NearbyNotesCounter.shared.deactivate()
     }
 
     /// True when the mesh timeline holds nothing but archived echoes and
