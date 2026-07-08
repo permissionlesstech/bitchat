@@ -13994,6 +13994,186 @@
         }
       }
     },
+    "content.accessibility.gateway_hint" : {
+      "comment" : "Accessibility hint for the internet gateway indicator explaining a tap opens the channel sheet",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "يفتح إعدادات القنوات لتشغيل البوابة أو إيقافها"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "গেটওয়ে চালু বা বন্ধ করতে চ্যানেল সেটিংস খোলে"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Öffnet die kanaleinstellungen, um das gateway ein- oder auszuschalten"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens channel settings to turn the gateway on or off"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abre los ajustes de canales para activar o desactivar la puerta de enlace"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Binubuksan ang mga setting ng channel para i-on o i-off ang gateway"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ouvre les réglages des canaux pour activer ou désactiver la passerelle"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "פותח את הגדרות הערוצים כדי להפעיל או לכבות את השער"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "गेटवे चालू या बंद करने के लिए चैनल सेटिंग्स खोलता है"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Membuka pengaturan kanal untuk menyalakan atau mematikan gateway"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Apre le impostazioni dei canali per attivare o disattivare il gateway"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "チャンネル設定を開いてゲートウェイのオン/オフを切り替えます"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "채널 설정을 열어 게이트웨이를 켜거나 끕니다"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Membuka tetapan saluran untuk menghidupkan atau mematikan gateway"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "गेटवे खोल्न वा बन्द गर्न च्यानल सेटिङहरू खोल्छ"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Opent kanaalinstellingen om de gateway aan of uit te zetten"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Otwiera ustawienia kanałów, aby włączyć lub wyłączyć bramę"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abre as definições de canais para ligar ou desligar o gateway"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Abre as configurações de canais para ligar ou desligar o gateway"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Открывает настройки каналов, чтобы включить или выключить шлюз"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Öppnar kanalinställningar för att slå på eller av gatewayen"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "கேட்வேயை இயக்க அல்லது அணைக்க சேனல் அமைப்புகளைத் திறக்கிறது"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "เปิดการตั้งค่าช่องเพื่อเปิดหรือปิดเกตเวย์"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ağ geçidini açmak veya kapatmak için kanal ayarlarını açar"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Відкриває налаштування каналів, щоб увімкнути або вимкнути шлюз"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "گیٹ وے کو آن یا آف کرنے کے لیے چینل کی ترتیبات کھولتا ہے"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mở cài đặt kênh để bật hoặc tắt gateway"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "打开频道设置以开启或关闭网关"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "開啟頻道設定以開啟或關閉閘道"
+          }
+        }
+      }
+    },
     "content.accessibility.group_chat" : {
       "extractionState" : "manual",
       "localizations" : {

@@ -252,6 +252,21 @@ struct AppInfoView: View {
                 }
             }
 
+            // Voice
+            VStack(alignment: .leading, spacing: 16) {
+                SectionHeader(Strings.Voice.title)
+
+                HStack(spacing: 0) {
+                    FeatureRow(info: Strings.Voice.live)
+                    Toggle(Strings.Voice.live.title, isOn: $liveVoiceEnabled)
+                        .labelsHidden()
+                        .tint(palette.accent)
+                        .onChange(of: liveVoiceEnabled) { newValue in
+                            PTTSettings.liveVoiceEnabled = newValue
+                        }
+                }
+            }
+
             // Network diagnostics
             if topologyProvider != nil {
                 VStack(alignment: .leading, spacing: 16) {

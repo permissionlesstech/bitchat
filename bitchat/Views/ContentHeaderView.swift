@@ -33,7 +33,12 @@ struct ContentHeaderView: View {
         HStack(spacing: 0) {
             Text(verbatim: "bitchat/")
                 .bitchatFont(size: 18, weight: .medium)
+                .lineLimit(1)
                 .foregroundColor(palette.primary)
+                // When icons crowd the header, squeeze the nickname first
+                // (priority 0) and the logo only as a last resort; the icon
+                // cluster at priority 3 never gives up width.
+                .layoutPriority(2)
                 .onTapGesture(count: 3) {
                     appChromeModel.panicClearAllData()
                 }
@@ -55,6 +60,8 @@ struct ContentHeaderView: View {
                 Text(verbatim: "@")
                     .bitchatFont(size: 14)
                     .foregroundColor(palette.secondary)
+                    // Keep the sigil whole while the field beside it shrinks.
+                    .fixedSize()
 
                 TextField(
                     "content.input.nickname_placeholder",
@@ -96,16 +103,22 @@ struct ContentHeaderView: View {
 
             HStack(spacing: 2) {
                 if locationChannelsModel.gatewayEnabled {
-                    Image(systemName: "globe")
-                        .font(.bitchatSystem(size: 12))
-                        .foregroundColor(palette.secondary.opacity(0.8))
-                        .headerTapTarget()
-                        .accessibilityLabel(
-                            String(localized: "content.accessibility.gateway_active", defaultValue: "Internet gateway active, sharing your connection with the mesh", comment: "Accessibility label for the internet gateway indicator")
-                        )
-                        .help(
-                            String(localized: "content.header.gateway_active", defaultValue: "Sharing your internet connection with nearby mesh peers", comment: "Tooltip for the internet gateway indicator")
-                        )
+                    Button(action: { appChromeModel.isLocationChannelsSheetPresented = true }) {
+                        Image(systemName: "globe")
+                            .font(.bitchatSystem(size: 12))
+                            .foregroundColor(palette.secondary.opacity(0.8))
+                            .headerTapTarget()
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(
+                        String(localized: "content.accessibility.gateway_active", defaultValue: "Internet gateway active, sharing your connection with the mesh", comment: "Accessibility label for the internet gateway indicator")
+                    )
+                    .accessibilityHint(
+                        String(localized: "content.accessibility.gateway_hint", defaultValue: "Opens channel settings to turn the gateway on or off", comment: "Accessibility hint for the internet gateway indicator explaining a tap opens the channel sheet")
+                    )
+                    .help(
+                        String(localized: "content.header.gateway_active", defaultValue: "Sharing your internet connection with nearby mesh peers", comment: "Tooltip for the internet gateway indicator")
+                    )
                 }
 
                 if carriedMailCount > 0 {
