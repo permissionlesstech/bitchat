@@ -17,6 +17,10 @@ struct LocationNotesDependencies {
     var now: () -> Date
     // Fires when the geo relay directory refreshes; used to retry after "no relays".
     var relayDirectoryUpdates: AnyPublisher<Void, Never> = Empty(completeImmediately: false).eraseToAnyPublisher()
+    /// Whether any of the target relays has a live connection — distinguishes
+    /// "loaded, empty" from "still connecting (Tor warming up)" when EOSE
+    /// fires without data. Defaults to true so tests keep legacy behavior.
+    var anyRelayConnected: @MainActor (_ relayUrls: [String]) -> Bool = { _ in true }
 
     private static let idBridge = NostrIdentityBridge()
 
@@ -46,7 +50,10 @@ struct LocationNotesDependencies {
         relayDirectoryUpdates: NotificationCenter.default
             .publisher(for: .geoRelayDirectoryDidRefresh)
             .map { _ in () }
-            .eraseToAnyPublisher()
+            .eraseToAnyPublisher(),
+        anyRelayConnected: { relayUrls in
+            NostrRelayManager.shared.isAnyRelayConnected(among: relayUrls)
+        }
     )
 }
 
@@ -57,6 +64,10 @@ final class LocationNotesManager: ObservableObject {
     enum State: Equatable {
         case idle
         case loading
+        /// The initial fetch timed out with zero target relays connected
+        /// (usually Tor still bootstrapping): not "empty", just not there
+        /// yet. Retries automatically once a relay comes up.
+        case connecting
         case ready
         case noRelays
     }
@@ -115,6 +126,7 @@ final class LocationNotesManager: ObservableObject {
     private var noteIDs = Set<String>() // O(1) duplicate detection
     private var directoryUpdateCancellable: AnyCancellable?
     private var expiryPruneTimer: Timer?
+    private var connectivityRetryTimer: Timer?
     private let dependencies: LocationNotesDependencies
     private let maxNotesInMemory = 500 // Defensive cap (relay limit is 200)
 
@@ -160,6 +172,7 @@ final class LocationNotesManager: ObservableObject {
 
     deinit {
         expiryPruneTimer?.invalidate()
+        connectivityRetryTimer?.invalidate()
     }
 
     /// Drops notes whose NIP-40 expiry has passed. Their ids stay in
@@ -220,6 +233,8 @@ final class LocationNotesManager: ObservableObject {
     private func subscribe() {
         state = .loading
         errorMessage = nil
+        connectivityRetryTimer?.invalidate()
+        connectivityRetryTimer = nil
         if let sub = subscriptionID {
             dependencies.unsubscribe(sub)
             subscriptionID = nil
@@ -270,10 +285,45 @@ final class LocationNotesManager: ObservableObject {
         }, { [weak self] in
             guard let self = self else { return }
             self.initialLoadComplete = true
-            if self.state != .noRelays {
+            guard self.state != .noRelays else { return }
+            // EOSE with no data and zero connected target relays means the
+            // 10s fallback fired while Tor was still warming up — showing
+            // "no notes" would be a lie. Wait visibly and retry.
+            if self.notes.isEmpty, !self.dependencies.anyRelayConnected(relays) {
+                self.state = .connecting
+                self.scheduleConnectivityRetry(relays: relays)
+            } else {
                 self.state = .ready
             }
         })
+    }
+
+    /// While `.connecting`, poll for a live target relay and re-subscribe as
+    /// soon as one appears (fresh REQ, fresh EOSE tracking). The poll dies
+    /// with the state: any subscribe/cancel invalidates it.
+    private func scheduleConnectivityRetry(relays: [String]) {
+        connectivityRetryTimer?.invalidate()
+        connectivityRetryTimer = Timer.scheduledTimer(
+            withTimeInterval: TransportConfig.uiGeoNotesConnectivityRetrySeconds,
+            repeats: true
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.retryIfRelaysAvailable(relays: relays)
+            }
+        }
+    }
+
+    func retryIfRelaysAvailable(relays: [String]) {
+        guard state == .connecting else {
+            connectivityRetryTimer?.invalidate()
+            connectivityRetryTimer = nil
+            return
+        }
+        guard dependencies.anyRelayConnected(relays) else { return }
+        connectivityRetryTimer?.invalidate()
+        connectivityRetryTimer = nil
+        SecureLogger.debug("LocationNotesManager: relay came up, retrying notes fetch for \(geohash)", category: .session)
+        refresh()
     }
 
     /// Send a location note for the current geohash using the per-geohash
@@ -410,6 +460,8 @@ final class LocationNotesManager: ObservableObject {
             dependencies.unsubscribe(sub)
             subscriptionID = nil
         }
+        connectivityRetryTimer?.invalidate()
+        connectivityRetryTimer = nil
         state = .idle
         errorMessage = nil
     }

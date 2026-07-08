@@ -336,6 +336,79 @@ struct LocationNotesManagerTests {
         #expect(manager.notes.isEmpty)
     }
 
+    @Test
+    func eoseWithoutConnectedRelays_showsConnectingInsteadOfEmpty() {
+        var storedEOSE: (() -> Void)?
+        var deps = LocationNotesDependencies(
+            relayLookup: { _, _ in ["wss://relay.one"] },
+            subscribe: { _, _, _, _, eose in storedEOSE = eose },
+            unsubscribe: { _ in },
+            sendEvent: { _, _ in },
+            deriveIdentity: { _ in throw TestError.shouldNotDerive },
+            now: { Date() }
+        )
+        deps.anyRelayConnected = { _ in false }
+
+        let manager = LocationNotesManager(geohash: "u4pruydq", dependencies: deps)
+        storedEOSE?()
+
+        #expect(manager.state == .connecting)
+        #expect(manager.initialLoadComplete)
+    }
+
+    @Test
+    func eoseWithConnectedRelayAndNoNotes_isReadyEmpty() {
+        var storedEOSE: (() -> Void)?
+        var deps = LocationNotesDependencies(
+            relayLookup: { _, _ in ["wss://relay.one"] },
+            subscribe: { _, _, _, _, eose in storedEOSE = eose },
+            unsubscribe: { _ in },
+            sendEvent: { _, _ in },
+            deriveIdentity: { _ in throw TestError.shouldNotDerive },
+            now: { Date() }
+        )
+        deps.anyRelayConnected = { _ in true }
+
+        let manager = LocationNotesManager(geohash: "u4pruydq", dependencies: deps)
+        storedEOSE?()
+
+        #expect(manager.state == .ready)
+    }
+
+    @Test
+    func connectingState_retriesOnceARelayComesUp() {
+        var storedEOSE: (() -> Void)?
+        var subscribeCount = 0
+        var relayUp = false
+        var deps = LocationNotesDependencies(
+            relayLookup: { _, _ in ["wss://relay.one"] },
+            subscribe: { _, _, _, _, eose in
+                subscribeCount += 1
+                storedEOSE = eose
+            },
+            unsubscribe: { _ in },
+            sendEvent: { _, _ in },
+            deriveIdentity: { _ in throw TestError.shouldNotDerive },
+            now: { Date() }
+        )
+        deps.anyRelayConnected = { _ in relayUp }
+
+        let manager = LocationNotesManager(geohash: "u4pruydq", dependencies: deps)
+        #expect(subscribeCount == 1)
+        storedEOSE?()
+        #expect(manager.state == .connecting)
+
+        // Relay still down: no retry.
+        manager.retryIfRelaysAvailable(relays: ["wss://relay.one"])
+        #expect(subscribeCount == 1)
+
+        // Relay up: re-subscribes for a fresh initial fetch.
+        relayUp = true
+        manager.retryIfRelaysAvailable(relays: ["wss://relay.one"])
+        #expect(subscribeCount == 2)
+        #expect(manager.state == .loading)
+    }
+
     private enum TestError: Error {
         case shouldNotDerive
     }

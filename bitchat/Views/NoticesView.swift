@@ -126,6 +126,7 @@ struct NoticesView: View {
         static let locationUnavailable = String(localized: "content.notes.location_unavailable", comment: "Shown when the device location is unavailable for geo notices")
         static let enableLocation = String(localized: "content.location.enable", comment: "Button enabling location for geo notices")
         static let loadingNotes: LocalizedStringKey = "location_notes.loading_notes"
+        static let connectingRelays: LocalizedStringKey = "location_notes.connecting_relays"
         static let noRelaysNearby: LocalizedStringKey = "location_notes.no_relays_nearby"
         static let relaysRetryHint: LocalizedStringKey = "location_notes.relays_retry_hint"
         static let retry: LocalizedStringKey = "location_notes.action.retry"
@@ -476,7 +477,9 @@ private struct NoticesList: View {
     /// once the sources settled.
     private var showEmptyState: Bool {
         guard let notesManager else { return true }
-        return notesManager.initialLoadComplete && notesManager.state != .loading
+        return notesManager.initialLoadComplete
+            && notesManager.state != .loading
+            && notesManager.state != .connecting
     }
 
     @ViewBuilder
@@ -486,6 +489,15 @@ private struct NoticesList: View {
                 HStack(spacing: 10) {
                     ProgressView()
                     Text(Strings.loadingNotes)
+                        .bitchatFont(size: 12)
+                        .foregroundColor(palette.secondary)
+                    Spacer()
+                }
+                .padding(.vertical, 8)
+            } else if notesManager.state == .connecting {
+                HStack(spacing: 10) {
+                    ProgressView()
+                    Text(Strings.connectingRelays)
                         .bitchatFont(size: 12)
                         .foregroundColor(palette.secondary)
                     Spacer()
