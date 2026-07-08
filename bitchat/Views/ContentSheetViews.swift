@@ -522,10 +522,11 @@ private struct ContentPrivateHeaderInfoButton: View {
                             .foregroundColor(.purple)
                             .accessibilityLabel(String(localized: "content.accessibility.available_nostr", comment: "Accessibility label for Nostr-available peer indicator"))
                     case .offline:
-                        // Same dimmed offline mark the mesh list uses; icon
-                        // only — a leading text label read as part of the
-                        // name ("sin conexión bob"). VoiceOver still says it.
-                        Image(systemName: "person")
+                        // Slashed variant of the connected glyph — offline as
+                        // the negation of connected, no text label (a leading
+                        // one read as part of the name: "sin conexión bob").
+                        // VoiceOver still says it.
+                        Image(systemName: "antenna.radiowaves.left.and.right.slash")
                             .font(.bitchatSystem(size: 14))
                             .foregroundColor(palette.secondary)
                             .accessibilityLabel(String(localized: "mesh_peers.state.offline", comment: "State label for a peer that is not currently reachable"))

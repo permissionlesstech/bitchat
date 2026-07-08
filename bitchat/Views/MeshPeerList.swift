@@ -86,8 +86,9 @@ struct MeshPeerList: View {
                                 .foregroundColor(.purple)
                                 .help(Strings.nostr)
                         } else {
-                            // Fallback icon for others (dimmed)
-                            Image(systemName: "person")
+                            // Offline: slashed variant of the connected glyph
+                            // (dimmed) — clearer than a generic person icon.
+                            Image(systemName: "antenna.radiowaves.left.and.right.slash")
                                 .font(.bitchatSystem(size: 10))
                                 .foregroundColor(palette.secondary)
                                 .help(Strings.offline)
