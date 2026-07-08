@@ -22,7 +22,6 @@ struct LocationChannelsSheet: View {
         static let loadingNearby: LocalizedStringKey = "location_channels.loading_nearby"
         static let teleport: LocalizedStringKey = "location_channels.action.teleport"
         static let bookmarked: LocalizedStringKey = "location_channels.bookmarked_section_title"
-        static let removeAccess: LocalizedStringKey = "location_channels.action.remove_access"
 
         static let invalidGeohash = String(localized: "location_channels.error.invalid_geohash", comment: "Error shown when a custom geohash is invalid")
         static let switchChannelHint = String(localized: "location_channels.accessibility.switch_hint", comment: "Accessibility hint on a channel row explaining activation switches to it")
@@ -234,20 +233,6 @@ struct LocationChannelsSheet: View {
                         .padding(.vertical, 8)
                 }
 
-                if locationChannelsModel.permissionState == .authorized {
-                    sectionDivider
-                    Button(action: SystemSettings.location.open) {
-                        Text(Strings.removeAccess)
-                            .bitchatFont(size: 12)
-                            .foregroundColor(palette.alertRed)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
-                            .background(Color.red.opacity(0.08))
-                            .cornerRadius(6)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.vertical, 8)
-                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, 6)

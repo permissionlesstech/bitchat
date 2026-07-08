@@ -20,10 +20,12 @@ struct AppInfoView: View {
 
     @State private var showTopology = false
     @State private var liveVoiceEnabled = PTTSettings.liveVoiceEnabled
-    @State private var selectedPane: Pane = .settings
+    /// Sticky across opens: first-ever open lands on Info (the gentler
+    /// introduction), and afterwards the sheet reopens wherever it was left.
+    @AppStorage("appInfo.selectedPane") private var selectedPane: Pane = .info
     @State private var showPanicConfirmation = false
 
-    private enum Pane: Hashable {
+    private enum Pane: String {
         case settings
         case info
     }
@@ -140,11 +142,8 @@ struct AppInfoView: View {
 
         enum Voice {
             static let title: LocalizedStringKey = "app_info.voice.title"
-            static let live = AppInfoFeatureInfo(
-                icon: "dot.radiowaves.left.and.right",
-                title: "app_info.voice.live.title",
-                description: "app_info.voice.live.description"
-            )
+            // The live-voice title/description keys are referenced inline at
+            // the toggle (they ride the shared settingToggle now).
         }
 
         enum Network {
@@ -256,8 +255,8 @@ struct AppInfoView: View {
 
     private var panePicker: some View {
         Picker(Strings.Settings.tabPickerLabel, selection: $selectedPane) {
-            Text(Strings.Settings.tabSettings).tag(Pane.settings)
             Text(Strings.Settings.tabInfo).tag(Pane.info)
+            Text(Strings.Settings.tabSettings).tag(Pane.settings)
         }
         .pickerStyle(.segmented)
         .labelsHidden()
@@ -304,20 +303,22 @@ struct AppInfoView: View {
                 }
             }
 
-            // Voice
-            VStack(alignment: .leading, spacing: 16) {
+            // Voice — same card + IRC pill as every other toggle setting.
+            VStack(alignment: .leading, spacing: 12) {
                 SectionHeader(Strings.Voice.title)
 
-                HStack(spacing: 0) {
-                    FeatureRow(info: Strings.Voice.live)
-                    Toggle(isOn: $liveVoiceEnabled) {
-                        Strings.Voice.live.title
-                    }
-                    .labelsHidden()
-                    .tint(palette.accent)
-                    .onChange(of: liveVoiceEnabled) { newValue in
-                        PTTSettings.liveVoiceEnabled = newValue
-                    }
+                settingsCard {
+                    settingToggle(
+                        title: Text("app_info.voice.live.title"),
+                        subtitle: Text("app_info.voice.live.description"),
+                        isOn: Binding(
+                            get: { liveVoiceEnabled },
+                            set: { newValue in
+                                liveVoiceEnabled = newValue
+                                PTTSettings.liveVoiceEnabled = newValue
+                            }
+                        )
+                    )
                 }
             }
 
@@ -326,7 +327,7 @@ struct AppInfoView: View {
                 SectionHeader(verbatim: Strings.Settings.connectivityTitle)
 
                 settingsCard {
-                    connectivityToggle(
+                    settingToggle(
                         title: Text(Strings.Settings.bridgeTitle),
                         subtitle: Text(Strings.Settings.bridgeSubtitle),
                         isOn: bridgeToggleBinding
@@ -342,7 +343,7 @@ struct AppInfoView: View {
                 }
 
                 settingsCard {
-                    connectivityToggle(
+                    settingToggle(
                         title: Text(Strings.Settings.gatewayTitle),
                         subtitle: Text(Strings.Settings.gatewaySubtitle),
                         isOn: gatewayToggleBinding
@@ -350,11 +351,28 @@ struct AppInfoView: View {
                 }
 
                 settingsCard {
-                    connectivityToggle(
+                    settingToggle(
                         title: Text(Strings.Settings.torTitle),
                         subtitle: Text(Strings.Settings.torSubtitle),
                         isOn: torToggleBinding
                     )
+                }
+
+                // Location powers the channels list and the bridge cell;
+                // revoking it lives with the other connectivity controls
+                // (moved from the channels sheet). The button deep-links to
+                // the system permission screen.
+                if locationChannelsModel.permissionState == .authorized {
+                    Button(action: SystemSettings.location.open) {
+                        Text("location_channels.action.remove_access")
+                            .bitchatFont(size: 12)
+                            .foregroundColor(palette.alertRed)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                            .background(Color.red.opacity(0.08))
+                            .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
 
@@ -424,8 +442,9 @@ struct AppInfoView: View {
             .cornerRadius(8)
     }
 
-    /// A title+subtitle row driving an IRC-style on/off pill.
-    private func connectivityToggle(title: Text, subtitle: Text, isOn: Binding<Bool>) -> some View {
+    /// A title+subtitle row driving an IRC-style on/off pill — the one
+    /// toggle style every setting uses.
+    private func settingToggle(title: Text, subtitle: Text, isOn: Binding<Bool>) -> some View {
         Toggle(isOn: isOn) {
             VStack(alignment: .leading, spacing: 2) {
                 title
