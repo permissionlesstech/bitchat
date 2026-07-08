@@ -44,13 +44,14 @@ struct MeshPeerList: View {
         }
 
         if peerListModel.meshRows.isEmpty {
-            VStack(alignment: .leading, spacing: 0) {
-                Text(Strings.noneNearby)
-                    .bitchatFont(size: 14)
-                    .foregroundColor(palette.secondary)
-                    .padding(.horizontal)
-                    .padding(.top, 12)
-            }
+            // Match the section's row rhythm (same size, indent, and vertical
+            // padding as a peer row) so the empty state reads as the list's
+            // only line, not a floating caption.
+            Text(Strings.noneNearby)
+                .bitchatFont(size: 14)
+                .foregroundColor(palette.secondary)
+                .padding(.horizontal)
+                .padding(.vertical, 4)
         } else {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(0..<peers.count, id: \.self) { idx in

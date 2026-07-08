@@ -155,9 +155,6 @@ final class BridgeService: ObservableObject {
     /// True when the mesh timeline already holds this message ID (the radio
     /// copy) — used to skip pointless downlink airtime.
     var isMessageSeenLocally: (@MainActor (String) -> Bool)?
-    /// Whether the internet-sharing gateway toggle is on; bridge gateway
-    /// duties (deposits + downlink) require both toggles.
-    var gatewayEnabled: (@MainActor () -> Bool)?
     /// Derives the unlinkable per-cell rendezvous identity.
     var deriveIdentity: (@MainActor (String) throws -> NostrIdentity)?
     /// Local nickname for the `n` tag.
@@ -267,10 +264,12 @@ final class BridgeService: ObservableObject {
         return nil
     }
 
-    /// True when this device performs gateway duties for the island.
-    private var isBridgeGateway: Bool {
-        isEnabled && (gatewayEnabled?() ?? false)
-    }
+    // One switch does the right thing: while bridging, a device with
+    // internet automatically serves its island (accepts deposits, carries
+    // remote messages onto the radio). The marginal cost over bridging
+    // yourself is small — the relay connections and subscription already
+    // exist for you — and a separate "serve others" lever proved to be a
+    // silent trap for mesh-only neighbors.
 
     // MARK: - Outgoing (sender role)
 
@@ -376,10 +375,12 @@ final class BridgeService: ObservableObject {
             }
             recordParticipant(event.pubkey, isLocal: isLocalRadioCopy, nickname: message.senderNickname)
             inject(message)
-            // Gateway duty: carry remote islands' messages onto the radio for
+            // Serving duty: carry remote islands' messages onto the radio for
             // mesh-only peers. Local-origin events are skipped — the island
-            // already heard them (loop rule 3).
-            if isBridgeGateway, !isLocalRadioCopy,
+            // already heard them (loop rule 3). The drain is jitter-delayed:
+            // with every online bridger serving, the holdoff lets gateways
+            // hear each other's broadcasts and skip duplicates.
+            if !isLocalRadioCopy,
                !meshBroadcastEventIDs.contains(event.id),
                !rebroadcastEventIDs.contains(event.id),
                !pendingDownlinks.contains(where: { $0.event.id == event.id }) {
@@ -387,7 +388,7 @@ final class BridgeService: ObservableObject {
                 if pendingDownlinks.count > Limits.maxPendingDownlinks {
                     pendingDownlinks.removeFirst(pendingDownlinks.count - Limits.maxPendingDownlinks)
                 }
-                drainPendingDownlinks()
+                scheduleDownlinkDrainIfNeeded(jitter: true)
             }
         }
     }
@@ -413,7 +414,7 @@ final class BridgeService: ObservableObject {
     // MARK: - Uplink (gateway role: mesh peer -> internet)
 
     private func handleUplinkDeposit(_ carrier: NostrCarrierPacket, from depositor: PeerID) {
-        guard isBridgeGateway else { return }
+        guard isEnabled else { return }
         // Cheap structural gates before any crypto, mirroring GatewayService.
         guard let event = structurallyValidEvent(from: carrier) else {
             SecureLogger.debug("🌉 Bridge: rejected deposit from \(depositor.id.prefix(8))… (failed validation)", category: .security)
@@ -443,7 +444,7 @@ final class BridgeService: ObservableObject {
 
     /// Publish everything queued while relays were unreachable.
     func flushQueuedUplinks() {
-        guard isBridgeGateway, relaysConnected?() ?? false, !queuedUplinks.isEmpty else { return }
+        guard isEnabled, relaysConnected?() ?? false, !queuedUplinks.isEmpty else { return }
         let queued = queuedUplinks
         queuedUplinks.removeAll()
         for item in queued where !publishedEventIDs.contains(item.event.id) {
@@ -493,6 +494,10 @@ final class BridgeService: ObservableObject {
               downlinkSendTimes.count < Limits.downlinkEventsPerMinute {
             let (event, cell) = pendingDownlinks.removeFirst()
             guard isFresh(event) else { continue }
+            // Suppression recheck at send time: another gateway may have
+            // broadcast this event during our jitter holdoff.
+            guard !meshBroadcastEventIDs.contains(event.id),
+                  !rebroadcastEventIDs.contains(event.id) else { continue }
             guard let carrier = NostrCarrierPacket(direction: .fromBridge, geohash: cell, event: event),
                   let payload = carrier.encode() else { continue }
             broadcastToMesh?(payload)
@@ -505,10 +510,17 @@ final class BridgeService: ObservableObject {
         scheduleDownlinkDrainIfNeeded()
     }
 
-    private func scheduleDownlinkDrainIfNeeded() {
+    private func scheduleDownlinkDrainIfNeeded(jitter: Bool = false) {
         guard !pendingDownlinks.isEmpty, !downlinkDrainScheduled else { return }
-        let oldest = downlinkSendTimes.min() ?? now()
-        let delay = max(0.05, 60 - now().timeIntervalSince(oldest))
+        let delay: TimeInterval
+        if jitter {
+            // Multi-gateway suppression window: enough spread for another
+            // gateway's broadcast to land and mark the event mesh-carried.
+            delay = Double.random(in: 0.2...1.5)
+        } else {
+            let oldest = downlinkSendTimes.min() ?? now()
+            delay = max(0.05, 60 - now().timeIntervalSince(oldest))
+        }
         downlinkDrainScheduled = true
         let fire: @MainActor () -> Void = { [weak self] in
             guard let self else { return }

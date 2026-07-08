@@ -56,7 +56,7 @@ struct AppInfoView: View {
             static let connectivityTitle = String(localized: "app_info.settings.connectivity.title", defaultValue: "CONNECTIVITY", comment: "Section header (uppercase) for the connectivity toggles: mesh bridge, internet gateway, tor routing")
 
             static let bridgeTitle = String(localized: "app_info.settings.bridge.title", defaultValue: "mesh bridge", comment: "Title of the mesh bridge toggle in settings")
-            static let bridgeSubtitle = String(localized: "app_info.settings.bridge.subtitle", defaultValue: "joins nearby mesh islands over the internet: what you say in the mesh channel also reaches people in your area beyond radio range, and their messages appear here marked with the network glyph", comment: "Subtitle explaining what the mesh bridge toggle does")
+            static let bridgeSubtitle = String(localized: "app_info.settings.bridge.subtitle", defaultValue: "joins nearby mesh islands over the internet: what you say in the mesh channel also reaches people in your area beyond radio range, and their messages appear here marked with the network glyph. while you have internet, your device also carries bridge and location-channel traffic for phones around you that have none.", comment: "Subtitle explaining what the mesh bridge toggle does")
             static func bridgeCell(_ cell: String) -> String {
                 String(
                     format: String(localized: "app_info.settings.bridge.cell", defaultValue: "rendezvous cell: %@", comment: "Caption under the mesh bridge toggle showing the geohash cell the bridge is meeting on"),
@@ -66,13 +66,11 @@ struct AppInfoView: View {
             }
             static let bridgeNoCell = String(localized: "app_info.settings.bridge.no_cell", defaultValue: "no rendezvous cell yet — needs location access or a nearby bridge peer", comment: "Caption under the mesh bridge toggle when the bridge is on but has no geohash cell to meet on")
 
-            // Moved from LocationChannelsSheet; keys unchanged.
+            // Moved from LocationChannelsSheet; keys unchanged. (The former
+            // internet-gateway toggle is gone: the bridge switch drives all
+            // internet sharing, including geohash-channel gatewaying.)
             static let torTitle: LocalizedStringKey = "location_channels.tor.title"
             static let torSubtitle: LocalizedStringKey = "location_channels.tor.subtitle"
-            static let gatewayTitle: LocalizedStringKey = "location_channels.gateway.title"
-            // New key: the gateway now carries bridge traffic too, so the old
-            // geohash-only subtitle undersold it.
-            static let gatewaySubtitle = String(localized: "app_info.settings.gateway.subtitle", defaultValue: "shares your internet connection with the mesh around you, carrying location-channel and bridge traffic for phones that have none", comment: "Subtitle explaining what the internet gateway toggle does")
             static let toggleOn: LocalizedStringKey = "common.toggle.on"
             static let toggleOff: LocalizedStringKey = "common.toggle.off"
 
@@ -359,14 +357,6 @@ struct AppInfoView: View {
 
                 settingsCard {
                     settingToggle(
-                        title: Text(Strings.Settings.gatewayTitle),
-                        subtitle: Text(Strings.Settings.gatewaySubtitle),
-                        isOn: gatewayToggleBinding
-                    )
-                }
-
-                settingsCard {
-                    settingToggle(
                         title: Text(Strings.Settings.torTitle),
                         subtitle: Text(Strings.Settings.torSubtitle),
                         isOn: torToggleBinding
@@ -482,13 +472,6 @@ struct AppInfoView: View {
         Binding(
             get: { locationChannelsModel.userTorEnabled },
             set: { locationChannelsModel.setUserTorEnabled($0) }
-        )
-    }
-
-    private var gatewayToggleBinding: Binding<Bool> {
-        Binding(
-            get: { locationChannelsModel.gatewayEnabled },
-            set: { locationChannelsModel.setGatewayEnabled($0) }
         )
     }
 

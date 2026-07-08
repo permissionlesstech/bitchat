@@ -19,7 +19,6 @@ struct BridgeCourierServiceTests {
     @MainActor
     private final class Fixture {
         var bridgeOn = true
-        var gatewayOn = false
         var relaysConnected = true
         var myKey: Data? = Fixture.randomKey()
         var localPeers: [(peerID: PeerID, noiseKey: Data)] = []
@@ -39,7 +38,6 @@ struct BridgeCourierServiceTests {
         init() {
             service = BridgeCourierService()
             service.bridgeEnabled = { [weak self] in self?.bridgeOn ?? false }
-            service.gatewayEnabled = { [weak self] in self?.gatewayOn ?? false }
             service.relaysConnected = { [weak self] in self?.relaysConnected ?? false }
             service.publishEvent = { [weak self] event in self?.publishedEvents.append(event) }
             service.openSubscription = { [weak self] tags in self?.openedSubscriptions.append(tags) }
@@ -148,9 +146,8 @@ struct BridgeCourierServiceTests {
         #expect(fixture.publishedEvents[0].pubkey != fixture.publishedEvents[1].pubkey)
     }
 
-    @Test func gatewayPublishesHeldEnvelopesWithCooldown() {
+    @Test func bridgingPublishesHeldEnvelopesWithCooldown() {
         let fixture = Fixture()
-        fixture.gatewayOn = true
         fixture.held = [makeEnvelope(recipientKey: Fixture.randomKey())]
 
         fixture.service.publishHeldEnvelopes()
@@ -172,9 +169,8 @@ struct BridgeCourierServiceTests {
         #expect(tags.count == 3) // adjacent UTC days
     }
 
-    @Test func gatewayRefreshAlsoWatchesLocalVerifiedPeers() throws {
+    @Test func refreshAlsoWatchesLocalVerifiedPeers() throws {
         let fixture = Fixture()
-        fixture.gatewayOn = true
         let peerKey = Fixture.randomKey()
         fixture.localPeers = [(PeerID(str: "aabbccdd00112233"), peerKey)]
 
@@ -222,7 +218,6 @@ struct BridgeCourierServiceTests {
 
     @Test func dropForWatchedLocalPeerIsDelivered() throws {
         let fixture = Fixture()
-        fixture.gatewayOn = true
         let peerKey = Fixture.randomKey()
         let peer = PeerID(str: "aabbccdd00112233")
         fixture.localPeers = [(peer, peerKey)]
@@ -238,7 +233,6 @@ struct BridgeCourierServiceTests {
 
     @Test func dropForStrangerIsIgnored() throws {
         let fixture = Fixture()
-        fixture.gatewayOn = true
         fixture.service.refresh()
         let envelope = makeEnvelope(recipientKey: Fixture.randomKey())
 

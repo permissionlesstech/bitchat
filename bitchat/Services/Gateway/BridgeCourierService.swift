@@ -56,7 +56,6 @@ final class BridgeCourierService: ObservableObject {
     // MARK: Wiring (set once by the bootstrapper; fakes in tests)
 
     var bridgeEnabled: (@MainActor () -> Bool)?
-    var gatewayEnabled: (@MainActor () -> Bool)?
     var relaysConnected: (@MainActor () -> Bool)?
     /// Publishes a signed drop event to the default (DM) relays.
     var publishEvent: (@MainActor (NostrEvent) -> Void)?
@@ -112,11 +111,10 @@ final class BridgeCourierService: ObservableObject {
         publishDrop(envelope)
     }
 
-    /// Publishes gateway-held envelopes (mail we carry for others) as drops,
+    /// Publishes held envelopes (mail we carry for others) as drops,
     /// honoring the per-envelope cooldown.
     func publishHeldEnvelopes() {
-        guard bridgeEnabled?() ?? false, gatewayEnabled?() ?? false,
-              relaysConnected?() ?? false else { return }
+        guard bridgeEnabled?() ?? false, relaysConnected?() ?? false else { return }
         for envelope in heldEnvelopes?(Limits.heldEnvelopePublishCooldown) ?? [] {
             publishDrop(envelope)
         }
@@ -177,13 +175,11 @@ final class BridgeCourierService: ObservableObject {
         } else {
             myTagsHex = []
         }
-        if gatewayEnabled?() ?? false {
-            let peers = (localVerifiedPeers?() ?? []).prefix(Limits.maxWatchedPeers)
-            watchedPeerTags = peers.map { peer in
-                (peer.peerID, Set(CourierEnvelope.candidateTags(noiseStaticKey: peer.noiseKey, around: date).map { $0.hexEncodedString() }))
-            }
-        } else {
-            watchedPeerTags = []
+        // While bridging with internet, every device watches drops for its
+        // verified local peers — the single-switch analogue of gateway duty.
+        let peers = (localVerifiedPeers?() ?? []).prefix(Limits.maxWatchedPeers)
+        watchedPeerTags = peers.map { peer in
+            (peer.peerID, Set(CourierEnvelope.candidateTags(noiseStaticKey: peer.noiseKey, around: date).map { $0.hexEncodedString() }))
         }
         let allTags = myTagsHex.union(watchedPeerTags.flatMap(\.tagsHex))
         guard !allTags.isEmpty else {
@@ -202,7 +198,7 @@ final class BridgeCourierService: ObservableObject {
     /// Announce-driven refresh, debounced — a newly verified peer should be
     /// watched promptly, but announce storms must not thrash subscriptions.
     func refreshAfterVerifiedAnnounce() {
-        guard bridgeEnabled?() ?? false, gatewayEnabled?() ?? false else { return }
+        guard bridgeEnabled?() ?? false else { return }
         guard now().timeIntervalSince(lastAnnounceRefresh) >= Limits.announceRefreshDebounceSeconds else { return }
         lastAnnounceRefresh = now()
         refresh()
@@ -251,8 +247,7 @@ final class BridgeCourierService: ObservableObject {
             openEnvelope?(envelope)
             return
         }
-        if gatewayEnabled?() ?? false,
-           let match = watchedPeerTags.first(where: { $0.tagsHex.contains(tagHex) }) {
+        if let match = watchedPeerTags.first(where: { $0.tagsHex.contains(tagHex) }) {
             SecureLogger.info("📦🌉 Courier drop fetched for local peer \(match.peerID.id.prefix(8))…", category: .session)
             deliverToPeer?(envelope, match.peerID)
         }

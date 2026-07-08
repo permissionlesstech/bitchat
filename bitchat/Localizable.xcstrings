@@ -189,6 +189,7 @@
     },
     "%@ active" : {
       "comment" : "A label at the bottom of the people list sheet showing the number of active users.",
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -10955,175 +10956,175 @@
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "يصل جزر mesh القريبة عبر الإنترنت: ما تقوله في قناة mesh يصل أيضًا إلى أشخاص في منطقتك خارج مدى الراديو، وتظهر رسائلهم هنا معلَّمة برمز الشبكة"
+            "value" : "يصل جزر mesh القريبة عبر الإنترنت: ما تقوله في قناة mesh يصل أيضًا إلى أشخاص في منطقتك خارج مدى الراديو، وتظهر رسائلهم هنا معلَّمة برمز الشبكة. ما دام لديك إنترنت، يحمل جهازك أيضًا حركة الجسر وقنوات الموقع للهواتف من حولك التي لا تملك اتصالًا."
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "কাছাকাছি মেশ দ্বীপগুলোকে ইন্টারনেটের মাধ্যমে যুক্ত করে: মেশ চ্যানেলে আপনি যা বলেন তা আপনার এলাকার রেডিও পরিসরের বাইরের মানুষের কাছেও পৌঁছায়, আর তাদের বার্তা নেটওয়ার্ক চিহ্নসহ এখানে দেখা যায়"
+            "value" : "কাছাকাছি মেশ দ্বীপগুলোকে ইন্টারনেটের মাধ্যমে যুক্ত করে: মেশ চ্যানেলে আপনি যা বলেন তা আপনার এলাকার রেডিও পরিসরের বাইরের মানুষের কাছেও পৌঁছায়, আর তাদের বার্তা নেটওয়ার্ক চিহ্নসহ এখানে দেখা যায়। আপনার ইন্টারনেট থাকাকালীন, আপনার ডিভাইস আশপাশের ইন্টারনেটবিহীন ফোনের জন্য ব্রিজ ও লোকেশন-চ্যানেলের ট্র্যাফিকও বহন করে।"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "verbindet nahe mesh-inseln über das internet: was du im mesh-kanal sagst, erreicht auch personen in deiner gegend außerhalb der funkreichweite, und ihre nachrichten erscheinen hier mit dem netzwerk-symbol markiert"
+            "value" : "verbindet nahe mesh-inseln über das internet: was du im mesh-kanal sagst, erreicht auch personen in deiner gegend außerhalb der funkreichweite, und ihre nachrichten erscheinen hier mit dem netzwerk-symbol markiert. solange du internet hast, trägt dein gerät auch brücken- und standortkanal-verkehr für handys um dich herum, die keins haben."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "joins nearby mesh islands over the internet: what you say in the mesh channel also reaches people in your area beyond radio range, and their messages appear here marked with the network glyph"
+            "value" : "joins nearby mesh islands over the internet: what you say in the mesh channel also reaches people in your area beyond radio range, and their messages appear here marked with the network glyph. while you have internet, your device also carries bridge and location-channel traffic for phones around you that have none."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "une islas mesh cercanas a través de internet: lo que dices en el canal mesh también llega a personas de tu zona fuera del alcance de radio, y sus mensajes aparecen aquí marcados con el símbolo de red"
+            "value" : "une islas mesh cercanas a través de internet: lo que dices en el canal mesh también llega a personas de tu zona fuera del alcance de radio, y sus mensajes aparecen aquí marcados con el símbolo de red. mientras tengas internet, tu dispositivo también lleva el tráfico del puente y de los canales de ubicación para teléfonos a tu alrededor que no tienen conexión."
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "pinagdurugtong ang mga kalapit na mesh island sa pamamagitan ng internet: ang sinasabi mo sa mesh channel ay umaabot din sa mga tao sa iyong lugar na lampas sa saklaw ng radyo, at lumalabas dito ang kanilang mga mensahe na may markang simbolo ng network"
+            "value" : "pinagdurugtong ang mga kalapit na mesh island sa pamamagitan ng internet: ang sinasabi mo sa mesh channel ay umaabot din sa mga tao sa iyong lugar na lampas sa saklaw ng radyo, at lumalabas dito ang kanilang mga mensahe na may markang simbolo ng network. habang may internet ka, dinadala rin ng device mo ang trapiko ng bridge at ng mga channel ng lokasyon para sa mga teleponong nasa paligid mo na walang koneksyon."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "relie les îlots mesh voisins via internet : ce que tu dis dans le canal mesh atteint aussi les personnes de ta zone hors de portée radio, et leurs messages apparaissent ici marqués du symbole réseau"
+            "value" : "relie les îlots mesh voisins via internet : ce que tu dis dans le canal mesh atteint aussi les personnes de ta zone hors de portée radio, et leurs messages apparaissent ici marqués du symbole réseau. tant que tu as internet, ton appareil achemine aussi le trafic du pont et des canaux localisation pour les téléphones autour de toi qui n'en ont pas."
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "מחבר איי mesh קרובים דרך האינטרנט: מה שאתה אומר בערוץ ה-mesh מגיע גם לאנשים באזורך מעבר לטווח הרדיו, וההודעות שלהם מופיעות כאן מסומנות בסמל הרשת"
+            "value" : "מחבר איי mesh קרובים דרך האינטרנט: מה שאתה אומר בערוץ ה-mesh מגיע גם לאנשים באזורך מעבר לטווח הרדיו, וההודעות שלהם מופיעות כאן מסומנות בסמל הרשת. כל עוד יש לך אינטרנט, המכשיר שלך גם מעביר תעבורת גשר וערוצי מיקום עבור טלפונים סביבך שאין להם חיבור."
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "आसपास के मेश द्वीपों को इंटरनेट से जोड़ता है: मेश चैनल में आप जो कहते हैं वह आपके क्षेत्र में रेडियो दायरे से बाहर के लोगों तक भी पहुँचता है, और उनके संदेश यहाँ नेटवर्क चिह्न के साथ दिखते हैं"
+            "value" : "आसपास के मेश द्वीपों को इंटरनेट से जोड़ता है: मेश चैनल में आप जो कहते हैं वह आपके क्षेत्र में रेडियो दायरे से बाहर के लोगों तक भी पहुँचता है, और उनके संदेश यहाँ नेटवर्क चिह्न के साथ दिखते हैं। जब तक आपके पास इंटरनेट है, आपका डिवाइस आसपास के बिना इंटरनेट वाले फोनों के लिए ब्रिज और लोकेशन-चैनल का ट्रैफ़िक भी पहुँचाता है।"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "menyatukan pulau-pulau mesh terdekat lewat internet: yang kamu katakan di kanal mesh juga sampai ke orang-orang di areamu di luar jangkauan radio, dan pesan mereka muncul di sini ditandai dengan simbol jaringan"
+            "value" : "menyatukan pulau-pulau mesh terdekat lewat internet: yang kamu katakan di kanal mesh juga sampai ke orang-orang di areamu di luar jangkauan radio, dan pesan mereka muncul di sini ditandai dengan simbol jaringan. selama kamu punya internet, perangkatmu juga membawa lalu lintas jembatan dan kanal lokasi untuk ponsel di sekitarmu yang tidak punya koneksi."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "unisce le isole mesh vicine tramite internet: ciò che dici nel canale mesh raggiunge anche persone della tua zona oltre la portata radio, e i loro messaggi appaiono qui contrassegnati con il simbolo di rete"
+            "value" : "unisce le isole mesh vicine tramite internet: ciò che dici nel canale mesh raggiunge anche persone della tua zona oltre la portata radio, e i loro messaggi appaiono qui contrassegnati con il simbolo di rete. finché hai internet, il tuo dispositivo trasporta anche il traffico del ponte e dei canali posizione per i telefoni intorno a te che non ne hanno."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "近くのmeshの島々をインターネットでつなぎます: meshチャンネルでの発言はエリア内の電波範囲外の人にも届き、相手のメッセージはネットワーク記号付きでここに表示されます"
+            "value" : "近くのmeshの島々をインターネットでつなぎます: meshチャンネルでの発言はエリア内の電波範囲外の人にも届き、相手のメッセージはネットワーク記号付きでここに表示されます。インターネットがある間は、あなたの端末が周囲の接続を持たない端末のためにブリッジとロケーションチャンネルの通信も運びます。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "근처의 mesh 섬들을 인터넷으로 연결합니다: mesh 채널에서 말한 내용이 이 지역의 전파 범위 밖 사람들에게도 전달되고, 그들의 메시지는 네트워크 기호가 붙어 여기에 표시됩니다"
+            "value" : "근처의 mesh 섬들을 인터넷으로 연결합니다: mesh 채널에서 말한 내용이 이 지역의 전파 범위 밖 사람들에게도 전달되고, 그들의 메시지는 네트워크 기호가 붙어 여기에 표시됩니다. 인터넷이 있는 동안에는 내 기기가 주변의 연결이 없는 휴대폰을 위해 브리지와 위치 채널 트래픽도 전달합니다."
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "menyatukan pulau-pulau mesh berdekatan melalui internet: apa yang kamu katakan di kanal mesh juga sampai kepada orang di kawasanmu di luar jangkauan radio, dan pesan mereka muncul di sini ditanda dengan simbol rangkaian"
+            "value" : "menyatukan pulau-pulau mesh berdekatan melalui internet: apa yang kamu katakan di kanal mesh juga sampai kepada orang di kawasanmu di luar jangkauan radio, dan pesan mereka muncul di sini ditanda dengan simbol rangkaian. selagi kamu ada internet, perantimu juga membawa trafik jambatan dan kanal lokasi untuk telefon di sekelilingmu yang tiada sambungan."
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "नजिकका mesh टापुहरूलाई इन्टरनेटमार्फत जोड्छ: mesh च्यानलमा तिमीले भनेको कुरा तिम्रो क्षेत्रमा रेडियो पहुँचभन्दा बाहिरका मानिससम्म पनि पुग्छ, र उनीहरूका सन्देश नेटवर्क चिन्हसहित यहाँ देखिन्छन्"
+            "value" : "नजिकका mesh टापुहरूलाई इन्टरनेटमार्फत जोड्छ: mesh च्यानलमा तिमीले भनेको कुरा तिम्रो क्षेत्रमा रेडियो पहुँचभन्दा बाहिरका मानिससम्म पनि पुग्छ, र उनीहरूका सन्देश नेटवर्क चिन्हसहित यहाँ देखिन्छन्। तिमीसँग इन्टरनेट भएसम्म, तिम्रो यन्त्रले वरपरका इन्टरनेट नभएका फोनहरूका लागि पुल र स्थान-च्यानलको ट्राफिक पनि बोक्छ।"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "verbindt nabije mesh-eilanden via internet: wat je in het mesh-kanaal zegt bereikt ook mensen in jouw omgeving buiten radiobereik, en hun berichten verschijnen hier gemarkeerd met het netwerksymbool"
+            "value" : "verbindt nabije mesh-eilanden via internet: wat je in het mesh-kanaal zegt bereikt ook mensen in jouw omgeving buiten radiobereik, en hun berichten verschijnen hier gemarkeerd met het netwerksymbool. zolang je internet hebt, draagt je apparaat ook brug- en locatiekanaalverkeer voor telefoons om je heen die geen verbinding hebben."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "łączy pobliskie wyspy mesh przez internet: to, co mówisz na kanale mesh, dociera też do osób w twojej okolicy poza zasięgiem radiowym, a ich wiadomości pojawiają się tutaj oznaczone symbolem sieci"
+            "value" : "łączy pobliskie wyspy mesh przez internet: to, co mówisz na kanale mesh, dociera też do osób w twojej okolicy poza zasięgiem radiowym, a ich wiadomości pojawiają się tutaj oznaczone symbolem sieci. dopóki masz internet, twoje urządzenie przenosi też ruch mostu i kanałów lokalizacji dla telefonów wokół ciebie, które go nie mają."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "junta ilhas mesh próximas através da internet: o que dizes no canal mesh também chega a pessoas na tua zona fora do alcance de rádio, e as mensagens delas aparecem aqui marcadas com o símbolo de rede"
+            "value" : "junta ilhas mesh próximas através da internet: o que dizes no canal mesh também chega a pessoas na tua zona fora do alcance de rádio, e as mensagens delas aparecem aqui marcadas com o símbolo de rede. enquanto tens internet, o teu dispositivo também transporta o tráfego da ponte e dos canais de localização para telemóveis à tua volta que não têm ligação."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "junta ilhas mesh próximas pela internet: o que você diz no canal mesh também chega a pessoas na sua área fora do alcance de rádio, e as mensagens delas aparecem aqui marcadas com o símbolo de rede"
+            "value" : "junta ilhas mesh próximas pela internet: o que você diz no canal mesh também chega a pessoas na sua área fora do alcance de rádio, e as mensagens delas aparecem aqui marcadas com o símbolo de rede. enquanto você tem internet, seu dispositivo também leva o tráfego da ponte e dos canais de localização para celulares ao seu redor que não têm conexão."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "объединяет соседние mesh-острова через интернет: то, что ты говоришь в mesh-канале, доходит и до людей в твоём районе за пределами радиуса радиосвязи, а их сообщения появляются здесь с пометкой символом сети"
+            "value" : "объединяет соседние mesh-острова через интернет: то, что ты говоришь в mesh-канале, доходит и до людей в твоём районе за пределами радиуса радиосвязи, а их сообщения появляются здесь с пометкой символом сети. пока у тебя есть интернет, твоё устройство также переносит трафик моста и каналов локации для телефонов вокруг, у которых его нет."
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "kopplar ihop närliggande mesh-öar via internet: det du säger i mesh-kanalen når även personer i ditt område utom radioräckvidd, och deras meddelanden visas här markerade med nätverkssymbolen"
+            "value" : "kopplar ihop närliggande mesh-öar via internet: det du säger i mesh-kanalen når även personer i ditt område utom radioräckvidd, och deras meddelanden visas här markerade med nätverkssymbolen. så länge du har internet bär din enhet också brygg- och platskanaltrafik åt telefoner omkring dig som saknar anslutning."
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "அருகிலுள்ள mesh தீவுகளை இணையம் வழியாக இணைக்கிறது: mesh சேனலில் நீங்கள் சொல்வது உங்கள் பகுதியில் ரேடியோ வரம்புக்கு அப்பாலுள்ளவர்களையும் சென்றடையும், அவர்களின் செய்திகள் நெட்வொர்க் சின்னத்துடன் இங்கே தோன்றும்"
+            "value" : "அருகிலுள்ள mesh தீவுகளை இணையம் வழியாக இணைக்கிறது: mesh சேனலில் நீங்கள் சொல்வது உங்கள் பகுதியில் ரேடியோ வரம்புக்கு அப்பாலுள்ளவர்களையும் சென்றடையும், அவர்களின் செய்திகள் நெட்வொர்க் சின்னத்துடன் இங்கே தோன்றும். உங்களிடம் இணையம் இருக்கும் வரை, சுற்றியுள்ள இணைப்பு இல்லாத போன்களுக்காக உங்கள் சாதனம் பாலம் மற்றும் இட சேனல்களின் போக்குவரத்தையும் சுமக்கிறது."
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "เชื่อมเกาะ mesh ที่อยู่ใกล้กันผ่านอินเทอร์เน็ต: สิ่งที่คุณพูดในช่อง mesh ยังไปถึงผู้คนในพื้นที่ของคุณที่อยู่นอกระยะวิทยุ และข้อความของพวกเขาจะปรากฏที่นี่พร้อมสัญลักษณ์เครือข่ายกำกับ"
+            "value" : "เชื่อมเกาะ mesh ที่อยู่ใกล้กันผ่านอินเทอร์เน็ต: สิ่งที่คุณพูดในช่อง mesh ยังไปถึงผู้คนในพื้นที่ของคุณที่อยู่นอกระยะวิทยุ และข้อความของพวกเขาจะปรากฏที่นี่พร้อมสัญลักษณ์เครือข่ายกำกับ ตราบใดที่คุณมีอินเทอร์เน็ต อุปกรณ์ของคุณยังส่งต่อทราฟฟิกของบริดจ์และช่องตามตำแหน่งให้โทรศัพท์รอบตัวที่ไม่มีอินเทอร์เน็ตด้วย"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "yakındaki mesh adalarını internet üzerinden birleştirir: mesh kanalında söylediklerin bölgendeki telsiz menzili dışındaki kişilere de ulaşır ve onların mesajları burada ağ simgesiyle işaretli olarak görünür"
+            "value" : "yakındaki mesh adalarını internet üzerinden birleştirir: mesh kanalında söylediklerin bölgendeki telsiz menzili dışındaki kişilere de ulaşır ve onların mesajları burada ağ simgesiyle işaretli olarak görünür. internetin olduğu sürece cihazın, çevrendeki bağlantısı olmayan telefonlar için köprü ve konum kanalı trafiğini de taşır."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "об'єднує сусідні mesh-острови через інтернет: те, що ти кажеш у mesh-каналі, доходить і до людей у твоєму районі поза радіусом радіозв'язку, а їхні повідомлення з'являються тут із позначкою символом мережі"
+            "value" : "об'єднує сусідні mesh-острови через інтернет: те, що ти кажеш у mesh-каналі, доходить і до людей у твоєму районі поза радіусом радіозв'язку, а їхні повідомлення з'являються тут із позначкою символом мережі. поки в тебе є інтернет, твій пристрій також переносить трафік мосту й каналів локації для телефонів навколо, які його не мають."
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "قریبی mesh جزیروں کو انٹرنیٹ کے ذریعے جوڑتا ہے: mesh چینل میں آپ جو کہتے ہیں وہ آپ کے علاقے میں ریڈیو رینج سے باہر لوگوں تک بھی پہنچتا ہے، اور ان کے پیغامات یہاں نیٹ ورک علامت کے ساتھ نظر آتے ہیں"
+            "value" : "قریبی mesh جزیروں کو انٹرنیٹ کے ذریعے جوڑتا ہے: mesh چینل میں آپ جو کہتے ہیں وہ آپ کے علاقے میں ریڈیو رینج سے باہر لوگوں تک بھی پہنچتا ہے، اور ان کے پیغامات یہاں نیٹ ورک علامت کے ساتھ نظر آتے ہیں۔ جب تک آپ کے پاس انٹرنیٹ ہے، آپ کا آلہ ارد گرد کے بغیر انٹرنیٹ والے فونز کے لیے پل اور لوکیشن چینلز کی ٹریفک بھی پہنچاتا ہے۔"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "nối các đảo mesh gần nhau qua internet: những gì bạn nói trong kênh mesh cũng đến được mọi người trong khu vực ngoài phạm vi sóng, và tin nhắn của họ hiện ở đây kèm ký hiệu mạng"
+            "value" : "nối các đảo mesh gần nhau qua internet: những gì bạn nói trong kênh mesh cũng đến được mọi người trong khu vực ngoài phạm vi sóng, và tin nhắn của họ hiện ở đây kèm ký hiệu mạng. khi bạn có internet, thiết bị của bạn cũng chuyển lưu lượng cầu nối và kênh vị trí cho những điện thoại xung quanh không có kết nối."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "通过互联网连接附近的 mesh 孤岛：你在 mesh 频道说的话也会送达本地区无线电范围之外的人，他们的消息会带网络符号显示在这里"
+            "value" : "通过互联网连接附近的 mesh 孤岛：你在 mesh 频道说的话也会送达本地区无线电范围之外的人，他们的消息会带网络符号显示在这里。当你有互联网时，你的设备还会为周围没有网络的手机传送桥接和位置频道流量。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "透過網際網路連接附近的 mesh 孤島：你在 mesh 頻道說的話也會送達本地區無線電範圍之外的人，他們的訊息會帶網路符號顯示在這裡"
+            "value" : "透過網際網路連接附近的 mesh 孤島：你在 mesh 頻道說的話也會送達本地區無線電範圍之外的人，他們的訊息會帶網路符號顯示在這裡。當你有網際網路時，你的裝置還會為周圍沒有網路的手機傳送橋接和位置頻道流量。"
           }
         }
       }
@@ -12377,186 +12378,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "危險區域"
-          }
-        }
-      }
-    },
-    "app_info.settings.gateway.subtitle" : {
-      "comment" : "Subtitle explaining what the internet gateway toggle does",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "يشارك اتصالك بالإنترنت مع شبكة mesh من حولك، ناقلًا حركة قنوات الموقع والجسر للهواتف التي لا تملك اتصالًا"
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "আপনার চারপাশের মেশের সঙ্গে আপনার ইন্টারনেট সংযোগ ভাগ করে, ইন্টারনেটবিহীন ফোনের জন্য লোকেশন-চ্যানেল ও ব্রিজের ট্র্যাফিক বহন করে"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "teilt deine internetverbindung mit dem mesh um dich herum und trägt standortkanal- und brücken-verkehr für handys ohne eigene verbindung"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "shares your internet connection with the mesh around you, carrying location-channel and bridge traffic for phones that have none"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "comparte tu conexión a internet con el mesh a tu alrededor, llevando el tráfico de canales de ubicación y del puente para teléfonos que no tienen conexión"
-          }
-        },
-        "fil" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ibinabahagi ang iyong koneksyon sa internet sa mesh sa paligid mo, dinadala ang trapiko ng mga location channel at ng bridge para sa mga teleponong walang koneksyon"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "partage ta connexion internet avec le mesh autour de toi, en acheminant le trafic des canaux de localisation et du pont pour les téléphones qui n'en ont pas"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "משתף את חיבור האינטרנט שלך עם ה-mesh סביבך, ומעביר תעבורת ערוצי מיקום וגשר עבור טלפונים שאין להם חיבור"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "आपके आसपास के मेश के साथ आपका इंटरनेट कनेक्शन साझा करता है, बिना इंटरनेट वाले फोनों के लिए लोकेशन-चैनल और ब्रिज का ट्रैफ़िक पहुँचाता है"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "membagikan koneksi internetmu dengan mesh di sekitarmu, membawa lalu lintas kanal lokasi dan jembatan untuk ponsel yang tidak punya koneksi"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "condivide la tua connessione internet con la mesh intorno a te, trasportando il traffico dei canali di posizione e del ponte per i telefoni che non ne hanno"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "周囲のmeshとインターネット接続を共有し、接続を持たない端末のために位置チャンネルとブリッジの通信を運びます"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "주변 mesh와 인터넷 연결을 공유하여, 연결이 없는 휴대폰을 위해 위치 채널과 브리지 트래픽을 전달합니다"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "berkongsi sambungan internetmu dengan mesh di sekelilingmu, membawa trafik kanal lokasi dan jambatan untuk telefon yang tiada sambungan"
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "तिम्रो वरपरको mesh सँग तिम्रो इन्टरनेट जडान साझेदारी गर्छ, इन्टरनेट नभएका फोनहरूका लागि स्थान-च्यानल र पुलको ट्राफिक बोक्छ"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "deelt je internetverbinding met de mesh om je heen en draagt locatiekanaal- en brugverkeer voor telefoons die geen verbinding hebben"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "udostępnia twoje połączenie internetowe sieci mesh wokół ciebie, przenosząc ruch kanałów lokalizacji i mostu dla telefonów, które go nie mają"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "partilha a tua ligação à internet com a mesh à tua volta, transportando o tráfego dos canais de localização e da ponte para telemóveis que não têm ligação"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "compartilha sua conexão de internet com o mesh ao seu redor, levando o tráfego dos canais de localização e da ponte para celulares que não têm conexão"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "раздаёт твоё интернет-соединение mesh-сети вокруг тебя, перенося трафик каналов местоположения и моста для телефонов без связи"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "delar din internetanslutning med mesh omkring dig och bär trafik för platskanaler och bryggan åt telefoner som saknar anslutning"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "உங்களைச் சுற்றியுள்ள mesh உடன் உங்கள் இணைய இணைப்பைப் பகிர்ந்து, இணைப்பு இல்லாத போன்களுக்காக இருப்பிட-சேனல் மற்றும் பாலத்தின் போக்குவரத்தைச் சுமக்கிறது"
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "แชร์การเชื่อมต่ออินเทอร์เน็ตของคุณกับ mesh รอบตัว โดยส่งต่อทราฟฟิกของช่องตามตำแหน่งและบริดจ์ให้โทรศัพท์ที่ไม่มีอินเทอร์เน็ต"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "internet bağlantını çevrendeki mesh ile paylaşır, bağlantısı olmayan telefonlar için konum kanalı ve köprü trafiğini taşır"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ділиться твоїм інтернет-з'єднанням з mesh навколо тебе, переносячи трафік каналів локації та мосту для телефонів без зв'язку"
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "آپ کے ارد گرد کے mesh کے ساتھ آپ کا انٹرنیٹ کنکشن شیئر کرتا ہے، اور بغیر انٹرنیٹ والے فونز کے لیے لوکیشن چینل اور پل کی ٹریفک پہنچاتا ہے"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "chia sẻ kết nối internet của bạn với mesh xung quanh, chuyển lưu lượng kênh vị trí và cầu nối cho những điện thoại không có kết nối"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "与你周围的 mesh 共享你的互联网连接，为没有网络的手机传送位置频道和桥接流量"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "與你周圍的 mesh 分享你的網際網路連線，為沒有網路的手機傳送位置頻道和橋接流量"
           }
         }
       }
@@ -41479,24 +41300,6 @@
               "formatSpecifier" : "lld",
               "variations" : {
                 "plural" : {
-                  "zero" : {
-                    "stringUnit" : {
-                      "state" : "needs_review",
-                      "value" : "%d أشخاص"
-                    }
-                  },
-                  "one" : {
-                    "stringUnit" : {
-                      "state" : "needs_review",
-                      "value" : "%d شخص"
-                    }
-                  },
-                  "two" : {
-                    "stringUnit" : {
-                      "state" : "needs_review",
-                      "value" : "%d شخصان"
-                    }
-                  },
                   "few" : {
                     "stringUnit" : {
                       "state" : "needs_review",
@@ -41509,10 +41312,28 @@
                       "value" : "%d شخصًا"
                     }
                   },
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d شخص"
+                    }
+                  },
                   "other" : {
                     "stringUnit" : {
                       "state" : "needs_review",
                       "value" : "%d شخص"
+                    }
+                  },
+                  "two" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d شخصان"
+                    }
+                  },
+                  "zero" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d أشخاص"
                     }
                   }
                 }
@@ -41689,25 +41510,25 @@
               "formatSpecifier" : "lld",
               "variations" : {
                 "plural" : {
-                  "one" : {
-                    "stringUnit" : {
-                      "state" : "needs_review",
-                      "value" : "%d אדם"
-                    }
-                  },
-                  "two" : {
-                    "stringUnit" : {
-                      "state" : "needs_review",
-                      "value" : "%d אנשים"
-                    }
-                  },
                   "many" : {
                     "stringUnit" : {
                       "state" : "needs_review",
                       "value" : "%d אנשים"
                     }
                   },
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d אדם"
+                    }
+                  },
                   "other" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d אנשים"
+                    }
+                  },
+                  "two" : {
                     "stringUnit" : {
                       "state" : "needs_review",
                       "value" : "%d אנשים"
@@ -41921,12 +41742,6 @@
               "formatSpecifier" : "lld",
               "variations" : {
                 "plural" : {
-                  "one" : {
-                    "stringUnit" : {
-                      "state" : "needs_review",
-                      "value" : "%d osobę"
-                    }
-                  },
                   "few" : {
                     "stringUnit" : {
                       "state" : "needs_review",
@@ -41937,6 +41752,12 @@
                     "stringUnit" : {
                       "state" : "needs_review",
                       "value" : "%d osób"
+                    }
+                  },
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d osobę"
                     }
                   },
                   "other" : {
@@ -42153,12 +41974,6 @@
               "formatSpecifier" : "lld",
               "variations" : {
                 "plural" : {
-                  "one" : {
-                    "stringUnit" : {
-                      "state" : "needs_review",
-                      "value" : "%d особа"
-                    }
-                  },
                   "few" : {
                     "stringUnit" : {
                       "state" : "needs_review",
@@ -42169,6 +41984,12 @@
                     "stringUnit" : {
                       "state" : "needs_review",
                       "value" : "%d осіб"
+                    }
+                  },
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "needs_review",
+                      "value" : "%d особа"
                     }
                   },
                   "other" : {
@@ -47113,186 +46934,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "無效的 geohash"
-          }
-        }
-      }
-    },
-    "location_channels.gateway.title" : {
-      "comment" : "Title for the internet gateway toggle in the location channels sheet",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "بوابة الإنترنت"
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ইন্টারনেট গেটওয়ে"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "internet-gateway"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "internet gateway"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "puerta de enlace a internet"
-          }
-        },
-        "fil" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "internet gateway"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "passerelle internet"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "שער אינטרנט"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "इंटरनेट गेटवे"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "gateway internet"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "gateway internet"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "インターネットゲートウェイ"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "인터넷 게이트웨이"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "gateway internet"
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "इन्टरनेट गेटवे"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "internetgateway"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "brama internetowa"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "gateway de internet"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "gateway de internet"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "интернет-шлюз"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "internetgateway"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "இணைய நுழைவாயில்"
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "เกตเวย์อินเทอร์เน็ต"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "internet ağ geçidi"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "інтернет-шлюз"
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "انٹرنیٹ گیٹ وے"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "cổng internet"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "互联网网关"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "網際網路閘道"
           }
         }
       }

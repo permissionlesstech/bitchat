@@ -456,28 +456,34 @@ private extension ChatViewModelBootstrapper {
         bridge.isMessageSeenLocally = { [weak viewModel] messageID in
             viewModel?.publicConversationContainsMessage(withID: messageID, in: .mesh) ?? false
         }
-        bridge.gatewayEnabled = { GatewayService.shared.isEnabled }
         bridge.deriveIdentity = { cell in
             try idBridge.deriveIdentity(forBridgeRendezvous: cell)
         }
         bridge.myNickname = { [weak viewModel] in viewModel?.nickname ?? "" }
 
-        // The `.bridge` capability + cell TLV advertise gateway duty: "send
-        // me deposits, and this is the island's cell". Both toggles required.
+        // The `.bridge` capability + cell TLV advertise serving duty: "send
+        // me deposits, and this is the island's cell". One switch: bridging
+        // with a known cell is serving (deposits queue through connectivity
+        // gaps, so the advertisement doesn't flap with the relays).
         let updateAdvertisement: @MainActor () -> Void = { [weak bleService] in
             let advertise = BridgeService.shared.isEnabled
-                && GatewayService.shared.isEnabled
                 && BridgeService.shared.activeCell != nil
             bleService?.setLocalBridgeGeohash(advertise ? BridgeService.shared.activeCell : nil)
             bleService?.setLocalCapability(.bridge, enabled: advertise)
         }
-        bridge.onEnabledChanged = { _ in updateAdvertisement() }
+        bridge.onEnabledChanged = { enabled in
+            updateAdvertisement()
+            // One switch collapses further: the bridge toggle also drives
+            // the geohash-channel gateway — bridging with internet means
+            // sharing it with the mesh around you, full stop.
+            GatewayService.shared.setEnabled(enabled)
+        }
         bridge.onActiveCellChanged = { _ in updateAdvertisement() }
-        GatewayService.shared.$isEnabled
-            .dropFirst()
-            .receive(on: DispatchQueue.main)
-            .sink { _ in updateAdvertisement() }
-            .store(in: &viewModel.cancellables)
+        // Align a persisted split state (e.g. gateway enabled back when it
+        // had its own toggle) to the single switch at launch.
+        if GatewayService.shared.isEnabled != bridge.isEnabled {
+            GatewayService.shared.setEnabled(bridge.isEnabled)
+        }
 
         // Location fixes (or losing them) move the rendezvous cell.
         viewModel.locationManager.$availableChannels
@@ -500,7 +506,6 @@ private extension ChatViewModelBootstrapper {
         let courier = BridgeCourierService.shared
 
         courier.bridgeEnabled = { BridgeService.shared.isEnabled }
-        courier.gatewayEnabled = { GatewayService.shared.isEnabled }
         courier.relaysConnected = { NostrRelayManager.shared.isConnected }
         courier.publishEvent = { event in
             // Default (DM) relays: drops need the standing global relay set,
@@ -561,11 +566,6 @@ private extension ChatViewModelBootstrapper {
             .store(in: &viewModel.cancellables)
         // Toggle changes re-evaluate the watch set.
         BridgeService.shared.$isEnabled
-            .dropFirst()
-            .receive(on: DispatchQueue.main)
-            .sink { _ in BridgeCourierService.shared.refresh() }
-            .store(in: &viewModel.cancellables)
-        GatewayService.shared.$isEnabled
             .dropFirst()
             .receive(on: DispatchQueue.main)
             .sink { _ in BridgeCourierService.shared.refresh() }

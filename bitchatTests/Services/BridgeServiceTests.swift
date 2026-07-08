@@ -28,7 +28,6 @@ struct BridgeServiceTests {
         var locationCell: String? = BridgeServiceTests.cell
         var meshAdvertisedCell: String?
         var bridgePeers: [PeerID] = []
-        var gatewayOn = true
         var sendSucceeds = true
         var locallySeenMessageIDs: Set<String> = []
         var nickname = "tester"
@@ -88,7 +87,6 @@ struct BridgeServiceTests {
             service.isMessageSeenLocally = { [weak self] id in
                 self?.locallySeenMessageIDs.contains(id) ?? false
             }
-            service.gatewayEnabled = { [weak self] in self?.gatewayOn ?? false }
             service.deriveIdentity = { [weak self] _ in
                 guard let self else { throw NostrError.invalidEvent }
                 return self.identity
@@ -273,10 +271,32 @@ struct BridgeServiceTests {
         #expect(fixture.injected.count == 1)
         #expect(fixture.injected.first?.content == event.content)
         #expect(fixture.service.bridgedPeerCount == 1)
-        // Gateway duty: remote event rides out as a fromBridge broadcast.
+        // Serving duty: after the jitter holdoff, the remote event rides out
+        // as a fromBridge broadcast — one switch, no gateway toggle.
+        #expect(fixture.broadcasts.isEmpty)
+        fixture.fireScheduledTimers()
         let broadcast = try #require(fixture.broadcasts.first)
         let carrier = try #require(NostrCarrierPacket.decode(broadcast))
         #expect(carrier.direction == .fromBridge)
+    }
+
+    @Test func jitterHoldoffSuppressesAlreadyBroadcastEvents() throws {
+        // Two gateways, one island: while our drain waits out the jitter,
+        // the other gateway's fromBridge broadcast arrives — ours must yield.
+        let fixture = Fixture(enabled: true)
+        fixture.service.refreshRendezvous()
+        let event = try makeRemoteEvent()
+
+        fixture.service.handleRendezvousEvent(event) // queued behind jitter
+        fixture.service.handleMeshCarrier(
+            try carrier(event, direction: .fromBridge),
+            from: PeerID(str: "aabbccdd00112233"),
+            directedToUs: false
+        )
+        fixture.fireScheduledTimers()
+
+        #expect(fixture.broadcasts.isEmpty)
+        #expect(fixture.injected.count == 1) // rendered once, either path
     }
 
     @Test func neighborCellEventIsAccepted() throws {
@@ -325,21 +345,10 @@ struct BridgeServiceTests {
 
         fixture.service.handleRendezvousEvent(event)
         fixture.service.handleRendezvousEvent(event)
+        fixture.fireScheduledTimers()
 
         #expect(fixture.injected.count == 1)
         #expect(fixture.broadcasts.count == 1)
-    }
-
-    @Test func gatewayOffMeansNoDownlinkButStillInjects() throws {
-        let fixture = Fixture(enabled: true)
-        fixture.gatewayOn = false
-        fixture.service.refreshRendezvous()
-        let event = try makeRemoteEvent()
-
-        fixture.service.handleRendezvousEvent(event)
-
-        #expect(fixture.injected.count == 1)
-        #expect(fixture.broadcasts.isEmpty)
     }
 
     @Test func presenceCountsParticipantWithoutInjection() throws {
@@ -385,9 +394,10 @@ struct BridgeServiceTests {
         for _ in 0..<(BridgeService.Limits.downlinkEventsPerMinute + 5) {
             fixture.service.handleRendezvousEvent(try makeRemoteEvent())
         }
+        fixture.fireScheduledTimers() // jitter holdoff elapses
 
         #expect(fixture.broadcasts.count == BridgeService.Limits.downlinkEventsPerMinute)
-        // Window frees: the armed timer drains the backlog.
+        // Window frees: the re-armed timer drains the backlog.
         fixture.advance(61)
         fixture.fireScheduledTimers()
         #expect(fixture.broadcasts.count == BridgeService.Limits.downlinkEventsPerMinute + 5)
@@ -435,6 +445,7 @@ struct BridgeServiceTests {
             directedToUs: false
         )
         fixture.service.handleRendezvousEvent(event)
+        fixture.fireScheduledTimers()
 
         #expect(fixture.broadcasts.isEmpty)
         #expect(fixture.injected.count == 1)
@@ -515,10 +526,8 @@ struct BridgeServiceTests {
         #expect(fixture.published.contains { $0.event.id == event.id })
     }
 
-    @Test func depositRequiresGatewayToggle() throws {
-        let fixture = Fixture(enabled: true)
-        fixture.gatewayOn = false
-        fixture.service.refreshRendezvous()
+    @Test func depositRequiresBridgeToggle() throws {
+        let fixture = Fixture(enabled: false)
 
         fixture.service.handleMeshCarrier(
             try carrier(makeRemoteEvent(), direction: .toBridge),
@@ -559,6 +568,7 @@ struct BridgeServiceTests {
             directedToUs: true
         )
         fixture.service.handleRendezvousEvent(event)
+        fixture.fireScheduledTimers()
 
         #expect(fixture.broadcasts.isEmpty)
     }
