@@ -196,6 +196,19 @@ struct AppInfoView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical)
 
+            // How to Use
+            VStack(alignment: .leading, spacing: 16) {
+                SectionHeader(Strings.HowToUse.title)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(Array(Strings.HowToUse.instructions.enumerated()), id: \.offset) { _, instruction in
+                        Text(instruction)
+                    }
+                }
+                .bitchatFont(size: 14)
+                .foregroundColor(textColor)
+            }
+
             // Appearance — single row: label left, theme chips right
             HStack(spacing: 12) {
                 SectionHeader(Strings.appearanceTitle)
@@ -218,19 +231,6 @@ struct AppInfoView: View {
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(selectedTheme == theme ? .isSelected : [])
                 }
-            }
-
-            // How to Use
-            VStack(alignment: .leading, spacing: 16) {
-                SectionHeader(Strings.HowToUse.title)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(Array(Strings.HowToUse.instructions.enumerated()), id: \.offset) { _, instruction in
-                        Text(instruction)
-                    }
-                }
-                .bitchatFont(size: 14)
-                .foregroundColor(textColor)
             }
 
             // Voice
@@ -286,6 +286,17 @@ struct AppInfoView: View {
                 FeatureRow(info: Strings.Features.mentions)
             }
 
+            // Privacy
+            VStack(alignment: .leading, spacing: 16) {
+                SectionHeader(Strings.Privacy.title)
+
+                FeatureRow(info: Strings.Privacy.noTracking)
+
+                FeatureRow(info: Strings.Privacy.ephemeral)
+
+                FeatureRow(info: Strings.Privacy.panic)
+            }
+
             // Symbols legend
             VStack(alignment: .leading, spacing: 10) {
                 SectionHeader(Strings.Legend.title)
@@ -306,17 +317,6 @@ struct AppInfoView: View {
                     }
                     .accessibilityElement(children: .combine)
                 }
-            }
-
-            // Privacy
-            VStack(alignment: .leading, spacing: 16) {
-                SectionHeader(Strings.Privacy.title)
-
-                FeatureRow(info: Strings.Privacy.noTracking)
-
-                FeatureRow(info: Strings.Privacy.ephemeral)
-
-                FeatureRow(info: Strings.Privacy.panic)
             }
         }
         .padding()
