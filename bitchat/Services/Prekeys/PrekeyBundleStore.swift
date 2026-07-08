@@ -22,6 +22,11 @@ import Foundation
 /// prekey-seal for recipients met long ago. Included in the panic wipe.
 final class PrekeyBundleStore {
     struct StoredBundle: Codable {
+        // noiseKey is read in loadFromDisk (dictionary keying), but the
+        // Periphery indexer intermittently misses that read and flakes CI
+        // with "assign-only" — its USR is baselined (an in-source ignore
+        // can't work: strict mode flags it as superfluous on the runs where
+        // the indexer gets it right).
         let noiseKey: Data
         var generatedAt: UInt64
         var prekeyIDs: [UInt32]

@@ -398,16 +398,18 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     let readReceiptsDefaults: UserDefaults
 
     /// Default read-receipt persistence store. Production uses `.standard`.
-    /// Under test, a dedicated scratch suite is used instead — wiped at first
-    /// use per process — so back-to-back local test runs never see each
-    /// other's persisted receipts (and tests never pollute `.standard`).
-    static let defaultReadReceiptsDefaults: UserDefaults = {
+    /// Under test, every instance gets its own scratch suite: a per-process
+    /// shared suite let one test's persisted receipts leak into another
+    /// test's freshly constructed view model (surfaced as an order-dependent
+    /// CI flake on a duplicated message ID), and tests never pollute
+    /// `.standard`.
+    static func defaultReadReceiptsDefaults() -> UserDefaults {
         guard TestEnvironment.isRunningTests else { return .standard }
-        let suiteName = "chat.bitchat.tests.readReceipts"
+        let suiteName = "chat.bitchat.tests.readReceipts.\(UUID().uuidString)"
         guard let scratch = UserDefaults(suiteName: suiteName) else { return .standard }
         scratch.removePersistentDomain(forName: suiteName)
         return scratch
-    }()
+    }
 
     // Track sent read receipts to avoid duplicates (persisted across launches)
     // Note: Persistence happens automatically in didSet, no lifecycle observers needed
@@ -809,7 +811,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         self.autocompleteService = services.autocompleteService
         self.deduplicationService = services.deduplicationService
         self.publicMessagePipeline = services.publicMessagePipeline
-        let readReceiptsDefaults = readReceiptsDefaults ?? Self.defaultReadReceiptsDefaults
+        let readReceiptsDefaults = readReceiptsDefaults ?? Self.defaultReadReceiptsDefaults()
         self.readReceiptsDefaults = readReceiptsDefaults
         self.sentReadReceipts = ChatViewModelBootstrapper.loadPersistedReadReceipts(userDefaults: readReceiptsDefaults)
 
