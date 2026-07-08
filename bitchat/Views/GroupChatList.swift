@@ -30,10 +30,6 @@ struct GroupChatList: View {
 
                 ForEach(groups) { group in
                     HStack(spacing: 4) {
-                        Image(systemName: "person.3.fill")
-                            .font(.bitchatSystem(size: 10))
-                            .foregroundColor(palette.primary)
-
                         Text("#\(group.name)")
                             .bitchatFont(size: 14)
                             .foregroundColor(palette.primary)

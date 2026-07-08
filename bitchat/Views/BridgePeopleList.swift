@@ -61,9 +61,6 @@ struct BridgePeopleList: View {
 
                 ForEach(bridgeService.bridgedParticipants) { person in
                     HStack(spacing: 4) {
-                        Image(systemName: "network")
-                            .font(.bitchatSystem(size: 10))
-                            .foregroundColor(Color.cyan.opacity(0.75))
                         Text(person.displayName)
                             .bitchatFont(size: 14)
                             .foregroundColor(palette.primary)
