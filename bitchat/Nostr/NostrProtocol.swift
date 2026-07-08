@@ -346,7 +346,8 @@ struct NostrProtocol {
         geohash: String,
         senderIdentity: NostrIdentity,
         nickname: String? = nil,
-        expiresAt: Date? = nil
+        expiresAt: Date? = nil,
+        urgent: Bool = false
     ) throws -> NostrEvent {
         var tags = [["g", geohash]]
         if let nickname = nickname?.trimmedOrNilIfEmpty {
@@ -354,6 +355,9 @@ struct NostrProtocol {
         }
         if let expiresAt {
             tags.append(["expiration", String(Int(expiresAt.timeIntervalSince1970))])
+        }
+        if urgent {
+            tags.append(["t", "urgent"])
         }
         let event = NostrEvent(
             pubkey: senderIdentity.publicKeyHex,

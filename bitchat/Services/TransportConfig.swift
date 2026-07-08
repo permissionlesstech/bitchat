@@ -172,6 +172,17 @@ enum TransportConfig {
     static let nostrGeohashSampleLookbackSeconds: TimeInterval = 300
     static let nostrGeohashSampleLimit: Int = 100
     static let nostrDMSubscribeLookbackSeconds: TimeInterval = 86400
+    // A sampled chat message this recent means "a conversation is happening
+    // there" for the empty-timeline nearby-activity hint.
+    static let uiGeohashChatActivityWindowSeconds: TimeInterval = 900
+    // Startup delay before reading the gossip archive for "heard here
+    // earlier" echoes; covers the archive's async disk restore.
+    static let uiArchivedEchoLoadDelaySeconds: TimeInterval = 1.5
+    // Dead drops: location notes left via /drop expire after this long.
+    static let locationDropExpirySeconds: TimeInterval = 24 * 60 * 60
+    // Poll cadence while geo notes wait for a relay connection (Tor warming
+    // up); re-subscribes as soon as one comes up.
+    static let uiGeoNotesConnectivityRetrySeconds: TimeInterval = 3.0
 
     // Message deduplication
     static let messageDedupMaxAgeSeconds: TimeInterval = 300

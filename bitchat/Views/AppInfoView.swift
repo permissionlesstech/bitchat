@@ -20,6 +20,8 @@ struct AppInfoView: View {
 
     @State private var showTopology = false
     @State private var liveVoiceEnabled = PTTSettings.liveVoiceEnabled
+    @State private var locationNotesEnabled = LocationNotesSettings.enabled
+    @ObservedObject private var locationManager = LocationChannelManager.shared
     /// Sticky across opens: first-ever open lands on Info (the gentler
     /// introduction), and afterwards the sheet reopens wherever it was left.
     @AppStorage("appInfo.selectedPane") private var selectedPane: Pane = .info
@@ -146,6 +148,17 @@ struct AppInfoView: View {
             static let title: LocalizedStringKey = "app_info.voice.title"
             // The live-voice title/description keys are referenced inline at
             // the toggle (they ride the shared settingToggle now).
+        }
+
+        enum Location {
+            static let title: LocalizedStringKey = "app_info.location.title"
+            static let notes = AppInfoFeatureInfo(
+                icon: "mappin.and.ellipse",
+                title: "app_info.location.notes.title",
+                description: "app_info.location.notes.description"
+            )
+            static let enable: LocalizedStringKey = "app_info.location.enable"
+            static let openSettings: LocalizedStringKey = "app_info.location.open_settings"
         }
 
         enum Network {
@@ -357,6 +370,27 @@ struct AppInfoView: View {
                         title: Text(Strings.Settings.torTitle),
                         subtitle: Text(Strings.Settings.torSubtitle),
                         isOn: torToggleBinding
+                    )
+                }
+
+                // Location notes / dead drops (merged from main's flat
+                // layout into the shared card + pill style). Turning it on
+                // may need the location prompt; the permission control below
+                // covers the denied path.
+                settingsCard {
+                    settingToggle(
+                        title: Strings.Location.notes.title,
+                        subtitle: Strings.Location.notes.description,
+                        isOn: Binding(
+                            get: { locationNotesEnabled },
+                            set: { newValue in
+                                locationNotesEnabled = newValue
+                                LocationNotesSettings.enabled = newValue
+                                if newValue {
+                                    locationManager.enableLocationChannels()
+                                }
+                            }
+                        )
                     )
                 }
 

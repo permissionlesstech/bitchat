@@ -415,7 +415,7 @@ struct ViewSmokeTests {
         let board = BoardManager(
             transport: transport,
             store: BoardStore(persistsToDisk: false, fileURL: nil, now: { Date() }),
-            publishToNostr: { _, _, _, _ in nil },
+            publishToNostr: { _, _, _, _, _ in nil },
             deleteFromNostr: { _, _ in }
         )
 

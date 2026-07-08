@@ -68,6 +68,13 @@ private final class MockChatPeerListContext: ChatPeerListContext {
     func notifyNetworkAvailable(peerCount: Int) {
         networkAvailableNotifications.append(peerCount)
     }
+
+    // Sightings
+    private(set) var recordedSightings: [[PeerID]] = []
+
+    func recordMeshSightings(peerIDs: [PeerID]) {
+        recordedSightings.append(peerIDs)
+    }
 }
 
 // MARK: - Helpers

@@ -211,6 +211,32 @@ protocol Transport: AnyObject {
     // Pending file management (BCH-01-002: files held in memory until user accepts)
     func acceptPendingFile(id: String) -> URL?
     func declinePendingFile(id: String)
+
+    // Store-and-forward archive (mesh transports only): the public messages
+    // this device is carrying for gossip sync, decoded for display as
+    // "heard here earlier" timeline echoes.
+    func collectArchivedPublicMessages(completion: @escaping @MainActor ([ArchivedPublicMessage]) -> Void)
+}
+
+/// A carried public mesh message from the store-and-forward window, decoded
+/// for display. `packetIdHex` is stable across launches so echo rows keep a
+/// deterministic message ID.
+struct ArchivedPublicMessage {
+    let packetIdHex: String
+    let senderPeerID: PeerID
+    let senderNickname: String
+    let content: String
+    let timestamp: Date
+}
+
+extension BitchatMessage {
+    /// Echo rows are minted locally with this prefix (packet-id derived, so
+    /// stable across launches); the timeline dims them.
+    static let archivedEchoIDPrefix = "echo-"
+
+    var isArchivedEcho: Bool {
+        id.hasPrefix(Self.archivedEchoIDPrefix)
+    }
 }
 
 extension Transport {
@@ -261,6 +287,10 @@ extension Transport {
 
     func acceptPendingFile(id: String) -> URL? { nil }
     func declinePendingFile(id: String) {}
+
+    func collectArchivedPublicMessages(completion: @escaping @MainActor ([ArchivedPublicMessage]) -> Void) {
+        Task { @MainActor in completion([]) }
+    }
 }
 
 protocol TransportPeerEventsDelegate: AnyObject {

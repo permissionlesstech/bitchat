@@ -288,6 +288,15 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
     func clearCurrentPublicTimeline() {
         context.clearPublicConversation(ConversationID(channelID: context.activeChannel))
 
+        // Clearing the mesh timeline also dismisses its archived echoes for
+        // good: the watermark stops the next launch from re-seeding them
+        // (the archive itself keeps carrying the messages for peers), and
+        // the dedup keys go so a cleared message arriving live shows again.
+        if case .mesh = context.activeChannel {
+            MeshEchoSettings.clearedThrough = Date()
+            archivedEchoKeys.removeAll()
+        }
+
         // The SPM test process shares the real Application Support tree, so this
         // detached deletion can land mid-test under parallel scheduling and flake
         // a file-dependent test. Tests never need the on-disk media cleared.
@@ -407,6 +416,21 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
     ///   event (0 for mesh messages). Sufficient PoW relaxes the per-sender
     ///   rate limit; low/no-PoW events keep the strict limits so old clients
     ///   still get through at normal rates.
+    /// Identity keys of the archived echoes seeded into the mesh timeline at
+    /// launch. The mesh wire format carries no stable message ID, so a
+    /// re-synced copy of an already-rendered echo arrives with a fresh UUID —
+    /// this content identity is the only way to recognize it.
+    private var archivedEchoKeys = Set<String>()
+
+    func registerArchivedEcho(senderPeerID: PeerID?, timestamp: Date, content: String) {
+        archivedEchoKeys.insert(Self.archivedEchoKey(senderPeerID: senderPeerID, timestamp: timestamp, content: content))
+    }
+
+    static func archivedEchoKey(senderPeerID: PeerID?, timestamp: Date, content: String) -> String {
+        let ms = UInt64((timestamp.timeIntervalSince1970 * 1000).rounded())
+        return "\(senderPeerID?.id ?? "")|\(ms)|\(content)"
+    }
+
     func handlePublicMessage(_ message: BitchatMessage, powBits: Int = 0) {
         let finalMessage = context.processActionMessage(message)
         if context.isMessageBlocked(finalMessage) { return }
@@ -441,6 +465,17 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
             destination = .mesh
         }
         guard let destination else { return }
+
+        // A live copy of a message already rendered as an archived echo
+        // (e.g. re-served by a peer's gossip sync) would duplicate the row.
+        if destination == .mesh, !isSystem {
+            let key = Self.archivedEchoKey(
+                senderPeerID: finalMessage.senderPeerID,
+                timestamp: finalMessage.timestamp,
+                content: finalMessage.content
+            )
+            if archivedEchoKeys.contains(key) { return }
+        }
 
         let channelMatches: Bool = {
             switch context.activeChannel {

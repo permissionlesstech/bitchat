@@ -180,6 +180,8 @@ private extension ChatViewModelBootstrapper {
 
         viewModel.publicMessagePipeline.delegate = viewModel.publicConversationCoordinator
 
+        loadArchivedEchoes()
+
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak viewModel] in
             guard let viewModel,
                   let bleService = viewModel.meshService as? BLEService else { return }
@@ -196,6 +198,58 @@ private extension ChatViewModelBootstrapper {
                 nanoseconds: UInt64(TransportConfig.uiStartupPhaseDurationSeconds * 1_000_000_000)
             )
             viewModel.isStartupPhase = false
+        }
+    }
+
+    /// Surfaces the carried store-and-forward window (up to 6h of public
+    /// mesh messages, persisted across restarts) as dimmed "heard here
+    /// earlier" rows, so the mesh timeline opens with the place's memory
+    /// instead of a void. The archive restore runs async on the sync queue
+    /// right after transport start, so give it a beat before asking.
+    private func loadArchivedEchoes() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiArchivedEchoLoadDelaySeconds) { [weak viewModel] in
+            guard let viewModel else { return }
+            viewModel.meshService.collectArchivedPublicMessages { [weak viewModel] allArchived in
+                // A previous /clear dismissed everything heard up to its
+                // watermark; only newer archive entries come back.
+                let clearedThrough = MeshEchoSettings.clearedThrough ?? .distantPast
+                let archived = allArchived.filter { $0.timestamp > clearedThrough }
+                guard let viewModel, !archived.isEmpty else { return }
+                // Seed only an untouched timeline: with live rows already
+                // present (or after /clear) splicing history back in would
+                // be wrong.
+                guard viewModel.conversations.conversationsByID[.mesh]?.messages.isEmpty != false else { return }
+
+                for item in archived {
+                    let echo = BitchatMessage(
+                        id: BitchatMessage.archivedEchoIDPrefix + item.packetIdHex,
+                        sender: item.senderNickname,
+                        content: item.content,
+                        timestamp: item.timestamp,
+                        isRelay: false,
+                        senderPeerID: item.senderPeerID
+                    )
+                    viewModel.publicConversationCoordinator.registerArchivedEcho(
+                        senderPeerID: item.senderPeerID,
+                        timestamp: item.timestamp,
+                        content: item.content
+                    )
+                    _ = viewModel.appendPublicMessage(echo, to: .mesh)
+                }
+
+                if let firstTimestamp = archived.map(\.timestamp).min() {
+                    // Echo-prefixed ID so the divider joins the tinted,
+                    // dimmed echo block in the timeline.
+                    let divider = BitchatMessage(
+                        id: BitchatMessage.archivedEchoIDPrefix + "divider",
+                        sender: "system",
+                        content: String(localized: "content.echoes.divider", comment: "System line shown above dimmed archived messages replayed on the mesh timeline at launch"),
+                        timestamp: firstTimestamp.addingTimeInterval(-1),
+                        isRelay: false
+                    )
+                    _ = viewModel.appendPublicMessage(divider, to: .mesh)
+                }
+            }
         }
     }
 

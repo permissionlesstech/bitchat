@@ -23,6 +23,9 @@ struct NoticeItem: Identifiable, Equatable {
     let content: String
     let createdAt: Date
     let isUrgent: Bool
+    /// When the notice fades (board expiry or a note's NIP-40 tag, as dead
+    /// drops carry). Nil means it only ages out of the relay window.
+    let expiresAt: Date?
     let source: Source
 
     var isBoardPost: Bool {
@@ -36,6 +39,9 @@ struct NoticeItem: Identifiable, Equatable {
         content = post.content
         createdAt = Date(timeIntervalSince1970: TimeInterval(post.createdAt) / 1000)
         isUrgent = post.isUrgent
+        expiresAt = post.expiresAt > 0
+            ? Date(timeIntervalSince1970: TimeInterval(post.expiresAt) / 1000)
+            : nil
         source = .board(post)
     }
 
@@ -46,7 +52,8 @@ struct NoticeItem: Identifiable, Equatable {
             .first.map(String.init) ?? display
         content = note.content
         createdAt = note.createdAt
-        isUrgent = false
+        isUrgent = note.isUrgent
+        expiresAt = note.expiresAt
         source = .nostr(note)
     }
 }

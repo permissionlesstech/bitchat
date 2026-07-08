@@ -19,6 +19,8 @@ struct MessageListView: View {
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
+    @EnvironmentObject private var appChromeModel: AppChromeModel
+    @ObservedObject private var nearbyNotes = NearbyNotesCounter.shared
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.appTheme) private var theme
@@ -45,6 +47,9 @@ struct MessageListView: View {
     /// switches swap the timeline wholesale, so a count delta is only a
     /// "new messages" signal while the context is unchanged.
     @State private var unseenBaselineKey = ""
+    /// Whether this instance holds the nearby-notes counter active (mesh
+    /// public timeline only); balanced against activate/deactivate.
+    @State private var holdsNotesCounter = false
 
     @ThemedPalette private var palette
 
@@ -72,10 +77,19 @@ struct MessageListView: View {
             return MessageDisplayItem(id: "\(contextKey)|\(message.id)", message: message)
         }
 
+        VStack(spacing: 0) {
+        // Notes pinned to this place stay visible while chatting — a
+        // conversation starting must not hide what's left here.
+        if privatePeer == nil,
+           case .mesh = locationChannelsModel.selectedChannel,
+           nearbyNotes.noteCount > 0 {
+            notesHereStrip
+        }
+        GeometryReader { geometry in
         ScrollViewReader { proxy in
             ScrollView {
                 if messageItems.isEmpty && privatePeer == nil {
-                    publicEmptyState
+                    publicEmptyState(fillHeight: geometry.size.height)
                 }
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(messageItems) { item in
@@ -150,10 +164,23 @@ struct MessageListView: View {
                             }
                             .padding(.horizontal, 12)
                             .padding(.vertical, 1)
+                            // Archived echoes read as one tinted block, not
+                            // just faded rows.
+                            .background(message.isArchivedEcho ? palette.secondary.opacity(0.08) : Color.clear)
                     }
                 }
                 .transaction { tx in if conversationUIModel.isBatchingPublic { tx.disablesAnimations = true } }
                 .padding(.vertical, 2)
+
+                // Only carried history on screen: the ambient layer (radar,
+                // sightings, live hints) stays visible below it instead of
+                // vanishing the moment echoes exist.
+                if privatePeer == nil, showsAmbientFooter(messageItems: messageItems) {
+                    MeshEmptyStateView(compact: true)
+                        .padding(.horizontal, 12)
+                        .padding(.top, 20)
+                        .padding(.bottom, 8)
+                }
             }
             .overlay(alignment: .bottomTrailing) {
                 if !isAtBottom && !messageItems.isEmpty {
@@ -246,6 +273,12 @@ struct MessageListView: View {
                 scrollThrottleTimer?.invalidate()
             }
         }
+        }
+        }
+        .onAppear { updateNotesCounterHold() }
+        .onDisappear { releaseNotesCounterHold() }
+        .onChange(of: locationChannelsModel.selectedChannel) { _ in updateNotesCounterHold() }
+        .onChange(of: privatePeer) { _ in updateNotesCounterHold() }
         .environment(\.openURL, OpenURLAction { url in
             // Intercept custom cashu: links created in attributed text
             if let scheme = url.scheme?.lowercased(), scheme == "cashu" || scheme == "lightning" {
@@ -270,16 +303,75 @@ private extension MessageListView {
         return locationChannelsModel.selectedChannel.contextKey
     }
 
+    /// Tappable strip above the mesh timeline while notes are pinned at this
+    /// place: opens the notices sheet on the geo tab.
+    var notesHereStrip: some View {
+        let text: String = nearbyNotes.noteCount == 1
+            ? String(localized: "content.empty.notes_one", comment: "Hint when exactly one note was left at this place")
+            : String(
+                format: String(localized: "content.empty.notes_many", comment: "Hint counting notes left at this place"),
+                locale: .current,
+                nearbyNotes.noteCount
+            )
+
+        return Button {
+            appChromeModel.presentNotices(geoTab: true)
+        } label: {
+            HStack(spacing: 6) {
+                Text(verbatim: "📍 \(text)")
+                    .bitchatFont(size: 12)
+                    .foregroundColor(palette.primary)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.bitchatSystem(size: 10))
+                    .foregroundColor(palette.secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(palette.secondary.opacity(0.08))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// The nearby-notes counter runs whenever the mesh public timeline is
+    /// showing — the strip needs a live count before it can decide to exist.
+    func updateNotesCounterHold() {
+        let shouldHold = privatePeer == nil && locationChannelsModel.selectedChannel.isMesh
+        guard shouldHold != holdsNotesCounter else { return }
+        holdsNotesCounter = shouldHold
+        if shouldHold {
+            NearbyNotesCounter.shared.activate()
+        } else {
+            NearbyNotesCounter.shared.deactivate()
+        }
+    }
+
+    func releaseNotesCounterHold() {
+        guard holdsNotesCounter else { return }
+        holdsNotesCounter = false
+        NearbyNotesCounter.shared.deactivate()
+    }
+
+    /// True when the mesh timeline holds nothing but archived echoes and
+    /// system lines — no live conversation yet, so the ambient layer still
+    /// applies.
+    private func showsAmbientFooter(messageItems: [MessageDisplayItem]) -> Bool {
+        guard case .mesh = locationChannelsModel.selectedChannel,
+              !messageItems.isEmpty else { return false }
+        return messageItems.allSatisfy { $0.message.isArchivedEcho || $0.message.sender == "system" }
+    }
+
     /// Terminal-styled narration for an empty public timeline: says which
     /// channel this is, that the app is waiting for peers, and where to go
     /// next. Rendered inside the ScrollView; disappears with the first row.
-    var publicEmptyState: some View {
+    /// The mesh case fills the visible chat height so its radar can center
+    /// in the space below the text.
+    func publicEmptyState(fillHeight: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             switch locationChannelsModel.selectedChannel {
             case .mesh:
-                emptyStateLine(String(localized: "content.empty.mesh_intro", comment: "First line of the empty mesh timeline explaining what the mesh channel is"))
-                emptyStateLine(String(localized: "content.empty.mesh_waiting", comment: "Second line of the empty mesh timeline saying no peers are in range yet"))
-                emptyStateLine(String(localized: "content.empty.switch_hint", comment: "Empty timeline hint pointing at the channel switcher and the help screen"))
+                MeshEmptyStateView(fillHeight: max(0, fillHeight - 24))
             case .location(let channel):
                 emptyStateLine(
                     String(
@@ -410,6 +502,9 @@ private extension MessageListView {
                 TextMessageView(message: message)
             }
         }
+        // Archived echoes ("heard here earlier") render dimmed: real history,
+        // visually distinct from the live conversation.
+        .opacity(message.isArchivedEcho ? 0.55 : 1)
     }
 
     @ViewBuilder

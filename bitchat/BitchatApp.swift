@@ -104,12 +104,20 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         let identifier = response.notification.request.identifier
+        let actionIdentifier = response.actionIdentifier
         let userInfo = response.notification.request.content.userInfo
 
+        // Complete only after the response is handled: for a background
+        // action (👋 wave) the system may suspend the app the moment the
+        // completion handler runs, which would drop the queued send.
         Task { @MainActor in
-            self.runtime?.handleNotificationResponse(identifier: identifier, userInfo: userInfo)
+            self.runtime?.handleNotificationResponse(
+                identifier: identifier,
+                actionIdentifier: actionIdentifier,
+                userInfo: userInfo
+            )
+            completionHandler()
         }
-        completionHandler()
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
