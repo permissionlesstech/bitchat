@@ -234,6 +234,11 @@ private struct ContentPeopleListView: View {
                     }
                 }
                 .padding(.top, 4)
+                // Full width even when every row is narrow (empty mesh, no
+                // groups): without this the VStack hugs its widest child and
+                // the ScrollView centers it — headers and empty states
+                // floated mid-screen on iPhone.
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .id(peerListModel.renderID)
             }
         }

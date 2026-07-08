@@ -430,6 +430,9 @@ private extension ChatViewModelBootstrapper {
                 .first { $0.level == .neighborhood }?
                 .geohash
         }
+        bridge.requestLocationFix = { [weak viewModel] in
+            viewModel?.locationManager.refreshChannels()
+        }
         bridge.meshAdvertisedCell = { [weak bleService] in
             bleService?.advertisedBridgeGeohash()
         }

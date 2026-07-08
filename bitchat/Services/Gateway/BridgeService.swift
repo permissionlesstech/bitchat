@@ -140,6 +140,11 @@ final class BridgeService: ObservableObject {
     var relaysConnected: (@MainActor () -> Bool)?
     /// The local neighborhood cell from CoreLocation, if permitted.
     var locationCell: (@MainActor () -> String?)?
+    /// Asks the location layer for a fresh one-shot fix. The bridge must
+    /// pump location itself: channel data otherwise only flows while some
+    /// other feature (channels sheet, location notes) happens to be active —
+    /// a field failure mode where the bridge silently never got a cell.
+    var requestLocationFix: (@MainActor () -> Void)?
     /// A rendezvous cell advertised by a reachable mesh bridge peer's
     /// announce — lets a mesh-only, location-less device still compose
     /// correctly tagged events.
@@ -230,6 +235,11 @@ final class BridgeService: ObservableObject {
     /// changes; idempotent.
     func refreshRendezvous() {
         let cell = isEnabled ? currentCell() : nil
+        // No cell yet: ask for a fix — the availableChannels change re-enters
+        // here once it lands.
+        if isEnabled, cell == nil {
+            requestLocationFix?()
+        }
         guard cell != activeCell else {
             if isEnabled, activeCell != nil { armPresenceTimerIfNeeded() }
             return
@@ -325,6 +335,9 @@ final class BridgeService: ObservableObject {
             self.presenceTimerArmed = false
             self.publishPresence()
             self.pruneParticipants()
+            // Piggyback a location refresh so a moving device migrates cells
+            // without depending on any other feature pumping location.
+            self.requestLocationFix?()
             self.armPresenceTimerIfNeeded()
         }
         if let scheduleTimer {

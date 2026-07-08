@@ -45,6 +45,7 @@ struct BridgeServiceTests {
         private(set) var openedSubscriptions: [[String]] = []
         private(set) var closedSubscriptions = 0
         private(set) var enabledChanges: [Bool] = []
+        private(set) var locationFixRequests = 0
         private(set) var cellChanges: [String?] = []
         private(set) var scheduledTimers: [(delay: TimeInterval, work: @MainActor () -> Void)] = []
 
@@ -71,6 +72,7 @@ struct BridgeServiceTests {
             }
             service.relaysConnected = { [weak self] in self?.relaysConnected ?? false }
             service.locationCell = { [weak self] in self?.locationCell }
+            service.requestLocationFix = { [weak self] in self?.locationFixRequests += 1 }
             service.meshAdvertisedCell = { [weak self] in self?.meshAdvertisedCell }
             service.sendToBridgePeer = { [weak self] payload, peer in
                 guard let self, self.sendSucceeds else { return false }
@@ -153,6 +155,23 @@ struct BridgeServiceTests {
         #expect(cells.first == Self.cell)
         #expect(cells.count == 9) // own cell + 8 neighbors
         #expect(fixture.service.subscribedCells.count == 9)
+    }
+
+    @Test func missingCellRequestsALocationFix() {
+        // Field bug: the bridge waited passively for availableChannels,
+        // which only flow while some other feature pumps location. Bridging
+        // without a cell must ask for a fix itself.
+        let fixture = Fixture(enabled: true)
+        fixture.locationCell = nil
+        fixture.service.refreshRendezvous()
+
+        #expect(fixture.locationFixRequests >= 1)
+        #expect(fixture.service.activeCell == nil)
+
+        // The fix lands, channels flow, and the sink re-enters here:
+        fixture.locationCell = Self.cell
+        fixture.service.refreshRendezvous()
+        #expect(fixture.service.activeCell == Self.cell)
     }
 
     @Test func noLocationFallsBackToMeshAdvertisedCell() {

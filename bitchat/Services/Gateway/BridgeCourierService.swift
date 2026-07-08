@@ -87,6 +87,7 @@ final class BridgeCourierService: ObservableObject {
     /// Drop event IDs already handled (multi-relay dedup).
     private var seenDropEventIDs: BoundedIDSet
     private var subscriptionOpen = false
+    private var lastSubscribedTags: Set<String> = []
     private var refreshTimerArmed = false
     private var lastAnnounceRefresh = Date.distantPast
 
@@ -186,11 +187,18 @@ final class BridgeCourierService: ObservableObject {
             if subscriptionOpen {
                 closeSubscription?()
                 subscriptionOpen = false
+                lastSubscribedTags = []
             }
             return
         }
-        openSubscription?(allTags.sorted())
-        subscriptionOpen = true
+        // Resubscribe only when the watched set actually changed — refresh
+        // fires on every verified announce (field logs showed the drop
+        // subscription rebuilt every ~60s for an unchanged tag set).
+        if !subscriptionOpen || allTags != lastSubscribedTags {
+            openSubscription?(allTags.sorted())
+            subscriptionOpen = true
+            lastSubscribedTags = allTags
+        }
         flushPendingDrops()
         publishHeldEnvelopes()
     }
