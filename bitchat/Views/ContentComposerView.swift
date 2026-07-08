@@ -249,12 +249,12 @@ private extension ContentComposerView {
         return conversationUIModel.activeLiveVoiceTalker
     }
 
-    /// Recording > floor-busy > live-ready (blue: holding will stream in
-    /// real time) > default accent (holding records a classic note).
+    /// Recording > floor-busy > default accent. Whether the hold streams
+    /// live or records a classic note is signaled by the recording HUD's
+    /// LIVE treatment, not the idle button color.
     var micColor: Color {
         if voiceRecordingVM.state.isActive { return .red }
         if busyTalker != nil { return Color.red.opacity(0.6) }
-        if conversationUIModel.isLiveVoiceCaptureAvailable() { return .blue }
         return composerAccentColor
     }
 

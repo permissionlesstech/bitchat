@@ -99,13 +99,6 @@ extension ChatViewModel {
         return activeChannel == .mesh ? .publicMesh : nil
     }
 
-    /// Whether holding the mic right now would stream live (drives the
-    /// composer's blue mic indicator).
-    @MainActor
-    var isLiveVoiceCaptureAvailable: Bool {
-        liveVoiceTarget() != nil
-    }
-
     /// Picks the capture backend for the composer's hold-to-record gesture:
     /// live push-to-talk when the audience can hear it now — a DM peer that
     /// is mesh-reachable with an established Noise session, or the public
