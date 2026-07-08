@@ -277,9 +277,7 @@ private extension MessageListView {
         VStack(alignment: .leading, spacing: 6) {
             switch locationChannelsModel.selectedChannel {
             case .mesh:
-                emptyStateLine(String(localized: "content.empty.mesh_intro", comment: "First line of the empty mesh timeline explaining what the mesh channel is"))
-                emptyStateLine(String(localized: "content.empty.mesh_waiting", comment: "Second line of the empty mesh timeline saying no peers are in range yet"))
-                emptyStateLine(String(localized: "content.empty.switch_hint", comment: "Empty timeline hint pointing at the channel switcher and the help screen"))
+                MeshEmptyStateView()
             case .location(let channel):
                 emptyStateLine(
                     String(
@@ -410,6 +408,9 @@ private extension MessageListView {
                 TextMessageView(message: message)
             }
         }
+        // Archived echoes ("heard here earlier") render dimmed: real history,
+        // visually distinct from the live conversation.
+        .opacity(message.isArchivedEcho ? 0.55 : 1)
     }
 
     @ViewBuilder

@@ -104,10 +104,15 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         let identifier = response.notification.request.identifier
+        let actionIdentifier = response.actionIdentifier
         let userInfo = response.notification.request.content.userInfo
 
         Task { @MainActor in
-            self.runtime?.handleNotificationResponse(identifier: identifier, userInfo: userInfo)
+            self.runtime?.handleNotificationResponse(
+                identifier: identifier,
+                actionIdentifier: actionIdentifier,
+                userInfo: userInfo
+            )
         }
         completionHandler()
     }

@@ -70,6 +70,26 @@ final class LocationNotesManager: ObservableObject {
         /// The matched `g` tag: the cell the note was posted to, which can be
         /// a neighbor of the subscribed geohash.
         let geohash: String
+        /// NIP-40 expiration, when the note carries one (dead drops do).
+        let expiresAt: Date?
+
+        init(
+            id: String,
+            pubkey: String,
+            content: String,
+            createdAt: Date,
+            nickname: String?,
+            geohash: String,
+            expiresAt: Date? = nil
+        ) {
+            self.id = id
+            self.pubkey = pubkey
+            self.content = content
+            self.createdAt = createdAt
+            self.nickname = nickname
+            self.geohash = geohash
+            self.expiresAt = expiresAt
+        }
 
         var displayName: String {
             let suffix = String(pubkey.suffix(4))
@@ -202,10 +222,14 @@ final class LocationNotesManager: ObservableObject {
                 tag.count >= 2 && tag[0].lowercased() == "g" && validGeohashes.contains(tag[1].lowercased())
             })?[1].lowercased() else { return }
             guard !self.noteIDs.contains(event.id) else { return }
+            // NIP-40: relays are not required to enforce expiration — drop
+            // expired notes client-side so 24h dead drops actually vanish.
+            let expiresAt = Self.expirationDate(of: event)
+            if let expiresAt, expiresAt <= self.dependencies.now() { return }
             self.noteIDs.insert(event.id)
             let nick = event.tags.first(where: { $0.first?.lowercased() == "n" && $0.count >= 2 })?.dropFirst().first
             let ts = Date(timeIntervalSince1970: TimeInterval(event.created_at))
-            let note = Note(id: event.id, pubkey: event.pubkey, content: event.content, createdAt: ts, nickname: nick, geohash: matchedGeohash)
+            let note = Note(id: event.id, pubkey: event.pubkey, content: event.content, createdAt: ts, nickname: nick, geohash: matchedGeohash, expiresAt: expiresAt)
             self.notes.append(note)
             self.notes.sort { $0.createdAt > $1.createdAt }
             self.enforceMemoryCap()
@@ -219,8 +243,9 @@ final class LocationNotesManager: ObservableObject {
         })
     }
 
-    /// Send a location note for the current geohash using the per-geohash identity.
-    func send(content: String, nickname: String) {
+    /// Send a location note for the current geohash using the per-geohash
+    /// identity, optionally expiring via NIP-40 (dead drops pass 24h).
+    func send(content: String, nickname: String, expiresAt: Date? = nil) {
         guard let trimmed = content.trimmedOrNilIfEmpty else { return }
         let relays = dependencies.relayLookup(geohash, TransportConfig.nostrGeoRelayCount)
         guard !relays.isEmpty else {
@@ -235,7 +260,8 @@ final class LocationNotesManager: ObservableObject {
                 content: trimmed,
                 geohash: geohash,
                 senderIdentity: id,
-                nickname: nickname
+                nickname: nickname,
+                expiresAt: expiresAt
             )
             dependencies.sendEvent(event, relays)
             // Optimistic local-echo
@@ -245,7 +271,8 @@ final class LocationNotesManager: ObservableObject {
                 content: trimmed,
                 createdAt: Date(timeIntervalSince1970: TimeInterval(event.created_at)),
                 nickname: nickname,
-                geohash: geohash
+                geohash: geohash,
+                expiresAt: expiresAt
             )
             self.noteIDs.insert(event.id)
             self.notes.insert(echo, at: 0)
@@ -288,12 +315,54 @@ final class LocationNotesManager: ObservableObject {
         }
     }
 
+    /// The NIP-40 `expiration` tag as a date, if the event carries one.
+    static func expirationDate(of event: NostrEvent) -> Date? {
+        guard let tag = event.tags.first(where: { $0.count >= 2 && $0[0].lowercased() == "expiration" }),
+              let seconds = TimeInterval(tag[1])
+        else { return nil }
+        return Date(timeIntervalSince1970: seconds)
+    }
+
     /// Enforces defensive memory cap on notes array (keeps newest).
     private func enforceMemoryCap() {
         if notes.count > maxNotesInMemory {
             let removed = notes.count - maxNotesInMemory
             notes = Array(notes.prefix(maxNotesInMemory))
             SecureLogger.debug("LocationNotesManager: trimmed \(removed) old notes (cap: \(maxNotesInMemory))", category: .session)
+        }
+    }
+
+    /// One-shot dead-drop publish without holding a subscription: pins a
+    /// note to `geohash` that expires via NIP-40. Returns false when no geo
+    /// relays are known or signing fails.
+    @MainActor
+    static func postDrop(
+        content: String,
+        nickname: String,
+        geohash: String,
+        expiry: TimeInterval = TransportConfig.locationDropExpirySeconds,
+        dependencies: LocationNotesDependencies = .live
+    ) -> Bool {
+        guard let trimmed = content.trimmedOrNilIfEmpty else { return false }
+        let relays = dependencies.relayLookup(geohash, TransportConfig.nostrGeoRelayCount)
+        guard !relays.isEmpty else {
+            SecureLogger.warning("LocationNotesManager: drop blocked, no geo relays for geohash=\(geohash)", category: .session)
+            return false
+        }
+        do {
+            let identity = try dependencies.deriveIdentity(geohash)
+            let event = try NostrProtocol.createGeohashTextNote(
+                content: trimmed,
+                geohash: geohash,
+                senderIdentity: identity,
+                nickname: nickname,
+                expiresAt: dependencies.now().addingTimeInterval(expiry)
+            )
+            dependencies.sendEvent(event, relays)
+            return true
+        } catch {
+            SecureLogger.error("LocationNotesManager: failed to post drop: \(error)", category: .session)
+            return false
         }
     }
 

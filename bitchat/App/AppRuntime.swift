@@ -221,7 +221,16 @@ final class AppRuntime: ObservableObject {
         chatViewModel.applicationWillTerminate()
     }
 
-    func handleNotificationResponse(identifier: String, userInfo: [AnyHashable: Any]) {
+    func handleNotificationResponse(
+        identifier: String,
+        actionIdentifier: String = UNNotificationDefaultActionIdentifier,
+        userInfo: [AnyHashable: Any]
+    ) {
+        if actionIdentifier == NotificationService.waveActionID {
+            chatViewModel.sendMeshWave()
+            return
+        }
+
         if identifier.hasPrefix("private-"), let peerID = PeerID(str: userInfo["peerID"] as? String) {
             record(.notificationOpened(peerID: peerID))
             chatViewModel.startPrivateChat(with: peerID)

@@ -932,6 +932,12 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         outgoingCoordinator.sendMessage(content)
     }
 
+    /// Sends a 👋 to the mesh channel regardless of the active channel.
+    @MainActor
+    func sendMeshWave() {
+        outgoingCoordinator.sendMeshWave()
+    }
+
     // MARK: - Geohash Participants
 
     @MainActor
@@ -1218,6 +1224,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         messageRouter.wipeOutbox()
         GossipMessageArchive.wipeDefault()
         StoreAndForwardMetrics.shared.reset()
+
+        // Ambient-liveliness bookkeeping: sampled nearby-chat previews and
+        // the daily sightings tally
+        GeohashChatActivityTracker.shared.clear()
+        MeshSightingsTracker.shared.clear()
 
         // Drop private group keys and rosters (keychain + disk)
         groupStore.wipe()

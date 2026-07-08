@@ -216,6 +216,93 @@ struct LocationNotesManagerTests {
         #expect(manager.errorMessage == nil)
     }
 
+    @Test
+    func ingestDropsExpiredNotesAndKeepsUnexpiredOnes() throws {
+        var storedHandler: ((NostrEvent) -> Void)?
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let deps = LocationNotesDependencies(
+            relayLookup: { _, _ in ["wss://relay.one"] },
+            subscribe: { _, _, _, handler, _ in
+                storedHandler = handler
+            },
+            unsubscribe: { _ in },
+            sendEvent: { _, _ in },
+            deriveIdentity: { _ in throw TestError.shouldNotDerive },
+            now: { now }
+        )
+
+        let manager = LocationNotesManager(geohash: "u4pruydq", dependencies: deps)
+        let identity = try NostrIdentity.generate()
+
+        let expired = NostrEvent(
+            pubkey: identity.publicKeyHex,
+            createdAt: now.addingTimeInterval(-3600),
+            kind: .textNote,
+            tags: [["g", "u4pruydq"], ["expiration", String(Int(now.timeIntervalSince1970) - 60)]],
+            content: "gone"
+        )
+        storedHandler?(try expired.sign(with: identity.schnorrSigningKey()))
+
+        let live = NostrEvent(
+            pubkey: identity.publicKeyHex,
+            createdAt: now.addingTimeInterval(-3600),
+            kind: .textNote,
+            tags: [["g", "u4pruydq"], ["expiration", String(Int(now.timeIntervalSince1970) + 3600)]],
+            content: "still here"
+        )
+        storedHandler?(try live.sign(with: identity.schnorrSigningKey()))
+
+        #expect(manager.notes.count == 1)
+        #expect(manager.notes.first?.content == "still here")
+        #expect(manager.notes.first?.expiresAt == Date(timeIntervalSince1970: TimeInterval(Int(now.timeIntervalSince1970) + 3600)))
+    }
+
+    @Test
+    func postDrop_sendsExpiringNoteToGeoRelays() throws {
+        var sentEvents: [NostrEvent] = []
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let identity = try NostrIdentity.generate()
+        let deps = LocationNotesDependencies(
+            relayLookup: { _, _ in ["wss://relay.one"] },
+            subscribe: { _, _, _, _, _ in },
+            unsubscribe: { _ in },
+            sendEvent: { event, _ in sentEvents.append(event) },
+            deriveIdentity: { _ in identity },
+            now: { now }
+        )
+
+        let posted = LocationNotesManager.postDrop(
+            content: "  the coffee here is great  ",
+            nickname: "scout",
+            geohash: "u4pruydq",
+            dependencies: deps
+        )
+
+        #expect(posted)
+        #expect(sentEvents.count == 1)
+        let event = try #require(sentEvents.first)
+        #expect(event.kind == NostrProtocol.EventKind.textNote.rawValue)
+        #expect(event.content == "the coffee here is great")
+        #expect(event.tags.contains(["g", "u4pruydq"]))
+        let expiration = event.tags.first { $0.first == "expiration" }?.last
+        let expected = Int(now.addingTimeInterval(TransportConfig.locationDropExpirySeconds).timeIntervalSince1970)
+        #expect(expiration == String(expected))
+    }
+
+    @Test
+    func postDrop_failsWithoutRelays() {
+        let deps = LocationNotesDependencies(
+            relayLookup: { _, _ in [] },
+            subscribe: { _, _, _, _, _ in },
+            unsubscribe: { _ in },
+            sendEvent: { _, _ in },
+            deriveIdentity: { _ in throw TestError.shouldNotDerive },
+            now: { Date() }
+        )
+
+        #expect(!LocationNotesManager.postDrop(content: "hi", nickname: "x", geohash: "u4pruydq", dependencies: deps))
+    }
+
     private enum TestError: Error {
         case shouldNotDerive
     }

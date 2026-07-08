@@ -652,6 +652,19 @@ final class GossipSyncManager {
         }
     }
 
+    /// Snapshot of the carried public-message packets (fresh window only),
+    /// for the "heard here earlier" timeline echoes. Completion runs on the
+    /// sync queue.
+    func collectPublicMessagePackets(completion: @escaping ([BitchatPacket]) -> Void) {
+        queue.async { [weak self] in
+            guard let self else {
+                completion([])
+                return
+            }
+            completion(self.messages.allPackets(isFresh: self.isPacketFresh))
+        }
+    }
+
     private func performPeriodicMaintenance(now: Date = Date()) {
         cleanupExpiredMessages()
         cleanupStaleAnnouncementsIfNeeded(now: now)

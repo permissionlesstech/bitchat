@@ -112,6 +112,13 @@ final class ChatOutgoingCoordinator {
             sendGeohashPublicMessage(trimmed, mentions: mentions, channel: channel)
         }
     }
+
+    /// Broadcasts a wave on the mesh channel regardless of the active channel —
+    /// used by the "bitchatters nearby" notification quick action, which always
+    /// refers to mesh peers.
+    func sendMeshWave() {
+        sendMeshPublicMessage(originalContent: "👋", trimmed: "👋", mentions: [])
+    }
 }
 
 private extension ChatOutgoingCoordinator {

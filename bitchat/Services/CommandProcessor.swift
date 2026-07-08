@@ -146,6 +146,8 @@ final class CommandProcessor {
             return handleTrace(args)
         case "/pay":
             return handlePay(args)
+        case "/drop":
+            return handleDrop(args)
         case "/help":
             return .success(message: Self.helpText)
         default:
@@ -171,8 +173,35 @@ final class CommandProcessor {
     /ping @name — measure round-trip time (mesh only)
     /trace @name — estimated mesh path (mesh only)
     /pay <token> — send a cashu ecash token in this chat
+    /drop <message> — pin a note to this place for 24h (needs location)
     /help — this list
     """
+
+    /// /drop <text> — a dead drop: pins a note to the current building-level
+    /// geohash with a 24h NIP-40 expiry. Anyone who passes through here and
+    /// looks at notices (or hits the empty-timeline "notes left here" hint)
+    /// reads it.
+    private func handleDrop(_ args: String) -> CommandResult {
+        guard LocationNotesSettings.enabled else {
+            return .error(message: "location notes are off — enable them in the info screen")
+        }
+        guard let content = args.trimmedOrNilIfEmpty else {
+            return .error(message: "usage: /drop <message>")
+        }
+        let location = LocationChannelManager.shared
+        guard location.permissionState == .authorized else {
+            return .error(message: "leaving a note needs location — enable it in the info screen")
+        }
+        guard let geohash = location.availableChannels.first(where: { $0.level == .building })?.geohash else {
+            location.refreshChannels()
+            return .error(message: "still finding this place — try again in a moment")
+        }
+        guard let nickname = contextProvider?.nickname,
+              LocationNotesManager.postDrop(content: content, nickname: nickname, geohash: geohash) else {
+            return .error(message: "no geo relays reachable — note not left")
+        }
+        return .success(message: "📍 note left here — it fades in 24h")
+    }
 
     // MARK: - Command Handlers
     

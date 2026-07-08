@@ -10,6 +10,8 @@ struct AppInfoView: View {
     var topologyProvider: (@MainActor () -> MeshTopologyDisplayModel)?
     @State private var showTopology = false
     @State private var liveVoiceEnabled = PTTSettings.liveVoiceEnabled
+    @State private var locationNotesEnabled = LocationNotesSettings.enabled
+    @ObservedObject private var locationManager = LocationChannelManager.shared
 
     private var selectedTheme: AppTheme {
         AppTheme(rawValue: appThemeRawValue) ?? .matrix
@@ -88,6 +90,18 @@ struct AppInfoView: View {
                 title: "app_info.voice.live.title",
                 description: "app_info.voice.live.description"
             )
+        }
+
+        enum Location {
+            static let title: LocalizedStringKey = "app_info.location.title"
+            static let notes = AppInfoFeatureInfo(
+                icon: "mappin.and.ellipse",
+                title: "app_info.location.notes.title",
+                description: "app_info.location.notes.description"
+            )
+            static let enable: LocalizedStringKey = "app_info.location.enable"
+            static let openSettings: LocalizedStringKey = "app_info.location.open_settings"
+            static let granted: LocalizedStringKey = "app_info.location.granted"
         }
 
         enum Network {
@@ -252,19 +266,24 @@ struct AppInfoView: View {
                 }
             }
 
-            // Voice
+            // Location (notes / dead drops)
             VStack(alignment: .leading, spacing: 16) {
-                SectionHeader(Strings.Voice.title)
+                SectionHeader(Strings.Location.title)
 
                 HStack(spacing: 0) {
-                    FeatureRow(info: Strings.Voice.live)
-                    Toggle(Strings.Voice.live.title, isOn: $liveVoiceEnabled)
+                    FeatureRow(info: Strings.Location.notes)
+                    Toggle(Strings.Location.notes.title, isOn: $locationNotesEnabled)
                         .labelsHidden()
                         .tint(palette.accent)
-                        .onChange(of: liveVoiceEnabled) { newValue in
-                            PTTSettings.liveVoiceEnabled = newValue
+                        .onChange(of: locationNotesEnabled) { newValue in
+                            LocationNotesSettings.enabled = newValue
+                            if newValue {
+                                locationManager.enableLocationChannels()
+                            }
                         }
                 }
+
+                locationPermissionRow
             }
 
             // Network diagnostics
@@ -339,6 +358,35 @@ struct AppInfoView: View {
             }
         }
         .padding()
+    }
+}
+
+private extension AppInfoView {
+    /// One status/action line under the notes toggle so the location
+    /// requirement is actionable right here instead of only in the channel
+    /// sheet.
+    @ViewBuilder
+    var locationPermissionRow: some View {
+        if locationNotesEnabled {
+            switch locationManager.permissionState {
+            case .notDetermined:
+                Button(Strings.Location.enable) {
+                    locationManager.enableLocationChannels()
+                }
+                .buttonStyle(.plain)
+                .bitchatFont(size: 13)
+                .foregroundColor(palette.accent)
+            case .denied, .restricted:
+                Button(Strings.Location.openSettings, action: SystemSettings.location.open)
+                    .buttonStyle(.plain)
+                    .bitchatFont(size: 13)
+                    .foregroundColor(palette.accent)
+            case .authorized:
+                Text(Strings.Location.granted)
+                    .bitchatFont(size: 12)
+                    .foregroundColor(secondaryTextColor)
+            }
+        }
     }
 }
 

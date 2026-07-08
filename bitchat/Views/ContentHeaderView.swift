@@ -23,7 +23,6 @@ struct ContentHeaderView: View {
 
     /// Unified notices sheet (board posts + location notes) for the current
     /// channel context.
-    @State private var showNotices = false
 
     /// Board posts mirrored from the store so the pin icon can show when the
     /// current scope has notices.
@@ -157,7 +156,7 @@ struct ContentHeaderView: View {
                         scopes.insert(geoScope)
                     }
                     boardAlertsModel.markSeen(forScopes: scopes)
-                    showNotices = true
+                    appChromeModel.presentNotices()
                 }) {
                     // Fill marks unseen new pins; the tint says the current
                     // scope has notices at all.
@@ -293,7 +292,10 @@ struct ContentHeaderView: View {
                 .environmentObject(locationChannelsModel)
                 .environmentObject(peerListModel)
         }
-        .sheet(isPresented: $showNotices) {
+        .sheet(
+            isPresented: $appChromeModel.isNoticesSheetPresented,
+            onDismiss: { appChromeModel.noticesSheetPrefersGeoTab = false }
+        ) {
             NoticesView(
                 senderNickname: appChromeModel.nickname,
                 board: appChromeModel.boardManager,
@@ -334,8 +336,12 @@ private extension ContentHeaderView {
     }
 
     /// Open the notices sheet on the tab matching the current channel: the
-    /// geohash channel's notices, or the mesh-local board in mesh chat.
+    /// geohash channel's notices, or the mesh-local board in mesh chat. An
+    /// explicit geo-tab request (the "notes left here" hint) wins.
     var initialNoticesTab: NoticesView.Tab {
+        if appChromeModel.noticesSheetPrefersGeoTab {
+            return .geo
+        }
         if case .location = locationChannelsModel.selectedChannel {
             return .geo
         }

@@ -109,6 +109,16 @@ struct NoticesView: View {
             )
         }
 
+        static func fades(_ expiresAt: Date) -> String {
+            let formatter = RelativeDateTimeFormatter()
+            formatter.unitsStyle = .abbreviated
+            return String(
+                format: String(localized: "notices.fades", defaultValue: "fades %@", comment: "Shown on notices with an expiry; placeholder is a localized relative time like 'in 23h'"),
+                locale: .current,
+                formatter.localizedString(for: expiresAt, relativeTo: Date())
+            )
+        }
+
         static func rowAccessibilityLabel(author: String, content: String, urgent: Bool) -> String {
             let base = String(
                 format: String(localized: "board.accessibility.post_row", defaultValue: "Notice from %@: %@", comment: "Accessibility label for a board post row"),
@@ -475,6 +485,11 @@ private struct NoticesList: View {
                 Text(Self.timestampText(for: item.createdAt))
                     .bitchatFont(size: 11)
                     .foregroundColor(palette.secondary)
+                if let expiresAt = item.expiresAt, expiresAt > Date() {
+                    Text(Strings.fades(expiresAt))
+                        .bitchatFont(size: 11)
+                        .foregroundColor(palette.secondary.opacity(0.8))
+                }
                 Spacer()
                 if showsSource {
                     sourceBadge(item)

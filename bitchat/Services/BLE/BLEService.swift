@@ -1232,6 +1232,56 @@ final class BLEService: NSObject {
         return nil
     }
 
+    // MARK: - Archived public messages ("heard here earlier")
+
+    func collectArchivedPublicMessages(completion: @escaping @MainActor ([ArchivedPublicMessage]) -> Void) {
+        guard let sync = gossipSyncManager else {
+            Task { @MainActor in completion([]) }
+            return
+        }
+        sync.collectPublicMessagePackets { [weak self] packets in
+            guard let self = self else {
+                Task { @MainActor in completion([]) }
+                return
+            }
+            // Signature verification and registry lookups run on messageQueue
+            // like the live receive path.
+            self.messageQueue.async {
+                let decoded = packets
+                    .compactMap { self.decodeArchivedPublicMessage($0) }
+                    .sorted { $0.timestamp < $1.timestamp }
+                Task { @MainActor in completion(decoded) }
+            }
+        }
+    }
+
+    private func decodeArchivedPublicMessage(_ packet: BitchatPacket) -> ArchivedPublicMessage? {
+        guard packet.type == MessageType.message.rawValue,
+              let content = String(data: packet.payload, encoding: .utf8)?.trimmedOrNilIfEmpty
+        else { return nil }
+        let senderPeerID = PeerID(hexData: packet.senderID)
+        let peers = collectionsQueue.sync { peerRegistry.snapshotByID }
+        // Archived senders are usually long gone, so the signature-derived
+        // identity is the best shot at a name; a live registry entry is
+        // next; anonymous fallback matches the live path.
+        let nickname = signedSenderDisplayName(for: packet, from: senderPeerID)
+            ?? BLEPeerSenderDisplayName.resolveKnownPeer(
+                peerID: senderPeerID,
+                localPeerID: myPeerID,
+                localNickname: myNickname,
+                peers: peers,
+                allowConnectedUnverified: false
+            )
+            ?? BLEPeerSenderDisplayName.anonymousNickname(for: senderPeerID)
+        return ArchivedPublicMessage(
+            packetIdHex: PacketIdUtil.computeId(packet).hexEncodedString(),
+            senderPeerID: senderPeerID,
+            senderNickname: nickname,
+            content: content,
+            timestamp: Date(timeIntervalSince1970: TimeInterval(packet.timestamp) / 1000)
+        )
+    }
+
     private func handleFileTransfer(_ packet: BitchatPacket, from peerID: PeerID) {
         fileTransferHandler.handle(packet, from: peerID)
     }
