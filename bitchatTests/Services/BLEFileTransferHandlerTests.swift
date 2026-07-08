@@ -148,6 +148,29 @@ struct BLEFileTransferHandlerTests {
     }
 
     @Test
+    func selfBroadcastReplayIsDeliveredWithoutSignatureCheck() throws {
+        // Our own broadcast file replayed via gossip sync arrives with ttl==0
+        // (so it is not treated as a self-echo) and cannot be verified against
+        // the peer registry — it must still be accepted, matching
+        // BLEPublicMessageHandler's self exemption.
+        let recorder = Recorder()
+        let handler = makeHandler(recorder: recorder)
+        let packet = try makeFileTransferPacket(
+            sender: localPeerID,
+            mimeType: "application/pdf",
+            content: Data("%PDF-1.7".utf8),
+            ttl: 0
+        )
+
+        handler.handle(packet, from: localPeerID)
+
+        #expect(recorder.signatureVerifyCount == 0)
+        #expect(recorder.signedNameQueries.isEmpty)
+        #expect(recorder.deliveredMessages.count == 1)
+        #expect(recorder.deliveredMessages.first?.sender == "Me")
+    }
+
+    @Test
     func broadcastFromPeerNotInRegistryAcceptedViaSignedIdentity() throws {
         let recorder = Recorder()
         recorder.signedName = "Carol"

@@ -151,13 +151,17 @@ final class BLEFileTransferHandler {
             ) ?? env.signedSenderDisplayName(packet, peerID)
         }
 
-        // Verify against the signing key already in the (synchronously-updated)
-        // registry first; fall back to the persisted-identity signature lookup
-        // for peers not yet cached there (mirrors `BLEPublicMessageHandler`).
+        // Our own broadcasts replayed back via gossip sync (ttl==0) are
+        // trivially authentic and cannot be verified against the peer registry
+        // or identity cache, so exempt self exactly as `BLEPublicMessageHandler`
+        // does. Verify against the signing key already in the
+        // (synchronously-updated) registry first, then fall back to the
+        // persisted-identity signature lookup for peers not yet cached there.
+        let isSelf = peerID == env.localPeerID()
         let registrySigningKey = peers[peerID]?.signingPublicKey
-        let verifiedViaRegistry = registrySigningKey.map { env.verifyPacketSignature(packet, $0) } ?? false
-        let signedDisplayName = verifiedViaRegistry ? nil : env.signedSenderDisplayName(packet, peerID)
-        guard verifiedViaRegistry || signedDisplayName != nil else { return nil }
+        let verifiedViaRegistry = !isSelf && (registrySigningKey.map { env.verifyPacketSignature(packet, $0) } ?? false)
+        let signedDisplayName = (isSelf || verifiedViaRegistry) ? nil : env.signedSenderDisplayName(packet, peerID)
+        guard isSelf || verifiedViaRegistry || signedDisplayName != nil else { return nil }
 
         return BLEPeerSenderDisplayName.resolveKnownPeer(
             peerID: peerID,
