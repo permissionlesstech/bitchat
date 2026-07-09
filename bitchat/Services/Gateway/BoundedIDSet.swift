@@ -32,14 +32,4 @@ struct BoundedIDSet {
         }
         return true
     }
-
-    /// Releases a previously inserted ID so it can be re-added later. Used
-    /// when a tentatively-recorded item is later abandoned (e.g. a queued
-    /// drop evicted before it was ever published) and must become retryable.
-    mutating func remove(_ id: String) {
-        guard members.remove(id) != nil else { return }
-        if let index = order.firstIndex(of: id) {
-            order.remove(at: index)
-        }
-    }
 }
