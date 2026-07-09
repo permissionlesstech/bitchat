@@ -136,18 +136,23 @@ final class ChatLiveVoiceCoordinator {
 
     private unowned let context: any ChatLiveVoiceContext
     private let fileStore: BLEIncomingFileStore
+    /// Captures live in the store's directories, so file operations go
+    /// through the store's (injectable) file manager.
+    private var fileManager: FileManager { fileStore.fileManager }
     private var assemblies: [AssemblyKey: Assembly] = [:]
     private var finishedBursts: [AssemblyKey: FinishedBurst] = [:]
 
-    init(context: any ChatLiveVoiceContext, fileStore: BLEIncomingFileStore = BLEIncomingFileStore()) {
+    /// `sweepsOnInit` exists for tests whose coordinator shares the real
+    /// application-support directory: they pass `false` so parallel test
+    /// runs never sweep each other's in-flight capture files.
+    init(context: any ChatLiveVoiceContext, fileStore: BLEIncomingFileStore = BLEIncomingFileStore(), sweepsOnInit: Bool = true) {
         self.context = context
         self.fileStore = fileStore
         // Orphaned partial captures from a previous session (live-only bursts
-        // whose finalized note never arrived) are dead weight outside the
-        // quota's accounting — sweep them on startup. Under test, only a
-        // store pointed at its own base directory is swept, so coordinators
-        // sharing the real application-support directory stay hermetic.
-        if !TestEnvironment.isRunningTests || fileStore.hasCustomBaseDirectory {
+        // whose finalized note never arrived) are dead weight the quota can
+        // never reclaim (eviction skips voice_live_* by design) — sweep them
+        // on startup.
+        if sweepsOnInit {
             sweepStaleLiveCaptures()
         }
     }
@@ -268,7 +273,7 @@ final class ChatLiveVoiceCoordinator {
 
         // The complete .m4a replaces the partial live capture.
         WaveformCache.shared.purge(url: finished.fileURL)
-        try? FileManager.default.removeItem(at: finished.fileURL)
+        try? fileManager.removeItem(at: finished.fileURL)
         finishedBursts.removeValue(forKey: entry.key)
 
         context.notifyUIChanged()
@@ -279,21 +284,19 @@ final class ChatLiveVoiceCoordinator {
     // MARK: - Assembly lifecycle
 
     private func makeAssembly(burstID: Data, peerID: PeerID, scope: VoiceBurstScope, nickname: String, timestamp: Date) -> Assembly? {
-        guard let fileURL = makeIncomingURL(burstID: burstID, peerID: peerID) else {
+        guard let fileURL = makeIncomingURL(burstID: burstID, peerID: peerID, scope: scope) else {
             SecureLogger.error("PTT: cannot resolve incoming media directory for burst \(burstID.hexEncodedString())", category: .session)
             return nil
         }
         // BCH-01-002: live captures share the incoming-media quota with
-        // finalized transfers; reserve the burst's worst case up front and
-        // never evict a partial that is still streaming in.
-        fileStore.enforceQuota(
-            reservingBytes: TransportConfig.pttMaxBurstBytes,
-            excluding: Set(assemblies.values.map(\.fileURL))
-        )
-        FileManager.default.createFile(atPath: fileURL.path, contents: nil)
+        // finalized transfers; reserve the burst's worst case up front.
+        // Eviction skips voice_live_* names, so partials still streaming in
+        // are safe no matter which caller triggers enforcement.
+        fileStore.enforceQuota(reservingBytes: TransportConfig.pttMaxBurstBytes)
+        fileManager.createFile(atPath: fileURL.path, contents: nil)
         guard let handle = try? FileHandle(forWritingTo: fileURL) else {
             SecureLogger.error("PTT: cannot open capture file for burst \(burstID.hexEncodedString())", category: .session)
-            try? FileManager.default.removeItem(at: fileURL)
+            try? fileManager.removeItem(at: fileURL)
             return nil
         }
 
@@ -457,7 +460,7 @@ final class ChatLiveVoiceCoordinator {
         guard assembly.deliveredFrames > 0 else {
             // Nothing audible ever arrived — drop the empty bubble.
             removeBubble(of: assembly)
-            try? FileManager.default.removeItem(at: assembly.fileURL)
+            try? fileManager.removeItem(at: assembly.fileURL)
             context.notifyUIChanged()
             return
         }
@@ -510,7 +513,7 @@ final class ChatLiveVoiceCoordinator {
         updatePublicTalkerIndicator()
         removeBubble(of: assembly)
         WaveformCache.shared.purge(url: assembly.fileURL)
-        try? FileManager.default.removeItem(at: assembly.fileURL)
+        try? fileManager.removeItem(at: assembly.fileURL)
         context.notifyUIChanged()
     }
 
@@ -561,12 +564,15 @@ final class ChatLiveVoiceCoordinator {
 
     private static let incomingSubdirectory = "\(MimeType.Category.audio.mediaDir)/incoming"
 
-    /// The peer ID in the name keeps colliding burst IDs from different
-    /// senders on distinct files; `burstID(fromVoiceFileName:)` still rejects
-    /// every `voice_live_*` name, so live captures can never absorb a note.
-    private func makeIncomingURL(burstID: Data, peerID: PeerID) -> URL? {
+    /// The peer ID and scope in the name mirror the assembly key: colliding
+    /// burst IDs from different senders — or from the same sender across DM
+    /// and public — land on distinct files instead of truncating each other.
+    /// `burstID(fromVoiceFileName:)` still rejects every `voice_live_*` name,
+    /// so live captures can never absorb a note.
+    private func makeIncomingURL(burstID: Data, peerID: PeerID, scope: VoiceBurstScope) -> URL? {
         guard let directory = try? fileStore.incomingDirectory(subdirectory: Self.incomingSubdirectory) else { return nil }
-        return directory.appendingPathComponent("voice_live_\(burstID.hexEncodedString())_\(peerID.id).aac")
+        let scopeTag = scope == .directMessage ? "dm" : "mesh"
+        return directory.appendingPathComponent("\(BLEIncomingFileStore.liveCapturePrefix)\(burstID.hexEncodedString())_\(peerID.id)_\(scopeTag).aac")
     }
 
     /// Deletes partial live captures left behind by a previous session.
@@ -574,14 +580,14 @@ final class ChatLiveVoiceCoordinator {
     /// all delete their capture file.
     private func sweepStaleLiveCaptures() {
         guard let directory = try? fileStore.incomingDirectory(subdirectory: Self.incomingSubdirectory),
-              let contents = try? FileManager.default.contentsOfDirectory(
+              let contents = try? fileManager.contentsOfDirectory(
                   at: directory,
                   includingPropertiesForKeys: nil,
                   options: [.skipsHiddenFiles]
               )
         else { return }
-        for url in contents where url.lastPathComponent.hasPrefix("voice_live_") && url.pathExtension == "aac" {
-            try? FileManager.default.removeItem(at: url)
+        for url in contents where url.lastPathComponent.hasPrefix(BLEIncomingFileStore.liveCapturePrefix) && url.pathExtension == "aac" {
+            try? fileManager.removeItem(at: url)
         }
     }
 }

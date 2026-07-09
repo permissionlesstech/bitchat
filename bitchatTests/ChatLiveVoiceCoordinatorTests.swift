@@ -63,13 +63,17 @@ struct ChatLiveVoiceCoordinatorTests {
         coordinator.handleVoiceFramePayload(from: peerID, payload: packet.encode(), timestamp: Date())
     }
 
-    private func incomingFileURL(burstID: Data, peerID: PeerID) -> URL? {
+    private func liveCaptureName(burstID: Data, peerID: PeerID, scope: VoiceBurstScope = .directMessage) -> String {
+        "voice_live_\(burstID.hexEncodedString())_\(peerID.id)_\(scope == .directMessage ? "dm" : "mesh").aac"
+    }
+
+    private func incomingFileURL(burstID: Data, peerID: PeerID, scope: VoiceBurstScope = .directMessage) -> URL? {
         guard let base = try? FileManager.default.url(
             for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: false
         ) else { return nil }
         return base
             .appendingPathComponent("files/voicenotes/incoming", isDirectory: true)
-            .appendingPathComponent("voice_live_\(burstID.hexEncodedString())_\(peerID.id).aac")
+            .appendingPathComponent(liveCaptureName(burstID: burstID, peerID: peerID, scope: scope))
     }
 
     /// Fresh store rooted in its own temp directory so quota/sweep tests
@@ -88,7 +92,7 @@ struct ChatLiveVoiceCoordinatorTests {
 
     @Test func burstCreatesBubbleAndPersistsFramesInOrder() throws {
         let context = MockChatLiveVoiceContext()
-        let coordinator = ChatLiveVoiceCoordinator(context: context)
+        let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
         let burstID = makeBurstID(0xA1)
         defer { incomingFileURL(burstID: burstID, peerID: peer).map { try? FileManager.default.removeItem(at: $0) } }
 
@@ -100,7 +104,7 @@ struct ChatLiveVoiceCoordinatorTests {
         let bubble = try #require(context.handledPrivateMessages.first)
         #expect(bubble.isPrivate)
         #expect(bubble.senderPeerID == peer)
-        #expect(bubble.content == "[voice] voice_live_\(burstID.hexEncodedString())_\(peer.id).aac")
+        #expect(bubble.content == "[voice] voice_live_\(burstID.hexEncodedString())_\(peer.id)_dm.aac")
         #expect(coordinator.isLiveVoiceMessage(bubble))
 
         // Deliver out of order: seq 2 buffers behind the seq-1 hole, then
@@ -123,7 +127,7 @@ struct ChatLiveVoiceCoordinatorTests {
 
     @Test func absorbsFinalizedNoteIntoLiveBubble() throws {
         let context = MockChatLiveVoiceContext()
-        let coordinator = ChatLiveVoiceCoordinator(context: context)
+        let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
         let burstID = makeBurstID(0xB2)
         let hex = burstID.hexEncodedString()
 
@@ -157,7 +161,7 @@ struct ChatLiveVoiceCoordinatorTests {
 
     @Test func absorbIgnoresUnrelatedVoiceNotes() throws {
         let context = MockChatLiveVoiceContext()
-        let coordinator = ChatLiveVoiceCoordinator(context: context)
+        let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
 
         // A classic voice note (date-stamped name) and a live-capture name
         // must both pass through untouched.
@@ -181,7 +185,7 @@ struct ChatLiveVoiceCoordinatorTests {
 
     @Test func canceledBurstRemovesBubbleAndFile() throws {
         let context = MockChatLiveVoiceContext()
-        let coordinator = ChatLiveVoiceCoordinator(context: context)
+        let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
         let burstID = makeBurstID(0xC3)
 
         send(try #require(VoiceBurstPacket(burstID: burstID, seq: 1, kind: .frames([Data(repeating: 9, count: 40)]))), to: coordinator, from: peer)
@@ -196,7 +200,7 @@ struct ChatLiveVoiceCoordinatorTests {
 
     @Test func emptyBurstLeavesNoBubble() throws {
         let context = MockChatLiveVoiceContext()
-        let coordinator = ChatLiveVoiceCoordinator(context: context)
+        let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
         let burstID = makeBurstID(0xD4)
 
         send(try #require(VoiceBurstPacket(burstID: burstID, seq: 0, kind: .start(codec: .aacLC16kMono))), to: coordinator, from: peer)
@@ -209,7 +213,7 @@ struct ChatLiveVoiceCoordinatorTests {
 
     @Test func ignoresBlockedPeersAndUnknownControlPackets() throws {
         let context = MockChatLiveVoiceContext()
-        let coordinator = ChatLiveVoiceCoordinator(context: context)
+        let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
 
         context.blockedPeers = [peer]
         send(try #require(VoiceBurstPacket(burstID: makeBurstID(0xE5), seq: 0, kind: .start(codec: .aacLC16kMono))), to: coordinator, from: peer)
@@ -224,7 +228,7 @@ struct ChatLiveVoiceCoordinatorTests {
 
     @Test func concurrentAssemblyCapDropsExtraBursts() throws {
         let context = MockChatLiveVoiceContext()
-        let coordinator = ChatLiveVoiceCoordinator(context: context)
+        let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
 
         var cleanup: [Data] = []
         defer {
@@ -249,7 +253,7 @@ struct ChatLiveVoiceCoordinatorTests {
         defer { PTTSettings.liveVoiceEnabled = previous }
 
         let context = MockChatLiveVoiceContext()
-        let coordinator = ChatLiveVoiceCoordinator(context: context)
+        let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
         let burstID = makeBurstID(0xE8)
 
         // Off means classic-notes-only: no live bubble, no partial file.
@@ -262,7 +266,7 @@ struct ChatLiveVoiceCoordinatorTests {
 
     @Test func publicBurstCreatesMeshBubbleAndTracksTalker() throws {
         let context = MockChatLiveVoiceContext()
-        let coordinator = ChatLiveVoiceCoordinator(context: context)
+        let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
         let burstID = makeBurstID(0x71)
         defer { incomingFileURL(burstID: burstID, peerID: peer).map { try? FileManager.default.removeItem(at: $0) } }
 
@@ -300,7 +304,7 @@ struct ChatLiveVoiceCoordinatorTests {
 
     @Test func absorbEnforcesScopeBinding() throws {
         let context = MockChatLiveVoiceContext()
-        let coordinator = ChatLiveVoiceCoordinator(context: context)
+        let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
         let burstID = makeBurstID(0x72)
         defer { incomingFileURL(burstID: burstID, peerID: peer).map { try? FileManager.default.removeItem(at: $0) } }
 
@@ -322,14 +326,16 @@ struct ChatLiveVoiceCoordinatorTests {
         #expect(ChatLiveVoiceCoordinator.burstID(fromVoiceFileName: "voice_00112233445566ff (1).m4a") == Data(hexString: "00112233445566ff"))
         #expect(ChatLiveVoiceCoordinator.burstID(fromVoiceFileName: "voice_20260708_120000.m4a") == nil)
         #expect(ChatLiveVoiceCoordinator.burstID(fromVoiceFileName: "voice_live_00112233445566ff.aac") == nil)
-        // Per-peer live capture names must stay unabsorbable too.
+        // Per-peer, per-scope live capture names must stay unabsorbable too.
         #expect(ChatLiveVoiceCoordinator.burstID(fromVoiceFileName: "voice_live_00112233445566ff_aaaabbbbcccc0001.aac") == nil)
+        #expect(ChatLiveVoiceCoordinator.burstID(fromVoiceFileName: "voice_live_00112233445566ff_aaaabbbbcccc0001_dm.aac") == nil)
+        #expect(ChatLiveVoiceCoordinator.burstID(fromVoiceFileName: "voice_live_00112233445566ff_aaaabbbbcccc0001_mesh.aac") == nil)
         #expect(ChatLiveVoiceCoordinator.burstID(fromVoiceFileName: "other.m4a") == nil)
     }
 
     @Test func collidingBurstIDFromAnotherPeerCannotHijackAssembly() throws {
         let context = MockChatLiveVoiceContext()
-        let coordinator = ChatLiveVoiceCoordinator(context: context)
+        let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
         let burstID = makeBurstID(0x73)
         let attacker = PeerID(str: "ddddeeeeffff0002")
         defer {
@@ -364,17 +370,22 @@ struct ChatLiveVoiceCoordinatorTests {
 
     @Test func sameBurstIDCoexistsAcrossScopes() throws {
         let context = MockChatLiveVoiceContext()
-        let coordinator = ChatLiveVoiceCoordinator(context: context)
+        let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
         let burstID = makeBurstID(0x74)
-        defer { incomingFileURL(burstID: burstID, peerID: peer).map { try? FileManager.default.removeItem(at: $0) } }
+        defer {
+            incomingFileURL(burstID: burstID, peerID: peer).map { try? FileManager.default.removeItem(at: $0) }
+            incomingFileURL(burstID: burstID, peerID: peer, scope: .publicMesh).map { try? FileManager.default.removeItem(at: $0) }
+        }
 
         // A DM burst and a public burst reusing the same burst ID open
         // independent assemblies instead of colliding.
-        send(try #require(VoiceBurstPacket(burstID: burstID, seq: 1, kind: .frames([Data(repeating: 6, count: 50)]))), to: coordinator, from: peer)
+        let dmFrame = Data(repeating: 6, count: 50)
+        let publicFrame = Data(repeating: 7, count: 50)
+        send(try #require(VoiceBurstPacket(burstID: burstID, seq: 1, kind: .frames([dmFrame]))), to: coordinator, from: peer)
         coordinator.handlePublicVoiceFramePayload(
             from: peer,
             nickname: "bob",
-            payload: try #require(VoiceBurstPacket(burstID: burstID, seq: 1, kind: .frames([Data(repeating: 7, count: 50)]))).encode(),
+            payload: try #require(VoiceBurstPacket(burstID: burstID, seq: 1, kind: .frames([publicFrame]))).encode(),
             timestamp: Date()
         )
         #expect(context.handledPrivateMessages.count == 1)
@@ -395,6 +406,15 @@ struct ChatLiveVoiceCoordinatorTests {
         send(try #require(VoiceBurstPacket(burstID: burstID, seq: 2, kind: .end(totalDataPackets: 1, durationMs: 64))), to: coordinator, from: peer)
         #expect(!coordinator.isLiveVoiceMessage(dmBubble))
 
+        // The scope in the file name keeps the two captures on distinct
+        // paths: both survive with intact contents instead of one truncating
+        // or deleting the other.
+        let dmURL = try #require(incomingFileURL(burstID: burstID, peerID: peer))
+        let publicURL = try #require(incomingFileURL(burstID: burstID, peerID: peer, scope: .publicMesh))
+        #expect(dmURL != publicURL)
+        #expect(try Data(contentsOf: dmURL) == ADTSFramer.frame(dmFrame))
+        #expect(try Data(contentsOf: publicURL) == ADTSFramer.frame(publicFrame))
+
         // Absorption still routes each note by its scope.
         let dmNote = BitchatMessage(
             sender: "alice", content: "[voice] voice_\(burstID.hexEncodedString()).m4a", timestamp: Date(),
@@ -406,7 +426,7 @@ struct ChatLiveVoiceCoordinatorTests {
 
     @Test func finalizedNoteBindsToItsAuthenticatedSender() throws {
         let context = MockChatLiveVoiceContext()
-        let coordinator = ChatLiveVoiceCoordinator(context: context)
+        let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
         let burstID = makeBurstID(0x75)
         let hex = burstID.hexEncodedString()
         let attacker = PeerID(str: "ddddeeeeffff0002")
@@ -470,7 +490,7 @@ struct ChatLiveVoiceCoordinatorTests {
         // and the capture file lives under the injected store's base.
         #expect(!FileManager.default.fileExists(atPath: oldURL.path))
         #expect(FileManager.default.fileExists(atPath: newURL.path))
-        let liveURL = incoming.appendingPathComponent("voice_live_\(burstID.hexEncodedString())_\(peer.id).aac")
+        let liveURL = incoming.appendingPathComponent(liveCaptureName(burstID: burstID, peerID: peer))
         #expect(FileManager.default.fileExists(atPath: liveURL.path))
         let remaining = try FileManager.default.contentsOfDirectory(at: incoming, includingPropertiesForKeys: [.fileSizeKey])
             .compactMap { try $0.resourceValues(forKeys: [.fileSizeKey]).fileSize }
@@ -487,7 +507,7 @@ struct ChatLiveVoiceCoordinatorTests {
         let burstID = makeBurstID(0x77)
         send(try #require(VoiceBurstPacket(burstID: burstID, seq: 0, kind: .start(codec: .aacLC16kMono))), to: coordinator, from: peer)
         send(try #require(VoiceBurstPacket(burstID: burstID, seq: 1, kind: .frames([Data(repeating: 8, count: 60)]))), to: coordinator, from: peer)
-        let liveURL = incoming.appendingPathComponent("voice_live_\(burstID.hexEncodedString())_\(peer.id).aac")
+        let liveURL = incoming.appendingPathComponent(liveCaptureName(burstID: burstID, peerID: peer))
         #expect(FileManager.default.fileExists(atPath: liveURL.path))
 
         // Make the streaming partial the LRU-oldest candidate, then blow the
@@ -508,7 +528,7 @@ struct ChatLiveVoiceCoordinatorTests {
 
         // A partial capture orphaned by a previous session and a finalized
         // note that must survive the sweep.
-        let stale = incoming.appendingPathComponent("voice_live_00aa00aa00aa00aa_ddddeeeeffff0002.aac")
+        let stale = incoming.appendingPathComponent("voice_live_00aa00aa00aa00aa_ddddeeeeffff0002_dm.aac")
         let finalized = incoming.appendingPathComponent("voice_00112233445566ff.m4a")
         try Data([0x01]).write(to: stale)
         try Data([0x02]).write(to: finalized)
