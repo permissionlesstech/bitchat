@@ -118,6 +118,11 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
         }
         do {
             try await capture.start(outputURL: outputURL)
+        } catch is CancellationError {
+            // The hold was released/canceled while the session acquire was
+            // in flight: the engine never started and the capture already
+            // handed its token back — nothing to retry.
+            return
         } catch {
             // The HAL can briefly report a dead input right after the audio
             // session (re)activates while the route settles; one retry after

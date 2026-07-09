@@ -39,13 +39,24 @@ private struct StubSessionError: Error {}
 /// window where the (off-main) session acquire is still in flight.
 private final class GatedAudioSession: SessionApplying, @unchecked Sendable {
     private let gate = DispatchSemaphore(value: 0)
+    private let lock = NSLock()
+    private var _categoryCallCount = 0
+    private var _activationCalls: [Bool] = []
+
+    /// Non-zero once the acquire has reached the session queue (setCategory
+    /// runs just before the gated setActive).
+    var categoryCallCount: Int { lock.withLock { _categoryCallCount } }
+    var activationCalls: [Bool] { lock.withLock { _activationCalls } }
 
     func open() { gate.signal() }
 
-    func setCategory(_ category: AudioSessionCoordinator.Category) throws {}
+    func setCategory(_ category: AudioSessionCoordinator.Category) throws {
+        lock.withLock { _categoryCallCount += 1 }
+    }
 
     func setActive(_ active: Bool, notifyOthersOnDeactivation: Bool) throws {
         if active { gate.wait() }
+        lock.withLock { _activationCalls.append(active) }
     }
 }
 
@@ -54,6 +65,7 @@ private final class MockPlaybackEngine: PTTPlaybackEngine {
     private(set) var startCount = 0
     private(set) var stopCount = 0
     private(set) var scheduledBuffers: [AVAudioPCMBuffer] = []
+    private var heldCompletions: [@Sendable () -> Void] = []
     var startError: Error?
 
     // No object -> the player registers no configuration-change observer.
@@ -71,9 +83,20 @@ private final class MockPlaybackEngine: PTTPlaybackEngine {
     }
 
     func schedule(_ buffer: AVAudioPCMBuffer, completionHandler: @escaping @Sendable () -> Void) {
-        // Completions are held, not fired: these tests exercise lifecycle,
-        // not drain-out.
+        // Completions are held, not fired automatically: most tests exercise
+        // lifecycle, not drain-out. `fireScheduledCompletions` plays them out.
         scheduledBuffers.append(buffer)
+        heldCompletions.append(completionHandler)
+    }
+
+    /// "The scheduled audio played out": fires (and clears) the held
+    /// completions so the player's drain path runs.
+    func fireScheduledCompletions() {
+        let completions = heldCompletions
+        heldCompletions = []
+        for completion in completions {
+            completion()
+        }
     }
 }
 
@@ -183,24 +206,79 @@ struct PTTBurstPlayerTests {
 
     // MARK: - Burst END racing the async session acquire
 
-    @Test func burstEndDuringSessionAcquireStillPlays() async throws {
+    /// Models production ownership (`ChatLiveVoiceCoordinator.finalize`): the
+    /// assembly — the player's sole strong owner — is discarded on burst END,
+    /// and only the parked draining reference keeps the player alive. The
+    /// audio must still play out and the session token must come back once
+    /// the drain finishes.
+    @Test func burstEndDuringSessionAcquireStillPlaysWithOnlyDrainOwner() async throws {
         let session = GatedAudioSession()
         let coordinator = AudioSessionCoordinator(session: session)
-        let (player, engines) = try makePlayer(coordinator: coordinator)
+        final class EngineBox { var engines: [MockPlaybackEngine] = [] }
+        let box = EngineBox()
+        var owner: PTTBurstPlayer? = PTTBurstPlayer(
+            coordinator: coordinator,
+            exclusivity: VoiceNotePlaybackCoordinator(),
+            makeEngine: {
+                let engine = MockPlaybackEngine()
+                box.engines.append(engine)
+                return engine
+            }
+        )
+        try #require(owner != nil)
+        weak let player = owner
 
         let frames = try encodeSineFrames()
-        player.enqueue(frames)
+        owner?.enqueue(frames)
         // END lands while activation is still blocked on the session queue.
         // With nothing scheduled yet, the drain check must not mistake the
         // not-yet-started burst for a played-out one and drop all its audio.
-        player.finishAfterDrain()
-        #expect(!player.stopped)
+        var draining: PTTBurstPlayer? = owner
+        owner?.onStopped = { draining = nil }
+        owner?.finishAfterDrain()
+        #expect(owner?.stopped == false)
+        owner = nil
 
         session.open()
-        await waitUntil { player.isPlaying }
-        #expect(engines()[0].startCount == 1)
-        #expect(!engines()[0].scheduledBuffers.isEmpty)
-        player.stop()
+        await waitUntil { player?.isPlaying == true }
+        #expect(box.engines.count == 1)
+        #expect(box.engines[0].startCount == 1)
+        #expect(!box.engines[0].scheduledBuffers.isEmpty)
+
+        // Play the tail out: the drain must stop the player, hand the token
+        // back (deactivation reaches the mock), and unpark the drain owner.
+        box.engines[0].fireScheduledCompletions()
+        await waitUntil { session.activationCalls == [true, false] }
+        #expect(draining == nil)
+        #expect(player == nil)
+    }
+
+    /// Backstop: if every owner drops the player before it stopped, `deinit`
+    /// must hand the registered session token back — the coordinator retains
+    /// tokens strongly, so a leaked one would keep the session active (and
+    /// pin any escalated category) for the app's lifetime.
+    @Test func ownerlessPlayerDeinitReleasesSessionToken() async throws {
+        let session = GatedAudioSession()
+        let coordinator = AudioSessionCoordinator(session: session)
+        var player: PTTBurstPlayer? = PTTBurstPlayer(
+            coordinator: coordinator,
+            exclusivity: VoiceNotePlaybackCoordinator(),
+            makeEngine: { MockPlaybackEngine() }
+        )
+        try #require(player != nil)
+
+        let frames = try encodeSineFrames()
+        player?.enqueue(frames)
+        // Make sure the acquire is in flight (holding the player alive
+        // through its call frame) before the last external reference drops.
+        await waitUntil { session.categoryCallCount == 1 }
+        player?.finishAfterDrain()
+        player = nil
+
+        session.open()
+        // The acquire task keeps the player alive just long enough to start;
+        // when it deallocates, deinit must release the freshly stored token.
+        await waitUntil { session.activationCalls == [true, false] }
     }
 
     // MARK: - Session acquire failure
@@ -225,5 +303,27 @@ struct PTTBurstPlayerTests {
         player.enqueue(frames)
         #expect(engines()[0].scheduledBuffers.isEmpty)
         #expect(!player.isPlaying)
+    }
+
+    // MARK: - Engine start failure
+
+    @Test func engineStartFailureRebuildsOnceBeforeGivingUp() async throws {
+        let coordinator = AudioSessionCoordinator(session: StubAudioSession())
+        let (player, engines) = try makePlayer(coordinator: coordinator)
+
+        // A capture racing the start can reconfigure the session while the
+        // engine spins up (its escalation fan-out no-ops on a never-started
+        // player): the player must rebuild once against the settled
+        // configuration instead of latching off.
+        engines()[0].startError = StubSessionError()
+        let frames = try encodeSineFrames()
+        player.enqueue(frames)
+
+        await waitUntil { player.isPlaying }
+        #expect(engines().count == 2)
+        #expect(engines()[0].startCount == 0)
+        #expect(engines()[1].startCount == 1)
+        #expect(!engines()[1].scheduledBuffers.isEmpty)
+        player.stop()
     }
 }

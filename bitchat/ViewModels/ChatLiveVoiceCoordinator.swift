@@ -141,6 +141,12 @@ final class ChatLiveVoiceCoordinator {
     private var fileManager: FileManager { fileStore.fileManager }
     private var assemblies: [AssemblyKey: Assembly] = [:]
     private var finishedBursts: [AssemblyKey: FinishedBurst] = [:]
+    /// Players still draining after their assembly — the sole strong owner —
+    /// was discarded on burst END. Without this hold the player deallocates
+    /// mid-tail (or mid session-acquire, killing the whole burst's audio)
+    /// and its registered session token would only be reclaimed by the
+    /// deinit backstop. Entries remove themselves via `onStopped`.
+    private var drainingPlayers: [ObjectIdentifier: PTTBurstPlayer] = [:]
 
     /// `sweepsOnInit` exists for tests whose coordinator shares the real
     /// application-support directory: they pass `false` so parallel test
@@ -465,7 +471,18 @@ final class ChatLiveVoiceCoordinator {
             return
         }
 
-        assembly.player?.finishAfterDrain()
+        if let player = assembly.player, !player.stopped {
+            // Park the draining player: this method just dropped the
+            // assembly, and nothing else holds the player strongly. It may
+            // still be playing out its tail — or still acquiring the audio
+            // session off-main — so it must stay alive until it stops.
+            let id = ObjectIdentifier(player)
+            drainingPlayers[id] = player
+            player.onStopped = { [weak self] in
+                self?.drainingPlayers.removeValue(forKey: id)
+            }
+            player.finishAfterDrain()
+        }
         // The bubble's waveform may have been computed from a partial file.
         WaveformCache.shared.purge(url: assembly.fileURL)
         // The capture is the bubble's replayable audio from here on (unless a

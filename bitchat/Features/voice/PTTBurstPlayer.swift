@@ -107,6 +107,12 @@ final class PTTBurstPlayer {
 
     private(set) var isPlaying = false
 
+    /// Fires exactly once when the player stops for good (drain-out, cancel,
+    /// interruption, failure). `ChatLiveVoiceCoordinator` uses it to unpark
+    /// the draining player it keeps alive after the assembly — the player's
+    /// only long-lived owner — is discarded on burst END.
+    var onStopped: (() -> Void)?
+
     init?(
         coordinator: AudioSessionCoordinator? = nil,
         exclusivity: VoiceNotePlaybackCoordinator? = nil,
@@ -124,6 +130,21 @@ final class PTTBurstPlayer {
             try? await Task.sleep(nanoseconds: UInt64(TransportConfig.pttJitterDeadlineSeconds * 1_000_000_000))
             self?.startIfReady(force: true)
         }
+    }
+
+    deinit {
+        // Backstop for an owner dropping the player before it stopped: the
+        // session coordinator retains registered tokens strongly, so a token
+        // leaked here would keep the session active (and pin any escalated
+        // category) for the app's lifetime. `release` is fire-and-forget
+        // onto the coordinator's queue, so it is deinit-safe.
+        if let token = sessionToken {
+            coordinator.release(token)
+        }
+        if let observer = configChangeObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        deadlineTask?.cancel()
     }
 
     /// Decodes and queues frames (in burst order). Starts playback when the
@@ -167,6 +188,7 @@ final class PTTBurstPlayer {
         isPlaying = false
         releaseSessionToken()
         exclusivity.deactivate(self)
+        onStopped?()
     }
 
     private func startIfReady(force: Bool) {
@@ -197,9 +219,9 @@ final class PTTBurstPlayer {
             // holder's last release deactivates the session mid-play, and no
             // interruption/escalation fan-out ever reaches us. Bail like the
             // engine-start failure below; the burst still assembles to file.
-            stopped = true
-            deadlineTask?.cancel()
-            queuedBuffers = []
+            // (stop() also fires onStopped so a parked draining player is
+            // unparked instead of leaking.)
+            stop()
             return
         }
         acquiringSession = false
@@ -216,11 +238,25 @@ final class PTTBurstPlayer {
         do {
             try engine.start()
         } catch {
-            SecureLogger.error("PTT playback engine failed to start: \(error)", category: .session)
+            // A capture racing this start can reconfigure the session while
+            // the engine spins up (its escalation fan-out no-ops on a player
+            // that never started): rebuild once against the settled
+            // configuration — counted against the restart cap — before
+            // giving up.
+            SecureLogger.warning("PTT playback engine failed to start (\(error)) — rebuilding once", category: .session)
             removeConfigObserver()
-            stopped = true
-            releaseSessionToken()
-            return
+            engineRestarts += 1
+            engine = makeEngine()
+            registerConfigObserver()
+            do {
+                try engine.start()
+            } catch {
+                SecureLogger.error("PTT playback engine failed to start: \(error)", category: .session)
+                // stop() removes the observer, hands the token back, and
+                // fires onStopped for any parked draining owner.
+                stop()
+                return
+            }
         }
         engineStarted = true
         isPlaying = true

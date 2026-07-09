@@ -127,7 +127,10 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
         let clamped = max(0, min(1, fraction))
         if let player = player {
             player.currentTime = clamped * player.duration
-            if isPlaying {
+            // While the session acquire is still in flight, don't start
+            // audio pre-activation — the pending acquire's completion starts
+            // playback (from the new position) once the session resolves.
+            if isPlaying, !sessionAcquireInFlight {
                 player.play()
             }
             updateProgress()
