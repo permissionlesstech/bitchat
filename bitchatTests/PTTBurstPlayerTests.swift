@@ -226,7 +226,7 @@ struct PTTBurstPlayerTests {
             }
         )
         try #require(owner != nil)
-        weak let player = owner
+        weak var player = owner
 
         let frames = try encodeSineFrames()
         owner?.enqueue(frames)
