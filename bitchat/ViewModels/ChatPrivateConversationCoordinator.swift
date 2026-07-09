@@ -91,7 +91,6 @@ protocol ChatPrivateConversationContext: AnyObject {
     func sendGeohashReadReceipt(_ messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity)
 
     // MARK: System messages
-    func addSystemMessage(_ content: String)
     func addMeshOnlySystemMessage(_ content: String)
     /// Appends a local-only system line into a specific private thread —
     /// errors about a DM belong in that DM, not on the active timeline.

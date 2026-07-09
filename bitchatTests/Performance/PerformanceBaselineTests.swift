@@ -225,8 +225,9 @@ final class PerformanceBaselineTests: XCTestCase {
     /// `ConversationStore`'s message-ID → conversation map: 2000 public
     /// (split mesh + geohash to stay under the per-conversation cap) + 50x40
     /// private messages, 500 status updates per pass. Statuses alternate
-    /// sent <-> delivered so every call performs a real update (never the
-    /// skip path).
+    /// between two `delivered` timestamps so every call performs a real update
+    /// (never the skip path). A sent <-> delivered alternation would now hit
+    /// the store's no-downgrade guard on the delivered -> sent half.
     func testDeliveryStatusIncrementalUpdates() {
         let context = PerfDeliveryContext.makeCorpus(publicCount: 2000, peerCount: 50, messagesPerPeer: 40)
         let coordinator = ChatDeliveryCoordinator(context: context)
@@ -234,12 +235,13 @@ final class PerformanceBaselineTests: XCTestCase {
         XCTAssertEqual(targetIDs.count, 500)
 
         let fixedDate = Date(timeIntervalSince1970: 1_700_000_000)
+        let fixedDate2 = Date(timeIntervalSince1970: 1_700_000_001)
         var toggle = false
         var samples: [TimeInterval] = []
 
         measure {
             toggle.toggle()
-            let status: DeliveryStatus = toggle ? .delivered(to: "peer", at: fixedDate) : .sent
+            let status: DeliveryStatus = toggle ? .delivered(to: "peer", at: fixedDate) : .delivered(to: "peer", at: fixedDate2)
             let start = Date()
             var updated = 0
             for id in targetIDs where coordinator.updateMessageDeliveryStatus(id, status: status) {
@@ -267,13 +269,16 @@ final class PerformanceBaselineTests: XCTestCase {
         let targetIDs = context.makeTargetIDs(publicTargets: 250, privateTargets: 250)
         XCTAssertEqual(targetIDs.count, 500)
 
+        // Alternate two delivered timestamps so every update is real; a
+        // sent <-> delivered swing would hit the no-downgrade guard.
         let fixedDate = Date(timeIntervalSince1970: 1_700_000_000)
+        let fixedDate2 = Date(timeIntervalSince1970: 1_700_000_001)
         var toggle = false
         var samples: [TimeInterval] = []
 
         measure {
             toggle.toggle()
-            let status: DeliveryStatus = toggle ? .delivered(to: "peer", at: fixedDate) : .sent
+            let status: DeliveryStatus = toggle ? .delivered(to: "peer", at: fixedDate) : .delivered(to: "peer", at: fixedDate2)
             let start = Date()
             var updated = 0
             for id in targetIDs where store.setDeliveryStatus(status, forMessageID: id) {
