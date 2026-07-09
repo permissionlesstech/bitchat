@@ -133,6 +133,28 @@ struct BridgeCourierServiceTests {
         #expect(fixture.service.pendingDrops.isEmpty)
     }
 
+    @Test func evictedPendingDropStaysRetryable() {
+        // Regression: a drop queued while relays are down but then evicted
+        // (oldest-out at capacity) before it ever published must release its
+        // sender-side dedup slot, or the router marks it "carried" and can
+        // never re-deposit it.
+        let fixture = Fixture()
+        fixture.relaysConnected = false
+        let key = Fixture.randomKey()
+        fixture.sealResult = makeEnvelope(recipientKey: key)
+
+        let firstID = UUID().uuidString
+        #expect(fixture.service.depositDrop(content: "0", messageID: firstID, recipientNoiseKey: key))
+        // Fill past capacity so the first drop is evicted.
+        for i in 1...BridgeCourierService.Limits.maxPendingDrops {
+            fixture.service.depositDrop(content: "\(i)", messageID: UUID().uuidString, recipientNoiseKey: key)
+        }
+        #expect(fixture.service.pendingDrops.count == BridgeCourierService.Limits.maxPendingDrops)
+
+        // The evicted first drop is deposit-able again (slot released).
+        #expect(fixture.service.depositDrop(content: "0-retry", messageID: firstID, recipientNoiseKey: key))
+    }
+
     @Test func distinctDropsUseDistinctThrowawayKeys() {
         let fixture = Fixture()
         let keyA = Fixture.randomKey()

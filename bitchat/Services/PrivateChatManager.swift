@@ -256,8 +256,6 @@ final class PrivateChatManager: ObservableObject {
             return
         }
 
-        sentReadReceipts.insert(message.id)
-
         // Create read receipt using the simplified method
         let receipt = ReadReceipt(
             originalMessageID: message.id,
@@ -268,11 +266,18 @@ final class PrivateChatManager: ObservableObject {
         // Route via MessageRouter to avoid handshakeRequired spam when session isn't established
         if let router = messageRouter {
             SecureLogger.debug("PrivateChatManager: sending READ ack for \(message.id.prefix(8))… to \(senderPeerID.id.prefix(8))… via router", category: .session)
-            Task { @MainActor in
-                router.sendReadReceipt(receipt, to: senderPeerID)
+            let messageID = message.id
+            Task { @MainActor [weak self] in
+                // Record as sent only when a reachable transport took it;
+                // otherwise leave it unmarked so a later read scan retries
+                // instead of permanently losing the receipt.
+                if router.sendReadReceipt(receipt, to: senderPeerID) {
+                    self?.sentReadReceipts.insert(messageID)
+                }
             }
         } else {
-            // Fallback: preserve previous behavior
+            // Fallback: preserve previous behavior (best-effort mesh send).
+            sentReadReceipts.insert(message.id)
             meshService?.sendReadReceipt(receipt, to: senderPeerID)
         }
     }

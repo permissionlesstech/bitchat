@@ -210,11 +210,18 @@ private extension ChatViewModelBootstrapper {
         DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiArchivedEchoLoadDelaySeconds) { [weak viewModel] in
             guard let viewModel else { return }
             viewModel.meshService.collectArchivedPublicMessages { [weak viewModel] allArchived in
+                guard let viewModel else { return }
                 // A previous /clear dismissed everything heard up to its
-                // watermark; only newer archive entries come back.
+                // watermark; only newer archive entries come back. The archive
+                // is block-agnostic, so also drop blocked senders here — this
+                // is the one path that bypasses the live block filter, and
+                // without it a blocked person's messages resurface as echoes
+                // on every launch until the 6h window ages out.
                 let clearedThrough = MeshEchoSettings.clearedThrough ?? .distantPast
-                let archived = allArchived.filter { $0.timestamp > clearedThrough }
-                guard let viewModel, !archived.isEmpty else { return }
+                let archived = allArchived.filter {
+                    $0.timestamp > clearedThrough && !viewModel.isPeerBlocked($0.senderPeerID)
+                }
+                guard !archived.isEmpty else { return }
                 // Seed only an untouched timeline: with live rows already
                 // present (or after /clear) splicing history back in would
                 // be wrong.

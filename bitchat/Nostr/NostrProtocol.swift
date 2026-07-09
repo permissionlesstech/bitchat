@@ -325,7 +325,7 @@ struct NostrProtocol {
     ) throws -> NostrEvent {
         let tags = [
             ["x", recipientTagHex],
-            ["expiration", String(Int(expiresAt.timeIntervalSince1970))],
+            ["expiration", String(Int(expiresAt.timeIntervalSince1970))]
         ]
         let event = NostrEvent(
             pubkey: senderIdentity.publicKeyHex,

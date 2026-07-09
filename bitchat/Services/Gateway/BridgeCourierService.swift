@@ -9,7 +9,6 @@
 import BitFoundation
 import BitLogger
 import Foundation
-import Security
 
 /// Courier delivery over the internet bridge: sealed courier envelopes are
 /// parked on relays as kind-1401 "drops" tagged with their rotating
@@ -111,8 +110,13 @@ final class BridgeCourierService: ObservableObject {
         guard bridgeEnabled?() ?? false else { return false }
         guard !publishedDropKeys.contains(messageID) else { return false }
         guard let envelope = sealEnvelope?(content, messageID, recipientNoiseKey) else { return false }
+        // Only consume the sender-side dedup slot once the drop is durably
+        // accepted (published, or safely queued for the next relay
+        // connection). If the compose fails, leave the slot open so the
+        // router's retry sweep can attempt a fresh deposit rather than
+        // marking the message "carried" and blocking retries forever.
+        guard publishDrop(envelope, messageID: messageID) else { return false }
         publishedDropKeys.insert(messageID)
-        publishDrop(envelope)
         return true
     }
 
@@ -125,18 +129,27 @@ final class BridgeCourierService: ObservableObject {
         }
     }
 
-    private func publishDrop(_ envelope: CourierEnvelope) {
+    /// Publishes a drop, or queues it when relays are down. `messageID` is the
+    /// sender-side dedup key (nil for held/relayed envelopes we don't track);
+    /// it rides the pending queue so an evicted drop can release its slot.
+    /// Returns false only when the drop could not be made durable (bad
+    /// encode/expired/compose failure) so callers can keep it retryable.
+    @discardableResult
+    private func publishDrop(_ envelope: CourierEnvelope, messageID: String? = nil) -> Bool {
         guard let encoded = envelope.encode(),
               encoded.count <= Limits.maxDropEnvelopeBytes,
-              !envelope.isExpired else { return }
+              !envelope.isExpired else { return false }
         guard relaysConnected?() ?? false else {
-            pendingDrops.append((envelope, nil))
-            if pendingDrops.count > Limits.maxPendingDrops {
-                pendingDrops.removeFirst(pendingDrops.count - Limits.maxPendingDrops)
+            pendingDrops.append((envelope, messageID))
+            while pendingDrops.count > Limits.maxPendingDrops {
+                let evicted = pendingDrops.removeFirst()
+                // The oldest queued drop is being dropped before it ever
+                // published; release its dedup slot so it stays retryable.
+                if let key = evicted.dedupKey { publishedDropKeys.remove(key) }
             }
-            return
+            return true
         }
-        guard let identity = Self.makeThrowawayIdentity(),
+        guard let identity = try? NostrIdentity.generate(),
               let event = try? NostrProtocol.createCourierDropEvent(
                 envelope: encoded,
                 recipientTagHex: envelope.recipientTag.hexEncodedString(),
@@ -144,10 +157,11 @@ final class BridgeCourierService: ObservableObject {
                 senderIdentity: identity
               ) else {
             SecureLogger.error("📦🌉 Failed to compose courier drop", category: .encryption)
-            return
+            return false
         }
         publishEvent?(event)
         SecureLogger.debug("📦🌉 Published courier drop for tag \(envelope.recipientTag.hexEncodedString().prefix(8))…", category: .session)
+        return true
     }
 
     /// Drops queued while relays were unreachable publish on reconnect.
@@ -155,8 +169,10 @@ final class BridgeCourierService: ObservableObject {
         guard bridgeEnabled?() ?? false, relaysConnected?() ?? false, !pendingDrops.isEmpty else { return }
         let queued = pendingDrops
         pendingDrops.removeAll()
-        for item in queued {
-            publishDrop(item.envelope)
+        for item in queued where !publishDrop(item.envelope, messageID: item.dedupKey) {
+            // Compose failed with relays up: release the slot so the router's
+            // retry sweep can attempt a fresh deposit.
+            if let key = item.dedupKey { publishedDropKeys.remove(key) }
         }
     }
 
@@ -267,18 +283,10 @@ final class BridgeCourierService: ObservableObject {
 
     // MARK: - Helpers
 
-    /// A fresh random Nostr identity for signing one drop.
+    /// A fresh random Nostr identity for signing one drop. Delegates to the
+    /// canonical generator (Schnorr key that can't fail validity) instead of
+    /// hand-rolling SecRandom + retry.
     static func makeThrowawayIdentity() -> NostrIdentity? {
-        for _ in 0..<10 {
-            var bytes = Data(count: 32)
-            let status = bytes.withUnsafeMutableBytes { ptr in
-                SecRandomCopyBytes(kSecRandomDefault, 32, ptr.baseAddress!)
-            }
-            guard status == errSecSuccess else { return nil }
-            if let identity = try? NostrIdentity(privateKeyData: bytes) {
-                return identity
-            }
-        }
-        return nil
+        try? NostrIdentity.generate()
     }
 }

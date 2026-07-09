@@ -652,7 +652,7 @@ final class BridgeService: ObservableObject {
             let messageID = (meshID?.trimmedOrNilIfEmpty) ?? event.id
             return .message(InboundBridgeMessage(
                 messageID: messageID,
-                senderNickname: nickname?.trimmedOrNilIfEmpty ?? "anon#\(event.pubkey.prefix(4))",
+                senderNickname: nickname?.trimmedOrNilIfEmpty ?? "anon#\(event.pubkey.suffix(4))",
                 senderPubkey: event.pubkey,
                 content: content,
                 timestamp: Date(timeIntervalSince1970: TimeInterval(event.created_at))

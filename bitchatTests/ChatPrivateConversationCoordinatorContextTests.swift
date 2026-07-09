@@ -181,8 +181,10 @@ private final class MockChatPrivateConversationContext: ChatPrivateConversationC
         routedPrivateMessages.append((content, peerID, messageID))
     }
 
-    func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {
+    var routeReadReceiptResult = true
+    func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) -> Bool {
         routedReadReceipts.append((receipt.originalMessageID, peerID))
+        return routeReadReceiptResult
     }
 
     func sendMeshReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {

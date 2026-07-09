@@ -225,8 +225,17 @@ final class Conversation: ObservableObject, Identifiable {
         guard let current else { return false }
         if current == new { return true }
 
+        // Never downgrade to a weaker delivery state. Ordering of certainty:
+        // sending < sent < carried < delivered < read. A late `.sent` write
+        // (e.g. the optimistic stamp after routing) must not clobber the
+        // `.carried` the router already set when it handed a copy to a
+        // courier/bridge, nor a `.delivered`/`.read` ack.
         switch (current, new) {
-        case (.read, .delivered), (.read, .sent):
+        case (.read, .delivered), (.read, .carried), (.read, .sent):
+            return true
+        case (.delivered, .carried), (.delivered, .sent):
+            return true
+        case (.carried, .sent):
             return true
         default:
             return false

@@ -100,7 +100,11 @@ struct MeshEmptyStateView: View {
             }
         }
         .frame(minHeight: compact ? 0 : fillHeight, alignment: .top)
-        .onReceive(refreshTimer) { _ in refreshTick += 1 }
+        .onReceive(refreshTimer) { _ in
+            refreshTick += 1
+            // Roll the tally over if the local day changed while idle.
+            sightingsTracker.refreshForDisplay()
+        }
     }
 
     /// The radar with today's tally as its caption — the stat belongs to

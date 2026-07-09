@@ -68,6 +68,67 @@ struct ChatViewModelDeliveryStatusTests {
     }
 
     @Test @MainActor
+    func deliveryStatus_noDowngrade_carriedToSent() async {
+        // Regression: the optimistic `.sent` stamp the send path writes after
+        // routing must not clobber the `.carried` the router already set when
+        // it handed a copy to a courier/bridge (store-and-forward), or the
+        // offline-favorite flow shows "sent" instead of 📦 carried.
+        let (viewModel, transport) = makeTestableViewModel()
+        let peerID = PeerID(str: "0102030405060708")
+        let messageID = "test-msg-carried"
+
+        let message = BitchatMessage(
+            id: messageID,
+            sender: viewModel.nickname,
+            content: "Test message",
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: true,
+            recipientNickname: "Peer",
+            senderPeerID: transport.myPeerID,
+            deliveryStatus: .carried
+        )
+        viewModel.seedPrivateChat([message], for: peerID)
+
+        viewModel.didUpdateMessageDeliveryStatus(messageID, status: .sent)
+
+        let currentStatus = viewModel.privateChats[peerID]?.first?.deliveryStatus
+        #expect({
+            if case .carried = currentStatus { return true }
+            return false
+        }())
+    }
+
+    @Test @MainActor
+    func deliveryStatus_upgrade_carriedToDelivered() async {
+        // A delivery ack must still promote a carried message.
+        let (viewModel, transport) = makeTestableViewModel()
+        let peerID = PeerID(str: "0102030405060708")
+        let messageID = "test-msg-carried-delivered"
+
+        let message = BitchatMessage(
+            id: messageID,
+            sender: viewModel.nickname,
+            content: "Test message",
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: true,
+            recipientNickname: "Peer",
+            senderPeerID: transport.myPeerID,
+            deliveryStatus: .carried
+        )
+        viewModel.seedPrivateChat([message], for: peerID)
+
+        viewModel.didUpdateMessageDeliveryStatus(messageID, status: .delivered(to: "Peer", at: Date()))
+
+        let currentStatus = viewModel.privateChats[peerID]?.first?.deliveryStatus
+        #expect({
+            if case .delivered = currentStatus { return true }
+            return false
+        }())
+    }
+
+    @Test @MainActor
     func deliveryStatus_upgrade_sentToDelivered() async {
         let (viewModel, transport) = makeTestableViewModel()
         let peerID = PeerID(str: "0102030405060708")

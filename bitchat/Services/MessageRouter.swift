@@ -92,6 +92,10 @@ final class MessageRouter {
         bridgeSweepTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+                // Expire stale outbox entries in-session too — otherwise a DM
+                // to a peer that never reconnects sits on "sending" until the
+                // next relaunch instead of surfacing as failed.
+                self?.cleanupExpiredMessages()
                 self?.retryBridgeCourierDeposits()
             }
         }
@@ -354,13 +358,20 @@ final class MessageRouter {
         outboxStore?.wipe()
     }
 
-    func sendReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {
+    /// Returns true only when the receipt was handed to a reachable transport.
+    /// A false result means it was dropped (no route) and must NOT be recorded
+    /// as sent, or the sender's message would stay unread forever — the receipt
+    /// is retried on the next read scan (chat open / foreground / reconnect).
+    @discardableResult
+    func sendReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) -> Bool {
         if let transport = reachableTransport(for: peerID) {
             SecureLogger.debug("Routing READ ack via \(type(of: transport)) to \(peerID.id.prefix(8))… id=\(receipt.originalMessageID.prefix(8))…", category: .session)
             transport.sendReadReceipt(receipt, to: peerID)
+            return true
         } else if !transports.isEmpty {
-            SecureLogger.debug("No reachable transport for READ ack to \(peerID.id.prefix(8))…", category: .session)
+            SecureLogger.debug("No reachable transport for READ ack to \(peerID.id.prefix(8))… — leaving unsent for retry", category: .session)
         }
+        return false
     }
 
     func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {

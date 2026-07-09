@@ -83,7 +83,8 @@ protocol ChatPrivateConversationContext: AnyObject {
 
     // MARK: Routing & acknowledgements
     func routePrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String)
-    func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID)
+    @discardableResult
+    func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) -> Bool
     func sendMeshReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID)
     func sendGeohashPrivateMessage(_ content: String, toRecipientHex recipientHex: String, from identity: NostrIdentity, messageID: String)
     func sendGeohashDeliveryAck(for messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity)
@@ -161,7 +162,8 @@ extension ChatViewModel: ChatPrivateConversationContext {
         messageRouter.sendPrivate(content, to: peerID, recipientNickname: recipientNickname, messageID: messageID)
     }
 
-    func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {
+    @discardableResult
+    func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) -> Bool {
         messageRouter.sendReadReceipt(receipt, to: peerID)
     }
 
@@ -329,8 +331,12 @@ final class ChatPrivateConversationCoordinator {
 
     func sendGeohashDM(_ content: String, to peerID: PeerID) {
         guard case .location(let channel) = context.activeChannel else {
-            context.addSystemMessage(
-                String(localized: "system.location.not_in_channel", comment: "System message when attempting to send without being in a location channel")
+            // The failure happened inside a geoDM thread — surface it there,
+            // not on the public timeline (matches the sibling blocked/unknown
+            // errors routed into the thread by #1415).
+            context.addLocalPrivateSystemMessage(
+                String(localized: "system.location.not_in_channel", comment: "System message when attempting to send without being in a location channel"),
+                to: peerID
             )
             return
         }

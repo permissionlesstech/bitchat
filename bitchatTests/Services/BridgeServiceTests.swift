@@ -494,7 +494,7 @@ struct BridgeServiceTests {
             "kind": event.kind,
             "tags": event.tags,
             "content": event.content + " (tampered)",
-            "sig": event.sig ?? "",
+            "sig": event.sig ?? ""
         ]
         let forged = try NostrEvent(from: dict)
 
