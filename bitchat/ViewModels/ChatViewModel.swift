@@ -1173,6 +1173,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         // our own queued outbox, the carried public history, and the
         // counters describing all of it
         CourierStore.shared.wipe()
+        BridgeCourierService.shared.wipe()
         messageRouter.wipeOutbox()
         GossipMessageArchive.wipeDefault()
         StoreAndForwardMetrics.shared.reset()

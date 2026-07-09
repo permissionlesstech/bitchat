@@ -351,9 +351,15 @@ final class MessageRouter {
     }
 
     private func enqueue(_ message: QueuedMessage, for peerID: PeerID) {
+        var message = message
         var queue = outbox[peerID] ?? []
-        // Re-sending an already-queued ID replaces the entry (keeps attempt count fresh)
-        queue.removeAll { $0.messageID == message.messageID }
+        // Re-sending an already-queued ID replaces the entry (keeps attempt
+        // count fresh) but must not forget which couriers already carry it,
+        // or the replacement re-burns the same courier slots.
+        if let existing = queue.firstIndex(where: { $0.messageID == message.messageID }) {
+            message.depositedCourierKeys.formUnion(queue[existing].depositedCourierKeys)
+            queue.remove(at: existing)
+        }
         queue.append(message)
 
         // Enforce per-peer size limit with FIFO eviction

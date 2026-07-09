@@ -129,6 +129,15 @@ final class BLEService: NSObject {
     // Application state tracking (thread-safe)
     #if os(iOS)
     private var isAppActive: Bool = true  // Assume active initially
+    /// Last `UIApplication.shared.backgroundTimeRemaining` sampled on the
+    /// main thread, cached so bleQueue status logs can read it without ever
+    /// dispatching to main (see `captureBluetoothStatus` for the invariant).
+    private let backgroundTimeLock = NSLock()
+    private var _cachedBackgroundTimeRemaining: TimeInterval = .greatestFiniteMagnitude
+    private var cachedBackgroundTimeRemaining: TimeInterval {
+        backgroundTimeLock.lock(); defer { backgroundTimeLock.unlock() }
+        return _cachedBackgroundTimeRemaining
+    }
     #endif
     
     // MARK: - Core BLE Objects
@@ -176,6 +185,13 @@ final class BLEService: NSObject {
 
     // Ingress link tracking for duplicate and last-hop suppression
     private var ingressLinks = BLEIngressLinkRegistry()
+    // Inner message IDs of recently opened courier envelopes. Redundant
+    // copies of one message ride different envelopes (each seal uses a fresh
+    // ephemeral key, and bridge drops multiply across relays/couriers), so
+    // envelope-level dedup can't catch them; dedup on the inner ID before
+    // delivery so a duplicate costs one decrypt instead of a delivery + ack
+    // + handshake each. Owned by collectionsQueue barriers.
+    private var openedCourierMessageIDs = BoundedIDSet(capacity: TransportConfig.courierOpenedMessageIDCap)
     private let logRateLimiter = BLELogRateLimiter(defaultMinimumInterval: 5)
 
     private var pendingPeripheralWrites = BLEOutboundWriteBuffer()
@@ -777,7 +793,11 @@ final class BLEService: NSObject {
     }
     
     func triggerHandshake(with peerID: PeerID) {
-        initiateNoiseHandshake(with: peerID)
+        // Callers are on the main actor; the handshake broadcast sync-waits
+        // on bleQueue for link state, so hop off main first.
+        messageQueue.async { [weak self] in
+            self?.initiateNoiseHandshake(with: peerID)
+        }
     }
     
     // MARK: Noise identity/session access (narrow Transport wrappers)
@@ -932,6 +952,15 @@ final class BLEService: NSObject {
 
     
     func sendReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {
+        // Hop like sendMessage: callers are often on the main actor, and the
+        // send path sync-waits on bleQueue for link state — the main thread
+        // must never block on bleQueue (see captureBluetoothStatus).
+        if DispatchQueue.getSpecific(key: messageQueueKey) == nil {
+            messageQueue.async { [weak self] in
+                self?.sendReadReceipt(receipt, to: peerID)
+            }
+            return
+        }
         let payload = BLENoisePayloadFactory.readReceipt(originalMessageID: receipt.originalMessageID)
 
         if noiseService.hasEstablishedSession(with: peerID) {
@@ -942,11 +971,15 @@ final class BLEService: NSObject {
                 SecureLogger.error("Failed to send read receipt: \(error)")
             }
         } else {
-            // Queue for after handshake and initiate if needed
+            // Queue for after handshake; initiate only while the peer is
+            // around to answer (see sendDeliveryAck — absent senders must
+            // not turn queued acks into handshake floods).
             collectionsQueue.sync(flags: .barrier) {
                 pendingNoiseSessionQueues.appendTypedPayload(payload, for: peerID)
             }
-            if !noiseService.hasSession(with: peerID) { initiateNoiseHandshake(with: peerID) }
+            if !noiseService.hasSession(with: peerID), isPeerReachable(peerID) {
+                initiateNoiseHandshake(with: peerID)
+            }
             SecureLogger.debug("🕒 Queued READ receipt for \(peerID.id.prefix(8))… until handshake completes", category: .session)
         }
     }
@@ -1395,6 +1428,15 @@ final class BLEService: NSObject {
     }
     
     func sendDeliveryAck(for messageID: String, to peerID: PeerID) {
+        // Hop like sendMessage: callers are often on the main actor, and the
+        // send path sync-waits on bleQueue for link state — the main thread
+        // must never block on bleQueue (see captureBluetoothStatus).
+        if DispatchQueue.getSpecific(key: messageQueueKey) == nil {
+            messageQueue.async { [weak self] in
+                self?.sendDeliveryAck(for: messageID, to: peerID)
+            }
+            return
+        }
         let payload = BLENoisePayloadFactory.delivered(messageID: messageID)
 
         if noiseService.hasEstablishedSession(with: peerID) {
@@ -1404,11 +1446,18 @@ final class BLEService: NSObject {
                 SecureLogger.error("Failed to send delivery ACK: \(error)")
             }
         } else {
-            // Queue for after handshake and initiate if needed
+            // Queue for after handshake; initiate only while the peer is
+            // around to answer — couriered/bridged mail routinely arrives
+            // from absent (or rotated) identities, and every duplicate copy
+            // initiating a handshake broadcast turns one undeliverable ack
+            // into a mesh-wide flood. The queued ack flushes whenever a
+            // session eventually establishes.
             collectionsQueue.sync(flags: .barrier) {
                 pendingNoiseSessionQueues.appendTypedPayload(payload, for: peerID)
             }
-            if !noiseService.hasSession(with: peerID) { initiateNoiseHandshake(with: peerID) }
+            if !noiseService.hasSession(with: peerID), isPeerReachable(peerID) {
+                initiateNoiseHandshake(with: peerID)
+            }
             SecureLogger.debug("🕒 Queued DELIVERED ack for \(peerID.id.prefix(8))… until handshake completes", category: .session)
         }
     }
@@ -2720,18 +2769,36 @@ extension BLEService {
     }
 
     private func logBluetoothStatus(_ context: String) {
-        bleQueue.async { [weak self] in
-            guard let self = self else { return }
-            self.captureBluetoothStatus(context: context)
-        }
+        scheduleBluetoothStatusSample(after: 0, context: context)
     }
 
     private func scheduleBluetoothStatusSample(after delay: TimeInterval, context: String) {
-        bleQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
-            guard let self = self else { return }
-            self.captureBluetoothStatus(context: context)
+        #if os(iOS)
+        // Sample the main-actor background budget first (async hop, never a
+        // sync wait), then log from bleQueue off the cache — bleQueue must
+        // never block on main (see captureBluetoothStatus).
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self else { return }
+            self.refreshCachedBackgroundTimeRemaining()
+            self.bleQueue.async { self.captureBluetoothStatus(context: context) }
         }
+        #else
+        bleQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
+            self?.captureBluetoothStatus(context: context)
+        }
+        #endif
     }
+
+    #if os(iOS)
+    /// Main thread only (reads main-actor UIApplication state).
+    private func refreshCachedBackgroundTimeRemaining() {
+        dispatchPrecondition(condition: .onQueue(.main))
+        let seconds = UIApplication.shared.backgroundTimeRemaining
+        backgroundTimeLock.lock()
+        _cachedBackgroundTimeRemaining = seconds
+        backgroundTimeLock.unlock()
+    }
+    #endif
 
     private func captureBluetoothStatus(context: String) {
         assert(DispatchQueue.getSpecific(key: bleQueueKey) != nil, "captureBluetoothStatus must run on bleQueue")
@@ -2750,11 +2817,15 @@ extension BLEService {
         }
 
         #if os(iOS)
-        var backgroundDescriptor = ""
-        var backgroundSeconds: TimeInterval = 0
-        DispatchQueue.main.sync {
-            backgroundSeconds = UIApplication.shared.backgroundTimeRemaining
-        }
+        // INVARIANT: bleQueue must NEVER sync-dispatch to the main thread.
+        // The main actor sync-waits on bleQueue along the send paths
+        // (readLinkState), so a main.sync here completes an ABBA deadlock —
+        // field-verified as a permanent freeze when a courier-drop storm put
+        // an ack send (main → bleQueue.sync) up against a status capture
+        // (bleQueue → main.sync). backgroundTimeRemaining is main-actor
+        // state, so it is sampled on main and cached.
+        let backgroundSeconds = cachedBackgroundTimeRemaining
+        let backgroundDescriptor: String
         if backgroundSeconds == .greatestFiniteMagnitude {
             backgroundDescriptor = " bgRemaining=∞"
         } else {
@@ -3044,6 +3115,15 @@ extension BLEService {
 
     
     private func sendNoisePayload(_ typedPayload: Data, to peerID: PeerID) {
+        // Hop like sendMessage: the Transport-facing wrappers (verify/vouch/
+        // group payloads) call this from the main actor, and the send path
+        // sync-waits on bleQueue for link state.
+        if DispatchQueue.getSpecific(key: messageQueueKey) == nil {
+            messageQueue.async { [weak self] in
+                self?.sendNoisePayload(typedPayload, to: peerID)
+            }
+            return
+        }
         guard noiseService.hasSession(with: peerID) else {
             // No session yet - queue the payload SYNCHRONOUSLY before initiating handshake
             // to prevent race where fast handshake completion drains empty queue
@@ -3291,6 +3371,23 @@ extension BLEService {
                 SecureLogger.warning("⚠️ Courier envelope carried unsupported payload type", category: .session)
                 return
             }
+            let payload = Data(typedPayload.dropFirst())
+            guard let innerMessageID = PrivateMessagePacket.decode(from: payload)?.messageID else {
+                SecureLogger.warning("⚠️ Courier envelope carried undecodable private message", category: .session)
+                return
+            }
+            // Redundant copies of one message arrive as distinct envelopes
+            // (fresh seal each: mesh couriers, bridge drops across relays),
+            // so dedup here on the inner message ID — before delivery, ack,
+            // and handshake work. A duplicate costs only the decrypt above
+            // and at most one ack ever goes out per message ID.
+            let firstOpen = collectionsQueue.sync(flags: .barrier) {
+                openedCourierMessageIDs.insert(innerMessageID)
+            }
+            guard firstOpen else {
+                SecureLogger.debug("📦 Dropping duplicate courier envelope for message \(innerMessageID.prefix(8))…", category: .session)
+                return
+            }
             // Couriered mail arrives while the sender is absent, so the UI's
             // block check can't resolve their fingerprint from a live session.
             // Gate here, where the full static key is in hand.
@@ -3306,7 +3403,6 @@ extension BLEService {
             let shortID = PeerID(publicKey: senderStaticKey)
             let isKnownOnMesh = collectionsQueue.sync { peerRegistry.info(for: shortID) != nil }
             let senderPeerID = isKnownOnMesh ? shortID : PeerID(hexData: senderStaticKey)
-            let payload = Data(typedPayload.dropFirst())
             SecureLogger.debug("📦 Opened courier envelope from \(senderPeerID.id.prefix(8))…", category: .session)
             sfMetrics?.record(.courierOpened)
             notifyUI { [weak self] in
@@ -3745,6 +3841,7 @@ extension BLEService {
     #if os(iOS)
     @objc private func appDidBecomeActive() {
         isAppActive = true
+        refreshCachedBackgroundTimeRemaining()
         // Restart scanning with allow duplicates when app becomes active
         if centralManager?.state == .poweredOn {
             centralManager?.stopScan()
@@ -3758,6 +3855,7 @@ extension BLEService {
 
     @objc private func appDidEnterBackground() {
         isAppActive = false
+        refreshCachedBackgroundTimeRemaining()
         // Restart scanning without allow duplicates in background
         if centralManager?.state == .poweredOn {
             centralManager?.stopScan()
@@ -3851,6 +3949,15 @@ extension BLEService {
     // MARK: Private Message Handling
     
     private func sendPrivateMessage(_ content: String, to recipientID: PeerID, messageID: String) {
+        // Hop like sendMessage: the Transport-facing wrappers call this from
+        // the main actor (router sends, favorite notifications), and the send
+        // path sync-waits on bleQueue for link state.
+        if DispatchQueue.getSpecific(key: messageQueueKey) == nil {
+            messageQueue.async { [weak self] in
+                self?.sendPrivateMessage(content, to: recipientID, messageID: messageID)
+            }
+            return
+        }
         // Sessions and wire recipient IDs are keyed by the short 16-hex form;
         // callers may pass the full 64-hex noise key (mirrors sendFilePrivate).
         let recipientID = recipientID.toShort()

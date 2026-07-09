@@ -81,21 +81,55 @@ final class BridgeCourierService: ObservableObject {
     private(set) var myTagsHex: Set<String> = []
     private(set) var watchedPeerTags: [(peerID: PeerID, tagsHex: Set<String>)] = []
     private(set) var pendingDrops: [(envelope: CourierEnvelope, dedupKey: String?)] = []
-    /// Message IDs already published as drops (sender-side dedup).
-    private var publishedDropKeys: BoundedIDSet
-    /// Drop event IDs already handled (multi-relay dedup).
-    private var seenDropEventIDs: BoundedIDSet
+    /// Message IDs already published as drops (sender-side dedup) and drop
+    /// event IDs already handled (multi-relay dedup). Both persist across
+    /// relaunches: relays hold drops for the full 24h NIP-40 window and the
+    /// persisted outbox keeps re-depositing, so in-memory-only dedup meant
+    /// every relaunch republished the same message as a fresh drop and every
+    /// gateway relaunch re-delivered the whole backlog (field-verified
+    /// amplification storm). Entries age out with the 24h drop window.
+    private var publishedDropKeys: ExpiringIDSet
+    private var seenDropEventIDs: ExpiringIDSet
     private var subscriptionOpen = false
     private var lastSubscribedTags: Set<String> = []
     private var refreshTimerArmed = false
     private var lastAnnounceRefresh = Date.distantPast
 
     private let now: () -> Date
+    private let dedupStore: BridgeDropDedupStore
 
-    init(now: @escaping () -> Date = Date.init) {
+    init(now: @escaping () -> Date = Date.init, dedupStore: BridgeDropDedupStore? = nil) {
         self.now = now
-        self.publishedDropKeys = BoundedIDSet(capacity: Limits.maxTrackedIDs)
-        self.seenDropEventIDs = BoundedIDSet(capacity: Limits.maxTrackedIDs)
+        self.dedupStore = dedupStore ?? BridgeDropDedupStore(persistsToDisk: !TestEnvironment.isRunningTests)
+        let snapshot = self.dedupStore.load()
+        let date = now()
+        self.publishedDropKeys = ExpiringIDSet(
+            capacity: Limits.maxTrackedIDs,
+            lifetime: CourierEnvelope.maxLifetimeSeconds,
+            entries: snapshot.publishedDropKeys,
+            now: date
+        )
+        self.seenDropEventIDs = ExpiringIDSet(
+            capacity: Limits.maxTrackedIDs,
+            lifetime: CourierEnvelope.maxLifetimeSeconds,
+            entries: snapshot.seenDropEventIDs,
+            now: date
+        )
+    }
+
+    private func persistDedup() {
+        dedupStore.save(BridgeDropDedupStore.Snapshot(
+            publishedDropKeys: publishedDropKeys.entries,
+            seenDropEventIDs: seenDropEventIDs.entries
+        ))
+    }
+
+    /// Panic wipe: forget queued drops and the persisted dedup record.
+    func wipe() {
+        pendingDrops.removeAll()
+        publishedDropKeys = ExpiringIDSet(capacity: Limits.maxTrackedIDs, lifetime: CourierEnvelope.maxLifetimeSeconds)
+        seenDropEventIDs = ExpiringIDSet(capacity: Limits.maxTrackedIDs, lifetime: CourierEnvelope.maxLifetimeSeconds)
+        dedupStore.wipe()
     }
 
     // MARK: - Sender role
@@ -108,14 +142,15 @@ final class BridgeCourierService: ObservableObject {
     @discardableResult
     func depositDrop(content: String, messageID: String, recipientNoiseKey: Data) -> Bool {
         guard bridgeEnabled?() ?? false else { return false }
-        guard !publishedDropKeys.contains(messageID) else { return false }
+        guard !publishedDropKeys.contains(messageID, now: now()) else { return false }
         guard let envelope = sealEnvelope?(content, messageID, recipientNoiseKey) else { return false }
         // An envelope that can't encode within the drop size caps fails the
         // same way on every attempt (size is a function of the content, not
         // of the sealing); consume the dedup slot so the retry sweep stops
         // re-running Noise sealing on a drop that can never ship.
         guard let encoded = envelope.encode(), encoded.count <= Limits.maxDropEnvelopeBytes else {
-            publishedDropKeys.insert(messageID)
+            publishedDropKeys.insert(messageID, now: now())
+            persistDedup()
             return false
         }
         // Only consume the sender-side dedup slot once the drop is durably
@@ -124,7 +159,8 @@ final class BridgeCourierService: ObservableObject {
         // router's retry sweep can attempt a fresh deposit rather than
         // marking the message "carried" and blocking retries forever.
         guard publishDrop(envelope, messageID: messageID) else { return false }
-        publishedDropKeys.insert(messageID)
+        publishedDropKeys.insert(messageID, now: now())
+        persistDedup()
         return true
     }
 
@@ -153,7 +189,10 @@ final class BridgeCourierService: ObservableObject {
                 let evicted = pendingDrops.removeFirst()
                 // The oldest queued drop is being dropped before it ever
                 // published; release its dedup slot so it stays retryable.
-                if let key = evicted.dedupKey { publishedDropKeys.remove(key) }
+                if let key = evicted.dedupKey {
+                    publishedDropKeys.remove(key)
+                    persistDedup()
+                }
             }
             return true
         }
@@ -180,7 +219,10 @@ final class BridgeCourierService: ObservableObject {
         for item in queued where !publishDrop(item.envelope, messageID: item.dedupKey) {
             // Compose failed with relays up: release the slot so the router's
             // retry sweep can attempt a fresh deposit.
-            if let key = item.dedupKey { publishedDropKeys.remove(key) }
+            if let key = item.dedupKey {
+                publishedDropKeys.remove(key)
+                persistDedup()
+            }
         }
     }
 
@@ -265,7 +307,8 @@ final class BridgeCourierService: ObservableObject {
     func handleDropEvent(_ event: NostrEvent) {
         guard bridgeEnabled?() ?? false else { return }
         guard event.kind == NostrProtocol.EventKind.courierDrop.rawValue else { return }
-        guard seenDropEventIDs.insert(event.id) else { return }
+        guard seenDropEventIDs.insert(event.id, now: now()) else { return }
+        persistDedup()
         guard let data = Data(base64Encoded: event.content),
               data.count <= Limits.maxDropEnvelopeBytes,
               let envelope = CourierEnvelope.decode(data),

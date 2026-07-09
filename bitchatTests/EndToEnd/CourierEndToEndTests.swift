@@ -556,6 +556,70 @@ struct CourierEndToEndTests {
         #expect(!stored)
     }
 
+    /// Regression for the relaunch amplification storm: redundant copies of
+    /// one message arrive as *distinct* envelopes (every seal uses a fresh
+    /// ephemeral key), so only the inner message ID can dedup them. The first
+    /// copy delivers; duplicates must stop right after the decrypt — no
+    /// second delivery, no second ack/handshake trigger downstream.
+    @Test func duplicateCourierCopiesDeliverInnerMessageOnce() async throws {
+        let alice = makeService()
+        let bob = makeService()
+        let bobDelegate = NoiseCaptureDelegate()
+        bob.delegate = bobDelegate
+
+        let bobKey = bob.noiseStaticPublicKeyData()
+        let first = try #require(alice.sealBridgeCourierEnvelope("once", messageID: "dup-1", recipientNoiseKey: bobKey))
+        let second = try #require(alice.sealBridgeCourierEnvelope("once", messageID: "dup-1", recipientNoiseKey: bobKey))
+        // Distinct seals: envelope-level dedup can never catch this pair.
+        #expect(first.ciphertext != second.ciphertext)
+
+        #expect(bob.openBridgedCourierEnvelope(first))
+        #expect(bob.openBridgedCourierEnvelope(second))
+
+        let delivered = await TestHelpers.waitUntil(
+            { !bobDelegate.snapshot().isEmpty },
+            timeout: TestConstants.defaultTimeout
+        )
+        #expect(delivered)
+        // Give a duplicate delivery a chance to surface, then confirm the
+        // second copy never reached the delegate.
+        let duplicated = await TestHelpers.waitUntil(
+            { bobDelegate.snapshot().count > 1 },
+            timeout: TestConstants.shortTimeout
+        )
+        #expect(!duplicated)
+        #expect(bobDelegate.snapshot().count == 1)
+    }
+
+    /// Acks for mail from absent senders (the usual couriered/bridged case)
+    /// queue for a future session instead of initiating a handshake
+    /// broadcast — otherwise every duplicate copy of every drop turns into a
+    /// mesh-wide handshake flood at an identity that cannot answer.
+    @Test func deliveryAckForAbsentPeerQueuesWithoutHandshake() async throws {
+        let ble = makeService()
+        let outbound = PacketTap()
+        ble._test_onOutboundPacket = outbound.record
+
+        // Nobody by this ID on the mesh (not connected, not reachable).
+        ble.sendDeliveryAck(for: "msg-1", to: PeerID(str: "00000000000000ee"))
+
+        let initiated = await TestHelpers.waitUntil(
+            { outbound.count(ofType: .noiseHandshake) > 0 },
+            timeout: TestConstants.shortTimeout
+        )
+        #expect(!initiated)
+
+        // Control: a peer that is actually around still gets the handshake.
+        let present = PeerID(str: "00000000000000ef")
+        ble._test_seedConnectedPeer(present, nickname: "present")
+        ble.sendDeliveryAck(for: "msg-2", to: present)
+        let initiatedForPresent = await TestHelpers.waitUntil(
+            { outbound.count(ofType: .noiseHandshake) > 0 },
+            timeout: TestConstants.defaultTimeout
+        )
+        #expect(initiatedForPresent)
+    }
+
     private func makeUnsignedAnnounce(from service: BLEService) throws -> BitchatPacket {
         let announcement = AnnouncementPacket(
             nickname: "Unsigned",
