@@ -447,6 +447,34 @@ struct MessageRouterTests {
     }
 
     @Test @MainActor
+    func enqueueReplacementCarriesOverDepositedCourierKeys() async {
+        // Re-sending a queued message ID replaces the outbox entry; the
+        // replacement must inherit which couriers already carry the message,
+        // or the deposit retry re-burns the same courier slots (duplicate
+        // sealed copies to the same peer).
+        let recipient = PeerID(str: "00000000000000aa")
+        let recipientKey = Data(repeating: 0xBB, count: 32)
+        let courier = PeerID(str: "00000000000000cc")
+        let courierKey = Data(repeating: 0xCC, count: 32)
+
+        let transport = MockTransport()
+        transport.connectedPeers.insert(courier)
+        transport.updatePeerSnapshots([Self.snapshot(courier, key: courierKey, verified: true)])
+
+        let router = MessageRouter(
+            transports: [transport],
+            courierDirectory: Self.directory(recipient: recipient, recipientKey: recipientKey)
+        )
+        router.sendPrivate("Hello", to: recipient, recipientNickname: "Peer", messageID: "ck1")
+        #expect(transport.sentCourierMessages.count == 1)
+
+        // Same message ID re-sent (e.g. a resend while still queued): the
+        // courier already carrying it must not receive a second copy.
+        router.sendPrivate("Hello", to: recipient, recipientNickname: "Peer", messageID: "ck1")
+        #expect(transport.sentCourierMessages.count == 1)
+    }
+
+    @Test @MainActor
     func courierBecameAvailable_ignoresTheRecipientThemselves() async {
         let recipient = PeerID(str: "00000000000000aa")
         let recipientKey = Data(repeating: 0xBB, count: 32)

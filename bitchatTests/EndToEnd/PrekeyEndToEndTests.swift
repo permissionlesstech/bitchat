@@ -190,7 +190,11 @@ struct PrekeyEndToEndTests {
         #expect(message.content == "burn after reading")
 
         // 6. Redelivery tolerance: the same envelope arriving via another
-        //    packet (spray-and-wait) still opens inside the grace window.
+        //    packet (spray-and-wait) still decrypts inside the prekey grace
+        //    window (asserted at the crypto layer in NoisePrekeyTests), but
+        //    the duplicate is absorbed before delivery — the receiver dedups
+        //    on the inner message ID, so redundant courier copies never
+        //    re-deliver (or re-ack) the same message.
         let redelivery = BitchatPacket(
             type: MessageType.courierEnvelope.rawValue,
             senderID: Data(hexString: carol.myPeerID.id) ?? Data(),
@@ -203,9 +207,10 @@ struct PrekeyEndToEndTests {
         bob._test_handlePacket(redelivery, fromPeerID: carol.myPeerID)
         let redelivered = await TestHelpers.waitUntil(
             { bobDelegate.snapshot().count == 2 },
-            timeout: TestConstants.defaultTimeout
+            timeout: TestConstants.shortTimeout
         )
-        #expect(redelivered)
+        #expect(!redelivered)
+        #expect(bobDelegate.snapshot().count == 1)
     }
 
     @Test func withoutBundleSealingFallsBackToStatic() async throws {

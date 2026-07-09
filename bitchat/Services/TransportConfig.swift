@@ -345,6 +345,9 @@ enum TransportConfig {
     // Cooldown between speculative multi-hop handovers of the same envelope
     // toward a recipient heard only via relayed announces.
     static let courierRemoteHandoverCooldownSeconds: TimeInterval = 10 * 60
+    // Recently opened courier inner message IDs kept for receiver-side dedup
+    // (redundant copies ride distinct seals, so only the inner ID matches).
+    static let courierOpenedMessageIDCap: Int = 512
 
     // One-time prekey bundles (forward-secret courier sealing)
     // Own gossip-sync round for bundles: modest cadence, bounded peer count,
