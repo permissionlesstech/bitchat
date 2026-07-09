@@ -236,7 +236,11 @@ final class BLELinkStateStore {
         // link: with duplicate links to one peer, removing a stale duplicate
         // must not strand the peer's surviving bound link.
         if let peerID, peerToPeripheralUUID[peerID] == peripheralID {
-            if let survivorUUID = peripherals.first(where: { $0.value.peerID == peerID && $0.value.isConnected })?.key {
+            // Prefer a writable survivor: repairing onto a link that is
+            // mid-service-rediscovery would strand directed sends until the
+            // characteristic comes back.
+            let survivors = peripherals.filter { $0.value.peerID == peerID && $0.value.isConnected }
+            if let survivorUUID = survivors.first(where: { $0.value.characteristic != nil })?.key ?? survivors.first?.key {
                 peerToPeripheralUUID[peerID] = survivorUUID
             } else {
                 peerToPeripheralUUID.removeValue(forKey: peerID)

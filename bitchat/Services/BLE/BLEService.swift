@@ -1217,6 +1217,9 @@ final class BLEService: NSObject {
             excludedLinks: excludedPeerLinks,
             peripheralPeerBindings: peripheralPeerBindings,
             centralPeerBindings: centralSnapshot.peerIDsByCentralUUID,
+            // Perf note: this is a third bleQueue hop per send; if send-path
+            // profiling ever flags it, fold it into snapshotPeripheralStates
+            // as a combined snapshot.
             preferredPeripheralPerPeer: readLinkState { $0.preferredPeripheralBindings },
             directAnnounceTTL: messageTTL,
             directedOnlyPeer: directedOnlyPeer
@@ -1936,7 +1939,17 @@ extension BLEService: CBCentralManagerDelegate {
 
         // Clean up references and peer mappings
         _ = linkStateStore.removePeripheral(peripheralID)
-        if let peerID {
+        // A duplicate link can drop while the peer stays live on another
+        // (the dual-role central link, or a second bound link after a
+        // restore): peer-disconnect bookkeeping only runs once the peer's
+        // last live link is gone. removePeripheral just repaired the reverse
+        // map onto a connected survivor, so directLinkState is accurate
+        // here. The scan restart and connect-slot refill below stay
+        // unguarded — they respond to the physical drop regardless of
+        // remaining logical links.
+        let remainingLinks = peerID.map { linkStateStore.directLinkState(for: $0) }
+        let peerStillLinked = (remainingLinks?.hasPeripheral ?? false) || (remainingLinks?.hasCentral ?? false)
+        if let peerID, !peerStillLinked {
             // Do not remove peer; mark as not connected but retain for reachability
             collectionsQueue.sync(flags: .barrier) {
                 peerRegistry.markDisconnected(peerID)
@@ -1944,7 +1957,7 @@ extension BLEService: CBCentralManagerDelegate {
             refreshLocalTopology()
         }
 
-        
+
         // Restart scanning with allow duplicates for faster rediscovery
         if centralManager?.state == .poweredOn {
             // Stop and restart scanning to ensure we get fresh discovery events
@@ -1955,15 +1968,15 @@ extension BLEService: CBCentralManagerDelegate {
         }
         // Attempt to fill freed slot from queue
         bleQueue.async { [weak self] in self?.tryConnectFromQueue() }
-        
+
         // Notify delegate about disconnection on main thread (direct link dropped)
         notifyUI { [weak self] in
             guard let self = self else { return }
-            
+
             // Get current peer list (after removal)
             let currentPeerIDs = self.collectionsQueue.sync { self.peerRegistry.peerIDs }
-            
-            if let peerID {
+
+            if let peerID, !peerStillLinked {
                 self.notifyPeerDisconnectedDebounced(peerID)
             }
             self.requestPeerDataPublish()
@@ -4654,7 +4667,8 @@ extension BLEService {
             BLERedundantLinkPolicy.PeripheralLink(
                 uuid: $0.peripheral.identifier.uuidString,
                 peerID: $0.peerID,
-                isConnected: $0.isConnected
+                isConnected: $0.isConnected,
+                hasCharacteristic: $0.characteristic != nil
             )
         }
     }

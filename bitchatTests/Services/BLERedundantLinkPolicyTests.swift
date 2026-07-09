@@ -7,8 +7,8 @@ struct BLERedundantLinkPolicyTests {
     private let peer = PeerID(str: "1122334455667788")
     private let otherPeer = PeerID(str: "8877665544332211")
 
-    private func link(_ uuid: String, _ peerID: PeerID?, connected: Bool = true) -> BLERedundantLinkPolicy.PeripheralLink {
-        BLERedundantLinkPolicy.PeripheralLink(uuid: uuid, peerID: peerID, isConnected: connected)
+    private func link(_ uuid: String, _ peerID: PeerID?, connected: Bool = true, writable: Bool = true) -> BLERedundantLinkPolicy.PeripheralLink {
+        BLERedundantLinkPolicy.PeripheralLink(uuid: uuid, peerID: peerID, isConnected: connected, hasCharacteristic: writable)
     }
 
     @Test
@@ -55,6 +55,52 @@ struct BLERedundantLinkPolicyTests {
             peerID: peer
         )
         #expect(kept == nil)
+    }
+
+    @Test
+    func characteristicLessAnchorLosesToWritableDuplicate() {
+        // The ingress link is mid-service-rediscovery (no characteristic):
+        // keeping it and cancelling the writable duplicate would strand
+        // outbound traffic on the central link, so the writable
+        // reverse-mapped link wins.
+        let kept = BLERedundantLinkPolicy.keptPeripheralUUID(
+            ingressPeripheralUUID: "p-charless",
+            mostRecentlyBoundUUID: "p-writable",
+            links: [link("p-charless", peer, writable: false), link("p-writable", peer)],
+            peerID: peer
+        )
+        #expect(kept == "p-writable")
+    }
+
+    @Test
+    func writableDuplicateThatIsNoAnchorDefersConsolidation() {
+        // Both anchors are characteristic-less but a writable third link
+        // exists: never keep a charless link over it — wait for a later
+        // announce instead of guessing which link to keep.
+        let kept = BLERedundantLinkPolicy.keptPeripheralUUID(
+            ingressPeripheralUUID: "p-charless-1",
+            mostRecentlyBoundUUID: "p-charless-2",
+            links: [
+                link("p-charless-1", peer, writable: false),
+                link("p-charless-2", peer, writable: false),
+                link("p-writable", peer)
+            ],
+            peerID: peer
+        )
+        #expect(kept == nil)
+    }
+
+    @Test
+    func allCharacteristicLessDuplicatesStillConsolidateOnIngress() {
+        // No writable link exists at all (all mid-rediscovery): the ingress
+        // anchor still consolidates — no writable duplicate is at risk.
+        let kept = BLERedundantLinkPolicy.keptPeripheralUUID(
+            ingressPeripheralUUID: "p-ingress",
+            mostRecentlyBoundUUID: "p-stale",
+            links: [link("p-ingress", peer, writable: false), link("p-stale", peer, writable: false)],
+            peerID: peer
+        )
+        #expect(kept == "p-ingress")
     }
 
     @Test

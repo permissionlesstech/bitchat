@@ -17,11 +17,16 @@ enum BLERedundantLinkPolicy {
         let uuid: String
         let peerID: PeerID?
         let isConnected: Bool
+        /// Whether the link has a discovered characteristic (is writable).
+        /// A link mid-service-rediscovery (didModifyServices cleared it)
+        /// must never be kept over a writable duplicate.
+        let hasCharacteristic: Bool
 
-        init(uuid: String, peerID: PeerID?, isConnected: Bool) {
+        init(uuid: String, peerID: PeerID?, isConnected: Bool, hasCharacteristic: Bool) {
             self.uuid = uuid
             self.peerID = peerID
             self.isConnected = isConnected
+            self.hasCharacteristic = hasCharacteristic
         }
     }
 
@@ -29,7 +34,11 @@ enum BLERedundantLinkPolicy {
     /// links, or nil when there is nothing to consolidate. Prefers the
     /// ingress link of the verified direct announce that triggered the check
     /// (the strongest liveness proof available), falling back to the peer's
-    /// most recently bound link.
+    /// most recently bound link — but only among writable links while any
+    /// exist: keeping a characteristic-less link and cancelling the writable
+    /// duplicate would strand outbound traffic on the central link until
+    /// rediscovery finishes. When neither anchor is a viable candidate,
+    /// consolidation waits for a later announce rather than guessing.
     static func keptPeripheralUUID(
         ingressPeripheralUUID: String?,
         mostRecentlyBoundUUID: String?,
@@ -39,10 +48,13 @@ enum BLERedundantLinkPolicy {
         let bound = links.filter { $0.peerID == peerID && $0.isConnected }
         guard bound.count > 1 else { return nil }
 
-        if let ingressPeripheralUUID, bound.contains(where: { $0.uuid == ingressPeripheralUUID }) {
+        let writable = bound.filter(\.hasCharacteristic)
+        let candidates = writable.isEmpty ? bound : writable
+
+        if let ingressPeripheralUUID, candidates.contains(where: { $0.uuid == ingressPeripheralUUID }) {
             return ingressPeripheralUUID
         }
-        if let mostRecentlyBoundUUID, bound.contains(where: { $0.uuid == mostRecentlyBoundUUID }) {
+        if let mostRecentlyBoundUUID, candidates.contains(where: { $0.uuid == mostRecentlyBoundUUID }) {
             return mostRecentlyBoundUUID
         }
         return nil

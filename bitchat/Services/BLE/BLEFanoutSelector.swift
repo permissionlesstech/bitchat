@@ -181,6 +181,12 @@ enum BLEFanoutSelector {
             keptPeripheralIDs.append(id)
         }
 
+        // Known limitation: centrals collapse in subscription order (oldest
+        // first) — there is no recency signal like the peripheral reverse
+        // map. A central-only peer with duplicate subscriptions rides the
+        // oldest one until the remote side (which owns those connections)
+        // consolidates on its next verified announce (bounded by its
+        // retirement cooldown).
         var keptCentralIDs: [String] = []
         for id in links.centralIDs {
             if let peer = centralPeerBindings[id], !seenPeers.insert(peer).inserted {
