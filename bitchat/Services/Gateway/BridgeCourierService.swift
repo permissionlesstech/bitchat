@@ -110,6 +110,14 @@ final class BridgeCourierService: ObservableObject {
         guard bridgeEnabled?() ?? false else { return false }
         guard !publishedDropKeys.contains(messageID) else { return false }
         guard let envelope = sealEnvelope?(content, messageID, recipientNoiseKey) else { return false }
+        // An envelope that can't encode within the drop size caps fails the
+        // same way on every attempt (size is a function of the content, not
+        // of the sealing); consume the dedup slot so the retry sweep stops
+        // re-running Noise sealing on a drop that can never ship.
+        guard let encoded = envelope.encode(), encoded.count <= Limits.maxDropEnvelopeBytes else {
+            publishedDropKeys.insert(messageID)
+            return false
+        }
         // Only consume the sender-side dedup slot once the drop is durably
         // accepted (published, or safely queued for the next relay
         // connection). If the compose fails, leave the slot open so the

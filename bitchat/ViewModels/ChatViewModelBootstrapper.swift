@@ -212,11 +212,12 @@ private extension ChatViewModelBootstrapper {
             viewModel.meshService.collectArchivedPublicMessages { [weak viewModel] allArchived in
                 guard let viewModel else { return }
                 // A previous /clear dismissed everything heard up to its
-                // watermark; only newer archive entries come back. The archive
-                // is block-agnostic, so also drop blocked senders here — this
-                // is the one path that bypasses the live block filter, and
-                // without it a blocked person's messages resurface as echoes
-                // on every launch until the 6h window ages out.
+                // watermark; only newer archive entries come back. Blocking a
+                // peer purges their carried messages from the archive at
+                // block time (when the fingerprint↔peerID mapping is known);
+                // the filter here is defense-in-depth for entries that slip
+                // past the purge (e.g. re-synced from a nearby peer), and it
+                // only resolves connected peers or favorites.
                 let clearedThrough = MeshEchoSettings.clearedThrough ?? .distantPast
                 let archived = allArchived.filter {
                     $0.timestamp > clearedThrough && !viewModel.isPeerBlocked($0.senderPeerID)

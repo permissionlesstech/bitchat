@@ -155,6 +155,26 @@ struct BridgeCourierServiceTests {
         #expect(fixture.service.depositDrop(content: "0-retry", messageID: firstID, recipientNoiseKey: key))
     }
 
+    @Test func oversizeDropConsumesSlotInsteadOfChurning() {
+        // An envelope that encodes over the size cap fails identically on
+        // every attempt; the dedup slot must be consumed so the retry sweep
+        // doesn't re-run Noise sealing forever.
+        let fixture = Fixture()
+        let key = Fixture.randomKey()
+        fixture.sealResult = makeEnvelope(
+            recipientKey: key,
+            ciphertext: Data(repeating: 7, count: BridgeCourierService.Limits.maxDropEnvelopeBytes + 1)
+        )
+        let messageID = UUID().uuidString
+
+        #expect(!fixture.service.depositDrop(content: "big", messageID: messageID, recipientNoiseKey: key))
+        #expect(fixture.publishedEvents.isEmpty)
+
+        // The retry sweep must not seal the same payload again.
+        #expect(!fixture.service.depositDrop(content: "big", messageID: messageID, recipientNoiseKey: key))
+        #expect(fixture.sealRequests.count == 1)
+    }
+
     @Test func distinctDropsUseDistinctThrowawayKeys() {
         let fixture = Fixture()
         let keyA = Fixture.randomKey()

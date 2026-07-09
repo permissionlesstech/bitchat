@@ -365,6 +365,9 @@ final class CommandProcessor {
                 )
                 identityManager.updateSocialIdentity(blockedIdentity)
             }
+            // Scrub their carried public messages now, while the peerID is
+            // resolvable, so they can't resurface as archived echoes.
+            meshService?.purgeArchivedPublicMessages(from: peerID)
             return .success(message: "blocked \(nickname). you will no longer receive messages from them")
         }
         // Mesh lookup failed; try geohash (Nostr) participant by display name

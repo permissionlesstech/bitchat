@@ -216,6 +216,9 @@ protocol Transport: AnyObject {
     // this device is carrying for gossip sync, decoded for display as
     // "heard here earlier" timeline echoes.
     func collectArchivedPublicMessages(completion: @escaping @MainActor ([ArchivedPublicMessage]) -> Void)
+    /// Drops any carried public messages from a (newly blocked) sender so
+    /// they can't resurface as archived echoes on a later launch.
+    func purgeArchivedPublicMessages(from peerID: PeerID)
 }
 
 /// A carried public mesh message from the store-and-forward window, decoded
@@ -291,6 +294,8 @@ extension Transport {
     func collectArchivedPublicMessages(completion: @escaping @MainActor ([ArchivedPublicMessage]) -> Void) {
         Task { @MainActor in completion([]) }
     }
+
+    func purgeArchivedPublicMessages(from peerID: PeerID) {}
 }
 
 protocol TransportPeerEventsDelegate: AnyObject {

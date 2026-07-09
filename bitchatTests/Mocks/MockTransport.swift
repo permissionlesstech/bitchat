@@ -45,6 +45,7 @@ final class MockTransport: Transport {
     private(set) var emergencyDisconnectCallCount = 0
     private(set) var broadcastAnnounceCallCount = 0
     private(set) var triggeredHandshakes: [PeerID] = []
+    private(set) var purgedArchivePeers: [PeerID] = []
 
     // MARK: - Configurable Mock State
 
@@ -105,6 +106,10 @@ final class MockTransport: Transport {
 
     func triggerHandshake(with peerID: PeerID) {
         triggeredHandshakes.append(peerID)
+    }
+
+    func purgeArchivedPublicMessages(from peerID: PeerID) {
+        purgedArchivePeers.append(peerID)
     }
 
     // Noise identity wrappers backed by a mock-keychain encryption service

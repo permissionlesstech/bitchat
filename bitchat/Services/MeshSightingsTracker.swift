@@ -102,12 +102,16 @@ final class MeshSightingsTracker: ObservableObject {
         return digest.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
-    private static func dayKey(for date: Date) -> String {
+    private static let dayKeyFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.calendar = Calendar.current
         formatter.timeZone = TimeZone.current
         formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
+        return formatter
+    }()
+
+    private static func dayKey(for date: Date) -> String {
+        dayKeyFormatter.string(from: date)
     }
 
     private static func randomSalt() -> Data {

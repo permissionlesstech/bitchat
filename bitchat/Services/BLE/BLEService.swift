@@ -1257,6 +1257,10 @@ final class BLEService: NSObject {
 
     // MARK: - Archived public messages ("heard here earlier")
 
+    func purgeArchivedPublicMessages(from peerID: PeerID) {
+        gossipSyncManager?.removePublicMessages(from: peerID)
+    }
+
     func collectArchivedPublicMessages(completion: @escaping @MainActor ([ArchivedPublicMessage]) -> Void) {
         guard let sync = gossipSyncManager else {
             Task { @MainActor in completion([]) }

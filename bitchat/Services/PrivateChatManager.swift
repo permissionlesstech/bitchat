@@ -267,12 +267,15 @@ final class PrivateChatManager: ObservableObject {
         if let router = messageRouter {
             SecureLogger.debug("PrivateChatManager: sending READ ack for \(message.id.prefix(8))… to \(senderPeerID.id.prefix(8))… via router", category: .session)
             let messageID = message.id
+            // Claim the receipt synchronously so a second read scan in the
+            // same runloop pass (chat open triggers two) can't route a
+            // duplicate; release the claim on a failed route (no reachable
+            // transport) so a later read scan retries instead of permanently
+            // losing the receipt.
+            sentReadReceipts.insert(messageID)
             Task { @MainActor [weak self] in
-                // Record as sent only when a reachable transport took it;
-                // otherwise leave it unmarked so a later read scan retries
-                // instead of permanently losing the receipt.
-                if router.sendReadReceipt(receipt, to: senderPeerID) {
-                    self?.sentReadReceipts.insert(messageID)
+                if !router.sendReadReceipt(receipt, to: senderPeerID) {
+                    self?.sentReadReceipts.remove(messageID)
                 }
             }
         } else {

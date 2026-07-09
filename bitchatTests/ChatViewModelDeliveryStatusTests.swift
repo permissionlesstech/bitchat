@@ -100,6 +100,41 @@ struct ChatViewModelDeliveryStatusTests {
     }
 
     @Test @MainActor
+    func deliveryStatus_noDowngrade_carriedToSending() async {
+        // Regression: a pre-handshake resend stamps `.sending`; it must not
+        // wipe the 📦 carried indicator (nor a delivered/read ack).
+        let (viewModel, transport) = makeTestableViewModel()
+        let peerID = PeerID(str: "0102030405060708")
+        let messageID = "test-msg-carried-sending"
+
+        let message = BitchatMessage(
+            id: messageID,
+            sender: viewModel.nickname,
+            content: "Test message",
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: true,
+            recipientNickname: "Peer",
+            senderPeerID: transport.myPeerID,
+            deliveryStatus: .carried
+        )
+        viewModel.seedPrivateChat([message], for: peerID)
+
+        viewModel.didUpdateMessageDeliveryStatus(messageID, status: .sending)
+
+        let currentStatus = viewModel.privateChats[peerID]?.first?.deliveryStatus
+        #expect({
+            if case .carried = currentStatus { return true }
+            return false
+        }())
+
+        #expect(Conversation.shouldSkipStatusUpdate(current: .delivered(to: "Peer", at: Date()), new: .sending))
+        #expect(Conversation.shouldSkipStatusUpdate(current: .read(by: "Peer", at: Date()), new: .sending))
+        // A plain retry of an in-flight message is still allowed.
+        #expect(!Conversation.shouldSkipStatusUpdate(current: .sent, new: .sending))
+    }
+
+    @Test @MainActor
     func deliveryStatus_upgrade_carriedToDelivered() async {
         // A delivery ack must still promote a carried message.
         let (viewModel, transport) = makeTestableViewModel()

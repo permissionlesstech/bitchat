@@ -716,6 +716,23 @@ final class GossipSyncManager {
         }
     }
 
+    /// Block-time hygiene: drop the carried public messages from a blocked
+    /// sender and persist immediately, so nothing of theirs can resurface as
+    /// an archived echo on the next launch. Narrower than `removeState(for:)`
+    /// — the peer's announcement and in-flight fragments are untouched.
+    func removePublicMessages(from peerID: PeerID) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            let countBefore = self.messages.packets.count
+            self.messages.remove { PeerID(hexData: $0.senderID) == peerID }
+            guard self.messages.packets.count != countBefore else { return }
+            self.archiveDirty = true
+            // Persist now rather than waiting for maintenance: a relaunch in
+            // the gap would restore the purged messages from disk.
+            self.persistArchiveIfDirty()
+        }
+    }
+
     private func removeState(for peerID: PeerID) {
         // Deliberately keeps the peer's prekey bundle: bundles exist to reach
         // owners who left the mesh, and they age out on their own schedule.
