@@ -106,8 +106,10 @@ private final class MockChatLifecycleContext: ChatLifecycleContext {
         routedPrivateMessages.append((content, peerID, recipientNickname))
     }
 
-    func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {
+    var routeReadReceiptResult = true
+    func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) -> Bool {
         routedReadReceipts.append((receipt.originalMessageID, peerID))
+        return routeReadReceiptResult
     }
 
     func sendMeshMessage(_ content: String, mentions: [String], messageID: String, timestamp: Date) {

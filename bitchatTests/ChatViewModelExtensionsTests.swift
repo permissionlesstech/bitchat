@@ -761,9 +761,11 @@ struct ChatViewModelGeoDMTests {
 
         viewModel.sendGeohashDM("hello", to: convKey)
 
-        #expect(viewModel.privateChats[convKey] == nil)
-        #expect(viewModel.messages.count == 1)
-        #expect(viewModel.messages.last?.sender == "system")
+        // The failure is surfaced inside the geoDM thread, not on the public
+        // timeline (matches the sibling in-thread errors from #1415).
+        #expect(viewModel.messages.isEmpty)
+        #expect(viewModel.privateChats[convKey]?.count == 1)
+        #expect(viewModel.privateChats[convKey]?.last?.sender == "system")
     }
 
     @Test @MainActor

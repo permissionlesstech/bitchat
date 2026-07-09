@@ -14,6 +14,7 @@
 //
 
 import Testing
+import Combine
 import Foundation
 import CoreLocation
 import Tor
@@ -166,6 +167,44 @@ struct GeoChannelCoordinatorContextTests {
         let endCountBeforeRefresh = context.endSamplingCount
         coordinator.refreshSampling()
         #expect(await waitUntil { context.endSamplingCount > endCountBeforeRefresh })
+    }
+
+    @Test @MainActor
+    func buildingCellJoinsSamplingOnlyAfterNotesReveal() async {
+        TorManager.shared.setAppForeground(true)
+        let locationManager = makeLocationManager()
+        let context = MockGeoChannelContext()
+        let revealed = CurrentValueSubject<Bool, Never>(false)
+        let coordinator = GeoChannelCoordinator(
+            locationManager: locationManager,
+            bookmarksStore: locationManager,
+            torManager: TorManager.shared,
+            notesRevealed: revealed.eraseToAnyPublisher(),
+            context: context
+        )
+        defer { withExtendedLifetime(coordinator) {} }
+
+        // A location fix yields all six channel levels…
+        locationManager.locationManager(
+            CLLocationManager(),
+            didUpdateLocations: [CLLocation(latitude: 21.2850, longitude: -157.8357)]
+        )
+        #expect(await waitUntil {
+            locationManager.availableChannels.contains { $0.level == .building }
+        })
+        let building = locationManager.availableChannels.first { $0.level == .building }!.geohash
+
+        // …but pre-reveal sampling must exclude the building-precision cell:
+        // a passive precision-8 REQ identifies a single address.
+        #expect(await waitUntil {
+            (context.beginSamplingCalls.last?.count ?? 0) == GeohashChannelLevel.allCases.count - 1
+        })
+        #expect(context.beginSamplingCalls.allSatisfy { !$0.contains(building) })
+
+        // The explicit notes act widens sampling to include it.
+        revealed.send(true)
+        #expect(await waitUntil { context.beginSamplingCalls.last?.contains(building) == true })
+        #expect(context.beginSamplingCalls.last?.count == GeohashChannelLevel.allCases.count)
     }
 
     @Test @MainActor

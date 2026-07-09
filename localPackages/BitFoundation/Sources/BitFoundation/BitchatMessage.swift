@@ -367,4 +367,3 @@ extension BitchatMessage {
         Self.timestampFormatter.string(from: timestamp)
     }
 }
-

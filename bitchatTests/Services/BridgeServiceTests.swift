@@ -117,19 +117,33 @@ struct BridgeServiceTests {
 
     // MARK: Event helpers
 
+    private static let remoteMeshSenderID = "feedfacecafef00d"
+    private static let remoteMeshTimestampMs: UInt64 = 1_750_000_000_000
+
     private func makeRemoteEvent(
         cell: String = BridgeServiceTests.cell,
         content: String = "hi \(UUID().uuidString.prefix(8))",
-        meshMessageID: String? = UUID().uuidString
+        meshSenderID: String = BridgeServiceTests.remoteMeshSenderID,
+        meshTimestampMs: UInt64 = BridgeServiceTests.remoteMeshTimestampMs,
+        identity: NostrIdentity? = nil
     ) throws -> NostrEvent {
-        let identity = try NostrIdentity.generate()
-        return try NostrProtocol.createBridgeMeshEvent(
+        try NostrProtocol.createBridgeMeshEvent(
             content: content,
             cell: cell,
-            senderIdentity: identity,
+            senderIdentity: identity ?? NostrIdentity.generate(),
             nickname: "remote",
-            meshMessageID: meshMessageID
+            meshSenderID: meshSenderID,
+            meshTimestampMs: meshTimestampMs
         )
+    }
+
+    /// The dedup key receivers derive for an event built by `makeRemoteEvent`.
+    private func stableID(
+        content: String,
+        meshSenderID: String = BridgeServiceTests.remoteMeshSenderID,
+        meshTimestampMs: UInt64 = BridgeServiceTests.remoteMeshTimestampMs
+    ) -> String {
+        MeshMessageIdentity.stableID(senderIDHex: meshSenderID, timestampMs: meshTimestampMs, content: content)
     }
 
     private func makePresenceEvent(cell: String = BridgeServiceTests.cell) throws -> NostrEvent {
@@ -201,20 +215,56 @@ struct BridgeServiceTests {
 
     // MARK: - Outgoing
 
-    @Test func outgoingPublishesSignedRendezvousEventWithMeshMessageID() throws {
+    @Test func outgoingPublishesSignedRendezvousEventWithOriginCoordinates() throws {
         let fixture = Fixture(enabled: true)
         fixture.service.refreshRendezvous()
-        let messageID = UUID().uuidString
+        let sender = PeerID(str: "0011223344556677")
+        let timestamp = Date()
 
-        fixture.service.bridgeOutgoing(content: "hello hill", messageID: messageID)
+        fixture.service.bridgeOutgoing(content: "hello hill", senderPeerID: sender, timestamp: timestamp)
 
         let published = try #require(fixture.published.last)
         #expect(published.cell == Self.cell)
         #expect(published.event.isValidSignature())
         #expect(published.event.content == "hello hill")
         #expect(published.event.tags.contains(["r", Self.cell]))
-        #expect(published.event.tags.contains(["m", messageID]))
+        let timestampMs = MeshMessageIdentity.millisecondTimestamp(timestamp)
+        #expect(published.event.tags.contains([
+            "m",
+            MeshMessageIdentity.stableID(senderIDHex: sender.id, timestampMs: timestampMs, content: "hello hill"),
+            sender.id,
+            String(timestampMs),
+        ]))
         #expect(published.event.tags.contains(["n", "tester"]))
+    }
+
+    @Test func newMeshTagStaysPerMessageUniqueForOldParsers() throws {
+        // v1.7.0 parsers take m[1] unconditionally as the dedup key whenever
+        // the tag has >= 2 elements. A constant m[1] (e.g. the bare sender
+        // ID) would make old receivers inject-dedup away every message from
+        // a sender after their first — so element 1 must be the
+        // per-message-unique stable ID itself.
+        let fixture = Fixture(enabled: true)
+        fixture.service.refreshRendezvous()
+        let sender = PeerID(str: "0011223344556677")
+        let timestamp = Date()
+
+        fixture.service.bridgeOutgoing(content: "first", senderPeerID: sender, timestamp: timestamp)
+        fixture.service.bridgeOutgoing(content: "second", senderPeerID: sender, timestamp: timestamp)
+
+        // Old-parser extraction: m[1] of the first `m` tag with >= 2 elements.
+        let oldParserKeys = fixture.publishedMessages.compactMap {
+            $0.event.tags.first(where: { $0.count >= 2 && $0[0] == "m" })?[1]
+        }
+        #expect(oldParserKeys.count == 2)
+        #expect(oldParserKeys[0] != oldParserKeys[1])
+        // And old and new receivers key the same message identically: m[1]
+        // equals the ID the new parser recomputes from elements 2-3.
+        let timestampMs = MeshMessageIdentity.millisecondTimestamp(timestamp)
+        #expect(oldParserKeys == [
+            MeshMessageIdentity.stableID(senderIDHex: sender.id, timestampMs: timestampMs, content: "first"),
+            MeshMessageIdentity.stableID(senderIDHex: sender.id, timestampMs: timestampMs, content: "second"),
+        ])
     }
 
     @Test func nearbyOnlySuppressesTheBridgedCopy() {
@@ -222,7 +272,7 @@ struct BridgeServiceTests {
         fixture.service.refreshRendezvous()
         fixture.service.nearbyOnly = true
 
-        fixture.service.bridgeOutgoing(content: "just us", messageID: UUID().uuidString)
+        fixture.service.bridgeOutgoing(content: "just us", senderPeerID: PeerID(str: "0011223344556677"), timestamp: Date())
 
         #expect(fixture.publishedMessages.isEmpty)
         #expect(fixture.uplinkSends.isEmpty)
@@ -234,7 +284,7 @@ struct BridgeServiceTests {
         fixture.relaysConnected = false
         fixture.bridgePeers = [PeerID(str: "abcdef0123456789")]
 
-        fixture.service.bridgeOutgoing(content: "no internet here", messageID: UUID().uuidString)
+        fixture.service.bridgeOutgoing(content: "no internet here", senderPeerID: PeerID(str: "0011223344556677"), timestamp: Date())
 
         #expect(fixture.publishedMessages.isEmpty)
         let sent = try #require(fixture.uplinkSends.first)
@@ -255,7 +305,8 @@ struct BridgeServiceTests {
             cell: Self.cell,
             senderIdentity: fixture.identity, // == deriveIdentity(cell)
             nickname: "tester",
-            meshMessageID: UUID().uuidString
+            meshSenderID: "0011223344556677",
+            meshTimestampMs: Self.remoteMeshTimestampMs
         )
 
         fixture.service.handleRendezvousEvent(ownOldEvent)
@@ -268,7 +319,7 @@ struct BridgeServiceTests {
     @Test func ownEventComingBackFromSubscriptionIsIgnored() {
         let fixture = Fixture(enabled: true)
         fixture.service.refreshRendezvous()
-        fixture.service.bridgeOutgoing(content: "echo me", messageID: UUID().uuidString)
+        fixture.service.bridgeOutgoing(content: "echo me", senderPeerID: PeerID(str: "0011223344556677"), timestamp: Date())
         let ownEvent = fixture.published[0].event
 
         fixture.service.handleRendezvousEvent(ownEvent)
@@ -343,9 +394,10 @@ struct BridgeServiceTests {
     @Test func locallySeenMessageIsNeitherInjectedNorDownlinked() throws {
         let fixture = Fixture(enabled: true)
         fixture.service.refreshRendezvous()
-        let messageID = UUID().uuidString
-        fixture.locallySeenMessageIDs = [messageID]
-        let event = try makeRemoteEvent(meshMessageID: messageID)
+        let content = "heard on the radio"
+        // The radio copy's timeline row keys on the same derived stable ID.
+        fixture.locallySeenMessageIDs = [stableID(content: content)]
+        let event = try makeRemoteEvent(content: content)
 
         fixture.service.handleRendezvousEvent(event)
 
@@ -355,6 +407,96 @@ struct BridgeServiceTests {
         #expect(fixture.injected.isEmpty)
         #expect(fixture.broadcasts.isEmpty)
         #expect(fixture.service.bridgedPeerCount == 0)
+    }
+
+    @Test func radioConfirmedSenderStaysLocalForLaterEvents() throws {
+        // Sticky local attribution keyed on the derived stable ID: one
+        // radio-confirmed message marks the pubkey as an islander, so their
+        // later events never inflate the bridged count.
+        let fixture = Fixture(enabled: true)
+        fixture.service.refreshRendezvous()
+        let identity = try NostrIdentity.generate()
+        let content = "island echo"
+        fixture.locallySeenMessageIDs = [stableID(content: content)]
+
+        fixture.service.handleRendezvousEvent(try makeRemoteEvent(content: content, identity: identity))
+        #expect(fixture.service.bridgedPeerCount == 0)
+
+        fixture.service.handleRendezvousEvent(try makeRemoteEvent(
+            content: "not on the radio yet",
+            meshTimestampMs: Self.remoteMeshTimestampMs + 1,
+            identity: identity
+        ))
+        #expect(fixture.service.bridgedPeerCount == 0)
+    }
+
+    @Test func spoofedOriginCoordinatesCannotSuppressTheGenuineMessage() throws {
+        // Attack: sign an event claiming a victim's origin coordinates in the
+        // `m` tag to pre-poison the dedup key. The key is recomputed from the
+        // event's own content, so the spoof lands under a different ID and the
+        // genuine message still renders.
+        let fixture = Fixture(enabled: true)
+        fixture.service.refreshRendezvous()
+        let spoof = try makeRemoteEvent(content: "impostor payload")
+        let genuine = try makeRemoteEvent(content: "the real message")
+
+        fixture.service.handleRendezvousEvent(spoof)
+        fixture.service.handleRendezvousEvent(genuine)
+
+        #expect(fixture.injected.count == 2)
+        #expect(fixture.injected.map(\.messageID) == [
+            stableID(content: "impostor payload"),
+            stableID(content: "the real message"),
+        ])
+    }
+
+    @Test func forgedStableIDElementIsNeverTrusted() throws {
+        // Element 1 of the `m` tag exists only for old parsers. An event
+        // claiming the genuine message's stable ID there — over different
+        // content — must still key on its own derived ID, so it cannot
+        // pre-poison the genuine message's dedup slot.
+        let fixture = Fixture(enabled: true)
+        fixture.service.refreshRendezvous()
+        let genuineID = stableID(content: "the real message")
+        let identity = try NostrIdentity.generate()
+        let forged = try NostrEvent(
+            pubkey: identity.publicKeyHex,
+            createdAt: Date(),
+            kind: .ephemeralEvent,
+            tags: [
+                ["r", Self.cell],
+                ["m", genuineID, Self.remoteMeshSenderID, String(Self.remoteMeshTimestampMs)],
+            ],
+            content: "impostor payload"
+        ).sign(with: identity.schnorrSigningKey())
+        let genuine = try makeRemoteEvent(content: "the real message")
+
+        fixture.service.handleRendezvousEvent(forged)
+        fixture.service.handleRendezvousEvent(genuine)
+
+        #expect(fixture.injected.map(\.messageID) == [
+            stableID(content: "impostor payload"),
+            genuineID,
+        ])
+    }
+
+    @Test func oldFormatMeshTagFallsBackToEventID() throws {
+        // A 2-element `m` tag from an old sender carries an ID no other
+        // device can recompute; the event ID keeps today's behavior.
+        let fixture = Fixture(enabled: true)
+        fixture.service.refreshRendezvous()
+        let identity = try NostrIdentity.generate()
+        let legacy = try NostrEvent(
+            pubkey: identity.publicKeyHex,
+            createdAt: Date(),
+            kind: .ephemeralEvent,
+            tags: [["r", Self.cell], ["m", UUID().uuidString]],
+            content: "legacy copy"
+        ).sign(with: identity.schnorrSigningKey())
+
+        fixture.service.handleRendezvousEvent(legacy)
+
+        #expect(fixture.injected.map(\.messageID) == [legacy.id])
     }
 
     @Test func duplicateSubscriptionEventInjectsOnce() throws {
@@ -494,7 +636,7 @@ struct BridgeServiceTests {
             "kind": event.kind,
             "tags": event.tags,
             "content": event.content + " (tampered)",
-            "sig": event.sig ?? "",
+            "sig": event.sig ?? ""
         ]
         let forged = try NostrEvent(from: dict)
 

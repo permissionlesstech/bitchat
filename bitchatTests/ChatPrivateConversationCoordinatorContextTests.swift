@@ -181,8 +181,10 @@ private final class MockChatPrivateConversationContext: ChatPrivateConversationC
         routedPrivateMessages.append((content, peerID, messageID))
     }
 
-    func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {
+    var routeReadReceiptResult = true
+    func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) -> Bool {
         routedReadReceipts.append((receipt.originalMessageID, peerID))
+        return routeReadReceiptResult
     }
 
     func sendMeshReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {
@@ -223,12 +225,7 @@ private final class MockChatPrivateConversationContext: ChatPrivateConversationC
     }
 
     // System messages
-    private(set) var systemMessages: [String] = []
     private(set) var meshOnlySystemMessages: [String] = []
-
-    func addSystemMessage(_ content: String) {
-        systemMessages.append(content)
-    }
 
     func addMeshOnlySystemMessage(_ content: String) {
         meshOnlySystemMessages.append(content)
@@ -657,7 +654,6 @@ struct ChatPrivateConversationCoordinatorContextTests {
         #expect(context.routedPrivateMessages.map(\.content) == ["hello bob"])
         #expect(context.privateChats[peerID]?.first?.deliveryStatus == .sent)
         #expect(context.privateChats[peerID]?.first?.recipientNickname == "bob")
-        #expect(context.systemMessages.isEmpty)
     }
 
     /// Same as above, but the conversation is keyed by the SHORT mesh ID —
@@ -683,7 +679,6 @@ struct ChatPrivateConversationCoordinatorContextTests {
         #expect(context.routedPrivateMessages.map(\.content) == ["hello again"])
         #expect(context.privateChats[shortID]?.first?.deliveryStatus == .sent)
         #expect(context.privateChats[shortID]?.first?.recipientNickname == "bob")
-        #expect(context.systemMessages.isEmpty)
     }
 
     /// Field-found: pre-judging reachability here marked the message failed
@@ -701,6 +696,5 @@ struct ChatPrivateConversationCoordinatorContextTests {
 
         #expect(context.routedPrivateMessages.map(\.content) == ["hello?"])
         #expect(context.privateChats[peerID]?.first?.deliveryStatus == .sending)
-        #expect(context.systemMessages.isEmpty)
     }
 }

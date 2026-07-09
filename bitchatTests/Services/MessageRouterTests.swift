@@ -316,6 +316,108 @@ struct MessageRouterTests {
         #expect(couriers.contains(favorite))
     }
 
+    /// Residual gap after the rotation-heal containment: a replayed "direct"
+    /// announce (TTL is unsigned) can bind an absent victim's peer ID to the
+    /// replayer's link, leaving the victim "connected" on a link whose Noise
+    /// handshake can never complete. The connected fast-path must not trust
+    /// that outright: the send still goes out (a genuine link finishes the
+    /// handshake), but a copy is retained and a sealed copy goes to couriers
+    /// so nothing is silently lost.
+    @Test @MainActor
+    func sendPrivate_connectedWithoutSecureSessionRetainsAndDepositsWithCourier() async {
+        let victim = PeerID(str: "00000000000000aa")
+        let victimKey = Data(repeating: 0xBB, count: 32)
+        let courier = PeerID(str: "00000000000000cc")
+        let courierKey = Data(repeating: 0xCC, count: 32)
+
+        let transport = MockTransport()
+        transport.connectedPeers.insert(victim)
+        transport.connectedPeers.insert(courier)
+        transport.securePeers = [] // no established Noise session with anyone
+        transport.updatePeerSnapshots([Self.snapshot(courier, key: courierKey, verified: true)])
+
+        let router = MessageRouter(
+            transports: [transport],
+            courierDirectory: Self.directory(recipient: victim, recipientKey: victimKey)
+        )
+        router.sendPrivate("Hello", to: victim, recipientNickname: "Peer", messageID: "cs1")
+
+        // The send is still attempted (it kicks the handshake on a genuine
+        // link) but not trusted outright: a courier gets a sealed copy now …
+        #expect(transport.sentPrivateMessages.map(\.messageID) == ["cs1"])
+        #expect(transport.sentCourierMessages.count == 1)
+        #expect(transport.sentCourierMessages.first?.messageID == "cs1")
+        #expect(transport.sentCourierMessages.first?.recipientNoiseKey == victimKey)
+        #expect(transport.sentCourierMessages.first?.couriers == [courier])
+
+        // … and the retained copy keeps flushing until a delivery ack — a
+        // flush over the insecure link must resend without dropping it.
+        router.flushOutbox(for: victim)
+        router.flushOutbox(for: victim)
+        #expect(transport.sentPrivateMessages.count == 3)
+        router.markDelivered("cs1")
+        router.flushOutbox(for: victim)
+        #expect(transport.sentPrivateMessages.count == 3)
+    }
+
+    /// Flushes over a connected-but-insecure link never count toward the
+    /// attempt-cap drop: the message was actually transmitted over a live
+    /// link, so a peer whose Noise handshake stalls across reconnect flapping
+    /// must not burn through the cap and lose the store-and-forward copy the
+    /// secure-session gate exists to preserve. Retention stays bounded by
+    /// the 24h outbox TTL and the per-peer FIFO cap; an ack clears it.
+    @Test @MainActor
+    func flushOutbox_connectedInsecureFlushesNeverDropTheRetainedCopy() async {
+        let peerID = PeerID(str: "00000000000000ac")
+        let transport = MockTransport()
+        transport.connectedPeers.insert(peerID)
+        transport.securePeers = [] // handshake never completes
+
+        let router = MessageRouter(transports: [transport])
+        var dropped: [String] = []
+        router.onMessageDropped = { messageID, _ in dropped.append(messageID) }
+
+        router.sendPrivate("Hello", to: peerID, recipientNickname: "Peer", messageID: "ci1")
+
+        // Well past maxSendAttempts (8): every flush resends, none drops.
+        for _ in 0..<10 {
+            router.flushOutbox(for: peerID)
+        }
+        #expect(dropped.isEmpty)
+        #expect(transport.sentPrivateMessages.count == 11)
+
+        // The copy is still retained and an ack still clears it.
+        router.markDelivered("ci1")
+        router.flushOutbox(for: peerID)
+        #expect(transport.sentPrivateMessages.count == 11)
+    }
+
+    /// With an established secure session the connected fast-path stays
+    /// exactly as before: trusted outright, no retained copy, no courier.
+    @Test @MainActor
+    func sendPrivate_connectedWithSecureSessionIsTrustedOutright() async {
+        let peerID = PeerID(str: "00000000000000ab")
+        let peerKey = Data(repeating: 0xAB, count: 32)
+        let courier = PeerID(str: "00000000000000cc")
+
+        let transport = MockTransport()
+        transport.connectedPeers.insert(peerID)
+        transport.connectedPeers.insert(courier)
+        transport.securePeers = [peerID]
+        transport.updatePeerSnapshots([Self.snapshot(courier, key: Data(repeating: 0xCC, count: 32), verified: true)])
+
+        let router = MessageRouter(
+            transports: [transport],
+            courierDirectory: Self.directory(recipient: peerID, recipientKey: peerKey)
+        )
+        router.sendPrivate("Hello", to: peerID, recipientNickname: "Peer", messageID: "cs2")
+
+        #expect(transport.sentPrivateMessages.map(\.messageID) == ["cs2"])
+        #expect(transport.sentCourierMessages.isEmpty)
+        router.flushOutbox(for: peerID)
+        #expect(transport.sentPrivateMessages.count == 1)
+    }
+
     @Test @MainActor
     func courierBecameAvailable_retriesDepositOnceWithoutDoubleBurn() async {
         let recipient = PeerID(str: "00000000000000aa")

@@ -103,6 +103,9 @@ struct ProtocolContractTests {
         #expect(probe.sentMessages.count == 1)
         #expect(probe.sentMessages.first?.content == "hello")
         #expect(probe.acceptPendingFile(id: "pending") == nil)
+        // Secure delivery defaults to prompt delivery (itself defaulting to
+        // reachability) for transports without a forgeable link layer.
+        #expect(probe.canDeliverSecurely(to: peerID) == false)
     }
 
     @Test

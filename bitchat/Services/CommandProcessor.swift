@@ -200,6 +200,10 @@ final class CommandProcessor {
               LocationNotesManager.postDrop(content: content, nickname: nickname, geohash: geohash) else {
             return .error(message: "no geo relays reachable — note not left")
         }
+        // Leaving a note is an explicit notes act: it unlocks the passive
+        // nearby-notes counter (tap-to-reveal) so the sender sees their own
+        // drop counted on the timeline.
+        NearbyNotesCounter.shared.reveal()
         return .success(message: "📍 note left here — it fades in 24h")
     }
 
@@ -365,6 +369,9 @@ final class CommandProcessor {
                 )
                 identityManager.updateSocialIdentity(blockedIdentity)
             }
+            // Scrub their carried public messages now, while the peerID is
+            // resolvable, so they can't resurface as archived echoes.
+            meshService?.purgeArchivedPublicMessages(from: peerID)
             return .success(message: "blocked \(nickname). you will no longer receive messages from them")
         }
         // Mesh lookup failed; try geohash (Nostr) participant by display name

@@ -254,6 +254,144 @@ struct BLEServiceCoreTests {
     }
 
     @Test
+    func replayedDirectAnnounceForAbsentPeerNeverYieldsSecureDelivery() async throws {
+        // Residual heal-path gap: the victim has NO live link, so the
+        // identity-owns-a-link containment cannot refuse the rebind. The
+        // replay steals the link binding, and because a successful rebind
+        // promotes its new owner to connected (a legitimate rotation heal
+        // requires that), the absent victim may read as connected. That
+        // forged presence is display-only and accepted — the invariant that
+        // holds is that the stolen link can never produce an established
+        // Noise session, so MessageRouter's canDeliverSecurely gate routes
+        // DMs through retain + courier instead of trusting it outright.
+        let ble = makeService()
+        let attackerPeerID = PeerID(str: "1122334455667788")
+        let attackerLink = "central-attacker-absent-victim"
+        ble._test_seedConnectedPeer(attackerPeerID, nickname: "attacker")
+        ble._test_bindCentral(attackerLink, to: attackerPeerID)
+
+        // The absent victim's fresh signed announce, replayed on the
+        // attacker's bound link with its direct TTL restored.
+        let victimSigner = NoiseEncryptionService(keychain: MockKeychain())
+        let announcement = AnnouncementPacket(
+            nickname: "victim",
+            noisePublicKey: victimSigner.getStaticPublicKeyData(),
+            signingPublicKey: victimSigner.getSigningPublicKeyData(),
+            directNeighbors: nil
+        )
+        let payload = try #require(announcement.encode(), "Failed to encode announcement")
+        let victimPeerID = PeerID(publicKey: announcement.noisePublicKey)
+        let unsigned = BitchatPacket(
+            type: MessageType.announce.rawValue,
+            senderID: Data(hexString: victimPeerID.id) ?? Data(),
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: payload,
+            signature: nil,
+            ttl: 7
+        )
+        let packet = try #require(victimSigner.signPacket(unsigned), "Failed to sign announce packet")
+
+        #expect(ble._test_recordIngressIfNew(packet: packet, linkID: attackerLink))
+        ble._test_handlePacket(packet, fromPeerID: victimPeerID, preseedPeer: false)
+
+        // The rebind steals the link (no live link owns the victim's
+        // identity, so containment cannot refuse) …
+        let rebound = await TestHelpers.waitUntil(
+            { ble._test_centralBinding(attackerLink) == victimPeerID },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(rebound)
+        // … and the promote marks the absent victim connected: the accepted,
+        // display-only forged-presence residue (documented at
+        // BLEAnnounceHandler's linkBoundToOtherPeer check) …
+        let forgedPresence = await TestHelpers.waitUntil(
+            { ble.isPeerConnected(victimPeerID) },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(forgedPresence)
+        // … but secure delivery stays impossible — the DM gate holds, and
+        // MessageRouter retains + couriers instead of trusting the link.
+        #expect(!ble.canDeliverSecurely(to: victimPeerID))
+    }
+
+    /// A legitimate rotation announce necessarily arrives on a link still
+    /// bound to the OLD ID, so its registry upsert stores the new peer
+    /// disconnected. The successful rebind must promote it: a healed
+    /// rotation with a live link has to read as connected again for routing
+    /// and outbox flushes.
+    @Test
+    func rotationHealPromotesRotatedPeerToConnected() async throws {
+        let ble = makeService()
+        let oldPeerID = PeerID(str: "1122334455667788")
+        let centralUUID = "central-rotation-promote"
+
+        ble._test_seedConnectedPeer(oldPeerID, nickname: "alice")
+        ble._test_bindCentral(centralUUID, to: oldPeerID)
+
+        let signer = NoiseEncryptionService(keychain: MockKeychain())
+        let announcement = AnnouncementPacket(
+            nickname: "alice",
+            noisePublicKey: signer.getStaticPublicKeyData(),
+            signingPublicKey: signer.getSigningPublicKeyData(),
+            directNeighbors: nil
+        )
+        let payload = try #require(announcement.encode(), "Failed to encode announcement")
+        let newPeerID = PeerID(publicKey: announcement.noisePublicKey)
+        let unsigned = BitchatPacket(
+            type: MessageType.announce.rawValue,
+            senderID: Data(hexString: newPeerID.id) ?? Data(),
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: payload,
+            signature: nil,
+            ttl: 7
+        )
+        let packet = try #require(signer.signPacket(unsigned), "Failed to sign announce packet")
+
+        #expect(ble._test_recordIngressIfNew(packet: packet, linkID: centralUUID))
+        ble._test_handlePacket(packet, fromPeerID: newPeerID, preseedPeer: false)
+
+        let rebound = await TestHelpers.waitUntil(
+            { ble._test_centralBinding(centralUUID) == newPeerID },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(rebound)
+
+        let connected = await TestHelpers.waitUntil(
+            { ble.isPeerConnected(newPeerID) },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(connected)
+    }
+
+    /// Noise sessions are keyed by the short wire ID, but routers may key
+    /// sends by the full 64-hex Noise key (favorites resolution does). The
+    /// secure-delivery gate must normalize like isPeerConnected, or an
+    /// established session is misread as insecure and every DM needlessly
+    /// retains + couriers until an ack.
+    @Test
+    func canDeliverSecurelyNormalizesFullNoiseKeyPeerIDs() async throws {
+        let ble = makeService()
+        let remote = NoiseEncryptionService(keychain: MockKeychain())
+        let remoteKey = remote.getStaticPublicKeyData()
+        let shortID = PeerID(publicKey: remoteKey)
+        let fullKeyID = PeerID(hexData: remoteKey)
+        #expect(fullKeyID.toShort() == shortID)
+        #expect(!ble.canDeliverSecurely(to: shortID))
+
+        // Full XX handshake; the local side keys the session by the short
+        // wire ID, exactly as packets present it in production.
+        let m1 = try ble._test_noiseInitiateHandshake(with: shortID)
+        let m2 = try #require(try remote.processHandshakeMessage(from: ble.myPeerID, message: m1))
+        let m3 = try #require(try ble._test_noiseProcessHandshakeMessage(from: shortID, message: m2))
+        _ = try remote.processHandshakeMessage(from: ble.myPeerID, message: m3)
+
+        #expect(ble.canDeliverSecurely(to: shortID))
+        #expect(ble.canDeliverSecurely(to: fullKeyID))
+    }
+
+    @Test
     func ingressRejectsSelfLoopbackBeforeSpoofChecks() async throws {
         let ble = makeService()
         let packet = makePublicPacket(

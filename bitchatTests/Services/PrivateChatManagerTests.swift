@@ -109,6 +109,76 @@ struct PrivateChatManagerTests {
     }
 
     @Test @MainActor
+    func markAsRead_calledTwiceSynchronously_routesOneReceiptPerMessage() async {
+        // Regression: opening a chat runs two read scans in the same
+        // synchronous MainActor stretch (beginPrivateChatSession and
+        // markPrivateMessagesAsRead). The receipt must be claimed before the
+        // routing task gets a chance to run, or both scans route a copy.
+        let transport = MockTransport()
+        let router = MessageRouter(transports: [transport])
+        let (manager, store) = Self.makeManager(transport: transport)
+        manager.messageRouter = router
+
+        let peerID = PeerID(str: "00000000000000DE")
+        transport.reachablePeers.insert(peerID)
+
+        store.append(
+            BitchatMessage(
+                id: "pm-double",
+                sender: "Peer",
+                content: "Hi",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "Me",
+                senderPeerID: peerID
+            ),
+            to: .directPeer(peerID)
+        )
+        store.markUnread(.directPeer(peerID))
+
+        manager.markAsRead(from: peerID)
+        manager.markAsRead(from: peerID)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        #expect(transport.sentReadReceipts.count == 1)
+        #expect(manager.sentReadReceipts.contains("pm-double"))
+    }
+
+    @Test @MainActor
+    func markAsRead_failedRouteReleasesClaimForRetry() async {
+        // No reachable transport: the receipt is not sent, and the eager
+        // claim must be released so a later read scan retries.
+        let transport = MockTransport()
+        let router = MessageRouter(transports: [transport])
+        let (manager, store) = Self.makeManager(transport: transport)
+        manager.messageRouter = router
+
+        let peerID = PeerID(str: "00000000000000DF")
+
+        store.append(
+            BitchatMessage(
+                id: "pm-unroutable",
+                sender: "Peer",
+                content: "Hi",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "Me",
+                senderPeerID: peerID
+            ),
+            to: .directPeer(peerID)
+        )
+        store.markUnread(.directPeer(peerID))
+
+        manager.markAsRead(from: peerID)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        #expect(transport.sentReadReceipts.isEmpty)
+        #expect(!manager.sentReadReceipts.contains("pm-unroutable"))
+    }
+
+    @Test @MainActor
     func consolidateMessages_mergesStableNoiseKeyHistoryAndMarksUnread() async {
         let transport = MockTransport()
         let (manager, store) = Self.makeManager(transport: transport)

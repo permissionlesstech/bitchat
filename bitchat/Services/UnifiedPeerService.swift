@@ -275,6 +275,12 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
             return nil
         }
         identityManager.setBlocked(fingerprint, isBlocked: blocked)
+        if blocked {
+            // Purge while the fingerprint↔peerID mapping is still known: the
+            // archived-echo seed filter can't resolve offline strangers, so
+            // scrub their carried messages now rather than at relaunch.
+            meshService.purgeArchivedPublicMessages(from: peerID)
+        }
         updatePeers()
         return fingerprint
     }

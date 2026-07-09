@@ -53,7 +53,8 @@ protocol ChatLifecycleContext: AnyObject {
 
     // MARK: Routing & receipts
     func routePrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String)
-    func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID)
+    @discardableResult
+    func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) -> Bool
     func sendMeshMessage(_ content: String, mentions: [String], messageID: String, timestamp: Date)
     func sendGeohashReadReceipt(_ messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity)
 
@@ -248,8 +249,12 @@ final class ChatLifecycleCoordinator {
                 ? peerID
                 : (context.unifiedPeer(for: peerID)?.peerID ?? peerID)
 
-            context.routeReadReceipt(receipt, to: recipientPeerID)
-            context.markReadReceiptSent(message.id)
+            // Only record the receipt as sent when it actually left via a
+            // reachable transport; a dropped receipt stays unmarked so the
+            // next read scan retries it instead of burning it forever.
+            if context.routeReadReceipt(receipt, to: recipientPeerID) {
+                context.markReadReceiptSent(message.id)
+            }
         }
     }
 

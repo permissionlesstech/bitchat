@@ -122,10 +122,18 @@ final class BLEPublicMessageHandler {
         SecureLogger.debug("💬 [\(senderNickname)] TTL:\(packet.ttl) (\(pathTag)) chars=\(content.count) bytes=\(packet.payload.count)", category: .session)
 
         let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
-        var resolvedSelfMessageID: String? = nil
+        let messageID: String?
         if peerID == env.localPeerID() {
-            resolvedSelfMessageID = env.takeSelfBroadcastMessageID(packet)
+            messageID = env.takeSelfBroadcastMessageID(packet)
+        } else {
+            // The wire carries no message ID; derive the stable one every
+            // device agrees on so bridged copies dedup against the radio copy.
+            messageID = MeshMessageIdentity.stableID(
+                senderIDHex: peerID.id,
+                timestampMs: packet.timestamp,
+                content: content
+            )
         }
-        env.deliverPublicMessage(peerID, senderNickname, content, ts, resolvedSelfMessageID)
+        env.deliverPublicMessage(peerID, senderNickname, content, ts, messageID)
     }
 }

@@ -342,6 +342,34 @@ struct BLEFileTransferHandlerTests {
         #expect(recorder.deliveredMessages.isEmpty)
     }
 
+    @Test
+    func quotaEvictionForFinalizedArrivalSkipsInFlightLiveCaptures() throws {
+        let base = FileManager.default.temporaryDirectory
+            .appendingPathComponent("quota-live-capture-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: base) }
+        let store = BLEIncomingFileStore(baseDirectory: base)
+        let incoming = try store.incomingDirectory(subdirectory: "voicenotes/incoming")
+
+        // The in-flight partial is the LRU-oldest eviction candidate; without
+        // the voice_live_ pattern guard it would be deleted first, unlinking
+        // the inode under the coordinator's open FileHandle.
+        let inFlight = incoming.appendingPathComponent("voice_live_00112233445566ff_1122334455667788_dm.aac")
+        let evictable = incoming.appendingPathComponent("voice_old.m4a")
+        try Data(count: 51 * 1024 * 1024).write(to: inFlight)
+        try Data(count: 51 * 1024 * 1024).write(to: evictable)
+        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -7200)], ofItemAtPath: inFlight.path)
+        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -60)], ofItemAtPath: evictable.path)
+
+        // 102 MB used against the 100 MB quota forces one eviction. This is
+        // the finalized-file arrival path (BLEFileTransferHandler via
+        // BLEService), which knows nothing about in-flight captures — the
+        // store itself must protect them.
+        store.enforceQuota(reservingBytes: 0)
+
+        #expect(FileManager.default.fileExists(atPath: inFlight.path))
+        #expect(!FileManager.default.fileExists(atPath: evictable.path))
+    }
+
     private func expectNoSideEffects(_ recorder: Recorder) {
         #expect(recorder.signedNameQueries.isEmpty)
         #expect(recorder.trackedPackets.isEmpty)

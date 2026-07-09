@@ -2,6 +2,7 @@
 # (CI checkouts are fresh, so this only matters in a working tree).
 excluded:
   - .build
+  - .claude
   - .swiftpm
   - .DerivedData
   - DerivedData

@@ -264,22 +264,33 @@ struct NostrProtocol {
 
     /// Create a mesh-bridge public message (kind 20000) for a geohash-cell
     /// rendezvous. The distinct `r` tag keeps bridge traffic out of geohash
-    /// channel subscriptions (which filter on `#g`); `m` carries the original
-    /// mesh message ID so receivers dedup the bridged copy against the radio
-    /// copy by timeline ID.
+    /// channel subscriptions (which filter on `#g`); `m` is
+    /// `[stable ID, mesh sender ID, wire timestamp in ms]`. Element 1 is the
+    /// content-stable mesh message ID (`MeshMessageIdentity`) for v1.7.0
+    /// parsers, which key their dedup on `m[1]` unconditionally and need it
+    /// per-message-unique; current parsers ignore it and recompute the ID
+    /// from the origin coordinates (elements 2-3) plus the event's own
+    /// content to dedup the bridged copy against the radio copy by
+    /// timeline ID.
     static func createBridgeMeshEvent(
         content: String,
         cell: String,
         senderIdentity: NostrIdentity,
         nickname: String? = nil,
-        meshMessageID: String? = nil
+        meshSenderID: String? = nil,
+        meshTimestampMs: UInt64? = nil
     ) throws -> NostrEvent {
         var tags = [["r", cell]]
         if let nickname = nickname?.trimmedOrNilIfEmpty {
             tags.append(["n", nickname])
         }
-        if let meshMessageID = meshMessageID?.trimmedOrNilIfEmpty {
-            tags.append(["m", meshMessageID])
+        if let meshSenderID = meshSenderID?.trimmedOrNilIfEmpty, let meshTimestampMs {
+            let stableID = MeshMessageIdentity.stableID(
+                senderIDHex: meshSenderID,
+                timestampMs: meshTimestampMs,
+                content: content
+            )
+            tags.append(["m", stableID, meshSenderID, String(meshTimestampMs)])
         }
         let event = NostrEvent(
             pubkey: senderIdentity.publicKeyHex,
@@ -325,7 +336,7 @@ struct NostrProtocol {
     ) throws -> NostrEvent {
         let tags = [
             ["x", recipientTagHex],
-            ["expiration", String(Int(expiresAt.timeIntervalSince1970))],
+            ["expiration", String(Int(expiresAt.timeIntervalSince1970))]
         ]
         let event = NostrEvent(
             pubkey: senderIdentity.publicKeyHex,

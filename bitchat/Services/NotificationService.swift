@@ -153,7 +153,7 @@ final class NotificationService {
     private func registerCategories() {
         let wave = UNNotificationAction(
             identifier: Self.waveActionID,
-            title: "wave 👋",
+            title: String(localized: "notification.action.wave", comment: "Title of the notification action button that sends a friendly wave back to a nearby person"),
             options: []
         )
         let nearby = UNNotificationCategory(

@@ -51,6 +51,14 @@ final class MeshSightingsTracker: ObservableObject {
         defaults.set(Array(seenHashes), forKey: Keys.hashes)
     }
 
+    /// Re-evaluates the day boundary for the UI. `recordSighting` handles
+    /// rollover when peers are seen, but an idle app open across midnight
+    /// would otherwise keep showing yesterday's tally until the next sighting;
+    /// the empty-state view calls this on its periodic refresh tick.
+    func refreshForDisplay() {
+        rollOverIfNeeded()
+    }
+
     func clear() {
         seenHashes.removeAll()
         todayCount = 0
@@ -76,8 +84,10 @@ final class MeshSightingsTracker: ObservableObject {
         defaults.set(today, forKey: Keys.dayKey)
         defaults.set(Self.randomSalt(), forKey: Keys.salt)
         defaults.removeObject(forKey: Keys.hashes)
+        defaults.removeObject(forKey: Keys.lastSeenAt)
         seenHashes.removeAll()
         todayCount = 0
+        lastSightingAt = nil
     }
 
     private func saltedHash(_ value: String) -> String {
@@ -92,12 +102,16 @@ final class MeshSightingsTracker: ObservableObject {
         return digest.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
-    private static func dayKey(for date: Date) -> String {
+    private static let dayKeyFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.calendar = Calendar.current
         formatter.timeZone = TimeZone.current
         formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
+        return formatter
+    }()
+
+    private static func dayKey(for date: Date) -> String {
+        dayKeyFormatter.string(from: date)
     }
 
     private static func randomSalt() -> Data {

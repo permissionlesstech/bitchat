@@ -111,6 +111,53 @@ struct BridgeWireFormatTests {
     }
 }
 
+@Suite("Mesh message identity")
+struct MeshMessageIdentityTests {
+    @Test func stableIDIsDeterministicHex() {
+        let id = MeshMessageIdentity.stableID(
+            senderIDHex: "0011223344556677",
+            timestampMs: 1_750_000_000_123,
+            content: "hello mesh"
+        )
+        // Pinned vector: first 32 hex chars of
+        // SHA256("0011223344556677|1750000000123|hello mesh"). Any drift
+        // breaks cross-device (and cross-version) dedup.
+        #expect(id == "b83f94d81dcdd1b0c0048f6645995dd4")
+        #expect(id == MeshMessageIdentity.stableID(
+            senderIDHex: "0011223344556677",
+            timestampMs: 1_750_000_000_123,
+            content: "hello mesh"
+        ))
+    }
+
+    @Test func senderIDIsCaseInsensitive() {
+        let lower = MeshMessageIdentity.stableID(senderIDHex: "aabbccdd00112233", timestampMs: 1, content: "x")
+        let upper = MeshMessageIdentity.stableID(senderIDHex: "AABBCCDD00112233", timestampMs: 1, content: "x")
+        #expect(lower == upper)
+    }
+
+    @Test func contentWhitespaceIsNormalized() {
+        // Senders bridge the trimmed content while the radio carries the
+        // original; both must derive the same key.
+        let raw = MeshMessageIdentity.stableID(senderIDHex: "aabbccdd00112233", timestampMs: 1, content: "  hello mesh \n")
+        let trimmed = MeshMessageIdentity.stableID(senderIDHex: "aabbccdd00112233", timestampMs: 1, content: "hello mesh")
+        #expect(raw == trimmed)
+    }
+
+    @Test func anyCoordinateChangeChangesTheID() {
+        let base = MeshMessageIdentity.stableID(senderIDHex: "aabbccdd00112233", timestampMs: 5, content: "x")
+        #expect(base != MeshMessageIdentity.stableID(senderIDHex: "aabbccdd00112234", timestampMs: 5, content: "x"))
+        #expect(base != MeshMessageIdentity.stableID(senderIDHex: "aabbccdd00112233", timestampMs: 6, content: "x"))
+        #expect(base != MeshMessageIdentity.stableID(senderIDHex: "aabbccdd00112233", timestampMs: 5, content: "y"))
+    }
+
+    @Test func millisecondTimestampTruncatesLikeTheWire() {
+        // Must match `BLEService.sendMessage`'s UInt64(seconds * 1000).
+        #expect(MeshMessageIdentity.millisecondTimestamp(Date(timeIntervalSince1970: 1_000.9996)) == 1_000_999)
+        #expect(MeshMessageIdentity.millisecondTimestamp(Date(timeIntervalSince1970: 1_000)) == 1_000_000)
+    }
+}
+
 @Suite("Courier store bridge publish")
 struct CourierStoreBridgePublishTests {
     private func makeStore(now: @escaping () -> Date = Date.init) -> CourierStore {

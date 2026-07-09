@@ -15,12 +15,6 @@ struct GeohashChatPreview: Equatable, Sendable {
     let senderName: String
     let content: String
     let timestamp: Date
-
-    init(senderName: String, content: String, timestamp: Date) {
-        self.senderName = senderName
-        self.content = content
-        self.timestamp = timestamp
-    }
 }
 
 /// The liveliest nearby conversation, resolved against the user's regional

@@ -53,17 +53,22 @@ struct UnifiedPeerServiceTests {
         let fingerprint = "fp-target"
         transport.peerFingerprints[peerID] = fingerprint
 
-        // Blocking resolves and persists by the peer's fingerprint.
+        // Blocking resolves and persists by the peer's fingerprint, and
+        // scrubs the peer's carried public messages from the gossip archive
+        // while the fingerprint↔peerID mapping is still known (the
+        // archived-echo seed filter can't resolve offline strangers).
         let resolved = service.setBlocked(peerID, blocked: true)
         #expect(resolved == fingerprint)
         #expect(identity.isBlocked(fingerprint: fingerprint))
         #expect(service.isBlocked(peerID))
+        #expect(transport.purgedArchivePeers == [peerID])
 
-        // Unblocking clears it against the same identity.
+        // Unblocking clears it against the same identity, without purging.
         let unresolved = service.setBlocked(peerID, blocked: false)
         #expect(unresolved == fingerprint)
         #expect(!identity.isBlocked(fingerprint: fingerprint))
         #expect(!service.isBlocked(peerID))
+        #expect(transport.purgedArchivePeers == [peerID])
     }
 
     // MARK: - Offline-favorite dedup (updatePeers phase 2)

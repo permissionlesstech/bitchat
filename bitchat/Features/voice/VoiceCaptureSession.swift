@@ -124,6 +124,13 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
             // a short pause covers it (observed on iPhone field tests).
             SecureLogger.warning("PTT: capture start failed (\(error)) — retrying once after route settle", category: .session)
             try? await Task.sleep(nanoseconds: 150_000_000)
+            // The hold may have been released/canceled during the retry pause.
+            // Starting the mic now would leave it live and streaming after the
+            // user let go, so bail instead of opening a hot mic.
+            guard !completed else {
+                capture.cancel()
+                return
+            }
             try capture.start(outputURL: outputURL)
         }
         startDate = Date()
@@ -156,10 +163,16 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
     }
 
     func cancel() async {
-        guard !completed else { return }
+        let alreadyCompleted = completed
         completed = true
+        // Always tear down the capture, even if a quick-release already marked
+        // us completed: the engine can start late (during start()'s retry
+        // pause), and only capture.cancel() stops the mic and deactivates the
+        // session. It is idempotent, so a redundant call is harmless.
         capture.cancel()
-        sendControlPacket(.canceled)
+        if !alreadyCompleted {
+            sendControlPacket(.canceled)
+        }
     }
 
     private func sendControlPacket(_ kind: VoiceBurstPacket.Kind) {

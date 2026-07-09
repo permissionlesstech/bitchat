@@ -210,11 +210,19 @@ private extension ChatViewModelBootstrapper {
         DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiArchivedEchoLoadDelaySeconds) { [weak viewModel] in
             guard let viewModel else { return }
             viewModel.meshService.collectArchivedPublicMessages { [weak viewModel] allArchived in
+                guard let viewModel else { return }
                 // A previous /clear dismissed everything heard up to its
-                // watermark; only newer archive entries come back.
+                // watermark; only newer archive entries come back. Blocking a
+                // peer purges their carried messages from the archive at
+                // block time (when the fingerprint↔peerID mapping is known);
+                // the filter here is defense-in-depth for entries that slip
+                // past the purge (e.g. re-synced from a nearby peer), and it
+                // only resolves connected peers or favorites.
                 let clearedThrough = MeshEchoSettings.clearedThrough ?? .distantPast
-                let archived = allArchived.filter { $0.timestamp > clearedThrough }
-                guard let viewModel, !archived.isEmpty else { return }
+                let archived = allArchived.filter {
+                    $0.timestamp > clearedThrough && !viewModel.isPeerBlocked($0.senderPeerID)
+                }
+                guard !archived.isEmpty else { return }
                 // Seed only an untouched timeline: with live rows already
                 // present (or after /clear) splicing history back in would
                 // be wrong.

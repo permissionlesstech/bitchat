@@ -47,9 +47,11 @@ import Foundation
 ///    already holds the radio copy (`isMessageSeenLocally` on the event's
 ///    mesh message ID) — remote islands' traffic is the only thing worth
 ///    airtime.
-/// Receivers additionally dedup by timeline message ID: a bridged copy
-/// carries the original mesh message ID in its `m` tag, so the store's
-/// insert-by-ID absorbs radio/bridge duplicates in either arrival order.
+/// Receivers additionally dedup by timeline message ID: the wire carries no
+/// public message ID, so every device derives the same content-stable one
+/// (`MeshMessageIdentity`) from the origin coordinates in the event's `m`
+/// tag — recomputed locally, never trusted — and the store's insert-by-ID
+/// absorbs radio/bridge duplicates in either arrival order.
 ///
 /// All dependencies are closure-injected (repo convention) so the policy
 /// layer is unit-testable without relays, radios, or CoreLocation.
@@ -292,22 +294,32 @@ final class BridgeService: ObservableObject {
     /// Composes and ships the bridged copy of an outgoing public mesh
     /// message. Call after the radio send; no-op when the bridge is off,
     /// no cell is known, or the message was flagged nearby-only upstream.
-    func bridgeOutgoing(content: String, messageID: String) {
+    /// `senderPeerID`/`timestamp` are the origin coordinates of the radio
+    /// send — they (with the content) derive the cross-device-stable mesh
+    /// message ID that receivers dedup on.
+    func bridgeOutgoing(content: String, senderPeerID: PeerID, timestamp: Date) {
         guard isEnabled, !nearbyOnly, let cell = activeCell ?? currentCell() else { return }
         guard content.utf8.count <= Limits.maxContentBytes else { return }
+        let timestampMs = MeshMessageIdentity.millisecondTimestamp(timestamp)
+        let stableID = MeshMessageIdentity.stableID(
+            senderIDHex: senderPeerID.id,
+            timestampMs: timestampMs,
+            content: content
+        )
         guard let identity = try? deriveIdentity?(cell),
               let event = try? NostrProtocol.createBridgeMeshEvent(
                 content: content,
                 cell: cell,
                 senderIdentity: identity,
                 nickname: myNickname?(),
-                meshMessageID: messageID
+                meshSenderID: senderPeerID.id,
+                meshTimestampMs: timestampMs
               ) else {
             SecureLogger.error("🌉 Bridge: failed to compose rendezvous event", category: .session)
             return
         }
         publishedEventIDs.insert(event.id)
-        injectedMessageIDs.insert(messageID) // our own timeline already has it
+        injectedMessageIDs.insert(stableID) // our own timeline already has it
         if relaysConnected?() ?? false {
             publishToRelays?(event, cell)
         } else if let carrier = NostrCarrierPacket(direction: .toBridge, geohash: cell, event: event),
@@ -648,11 +660,28 @@ final class BridgeService: ObservableObject {
             let content = event.content
             guard !content.trimmed.isEmpty, content.utf8.count <= Limits.maxContentBytes else { return nil }
             let nickname = event.tags.first(where: { $0.count >= 2 && $0[0] == "n" })?[1]
-            let meshID = event.tags.first(where: { $0.count >= 2 && $0[0] == "m" })?[1]
-            let messageID = (meshID?.trimmedOrNilIfEmpty) ?? event.id
+            // Recompute — never trust — the mesh message ID: the `m` tag is
+            // `[stable ID, sender ID, wire timestamp ms]`. Element 1 exists
+            // for v1.7.0 parsers; we ignore it and derive the ID from the
+            // origin coordinates (elements 2-3) plus the event's own content,
+            // so a forged tag cannot bind a chosen ID to different content
+            // (see `MeshMessageIdentity` for the exact property and its
+            // limits).
+            let m = event.tags.first(where: { $0.count >= 2 && $0[0] == "m" })
+            let messageID: String
+            if let m, m.count >= 4, m[2].count == 16, m[2].allSatisfy(\.isHexDigit),
+               let timestampMs = UInt64(m[3]) {
+                messageID = MeshMessageIdentity.stableID(
+                    senderIDHex: m[2],
+                    timestampMs: timestampMs,
+                    content: content
+                )
+            } else {
+                messageID = event.id // old-format or absent tag
+            }
             return .message(InboundBridgeMessage(
                 messageID: messageID,
-                senderNickname: nickname?.trimmedOrNilIfEmpty ?? "anon#\(event.pubkey.prefix(4))",
+                senderNickname: nickname?.trimmedOrNilIfEmpty ?? "anon#\(event.pubkey.suffix(4))",
                 senderPubkey: event.pubkey,
                 content: content,
                 timestamp: Date(timeIntervalSince1970: TimeInterval(event.created_at))

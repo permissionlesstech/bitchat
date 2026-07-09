@@ -275,4 +275,3 @@ private extension SecureLogger {
         return "[\(timestamp)] [\(fileName):\(line) \(function)]"
     }
 }
-
