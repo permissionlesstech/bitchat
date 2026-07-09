@@ -20,6 +20,8 @@ enum BLEOutboundLinkPlanner {
         excludedLinks: Set<BLEIngressLinkID>,
         peripheralPeerBindings: [String: PeerID] = [:],
         centralPeerBindings: [String: PeerID] = [:],
+        preferredPeripheralPerPeer: [PeerID: String] = [:],
+        directAnnounceTTL: UInt8 = TransportConfig.messageTTLDefault,
         directedOnlyPeer: PeerID?
     ) -> BLEOutboundLinkPlan {
         if let minLimit = minimumLinkLimit(
@@ -36,6 +38,9 @@ enum BLEOutboundLinkPlanner {
         }
 
         let directedPeerHint = directedPeerHint(for: packet, explicitPeer: directedOnlyPeer)
+        // Direct announces bypass the per-peer duplicate-link collapse so
+        // every live link gets bound (see BLEFanoutSelector.selectLinks).
+        let isDirectAnnounce = packet.type == MessageType.announce.rawValue && packet.ttl == directAnnounceTTL
         let selectedLinks = BLEFanoutSelector.selectLinks(
             peripheralIDs: peripheralIDs,
             centralIDs: centralIDs,
@@ -43,6 +48,8 @@ enum BLEOutboundLinkPlanner {
             excludedLinks: excludedLinks,
             peripheralPeerBindings: peripheralPeerBindings,
             centralPeerBindings: centralPeerBindings,
+            preferredPeripheralPerPeer: preferredPeripheralPerPeer,
+            collapseDuplicatePeerLinks: !isDirectAnnounce,
             directedPeerHint: directedPeerHint,
             packetType: packet.type,
             messageID: BLEOutboundPacketPolicy.messageID(for: packet)

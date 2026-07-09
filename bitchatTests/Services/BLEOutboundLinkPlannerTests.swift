@@ -114,6 +114,45 @@ struct BLEOutboundLinkPlannerTests {
     }
 
     @Test
+    func directAnnounceBypassesDuplicateLinkCollapseButRelayedAnnounceDoesNot() {
+        let peer = PeerID(str: "1122334455667788")
+        let bindings: [String: PeerID] = ["p1": peer, "p2": peer]
+
+        let direct = BLEOutboundLinkPlanner.plan(
+            packet: makePacket(type: .announce),
+            dataCount: 32,
+            peripheralIDs: ["p1", "p2"],
+            peripheralWriteLimits: [128, 128],
+            centralIDs: [],
+            centralNotifyLimits: [],
+            ingressRecord: nil,
+            excludedLinks: [],
+            peripheralPeerBindings: bindings,
+            preferredPeripheralPerPeer: [peer: "p1"],
+            directedOnlyPeer: nil
+        )
+        // A direct announce is the link-binding packet: it must reach every
+        // live link, including a peer's duplicate connections.
+        #expect(direct.selectedLinks.peripheralIDs == Set(["p1", "p2"]))
+
+        let relayed = BLEOutboundLinkPlanner.plan(
+            packet: makePacket(type: .announce, ttl: TransportConfig.messageTTLDefault - 1),
+            dataCount: 32,
+            peripheralIDs: ["p1", "p2"],
+            peripheralWriteLimits: [128, 128],
+            centralIDs: [],
+            centralNotifyLimits: [],
+            ingressRecord: nil,
+            excludedLinks: [],
+            peripheralPeerBindings: bindings,
+            preferredPeripheralPerPeer: [peer: "p1"],
+            directedOnlyPeer: nil
+        )
+        // Relayed announces keep the per-peer collapse (relay hygiene).
+        #expect(relayed.selectedLinks.peripheralIDs == Set(["p1"]))
+    }
+
+    @Test
     func minimumLinkLimitUsesTheSmallestPresentRoleLimit() {
         #expect(BLEOutboundLinkPlanner.minimumLinkLimit(peripheralWriteLimits: [80, 120], centralNotifyLimits: []) == 80)
         #expect(BLEOutboundLinkPlanner.minimumLinkLimit(peripheralWriteLimits: [], centralNotifyLimits: [60, 90]) == 60)
@@ -123,7 +162,8 @@ struct BLEOutboundLinkPlannerTests {
     private func makePacket(
         type: MessageType,
         sender: PeerID = PeerID(str: "8877665544332211"),
-        recipient: PeerID? = nil
+        recipient: PeerID? = nil,
+        ttl: UInt8 = TransportConfig.messageTTLDefault
     ) -> BitchatPacket {
         BitchatPacket(
             type: type.rawValue,
@@ -132,7 +172,7 @@ struct BLEOutboundLinkPlannerTests {
             timestamp: 1234,
             payload: Data([0x01, 0x02]),
             signature: nil,
-            ttl: TransportConfig.messageTTLDefault
+            ttl: ttl
         )
     }
 }
