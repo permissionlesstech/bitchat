@@ -24,10 +24,15 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
     private var player: AVAudioPlayer?
     private var timer: Timer?
     private var url: URL
+    /// Test seam; `AudioSessionCoordinator.shared` when nil (its `shared` is
+    /// main-actor-isolated, so it can't be a default argument of this
+    /// nonisolated init).
+    private let sessionCoordinatorOverride: AudioSessionCoordinator?
     private var sessionToken: AudioSessionCoordinator.Token?
 
-    init(url: URL) {
+    init(url: URL, sessionCoordinator: AudioSessionCoordinator? = nil) {
         self.url = url
+        self.sessionCoordinatorOverride = sessionCoordinator
         super.init()
         // Don't load anything eagerly - wait until user interaction or view is fully displayed
     }
@@ -52,6 +57,20 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
 
     deinit {
         timer?.invalidate()
+        player?.stop()
+        // A per-row @StateObject can be discarded mid-playback (navigating
+        // away). Leaking the token here would hold the session forever —
+        // never deactivating it, and pinning any escalated category for the
+        // app's lifetime. deinit is nonisolated, so hop to the coordinator's
+        // actor; the Sendable token and the coordinator reference are the
+        // only captures.
+        if let token = sessionToken {
+            sessionToken = nil
+            let coordinator = sessionCoordinatorOverride
+            Task { @MainActor in
+                (coordinator ?? .shared).release(token)
+            }
+        }
     }
 
     func replaceURL(_ url: URL) {
@@ -69,6 +88,9 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
 
     func play() {
         guard ensurePlayerReady() else { return }
+        // Acquired here (not in ensurePlayerReady): scrubbing a paused note
+        // must not hold the session while nothing is audible.
+        acquireSessionIfNeeded()
         VoiceNotePlaybackCoordinator.shared.activate(self)
         player?.play()
         startTimer()
@@ -145,7 +167,6 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
         if player == nil {
             preparePlayer(for: url)
         }
-        acquireSessionIfNeeded()
         return player != nil
     }
 
@@ -156,7 +177,7 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
         MainActor.assumeIsolated {
             guard sessionToken == nil else { return }
             do {
-                sessionToken = try AudioSessionCoordinator.shared.acquire(.playback) { [weak self] in
+                sessionToken = try (sessionCoordinatorOverride ?? .shared).acquire(.playback) { [weak self] in
                     self?.pause()
                 }
             } catch {
@@ -167,7 +188,7 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
 
     private func releaseSession() {
         MainActor.assumeIsolated {
-            sessionToken.map(AudioSessionCoordinator.shared.release)
+            sessionToken.map((sessionCoordinatorOverride ?? .shared).release)
             sessionToken = nil
         }
     }

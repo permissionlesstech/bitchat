@@ -34,11 +34,13 @@ protocol SessionApplying {
 ///   any capture holder escalates to `.playAndRecord`, and the category is
 ///   never downgraded while anyone still holds a token (capture ending must
 ///   not yank the route out from under live playback);
-/// - fans out `onInterrupted` on system interruptions, on the escalating
-///   category change (so running engines can stop/restart against the new
-///   configuration), and when the active route's device disappears. There
-///   is no auto-resume: bursts are transient, the next press or burst simply
-///   re-acquires.
+/// - fans out `onInterrupted` on system interruptions and when the active
+///   route's device disappears (no auto-resume: bursts are transient, the
+///   next press or burst simply re-acquires). The escalating category change
+///   fans out separately as `onCategoryEscalated` — the session stays live,
+///   so holders that can rebuild their engine against the new configuration
+///   keep playing (talk-over is bidirectional); holders that don't provide
+///   it fall back to `onInterrupted`.
 ///
 /// Microphone *permission* queries stay with their callers; this type owns
 /// only category and activation.
@@ -60,9 +62,14 @@ final class AudioSessionCoordinator {
     /// once when done (extra releases are ignored).
     final class Token: Sendable {
         fileprivate let onInterrupted: @MainActor () -> Void
+        fileprivate let onCategoryEscalated: (@MainActor () -> Void)?
 
-        fileprivate init(onInterrupted: @escaping @MainActor () -> Void) {
+        fileprivate init(
+            onInterrupted: @escaping @MainActor () -> Void,
+            onCategoryEscalated: (@MainActor () -> Void)?
+        ) {
             self.onInterrupted = onInterrupted
+            self.onCategoryEscalated = onCategoryEscalated
         }
     }
 
@@ -87,23 +94,45 @@ final class AudioSessionCoordinator {
 
     /// Configures + activates the session for `use` and registers the caller
     /// as a holder. `onInterrupted` fires (on the main actor) when the client
-    /// must stop using the session: a system interruption began, the session
-    /// was reconfigured underneath it, or its route's device went away. The
-    /// client should stop its engine, finalize any artifacts, and release —
-    /// resuming means acquiring again.
-    func acquire(_ use: Use, onInterrupted: @escaping @MainActor () -> Void) throws -> Token {
+    /// must stop using the session: a system interruption began or its
+    /// route's device went away. The client should stop its engine, finalize
+    /// any artifacts, and release — resuming means acquiring again.
+    ///
+    /// `onCategoryEscalated` fires instead when the session category
+    /// escalated underneath the holder (a capture client joined): the session
+    /// stays active, so a holder that can rebuild its engine against the new
+    /// configuration should restart and keep going. Holders that pass `nil`
+    /// get `onInterrupted` for escalation too.
+    func acquire(
+        _ use: Use,
+        onInterrupted: @escaping @MainActor () -> Void,
+        onCategoryEscalated: (@MainActor () -> Void)? = nil
+    ) throws -> Token {
         let target: Category = (use == .capture || currentCategory == .playAndRecord) ? .playAndRecord : .playback
         let categoryChanged = target != currentCategory
+        let previousCategory = currentCategory
         if categoryChanged {
             try session.setCategory(target)
             currentCategory = target
         }
         if !sessionActive {
-            try session.setActive(true, notifyOthersOnDeactivation: false)
+            do {
+                try session.setActive(true, notifyOthersOnDeactivation: false)
+            } catch {
+                // Activation failed (e.g. a phone call owns the hardware):
+                // with no holder registered, an escalated category recorded
+                // here would stick and pin later playback-only acquires to
+                // .playAndRecord. Existing holders keep the category the
+                // hardware really has.
+                if categoryChanged, holders.isEmpty {
+                    currentCategory = previousCategory
+                }
+                throw error
+            }
             sessionActive = true
         }
 
-        let token = Token(onInterrupted: onInterrupted)
+        let token = Token(onInterrupted: onInterrupted, onCategoryEscalated: onCategoryEscalated)
         let existing = Array(holders.values)
         holders[ObjectIdentifier(token)] = token
 
@@ -112,7 +141,7 @@ final class AudioSessionCoordinator {
         if categoryChanged, !existing.isEmpty {
             SecureLogger.info("AudioSession: category escalated to playAndRecord with \(existing.count) live holder(s)", category: .session)
             for holder in existing {
-                holder.onInterrupted()
+                (holder.onCategoryEscalated ?? holder.onInterrupted)()
             }
         }
         return token

@@ -64,7 +64,9 @@ actor VoiceRecorder {
             }
         }
         // Actor reentrancy: another recording may have started during the hop.
-        if recorder?.isRecording == true {
+        // Guard the token too — overwriting a live one (double-fired hold
+        // gesture) would leak the first holder and pin the session forever.
+        if recorder?.isRecording == true || sessionToken != nil {
             await MainActor.run { AudioSessionCoordinator.shared.release(token) }
             throw RecorderError.recordingInProgress
         }

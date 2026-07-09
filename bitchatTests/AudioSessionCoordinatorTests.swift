@@ -19,6 +19,8 @@ private final class MockAudioSession: SessionApplying {
 
     private(set) var calls: [Call] = []
     var nextError: Error?
+    /// Fails only the next `setActive` (so `setCategory` can succeed first).
+    var nextActivationError: Error?
 
     func setCategory(_ category: AudioSessionCoordinator.Category) throws {
         try throwIfRequested()
@@ -27,6 +29,10 @@ private final class MockAudioSession: SessionApplying {
 
     func setActive(_ active: Bool, notifyOthersOnDeactivation: Bool) throws {
         try throwIfRequested()
+        if let error = nextActivationError {
+            nextActivationError = nil
+            throw error
+        }
         calls.append(.setActive(active, notifyOthers: notifyOthersOnDeactivation))
     }
 
@@ -117,6 +123,28 @@ struct AudioSessionCoordinatorTests {
         #expect(session.activationCalls == [true, false])
     }
 
+    @Test func failedActivationRollsBackEscalatedCategory() throws {
+        let session = MockAudioSession()
+        let coordinator = AudioSessionCoordinator(session: session)
+
+        // setCategory(.playAndRecord) succeeds, setActive throws (e.g. a
+        // phone call owns the hardware).
+        session.nextActivationError = MockSessionError()
+        #expect(throws: MockSessionError.self) {
+            try coordinator.acquire(.capture) {}
+        }
+
+        // With no holder registered the escalated category must not stick:
+        // the next playback-only acquire runs under .playback, not the
+        // leftover .playAndRecord.
+        let token = try coordinator.acquire(.playback) {}
+        #expect(session.categoryCalls == [.playAndRecord, .playback])
+        // And the failed acquire left no holder behind: this one was 0->1.
+        #expect(session.activationCalls == [true])
+        coordinator.release(token)
+        #expect(session.activationCalls == [true, false])
+    }
+
     // MARK: - Category escalation
 
     @Test func captureWhilePlaybackEscalatesExactlyOnceAndNeverDowngrades() throws {
@@ -184,6 +212,33 @@ struct AudioSessionCoordinatorTests {
         coordinator.release(playback)
         coordinator.release(capture)
         coordinator.release(secondCapture)
+    }
+
+    @Test func escalationPrefersCategoryChangeCallbackOverInterruption() throws {
+        let session = MockAudioSession()
+        let coordinator = AudioSessionCoordinator(session: session)
+
+        var escalations = 0
+        var interruptions = 0
+        let playback = try coordinator.acquire(
+            .playback,
+            onInterrupted: { interruptions += 1 },
+            onCategoryEscalated: { escalations += 1 }
+        )
+
+        // Escalation reaches the dedicated callback (the holder restarts and
+        // keeps playing) — not onInterrupted (which would stop it for good).
+        let capture = try coordinator.acquire(.capture) {}
+        #expect(escalations == 1)
+        #expect(interruptions == 0)
+
+        // A real interruption still stops it.
+        coordinator.handleInterruptionBegan()
+        #expect(escalations == 1)
+        #expect(interruptions == 1)
+
+        coordinator.release(playback)
+        coordinator.release(capture)
     }
 
     // MARK: - Interruptions and route changes

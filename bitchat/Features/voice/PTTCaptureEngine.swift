@@ -97,18 +97,10 @@ final class PTTCaptureEngine {
         engine.inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, _ in
             self?.queue.async { self?.process(buffer) }
         }
-        engine.prepare()
-        do {
-            try engine.start()
-        } catch {
-            SecureLogger.error("PTT: capture engine failed to start (input: \(Int(inputFormat.sampleRate)) Hz, \(inputFormat.channelCount) ch): \(error)", category: .session)
-            engine.inputNode.removeTap(onBus: 0)
-            queue.sync { self.teardown(deleteFile: true) }
-            throw error
-        }
-        engineStarted = true
         // Route/category changes reconfigure the engine underneath the tap;
         // stop and finalize cleanly — the .m4a captured so far still sends.
+        // Registered before start() so no reconfigure lands unobserved
+        // (handleInterruption itself gates on engineStarted).
         configChangeObserver = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange,
             object: engine,
@@ -118,6 +110,20 @@ final class PTTCaptureEngine {
                 self?.handleInterruption()
             }
         }
+        engine.prepare()
+        do {
+            try engine.start()
+        } catch {
+            SecureLogger.error("PTT: capture engine failed to start (input: \(Int(inputFormat.sampleRate)) Hz, \(inputFormat.channelCount) ch): \(error)", category: .session)
+            if let observer = configChangeObserver {
+                NotificationCenter.default.removeObserver(observer)
+                configChangeObserver = nil
+            }
+            engine.inputNode.removeTap(onBus: 0)
+            queue.sync { self.teardown(deleteFile: true) }
+            throw error
+        }
+        engineStarted = true
         SecureLogger.info("PTT: capture engine running (input: \(Int(inputFormat.sampleRate)) Hz, \(inputFormat.channelCount) ch)", category: .session)
     }
 
