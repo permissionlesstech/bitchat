@@ -468,16 +468,22 @@ final class ChatLiveVoiceCoordinator {
         assembly.player?.finishAfterDrain()
         // The bubble's waveform may have been computed from a partial file.
         WaveformCache.shared.purge(url: assembly.fileURL)
-        // Republish so the row re-renders without its LIVE treatment even if
-        // no finalized note ever arrives to swap in.
-        republishBubble(of: assembly)
+        // The capture is the bubble's replayable audio from here on (unless a
+        // finalized note arrives to swap in): move it off its voice_live_
+        // name so only genuinely in-flight files match the startup sweep and
+        // the quota's live-capture guard — a kept fallback is never swept,
+        // and it ages out of the quota like any finalized media.
+        let fileURL = promoteToFallback(assembly.fileURL)
+        // Republish so the row re-renders without its LIVE treatment — and
+        // points at the promoted file — even if no note ever arrives.
+        republishBubble(of: assembly, fileURL: fileURL)
 
         pruneFinishedBursts()
         finishedBursts[assembly.key] = FinishedBurst(
             messageID: assembly.messageID,
             peerID: assembly.peerID,
             scope: assembly.scope,
-            fileURL: assembly.fileURL,
+            fileURL: fileURL,
             messageTimestamp: assembly.messageTimestamp,
             expiresAt: Date().addingTimeInterval(TransportConfig.pttFinishedBurstRegistrySeconds)
         )
@@ -494,12 +500,48 @@ final class ChatLiveVoiceCoordinator {
         }
     }
 
-    private func republishBubble(of assembly: Assembly) {
+    private func republishBubble(of assembly: Assembly, fileURL: URL) {
+        // Same row (same ID), content re-pointed at `fileURL`; the delivery
+        // status is carried over because the inbound pipeline may have
+        // updated it on the shared original.
+        let message = BitchatMessage(
+            id: assembly.messageID,
+            sender: assembly.nickname,
+            content: "\(MimeType.Category.audio.messagePrefix)\(fileURL.lastPathComponent)",
+            timestamp: assembly.messageTimestamp,
+            isRelay: false,
+            isPrivate: assembly.scope == .directMessage,
+            recipientNickname: assembly.scope == .directMessage ? context.nickname : nil,
+            senderPeerID: assembly.peerID,
+            deliveryStatus: assembly.message.deliveryStatus
+        )
         switch assembly.scope {
         case .directMessage:
-            context.upsertPrivateMessage(assembly.message, in: assembly.peerID)
+            context.upsertPrivateMessage(message, in: assembly.peerID)
         case .publicMesh:
-            context.upsertPublicMeshMessage(assembly.message)
+            context.upsertPublicMeshMessage(message)
+        }
+    }
+
+    /// Moves a finished capture off its `voice_live_` prefix (onto plain
+    /// `voice_`), so the in-flight patterns — the startup sweep and the
+    /// quota's eviction guard — only ever match captures still streaming in.
+    /// On failure the live name is kept: worst case the file is reclaimed at
+    /// the next startup, exactly the pre-promotion behavior.
+    private func promoteToFallback(_ liveURL: URL) -> URL {
+        let liveName = liveURL.lastPathComponent
+        guard liveName.hasPrefix(BLEIncomingFileStore.liveCapturePrefix) else { return liveURL }
+        let fallbackName = "voice_" + liveName.dropFirst(BLEIncomingFileStore.liveCapturePrefix.count)
+        let destination = liveURL.deletingLastPathComponent().appendingPathComponent(fallbackName)
+        do {
+            // A leftover from an earlier burst that reused the same
+            // (peer, scope, burstID) triple would block the move.
+            try? fileManager.removeItem(at: destination)
+            try fileManager.moveItem(at: liveURL, to: destination)
+            return destination
+        } catch {
+            SecureLogger.warning("PTT: keeping live-capture name for finished burst — promotion failed: \(error)", category: .session)
+            return liveURL
         }
     }
 
@@ -577,7 +619,12 @@ final class ChatLiveVoiceCoordinator {
 
     /// Deletes partial live captures left behind by a previous session.
     /// In-session cleanup needs no sweep: absorb, cancel, and empty-finalize
-    /// all delete their capture file.
+    /// delete their capture file, and finalize promotes keepers off the
+    /// `voice_live_` name. So anything the sweep matches was orphaned by a
+    /// crash mid-burst — safe to delete, because chat rows are in-memory
+    /// only (ConversationStore never persists; the gossip archive replays
+    /// `MessageType.message` packets only), so no row from a previous
+    /// process can reference the file.
     private func sweepStaleLiveCaptures() {
         guard let directory = try? fileStore.incomingDirectory(subdirectory: Self.incomingSubdirectory),
               let contents = try? fileManager.contentsOfDirectory(

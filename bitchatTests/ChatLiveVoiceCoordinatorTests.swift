@@ -63,17 +63,36 @@ struct ChatLiveVoiceCoordinatorTests {
         coordinator.handleVoiceFramePayload(from: peerID, payload: packet.encode(), timestamp: Date())
     }
 
-    private func liveCaptureName(burstID: Data, peerID: PeerID, scope: VoiceBurstScope = .directMessage) -> String {
-        "voice_live_\(burstID.hexEncodedString())_\(peerID.id)_\(scope == .directMessage ? "dm" : "mesh").aac"
+    private func captureSuffix(burstID: Data, peerID: PeerID, scope: VoiceBurstScope) -> String {
+        "\(burstID.hexEncodedString())_\(peerID.id)_\(scope == .directMessage ? "dm" : "mesh").aac"
     }
 
-    private func incomingFileURL(burstID: Data, peerID: PeerID, scope: VoiceBurstScope = .directMessage) -> URL? {
+    /// Name of a capture still streaming in.
+    private func liveCaptureName(burstID: Data, peerID: PeerID, scope: VoiceBurstScope = .directMessage) -> String {
+        "voice_live_" + captureSuffix(burstID: burstID, peerID: peerID, scope: scope)
+    }
+
+    /// Name a finished capture is promoted to when it becomes the bubble's
+    /// replayable fallback.
+    private func fallbackName(burstID: Data, peerID: PeerID, scope: VoiceBurstScope = .directMessage) -> String {
+        "voice_" + captureSuffix(burstID: burstID, peerID: peerID, scope: scope)
+    }
+
+    private func incomingFileURL(named name: String) -> URL? {
         guard let base = try? FileManager.default.url(
             for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: false
         ) else { return nil }
         return base
             .appendingPathComponent("files/voicenotes/incoming", isDirectory: true)
-            .appendingPathComponent(liveCaptureName(burstID: burstID, peerID: peerID, scope: scope))
+            .appendingPathComponent(name)
+    }
+
+    private func incomingFileURL(burstID: Data, peerID: PeerID, scope: VoiceBurstScope = .directMessage) -> URL? {
+        incomingFileURL(named: liveCaptureName(burstID: burstID, peerID: peerID, scope: scope))
+    }
+
+    private func fallbackFileURL(burstID: Data, peerID: PeerID, scope: VoiceBurstScope = .directMessage) -> URL? {
+        incomingFileURL(named: fallbackName(burstID: burstID, peerID: peerID, scope: scope))
     }
 
     /// Fresh store rooted in its own temp directory so quota/sweep tests
@@ -94,7 +113,7 @@ struct ChatLiveVoiceCoordinatorTests {
         let context = MockChatLiveVoiceContext()
         let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
         let burstID = makeBurstID(0xA1)
-        defer { incomingFileURL(burstID: burstID, peerID: peer).map { try? FileManager.default.removeItem(at: $0) } }
+        defer { fallbackFileURL(burstID: burstID, peerID: peer).map { try? FileManager.default.removeItem(at: $0) } }
 
         let frame1 = Data(repeating: 0x01, count: 60)
         let frame2 = Data(repeating: 0x02, count: 60)
@@ -113,15 +132,20 @@ struct ChatLiveVoiceCoordinatorTests {
         send(try #require(VoiceBurstPacket(burstID: burstID, seq: 1, kind: .frames([frame1]))), to: coordinator, from: peer)
         send(try #require(VoiceBurstPacket(burstID: burstID, seq: 3, kind: .end(totalDataPackets: 2, durationMs: 128))), to: coordinator, from: peer)
 
-        let url = try #require(incomingFileURL(burstID: burstID, peerID: peer))
+        // The finished capture is promoted off its voice_live_ name.
+        let url = try #require(fallbackFileURL(burstID: burstID, peerID: peer))
         let written = try Data(contentsOf: url)
         var expected = ADTSFramer.frame(frame1)
         expected.append(ADTSFramer.frame(frame2))
         #expect(written == expected)
+        let liveURL = try #require(incomingFileURL(burstID: burstID, peerID: peer))
+        #expect(!FileManager.default.fileExists(atPath: liveURL.path))
 
-        // Burst ended: no longer live, bubble republished for re-render.
+        // Burst ended: no longer live, bubble republished pointing at the
+        // promoted file.
         #expect(!coordinator.isLiveVoiceMessage(bubble))
-        #expect(context.upsertedMessages.contains { $0.message.id == bubble.id })
+        let republished = try #require(context.upsertedMessages.last { $0.message.id == bubble.id })
+        #expect(republished.message.content == "[voice] \(fallbackName(burstID: burstID, peerID: peer))")
         #expect(context.removedMessageIDs.isEmpty)
     }
 
@@ -152,7 +176,8 @@ struct ChatLiveVoiceCoordinatorTests {
         #expect(replacement.message.id == bubble.id)
         #expect(replacement.message.content == note.content)
         #expect(replacement.peerID == peer)
-        let url = try #require(incomingFileURL(burstID: burstID, peerID: peer))
+        // The promoted partial capture is deleted in favor of the note.
+        let url = try #require(fallbackFileURL(burstID: burstID, peerID: peer))
         #expect(!FileManager.default.fileExists(atPath: url.path))
 
         // Absorption is one-shot.
@@ -268,7 +293,10 @@ struct ChatLiveVoiceCoordinatorTests {
         let context = MockChatLiveVoiceContext()
         let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
         let burstID = makeBurstID(0x71)
-        defer { incomingFileURL(burstID: burstID, peerID: peer).map { try? FileManager.default.removeItem(at: $0) } }
+        defer {
+            incomingFileURL(burstID: burstID, peerID: peer, scope: .publicMesh).map { try? FileManager.default.removeItem(at: $0) }
+            fallbackFileURL(burstID: burstID, peerID: peer, scope: .publicMesh).map { try? FileManager.default.removeItem(at: $0) }
+        }
 
         func sendPublic(_ packet: VoiceBurstPacket) {
             coordinator.handlePublicVoiceFramePayload(from: peer, nickname: "bob", payload: packet.encode(), timestamp: Date())
@@ -306,7 +334,7 @@ struct ChatLiveVoiceCoordinatorTests {
         let context = MockChatLiveVoiceContext()
         let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
         let burstID = makeBurstID(0x72)
-        defer { incomingFileURL(burstID: burstID, peerID: peer).map { try? FileManager.default.removeItem(at: $0) } }
+        defer { fallbackFileURL(burstID: burstID, peerID: peer).map { try? FileManager.default.removeItem(at: $0) } }
 
         // A DM burst...
         send(try #require(VoiceBurstPacket(burstID: burstID, seq: 1, kind: .frames([Data(repeating: 4, count: 40)]))), to: coordinator, from: peer)
@@ -339,7 +367,7 @@ struct ChatLiveVoiceCoordinatorTests {
         let burstID = makeBurstID(0x73)
         let attacker = PeerID(str: "ddddeeeeffff0002")
         defer {
-            incomingFileURL(burstID: burstID, peerID: peer).map { try? FileManager.default.removeItem(at: $0) }
+            fallbackFileURL(burstID: burstID, peerID: peer).map { try? FileManager.default.removeItem(at: $0) }
             incomingFileURL(burstID: burstID, peerID: attacker).map { try? FileManager.default.removeItem(at: $0) }
         }
 
@@ -360,7 +388,7 @@ struct ChatLiveVoiceCoordinatorTests {
         let victimFrame = Data(repeating: 0x0A, count: 60)
         send(try #require(VoiceBurstPacket(burstID: burstID, seq: 1, kind: .frames([victimFrame]))), to: coordinator, from: peer)
         send(try #require(VoiceBurstPacket(burstID: burstID, seq: 2, kind: .end(totalDataPackets: 1, durationMs: 64))), to: coordinator, from: peer)
-        let victimURL = try #require(incomingFileURL(burstID: burstID, peerID: peer))
+        let victimURL = try #require(fallbackFileURL(burstID: burstID, peerID: peer))
         #expect(try Data(contentsOf: victimURL) == ADTSFramer.frame(victimFrame))
         let attackerURL = try #require(incomingFileURL(burstID: burstID, peerID: attacker))
         #expect((try? Data(contentsOf: attackerURL))?.isEmpty == true)
@@ -373,8 +401,8 @@ struct ChatLiveVoiceCoordinatorTests {
         let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
         let burstID = makeBurstID(0x74)
         defer {
-            incomingFileURL(burstID: burstID, peerID: peer).map { try? FileManager.default.removeItem(at: $0) }
-            incomingFileURL(burstID: burstID, peerID: peer, scope: .publicMesh).map { try? FileManager.default.removeItem(at: $0) }
+            fallbackFileURL(burstID: burstID, peerID: peer).map { try? FileManager.default.removeItem(at: $0) }
+            fallbackFileURL(burstID: burstID, peerID: peer, scope: .publicMesh).map { try? FileManager.default.removeItem(at: $0) }
         }
 
         // A DM burst and a public burst reusing the same burst ID open
@@ -408,9 +436,9 @@ struct ChatLiveVoiceCoordinatorTests {
 
         // The scope in the file name keeps the two captures on distinct
         // paths: both survive with intact contents instead of one truncating
-        // or deleting the other.
-        let dmURL = try #require(incomingFileURL(burstID: burstID, peerID: peer))
-        let publicURL = try #require(incomingFileURL(burstID: burstID, peerID: peer, scope: .publicMesh))
+        // or deleting the other (both promoted off their live names by now).
+        let dmURL = try #require(fallbackFileURL(burstID: burstID, peerID: peer))
+        let publicURL = try #require(fallbackFileURL(burstID: burstID, peerID: peer, scope: .publicMesh))
         #expect(dmURL != publicURL)
         #expect(try Data(contentsOf: dmURL) == ADTSFramer.frame(dmFrame))
         #expect(try Data(contentsOf: publicURL) == ADTSFramer.frame(publicFrame))
@@ -431,8 +459,8 @@ struct ChatLiveVoiceCoordinatorTests {
         let hex = burstID.hexEncodedString()
         let attacker = PeerID(str: "ddddeeeeffff0002")
         defer {
-            incomingFileURL(burstID: burstID, peerID: peer).map { try? FileManager.default.removeItem(at: $0) }
-            incomingFileURL(burstID: burstID, peerID: attacker).map { try? FileManager.default.removeItem(at: $0) }
+            fallbackFileURL(burstID: burstID, peerID: peer).map { try? FileManager.default.removeItem(at: $0) }
+            fallbackFileURL(burstID: burstID, peerID: attacker).map { try? FileManager.default.removeItem(at: $0) }
         }
 
         // The attacker's colliding burst finishes FIRST, then the victim's.
@@ -526,17 +554,69 @@ struct ChatLiveVoiceCoordinatorTests {
         let (store, incoming, cleanup) = try makeTempStore()
         defer { cleanup() }
 
-        // A partial capture orphaned by a previous session and a finalized
-        // note that must survive the sweep.
+        // A partial capture orphaned by a previous session; a finalized note
+        // and a promoted fallback capture that must both survive the sweep.
         let stale = incoming.appendingPathComponent("voice_live_00aa00aa00aa00aa_ddddeeeeffff0002_dm.aac")
         let finalized = incoming.appendingPathComponent("voice_00112233445566ff.m4a")
+        let promoted = incoming.appendingPathComponent("voice_00bb00bb00bb00bb_ddddeeeeffff0002_dm.aac")
         try Data([0x01]).write(to: stale)
         try Data([0x02]).write(to: finalized)
+        try Data([0x03]).write(to: promoted)
 
         let context = MockChatLiveVoiceContext()
         _ = ChatLiveVoiceCoordinator(context: context, fileStore: store)
 
         #expect(!FileManager.default.fileExists(atPath: stale.path))
         #expect(FileManager.default.fileExists(atPath: finalized.path))
+        #expect(FileManager.default.fileExists(atPath: promoted.path))
+    }
+
+    @Test func finalizedFallbackSurvivesNextStartupSweep() throws {
+        let (store, incoming, cleanup) = try makeTempStore()
+        defer { cleanup() }
+
+        // A burst finishes without its finalized note (live-only burst or
+        // sender out of range): the capture is the row's only audio.
+        let context = MockChatLiveVoiceContext()
+        let coordinator = ChatLiveVoiceCoordinator(context: context, fileStore: store)
+        let burstID = makeBurstID(0x79)
+        let frame = Data(repeating: 0x0B, count: 60)
+        send(try #require(VoiceBurstPacket(burstID: burstID, seq: 1, kind: .frames([frame]))), to: coordinator, from: peer)
+        send(try #require(VoiceBurstPacket(burstID: burstID, seq: 2, kind: .end(totalDataPackets: 1, durationMs: 64))), to: coordinator, from: peer)
+
+        // The republished row points at the promoted (non-live) name, and
+        // that file holds the burst's audio.
+        let republished = try #require(context.upsertedMessages.last)
+        #expect(republished.message.content == "[voice] \(fallbackName(burstID: burstID, peerID: peer))")
+        let fallbackURL = incoming.appendingPathComponent(fallbackName(burstID: burstID, peerID: peer))
+        #expect(try Data(contentsOf: fallbackURL) == ADTSFramer.frame(frame))
+
+        // A later coordinator startup (same store) sweeps in-flight partials
+        // only: the row's fallback audio must survive and stay playable.
+        _ = ChatLiveVoiceCoordinator(context: MockChatLiveVoiceContext(), fileStore: store)
+        #expect(try Data(contentsOf: fallbackURL) == ADTSFramer.frame(frame))
+    }
+
+    @Test func promotedFallbackIsQuotaEvictable() throws {
+        let (store, incoming, cleanup) = try makeTempStore()
+        defer { cleanup() }
+
+        let context = MockChatLiveVoiceContext()
+        let coordinator = ChatLiveVoiceCoordinator(context: context, fileStore: store)
+        let burstID = makeBurstID(0x7A)
+        send(try #require(VoiceBurstPacket(burstID: burstID, seq: 1, kind: .frames([Data(repeating: 0x0C, count: 60)]))), to: coordinator, from: peer)
+        send(try #require(VoiceBurstPacket(burstID: burstID, seq: 2, kind: .end(totalDataPackets: 1, durationMs: 64))), to: coordinator, from: peer)
+        let fallbackURL = incoming.appendingPathComponent(fallbackName(burstID: burstID, peerID: peer))
+        #expect(FileManager.default.fileExists(atPath: fallbackURL.path))
+
+        // Once promoted, the capture is ordinary finalized media: as the
+        // LRU-oldest file it is evicted, not skipped, when quota pressure
+        // arrives.
+        try setModificationDate(Date(timeIntervalSinceNow: -7200), at: fallbackURL)
+        let bigURL = incoming.appendingPathComponent("voice_big.m4a")
+        try Data(count: 105 * 1024 * 1024).write(to: bigURL)
+        store.enforceQuota(reservingBytes: 0)
+
+        #expect(!FileManager.default.fileExists(atPath: fallbackURL.path))
     }
 }
