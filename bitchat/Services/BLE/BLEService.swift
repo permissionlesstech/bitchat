@@ -680,7 +680,11 @@ final class BLEService: NSObject {
         // on the unsigned TTL, so a replayed announce can bind an absent
         // peer's ID to the replayer's link. An established Noise session
         // proves the other end of the link holds the peer's private key.
-        noiseService.hasEstablishedSession(with: peerID)
+        //
+        // Sessions are keyed by the short wire ID, so normalize like
+        // isPeerConnected does — a send keyed by the full 64-hex Noise key
+        // must not misread an established session as insecure.
+        noiseService.hasEstablishedSession(with: peerID.toShort())
     }
 
     func peerNickname(peerID: PeerID) -> String? {
@@ -2086,6 +2090,16 @@ extension BLEService {
                 lastSeen: Date()
             ))
         }
+    }
+
+    /// Handshake plumbing for tests that need a real established Noise
+    /// session (e.g. canDeliverSecurely) without Bluetooth in the loop.
+    func _test_noiseInitiateHandshake(with peerID: PeerID) throws -> Data {
+        try noiseService.initiateHandshake(with: peerID)
+    }
+
+    func _test_noiseProcessHandshakeMessage(from peerID: PeerID, message: Data) throws -> Data? {
+        try noiseService.processHandshakeMessage(from: peerID, message: message)
     }
 
     static func _test_shouldRediscoverBitChatService(
@@ -4393,12 +4407,42 @@ extension BLEService {
             }
             SecureLogger.debug("🔄 Rebinding link after peer-ID rotation: \(previousPeerID.id.prefix(8))… → \(peerID.id.prefix(8))…", category: .session)
             self.refreshLocalTopology()
+            // The announce that triggered this rebind was upserted as
+            // disconnected: the registry ran while the link still belonged
+            // to the previous ID (the ambiguous state BLEAnnounceHandler
+            // denies the connected shortcut). The rebind has now
+            // containment-checked the claim and the identity owns a live
+            // link, so promote it — otherwise a healed rotation leaves a
+            // live link that reads as disconnected until the next announce.
+            self.messageQueue.async { [weak self] in
+                self?.promoteReboundPeerToConnected(peerID)
+            }
             // Retire the rotated-away ID only once its last link is gone; a
             // remaining stale link heals the same way or ages out.
             guard self.linkStateStore.links(to: previousPeerID).isEmpty else { return }
             self.messageQueue.async { [weak self] in
                 self?.retireRotatedPeer(previousPeerID)
             }
+        }
+    }
+
+    /// After a successful verified rebind the new identity owns a live link,
+    /// but its announce was stored disconnected (the link was still bound to
+    /// the rotated-away ID when the registry upsert ran). Flip it to
+    /// connected and republish so routing and the peer list see the healed
+    /// link. The `.peerConnected` UI event already fired from the announce
+    /// path (new/reconnected + direct), so only list state needs refreshing.
+    private func promoteReboundPeerToConnected(_ peerID: PeerID) {
+        let promoted = collectionsQueue.sync(flags: .barrier) {
+            peerRegistry.markConnected(peerID)
+        }
+        guard promoted else { return }
+        refreshLocalTopology()
+        publishFullPeerData()
+        notifyUI { [weak self] in
+            guard let self else { return }
+            let currentPeerIDs = self.collectionsQueue.sync { self.peerRegistry.peerIDs }
+            self.deliverTransportEvent(.peerListUpdated(currentPeerIDs))
         }
     }
 
@@ -4442,10 +4486,9 @@ extension BLEService {
             linkBoundToOtherPeer: { [weak self] packet, peerID in
                 // Reads the CURRENT binding — i.e. the state before
                 // rebindLinkAfterVerifiedDirectAnnounce (which runs after the
-                // handler) may steal the link. After a first replayed announce
-                // has rebound a link to an absent peer's ID, a second replay
-                // answers false here; see the caller in BLEAnnounceHandler
-                // for why that residual presence gap is accepted.
+                // handler) may steal the link and promote the new owner to
+                // connected. See the caller in BLEAnnounceHandler for why the
+                // residual forged-presence window this leaves is accepted.
                 guard let self else { return false }
                 guard let link = (self.collectionsQueue.sync { self.ingressLinks.link(for: packet) }) else { return false }
                 let boundPeerID: PeerID? = self.readLinkState { store in

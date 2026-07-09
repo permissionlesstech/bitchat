@@ -146,15 +146,17 @@ final class BLEAnnounceHandler {
         // both are ambiguous, so only the rebind (which containment-checks
         // the claimed identity) may promote it — never this shortcut.
         //
-        // Known limitation: this reads the binding BEFORE the rebind runs
-        // (BLEService rebinds after this handler returns), so once a first
-        // replay has stolen the link for an absent peer, a SECOND replay
-        // finds the link bound to the claimed peer — the live-link terms
-        // below then mark the absent peer connected. Presence display only:
-        // DMs stay gated on canDeliverSecurely (no Noise session means
-        // retain + courier, see MessageRouter.sendPrivate). Not closed here
-        // because the same post-rebind state is exactly what legitimate
-        // rotation/reconnect heals look like.
+        // Known limitation: denying the shortcut cannot prevent forged
+        // presence outright. A rebind that passes the containment checks
+        // promotes the claimed peer to connected — it must, or a legitimate
+        // rotation on an open link would read as disconnected — so a replay
+        // that wins the rebind (absent victim, cooldown clear) still forges
+        // presence. That residue is presence display only: DMs stay gated on
+        // canDeliverSecurely (no Noise session means retain + courier, see
+        // MessageRouter.sendPrivate). What this check buys: the ambiguous
+        // announce alone never flips presence — forging requires winning the
+        // containment-checked rebind (never steals an identity that owns a
+        // live link; at most one rebind per link per cooldown window).
         let linkBoundToOtherPeer = isDirectAnnounce && env.linkBoundToOtherPeer(packet, peerID)
 
         env.withRegistryBarrier {

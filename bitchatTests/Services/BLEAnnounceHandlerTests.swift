@@ -390,16 +390,16 @@ struct BLEAnnounceHandlerTests {
         #expect(recorder.upsertCalls.first?.isConnected == true)
     }
 
-    /// Documents a known, accepted limitation: the linkBoundToOtherPeer read
-    /// happens before the rebind steals the link, so while the FIRST replayed
-    /// "direct" announce is denied the connected shortcut, the SECOND finds
-    /// the link already rebound to the (absent) victim and the live-link
-    /// terms mark it connected. This is presence display only — DMs remain
-    /// gated on canDeliverSecurely, so without a Noise session they take the
-    /// retain + courier path (see MessageRouterTests
+    /// Documents the handler's contract around the rebind: the
+    /// linkBoundToOtherPeer read reflects the binding BEFORE the rebind runs,
+    /// so a replayed "direct" announce on someone else's link is denied the
+    /// connected shortcut — presence only flips via the rebind itself
+    /// (BLEService promotes the new owner after a successful, containment-
+    /// checked rebind) or via a later announce arriving on the now-rebound
+    /// link, as simulated here. Either way the residue is presence display
+    /// only — DMs remain gated on canDeliverSecurely, so without a Noise
+    /// session they take the retain + courier path (see MessageRouterTests
     /// .sendPrivate_connectedWithoutSecureSessionRetainsAndDepositsWithCourier).
-    /// Not closed at the announce layer because the post-rebind state is
-    /// indistinguishable from a legitimate rotation/reconnect heal.
     @Test
     func secondReplayedDirectAnnounceAfterRebindMarksAbsentPeerConnected() throws {
         let now = Date(timeIntervalSince1970: 1_000)

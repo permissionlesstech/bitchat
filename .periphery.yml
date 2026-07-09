@@ -10,5 +10,12 @@ project: bitchat.xcodeproj
 schemes:
   - bitchat (macOS)
 retain_swift_ui_previews: true
+# Codable properties are (de)serialized via synthesized conformances the
+# indexer doesn't always attribute reads to: PrekeyBundleStore.StoredBundle
+# .noiseKey flaked CI as "assign-only" even while read in loadFromDisk —
+# and slipped past its baselined USR. Retaining Codable properties outright
+# is deterministic; a truly-dead Codable field is a persisted-format change
+# anyway, never a safe mechanical delete.
+retain_codable_properties: true
 relative_results: true
 baseline: .periphery.baseline.json

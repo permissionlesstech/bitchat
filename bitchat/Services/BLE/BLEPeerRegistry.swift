@@ -158,6 +158,16 @@ struct BLEPeerRegistry {
         peers[peerID] = info
     }
 
+    /// Flips an already-known peer to connected. Returns false when the peer
+    /// is unknown or already connected (nothing changed).
+    @discardableResult
+    mutating func markConnected(_ peerID: PeerID) -> Bool {
+        guard var info = peers[peerID], !info.isConnected else { return false }
+        info.isConnected = true
+        peers[peerID] = info
+        return true
+    }
+
     mutating func updateLastSeen(_ peerID: PeerID, at date: Date) {
         guard var peer = peers[peerID] else { return }
         peer.lastSeen = date
