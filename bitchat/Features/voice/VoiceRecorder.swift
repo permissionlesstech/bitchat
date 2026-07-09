@@ -16,6 +16,7 @@ actor VoiceRecorder {
 
     private var recorder: AVAudioRecorder?
     private var currentURL: URL?
+    private var sessionToken: AudioSessionCoordinator.Token?
 
     // MARK: - Permissions
 
@@ -41,31 +42,15 @@ actor VoiceRecorder {
     // MARK: - Recording Lifecycle
 
     @discardableResult
-    func startRecording() throws -> URL {
+    func startRecording() async throws -> URL {
         if recorder?.isRecording == true {
             throw RecorderError.recordingInProgress
         }
 
         #if os(iOS)
-        let session = AVAudioSession.sharedInstance()
-        guard session.recordPermission == .granted else {
+        guard AVAudioSession.sharedInstance().recordPermission == .granted else {
             throw RecorderError.microphoneAccessDenied
         }
-        #if targetEnvironment(simulator)
-        // allowBluetoothHFP is not available on iOS Simulator
-        try session.setCategory(
-            .playAndRecord,
-            mode: .default,
-            options: [.defaultToSpeaker, .allowBluetoothA2DP]
-        )
-        #else
-        try session.setCategory(
-            .playAndRecord,
-            mode: .default,
-            options: [.defaultToSpeaker, .allowBluetoothA2DP, .allowBluetoothHFP]
-        )
-        #endif
-        try session.setActive(true, options: .notifyOthersOnDeactivation)
         #endif
         #if os(macOS)
         guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else {
@@ -73,22 +58,39 @@ actor VoiceRecorder {
         }
         #endif
 
-        let outputURL = try makeOutputURL()
-        let settings: [String: Any] = [
-            AVFormatIDKey: kAudioFormatMPEG4AAC,
-            AVSampleRateKey: 16_000,
-            AVNumberOfChannelsKey: 1,
-            AVEncoderBitRateKey: 16_000
-        ]
+        let token = try await MainActor.run {
+            try AudioSessionCoordinator.shared.acquire(.capture) {
+                Task { await VoiceRecorder.shared.handleSessionInterruption() }
+            }
+        }
+        // Actor reentrancy: another recording may have started during the hop.
+        if recorder?.isRecording == true {
+            await MainActor.run { AudioSessionCoordinator.shared.release(token) }
+            throw RecorderError.recordingInProgress
+        }
+        sessionToken = token
 
-        let audioRecorder = try AVAudioRecorder(url: outputURL, settings: settings)
-        audioRecorder.isMeteringEnabled = true
-        audioRecorder.prepareToRecord()
-        audioRecorder.record(forDuration: maxRecordingDuration)
+        do {
+            let outputURL = try makeOutputURL()
+            let settings: [String: Any] = [
+                AVFormatIDKey: kAudioFormatMPEG4AAC,
+                AVSampleRateKey: 16_000,
+                AVNumberOfChannelsKey: 1,
+                AVEncoderBitRateKey: 16_000
+            ]
 
-        recorder = audioRecorder
-        currentURL = outputURL
-        return outputURL
+            let audioRecorder = try AVAudioRecorder(url: outputURL, settings: settings)
+            audioRecorder.isMeteringEnabled = true
+            audioRecorder.prepareToRecord()
+            audioRecorder.record(forDuration: maxRecordingDuration)
+
+            recorder = audioRecorder
+            currentURL = outputURL
+            return outputURL
+        } catch {
+            await releaseSessionToken()
+            throw error
+        }
     }
 
     func stopRecording() async -> URL? {
@@ -104,7 +106,7 @@ actor VoiceRecorder {
 
         // A new session may have started during the sleep — don't touch its state
         if self.recorder === recorder {
-            cleanupSession()
+            await releaseSessionToken()
             self.recorder = nil
             currentURL = nil
         }
@@ -112,16 +114,26 @@ actor VoiceRecorder {
         return sessionURL
     }
 
-    func cancelRecording() {
+    func cancelRecording() async {
         if let recorder, recorder.isRecording {
             recorder.stop()
         }
-        cleanupSession()
+        await releaseSessionToken()
         if let currentURL {
             try? FileManager.default.removeItem(at: currentURL)
         }
         recorder = nil
         currentURL = nil
+    }
+
+    /// The audio session was interrupted (call, Siri) or reconfigured: stop
+    /// the recorder but keep `recorder`/`currentURL` so the caller's pending
+    /// `stopRecording()` still returns the partial note.
+    func handleSessionInterruption() async {
+        if let recorder, recorder.isRecording {
+            recorder.stop()
+        }
+        await releaseSessionToken()
     }
 
     // MARK: - Helpers
@@ -146,9 +158,9 @@ actor VoiceRecorder {
         #endif
     }
 
-    private func cleanupSession() {
-        #if os(iOS)
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-        #endif
+    private func releaseSessionToken() async {
+        guard let token = sessionToken else { return }
+        sessionToken = nil
+        await MainActor.run { AudioSessionCoordinator.shared.release(token) }
     }
 }

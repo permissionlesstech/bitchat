@@ -30,6 +30,8 @@ final class PTTBurstPlayer {
     private var finished = false
     private var stopped = false
     private var deadlineTask: Task<Void, Never>?
+    private var sessionToken: AudioSessionCoordinator.Token?
+    private var configChangeObserver: NSObjectProtocol?
 
     private(set) var isPlaying = false
 
@@ -72,12 +74,17 @@ final class PTTBurstPlayer {
         guard !stopped else { return }
         stopped = true
         deadlineTask?.cancel()
+        if let observer = configChangeObserver {
+            NotificationCenter.default.removeObserver(observer)
+            configChangeObserver = nil
+        }
         queuedBuffers = []
         if engineStarted {
             node.stop()
             engine.stop()
         }
         isPlaying = false
+        releaseSessionToken()
         VoiceNotePlaybackCoordinator.shared.deactivate(self)
     }
 
@@ -85,15 +92,13 @@ final class PTTBurstPlayer {
         guard !engineStarted, !stopped, !queuedBuffers.isEmpty else { return }
         guard force || queuedDuration >= TransportConfig.pttJitterBufferSeconds else { return }
 
-        #if os(iOS)
         do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .spokenAudio, options: [.mixWithOthers])
-            try session.setActive(true, options: [])
+            sessionToken = try AudioSessionCoordinator.shared.acquire(.playback) { [weak self] in
+                self?.stop()
+            }
         } catch {
             SecureLogger.error("PTT playback session activation failed: \(error)", category: .session)
         }
-        #endif
 
         engine.prepare()
         do {
@@ -101,10 +106,23 @@ final class PTTBurstPlayer {
         } catch {
             SecureLogger.error("PTT playback engine failed to start: \(error)", category: .session)
             stopped = true
+            releaseSessionToken()
             return
         }
         engineStarted = true
         isPlaying = true
+        // The engine reconfigures on route/category changes underneath live
+        // playback; a live stream can't resume mid-burst, so just stop — the
+        // burst keeps assembling to file (see `pauseForExclusivity`).
+        configChangeObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: engine,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.stop()
+            }
+        }
         VoiceNotePlaybackCoordinator.shared.activate(self)
         node.play()
 
@@ -130,6 +148,11 @@ final class PTTBurstPlayer {
     private func stopIfDrained() {
         guard finished, scheduledCount <= 0 else { return }
         stop()
+    }
+
+    private func releaseSessionToken() {
+        sessionToken.map(AudioSessionCoordinator.shared.release)
+        sessionToken = nil
     }
 }
 

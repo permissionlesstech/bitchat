@@ -35,9 +35,11 @@ final class PTTCaptureEngine {
     private var encodedFrameCount = 0
     private var running = false
     private var captureStart = Date()
-    /// Whether `engine.start()` succeeded for the current capture (main-actor
-    /// callers only; see `stopEngineIfStarted`).
-    private var engineStarted = false
+    /// Whether `engine.start()` succeeded for the current capture
+    /// (see `stopEngineIfStarted`).
+    @MainActor private var engineStarted = false
+    @MainActor private var sessionToken: AudioSessionCoordinator.Token?
+    @MainActor private var configChangeObserver: NSObjectProtocol?
 
     /// Called on the capture queue with each batch of encoded AAC frames.
     var onFrames: (([Data]) -> Void)?
@@ -47,11 +49,21 @@ final class PTTCaptureEngine {
         case audioSetupFailed
     }
 
+    @MainActor
     func start(outputURL: URL) throws {
-        #if os(iOS)
-        try Self.configureAudioSession()
-        #endif
+        sessionToken = try AudioSessionCoordinator.shared.acquire(.capture) { [weak self] in
+            self?.handleInterruption()
+        }
+        do {
+            try beginCapture(outputURL: outputURL)
+        } catch {
+            releaseSessionToken()
+            throw error
+        }
+    }
 
+    @MainActor
+    private func beginCapture(outputURL: URL) throws {
         // Fresh engine per capture so its input unit binds to the session
         // that is active *now* (see `engine` doc comment).
         engine = AVAudioEngine()
@@ -95,11 +107,23 @@ final class PTTCaptureEngine {
             throw error
         }
         engineStarted = true
+        // Route/category changes reconfigure the engine underneath the tap;
+        // stop and finalize cleanly — the .m4a captured so far still sends.
+        configChangeObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: engine,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.handleInterruption()
+            }
+        }
         SecureLogger.info("PTT: capture engine running (input: \(Int(inputFormat.sampleRate)) Hz, \(inputFormat.channelCount) ch)", category: .session)
     }
 
     /// Stops capture and finalizes the `.m4a`. Returns the file URL and the
     /// number of encoded AAC frames (each `PTTAudioFormat.frameDuration` long).
+    @MainActor
     func stop() -> (url: URL?, encodedFrames: Int) {
         stopEngineIfStarted()
         let result: (URL?, Int) = queue.sync {
@@ -108,28 +132,55 @@ final class PTTCaptureEngine {
             teardown(deleteFile: false)
             return (url, frames)
         }
-        #if os(iOS)
-        Self.deactivateAudioSession()
-        #endif
+        releaseSessionToken()
         return result
     }
 
+    @MainActor
     func cancel() {
         stopEngineIfStarted()
         queue.sync { teardown(deleteFile: true) }
-        #if os(iOS)
-        Self.deactivateAudioSession()
-        #endif
+        releaseSessionToken()
+    }
+
+    /// Audio session interrupted (call, Siri) or the engine was reconfigured
+    /// mid-capture: behave like `stop()` — finalize the `.m4a` container but
+    /// keep `fileURL`/`encodedFrameCount` so the caller's pending `stop()`
+    /// still returns the note for delivery.
+    @MainActor
+    private func handleInterruption() {
+        guard engineStarted else { return }
+        stopEngineIfStarted()
+        queue.sync {
+            running = false
+            // Releasing the AVAudioFile finalizes the .m4a container.
+            file = nil
+            encoder = nil
+            resampler = nil
+        }
+        releaseSessionToken()
+        SecureLogger.info("PTT: capture interrupted — burst finalized early", category: .session)
     }
 
     /// Touching `inputNode` on an engine that never started instantiates its
     /// input unit against whatever session is active and spams AURemoteIO
     /// errors — a canceled-before-start hold must not touch the engine.
+    @MainActor
     private func stopEngineIfStarted() {
+        if let observer = configChangeObserver {
+            NotificationCenter.default.removeObserver(observer)
+            configChangeObserver = nil
+        }
         guard engineStarted else { return }
         engineStarted = false
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
+    }
+
+    @MainActor
+    private func releaseSessionToken() {
+        sessionToken.map(AudioSessionCoordinator.shared.release)
+        sessionToken = nil
     }
 
     // MARK: - Capture queue
@@ -162,22 +213,4 @@ final class PTTCaptureEngine {
         }
         fileURL = nil
     }
-
-    // MARK: - Audio session (iOS)
-
-    #if os(iOS)
-    private static func configureAudioSession() throws {
-        let session = AVAudioSession.sharedInstance()
-        #if targetEnvironment(simulator)
-        try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothA2DP])
-        #else
-        try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothA2DP, .allowBluetoothHFP])
-        #endif
-        try session.setActive(true, options: .notifyOthersOnDeactivation)
-    }
-
-    private static func deactivateAudioSession() {
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-    }
-    #endif
 }

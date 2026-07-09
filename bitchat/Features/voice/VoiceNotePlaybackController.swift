@@ -24,6 +24,7 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
     private var player: AVAudioPlayer?
     private var timer: Timer?
     private var url: URL
+    private var sessionToken: AudioSessionCoordinator.Token?
 
     init(url: URL) {
         self.url = url
@@ -80,6 +81,7 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
         stopTimer()
         updateProgress()
         isPlaying = false
+        releaseSession()
     }
 
     func stop() {
@@ -88,6 +90,7 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
         stopTimer()
         updateProgress()
         isPlaying = false
+        releaseSession()
         VoiceNotePlaybackCoordinator.shared.deactivate(self)
     }
 
@@ -112,6 +115,7 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
             self.stopTimer()
             self.updateProgress()
             self.isPlaying = false
+            self.releaseSession()
             VoiceNotePlaybackCoordinator.shared.deactivate(self)
         }
     }
@@ -141,16 +145,31 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
         if player == nil {
             preparePlayer(for: url)
         }
-        #if os(iOS)
-        let session = AVAudioSession.sharedInstance()
-        do {
-            try session.setCategory(.playback, mode: .spokenAudio, options: [.mixWithOthers])
-            try session.setActive(true, options: [])
-        } catch {
-            SecureLogger.error("Failed to activate audio session: \(error)", category: .session)
-        }
-        #endif
+        acquireSessionIfNeeded()
         return player != nil
+    }
+
+    /// All entry points (SwiftUI actions, `pauseForExclusivity`, the
+    /// delegate's main-queue hop) run on the main thread, so assuming the
+    /// main actor bridges to the `@MainActor` coordinator.
+    private func acquireSessionIfNeeded() {
+        MainActor.assumeIsolated {
+            guard sessionToken == nil else { return }
+            do {
+                sessionToken = try AudioSessionCoordinator.shared.acquire(.playback) { [weak self] in
+                    self?.pause()
+                }
+            } catch {
+                SecureLogger.error("Failed to activate audio session: \(error)", category: .session)
+            }
+        }
+    }
+
+    private func releaseSession() {
+        MainActor.assumeIsolated {
+            sessionToken.map(AudioSessionCoordinator.shared.release)
+            sessionToken = nil
+        }
     }
 
     private func startTimer() {

@@ -1,0 +1,226 @@
+//
+// AudioSessionCoordinator.swift
+// bitchat
+//
+// This is free and unencumbered software released into the public domain.
+// For more information, see <https://unlicense.org>
+//
+
+import AVFoundation
+import BitLogger
+import Foundation
+
+/// The raw audio-session calls the coordinator makes, abstracted so the
+/// state machine is unit-testable with a mock (and compiles on the macOS
+/// test host, where `AVAudioSession` doesn't exist).
+@MainActor
+protocol SessionApplying {
+    func setCategory(_ category: AudioSessionCoordinator.Category) throws
+    func setActive(_ active: Bool, notifyOthersOnDeactivation: Bool) throws
+}
+
+/// Sole owner of `AVAudioSession` category/activation for voice features.
+///
+/// Talk-over means capture (push-to-talk) and playback (inbound bursts,
+/// voice notes) can be live simultaneously; letting each engine configure
+/// the shared session directly made them stomp each other's category and
+/// route mid-flight (the AURemoteIO -10851 dead-input class). Instead every
+/// client acquires a `Token` and the coordinator:
+///
+/// - reference-counts activation: `setActive(true)` only on the first
+///   holder, `setActive(false, notifyOthersOnDeactivation:)` only when the
+///   last one releases — no client can deactivate another's session;
+/// - keeps one escalating category: playback-only holders get `.playback`,
+///   any capture holder escalates to `.playAndRecord`, and the category is
+///   never downgraded while anyone still holds a token (capture ending must
+///   not yank the route out from under live playback);
+/// - fans out `onInterrupted` on system interruptions, on the escalating
+///   category change (so running engines can stop/restart against the new
+///   configuration), and when the active route's device disappears. There
+///   is no auto-resume: bursts are transient, the next press or burst simply
+///   re-acquires.
+///
+/// Microphone *permission* queries stay with their callers; this type owns
+/// only category and activation.
+@MainActor
+final class AudioSessionCoordinator {
+    enum Use {
+        case playback
+        case capture
+    }
+
+    /// The session category the coordinator has applied (the `SessionApplying`
+    /// adapter maps these to concrete `AVAudioSession` category/mode/options).
+    enum Category {
+        case playback
+        case playAndRecord
+    }
+
+    /// Opaque handle for one client's hold on the session. Release exactly
+    /// once when done (extra releases are ignored).
+    final class Token: Sendable {
+        fileprivate let use: Use
+        fileprivate let onInterrupted: @MainActor () -> Void
+
+        fileprivate init(use: Use, onInterrupted: @escaping @MainActor () -> Void) {
+            self.use = use
+            self.onInterrupted = onInterrupted
+        }
+    }
+
+    static let shared = AudioSessionCoordinator(session: SystemAudioSession())
+
+    private let session: SessionApplying
+    private var holders: [ObjectIdentifier: Token] = [:]
+    private var currentCategory: Category?
+    private var sessionActive = false
+    private var observers: [NSObjectProtocol] = []
+
+    init(session: SessionApplying) {
+        self.session = session
+        observeSystemNotifications()
+    }
+
+    /// Configures + activates the session for `use` and registers the caller
+    /// as a holder. `onInterrupted` fires (on the main actor) when the client
+    /// must stop using the session: a system interruption began, the session
+    /// was reconfigured underneath it, or its route's device went away. The
+    /// client should stop its engine, finalize any artifacts, and release —
+    /// resuming means acquiring again.
+    func acquire(_ use: Use, onInterrupted: @escaping @MainActor () -> Void) throws -> Token {
+        let target: Category = (use == .capture || currentCategory == .playAndRecord) ? .playAndRecord : .playback
+        let categoryChanged = target != currentCategory
+        if categoryChanged {
+            try session.setCategory(target)
+            currentCategory = target
+        }
+        if !sessionActive {
+            try session.setActive(true, notifyOthersOnDeactivation: false)
+            sessionActive = true
+        }
+
+        let token = Token(use: use, onInterrupted: onInterrupted)
+        let existing = Array(holders.values)
+        holders[ObjectIdentifier(token)] = token
+
+        // Escalating playback -> playAndRecord reconfigures the hardware
+        // route; engines started against the old configuration must restart.
+        if categoryChanged, !existing.isEmpty {
+            SecureLogger.info("AudioSession: category escalated to playAndRecord with \(existing.count) live holder(s)", category: .session)
+            for holder in existing {
+                holder.onInterrupted()
+            }
+        }
+        return token
+    }
+
+    /// Drops one holder. Deactivates the session (notifying other apps) only
+    /// when the last holder releases. Safe to call more than once.
+    func release(_ token: Token) {
+        guard holders.removeValue(forKey: ObjectIdentifier(token)) != nil else { return }
+        guard holders.isEmpty else { return }
+        currentCategory = nil
+        guard sessionActive else { return }
+        sessionActive = false
+        do {
+            try session.setActive(false, notifyOthersOnDeactivation: true)
+        } catch {
+            SecureLogger.error("AudioSession: deactivation failed: \(error)", category: .session)
+        }
+    }
+
+    // MARK: - System events (internal so tests can drive them directly)
+
+    /// A system interruption began: the session is already deactivated by the
+    /// OS, so just mark it inactive and tell every holder to stop. No
+    /// auto-resume — the next acquire re-activates.
+    func handleInterruptionBegan() {
+        sessionActive = false
+        for holder in Array(holders.values) {
+            holder.onInterrupted()
+        }
+    }
+
+    /// The active route's input/output device disappeared (e.g. BT headset
+    /// off): holders' engines are wedged against a dead route — stop them.
+    func handleRouteDeviceUnavailable() {
+        for holder in Array(holders.values) {
+            holder.onInterrupted()
+        }
+    }
+
+    private func observeSystemNotifications() {
+        #if os(iOS)
+        let center = NotificationCenter.default
+        observers.append(center.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: .main
+        ) { [weak self] note in
+            guard let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+                  AVAudioSession.InterruptionType(rawValue: raw) == .began
+            else { return }
+            MainActor.assumeIsolated {
+                SecureLogger.info("AudioSession: interruption began", category: .session)
+                self?.handleInterruptionBegan()
+            }
+        })
+        observers.append(center.addObserver(
+            forName: AVAudioSession.routeChangeNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: .main
+        ) { [weak self] note in
+            guard let raw = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
+                  AVAudioSession.RouteChangeReason(rawValue: raw) == .oldDeviceUnavailable
+            else { return }
+            MainActor.assumeIsolated {
+                SecureLogger.info("AudioSession: route device became unavailable", category: .session)
+                self?.handleRouteDeviceUnavailable()
+            }
+        })
+        #endif
+    }
+}
+
+// MARK: - Production adapter
+
+#if os(iOS)
+private struct SystemAudioSession: SessionApplying {
+    func setCategory(_ category: AudioSessionCoordinator.Category) throws {
+        let session = AVAudioSession.sharedInstance()
+        switch category {
+        case .playback:
+            try session.setCategory(.playback, mode: .spokenAudio, options: [.mixWithOthers])
+        case .playAndRecord:
+            // allowBluetoothHFP is not available on iOS Simulator
+            #if targetEnvironment(simulator)
+            try session.setCategory(
+                .playAndRecord,
+                mode: .default,
+                options: [.defaultToSpeaker, .allowBluetoothA2DP, .mixWithOthers]
+            )
+            #else
+            try session.setCategory(
+                .playAndRecord,
+                mode: .default,
+                options: [.defaultToSpeaker, .allowBluetoothA2DP, .allowBluetoothHFP, .mixWithOthers]
+            )
+            #endif
+        }
+    }
+
+    func setActive(_ active: Bool, notifyOthersOnDeactivation: Bool) throws {
+        try AVAudioSession.sharedInstance().setActive(
+            active,
+            options: notifyOthersOnDeactivation ? [.notifyOthersOnDeactivation] : []
+        )
+    }
+}
+#else
+/// macOS has no app-level audio session; the coordinator still runs its
+/// bookkeeping so client code is identical across platforms.
+private struct SystemAudioSession: SessionApplying {
+    func setCategory(_ category: AudioSessionCoordinator.Category) throws {}
+    func setActive(_ active: Bool, notifyOthersOnDeactivation: Bool) throws {}
+}
+#endif
