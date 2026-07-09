@@ -97,6 +97,10 @@ final class BridgeDropDedupStore {
 
     func save(_ snapshot: Snapshot) {
         guard let fileURL else { return }
+        guard !(snapshot.publishedDropKeys.isEmpty && snapshot.seenDropEventIDs.isEmpty) else {
+            try? FileManager.default.removeItem(at: fileURL)
+            return
+        }
         do {
             try FileManager.default.createDirectory(
                 at: fileURL.deletingLastPathComponent(),

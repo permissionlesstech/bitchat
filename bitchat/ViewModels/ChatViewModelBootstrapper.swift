@@ -567,7 +567,7 @@ private extension ChatViewModelBootstrapper {
             bleService?.openBridgedCourierEnvelope(envelope)
         }
         courier.deliverToPeer = { [weak bleService] envelope, peerID in
-            bleService?.deliverBridgedEnvelope(envelope, to: peerID)
+            bleService?.deliverBridgedEnvelope(envelope, to: peerID) ?? false
         }
         courier.heldEnvelopes = { cooldown in
             CourierStore.shared.envelopesForBridgePublish(cooldown: cooldown)

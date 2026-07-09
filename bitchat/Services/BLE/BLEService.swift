@@ -281,12 +281,18 @@ final class BLEService: NSObject {
         
         // Set up application state tracking (iOS only)
         #if os(iOS)
-        // Check initial state on main thread
+        // Check initial state on main thread. The background-budget cache is
+        // seeded here too: a background-restore launch captures Bluetooth
+        // status before any lifecycle notification fires, and the init-time
+        // sentinel would log a meaningless bgRemaining=∞ for exactly the
+        // wake window that matters.
         if Thread.isMainThread {
             isAppActive = UIApplication.shared.applicationState == .active
+            refreshCachedBackgroundTimeRemaining()
         } else {
             DispatchQueue.main.sync {
                 isAppActive = UIApplication.shared.applicationState == .active
+                refreshCachedBackgroundTimeRemaining()
             }
         }
         
@@ -1729,7 +1735,10 @@ extension BLEService: CBCentralManagerDelegate {
             recentPeripheralCache.record(peripheral, peripheralID: identifier, at: Date())
         }
 
-        captureBluetoothStatus(context: "central-restore")
+        // Via the sampler (not a direct capture): it refreshes the cached
+        // background budget on main first, so the restore log shows the real
+        // wake window instead of the init sentinel.
+        logBluetoothStatus("central-restore")
 
         if central.state == .poweredOn {
             startScanning()
@@ -2488,7 +2497,8 @@ extension BLEService: CBPeripheralManagerDelegate {
             }
         }
 
-        captureBluetoothStatus(context: "peripheral-restore")
+        // Via the sampler for a fresh background budget (see central-restore).
+        logBluetoothStatus("peripheral-restore")
 
         if peripheral.state == .poweredOn && !peripheral.isAdvertising {
             peripheral.startAdvertising(buildAdvertisementData())

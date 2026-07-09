@@ -9,6 +9,11 @@
 import BitFoundation
 import BitLogger
 import Foundation
+#if os(iOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 /// Courier delivery over the internet bridge: sealed courier envelopes are
 /// parked on relays as kind-1401 "drops" tagged with their rotating
@@ -48,6 +53,10 @@ final class BridgeCourierService: ObservableObject {
         /// Encoded envelope cap for a drop (16 KiB ciphertext + TLV slack).
         static let maxDropEnvelopeBytes = 20 * 1024
         static let maxTrackedIDs = 512
+        /// Coalescing window for dedup-record writes: a backlog re-fetch
+        /// mutates the seen set once per event, and each snapshot save is a
+        /// full JSON encode + atomic write on the main actor.
+        static let dedupPersistCoalesceSeconds: TimeInterval = 1.0
     }
 
     static let shared = BridgeCourierService()
@@ -70,7 +79,9 @@ final class BridgeCourierService: ObservableObject {
     /// Opens a drop addressed to us (tag verified inside).
     var openEnvelope: (@MainActor (CourierEnvelope) -> Void)?
     /// Hands a drop to a matching local peer as a directed courier packet.
-    var deliverToPeer: (@MainActor (CourierEnvelope, PeerID) -> Void)?
+    /// Returns false when the handoff could not even be attempted (peer no
+    /// longer reachable), so the drop event stays retryable.
+    var deliverToPeer: (@MainActor (CourierEnvelope, PeerID) -> Bool)?
     /// Held envelopes eligible for (re)publish, honoring the cooldown.
     var heldEnvelopes: (@MainActor (TimeInterval) -> [CourierEnvelope])?
     /// Timer injection for tests; nil arms a real `Task`.
@@ -98,6 +109,8 @@ final class BridgeCourierService: ObservableObject {
     private let now: () -> Date
     private let dedupStore: BridgeDropDedupStore
 
+    private var dedupPersistScheduled = false
+
     init(now: @escaping () -> Date = Date.init, dedupStore: BridgeDropDedupStore? = nil) {
         self.now = now
         self.dedupStore = dedupStore ?? BridgeDropDedupStore(persistsToDisk: !TestEnvironment.isRunningTests)
@@ -115,11 +128,44 @@ final class BridgeCourierService: ObservableObject {
             entries: snapshot.seenDropEventIDs,
             now: date
         )
+        // A coalesced dedup write scheduled just before a background kill
+        // would be lost; flush when the app backgrounds or terminates.
+        #if os(iOS)
+        let flushNotifications = [UIApplication.didEnterBackgroundNotification, UIApplication.willTerminateNotification]
+        #else
+        let flushNotifications = [NSApplication.willTerminateNotification]
+        #endif
+        for name in flushNotifications {
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.flushDedupSnapshot() }
+            }
+        }
     }
 
+    /// Schedules a coalesced write of the dedup record (see
+    /// `Limits.dedupPersistCoalesceSeconds`); lifecycle notifications flush
+    /// any scheduled write before a background kill could drop it.
     private func persistDedup() {
+        guard !dedupPersistScheduled else { return }
+        dedupPersistScheduled = true
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(Limits.dedupPersistCoalesceSeconds * 1_000_000_000))
+            guard let self else { return }
+            self.dedupPersistScheduled = false
+            self.flushDedupSnapshot()
+        }
+    }
+
+    /// Writes the dedup record now. Sender keys still sitting in the
+    /// in-memory `pendingDrops` queue are excluded: their drop is not durable
+    /// until it actually reaches a relay, and persisting the key early would
+    /// turn "app killed before relays connected" into a silent 24h blackhole
+    /// (the relaunch loses the queued drop but the persisted key blocks every
+    /// re-deposit). `flushPendingDrops` re-persists once they publish.
+    func flushDedupSnapshot() {
+        let pendingKeys = Set(pendingDrops.compactMap(\.dedupKey))
         dedupStore.save(BridgeDropDedupStore.Snapshot(
-            publishedDropKeys: publishedDropKeys.entries,
+            publishedDropKeys: publishedDropKeys.entries.filter { !pendingKeys.contains($0.key) },
             seenDropEventIDs: seenDropEventIDs.entries
         ))
     }
@@ -221,9 +267,11 @@ final class BridgeCourierService: ObservableObject {
             // retry sweep can attempt a fresh deposit.
             if let key = item.dedupKey {
                 publishedDropKeys.remove(key)
-                persistDedup()
             }
         }
+        // Flushed keys just became durable (published, so no longer excluded
+        // as pending) or were released above; either way the record changed.
+        persistDedup()
     }
 
     // MARK: - Subscription (recipient + gateway watch)
@@ -328,7 +376,14 @@ final class BridgeCourierService: ObservableObject {
         }
         if let match = watchedPeerTags.first(where: { $0.tagsHex.contains(tagHex) }) {
             SecureLogger.info("📦🌉 Courier drop fetched for local peer \(match.peerID.id.prefix(8))…", category: .session)
-            deliverToPeer?(envelope, match.peerID)
+            if deliverToPeer?(envelope, match.peerID) != true {
+                // The best-effort handoff never left this device (the peer
+                // walked away between the relay fetch and the mesh send).
+                // Release the seen slot so a relaunch or backlog redelivery
+                // retries — a single-gateway island has no other carrier.
+                seenDropEventIDs.remove(event.id)
+                persistDedup()
+            }
         }
     }
 
