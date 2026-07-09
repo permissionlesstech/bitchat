@@ -83,7 +83,13 @@ struct BLEPublicMessageHandlerTests {
         #expect(recorder.deliveries.first?.nickname == "Alice")
         #expect(recorder.deliveries.first?.content == "hello mesh")
         #expect(recorder.deliveries.first?.timestamp == now)
-        #expect(recorder.deliveries.first?.messageID == nil)
+        // No message ID on the wire: the handler derives the stable one
+        // every device agrees on for the same sender/timestamp/content.
+        #expect(recorder.deliveries.first?.messageID == MeshMessageIdentity.stableID(
+            senderIDHex: remotePeerID.id,
+            timestampMs: timestamp(now),
+            content: "hello mesh"
+        ))
     }
 
     @Test

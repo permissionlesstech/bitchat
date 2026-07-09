@@ -264,22 +264,25 @@ struct NostrProtocol {
 
     /// Create a mesh-bridge public message (kind 20000) for a geohash-cell
     /// rendezvous. The distinct `r` tag keeps bridge traffic out of geohash
-    /// channel subscriptions (which filter on `#g`); `m` carries the original
-    /// mesh message ID so receivers dedup the bridged copy against the radio
+    /// channel subscriptions (which filter on `#g`); `m` carries the origin
+    /// coordinates (mesh sender ID + wire timestamp in ms) from which every
+    /// receiver recomputes the content-stable mesh message ID
+    /// (`MeshMessageIdentity`) to dedup the bridged copy against the radio
     /// copy by timeline ID.
     static func createBridgeMeshEvent(
         content: String,
         cell: String,
         senderIdentity: NostrIdentity,
         nickname: String? = nil,
-        meshMessageID: String? = nil
+        meshSenderID: String? = nil,
+        meshTimestampMs: UInt64? = nil
     ) throws -> NostrEvent {
         var tags = [["r", cell]]
         if let nickname = nickname?.trimmedOrNilIfEmpty {
             tags.append(["n", nickname])
         }
-        if let meshMessageID = meshMessageID?.trimmedOrNilIfEmpty {
-            tags.append(["m", meshMessageID])
+        if let meshSenderID = meshSenderID?.trimmedOrNilIfEmpty, let meshTimestampMs {
+            tags.append(["m", meshSenderID, String(meshTimestampMs)])
         }
         let event = NostrEvent(
             pubkey: senderIdentity.publicKeyHex,

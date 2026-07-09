@@ -44,7 +44,10 @@ protocol ChatOutgoingContext: AnyObject {
     func sendGeohash(context: ChatViewModel.GeoOutgoingContext)
     /// Ships the bridged (rendezvous) copy of a just-sent public mesh
     /// message; no-op when the bridge is off or the send is nearby-only.
-    func bridgeOutgoingPublicMessage(_ content: String, messageID: String)
+    /// Takes the origin coordinates (sender + wire timestamp) — the bridge
+    /// derives the cross-device-stable mesh message ID from them, not from
+    /// our local timeline UUID (which no other device can recompute).
+    func bridgeOutgoingPublicMessage(_ content: String, senderPeerID: PeerID, timestamp: Date)
 
     // MARK: Geohash identity (shared with the other contexts)
     func deriveNostrIdentity(forGeohash geohash: String) throws -> NostrIdentity
@@ -66,8 +69,8 @@ extension ChatViewModel: ChatOutgoingContext {
         lastPublicActivityAt[key] = Date()
     }
 
-    func bridgeOutgoingPublicMessage(_ content: String, messageID: String) {
-        BridgeService.shared.bridgeOutgoing(content: content, messageID: messageID)
+    func bridgeOutgoingPublicMessage(_ content: String, senderPeerID: PeerID, timestamp: Date) {
+        BridgeService.shared.bridgeOutgoing(content: content, senderPeerID: senderPeerID, timestamp: timestamp)
     }
 }
 
@@ -147,7 +150,7 @@ private extension ChatOutgoingCoordinator {
             messageID: message.id,
             timestamp: message.timestamp
         )
-        context.bridgeOutgoingPublicMessage(trimmed, messageID: message.id)
+        context.bridgeOutgoingPublicMessage(trimmed, senderPeerID: context.myPeerID, timestamp: message.timestamp)
     }
 
     /// Geohash sends mine a NIP-13 nonce tag first (off the main actor, see
