@@ -230,7 +230,14 @@ final class NostrTransport: Transport, @unchecked Sendable {
         // instead of waiting for internet that may never come.
         isPeerReachable(peerID) && queue.sync { relaysConnected }
     }
-    
+
+    func canDeliverSecurely(to peerID: PeerID) -> Bool {
+        // Nostr has no link bindings to forge; a known recipient key plus a
+        // connected relay is the strongest delivery signal it has. The router
+        // already retains + couriers for Nostr sends, so keep that behavior.
+        canDeliverPromptly(to: peerID)
+    }
+
     func peerNickname(peerID: PeerID) -> String? { nil }
     func getPeerNicknames() -> [PeerID: String] { [:] }
 

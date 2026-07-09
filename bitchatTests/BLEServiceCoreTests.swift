@@ -254,6 +254,57 @@ struct BLEServiceCoreTests {
     }
 
     @Test
+    func replayedDirectAnnounceForAbsentPeerDoesNotForgeConnectivity() async throws {
+        // Residual heal-path gap: the victim has NO live link, so the
+        // identity-owns-a-link containment cannot refuse the rebind. The
+        // replay may steal the link binding, but it must not mark the absent
+        // victim connected (TTL — the directness signal — is unsigned), and
+        // it can never produce a deliverable secure session.
+        let ble = makeService()
+        let attackerPeerID = PeerID(str: "1122334455667788")
+        let attackerLink = "central-attacker-absent-victim"
+        ble._test_seedConnectedPeer(attackerPeerID, nickname: "attacker")
+        ble._test_bindCentral(attackerLink, to: attackerPeerID)
+
+        // The absent victim's fresh signed announce, replayed on the
+        // attacker's bound link with its direct TTL restored.
+        let victimSigner = NoiseEncryptionService(keychain: MockKeychain())
+        let announcement = AnnouncementPacket(
+            nickname: "victim",
+            noisePublicKey: victimSigner.getStaticPublicKeyData(),
+            signingPublicKey: victimSigner.getSigningPublicKeyData(),
+            directNeighbors: nil
+        )
+        let payload = try #require(announcement.encode(), "Failed to encode announcement")
+        let victimPeerID = PeerID(publicKey: announcement.noisePublicKey)
+        let unsigned = BitchatPacket(
+            type: MessageType.announce.rawValue,
+            senderID: Data(hexString: victimPeerID.id) ?? Data(),
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: payload,
+            signature: nil,
+            ttl: 7
+        )
+        let packet = try #require(victimSigner.signPacket(unsigned), "Failed to sign announce packet")
+
+        #expect(ble._test_recordIngressIfNew(packet: packet, linkID: attackerLink))
+        ble._test_handlePacket(packet, fromPeerID: victimPeerID, preseedPeer: false)
+
+        // The victim becomes known (verified announce) …
+        let known = await TestHelpers.waitUntil(
+            { ble.currentPeerSnapshots().map(\.peerID).contains(victimPeerID) },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(known)
+        // … but the forged direct TTL must not mark it connected, and the
+        // link can never deliver securely, so MessageRouter falls through to
+        // retain + courier instead of trusting the stolen link outright.
+        #expect(!ble.isPeerConnected(victimPeerID))
+        #expect(!ble.canDeliverSecurely(to: victimPeerID))
+    }
+
+    @Test
     func ingressRejectsSelfLoopbackBeforeSpoofChecks() async throws {
         let ble = makeService()
         let packet = makePublicPacket(

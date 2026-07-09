@@ -50,6 +50,10 @@ final class MockTransport: Transport {
 
     var connectedPeers: Set<PeerID> = []
     var reachablePeers: Set<PeerID> = []
+    /// Peers with an established secure session. `nil` mirrors the protocol
+    /// default (prompt delivery), so connected peers stay "secure" for tests
+    /// that never care about the distinction.
+    var securePeers: Set<PeerID>?
     var peerNicknames: [PeerID: String] = [:]
     var peerFingerprints: [PeerID: String] = [:]
     var peerNoiseStates: [PeerID: LazyHandshakeState] = [:]
@@ -85,6 +89,10 @@ final class MockTransport: Transport {
 
     func isPeerReachable(_ peerID: PeerID) -> Bool {
         reachablePeers.contains(peerID) || connectedPeers.contains(peerID)
+    }
+
+    func canDeliverSecurely(to peerID: PeerID) -> Bool {
+        securePeers?.contains(peerID) ?? canDeliverPromptly(to: peerID)
     }
 
     func peerNickname(peerID: PeerID) -> String? {

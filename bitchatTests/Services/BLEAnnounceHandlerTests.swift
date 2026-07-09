@@ -8,6 +8,7 @@ struct BLEAnnounceHandlerTests {
         var existingNoisePublicKey: Data?
         var signatureValid = true
         var linkState: (hasPeripheral: Bool, hasCentral: Bool) = (false, false)
+        var linkBoundToOtherPeer = false
         var upsertResult = BLEPeerAnnounceUpdate(isNewPeer: false, wasDisconnected: false, previousNickname: nil)
         var dedupSeenIDs: Set<String> = []
         var shouldEmitReconnectLogResult = true
@@ -41,6 +42,7 @@ struct BLEAnnounceHandlerTests {
                 return recorder.signatureValid
             },
             linkState: { _ in recorder.linkState },
+            linkBoundToOtherPeer: { _, _ in recorder.linkBoundToOtherPeer },
             withRegistryBarrier: { body in
                 recorder.barrierCount += 1
                 body()
@@ -332,6 +334,60 @@ struct BLEAnnounceHandlerTests {
         #expect(recorder.uiEventDeliveries.first?.notifyPeerConnected == false)
         #expect(recorder.uiEventDeliveries.first?.scheduleInitialSync == false)
         #expect(recorder.afterglowDelays.count == 1)
+    }
+
+    /// TTL is unsigned, so a replayed announce with its TTL restored looks
+    /// "direct" — but it arrives on a link another peer already owns. That
+    /// link must not shortcut the (possibly absent) claimed peer into
+    /// "connected".
+    @Test
+    func directAnnounceOnLinkBoundToAnotherPeerDoesNotMarkConnected() throws {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let noiseKey = Data(repeating: 0x88, count: 32)
+        let peerID = PeerID(publicKey: noiseKey)
+        let packet = try makeAnnouncePacket(
+            noisePublicKey: noiseKey,
+            peerID: peerID,
+            timestamp: timestamp(now),
+            signature: Data(repeating: 0xEE, count: 64)
+        )
+
+        let recorder = Recorder()
+        recorder.linkBoundToOtherPeer = true
+        recorder.upsertResult = BLEPeerAnnounceUpdate(isNewPeer: true, wasDisconnected: false, previousNickname: nil)
+        let handler = makeHandler(recorder: recorder, now: now)
+
+        let result = handler.handle(packet, from: peerID)
+
+        #expect(result?.isDirectAnnounce == true)
+        #expect(result?.isVerified == true)
+        #expect(recorder.upsertCalls.count == 1)
+        #expect(recorder.upsertCalls.first?.isConnected == false)
+    }
+
+    /// A peer with its own live link stays connected even when a copy of its
+    /// announce arrives on someone else's link.
+    @Test
+    func directAnnounceOnForeignLinkKeepsPeerWithOwnLinkConnected() throws {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let noiseKey = Data(repeating: 0x99, count: 32)
+        let peerID = PeerID(publicKey: noiseKey)
+        let packet = try makeAnnouncePacket(
+            noisePublicKey: noiseKey,
+            peerID: peerID,
+            timestamp: timestamp(now),
+            signature: Data(repeating: 0xEE, count: 64)
+        )
+
+        let recorder = Recorder()
+        recorder.linkBoundToOtherPeer = true
+        recorder.linkState = (hasPeripheral: false, hasCentral: true)
+        let handler = makeHandler(recorder: recorder, now: now)
+
+        handler.handle(packet, from: peerID)
+
+        #expect(recorder.upsertCalls.count == 1)
+        #expect(recorder.upsertCalls.first?.isConnected == true)
     }
 
     @Test

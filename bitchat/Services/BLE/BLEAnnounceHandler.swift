@@ -20,6 +20,12 @@ struct BLEAnnounceHandlerEnvironment {
     let verifySignature: (_ packet: BitchatPacket, _ signingPublicKey: Data) -> Bool
     /// Direct link state for the peer (BLE-queue read).
     let linkState: (PeerID) -> (hasPeripheral: Bool, hasCentral: Bool)
+    /// Whether the link this packet arrived on is already bound to a
+    /// different peer ID (ingress-registry + BLE-queue read). Directness
+    /// rides on the unsigned TTL, so a replayed announce can look "direct"
+    /// on the replayer's link; that link must not shortcut an absent peer
+    /// into "connected".
+    let linkBoundToOtherPeer: (_ packet: BitchatPacket, _ peerID: PeerID) -> Bool
     /// Runs the registry mutation phase under the collections barrier.
     let withRegistryBarrier: (() -> Void) -> Void
     /// Upserts the verified announce into the peer registry.
@@ -135,6 +141,11 @@ final class BLEAnnounceHandler {
         var isReconnectedPeer = false
         let directLinkState = env.linkState(peerID)
         let isDirectAnnounce = packet.ttl == env.messageTTL
+        // A "direct" announce arriving on a link that another peer already
+        // owns is either a rotation heal or a replay with its TTL restored;
+        // both are ambiguous, so only the rebind (which containment-checks
+        // the claimed identity) may promote it — never this shortcut.
+        let linkBoundToOtherPeer = isDirectAnnounce && env.linkBoundToOtherPeer(packet, peerID)
 
         env.withRegistryBarrier {
             let hasPeripheralConnection = directLinkState.hasPeripheral
@@ -152,7 +163,7 @@ final class BLEAnnounceHandler {
             let update = env.upsertVerifiedAnnounce(
                 peerID,
                 announcement,
-                isDirectAnnounce || hasPeripheralConnection || hasCentralSubscription,
+                hasPeripheralConnection || hasCentralSubscription || (isDirectAnnounce && !linkBoundToOtherPeer),
                 now
             )
             isNewPeer = update.isNewPeer

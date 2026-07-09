@@ -116,6 +116,14 @@ protocol Transport: AnyObject {
     /// npub as reachable even with no relay connection, where a send only
     /// joins a queue waiting for internet that may never come.
     func canDeliverPromptly(to peerID: PeerID) -> Bool
+    /// Whether a send to this peer can complete an end-to-end encrypted
+    /// delivery right now (e.g. an established Noise session). Distinct from
+    /// connectivity: a "connected" link binding alone is forgeable — link
+    /// bindings heal on signature-verified "direct" announces, but directness
+    /// rides on the unsigned TTL, so a replayed announce can wear an absent
+    /// peer's ID on the replayer's link. Routers must not trust a connected
+    /// link outright without this.
+    func canDeliverSecurely(to peerID: PeerID) -> Bool
     func peerNickname(peerID: PeerID) -> String?
     func getPeerNicknames() -> [PeerID: String]
 
@@ -243,6 +251,10 @@ extension Transport {
     // Reachability implies prompt delivery for transports that hand packets
     // straight to the radio; queue-backed transports override this.
     func canDeliverPromptly(to peerID: PeerID) -> Bool { isPeerReachable(peerID) }
+
+    // Transports without a forgeable link-binding layer (everything but the
+    // BLE mesh) have no stronger delivery signal than prompt delivery.
+    func canDeliverSecurely(to peerID: PeerID) -> Bool { canDeliverPromptly(to: peerID) }
 
     // Noise identity hooks default to inert for transports that do not carry
     // Noise sessions (e.g. NostrTransport).

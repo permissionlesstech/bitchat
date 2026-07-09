@@ -674,6 +674,15 @@ final class BLEService: NSObject {
         }
     }
 
+    func canDeliverSecurely(to peerID: PeerID) -> Bool {
+        // A live link binding alone is forgeable: the rotation heal rebinds a
+        // link on a signature-verified "direct" announce, but directness rides
+        // on the unsigned TTL, so a replayed announce can bind an absent
+        // peer's ID to the replayer's link. An established Noise session
+        // proves the other end of the link holds the peer's private key.
+        noiseService.hasEstablishedSession(with: peerID)
+    }
+
     func peerNickname(peerID: PeerID) -> String? {
         collectionsQueue.sync {
             peerRegistry.nickname(for: peerID, connectedOnly: true)
@@ -4429,6 +4438,20 @@ extension BLEService {
             },
             linkState: { [weak self] peerID in
                 self?.linkState(for: peerID) ?? (hasPeripheral: false, hasCentral: false)
+            },
+            linkBoundToOtherPeer: { [weak self] packet, peerID in
+                guard let self else { return false }
+                guard let link = (self.collectionsQueue.sync { self.ingressLinks.link(for: packet) }) else { return false }
+                let boundPeerID: PeerID? = self.readLinkState { store in
+                    switch link {
+                    case .peripheral(let peripheralUUID):
+                        return store.peerID(forPeripheralID: peripheralUUID)
+                    case .central(let centralUUID):
+                        return store.peerID(forCentralUUID: centralUUID)
+                    }
+                }
+                guard let boundPeerID else { return false }
+                return boundPeerID != peerID
             },
             withRegistryBarrier: { [weak self] body in
                 self?.collectionsQueue.sync(flags: .barrier) { body() }

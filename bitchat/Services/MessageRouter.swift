@@ -161,14 +161,31 @@ final class MessageRouter {
     // MARK: - Message Sending
 
     func sendPrivate(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) {
-        if let transport = connectedTransport(for: peerID) {
-            // A live link is a strong delivery signal; trust it outright.
+        if let transport = connectedTransport(for: peerID), transport.canDeliverSecurely(to: peerID) {
+            // A live link that can complete an encrypted delivery is a
+            // strong delivery signal; trust it outright.
             SecureLogger.debug("Routing PM via \(type(of: transport)) (connected) to \(peerID.id.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
             transport.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname, messageID: messageID)
             return
         }
 
         let message = QueuedMessage(content: content, nickname: recipientNickname, messageID: messageID, timestamp: now(), sendAttempts: 1)
+        if let transport = connectedTransport(for: peerID) {
+            // "Connected" without an established secure session is forgeable:
+            // link bindings heal on signature-verified "direct" announces, but
+            // directness rides on the unsigned TTL, so a replayed announce can
+            // bind an absent peer's ID to the replayer's link — where the send
+            // stalls on a handshake the replayer can never complete. Send now
+            // (a genuine link finishes the handshake and delivers), but retain
+            // a copy and hand a sealed copy to couriers so nothing is silently
+            // lost; receivers dedup resends by message ID.
+            SecureLogger.debug("Routing PM via \(type(of: transport)) (connected, no secure session) to \(peerID.id.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
+            transport.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname, messageID: messageID)
+            enqueue(message, for: peerID)
+            attemptCourierDeposit(messageID: messageID, for: peerID)
+            return
+        }
+
         if let transport = reachableTransport(for: peerID) {
             // Reachability without a connection is a freshness heuristic (e.g.
             // the mesh retention window), so the send can silently go nowhere.
@@ -386,14 +403,16 @@ final class MessageRouter {
                 continue
             }
 
-            if let transport = connectedTransport(for: peerID) {
-                // Live link: send and stop retaining.
+            if let transport = connectedTransport(for: peerID), transport.canDeliverSecurely(to: peerID) {
+                // Live link with a secure session: send and stop retaining.
                 SecureLogger.debug("Outbox -> \(type(of: transport)) (connected) for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))…", category: .session)
                 transport.sendPrivateMessage(message.content, to: peerID, recipientNickname: message.nickname, messageID: message.messageID)
                 metrics?.record(.outboxResent)
-            } else if let transport = reachableTransport(for: peerID) {
-                // Weak signal: send but keep retaining until an ack clears it,
-                // bounded by attempt count for peers that never ack.
+            } else if let transport = connectedTransport(for: peerID) ?? reachableTransport(for: peerID) {
+                // Weak signal (reachability heuristic, or a "connected" link
+                // without a secure session — possibly a stolen binding from a
+                // replayed announce): send but keep retaining until an ack
+                // clears it, bounded by attempt count for peers that never ack.
                 guard message.sendAttempts < Self.maxSendAttempts else {
                     SecureLogger.warning("📤 Dropping unacked PM for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))… after \(message.sendAttempts) attempts", category: .session)
                     dropMessage(message.messageID, for: peerID)
