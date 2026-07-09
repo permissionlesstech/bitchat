@@ -230,13 +230,18 @@ final class Conversation: ObservableObject, Identifiable {
         // (e.g. the optimistic stamp after routing) must not clobber the
         // `.carried` the router already set when it handed a copy to a
         // courier/bridge, nor a `.delivered`/`.read` ack. Same for the
-        // `.sending` stamp a pre-handshake resend emits.
+        // `.sending` stamp a pre-handshake resend emits asynchronously: it
+        // can land after the message already reached `.sent`, and "Sent" was
+        // already truthful. (`.failed` → `.sending` stays allowed so a real
+        // failure retry is visible.)
         switch (current, new) {
         case (.read, .delivered), (.read, .carried), (.read, .sent), (.read, .sending):
             return true
         case (.delivered, .carried), (.delivered, .sent), (.delivered, .sending):
             return true
         case (.carried, .sent), (.carried, .sending):
+            return true
+        case (.sent, .sending):
             return true
         default:
             return false

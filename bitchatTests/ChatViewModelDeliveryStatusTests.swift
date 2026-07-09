@@ -130,8 +130,11 @@ struct ChatViewModelDeliveryStatusTests {
 
         #expect(Conversation.shouldSkipStatusUpdate(current: .delivered(to: "Peer", at: Date()), new: .sending))
         #expect(Conversation.shouldSkipStatusUpdate(current: .read(by: "Peer", at: Date()), new: .sending))
-        // A plain retry of an in-flight message is still allowed.
-        #expect(!Conversation.shouldSkipStatusUpdate(current: .sent, new: .sending))
+        // A late async `.sending` (pre-handshake resend) must not visibly
+        // downgrade a truthful "Sent" either...
+        #expect(Conversation.shouldSkipStatusUpdate(current: .sent, new: .sending))
+        // ...but a retry after a real failure stays visible.
+        #expect(!Conversation.shouldSkipStatusUpdate(current: .failed(reason: "no route"), new: .sending))
     }
 
     @Test @MainActor
