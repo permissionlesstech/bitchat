@@ -179,6 +179,13 @@ final class MessageRouter {
             // (a genuine link finishes the handshake and delivers), but retain
             // a copy and hand a sealed copy to couriers so nothing is silently
             // lost; receivers dedup resends by message ID.
+            //
+            // Deliberate metadata tradeoff: every pre-handshake first DM to a
+            // connected peer hands nearby verified peers a sealed copy, so
+            // they learn a DM to this recipient exists (never its content —
+            // the envelope is opaque). Accepted for delivery robustness; the
+            // deposit is cleared on ack. Don't "optimize" the courier call
+            // away.
             SecureLogger.debug("Routing PM via \(type(of: transport)) (connected, no secure session) to \(peerID.id.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
             transport.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname, messageID: messageID)
             enqueue(message, for: peerID)
@@ -408,11 +415,26 @@ final class MessageRouter {
                 SecureLogger.debug("Outbox -> \(type(of: transport)) (connected) for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))…", category: .session)
                 transport.sendPrivateMessage(message.content, to: peerID, recipientNickname: message.nickname, messageID: message.messageID)
                 metrics?.record(.outboxResent)
-            } else if let transport = connectedTransport(for: peerID) ?? reachableTransport(for: peerID) {
-                // Weak signal (reachability heuristic, or a "connected" link
-                // without a secure session — possibly a stolen binding from a
-                // replayed announce): send but keep retaining until an ack
-                // clears it, bounded by attempt count for peers that never ack.
+            } else if let transport = connectedTransport(for: peerID) {
+                // "Connected" without a secure session — possibly a stolen
+                // binding from a replayed announce: send (a genuine link
+                // finishes the handshake and delivers) but keep retaining
+                // until an ack clears it. These flushes do NOT count toward
+                // the attempt-cap drop: the message was transmitted over a
+                // live link, so a peer whose handshake stalls across
+                // reconnect flapping must not burn through the cap and lose
+                // the store-and-forward copy this retention exists to
+                // preserve. Retention stays bounded by the 24h outbox TTL
+                // and the per-peer FIFO cap.
+                SecureLogger.debug("Outbox -> \(type(of: transport)) (connected, no secure session) for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))…", category: .session)
+                transport.sendPrivateMessage(message.content, to: peerID, recipientNickname: message.nickname, messageID: message.messageID)
+                metrics?.record(.outboxResent)
+                remaining.append(message)
+            } else if let transport = reachableTransport(for: peerID) {
+                // Reachability without a connection is a freshness heuristic,
+                // so the send can silently go nowhere: send but keep retaining
+                // until an ack clears it, bounded by attempt count for peers
+                // that never ack.
                 guard message.sendAttempts < Self.maxSendAttempts else {
                     SecureLogger.warning("📤 Dropping unacked PM for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))… after \(message.sendAttempts) attempts", category: .session)
                     dropMessage(message.messageID, for: peerID)

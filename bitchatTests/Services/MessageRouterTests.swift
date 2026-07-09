@@ -360,6 +360,38 @@ struct MessageRouterTests {
         #expect(transport.sentPrivateMessages.count == 3)
     }
 
+    /// Flushes over a connected-but-insecure link never count toward the
+    /// attempt-cap drop: the message was actually transmitted over a live
+    /// link, so a peer whose Noise handshake stalls across reconnect flapping
+    /// must not burn through the cap and lose the store-and-forward copy the
+    /// secure-session gate exists to preserve. Retention stays bounded by
+    /// the 24h outbox TTL and the per-peer FIFO cap; an ack clears it.
+    @Test @MainActor
+    func flushOutbox_connectedInsecureFlushesNeverDropTheRetainedCopy() async {
+        let peerID = PeerID(str: "00000000000000ac")
+        let transport = MockTransport()
+        transport.connectedPeers.insert(peerID)
+        transport.securePeers = [] // handshake never completes
+
+        let router = MessageRouter(transports: [transport])
+        var dropped: [String] = []
+        router.onMessageDropped = { messageID, _ in dropped.append(messageID) }
+
+        router.sendPrivate("Hello", to: peerID, recipientNickname: "Peer", messageID: "ci1")
+
+        // Well past maxSendAttempts (8): every flush resends, none drops.
+        for _ in 0..<10 {
+            router.flushOutbox(for: peerID)
+        }
+        #expect(dropped.isEmpty)
+        #expect(transport.sentPrivateMessages.count == 11)
+
+        // The copy is still retained and an ack still clears it.
+        router.markDelivered("ci1")
+        router.flushOutbox(for: peerID)
+        #expect(transport.sentPrivateMessages.count == 11)
+    }
+
     /// With an established secure session the connected fast-path stays
     /// exactly as before: trusted outright, no retained copy, no courier.
     @Test @MainActor

@@ -390,6 +390,51 @@ struct BLEAnnounceHandlerTests {
         #expect(recorder.upsertCalls.first?.isConnected == true)
     }
 
+    /// Documents a known, accepted limitation: the linkBoundToOtherPeer read
+    /// happens before the rebind steals the link, so while the FIRST replayed
+    /// "direct" announce is denied the connected shortcut, the SECOND finds
+    /// the link already rebound to the (absent) victim and the live-link
+    /// terms mark it connected. This is presence display only — DMs remain
+    /// gated on canDeliverSecurely, so without a Noise session they take the
+    /// retain + courier path (see MessageRouterTests
+    /// .sendPrivate_connectedWithoutSecureSessionRetainsAndDepositsWithCourier).
+    /// Not closed at the announce layer because the post-rebind state is
+    /// indistinguishable from a legitimate rotation/reconnect heal.
+    @Test
+    func secondReplayedDirectAnnounceAfterRebindMarksAbsentPeerConnected() throws {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let noiseKey = Data(repeating: 0xA1, count: 32)
+        let victim = PeerID(publicKey: noiseKey)
+        let packet = try makeAnnouncePacket(
+            noisePublicKey: noiseKey,
+            peerID: victim,
+            timestamp: timestamp(now),
+            signature: Data(repeating: 0xEE, count: 64)
+        )
+
+        let recorder = Recorder()
+        let handler = makeHandler(recorder: recorder, now: now)
+
+        // First replay: the link still belongs to the replayer and the victim
+        // has no live link of its own — the connected shortcut is denied.
+        recorder.linkBoundToOtherPeer = true
+        recorder.linkState = (hasPeripheral: false, hasCentral: false)
+        handler.handle(packet, from: victim)
+        #expect(recorder.upsertCalls.count == 1)
+        #expect(recorder.upsertCalls.first?.isConnected == false)
+
+        // The rebind then binds the replayer's link to the victim's ID (the
+        // rotation-heal path, containment-checked in BLEService). A second
+        // replay now finds the link owned by the claimed peer …
+        recorder.linkBoundToOtherPeer = false
+        recorder.linkState = (hasPeripheral: false, hasCentral: true)
+        handler.handle(packet, from: victim)
+
+        // … and the absent victim reads as connected: the residual gap.
+        #expect(recorder.upsertCalls.count == 2)
+        #expect(recorder.upsertCalls.last?.isConnected == true)
+    }
+
     @Test
     func announceBackIsSkippedWhenAlreadyMarked() throws {
         let now = Date(timeIntervalSince1970: 1_000)

@@ -4440,6 +4440,12 @@ extension BLEService {
                 self?.linkState(for: peerID) ?? (hasPeripheral: false, hasCentral: false)
             },
             linkBoundToOtherPeer: { [weak self] packet, peerID in
+                // Reads the CURRENT binding — i.e. the state before
+                // rebindLinkAfterVerifiedDirectAnnounce (which runs after the
+                // handler) may steal the link. After a first replayed announce
+                // has rebound a link to an absent peer's ID, a second replay
+                // answers false here; see the caller in BLEAnnounceHandler
+                // for why that residual presence gap is accepted.
                 guard let self else { return false }
                 guard let link = (self.collectionsQueue.sync { self.ingressLinks.link(for: packet) }) else { return false }
                 let boundPeerID: PeerID? = self.readLinkState { store in
