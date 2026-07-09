@@ -417,9 +417,12 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
     ///   rate limit; low/no-PoW events keep the strict limits so old clients
     ///   still get through at normal rates.
     /// Identity keys of the archived echoes seeded into the mesh timeline at
-    /// launch. The mesh wire format carries no stable message ID, so a
-    /// re-synced copy of an already-rendered echo arrives with a fresh UUID —
-    /// this content identity is the only way to recognize it.
+    /// launch. Re-synced copies of others' messages now arrive with the same
+    /// derived stable ID (`MeshMessageIdentity`), so the store's insert-by-ID
+    /// catches those — but the archive-restored rows themselves carry
+    /// `echo-`-prefixed IDs, and self echoes get fresh UUIDs, so this content
+    /// identity remains the way to recognize a live copy of an
+    /// already-rendered echo.
     private var archivedEchoKeys = Set<String>()
 
     func registerArchivedEcho(senderPeerID: PeerID?, timestamp: Date, content: String) {

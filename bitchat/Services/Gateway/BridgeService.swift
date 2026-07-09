@@ -660,16 +660,19 @@ final class BridgeService: ObservableObject {
             let content = event.content
             guard !content.trimmed.isEmpty, content.utf8.count <= Limits.maxContentBytes else { return nil }
             let nickname = event.tags.first(where: { $0.count >= 2 && $0[0] == "n" })?[1]
-            // Recompute — never trust — the mesh message ID: the `m` tag
-            // carries origin coordinates (sender ID + wire timestamp), and
-            // deriving the ID from them plus the event's own content means a
-            // spoofed tag cannot collide with a genuine message's key.
+            // Recompute — never trust — the mesh message ID: the `m` tag is
+            // `[stable ID, sender ID, wire timestamp ms]`. Element 1 exists
+            // for v1.7.0 parsers; we ignore it and derive the ID from the
+            // origin coordinates (elements 2-3) plus the event's own content,
+            // so a forged tag cannot bind a chosen ID to different content
+            // (see `MeshMessageIdentity` for the exact property and its
+            // limits).
             let m = event.tags.first(where: { $0.count >= 2 && $0[0] == "m" })
             let messageID: String
-            if let m, m.count >= 3, m[1].count == 16, m[1].allSatisfy(\.isHexDigit),
-               let timestampMs = UInt64(m[2]) {
+            if let m, m.count >= 4, m[2].count == 16, m[2].allSatisfy(\.isHexDigit),
+               let timestampMs = UInt64(m[3]) {
                 messageID = MeshMessageIdentity.stableID(
-                    senderIDHex: m[1],
+                    senderIDHex: m[2],
                     timestampMs: timestampMs,
                     content: content
                 )

@@ -228,10 +228,43 @@ struct BridgeServiceTests {
         #expect(published.event.isValidSignature())
         #expect(published.event.content == "hello hill")
         #expect(published.event.tags.contains(["r", Self.cell]))
-        #expect(published.event.tags.contains(
-            ["m", sender.id, String(MeshMessageIdentity.millisecondTimestamp(timestamp))]
-        ))
+        let timestampMs = MeshMessageIdentity.millisecondTimestamp(timestamp)
+        #expect(published.event.tags.contains([
+            "m",
+            MeshMessageIdentity.stableID(senderIDHex: sender.id, timestampMs: timestampMs, content: "hello hill"),
+            sender.id,
+            String(timestampMs),
+        ]))
         #expect(published.event.tags.contains(["n", "tester"]))
+    }
+
+    @Test func newMeshTagStaysPerMessageUniqueForOldParsers() throws {
+        // v1.7.0 parsers take m[1] unconditionally as the dedup key whenever
+        // the tag has >= 2 elements. A constant m[1] (e.g. the bare sender
+        // ID) would make old receivers inject-dedup away every message from
+        // a sender after their first — so element 1 must be the
+        // per-message-unique stable ID itself.
+        let fixture = Fixture(enabled: true)
+        fixture.service.refreshRendezvous()
+        let sender = PeerID(str: "0011223344556677")
+        let timestamp = Date()
+
+        fixture.service.bridgeOutgoing(content: "first", senderPeerID: sender, timestamp: timestamp)
+        fixture.service.bridgeOutgoing(content: "second", senderPeerID: sender, timestamp: timestamp)
+
+        // Old-parser extraction: m[1] of the first `m` tag with >= 2 elements.
+        let oldParserKeys = fixture.publishedMessages.compactMap {
+            $0.event.tags.first(where: { $0.count >= 2 && $0[0] == "m" })?[1]
+        }
+        #expect(oldParserKeys.count == 2)
+        #expect(oldParserKeys[0] != oldParserKeys[1])
+        // And old and new receivers key the same message identically: m[1]
+        // equals the ID the new parser recomputes from elements 2-3.
+        let timestampMs = MeshMessageIdentity.millisecondTimestamp(timestamp)
+        #expect(oldParserKeys == [
+            MeshMessageIdentity.stableID(senderIDHex: sender.id, timestampMs: timestampMs, content: "first"),
+            MeshMessageIdentity.stableID(senderIDHex: sender.id, timestampMs: timestampMs, content: "second"),
+        ])
     }
 
     @Test func nearbyOnlySuppressesTheBridgedCopy() {
@@ -414,6 +447,36 @@ struct BridgeServiceTests {
         #expect(fixture.injected.map(\.messageID) == [
             stableID(content: "impostor payload"),
             stableID(content: "the real message"),
+        ])
+    }
+
+    @Test func forgedStableIDElementIsNeverTrusted() throws {
+        // Element 1 of the `m` tag exists only for old parsers. An event
+        // claiming the genuine message's stable ID there — over different
+        // content — must still key on its own derived ID, so it cannot
+        // pre-poison the genuine message's dedup slot.
+        let fixture = Fixture(enabled: true)
+        fixture.service.refreshRendezvous()
+        let genuineID = stableID(content: "the real message")
+        let identity = try NostrIdentity.generate()
+        let forged = try NostrEvent(
+            pubkey: identity.publicKeyHex,
+            createdAt: Date(),
+            kind: .ephemeralEvent,
+            tags: [
+                ["r", Self.cell],
+                ["m", genuineID, Self.remoteMeshSenderID, String(Self.remoteMeshTimestampMs)],
+            ],
+            content: "impostor payload"
+        ).sign(with: identity.schnorrSigningKey())
+        let genuine = try makeRemoteEvent(content: "the real message")
+
+        fixture.service.handleRendezvousEvent(forged)
+        fixture.service.handleRendezvousEvent(genuine)
+
+        #expect(fixture.injected.map(\.messageID) == [
+            stableID(content: "impostor payload"),
+            genuineID,
         ])
     }
 
