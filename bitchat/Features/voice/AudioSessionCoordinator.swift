@@ -13,8 +13,13 @@ import Foundation
 /// The raw audio-session calls the coordinator makes, abstracted so the
 /// state machine is unit-testable with a mock (and compiles on the macOS
 /// test host, where `AVAudioSession` doesn't exist).
-@MainActor
-protocol SessionApplying {
+///
+/// Calls arrive on the coordinator's private serial queue — never the main
+/// thread. `setCategory`/`setActive` block on IPC to the audio server
+/// (observed >1 s under contention on device, tripping the system gesture
+/// gate), and Apple explicitly recommends activating the session off the
+/// main thread.
+protocol SessionApplying: Sendable {
     func setCategory(_ category: AudioSessionCoordinator.Category) throws
     func setActive(_ active: Bool, notifyOthersOnDeactivation: Bool) throws
 }
@@ -42,10 +47,17 @@ protocol SessionApplying {
 ///   keep playing (talk-over is bidirectional); holders that don't provide
 ///   it fall back to `onInterrupted`.
 ///
+/// Threading: all state lives on a private serial queue, which both
+/// serializes rapid acquire/release pairs and keeps the blocking session IPC
+/// off the main thread (`acquire` is `async` for exactly that hop; `release`
+/// is fire-and-forget onto the queue). Holder callbacks always run on the
+/// main actor.
+///
 /// Microphone *permission* queries stay with their callers; this type owns
 /// only category and activation.
-@MainActor
-final class AudioSessionCoordinator {
+///
+/// `@unchecked Sendable`: every mutable property is confined to `queue`.
+final class AudioSessionCoordinator: @unchecked Sendable {
     enum Use {
         case playback
         case capture
@@ -62,8 +74,8 @@ final class AudioSessionCoordinator {
     /// once when done (extra releases are ignored).
     ///
     /// `@unchecked` because the stored callbacks are `@MainActor`-isolated
-    /// closures (non-Sendable as stored types) that only the coordinator —
-    /// itself `@MainActor` — ever invokes; the token is otherwise immutable,
+    /// closures (non-Sendable as stored types) that the coordinator only
+    /// ever invokes on the main actor; the token is otherwise immutable,
     /// so handing it across executors (e.g. releasing from a `deinit` hop)
     /// is safe.
     final class Token: @unchecked Sendable {
@@ -82,9 +94,16 @@ final class AudioSessionCoordinator {
     static let shared = AudioSessionCoordinator(session: SystemAudioSession())
 
     private let session: SessionApplying
+    /// Confines all mutable state, serializes whole acquire/release
+    /// operations (two rapid presses can't interleave their category and
+    /// activation calls), and hosts the blocking session IPC off main.
+    private let queue = DispatchQueue(label: "chat.bitchat.audio-session", qos: .userInitiated)
+
+    // Queue-confined state.
     private var holders: [ObjectIdentifier: Token] = [:]
     private var currentCategory: Category?
     private var sessionActive = false
+    /// Written once in init, read in deinit — never touched concurrently.
     private var observers: [NSObjectProtocol] = []
 
     init(session: SessionApplying) {
@@ -99,21 +118,66 @@ final class AudioSessionCoordinator {
     }
 
     /// Configures + activates the session for `use` and registers the caller
-    /// as a holder. `onInterrupted` fires (on the main actor) when the client
-    /// must stop using the session: a system interruption began or its
-    /// route's device went away. The client should stop its engine, finalize
-    /// any artifacts, and release — resuming means acquiring again.
+    /// as a holder. The blocking `AVAudioSession` calls run on the session
+    /// queue — the caller suspends instead of stalling its thread (a PTT
+    /// press used to block main >1 s in `setActive`, tripping the system
+    /// gesture gate). `onInterrupted` fires (on the main actor) when the
+    /// client must stop using the session: a system interruption began or
+    /// its route's device went away. The client should stop its engine,
+    /// finalize any artifacts, and release — resuming means acquiring again.
     ///
     /// `onCategoryEscalated` fires instead when the session category
     /// escalated underneath the holder (a capture client joined): the session
     /// stays active, so a holder that can rebuild its engine against the new
     /// configuration should restart and keep going. Holders that pass `nil`
-    /// get `onInterrupted` for escalation too.
+    /// get `onInterrupted` for escalation too. Escalation is delivered before
+    /// `acquire` returns, so the new holder starts its engine strictly after
+    /// existing ones were told to rebuild.
     func acquire(
         _ use: Use,
         onInterrupted: @escaping @MainActor () -> Void,
         onCategoryEscalated: (@MainActor () -> Void)? = nil
-    ) throws -> Token {
+    ) async throws -> Token {
+        let token = Token(onInterrupted: onInterrupted, onCategoryEscalated: onCategoryEscalated)
+        let reconfigured: [Token] = try await withCheckedThrowingContinuation { continuation in
+            queue.async {
+                do {
+                    continuation.resume(returning: try self.activateOnQueue(use, registering: token))
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+
+        // Escalating playback -> playAndRecord reconfigures the hardware
+        // route; engines started against the old configuration must restart.
+        if !reconfigured.isEmpty {
+            SecureLogger.info("AudioSession: category escalated to playAndRecord with \(reconfigured.count) live holder(s)", category: .session)
+            await MainActor.run {
+                for holder in reconfigured {
+                    (holder.onCategoryEscalated ?? holder.onInterrupted)()
+                }
+            }
+        }
+        return token
+    }
+
+    /// Drops one holder. Deactivates the session (notifying other apps) only
+    /// when the last holder releases. Safe to call more than once, from any
+    /// thread (including `deinit` paths): the work is fire-and-forget onto
+    /// the session queue, so the blocking deactivation IPC never runs on the
+    /// caller.
+    func release(_ token: Token) {
+        queue.async {
+            self.releaseOnQueue(token)
+        }
+    }
+
+    // MARK: - Queue-confined core
+
+    /// Returns the pre-existing holders whose engines must restart because
+    /// this acquire escalated the category (empty otherwise).
+    private func activateOnQueue(_ use: Use, registering token: Token) throws -> [Token] {
         let target: Category = (use == .capture || currentCategory == .playAndRecord) ? .playAndRecord : .playback
         let categoryChanged = target != currentCategory
         let previousCategory = currentCategory
@@ -138,24 +202,12 @@ final class AudioSessionCoordinator {
             sessionActive = true
         }
 
-        let token = Token(onInterrupted: onInterrupted, onCategoryEscalated: onCategoryEscalated)
         let existing = Array(holders.values)
         holders[ObjectIdentifier(token)] = token
-
-        // Escalating playback -> playAndRecord reconfigures the hardware
-        // route; engines started against the old configuration must restart.
-        if categoryChanged, !existing.isEmpty {
-            SecureLogger.info("AudioSession: category escalated to playAndRecord with \(existing.count) live holder(s)", category: .session)
-            for holder in existing {
-                (holder.onCategoryEscalated ?? holder.onInterrupted)()
-            }
-        }
-        return token
+        return categoryChanged ? existing : []
     }
 
-    /// Drops one holder. Deactivates the session (notifying other apps) only
-    /// when the last holder releases. Safe to call more than once.
-    func release(_ token: Token) {
+    private func releaseOnQueue(_ token: Token) {
         guard holders.removeValue(forKey: ObjectIdentifier(token)) != nil else { return }
         guard holders.isEmpty else { return }
         currentCategory = nil
@@ -168,24 +220,46 @@ final class AudioSessionCoordinator {
         }
     }
 
+    private func onQueue<T: Sendable>(_ body: @escaping @Sendable () -> T) async -> T {
+        await withCheckedContinuation { continuation in
+            queue.async {
+                continuation.resume(returning: body())
+            }
+        }
+    }
+
     // MARK: - System events (internal so tests can drive them directly)
 
     /// A system interruption began: the session is already deactivated by the
-    /// OS, so just mark it inactive and tell every holder to stop. No
-    /// auto-resume — the next acquire re-activates.
-    func handleInterruptionBegan() {
-        sessionActive = false
-        for holder in Array(holders.values) {
-            holder.onInterrupted()
+    /// OS, so just mark it inactive and tell every holder (on the main actor)
+    /// to stop. No auto-resume — the next acquire re-activates.
+    func handleInterruptionBegan() async {
+        let holders = await onQueue { () -> [Token] in
+            self.sessionActive = false
+            return Array(self.holders.values)
+        }
+        await MainActor.run {
+            for holder in holders {
+                holder.onInterrupted()
+            }
         }
     }
 
     /// The active route's input/output device disappeared (e.g. BT headset
     /// off): holders' engines are wedged against a dead route — stop them.
-    func handleRouteDeviceUnavailable() {
-        for holder in Array(holders.values) {
-            holder.onInterrupted()
+    func handleRouteDeviceUnavailable() async {
+        let holders = await onQueue { Array(self.holders.values) }
+        await MainActor.run {
+            for holder in holders {
+                holder.onInterrupted()
+            }
         }
+    }
+
+    /// Test hook: suspends until every session operation enqueued before this
+    /// call — including fire-and-forget `release`s — has completed.
+    func drain() async {
+        await onQueue {}
     }
 
     private func observeSystemNotifications() {
@@ -197,12 +271,11 @@ final class AudioSessionCoordinator {
             queue: .main
         ) { [weak self] note in
             guard let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
-                  AVAudioSession.InterruptionType(rawValue: raw) == .began
+                  AVAudioSession.InterruptionType(rawValue: raw) == .began,
+                  let self
             else { return }
-            MainActor.assumeIsolated {
-                SecureLogger.info("AudioSession: interruption began", category: .session)
-                self?.handleInterruptionBegan()
-            }
+            SecureLogger.info("AudioSession: interruption began", category: .session)
+            Task { await self.handleInterruptionBegan() }
         })
         observers.append(center.addObserver(
             forName: AVAudioSession.routeChangeNotification,
@@ -210,12 +283,11 @@ final class AudioSessionCoordinator {
             queue: .main
         ) { [weak self] note in
             guard let raw = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
-                  AVAudioSession.RouteChangeReason(rawValue: raw) == .oldDeviceUnavailable
+                  AVAudioSession.RouteChangeReason(rawValue: raw) == .oldDeviceUnavailable,
+                  let self
             else { return }
-            MainActor.assumeIsolated {
-                SecureLogger.info("AudioSession: route device became unavailable", category: .session)
-                self?.handleRouteDeviceUnavailable()
-            }
+            SecureLogger.info("AudioSession: route device became unavailable", category: .session)
+            Task { await self.handleRouteDeviceUnavailable() }
         })
         #endif
     }

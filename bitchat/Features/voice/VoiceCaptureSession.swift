@@ -117,7 +117,7 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
             }
         }
         do {
-            try capture.start(outputURL: outputURL)
+            try await capture.start(outputURL: outputURL)
         } catch {
             // The HAL can briefly report a dead input right after the audio
             // session (re)activates while the route settles; one retry after
@@ -131,7 +131,7 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
                 capture.cancel()
                 return
             }
-            try capture.start(outputURL: outputURL)
+            try await capture.start(outputURL: outputURL)
         }
         startDate = Date()
         SecureLogger.info("PTT: live burst \(burstID.hexEncodedString()) capture started", category: .session)

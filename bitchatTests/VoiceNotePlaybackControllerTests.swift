@@ -11,14 +11,19 @@ import AVFoundation
 import Foundation
 @testable import bitchat
 
-@MainActor
-private final class RecordingAudioSession: SessionApplying {
-    private(set) var activationCalls: [Bool] = []
+/// Thread-safe: the coordinator invokes it on its private serial queue (the
+/// blocking session IPC runs off the main thread) while the test reads from
+/// the main actor.
+private final class RecordingAudioSession: SessionApplying, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _activationCalls: [Bool] = []
+
+    var activationCalls: [Bool] { lock.withLock { _activationCalls } }
 
     func setCategory(_ category: AudioSessionCoordinator.Category) throws {}
 
     func setActive(_ active: Bool, notifyOthersOnDeactivation: Bool) throws {
-        activationCalls.append(active)
+        lock.withLock { _activationCalls.append(active) }
     }
 }
 
@@ -37,13 +42,29 @@ struct VoiceNotePlaybackControllerTests {
         return url
     }
 
+    private func waitUntil(
+        _ condition: () -> Bool,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while !condition(), ContinuousClock.now < deadline {
+            await Task.yield()
+            try? await Task.sleep(nanoseconds: 1_000_000)
+        }
+        #expect(condition(), sourceLocation: sourceLocation)
+    }
+
     @Test func seekWhilePausedDoesNotAcquireSession() throws {
         let session = RecordingAudioSession()
         let coordinator = AudioSessionCoordinator(session: session)
         let url = try makeTempVoiceNote()
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let controller = VoiceNotePlaybackController(url: url, sessionCoordinator: coordinator)
+        let controller = VoiceNotePlaybackController(
+            url: url,
+            sessionCoordinator: coordinator,
+            exclusivity: VoiceNotePlaybackCoordinator()
+        )
         controller.seek(to: 0.5)
 
         // The scrub position moved (the player is real and ready)...
@@ -61,20 +82,24 @@ struct VoiceNotePlaybackControllerTests {
         let url = try makeTempVoiceNote()
         defer { try? FileManager.default.removeItem(at: url) }
 
-        var controller: VoiceNotePlaybackController? =
-            VoiceNotePlaybackController(url: url, sessionCoordinator: coordinator)
+        // Fresh exclusivity slot: a parallel test's play() must not pause
+        // this controller while its session acquire is in flight.
+        var controller: VoiceNotePlaybackController? = VoiceNotePlaybackController(
+            url: url,
+            sessionCoordinator: coordinator,
+            exclusivity: VoiceNotePlaybackCoordinator()
+        )
         controller?.play()
-        #expect(session.activationCalls == [true])
+        // The session acquire is asynchronous now (its blocking IPC runs off
+        // the main thread), so await the activation instead of asserting
+        // right after play().
+        await waitUntil { session.activationCalls == [true] }
 
         // Navigating away discards the row's @StateObject mid-playback:
-        // deinit must release the session hold (via a main-actor hop).
+        // deinit must release the session hold (a fire-and-forget hop onto
+        // the coordinator's queue).
         controller = nil
 
-        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
-        while session.activationCalls.count < 2, ContinuousClock.now < deadline {
-            await Task.yield()
-            try? await Task.sleep(nanoseconds: 1_000_000)
-        }
-        #expect(session.activationCalls == [true, false])
+        await waitUntil { session.activationCalls == [true, false] }
     }
 }

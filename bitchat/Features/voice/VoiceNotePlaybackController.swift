@@ -24,15 +24,24 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
     private var player: AVAudioPlayer?
     private var timer: Timer?
     private var url: URL
-    /// Test seam; `AudioSessionCoordinator.shared` when nil (its `shared` is
-    /// main-actor-isolated, so it can't be a default argument of this
-    /// nonisolated init).
+    /// Test seam; `AudioSessionCoordinator.shared` when nil.
     private let sessionCoordinatorOverride: AudioSessionCoordinator?
+    /// Injectable so tests don't fight over the app-wide exclusive-playback
+    /// slot (a parallel test's `play()` would pause this controller mid-test).
+    private let exclusivity: VoiceNotePlaybackCoordinator
     private var sessionToken: AudioSessionCoordinator.Token?
+    /// A session acquire is in flight (it suspends off-main for the blocking
+    /// session IPC); gates against double acquisition on rapid play taps.
+    private var sessionAcquireInFlight = false
 
-    init(url: URL, sessionCoordinator: AudioSessionCoordinator? = nil) {
+    init(
+        url: URL,
+        sessionCoordinator: AudioSessionCoordinator? = nil,
+        exclusivity: VoiceNotePlaybackCoordinator? = nil
+    ) {
         self.url = url
         self.sessionCoordinatorOverride = sessionCoordinator
+        self.exclusivity = exclusivity ?? .shared
         super.init()
         // Don't load anything eagerly - wait until user interaction or view is fully displayed
     }
@@ -61,15 +70,11 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
         // A per-row @StateObject can be discarded mid-playback (navigating
         // away). Leaking the token here would hold the session forever —
         // never deactivating it, and pinning any escalated category for the
-        // app's lifetime. deinit is nonisolated, so hop to the coordinator's
-        // actor; the Sendable token and the coordinator reference are the
-        // only captures.
+        // app's lifetime. `release` is fire-and-forget onto the coordinator's
+        // queue, so it is deinit-safe: only the Sendable token crosses.
         if let token = sessionToken {
             sessionToken = nil
-            let coordinator = sessionCoordinatorOverride
-            Task { @MainActor in
-                (coordinator ?? .shared).release(token)
-            }
+            (sessionCoordinatorOverride ?? .shared).release(token)
         }
     }
 
@@ -88,14 +93,15 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
 
     func play() {
         guard ensurePlayerReady() else { return }
-        // Acquired here (not in ensurePlayerReady): scrubbing a paused note
-        // must not hold the session while nothing is audible.
-        acquireSessionIfNeeded()
-        VoiceNotePlaybackCoordinator.shared.activate(self)
-        player?.play()
+        exclusivity.activate(self)
+        isPlaying = true
         startTimer()
         updateProgress()
-        isPlaying = true
+        // Acquired here (not in ensurePlayerReady): scrubbing a paused note
+        // must not hold the session while nothing is audible. The session
+        // calls block on audio-server IPC, so they run off the main thread;
+        // the player starts once the session is configured.
+        startPlayerAfterAcquiringSession()
     }
 
     func pause() {
@@ -113,7 +119,7 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
         updateProgress()
         isPlaying = false
         releaseSession()
-        VoiceNotePlaybackCoordinator.shared.deactivate(self)
+        exclusivity.deactivate(self)
     }
 
     func seek(to fraction: Double) {
@@ -138,7 +144,7 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
             self.updateProgress()
             self.isPlaying = false
             self.releaseSession()
-            VoiceNotePlaybackCoordinator.shared.deactivate(self)
+            self.exclusivity.deactivate(self)
         }
     }
 
@@ -171,26 +177,49 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
     }
 
     /// All entry points (SwiftUI actions, `pauseForExclusivity`, the
-    /// delegate's main-queue hop) run on the main thread, so assuming the
-    /// main actor bridges to the `@MainActor` coordinator.
-    private func acquireSessionIfNeeded() {
-        MainActor.assumeIsolated {
-            guard sessionToken == nil else { return }
+    /// delegate's main-queue hop) run on the main thread; the acquire itself
+    /// suspends while the blocking session IPC runs on the coordinator's
+    /// queue, and the player starts when it resolves. An acquire failure
+    /// still plays (historical behavior — the failure is only logged); a
+    /// pause/stop landing mid-acquire hands the token straight back and
+    /// never starts the player.
+    private func startPlayerAfterAcquiringSession() {
+        if sessionToken != nil {
+            player?.play()
+            return
+        }
+        guard !sessionAcquireInFlight else { return }
+        sessionAcquireInFlight = true
+        let coordinator = sessionCoordinatorOverride ?? AudioSessionCoordinator.shared
+        Task { @MainActor [weak self] in
+            var token: AudioSessionCoordinator.Token?
             do {
-                sessionToken = try (sessionCoordinatorOverride ?? .shared).acquire(.playback) { [weak self] in
+                token = try await coordinator.acquire(.playback) { [weak self] in
                     self?.pause()
                 }
             } catch {
                 SecureLogger.error("Failed to activate audio session: \(error)", category: .session)
             }
+            guard let self else {
+                // The row was discarded while acquiring; deinit had no token
+                // to release yet.
+                token.map(coordinator.release)
+                return
+            }
+            self.sessionAcquireInFlight = false
+            guard self.isPlaying else {
+                // Paused/stopped while the session was activating.
+                token.map(coordinator.release)
+                return
+            }
+            self.sessionToken = token
+            self.player?.play()
         }
     }
 
     private func releaseSession() {
-        MainActor.assumeIsolated {
-            sessionToken.map((sessionCoordinatorOverride ?? .shared).release)
-            sessionToken = nil
-        }
+        sessionToken.map((sessionCoordinatorOverride ?? .shared).release)
+        sessionToken = nil
     }
 
     private func startTimer() {
@@ -239,7 +268,9 @@ final class VoiceNotePlaybackCoordinator {
 
     private weak var activeController: (any ExclusivePlayback)?
 
-    private init() {}
+    /// Internal so tests can isolate their own exclusivity slot; the app
+    /// uses `shared`.
+    init() {}
 
     func activate(_ controller: any ExclusivePlayback) {
         if activeController === controller {

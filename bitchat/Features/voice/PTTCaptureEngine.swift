@@ -17,7 +17,8 @@ import Foundation
 ///   handles delivery to receivers that missed the live stream.
 /// `@unchecked Sendable`: every mutable property is confined to one executor —
 /// the capture `queue` (resampler/encoder/file/counters) or the main actor
-/// (`engine`, `engineStarted`, `sessionToken`, `configChangeObserver`) — so
+/// (`engine`, `engineStarted`, `sessionToken`, `configChangeObserver`,
+/// `holdGeneration`) — so
 /// weak references may cross the `@Sendable` tap/notification closures, which
 /// immediately hop back to the owning executor.
 final class PTTCaptureEngine: @unchecked Sendable {
@@ -45,6 +46,10 @@ final class PTTCaptureEngine: @unchecked Sendable {
     @MainActor private var engineStarted = false
     @MainActor private var sessionToken: AudioSessionCoordinator.Token?
     @MainActor private var configChangeObserver: NSObjectProtocol?
+    /// Bumped by `stop()`/`cancel()`: a `start()` resuming from the (off-main)
+    /// session acquire to find its generation stale must not open the mic
+    /// after the hold already ended.
+    @MainActor private var holdGeneration = 0
 
     /// Called on the capture queue with each batch of encoded AAC frames.
     var onFrames: (([Data]) -> Void)?
@@ -54,11 +59,23 @@ final class PTTCaptureEngine: @unchecked Sendable {
         case audioSetupFailed
     }
 
+    /// Async because acquiring the session hops its blocking IPC off the main
+    /// actor (a PTT press used to stall main >1 s in `setActive`); the engine
+    /// itself still starts back on main once the session is configured.
     @MainActor
-    func start(outputURL: URL) throws {
-        sessionToken = try AudioSessionCoordinator.shared.acquire(.capture) { [weak self] in
+    func start(outputURL: URL) async throws {
+        holdGeneration &+= 1
+        let generation = holdGeneration
+        let token = try await AudioSessionCoordinator.shared.acquire(.capture) { [weak self] in
             self?.handleInterruption()
         }
+        // The hold ended (stop/cancel) while the session was activating:
+        // starting the engine now would leave a hot mic after release.
+        guard generation == holdGeneration else {
+            AudioSessionCoordinator.shared.release(token)
+            throw CancellationError()
+        }
+        sessionToken = token
         do {
             try beginCapture(outputURL: outputURL)
         } catch {
@@ -136,6 +153,7 @@ final class PTTCaptureEngine: @unchecked Sendable {
     /// number of encoded AAC frames (each `PTTAudioFormat.frameDuration` long).
     @MainActor
     func stop() -> (url: URL?, encodedFrames: Int) {
+        holdGeneration &+= 1
         stopEngineIfStarted()
         let result: (URL?, Int) = queue.sync {
             let url = fileURL
@@ -149,6 +167,7 @@ final class PTTCaptureEngine: @unchecked Sendable {
 
     @MainActor
     func cancel() {
+        holdGeneration &+= 1
         stopEngineIfStarted()
         queue.sync { teardown(deleteFile: true) }
         releaseSessionToken()

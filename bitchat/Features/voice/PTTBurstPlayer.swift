@@ -83,6 +83,9 @@ final class PTTBurstPlayer {
     private var engine: PTTPlaybackEngine
     private let decoder: PTTFrameDecoder
     private let coordinator: AudioSessionCoordinator
+    /// Injectable so tests don't fight over the app-wide exclusive-playback
+    /// slot (a parallel test's `play()` would stop this player mid-test).
+    private let exclusivity: VoiceNotePlaybackCoordinator
 
     private var queuedBuffers: [AVAudioPCMBuffer] = []
     private var queuedDuration: TimeInterval = 0
@@ -93,7 +96,11 @@ final class PTTBurstPlayer {
     private var engineRestarts = 0
     private var engineStarted = false
     private var finished = false
-    private var stopped = false
+    /// Latched off (internal read so tests can await the async failure path).
+    private(set) var stopped = false
+    /// A session acquire is in flight (it suspends off-main for the blocking
+    /// session IPC); gates `startIfReady` against double acquisition.
+    private var acquiringSession = false
     private var deadlineTask: Task<Void, Never>?
     private var sessionToken: AudioSessionCoordinator.Token?
     private var configChangeObserver: NSObjectProtocol?
@@ -102,11 +109,13 @@ final class PTTBurstPlayer {
 
     init?(
         coordinator: AudioSessionCoordinator? = nil,
+        exclusivity: VoiceNotePlaybackCoordinator? = nil,
         makeEngine: (@MainActor () -> PTTPlaybackEngine)? = nil
     ) {
         guard let format = PTTAudioFormat.pcmFormat, let decoder = PTTFrameDecoder() else { return nil }
         self.decoder = decoder
         self.coordinator = coordinator ?? .shared
+        self.exclusivity = exclusivity ?? .shared
         let factory = makeEngine ?? { SystemPTTPlaybackEngine(format: format) }
         self.makeEngine = factory
         self.engine = factory()
@@ -136,6 +145,11 @@ final class PTTBurstPlayer {
     /// The burst ended: stop once everything scheduled has played out.
     func finishAfterDrain() {
         finished = true
+        // The complete burst is queued — no jitter left to wait for. This
+        // also matters when END lands while the async session acquire is
+        // still in flight: the queued audio must play out, not be treated
+        // as already drained.
+        startIfReady(force: true)
         stopIfDrained()
     }
 
@@ -152,20 +166,32 @@ final class PTTBurstPlayer {
         }
         isPlaying = false
         releaseSessionToken()
-        VoiceNotePlaybackCoordinator.shared.deactivate(self)
+        exclusivity.deactivate(self)
     }
 
     private func startIfReady(force: Bool) {
-        guard !engineStarted, !stopped, !queuedBuffers.isEmpty else { return }
+        guard !engineStarted, !acquiringSession, !stopped, !queuedBuffers.isEmpty else { return }
         guard force || queuedDuration >= TransportConfig.pttJitterBufferSeconds else { return }
 
+        // Acquiring the session suspends for its blocking IPC (off the main
+        // actor); frames arriving meanwhile keep queueing and are flushed
+        // onto the engine once it starts.
+        acquiringSession = true
+        Task { [weak self] in
+            await self?.acquireSessionAndStart()
+        }
+    }
+
+    private func acquireSessionAndStart() async {
+        let token: AudioSessionCoordinator.Token
         do {
-            sessionToken = try coordinator.acquire(
+            token = try await coordinator.acquire(
                 .playback,
                 onInterrupted: { [weak self] in self?.stop() },
                 onCategoryEscalated: { [weak self] in self?.restartEngine() }
             )
         } catch {
+            acquiringSession = false
             SecureLogger.error("PTT playback session activation failed: \(error)", category: .session)
             // Playing unregistered would leave the engine exposed: another
             // holder's last release deactivates the session mid-play, and no
@@ -176,6 +202,14 @@ final class PTTBurstPlayer {
             queuedBuffers = []
             return
         }
+        acquiringSession = false
+        // stop() (cancel, exclusivity, teardown) may have landed while the
+        // session was activating: hand the token straight back.
+        guard !stopped else {
+            coordinator.release(token)
+            return
+        }
+        sessionToken = token
 
         // Observe reconfiguration before starting so nothing lands between.
         registerConfigObserver()
@@ -190,7 +224,7 @@ final class PTTBurstPlayer {
         }
         engineStarted = true
         isPlaying = true
-        VoiceNotePlaybackCoordinator.shared.activate(self)
+        exclusivity.activate(self)
         engine.play()
 
         let buffered = queuedBuffers
@@ -270,6 +304,11 @@ final class PTTBurstPlayer {
 
     private func stopIfDrained() {
         guard finished, scheduledCount <= 0 else { return }
+        // Started: everything scheduled has played out. Never started with
+        // nothing queued or in flight (e.g. no decodable frames): nothing
+        // will ever play. Otherwise the engine start is still pending (the
+        // async session acquire) and the queued audio must play out first.
+        guard engineStarted || (!acquiringSession && queuedBuffers.isEmpty) else { return }
         stop()
     }
 

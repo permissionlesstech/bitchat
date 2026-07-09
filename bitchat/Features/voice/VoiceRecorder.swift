@@ -58,16 +58,16 @@ actor VoiceRecorder {
         }
         #endif
 
-        let token = try await MainActor.run {
-            try AudioSessionCoordinator.shared.acquire(.capture) {
-                Task { await VoiceRecorder.shared.handleSessionInterruption() }
-            }
+        // The acquire suspends while the blocking session IPC runs on the
+        // coordinator's queue (never this actor's thread or main).
+        let token = try await AudioSessionCoordinator.shared.acquire(.capture) {
+            Task { await VoiceRecorder.shared.handleSessionInterruption() }
         }
         // Actor reentrancy: another recording may have started during the hop.
         // Guard the token too — overwriting a live one (double-fired hold
         // gesture) would leak the first holder and pin the session forever.
         if recorder?.isRecording == true || sessionToken != nil {
-            await MainActor.run { AudioSessionCoordinator.shared.release(token) }
+            AudioSessionCoordinator.shared.release(token)
             throw RecorderError.recordingInProgress
         }
         sessionToken = token
@@ -90,7 +90,7 @@ actor VoiceRecorder {
             currentURL = outputURL
             return outputURL
         } catch {
-            await releaseSessionToken()
+            releaseSessionToken()
             throw error
         }
     }
@@ -108,7 +108,7 @@ actor VoiceRecorder {
 
         // A new session may have started during the sleep — don't touch its state
         if self.recorder === recorder {
-            await releaseSessionToken()
+            releaseSessionToken()
             self.recorder = nil
             currentURL = nil
         }
@@ -120,7 +120,7 @@ actor VoiceRecorder {
         if let recorder, recorder.isRecording {
             recorder.stop()
         }
-        await releaseSessionToken()
+        releaseSessionToken()
         if let currentURL {
             try? FileManager.default.removeItem(at: currentURL)
         }
@@ -135,7 +135,7 @@ actor VoiceRecorder {
         if let recorder, recorder.isRecording {
             recorder.stop()
         }
-        await releaseSessionToken()
+        releaseSessionToken()
     }
 
     // MARK: - Helpers
@@ -160,9 +160,11 @@ actor VoiceRecorder {
         #endif
     }
 
-    private func releaseSessionToken() async {
+    /// Fire-and-forget: the coordinator hops the blocking deactivation IPC
+    /// onto its own queue.
+    private func releaseSessionToken() {
         guard let token = sessionToken else { return }
         sessionToken = nil
-        await MainActor.run { AudioSessionCoordinator.shared.release(token) }
+        AudioSessionCoordinator.shared.release(token)
     }
 }
