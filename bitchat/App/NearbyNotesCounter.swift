@@ -43,6 +43,18 @@ final class NearbyNotesCounter: ObservableObject {
         self.releaseManager = releaseManager
     }
 
+    /// Whether the empty-timeline "check for notes" hint should render.
+    /// The permission gate matters: `retarget()` never subscribes without
+    /// location authorization, so offering the hint to an unauthorized
+    /// install would be a silent dead-end — tap, `revealed` flips, the hint
+    /// vanishes, and nothing else happens for the session. The hint never
+    /// prompts; it simply stays hidden until permission exists. The caller
+    /// passes its own observed permission state so the hint re-renders when
+    /// authorization changes.
+    func offersRevealHint(permissionState: LocationChannelManager.PermissionState) -> Bool {
+        !revealed && LocationNotesSettings.enabled && permissionState == .authorized
+    }
+
     /// Marks the one explicit act that lets the counter subscribe. Sticky for
     /// the rest of the session (the singleton's lifetime); `deactivate()`
     /// deliberately does not reset it.

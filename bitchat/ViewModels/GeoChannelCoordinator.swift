@@ -37,25 +37,34 @@ final class GeoChannelCoordinator {
     private weak var context: (any GeoChannelContext)?
 
     private var cancellables = Set<AnyCancellable>()
-    private var regionalGeohashes: [String] = []
+    private var regionalChannels: [GeohashChannel] = []
     private var bookmarkedGeohashes: [String] = []
+    /// Mirrors `NearbyNotesCounter.revealed` (injectable for tests): the
+    /// session's one explicit notes act. Until it happens, background
+    /// sampling must not include the building-precision cell — see
+    /// `sampledRegionalGeohashes`.
+    private var notesRevealed = false
+    private let notesRevealedPublisher: AnyPublisher<Bool, Never>
 
     init(
         locationManager: LocationChannelManager? = nil,
         bookmarksStore: GeohashBookmarksStore? = nil,
         torManager: TorManager? = nil,
+        notesRevealed: AnyPublisher<Bool, Never>? = nil,
         context: any GeoChannelContext
     ) {
         self.locationManager = locationManager ?? Self.defaultLocationManager()
         self.bookmarksStore = bookmarksStore ?? GeohashBookmarksStore.shared
         self.torManager = torManager ?? Self.defaultTorManager()
+        self.notesRevealedPublisher = notesRevealed
+            ?? NearbyNotesCounter.shared.$revealed.eraseToAnyPublisher()
         self.context = context
 
         start()
     }
 
     func start() {
-        regionalGeohashes = locationManager.availableChannels.map { $0.geohash }
+        regionalChannels = locationManager.availableChannels
         bookmarkedGeohashes = bookmarksStore.bookmarks
 
         locationManager.$selectedChannel
@@ -72,7 +81,18 @@ final class GeoChannelCoordinator {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] channels in
                 guard let self else { return }
-                self.regionalGeohashes = channels.map { $0.geohash }
+                self.regionalChannels = channels
+                self.updateSampling()
+            }
+            .store(in: &cancellables)
+
+        // Revealing the nearby-notes counter is the session's explicit notes
+        // act; it widens sampling to include the building cell (below).
+        notesRevealedPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] revealed in
+                guard let self, self.notesRevealed != revealed else { return }
+                self.notesRevealed = revealed
                 self.updateSampling()
             }
             .store(in: &cancellables)
@@ -102,8 +122,21 @@ final class GeoChannelCoordinator {
         updateSampling()
     }
 
+    /// Regional geohashes eligible for background sampling. The
+    /// building-precision (precision-8) cell identifies a single address, so
+    /// sampling it passively would leak the same location signal the
+    /// nearby-notes tap-to-reveal exists to gate — it joins only after the
+    /// session's explicit notes act. The coarser levels (block and up) keep
+    /// the nearby-conversation hint and channel participant counts working.
+    /// Bookmarks are exempt: bookmarking a geohash is itself explicit.
+    private var sampledRegionalGeohashes: [String] {
+        regionalChannels
+            .filter { notesRevealed || $0.level != .building }
+            .map { $0.geohash }
+    }
+
     private func updateSampling() {
-        let union = Array(Set(regionalGeohashes).union(bookmarkedGeohashes))
+        let union = Array(Set(sampledRegionalGeohashes).union(bookmarkedGeohashes))
         Task { @MainActor in
             guard !union.isEmpty else {
                 context?.endGeohashSampling()

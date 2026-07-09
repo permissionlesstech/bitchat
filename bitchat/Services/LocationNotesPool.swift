@@ -26,8 +26,8 @@ final class LocationNotesPool {
 
     /// Returns the shared manager for `geohash` (case-insensitive), creating
     /// it on first acquire and reviving a cancelled one on re-acquire.
-    /// Callers must never `setGeohash`/`cancel` a pooled manager — release it
-    /// and acquire the new geohash instead.
+    /// Callers must never `cancel` a pooled manager — release it and acquire
+    /// the new geohash instead.
     func acquire(_ geohash: String) -> LocationNotesManager {
         let key = geohash.lowercased()
         if let entry = entries[key] {

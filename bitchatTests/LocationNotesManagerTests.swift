@@ -123,27 +123,6 @@ struct LocationNotesManagerTests {
     }
 
     @Test
-    func setGeohash_invalidValueIsIgnored() {
-        var subscribeCount = 0
-        let deps = LocationNotesDependencies(
-            relayLookup: { _, _ in ["wss://relay.one"] },
-            subscribe: { _, _, _, _, _ in
-                subscribeCount += 1
-            },
-            unsubscribe: { _ in },
-            sendEvent: { _, _ in },
-            deriveIdentity: { _ in try NostrIdentity.generate() },
-            now: { Date() }
-        )
-
-        let manager = LocationNotesManager(geohash: "u4pruydq", dependencies: deps)
-        manager.setGeohash("not-valid")
-
-        #expect(manager.geohash == "u4pruydq")
-        #expect(subscribeCount == 1)
-    }
-
-    @Test
     func refreshAndCancel_manageSubscriptions() {
         var subscribeIDs: [String] = []
         var unsubscribedIDs: [String] = []

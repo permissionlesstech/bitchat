@@ -199,27 +199,10 @@ final class LocationNotesManager: ObservableObject {
         }
     }
 
-    func setGeohash(_ newGeohash: String) {
-        let norm = newGeohash.lowercased()
-        guard norm != geohash else { return }
-        guard Geohash.isValidGeohash(norm) else {
-            SecureLogger.warning("LocationNotesManager: rejecting invalid geohash '\(norm)' (expected 1-12 valid base32 chars)", category: .session)
-            return
-        }
-        if let sub = subscriptionID {
-            dependencies.unsubscribe(sub)
-            subscriptionID = nil
-        }
-        // Set loading state before clearing to prevent empty state flicker
-        state = .loading
-        initialLoadComplete = false
-        errorMessage = nil
-        geohash = norm
-        ownPubkey = (try? dependencies.deriveIdentity(norm))?.publicKeyHex
-        notes.removeAll()
-        noteIDs.removeAll()
-        subscribe()
-    }
+    // A manager's geohash is fixed for its lifetime: instances are pooled
+    // per geohash (`LocationNotesPool`), so retargeting one in place would
+    // corrupt the pool's keying and refcounts. Release the manager and
+    // acquire the new cell instead.
 
     func refresh() {
         if let sub = subscriptionID {

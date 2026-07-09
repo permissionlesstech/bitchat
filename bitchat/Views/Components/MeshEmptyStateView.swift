@@ -135,10 +135,12 @@ private extension MeshEmptyStateView {
     /// looking at the mesh timeline must not open a building-precision relay
     /// REQ (a passive location side-channel). This static line is the one
     /// explicit act that unlocks it; nothing touches the network until the
-    /// tap. Once revealed it yields to today's live strip and count, and the
-    /// app-info setting stays the kill switch.
+    /// tap. It only renders when location permission is already granted
+    /// (the tap never prompts, so without permission it would dead-end
+    /// silently). Once revealed it yields to today's live strip and count,
+    /// and the app-info setting stays the kill switch.
     var showsCheckNotesHint: Bool {
-        !nearbyNotes.revealed && LocationNotesSettings.enabled
+        nearbyNotes.offersRevealHint(permissionState: locationChannelsModel.permissionState)
     }
 
     var checkNotesHint: some View {
@@ -149,6 +151,9 @@ private extension MeshEmptyStateView {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // The visual label carries decorative asterisks and an emoji; expose
+        // just the localized action text to assistive tech.
+        .accessibilityLabel(Strings.checkNotes)
     }
 
     var sightingsText: String {

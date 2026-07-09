@@ -63,14 +63,20 @@ struct NoticesView: View {
         notesManager ?? liveGeoManager
     }
 
+    /// The one explicit act inside the sheet that unlocks the passive
+    /// nearby-notes counter: the person actively picking the geo segment
+    /// while the sheet has a geo scope. Landing on the geo tab via the
+    /// sheet's initial selection (auto-derived from the current channel —
+    /// e.g. browsing a remote geohash) is not an act toward the LOCAL
+    /// building cell and must not reveal it.
+    static func revealsNearbyNotes(onSwitchingTo tab: Tab, geoGeohash: String?) -> Bool {
+        tab == .geo && geoGeohash != nil
+    }
+
     /// Acquires (or retargets/revives) the pooled notes manager for the
     /// current geo scope.
     private func ensureGeoNotesManager() {
         guard tab == .geo else { return }
-        // Looking at the geo notices tab is an explicit act toward
-        // place-pinned notes, so it also unlocks the passive nearby-notes
-        // counter (tap-to-reveal).
-        NearbyNotesCounter.shared.reveal()
         guard notesManager == nil, let geohash = geoGeohash else { return }
         if let manager = liveGeoManager {
             if manager.geohash != geohash.lowercased() {
@@ -190,9 +196,19 @@ struct NoticesView: View {
         .onChange(of: tab) { newTab in
             if newTab == .geo {
                 beginGeoLocationIfNeeded()
+                if Self.revealsNearbyNotes(onSwitchingTo: newTab, geoGeohash: geoGeohash) {
+                    NearbyNotesCounter.shared.reveal()
+                }
                 ensureGeoNotesManager()
             } else {
                 locationChannelsModel.endLiveRefresh()
+                // Leaving the geo tab must take its REQ down with it, not
+                // leave the geohash subscription streaming behind the mesh
+                // board. The pool makes the return trip cheap (re-acquire
+                // revives the manager), and the dismissal release below is
+                // safe: `liveGeoManager` is nil until re-acquired.
+                LocationNotesPool.shared.release(liveGeoManager)
+                liveGeoManager = nil
             }
             // Each tab keeps its natural default: geo notes stay until
             // deleted (∞), mesh board posts fade within a week.
