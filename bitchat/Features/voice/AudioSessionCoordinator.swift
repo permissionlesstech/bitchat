@@ -59,11 +59,9 @@ final class AudioSessionCoordinator {
     /// Opaque handle for one client's hold on the session. Release exactly
     /// once when done (extra releases are ignored).
     final class Token: Sendable {
-        fileprivate let use: Use
         fileprivate let onInterrupted: @MainActor () -> Void
 
-        fileprivate init(use: Use, onInterrupted: @escaping @MainActor () -> Void) {
-            self.use = use
+        fileprivate init(onInterrupted: @escaping @MainActor () -> Void) {
             self.onInterrupted = onInterrupted
         }
     }
@@ -79,6 +77,12 @@ final class AudioSessionCoordinator {
     init(session: SessionApplying) {
         self.session = session
         observeSystemNotifications()
+    }
+
+    deinit {
+        for observer in observers {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
 
     /// Configures + activates the session for `use` and registers the caller
@@ -99,7 +103,7 @@ final class AudioSessionCoordinator {
             sessionActive = true
         }
 
-        let token = Token(use: use, onInterrupted: onInterrupted)
+        let token = Token(onInterrupted: onInterrupted)
         let existing = Array(holders.values)
         holders[ObjectIdentifier(token)] = token
 
