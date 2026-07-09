@@ -24,6 +24,7 @@ struct MeshEmptyStateView: View {
     @EnvironmentObject private var peerListModel: PeerListModel
     @ObservedObject private var activityTracker = GeohashChatActivityTracker.shared
     @ObservedObject private var sightingsTracker = MeshSightingsTracker.shared
+    @ObservedObject private var nearbyNotes = NearbyNotesCounter.shared
 
     @ThemedPalette private var palette
 
@@ -38,6 +39,7 @@ struct MeshEmptyStateView: View {
         static let meshIntro = String(localized: "content.empty.mesh_intro", comment: "First line of the empty mesh timeline explaining what the mesh channel is")
         static let switchHint = String(localized: "content.empty.switch_hint", comment: "Empty timeline hint pointing at the channel switcher and the help screen")
         static let sightingsOne = String(localized: "content.empty.sightings_one", comment: "Empty mesh timeline stat when exactly one device came within range today")
+        static let checkNotes = String(localized: "content.empty.check_notes", comment: "Empty mesh timeline action that starts looking for notes left at this place; before tapping, no lookup runs")
 
         static func sightingsMany(_ count: Int) -> String {
             String(
@@ -80,6 +82,9 @@ struct MeshEmptyStateView: View {
                 if let conversation = nearbyConversation {
                     conversationHint(conversation)
                 }
+                if showsCheckNotesHint {
+                    checkNotesHint
+                }
             } else {
                 // The radar + tally already say "scanning, nobody yet", so
                 // the narration stays to two lines with the live hint after
@@ -88,6 +93,9 @@ struct MeshEmptyStateView: View {
                 narrationLine(Strings.switchHint)
                 if let conversation = nearbyConversation {
                     conversationHint(conversation)
+                }
+                if showsCheckNotesHint {
+                    checkNotesHint
                 }
 
                 // The radar centers in whatever space is left below the
@@ -121,6 +129,26 @@ struct MeshEmptyStateView: View {
 private extension MeshEmptyStateView {
     var nearbyConversation: NearbyConversation? {
         activityTracker.mostActiveConversation(among: locationChannelsModel.availableChannels)
+    }
+
+    /// Tap-to-reveal: the nearby-notes counter never subscribes on its own —
+    /// looking at the mesh timeline must not open a building-precision relay
+    /// REQ (a passive location side-channel). This static line is the one
+    /// explicit act that unlocks it; nothing touches the network until the
+    /// tap. Once revealed it yields to today's live strip and count, and the
+    /// app-info setting stays the kill switch.
+    var showsCheckNotesHint: Bool {
+        !nearbyNotes.revealed && LocationNotesSettings.enabled
+    }
+
+    var checkNotesHint: some View {
+        Button {
+            NearbyNotesCounter.shared.reveal()
+        } label: {
+            actionLine("📍 \(Strings.checkNotes)")
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     var sightingsText: String {

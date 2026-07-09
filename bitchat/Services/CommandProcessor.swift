@@ -200,6 +200,10 @@ final class CommandProcessor {
               LocationNotesManager.postDrop(content: content, nickname: nickname, geohash: geohash) else {
             return .error(message: "no geo relays reachable — note not left")
         }
+        // Leaving a note is an explicit notes act: it unlocks the passive
+        // nearby-notes counter (tap-to-reveal) so the sender sees their own
+        // drop counted on the timeline.
+        NearbyNotesCounter.shared.reveal()
         return .success(message: "📍 note left here — it fades in 24h")
     }
 

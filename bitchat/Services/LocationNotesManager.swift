@@ -173,6 +173,15 @@ final class LocationNotesManager: ObservableObject {
     deinit {
         expiryPruneTimer?.invalidate()
         connectivityRetryTimer?.invalidate()
+        // A live REQ must not outlive its manager: relays would keep
+        // streaming events nobody consumes. deinit is nonisolated, so hop to
+        // the main actor with just the captured closure and id.
+        if let sub = subscriptionID {
+            let unsubscribe = dependencies.unsubscribe
+            Task { @MainActor in
+                unsubscribe(sub)
+            }
+        }
     }
 
     /// Drops notes whose NIP-40 expiry has passed. Their ids stay in

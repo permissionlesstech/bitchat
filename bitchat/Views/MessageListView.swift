@@ -334,8 +334,10 @@ private extension MessageListView {
         .buttonStyle(.plain)
     }
 
-    /// The nearby-notes counter runs whenever the mesh public timeline is
+    /// The nearby-notes counter is held whenever the mesh public timeline is
     /// showing — the strip needs a live count before it can decide to exist.
+    /// Holding is not subscribing: nothing hits the relays until an explicit
+    /// act reveals the counter (tap-to-reveal).
     func updateNotesCounterHold() {
         let shouldHold = privatePeer == nil && locationChannelsModel.selectedChannel.isMesh
         guard shouldHold != holdsNotesCounter else { return }

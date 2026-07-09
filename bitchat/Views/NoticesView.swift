@@ -40,8 +40,10 @@ struct NoticesView: View {
 
     /// Injected notes manager for tests; live use derives one per geohash.
     private let notesManager: LocationNotesManager?
-    /// Live manager owned by the sheet so the composer can post pure Nostr
+    /// Pooled manager held by the sheet so the composer can post pure Nostr
     /// notes (∞ expiry has no mesh-board copy) and the list can render them.
+    /// Acquired from `LocationNotesPool` (shared with the nearby-notes
+    /// counter, one REQ per geohash) and released on dismissal.
     @State private var liveGeoManager: LocationNotesManager?
 
     init(
@@ -61,19 +63,27 @@ struct NoticesView: View {
         notesManager ?? liveGeoManager
     }
 
-    /// Creates (or retargets/revives) the sheet-owned notes manager for the
+    /// Acquires (or retargets/revives) the pooled notes manager for the
     /// current geo scope.
     private func ensureGeoNotesManager() {
-        guard notesManager == nil, tab == .geo, let geohash = geoGeohash else { return }
+        guard tab == .geo else { return }
+        // Looking at the geo notices tab is an explicit act toward
+        // place-pinned notes, so it also unlocks the passive nearby-notes
+        // counter (tap-to-reveal).
+        NearbyNotesCounter.shared.reveal()
+        guard notesManager == nil, let geohash = geoGeohash else { return }
         if let manager = liveGeoManager {
             if manager.geohash != geohash.lowercased() {
-                manager.setGeohash(geohash)
+                // Pooled managers are shared; never retarget one in place —
+                // release the old cell and acquire the new one.
+                LocationNotesPool.shared.release(manager)
+                liveGeoManager = LocationNotesPool.shared.acquire(geohash)
             } else if manager.state == .idle {
-                // Cancelled on a tab switch; returning re-subscribes.
+                // Revived after a cancel elsewhere; returning re-subscribes.
                 manager.refresh()
             }
         } else {
-            liveGeoManager = LocationNotesManager(geohash: geohash)
+            liveGeoManager = LocationNotesPool.shared.acquire(geohash)
         }
     }
 
@@ -196,7 +206,11 @@ struct NoticesView: View {
         .onChange(of: geoGeohash) { _ in
             ensureGeoNotesManager()
         }
-        .onDisappear { locationChannelsModel.endLiveRefresh() }
+        .onDisappear {
+            locationChannelsModel.endLiveRefresh()
+            LocationNotesPool.shared.release(liveGeoManager)
+            liveGeoManager = nil
+        }
     }
 
     /// The geo tab tracks the device's building geohash while on mesh; keep
@@ -417,10 +431,6 @@ private struct GeoNoticesList: View {
             board: board,
             notesManager: notesManager
         )
-        .onChange(of: geohash) { newValue in
-            notesManager.setGeohash(newValue)
-        }
-        .onDisappear { notesManager.cancel() }
     }
 }
 
