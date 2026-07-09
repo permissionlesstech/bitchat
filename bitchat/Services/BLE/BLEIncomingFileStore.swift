@@ -15,6 +15,18 @@ struct BLEIncomingFileStore {
         self.dateProvider = dateProvider
     }
 
+    /// Whether the store was pointed at an explicit base directory instead
+    /// of the shared application-support root (true for hermetic tests).
+    var hasCustomBaseDirectory: Bool { baseDirectory != nil }
+
+    /// Resolves (and creates) an incoming-media directory for callers that
+    /// write progressively instead of via `save` (live voice captures).
+    func incomingDirectory(subdirectory: String) throws -> URL {
+        let directory = try filesDirectory().appendingPathComponent(subdirectory, isDirectory: true)
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true, attributes: nil)
+        return directory
+    }
+
     func save(
         data: Data,
         preferredName: String?,
@@ -39,7 +51,11 @@ struct BLEIncomingFileStore {
         }
     }
 
-    func enforceQuota(reservingBytes: Int) {
+    /// Frees least-recently-modified incoming files until `reservingBytes`
+    /// fits under the quota. `excluding` protects files that are still being
+    /// written (in-flight live captures) from eviction; they still count
+    /// toward usage.
+    func enforceQuota(reservingBytes: Int, excluding: Set<URL> = []) {
         do {
             let base = try filesDirectory()
             let incomingDirs = [
@@ -69,9 +85,11 @@ struct BLEIncomingFileStore {
             guard currentUsage > targetUsage else { return }
 
             let needToFree = currentUsage - targetUsage
+            let excludedPaths = Set(excluding.map { $0.standardizedFileURL.path })
             var freedSpace: Int64 = 0
             for file in allFiles.sorted(by: { $0.modified < $1.modified }) {
                 guard freedSpace < needToFree else { break }
+                guard !excludedPaths.contains(file.url.standardizedFileURL.path) else { continue }
                 do {
                     try fileManager.removeItem(at: file.url)
                     freedSpace += file.size

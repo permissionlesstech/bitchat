@@ -59,7 +59,7 @@ extension ChatViewModel: ChatLiveVoiceContext {
 }
 
 /// Where a live voice burst lives: a Noise DM or the public mesh timeline.
-enum VoiceBurstScope: Equatable {
+enum VoiceBurstScope: Hashable {
     case directMessage
     case publicMesh
 }
@@ -72,6 +72,16 @@ enum VoiceBurstScope: Equatable {
 /// bubble so nobody sees a duplicate.
 @MainActor
 final class ChatLiveVoiceCoordinator {
+    /// Burst IDs are sender-chosen, so they only identify a burst *within*
+    /// an authenticated (peer, scope) pair: keying assemblies by the full
+    /// triple stops an attacker who observed a public burst ID from racing
+    /// a START to capture the real talker's frames.
+    private struct AssemblyKey: Hashable {
+        let peerID: PeerID
+        let scope: VoiceBurstScope
+        let burstID: Data
+    }
+
     private final class Assembly {
         let burstID: Data
         let peerID: PeerID
@@ -96,6 +106,8 @@ final class ChatLiveVoiceCoordinator {
         var player: PTTBurstPlayer?
         var idleTimeout: Task<Void, Never>?
         var gapRedrain: Task<Void, Never>?
+
+        var key: AssemblyKey { AssemblyKey(peerID: peerID, scope: scope, burstID: burstID) }
 
         init(burstID: Data, peerID: PeerID, scope: VoiceBurstScope, nickname: String, message: BitchatMessage, fileURL: URL, fileHandle: FileHandle) {
             self.burstID = burstID
@@ -123,11 +135,21 @@ final class ChatLiveVoiceCoordinator {
     private static let finishedBurstsCap = 32
 
     private unowned let context: any ChatLiveVoiceContext
-    private var assemblies: [Data: Assembly] = [:]
-    private var finishedBursts: [Data: FinishedBurst] = [:]
+    private let fileStore: BLEIncomingFileStore
+    private var assemblies: [AssemblyKey: Assembly] = [:]
+    private var finishedBursts: [AssemblyKey: FinishedBurst] = [:]
 
-    init(context: any ChatLiveVoiceContext) {
+    init(context: any ChatLiveVoiceContext, fileStore: BLEIncomingFileStore = BLEIncomingFileStore()) {
         self.context = context
+        self.fileStore = fileStore
+        // Orphaned partial captures from a previous session (live-only bursts
+        // whose finalized note never arrived) are dead weight outside the
+        // quota's accounting — sweep them on startup. Under test, only a
+        // store pointed at its own base directory is swept, so coordinators
+        // sharing the real application-support directory stay hermetic.
+        if !TestEnvironment.isRunningTests || fileStore.hasCustomBaseDirectory {
+            sweepStaleLiveCaptures()
+        }
     }
 
     // MARK: - Inbound frames
@@ -160,11 +182,12 @@ final class ChatLiveVoiceCoordinator {
             return
         }
 
-        if let assembly = assemblies[packet.burstID] {
-            // The sender is authenticated (Noise session or packet
-            // signature); a different peer or scope reusing the same burst
-            // ID is a collision or a replay — drop it.
-            guard assembly.peerID == peerID, assembly.scope == scope else { return }
+        // The sender is authenticated (Noise session or packet signature),
+        // and the key binds the burst ID to that (peer, scope): a colliding
+        // START from another peer opens its own assembly instead of
+        // capturing this one's frames.
+        let key = AssemblyKey(peerID: peerID, scope: scope, burstID: packet.burstID)
+        if let assembly = assemblies[key] {
             apply(packet, to: assembly)
             return
         }
@@ -178,7 +201,7 @@ final class ChatLiveVoiceCoordinator {
                 return
             }
             guard let assembly = makeAssembly(burstID: packet.burstID, peerID: peerID, scope: scope, nickname: nickname, timestamp: timestamp) else { return }
-            assemblies[packet.burstID] = assembly
+            assemblies[key] = assembly
             updatePublicTalkerIndicator()
             apply(packet, to: assembly)
         case .end, .canceled:
@@ -203,17 +226,25 @@ final class ChatLiveVoiceCoordinator {
               let burstID = Self.burstID(fromVoiceFileName: String(message.content.dropFirst(prefix.count)))
         else { return false }
 
+        // Bind the note to the burst's authenticated sender and scope: an
+        // attacker's burst reusing the same ID lives under its own key and
+        // never matches the real sender's note (registry is capped at
+        // `finishedBurstsCap`, so the linear scan is cheap).
+        func matches(_ key: AssemblyKey) -> Bool {
+            key.burstID == burstID
+                && (message.senderPeerID == nil || key.peerID == message.senderPeerID)
+                && message.isPrivate == (key.scope == .directMessage)
+        }
+
         // The note usually lands after END, but a lost END or a fast transfer
         // can beat it — close out the live assembly first.
-        if let assembly = assemblies[burstID] {
+        if let assembly = assemblies.first(where: { matches($0.key) })?.value {
             finalize(assembly)
         }
 
         pruneFinishedBursts()
-        guard let finished = finishedBursts[burstID] else { return false }
-        // Bind the note to the burst's authenticated sender and scope.
-        guard message.senderPeerID == nil || message.senderPeerID == finished.peerID else { return false }
-        guard message.isPrivate == (finished.scope == .directMessage) else { return false }
+        guard let entry = finishedBursts.first(where: { matches($0.key) }) else { return false }
+        let finished = entry.value
 
         let replacement = BitchatMessage(
             id: finished.messageID,
@@ -238,7 +269,7 @@ final class ChatLiveVoiceCoordinator {
         // The complete .m4a replaces the partial live capture.
         WaveformCache.shared.purge(url: finished.fileURL)
         try? FileManager.default.removeItem(at: finished.fileURL)
-        finishedBursts.removeValue(forKey: burstID)
+        finishedBursts.removeValue(forKey: entry.key)
 
         context.notifyUIChanged()
         SecureLogger.debug("PTT: absorbed finalized note for burst \(burstID.hexEncodedString())", category: .session)
@@ -248,10 +279,17 @@ final class ChatLiveVoiceCoordinator {
     // MARK: - Assembly lifecycle
 
     private func makeAssembly(burstID: Data, peerID: PeerID, scope: VoiceBurstScope, nickname: String, timestamp: Date) -> Assembly? {
-        guard let fileURL = Self.makeIncomingURL(burstID: burstID) else {
+        guard let fileURL = makeIncomingURL(burstID: burstID, peerID: peerID) else {
             SecureLogger.error("PTT: cannot resolve incoming media directory for burst \(burstID.hexEncodedString())", category: .session)
             return nil
         }
+        // BCH-01-002: live captures share the incoming-media quota with
+        // finalized transfers; reserve the burst's worst case up front and
+        // never evict a partial that is still streaming in.
+        fileStore.enforceQuota(
+            reservingBytes: TransportConfig.pttMaxBurstBytes,
+            excluding: Set(assemblies.values.map(\.fileURL))
+        )
         FileManager.default.createFile(atPath: fileURL.path, contents: nil)
         guard let handle = try? FileHandle(forWritingTo: fileURL) else {
             SecureLogger.error("PTT: cannot open capture file for burst \(burstID.hexEncodedString())", category: .session)
@@ -413,7 +451,7 @@ final class ChatLiveVoiceCoordinator {
         }
         try? assembly.fileHandle?.close()
         assembly.fileHandle = nil
-        assemblies.removeValue(forKey: assembly.burstID)
+        assemblies.removeValue(forKey: assembly.key)
         updatePublicTalkerIndicator()
 
         guard assembly.deliveredFrames > 0 else {
@@ -432,7 +470,7 @@ final class ChatLiveVoiceCoordinator {
         republishBubble(of: assembly)
 
         pruneFinishedBursts()
-        finishedBursts[assembly.burstID] = FinishedBurst(
+        finishedBursts[assembly.key] = FinishedBurst(
             messageID: assembly.messageID,
             peerID: assembly.peerID,
             scope: assembly.scope,
@@ -468,7 +506,7 @@ final class ChatLiveVoiceCoordinator {
         assembly.player?.stop()
         try? assembly.fileHandle?.close()
         assembly.fileHandle = nil
-        assemblies.removeValue(forKey: assembly.burstID)
+        assemblies.removeValue(forKey: assembly.key)
         updatePublicTalkerIndicator()
         removeBubble(of: assembly)
         WaveformCache.shared.purge(url: assembly.fileURL)
@@ -480,10 +518,10 @@ final class ChatLiveVoiceCoordinator {
 
     private func rescheduleIdleTimeout(for assembly: Assembly) {
         assembly.idleTimeout?.cancel()
-        let burstID = assembly.burstID
+        let key = assembly.key
         assembly.idleTimeout = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(TransportConfig.pttBurstEndTimeoutSeconds * 1_000_000_000))
-            guard !Task.isCancelled, let self, let assembly = self.assemblies[burstID] else { return }
+            guard !Task.isCancelled, let self, let assembly = self.assemblies[key] else { return }
             // Talker went silent/out of range without an END.
             self.finalize(assembly)
         }
@@ -491,10 +529,10 @@ final class ChatLiveVoiceCoordinator {
 
     private func scheduleGapRedrain(for assembly: Assembly) {
         assembly.gapRedrain?.cancel()
-        let burstID = assembly.burstID
+        let key = assembly.key
         assembly.gapRedrain = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: UInt64((Self.gapSkipSeconds + 0.05) * 1_000_000_000))
-            guard !Task.isCancelled, let self, let assembly = self.assemblies[burstID] else { return }
+            guard !Task.isCancelled, let self, let assembly = self.assemblies[key] else { return }
             self.drainInOrder(assembly)
             self.finalizeIfComplete(assembly)
         }
@@ -521,21 +559,29 @@ final class ChatLiveVoiceCoordinator {
         return Data(hexString: hex)
     }
 
-    private static func makeIncomingURL(burstID: Data) -> URL? {
-        guard let base = try? FileManager.default.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        ) else { return nil }
-        let directory = base
-            .appendingPathComponent("files", isDirectory: true)
-            .appendingPathComponent("\(MimeType.Category.audio.mediaDir)/incoming", isDirectory: true)
-        do {
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: nil)
-        } catch {
-            return nil
+    private static let incomingSubdirectory = "\(MimeType.Category.audio.mediaDir)/incoming"
+
+    /// The peer ID in the name keeps colliding burst IDs from different
+    /// senders on distinct files; `burstID(fromVoiceFileName:)` still rejects
+    /// every `voice_live_*` name, so live captures can never absorb a note.
+    private func makeIncomingURL(burstID: Data, peerID: PeerID) -> URL? {
+        guard let directory = try? fileStore.incomingDirectory(subdirectory: Self.incomingSubdirectory) else { return nil }
+        return directory.appendingPathComponent("voice_live_\(burstID.hexEncodedString())_\(peerID.id).aac")
+    }
+
+    /// Deletes partial live captures left behind by a previous session.
+    /// In-session cleanup needs no sweep: absorb, cancel, and empty-finalize
+    /// all delete their capture file.
+    private func sweepStaleLiveCaptures() {
+        guard let directory = try? fileStore.incomingDirectory(subdirectory: Self.incomingSubdirectory),
+              let contents = try? FileManager.default.contentsOfDirectory(
+                  at: directory,
+                  includingPropertiesForKeys: nil,
+                  options: [.skipsHiddenFiles]
+              )
+        else { return }
+        for url in contents where url.lastPathComponent.hasPrefix("voice_live_") && url.pathExtension == "aac" {
+            try? FileManager.default.removeItem(at: url)
         }
-        return directory.appendingPathComponent("voice_live_\(burstID.hexEncodedString()).aac")
     }
 }
