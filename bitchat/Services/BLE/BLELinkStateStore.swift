@@ -164,13 +164,24 @@ final class BLELinkStateStore {
         guard let peerID else { return [] }
 
         var links: Set<BLEIngressLinkID> = []
-        if let peripheralUUID = peerToPeripheralUUID[peerID] {
+        // Scan all states rather than the 1:1 reverse map: after a state
+        // restoration the same device can hold several live peripheral links
+        // bound to one peer (it reappears under a fresh UUID while the
+        // restored connection lives on).
+        for (peripheralUUID, state) in peripherals where state.peerID == peerID {
             links.insert(.peripheral(peripheralUUID))
         }
         for (centralUUID, mappedPeerID) in centralToPeerID where mappedPeerID == peerID {
             links.insert(.central(centralUUID))
         }
         return links
+    }
+
+    /// The peer's most recently bound peripheral link, per peer. Used to keep
+    /// duplicate-link fanout collapse deterministic (see BLEFanoutSelector).
+    var preferredPeripheralBindings: [PeerID: String] {
+        assertOwned()
+        return peerToPeripheralUUID
     }
 
     func peerID(forPeripheralID peripheralID: String) -> PeerID? {
@@ -221,8 +232,19 @@ final class BLELinkStateStore {
     func removePeripheral(_ peripheralID: String) -> PeerID? {
         assertOwned()
         let peerID = peripherals.removeValue(forKey: peripheralID)?.peerID
-        if let peerID {
-            peerToPeripheralUUID.removeValue(forKey: peerID)
+        // Only clear (or repair) the reverse map when it points at the removed
+        // link: with duplicate links to one peer, removing a stale duplicate
+        // must not strand the peer's surviving bound link.
+        if let peerID, peerToPeripheralUUID[peerID] == peripheralID {
+            // Prefer a writable survivor: repairing onto a link that is
+            // mid-service-rediscovery would strand directed sends until the
+            // characteristic comes back.
+            let survivors = peripherals.filter { $0.value.peerID == peerID && $0.value.isConnected }
+            if let survivorUUID = survivors.first(where: { $0.value.characteristic != nil })?.key ?? survivors.first?.key {
+                peerToPeripheralUUID[peerID] = survivorUUID
+            } else {
+                peerToPeripheralUUID.removeValue(forKey: peerID)
+            }
         }
         return peerID
     }

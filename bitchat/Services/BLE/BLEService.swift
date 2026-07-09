@@ -41,6 +41,10 @@ final class BLEService: NSObject {
     // store): entries older than the cooldown are pruned on insert.
     private var lastLinkRebindAt: [String: Date] = [:]
 
+    // Redundant-link retirement cooldown per peer (bleQueue-owned): bounds
+    // how often a replayed announce could flip which duplicate link survives.
+    private var lastRedundantLinkRetirementAt: [PeerID: Date] = [:]
+
     // BCH-01-004: Rate-limiting for subscription-triggered announces.
     private var subscriptionAnnounceLimiter = BLESubscriptionAnnounceLimiter()
     
@@ -1190,8 +1194,13 @@ final class BLEService: NSObject {
         let outboundPriority = BLEOutboundPacketPolicy.priority(for: packet, data: data)
 
         let states = snapshotPeripheralStates()
-        let connectedStates = states.filter { $0.isConnected }
-        let subscribedCentrals = characteristic == nil ? [] : snapshotSubscribedCentrals().centrals
+        // A link without a discovered characteristic cannot be written to
+        // (the write loop below skips it); offering it to the planner only
+        // wastes fanout slots — and a peer's single collapsed copy would be
+        // silently dropped if its bound link is still mid-rediscovery.
+        let connectedStates = states.filter { $0.isConnected && $0.characteristic != nil }
+        let centralSnapshot = snapshotSubscribedCentrals()
+        let subscribedCentrals = characteristic == nil ? [] : centralSnapshot.centrals
         let connectedPeripheralIDs = connectedStates.map { $0.peripheral.identifier.uuidString }
         let centralIDs = subscribedCentrals.map { $0.identifier.uuidString }
         let peripheralPeerBindings = Dictionary(uniqueKeysWithValues: connectedStates.compactMap { state in
@@ -1207,7 +1216,12 @@ final class BLEService: NSObject {
             ingressRecord: ingressRecord,
             excludedLinks: excludedPeerLinks,
             peripheralPeerBindings: peripheralPeerBindings,
-            centralPeerBindings: snapshotSubscribedCentrals().peerIDsByCentralUUID,
+            centralPeerBindings: centralSnapshot.peerIDsByCentralUUID,
+            // Perf note: this is a third bleQueue hop per send; if send-path
+            // profiling ever flags it, fold it into snapshotPeripheralStates
+            // as a combined snapshot.
+            preferredPeripheralPerPeer: readLinkState { $0.preferredPeripheralBindings },
+            directAnnounceTTL: messageTTL,
             directedOnlyPeer: directedOnlyPeer
         )
 
@@ -1925,7 +1939,17 @@ extension BLEService: CBCentralManagerDelegate {
 
         // Clean up references and peer mappings
         _ = linkStateStore.removePeripheral(peripheralID)
-        if let peerID {
+        // A duplicate link can drop while the peer stays live on another
+        // (the dual-role central link, or a second bound link after a
+        // restore): peer-disconnect bookkeeping only runs once the peer's
+        // last live link is gone. removePeripheral just repaired the reverse
+        // map onto a connected survivor, so directLinkState is accurate
+        // here. The scan restart and connect-slot refill below stay
+        // unguarded — they respond to the physical drop regardless of
+        // remaining logical links.
+        let remainingLinks = peerID.map { linkStateStore.directLinkState(for: $0) }
+        let peerStillLinked = (remainingLinks?.hasPeripheral ?? false) || (remainingLinks?.hasCentral ?? false)
+        if let peerID, !peerStillLinked {
             // Do not remove peer; mark as not connected but retain for reachability
             collectionsQueue.sync(flags: .barrier) {
                 peerRegistry.markDisconnected(peerID)
@@ -1933,7 +1957,7 @@ extension BLEService: CBCentralManagerDelegate {
             refreshLocalTopology()
         }
 
-        
+
         // Restart scanning with allow duplicates for faster rediscovery
         if centralManager?.state == .poweredOn {
             // Stop and restart scanning to ensure we get fresh discovery events
@@ -1944,15 +1968,15 @@ extension BLEService: CBCentralManagerDelegate {
         }
         // Attempt to fill freed slot from queue
         bleQueue.async { [weak self] in self?.tryConnectFromQueue() }
-        
+
         // Notify delegate about disconnection on main thread (direct link dropped)
         notifyUI { [weak self] in
             guard let self = self else { return }
-            
+
             // Get current peer list (after removal)
             let currentPeerIDs = self.collectionsQueue.sync { self.peerRegistry.peerIDs }
-            
-            if let peerID {
+
+            if let peerID, !peerStillLinked {
                 self.notifyPeerDisconnectedDebounced(peerID)
             }
             self.requestPeerDataPublish()
@@ -2565,6 +2589,13 @@ extension BLEService: CBPeripheralManagerDelegate {
         
         // Find and disconnect the peer associated with this central
         if let peerID = removedPeerID {
+            // The remote side retiring a redundant duplicate connection
+            // arrives here as an unsubscribe while the peer stays live on
+            // its other links; only the peer's last link disconnecting
+            // counts. If every link truly dropped, the surviving-link
+            // callbacks (didDisconnectPeripheral, or this one again) run
+            // the bookkeeping.
+            guard linkStateStore.links(to: peerID).isEmpty else { return }
             // Mark peer as not connected; retain for reachability
             collectionsQueue.sync(flags: .barrier) {
                 peerRegistry.markDisconnected(peerID)
@@ -4114,6 +4145,12 @@ extension BLEService {
             } else {
                 SecureLogger.debug("🚦 Queued fragment transfer waiting for slot", category: .session)
             }
+
+        case let .droppedDuplicate(_, activeTransferId):
+            SecureLogger.debug(
+                "🔁 Skipping duplicate outbound transfer — same content already in flight as \(activeTransferId?.prefix(8) ?? "?")…",
+                category: .session
+            )
         }
     }
 
@@ -4446,9 +4483,11 @@ extension BLEService {
         }
 
         // A verified direct announce proves the sender owns the link it came
-        // in on: heal any stale binding left by a peer-ID rotation.
+        // in on: heal any stale binding left by a peer-ID rotation, and
+        // consolidate duplicate same-role connections onto that link.
         if let result, result.isVerified, result.isDirectAnnounce {
             rebindLinkAfterVerifiedDirectAnnounce(packet, to: result.peerID)
+            retireRedundantPeripheralLinks(packet, to: result.peerID)
         }
 
         // Bridge courier watch: a verified announce may add a peer whose
@@ -4538,12 +4577,99 @@ extension BLEService {
             self.messageQueue.async { [weak self] in
                 self?.promoteReboundPeerToConnected(peerID)
             }
+            // Any other peripheral links still bound to the rotated-away ID
+            // are stale duplicates of the same physical device (its restored
+            // connections outlived the relaunch that rotated the ID): cancel
+            // them now instead of leaving ghost links that spray duplicate
+            // traffic until the inactivity timeout.
+            self.cancelBoundPeripheralLinks(to: previousPeerID, keeping: linkUUID)
             // Retire the rotated-away ID only once its last link is gone; a
             // remaining stale link heals the same way or ages out.
             guard self.linkStateStore.links(to: previousPeerID).isEmpty else { return }
             self.messageQueue.async { [weak self] in
                 self?.retireRotatedPeer(previousPeerID)
             }
+        }
+    }
+
+    /// After a restore relaunch the same phone can reappear under a fresh
+    /// peripheral UUID while its restored connection lives on, leaving
+    /// several live central-role connections to one peer that each carry
+    /// every packet (field-verified: every voice frame arrived 2-3x). A
+    /// verified direct announce is the consolidation point: keep the link it
+    /// proves live (or the peer's most recently bound one) and cancel the
+    /// rest. Only same-role duplicates are touched — one connection per role
+    /// is the normal dual-role topology — and only connections we own as
+    /// central: the peer's central subscriptions on our peripheral manager
+    /// are its connections to cancel, and it runs this same policy.
+    ///
+    /// Directness is forgeable (TTL is unsigned), so a replayed announce
+    /// could nominate the replayer's link as the survivor. Containment
+    /// mirrors the rotation rebind: only links already BOUND to the peer are
+    /// retired (announce-evidenced, never pre-announce links), at most one
+    /// retirement per peer per cooldown window, and the peer keeps a live
+    /// link either way.
+    private func retireRedundantPeripheralLinks(_ packet: BitchatPacket, to peerID: PeerID) {
+        let ingressLink = collectionsQueue.sync { ingressLinks.link(for: packet) }
+        bleQueue.async { [weak self] in
+            guard let self else { return }
+            let now = Date()
+            self.lastRedundantLinkRetirementAt = self.lastRedundantLinkRetirementAt.filter {
+                now.timeIntervalSince($0.value) < TransportConfig.bleLinkRebindCooldownSeconds
+            }
+            guard self.lastRedundantLinkRetirementAt[peerID] == nil else { return }
+
+            var ingressPeripheralUUID: String?
+            if case .peripheral(let uuid) = ingressLink {
+                ingressPeripheralUUID = uuid
+            }
+            guard let keptUUID = BLERedundantLinkPolicy.keptPeripheralUUID(
+                ingressPeripheralUUID: ingressPeripheralUUID,
+                mostRecentlyBoundUUID: self.linkStateStore.preferredPeripheralBindings[peerID],
+                links: self.peripheralLinkPolicySnapshot(),
+                peerID: peerID
+            ) else { return }
+
+            self.lastRedundantLinkRetirementAt[peerID] = now
+            // The survivor becomes the peer's reverse-mapped link so directed
+            // sends follow the consolidation.
+            self.linkStateStore.bindPeripheral(keptUUID, to: peerID)
+            self.cancelBoundPeripheralLinks(to: peerID, keeping: keptUUID)
+            self.refreshLocalTopology()
+        }
+    }
+
+    /// Cancels our central-role connections whose link is bound to `peerID`,
+    /// except `keptUUID`. bleQueue only. Each entry is removed from the link
+    /// store BEFORE cancelling so didDisconnectPeripheral sees no peer
+    /// binding and skips its peer-disconnect bookkeeping — the peer is still
+    /// live (on the kept link, or under its rotated identity).
+    private func cancelBoundPeripheralLinks(to peerID: PeerID, keeping keptUUID: String?) {
+        let retiring = BLERedundantLinkPolicy.peripheralUUIDsToRetire(
+            links: peripheralLinkPolicySnapshot(),
+            peerID: peerID,
+            keeping: keptUUID ?? ""
+        )
+        for uuid in retiring {
+            guard let state = linkStateStore.state(forPeripheralID: uuid) else { continue }
+            _ = linkStateStore.removePeripheral(uuid)
+            SecureLogger.info(
+                "🔗 Retiring redundant link \(uuid.prefix(8))… bound to \(peerID.id.prefix(8))…\(keptUUID.map { " (keeping \($0.prefix(8))…)" } ?? "")",
+                category: .session
+            )
+            centralManager?.cancelPeripheralConnection(state.peripheral)
+        }
+    }
+
+    /// bleQueue only (reads the link store).
+    private func peripheralLinkPolicySnapshot() -> [BLERedundantLinkPolicy.PeripheralLink] {
+        linkStateStore.peripheralStates.map {
+            BLERedundantLinkPolicy.PeripheralLink(
+                uuid: $0.peripheral.identifier.uuidString,
+                peerID: $0.peerID,
+                isConnected: $0.isConnected,
+                hasCharacteristic: $0.characteristic != nil
+            )
         }
     }
 
