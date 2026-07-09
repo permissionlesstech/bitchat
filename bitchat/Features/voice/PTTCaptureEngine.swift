@@ -15,7 +15,12 @@ import Foundation
 /// - a finalized `.m4a` voice note on `stop()` — the same artifact
 ///   `VoiceRecorder` produces, so the existing voice-note send pipeline
 ///   handles delivery to receivers that missed the live stream.
-final class PTTCaptureEngine {
+/// `@unchecked Sendable`: every mutable property is confined to one executor —
+/// the capture `queue` (resampler/encoder/file/counters) or the main actor
+/// (`engine`, `engineStarted`, `sessionToken`, `configChangeObserver`) — so
+/// weak references may cross the `@Sendable` tap/notification closures, which
+/// immediately hop back to the owning executor.
+final class PTTCaptureEngine: @unchecked Sendable {
     /// Hard cap matching `VoiceRecorder.maxRecordingDuration`: past it the
     /// engine keeps running (the UI owns the gesture) but stops encoding.
     private static let maxCaptureDuration: TimeInterval = 120

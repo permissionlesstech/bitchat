@@ -60,7 +60,13 @@ final class AudioSessionCoordinator {
 
     /// Opaque handle for one client's hold on the session. Release exactly
     /// once when done (extra releases are ignored).
-    final class Token: Sendable {
+    ///
+    /// `@unchecked` because the stored callbacks are `@MainActor`-isolated
+    /// closures (non-Sendable as stored types) that only the coordinator —
+    /// itself `@MainActor` — ever invokes; the token is otherwise immutable,
+    /// so handing it across executors (e.g. releasing from a `deinit` hop)
+    /// is safe.
+    final class Token: @unchecked Sendable {
         fileprivate let onInterrupted: @MainActor () -> Void
         fileprivate let onCategoryEscalated: (@MainActor () -> Void)?
 
