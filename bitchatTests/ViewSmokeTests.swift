@@ -41,6 +41,7 @@ private struct SmokeFeatureModels {
     let conversationUIModel: ConversationUIModel
     let peerListModel: PeerListModel
     let boardAlertsModel: BoardAlertsModel
+    let sharedContentImportModel: SharedContentImportModel
 }
 
 @MainActor
@@ -99,7 +100,8 @@ private func makeSmokeFeatureModels(for viewModel: ChatViewModel) -> SmokeFeatur
         verificationModel: verificationModel,
         conversationUIModel: conversationUIModel,
         peerListModel: peerListModel,
-        boardAlertsModel: boardAlertsModel
+        boardAlertsModel: boardAlertsModel,
+        sharedContentImportModel: SharedContentImportModel(store: nil)
     )
 }
 
@@ -118,6 +120,7 @@ private func installSmokeEnvironment<V: View>(
         .environmentObject(featureModels.conversationUIModel)
         .environmentObject(featureModels.peerListModel)
         .environmentObject(featureModels.boardAlertsModel)
+        .environmentObject(featureModels.sharedContentImportModel)
 }
 
 @MainActor

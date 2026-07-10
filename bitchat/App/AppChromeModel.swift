@@ -20,6 +20,7 @@ final class AppChromeModel: ObservableObject {
     @Published var showScreenshotPrivacyWarning = false
 
     private let chatViewModel: ChatViewModel
+    private let onPanicWipe: () -> Void
     private var cancellables = Set<AnyCancellable>()
     /// The composer owns capture state above ChatViewModel. ContentView
     /// installs this hook so both panic entry points synchronously stop it.
@@ -28,8 +29,13 @@ final class AppChromeModel: ObservableObject {
     /// Bulletin-board coordinator, created on first use of the board sheet.
     private(set) lazy var boardManager = BoardManager(transport: chatViewModel.meshService)
 
-    init(chatViewModel: ChatViewModel, privateInboxModel: PrivateInboxModel) {
+    init(
+        chatViewModel: ChatViewModel,
+        privateInboxModel: PrivateInboxModel,
+        onPanicWipe: @escaping () -> Void = {}
+    ) {
         self.chatViewModel = chatViewModel
+        self.onPanicWipe = onPanicWipe
         self.nickname = chatViewModel.nickname
 
         bind(privateInboxModel: privateInboxModel)
@@ -106,6 +112,7 @@ final class AppChromeModel: ObservableObject {
 
     func panicClearAllData() {
         prepareForPanic?()
+        onPanicWipe()
         chatViewModel.panicClearAllData()
     }
 

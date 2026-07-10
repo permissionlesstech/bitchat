@@ -70,6 +70,7 @@
 		A6E32D1B2E762EA70032EA8A /* Exceptions for "bitchat" folder in "bitchatShareExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				Services/SharedContentHandoff.swift,
 				Services/TransportConfig.swift,
 			);
 			target = 57CA17A36A2532A6CFF367BB /* bitchatShareExtension */;

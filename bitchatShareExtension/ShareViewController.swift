@@ -19,9 +19,8 @@ final class ShareViewController: UIViewController {
         static let nothingToShare = String(localized: "share.status.nothing_to_share", comment: "Shown when the share extension receives no content")
         static let noShareableContent = String(localized: "share.status.no_shareable_content", comment: "Shown when provided content cannot be shared")
         static let sharedLinkTitleFallback = String(localized: "share.fallback.shared_link_title", comment: "Fallback title when saving a shared link")
-        static let sharedLinkConfirmation = String(localized: "share.status.shared_link", comment: "Confirmation after successfully sharing a link")
-        static let sharedTextConfirmation = String(localized: "share.status.shared_text", comment: "Confirmation after successfully sharing text")
-        static let failedToEncode = String(localized: "share.status.failed_to_encode", comment: "Shown when the share payload cannot be encoded")
+        static let savedForReview = String(localized: "share.status.saved_for_review", comment: "Shown after content is staged for review in the main app")
+        static let failedToSave = String(localized: "share.status.failed_to_save", comment: "Shown when content cannot be staged for the main app")
     }
     
     private let statusLabel: UILabel = {
@@ -44,9 +43,7 @@ final class ShareViewController: UIViewController {
             statusLabel.leadingAnchor.constraint(greaterThanOrEqualTo: view.layoutMarginsGuide.leadingAnchor),
             statusLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.layoutMarginsGuide.trailingAnchor)
         ])
-        DispatchQueue.global().async {
-            self.processShare()
-        }
+        processShare()
     }
 
     // MARK: - Processing
@@ -151,30 +148,31 @@ final class ShareViewController: UIViewController {
 
     // MARK: - Save + Finish
     private func saveAndFinish(url: URL, title: String?) {
-        let payload: [String: String] = [
-            "url": url.absoluteString,
-            "title": title ?? url.host ?? Strings.sharedLinkTitleFallback
-        ]
-        if let json = try? JSONSerialization.data(withJSONObject: payload),
-           let s = String(data: json, encoding: .utf8) {
-            saveToSharedDefaults(content: s, type: "url")
-            finishWithMessage(Strings.sharedLinkConfirmation)
-        } else {
-            finishWithMessage(Strings.failedToEncode)
-        }
+        let payload = SharedContentPayload.url(
+            url,
+            title: title ?? url.host ?? Strings.sharedLinkTitleFallback
+        )
+        stageAndFinish(payload)
     }
 
     private func saveAndFinish(text: String) {
-        saveToSharedDefaults(content: text, type: "text")
-        finishWithMessage(Strings.sharedTextConfirmation)
+        stageAndFinish(.text(text))
     }
 
-    private func saveToSharedDefaults(content: String, type: String) {
-        guard let userDefaults = UserDefaults(suiteName: Self.groupID) else { return }
-        userDefaults.set(content, forKey: "sharedContent")
-        userDefaults.set(type, forKey: "sharedContentType")
-        userDefaults.set(Date(), forKey: "sharedContentDate")
-        // No need to force synchronize; the system persists changes
+    private func stageAndFinish(_ payload: SharedContentPayload) {
+        guard let store = SharedContentStore(suiteName: Self.groupID) else {
+            finishWithMessage(Strings.failedToSave)
+            return
+        }
+
+        do {
+            try store.stage(payload)
+            // Staging is not sending. The main app will require a second,
+            // destination-labelled confirmation before filling its composer.
+            finishWithMessage(Strings.savedForReview)
+        } catch {
+            finishWithMessage(Strings.failedToSave)
+        }
     }
 
     private func finishWithMessage(_ msg: String) {
