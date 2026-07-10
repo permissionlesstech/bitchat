@@ -17,6 +17,11 @@ enum BLENoisePayloadFactory {
         typedPayload(.delivered, payload: Data(messageID.utf8))
     }
 
+    static func privateFile(_ filePacket: BitchatFilePacket) -> Data? {
+        guard let payload = filePacket.encode() else { return nil }
+        return typedPayload(.privateFile, payload: payload)
+    }
+
     static func typedPayload(_ type: NoisePayloadType, payload: Data) -> Data {
         var typed = Data([type.rawValue])
         typed.append(payload)

@@ -24,8 +24,12 @@ final class SecureNoiseSession: NoiseSession {
             throw NoiseSecurityError.sessionExhausted
         }
         
-        // Validate message size
-        guard NoiseSecurityValidator.validateMessageSize(plaintext) else {
+        // Ordinary Noise messages keep the protocol ceiling. Finalized media
+        // is the sole typed-payload extension and remains under the framed-file
+        // cap enforced again at the service and file-decoder layers.
+        let isPrivateFile = plaintext.first == NoisePayloadType.privateFile.rawValue
+            && NoiseSecurityValidator.validatePrivateFileMessageSize(plaintext)
+        guard NoiseSecurityValidator.validateMessageSize(plaintext) || isPrivateFile else {
             throw NoiseSecurityError.messageTooLarge
         }
         
@@ -42,8 +46,11 @@ final class SecureNoiseSession: NoiseSession {
             throw NoiseSecurityError.sessionExpired
         }
         
-        // Validate message size
-        guard NoiseSecurityValidator.validateMessageSize(ciphertext) else {
+        // The payload type is encrypted, so a large candidate can only be
+        // bounded here; `NoiseEncryptionService.decrypt` authenticates it and
+        // then requires the resulting type to be `.privateFile`.
+        guard NoiseSecurityValidator.validateCiphertextSize(ciphertext)
+                || NoiseSecurityValidator.validatePrivateFileCiphertextSize(ciphertext) else {
             throw NoiseSecurityError.messageTooLarge
         }
         

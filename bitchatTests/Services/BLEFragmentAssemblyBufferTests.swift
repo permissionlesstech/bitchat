@@ -118,6 +118,35 @@ struct BLEFragmentAssemblyBufferTests {
     }
 
     @Test
+    func encryptedPrivateFileAssemblyGetsFramedFileHeadroom() throws {
+        var buffer = BLEFragmentAssemblyBuffer()
+        let fragmentID = Data(repeating: 0x15, count: 8)
+        let first = try #require(BLEFragmentHeader(packet: makeFragmentPacket(
+            fragmentID: fragmentID,
+            index: 0,
+            total: 2,
+            originalType: MessageType.noiseEncrypted.rawValue,
+            fragmentData: Data(repeating: 0x01, count: FileTransferLimits.maxPayloadBytes)
+        )))
+        let second = try #require(BLEFragmentHeader(packet: makeFragmentPacket(
+            fragmentID: fragmentID,
+            index: 1,
+            total: 2,
+            originalType: MessageType.noiseEncrypted.rawValue,
+            fragmentData: Data([0x02])
+        )))
+
+        _ = buffer.append(first, maxInFlightAssemblies: 8)
+        let result = buffer.append(second, maxInFlightAssemblies: 8)
+
+        if case let .complete(_, data, _) = result {
+            #expect(data.count == FileTransferLimits.maxPayloadBytes + 1)
+        } else {
+            Issue.record("Expected encrypted private-file assembly to use framed-file limit")
+        }
+    }
+
+    @Test
     func removeExpiredDropsOldAssemblies() throws {
         var buffer = BLEFragmentAssemblyBuffer()
         let packet = makePacket(payload: makePayload(count: 256))

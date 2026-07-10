@@ -49,6 +49,18 @@ final class TransferProgressManager {
         }
     }
 
+    /// Reject a transfer before fragment scheduling (for example, when the
+    /// remote build did not advertise the required wire capability). Unlike
+    /// `cancel`, this still emits an event when no progress state exists yet,
+    /// allowing the UI to remove its already-created sending placeholder.
+    func rejectBeforeStart(id: String) {
+        queue.async(flags: .barrier) { [weak self] in
+            guard let self = self else { return }
+            let state = self.states.removeValue(forKey: id) ?? (sent: 0, total: 0)
+            self.subject.send(.cancelled(id: id, sentFragments: state.sent, totalFragments: state.total))
+        }
+    }
+
     func snapshot(id: String) -> (sent: Int, total: Int)? {
         var result: (sent: Int, total: Int)?
         queue.sync {

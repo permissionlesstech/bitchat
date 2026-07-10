@@ -48,7 +48,10 @@ struct BLENoiseSessionQueuesTests {
         queues.appendTypedPayload(Data([0x01]), for: peerID)
         queues.appendTypedPayload(Data([0x02]), for: peerID)
 
-        #expect(queues.takeTypedPayloads(for: peerID) == [Data([0x01]), Data([0x02])])
+        #expect(queues.takeTypedPayloads(for: peerID) == [
+            BLEPendingTypedPayload(payload: Data([0x01]), transferId: nil),
+            BLEPendingTypedPayload(payload: Data([0x02]), transferId: nil)
+        ])
         #expect(queues.takeTypedPayloads(for: peerID).isEmpty)
         #expect(queues.takePrivateMessages(for: peerID).map(\.messageID) == ["m1"])
     }
@@ -63,5 +66,22 @@ struct BLENoiseSessionQueuesTests {
         queues.removeAll()
 
         #expect(queues.isEmpty)
+    }
+
+    @Test
+    func transferIDSurvivesHandshakeQueueAndCanBeCancelledBeforeDrain() {
+        let peerID = PeerID(str: "aaaaaaaaaaaaaaaa")
+        var queues = BLENoiseSessionQueues()
+
+        queues.appendTypedPayload(Data([0x09, 0xAA]), transferId: "media-1", for: peerID)
+        queues.appendTypedPayload(Data([0x01, 0xBB]), for: peerID)
+
+        let removed = queues.removeTypedPayload(transferId: "media-1")
+        let removedAgain = queues.removeTypedPayload(transferId: "media-1")
+        #expect(removed)
+        #expect(!removedAgain)
+        #expect(queues.takeTypedPayloads(for: peerID) == [
+            BLEPendingTypedPayload(payload: Data([0x01, 0xBB]), transferId: nil)
+        ])
     }
 }

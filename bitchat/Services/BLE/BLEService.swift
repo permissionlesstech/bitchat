@@ -131,7 +131,7 @@ final class BLEService: NSObject {
     // 5. Fragment Reassembly (necessary for messages > MTU)
     private var fragmentAssemblyBuffer = BLEFragmentAssemblyBuffer()
     private var outboundFragmentTransfers = BLEOutboundFragmentTransferScheduler()
-    private let incomingFileStore = BLEIncomingFileStore()
+    private let incomingFileStore: BLEIncomingFileStore
     
     // Simple announce throttling
     private var announceThrottle = BLEAnnounceThrottle()
@@ -275,10 +275,12 @@ final class BLEService: NSObject {
         keychain: KeychainManagerProtocol,
         idBridge: NostrIdentityBridge,
         identityManager: SecureIdentityStateManagerProtocol,
-        initializeBluetoothManagers: Bool = true
+        initializeBluetoothManagers: Bool = true,
+        incomingFileStore: BLEIncomingFileStore = BLEIncomingFileStore()
     ) {
         self.keychain = keychain
         self.idBridge = idBridge
+        self.incomingFileStore = incomingFileStore
         noiseService = NoiseEncryptionService(keychain: keychain)
         self.identityManager = identityManager
         super.init()
@@ -877,7 +879,9 @@ final class BLEService: NSObject {
                 SecureLogger.debug("🛑 Removed pending transfer \(id.prefix(8))… before start", category: .session)
 
             case .missing:
-                break
+                if self.pendingNoiseSessionQueues.removeTypedPayload(transferId: transferId) {
+                    SecureLogger.debug("🛑 Removed handshake-queued transfer \(transferId.prefix(8))…", category: .session)
+                }
             }
         }
     }
@@ -935,35 +939,44 @@ final class BLEService: NSObject {
     func sendFilePrivate(_ filePacket: BitchatFilePacket, to peerID: PeerID, transferId: String) {
         messageQueue.async { [weak self] in
             guard let self = self else { return }
-            guard let payload = filePacket.encode() else {
-                SecureLogger.error("❌ Failed to encode file packet for private send", category: .session)
-                return
-            }
-            // Normalize to short form (SHA256-derived 16-hex) for wire protocol compatibility
-            // This ensures 64-hex Noise keys are converted to the canonical routing format
             let targetID = peerID.toShort()
-            guard let recipientData = Data(hexString: targetID.id) else {
-                SecureLogger.error("❌ Invalid recipient peer ID for file transfer: \(peerID.id.prefix(8))…", category: .session)
+            let supportsPrivateMedia = self.collectionsQueue.sync {
+                self.peerRegistry.capabilities(for: targetID).contains(.privateMedia)
+            }
+            guard supportsPrivateMedia else {
+                SecureLogger.warning(
+                    "Private media not sent: \(targetID.id.prefix(8))… did not advertise encrypted-media support",
+                    category: .security
+                )
+                TransferProgressManager.shared.rejectBeforeStart(id: transferId)
+                return
+            }
+            guard let typedPayload = BLENoisePayloadFactory.privateFile(filePacket) else {
+                SecureLogger.error("❌ Failed to encode file packet for private send", category: .session)
+                TransferProgressManager.shared.rejectBeforeStart(id: transferId)
+                return
+            }
+            guard self.noiseService.hasEstablishedSession(with: targetID) else {
+                self.collectionsQueue.sync(flags: .barrier) {
+                    self.pendingNoiseSessionQueues.appendTypedPayload(
+                        typedPayload,
+                        transferId: transferId,
+                        for: targetID
+                    )
+                }
+                SecureLogger.debug("📥 Queued private file for \(targetID.id.prefix(8))… pending handshake", category: .session)
+                self.initiateNoiseHandshake(with: targetID)
                 return
             }
 
-            var packet = BitchatPacket(
-                type: MessageType.fileTransfer.rawValue,
-                senderID: self.myPeerIDData,
-                recipientID: recipientData,
-                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                payload: payload,
-                signature: nil,
-                ttl: self.messageTTL,
-                version: 2
-            )
-
-            if let signed = self.noiseService.signPacket(packet) {
-                packet = signed
+            do {
+                let packet = try self.makeEncryptedNoisePacket(typedPayload, to: targetID)
+                SecureLogger.debug("📁 Sending encrypted private file to \(targetID.id.prefix(8))… plaintextBytes=\(typedPayload.count)", category: .session)
+                self.broadcastPacket(packet, transferId: transferId)
+            } catch {
+                SecureLogger.error("❌ Failed to encrypt private file for \(targetID.id.prefix(8))…: \(error)", category: .security)
+                TransferProgressManager.shared.rejectBeforeStart(id: transferId)
             }
-
-            SecureLogger.debug("📁 Sending private file transfer to \(peerID.id.prefix(8))… bytes=\(payload.count)", category: .session)
-            self.broadcastPacket(packet, transferId: transferId)
         }
     }
 
@@ -1104,6 +1117,21 @@ final class BLEService: NSObject {
         let padForBLE = BLEOutboundPacketPolicy.padsBLEFrame(for: packetToSend.type)
         if packetToSend.type == MessageType.fileTransfer.rawValue {
             sendFragmentedPacket(packetToSend, pad: padForBLE, maxChunk: nil, directedOnlyPeer: nil, transferId: transferId)
+            return
+        }
+        // App-initiated private media is already one opaque Noise ciphertext.
+        // Always fragment that outer packet so the existing transfer scheduler
+        // retains progress/cancel behavior without exposing the file TLVs.
+        if packetToSend.type == MessageType.noiseEncrypted.rawValue,
+           let transferId,
+           let recipientPeerID = PeerID(hexData: packetToSend.recipientID) {
+            sendFragmentedPacket(
+                packetToSend,
+                pad: padForBLE,
+                maxChunk: nil,
+                directedOnlyPeer: recipientPeerID,
+                transferId: transferId
+            )
             return
         }
         guard let data = packetToSend.toBinaryData(padding: padForBLE) else {
@@ -1532,6 +1560,9 @@ final class BLEService: NSObject {
             },
             verifyPacketSignature: { [weak self] packet, signingPublicKey in
                 self?.noiseService.verifyPacketSignature(packet, publicKey: signingPublicKey) ?? false
+            },
+            localSigningPublicKey: { [weak self] in
+                self?.noiseService.getSigningPublicKeyData() ?? Data()
             },
             signedSenderDisplayName: { [weak self] packet, peerID in
                 self?.signedSenderDisplayName(for: packet, from: peerID)
@@ -2336,7 +2367,11 @@ extension BLEService {
         }
     }
 
-    func _test_seedConnectedPeer(_ peerID: PeerID, nickname: String) {
+    func _test_seedConnectedPeer(
+        _ peerID: PeerID,
+        nickname: String,
+        capabilities: PeerCapabilities = []
+    ) {
         collectionsQueue.sync(flags: .barrier) {
             peerRegistry.upsert(BLEPeerInfo(
                 peerID: peerID,
@@ -2345,7 +2380,8 @@ extension BLEService {
                 noisePublicKey: nil,
                 signingPublicKey: nil,
                 isVerifiedNickname: true,
-                lastSeen: Date()
+                lastSeen: Date(),
+                capabilities: capabilities
             ))
         }
     }
@@ -3399,7 +3435,13 @@ extension BLEService {
     }
 
     private func makeEncryptedNoisePacket(_ typedPayload: Data, to peerID: PeerID) throws -> BitchatPacket {
-        let encrypted = try noiseService.encrypt(typedPayload, for: peerID)
+        let encrypted: Data
+        let isPrivateFile = typedPayload.first == NoisePayloadType.privateFile.rawValue
+        if isPrivateFile {
+            encrypted = try noiseService.encryptPrivateFilePayload(typedPayload, for: peerID)
+        } else {
+            encrypted = try noiseService.encrypt(typedPayload, for: peerID)
+        }
         return BitchatPacket(
             type: MessageType.noiseEncrypted.rawValue,
             senderID: myPeerIDData,
@@ -3407,7 +3449,9 @@ extension BLEService {
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             payload: encrypted,
             signature: nil,
-            ttl: messageTTL
+            ttl: messageTTL,
+            // v1 has a 16-bit payload length; finalized media can exceed it.
+            version: isPrivateFile ? 2 : 1
         )
     }
 
@@ -5472,6 +5516,14 @@ extension BLEService {
                 self?.noiseService.clearSession(for: peerID)
             },
             deliverNoisePayload: { [weak self] peerID, type, payload, timestamp in
+                if type == .privateFile {
+                    self?.fileTransferHandler.handlePrivatePayload(
+                        payload,
+                        from: peerID,
+                        timestamp: timestamp
+                    )
+                    return
+                }
                 // Single main-actor hop delivering `.noisePayloadReceived`.
                 self?.notifyUI { [weak self] in
                     self?.deliverTransportEvent(.noisePayloadReceived(
@@ -5488,14 +5540,17 @@ extension BLEService {
     // MARK: Helper Functions
     
     private func sendPendingNoisePayloadsAfterHandshake(for peerID: PeerID) {
-        let payloads = collectionsQueue.sync(flags: .barrier) { () -> [Data] in
+        let payloads = collectionsQueue.sync(flags: .barrier) { () -> [BLEPendingTypedPayload] in
             pendingNoiseSessionQueues.takeTypedPayloads(for: peerID)
         }
         guard !payloads.isEmpty else { return }
         SecureLogger.debug("📤 Sending \(payloads.count) pending noise payloads to \(peerID.id.prefix(8))… after handshake", category: .session)
-        for payload in payloads {
+        for pending in payloads {
             do {
-                broadcastPacket(try makeEncryptedNoisePacket(payload, to: peerID))
+                broadcastPacket(
+                    try makeEncryptedNoisePacket(pending.payload, to: peerID),
+                    transferId: pending.transferId
+                )
             } catch {
                 SecureLogger.error("❌ Failed to send pending noise payload to \(peerID.id.prefix(8))…: \(error)")
             }

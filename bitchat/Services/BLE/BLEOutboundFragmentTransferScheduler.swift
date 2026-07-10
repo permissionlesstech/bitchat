@@ -29,8 +29,9 @@ struct BLEOutboundFragmentTransferRequest {
     }
 
     var resolvedTransferId: String? {
+        if let transferId { return transferId }
         guard packet.type == MessageType.fileTransfer.rawValue else { return nil }
-        return transferId ?? packet.payload.sha256Hex()
+        return packet.payload.sha256Hex()
     }
 
     /// Content identity independent of the caller-chosen transfer ID: the
