@@ -109,6 +109,8 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
     private let teleportedStoreKey = "locationChannel.teleportedSet"
     private let bookmarksKey = "locationChannel.bookmarks"
     private let bookmarkNamesKey = "locationChannel.bookmarkNames"
+    private let bookmarkNamesSchemaVersionKey = "locationChannel.bookmarkNamesSchemaVersion"
+    private let bookmarkNamesCurrentSchemaVersion = 1
 
     // MARK: - Published State (Channel)
 
@@ -222,6 +224,26 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
            let dict = try? JSONDecoder().decode([String: String].self, from: data) {
             bookmarkNames = dict
         }
+
+        migrateBookmarkNamesIfNeeded()
+    }
+
+    /// Drops names cached before low-precision geohashes became country-first.
+    /// Correctly resolved names written after this migration must survive
+    /// subsequent launches, so the migration is explicitly versioned.
+    private func migrateBookmarkNamesIfNeeded() {
+        guard storage.integer(forKey: bookmarkNamesSchemaVersionKey) < bookmarkNamesCurrentSchemaVersion else {
+            return
+        }
+
+        let retainedNames = bookmarkNames.filter {
+            Self.normalizeGeohash($0.key).count > 2
+        }
+        if retainedNames.count != bookmarkNames.count {
+            bookmarkNames = retainedNames
+            persistBookmarkNames()
+        }
+        storage.set(bookmarkNamesCurrentSchemaVersion, forKey: bookmarkNamesSchemaVersionKey)
     }
 
     private func initializePermissionState() {
@@ -525,15 +547,15 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
     }
 
     private func resolveCompositeAdminName(geohash gh: String, points: [CLLocation]) {
-        var uniqueAdmins: [String] = []
-        var seenAdmins = Set<String>()
+        var uniqueRegions: [String] = []
+        var seenRegions = Set<String>()
         var idx = 0
 
         func step() {
             if idx >= points.count {
                 let finalName: String? = {
-                    if uniqueAdmins.count >= 2 { return uniqueAdmins[0] + " and " + uniqueAdmins[1] }
-                    return uniqueAdmins.first
+                    if uniqueRegions.count >= 2 { return uniqueRegions[0] + " and " + uniqueRegions[1] }
+                    return uniqueRegions.first
                 }()
                 if let finalName = finalName, !finalName.isEmpty {
                     DispatchQueue.main.async {
@@ -549,12 +571,16 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
             geocoder.reverseGeocodeLocation(loc) { [weak self] placemarks, _ in
                 guard self != nil else { return }
                 if let pm = placemarks?.first {
-                    if let admin = pm.administrativeArea, !admin.isEmpty, !seenAdmins.contains(admin) {
-                        seenAdmins.insert(admin)
-                        uniqueAdmins.append(admin)
-                    } else if let country = pm.country, !country.isEmpty, !seenAdmins.contains(country) {
-                        seenAdmins.insert(country)
-                        uniqueAdmins.append(country)
+                    if let country = pm.country, !country.isEmpty {
+                        if !seenRegions.contains(country) {
+                            seenRegions.insert(country)
+                            uniqueRegions.append(country)
+                        }
+                    } else if let admin = pm.administrativeArea,
+                              !admin.isEmpty,
+                              !seenRegions.contains(admin) {
+                        seenRegions.insert(admin)
+                        uniqueRegions.append(admin)
                     }
                 }
                 step()
@@ -566,7 +592,7 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
     private static func nameForGeohashLength(_ len: Int, from pm: CLPlacemark) -> String? {
         switch len {
         case 0...2:
-            return pm.administrativeArea ?? pm.country
+            return pm.country ?? pm.administrativeArea
         case 3...4:
             return pm.administrativeArea ?? pm.subAdministrativeArea ?? pm.country
         case 5:

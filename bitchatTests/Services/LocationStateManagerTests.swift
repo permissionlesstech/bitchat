@@ -207,7 +207,54 @@ final class LocationStateManagerTests: XCTestCase {
         XCTAssertFalse(reloaded.teleported)
     }
 
-    func test_addBookmark_lowPrecisionResolvesCompositeAdminName() async {
+    func test_loadPersistedState_migratesLowPrecisionBookmarkNamesOnce() throws {
+        let storage = makeStorage()
+        let staleNames = [
+            "gc": "England",
+            "u3": "Île-de-France",
+            "u4pr": "Paris",
+            "u4pruy": "Le Marais"
+        ]
+        storage.set(try JSONEncoder().encode(staleNames), forKey: "locationChannel.bookmarkNames")
+
+        let migrated = LocationStateManager(
+            storage: storage,
+            locationManager: MockLocationManager(authorizationStatus: .denied),
+            geocoder: MockLocationGeocoder(),
+            shouldInitializeCoreLocation: false
+        )
+
+        XCTAssertNil(migrated.bookmarkNames["gc"])
+        XCTAssertNil(migrated.bookmarkNames["u3"])
+        XCTAssertEqual(migrated.bookmarkNames["u4pr"], "Paris")
+        XCTAssertEqual(migrated.bookmarkNames["u4pruy"], "Le Marais")
+        XCTAssertEqual(storage.integer(forKey: "locationChannel.bookmarkNamesSchemaVersion"), 1)
+
+        let persistedData = try XCTUnwrap(storage.data(forKey: "locationChannel.bookmarkNames"))
+        let persistedNames = try JSONDecoder().decode([String: String].self, from: persistedData)
+        XCTAssertEqual(persistedNames, [
+            "u4pr": "Paris",
+            "u4pruy": "Le Marais"
+        ])
+
+        let correctedNames = [
+            "gc": "United Kingdom",
+            "u4pr": "Paris"
+        ]
+        storage.set(try JSONEncoder().encode(correctedNames), forKey: "locationChannel.bookmarkNames")
+
+        let reloaded = LocationStateManager(
+            storage: storage,
+            locationManager: MockLocationManager(authorizationStatus: .denied),
+            geocoder: MockLocationGeocoder(),
+            shouldInitializeCoreLocation: false
+        )
+
+        XCTAssertEqual(reloaded.bookmarkNames["gc"], "United Kingdom")
+        XCTAssertEqual(reloaded.bookmarkNames["u4pr"], "Paris")
+    }
+
+    func test_addBookmark_lowPrecisionPrefersCountryOverAdministrativeAreas() async {
         let geocoder = MockLocationGeocoder()
         geocoder.enqueue(placemarks: [makePlacemark(country: "United States", administrativeArea: "California")])
         geocoder.enqueue(placemarks: [makePlacemark(country: "United States", administrativeArea: "Nevada")])
@@ -223,10 +270,48 @@ final class LocationStateManagerTests: XCTestCase {
 
         manager.addBookmark("9q")
 
-        let bookmarkResolved = await waitUntil { manager.bookmarkNames["9q"] == "California and Nevada" }
+        let bookmarkResolved = await waitUntil { manager.bookmarkNames["9q"] == "United States" }
         XCTAssertTrue(bookmarkResolved)
         XCTAssertEqual(geocoder.reverseRequests.count, 5)
         XCTAssertEqual(manager.bookmarks, ["9q"])
+    }
+
+    func test_addBookmark_lowPrecisionFallsBackToDistinctAdministrativeAreas() async {
+        let geocoder = MockLocationGeocoder()
+        geocoder.enqueue(placemarks: [makePlacemark(administrativeArea: "California")])
+        geocoder.enqueue(placemarks: [makePlacemark(administrativeArea: "Nevada")])
+        geocoder.enqueue(placemarks: [makePlacemark(administrativeArea: "California")])
+        geocoder.enqueue(placemarks: [makePlacemark(administrativeArea: "Arizona")])
+        geocoder.enqueue(placemarks: [makePlacemark(administrativeArea: "Nevada")])
+        let manager = LocationStateManager(
+            storage: makeStorage(),
+            locationManager: MockLocationManager(authorizationStatus: .denied),
+            geocoder: geocoder,
+            shouldInitializeCoreLocation: false
+        )
+
+        manager.addBookmark("9q")
+
+        let bookmarkResolved = await waitUntil { manager.bookmarkNames["9q"] == "California and Nevada" }
+        XCTAssertTrue(bookmarkResolved)
+        XCTAssertEqual(geocoder.reverseRequests.count, 5)
+    }
+
+    func test_addBookmark_higherPrecisionStillPrefersAdministrativeArea() async {
+        let geocoder = MockLocationGeocoder()
+        geocoder.enqueue(placemarks: [makePlacemark(country: "United States", administrativeArea: "California")])
+        let manager = LocationStateManager(
+            storage: makeStorage(),
+            locationManager: MockLocationManager(authorizationStatus: .denied),
+            geocoder: geocoder,
+            shouldInitializeCoreLocation: false
+        )
+
+        manager.addBookmark("9q8")
+
+        let bookmarkResolved = await waitUntil { manager.bookmarkNames["9q8"] == "California" }
+        XCTAssertTrue(bookmarkResolved)
+        XCTAssertEqual(geocoder.reverseRequests.count, 1)
     }
 
     private func makeStorage() -> UserDefaults {
