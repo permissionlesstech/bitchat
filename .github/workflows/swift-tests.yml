@@ -142,6 +142,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
+      - name: Check clean recipe safety
+        run: bash scripts/check-just-clean-safety.sh
+
       - name: Build iOS (simulator, no signing)
         # Build both simulator architectures so CI validates every vendored
         # Arti simulator slice and the configuration that ships.
