@@ -4,6 +4,14 @@ import Foundation
 
 struct BLEIncomingFileStore {
     private static let quotaBytes: Int64 = 100 * 1024 * 1024
+    private static let mediaSubdirectories = [
+        "voicenotes/incoming",
+        "voicenotes/outgoing",
+        "images/incoming",
+        "images/outgoing",
+        "files/incoming",
+        "files/outgoing"
+    ]
 
     /// Name prefix of in-flight live voice captures (progressively written by
     /// `ChatLiveVoiceCoordinator`). Quota eviction skips them by pattern —
@@ -22,6 +30,23 @@ struct BLEIncomingFileStore {
         self.fileManager = fileManager
         self.baseDirectory = baseDirectory
         self.dateProvider = dateProvider
+    }
+
+    /// Panic-wipe every managed incoming and outgoing media artifact before
+    /// returning. Recreating the directory tree keeps later capture/receive
+    /// paths usable without allowing a detached cleanup task to race them.
+    func panicWipe() throws {
+        let filesDirectory = try rootDirectory().appendingPathComponent("files", isDirectory: true)
+        if fileManager.fileExists(atPath: filesDirectory.path) {
+            try fileManager.removeItem(at: filesDirectory)
+        }
+        for subdirectory in Self.mediaSubdirectories {
+            try fileManager.createDirectory(
+                at: filesDirectory.appendingPathComponent(subdirectory, isDirectory: true),
+                withIntermediateDirectories: true,
+                attributes: nil
+            )
+        }
     }
 
     /// Resolves (and creates) an incoming-media directory for callers that
@@ -113,15 +138,18 @@ struct BLEIncomingFileStore {
     }
 
     private func filesDirectory() throws -> URL {
-        let root = try baseDirectory ?? fileManager.url(
+        let filesDir = try rootDirectory().appendingPathComponent("files", isDirectory: true)
+        try fileManager.createDirectory(at: filesDir, withIntermediateDirectories: true, attributes: nil)
+        return filesDir
+    }
+
+    private func rootDirectory() throws -> URL {
+        try baseDirectory ?? fileManager.url(
             for: .applicationSupportDirectory,
             in: .userDomainMask,
             appropriateFor: nil,
             create: true
         )
-        let filesDir = root.appendingPathComponent("files", isDirectory: true)
-        try fileManager.createDirectory(at: filesDir, withIntermediateDirectories: true, attributes: nil)
-        return filesDir
     }
 
     private func sanitizedFileName(_ name: String?, defaultName: String, fallbackExtension: String?) -> String {

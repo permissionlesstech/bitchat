@@ -226,6 +226,21 @@ final class ChatLiveVoiceCoordinator {
         assemblies.values.contains { $0.messageID == message.id }
     }
 
+    /// Stop every live file handle/player before the panic media directory is
+    /// removed. This prevents an in-flight assembly from continuing to write
+    /// through an unlinked file after the wipe returns.
+    func resetForPanic() {
+        for assembly in Array(assemblies.values) {
+            cancelAssembly(assembly)
+        }
+        for player in drainingPlayers.values {
+            player.stop()
+        }
+        drainingPlayers.removeAll(keepingCapacity: false)
+        finishedBursts.removeAll(keepingCapacity: false)
+        updatePublicTalkerIndicator()
+    }
+
     /// Called for every inbound private message: when it is the finalized
     /// voice note of a burst we assembled (matched by burst ID in the file
     /// name), swap it into the existing live bubble and report `true` so the

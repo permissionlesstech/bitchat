@@ -78,6 +78,7 @@ final class ChatMediaTransferCoordinator {
 
     private(set) var transferIdToMessageIDs: [String: [String]] = [:]
     private(set) var messageIDToTransferId: [String: String] = [:]
+    private var preparationGeneration: UInt64 = 0
 
     init(context: any ChatMediaTransferContext) {
         self.context = context
@@ -98,13 +99,14 @@ final class ChatMediaTransferCoordinator {
         )
         let messageID = message.id
         let transferId = makeTransferID(messageID: messageID)
+        let generation = preparationGeneration
 
         Task.detached(priority: .userInitiated) { [weak self] in
             do {
                 let packet = try ChatMediaPreparation.prepareVoiceNotePacket(at: url)
 
                 await MainActor.run { [weak self] in
-                    guard let self else { return }
+                    guard let self, self.preparationGeneration == generation else { return }
                     self.registerTransfer(transferId: transferId, messageID: messageID)
                     if let peerID = targetPeer {
                         self.context.sendFilePrivate(packet, to: peerID, transferId: transferId)
@@ -116,13 +118,13 @@ final class ChatMediaTransferCoordinator {
                 SecureLogger.warning("Voice note exceeds size limit (\(size) bytes)", category: .session)
                 try? FileManager.default.removeItem(at: url)
                 await MainActor.run { [weak self] in
-                    guard let self else { return }
+                    guard let self, self.preparationGeneration == generation else { return }
                     self.handleMediaSendFailure(messageID: messageID, reason: String(localized: "content.delivery.reason.voice_too_large", comment: "Failure reason shown when a voice note exceeds the size limit"))
                 }
             } catch {
                 SecureLogger.error("Voice note send failed: \(error)", category: .session)
                 await MainActor.run { [weak self] in
-                    guard let self else { return }
+                    guard let self, self.preparationGeneration == generation else { return }
                     self.handleMediaSendFailure(messageID: messageID, reason: String(localized: "content.delivery.reason.voice_send_failed", comment: "Failure reason shown when a voice note could not be sent"))
                 }
             }
@@ -132,11 +134,15 @@ final class ChatMediaTransferCoordinator {
     #if os(iOS)
     func processThenSendImage(_ image: UIImage?) {
         guard let image else { return }
+        let generation = preparationGeneration
         Task.detached { [weak self] in
             do {
                 let processedURL = try ImageUtils.processImage(image)
                 await MainActor.run { [weak self] in
-                    guard let self else { return }
+                    guard let self, self.preparationGeneration == generation else {
+                        try? FileManager.default.removeItem(at: processedURL)
+                        return
+                    }
                     self.sendImage(from: processedURL)
                 }
             } catch {
@@ -147,11 +153,15 @@ final class ChatMediaTransferCoordinator {
     #elseif os(macOS)
     func processThenSendImage(from url: URL?) {
         guard let url else { return }
+        let generation = preparationGeneration
         Task.detached { [weak self] in
             do {
                 let processedURL = try ImageUtils.processImage(at: url)
                 await MainActor.run { [weak self] in
-                    guard let self else { return }
+                    guard let self, self.preparationGeneration == generation else {
+                        try? FileManager.default.removeItem(at: processedURL)
+                        return
+                    }
                     self.sendImage(from: processedURL)
                 }
             } catch {
@@ -170,6 +180,7 @@ final class ChatMediaTransferCoordinator {
         }
 
         let targetPeer = context.selectedPrivateChatPeer
+        let generation = preparationGeneration
 
         do {
             try ImageUtils.validateImageSource(at: sourceURL)
@@ -184,7 +195,10 @@ final class ChatMediaTransferCoordinator {
                 let prepared = try ChatMediaPreparation.prepareImagePacket(from: sourceURL)
 
                 await MainActor.run { [weak self] in
-                    guard let self else { return }
+                    guard let self, self.preparationGeneration == generation else {
+                        try? FileManager.default.removeItem(at: prepared.outputURL)
+                        return
+                    }
                     let message = self.enqueueMediaMessage(
                         content: "\(MimeType.Category.image.messagePrefix)\(prepared.outputURL.lastPathComponent)",
                         targetPeer: targetPeer
@@ -201,13 +215,13 @@ final class ChatMediaTransferCoordinator {
             } catch ChatMediaPreparationError.imageTooLarge(let size) {
                 SecureLogger.warning("Processed image exceeds size limit (\(size) bytes)", category: .session)
                 await MainActor.run { [weak self] in
-                    guard let self else { return }
+                    guard let self, self.preparationGeneration == generation else { return }
                     self.context.addSystemMessage("Image is too large to send.")
                 }
             } catch {
                 SecureLogger.error("Image send preparation failed: \(error)", category: .session)
                 await MainActor.run { [weak self] in
-                    guard let self else { return }
+                    guard let self, self.preparationGeneration == generation else { return }
                     self.context.addSystemMessage("Failed to prepare image for sending.")
                 }
             }
@@ -340,6 +354,19 @@ final class ChatMediaTransferCoordinator {
     func deleteMediaMessage(messageID: String) {
         clearTransferMapping(for: messageID)
         context.removeMessage(withID: messageID, cleanupFile: true)
+    }
+
+    /// Invalidates detached preparation work and cancels every transfer that
+    /// reached the transport. Stale tasks check the generation before they
+    /// can recreate a message or send after a panic wipe.
+    func resetForPanic() {
+        preparationGeneration &+= 1
+        let transferIDs = Set(transferIdToMessageIDs.keys)
+        transferIdToMessageIDs.removeAll(keepingCapacity: false)
+        messageIDToTransferId.removeAll(keepingCapacity: false)
+        for transferID in transferIDs {
+            context.cancelTransfer(transferID)
+        }
     }
 }
 
