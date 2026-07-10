@@ -1,42 +1,228 @@
-name: Fetch GeoRelays Data
+name: Propose GeoRelay Data Update
 
 on:
   schedule:
-    - cron: '0 6 * * 0'
+    - cron: "0 6 * * 0"
   workflow_dispatch:
 
+# Default to read-only. The publishing job receives only the scopes required
+# to push its branch and publish either a PR or a tracking issue.
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+
+concurrency:
+  group: georelay-data-update
+  cancel-in-progress: false
+
+env:
+  SOURCE_REPOSITORY: https://github.com/permissionlesstech/georelays.git
+  UPDATE_BRANCH: automation/georelay-data
+  TRACKING_ISSUE_TITLE: GeoRelay update awaiting pull request
 
 jobs:
-  update-relay-data:
+  propose-relay-data:
+    name: Validate and propose relay data
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Checkout reviewed base
+        # Pinned actions/checkout v5 so a mutable action tag cannot change the
+        # code that receives this job's write-capable token.
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: main
           fetch-depth: 0
+          # Do not expose the write token to fetch/validation subprocesses.
+          persist-credentials: false
 
-      - name: Fetch GeoRelays
+      - name: Test GeoRelay validator
         run: |
-          wget -q https://raw.githubusercontent.com/permissionlesstech/georelays/refs/heads/main/nostr_relays.csv
-          mv nostr_relays.csv ./relays/online_relays_gps.csv
+          set -euo pipefail
+          python3 -m unittest discover -s scripts/tests -p "test_*.py" -v
 
-      - name: Check for changes
-        id: git-check
+      - name: Fetch candidate over pinned HTTPS policy
+        id: upstream
         run: |
-          git diff --exit-code || echo "changes=true" >> $GITHUB_OUTPUT
-    
-      - name: Commit and push changes
-        if: steps.git-check.outputs.changes == 'true'
+          set -euo pipefail
+          source_commit=$(git ls-remote --refs "$SOURCE_REPOSITORY" refs/heads/main | awk 'NR == 1 { print $1 }')
+          if [[ ! "$source_commit" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Could not resolve an immutable upstream commit"
+            exit 1
+          fi
+          source_url="https://raw.githubusercontent.com/permissionlesstech/georelays/$source_commit/nostr_relays.csv"
+          effective_url=$(curl --fail --show-error --silent --location --proto "=https" --proto-redir "=https" --tlsv1.2 --max-time 60 --retry 3 --retry-all-errors --output "$RUNNER_TEMP/georelays-candidate.csv" --write-out "%{url_effective}" "$source_url")
+          if [[ "$effective_url" != "$source_url" ]]; then
+            echo "::error::Unexpected GeoRelay redirect target: $effective_url"
+            exit 1
+          fi
+          echo "source_commit=$source_commit" >> "$GITHUB_OUTPUT"
+          echo "source_url=$source_url" >> "$GITHUB_OUTPUT"
+
+      - name: Validate candidate against reviewed baseline
+        id: validation
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add relays/online_relays_gps.csv
-          git commit -m "Automated update of relay data - $(date -u)"
-          git push
+          set -euo pipefail
+          python3 scripts/validate_georelays.py --input "$RUNNER_TEMP/georelays-candidate.csv" --baseline relays/online_relays_gps.csv --output relays/online_relays_gps.csv --github-output "$GITHUB_OUTPUT"
+
+      - name: Check for a reviewed-file change
+        id: changes
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- relays/online_relays_gps.csv; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Upstream GeoRelay data already matches main." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --stat -- relays/online_relays_gps.csv
+          fi
+
+      - name: Push automation branch and publish review request
+        if: steps.changes.outputs.changed == 'true'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_COMMIT: ${{ steps.upstream.outputs.source_commit }}
+          SOURCE_URL: ${{ steps.upstream.outputs.source_url }}
+          DATA_ROWS: ${{ steps.validation.outputs.data_rows }}
+          UNIQUE_RELAYS: ${{ steps.validation.outputs.unique_relays }}
+          DATA_SHA256: ${{ steps.validation.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+
+          # Scope credential exposure to this final publishing step.
+          gh auth setup-git
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git switch -C "$UPDATE_BRANCH"
+          git add -- relays/online_relays_gps.csv
+          git diff --cached --quiet && {
+            echo "::error::Expected a staged GeoRelay data change"
+            exit 1
+          }
+          git commit -m "Update reviewed georelay directory" -m "Upstream-commit: $SOURCE_COMMIT"
+
+          remote_ref="refs/remotes/origin/$UPDATE_BRANCH"
+          if git fetch --no-tags origin "+refs/heads/$UPDATE_BRANCH:$remote_ref" 2>/dev/null; then
+            remote_sha=$(git rev-parse "$remote_ref")
+            git push --force-with-lease="refs/heads/$UPDATE_BRANCH:$remote_sha" origin "HEAD:refs/heads/$UPDATE_BRANCH"
+          else
+            git push origin "HEAD:refs/heads/$UPDATE_BRANCH"
+          fi
+
+          body_file="$RUNNER_TEMP/georelay-pr-body.md"
+          {
+            echo "## Automated GeoRelay data proposal"
+            echo
+            echo "- Source: $SOURCE_URL"
+            echo "- Upstream commit: $SOURCE_COMMIT"
+            echo "- Data rows: $DATA_ROWS"
+            echo "- Unique normalized relays: $UNIQUE_RELAYS"
+            echo "- SHA-256: $DATA_SHA256"
+            echo
+            echo "The candidate passed strict UTF-8, schema, size, row-count, secure-host, coordinate, duplicate-conflict, and baseline-delta validation."
+            echo
+            echo "This PR is intentionally not auto-merged. Review the relay additions/removals before merging."
+          } > "$body_file"
+
+          existing_pr=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --base main --head "$UPDATE_BRANCH" --json number --jq '.[0].number // empty')
+          pr_error="$RUNNER_TEMP/georelay-pr-error.txt"
+          pr_url=""
+          if [[ -n "$existing_pr" ]]; then
+            if gh pr edit "$existing_pr" --repo "$GITHUB_REPOSITORY" --title "Update reviewed GeoRelay directory" --body-file "$body_file" 2> "$pr_error"; then
+              pr_url=$(gh pr view "$existing_pr" --repo "$GITHUB_REPOSITORY" --json url --jq .url)
+            fi
+          else
+            if created_pr_url=$(gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$UPDATE_BRANCH" --title "Update reviewed GeoRelay directory" --body-file "$body_file" 2> "$pr_error"); then
+              pr_url="$created_pr_url"
+            fi
+          fi
+
+          tracking_issue_numbers=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TRACKING_ISSUE_TITLE\" in:title" --limit 100 --json number,title --jq ".[] | select(.title == \"$TRACKING_ISSUE_TITLE\") | .number")
+          tracking_issues=()
+          if [[ -n "$tracking_issue_numbers" ]]; then
+            mapfile -t tracking_issues <<< "$tracking_issue_numbers"
+          fi
+
+          if [[ -n "$pr_url" ]]; then
+            for issue_number in "${tracking_issues[@]}"; do
+              gh issue close "$issue_number" --repo "$GITHUB_REPOSITORY" --comment "A pull request is now available at $pr_url; closing this fallback tracking issue."
+            done
+            echo "Published GeoRelay review PR: $pr_url" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "::warning::GITHUB_TOKEN could not create or update the GeoRelay pull request; publishing the issues-write fallback."
+          if [[ -s "$pr_error" ]]; then
+            cat "$pr_error" >&2
+          fi
+
+          compare_url="https://github.com/${GITHUB_REPOSITORY}/compare/main...${UPDATE_BRANCH}?expand=1"
+          issue_body_file="$RUNNER_TEMP/georelay-tracking-issue-body.md"
+          {
+            echo "## Validated GeoRelay update awaiting review"
+            echo
+            echo "The automation branch was updated, but this workflow token could not create or update the pull request. Use the compare link below to create it manually."
+            echo
+            echo "- Compare and create PR: $compare_url"
+            echo "- Automation branch: $UPDATE_BRANCH"
+            echo "- Source: $SOURCE_URL"
+            echo "- Upstream commit: $SOURCE_COMMIT"
+            echo "- Data rows: $DATA_ROWS"
+            echo "- Unique normalized relays: $UNIQUE_RELAYS"
+            echo "- SHA-256: $DATA_SHA256"
+            echo
+            echo "The snapshot passed the repository's strict validator before the branch was pushed."
+          } > "$issue_body_file"
+
+          if (( ${#tracking_issues[@]} > 0 )); then
+            primary_issue="${tracking_issues[0]}"
+            gh issue edit "$primary_issue" --repo "$GITHUB_REPOSITORY" --title "$TRACKING_ISSUE_TITLE" --body-file "$issue_body_file"
+            issue_url=$(gh issue view "$primary_issue" --repo "$GITHUB_REPOSITORY" --json url --jq .url)
+            for duplicate_issue in "${tracking_issues[@]:1}"; do
+              gh issue close "$duplicate_issue" --repo "$GITHUB_REPOSITORY" --comment "Closing duplicate GeoRelay automation tracking issue; #$primary_issue is canonical."
+            done
+          else
+            issue_url=$(gh issue create --repo "$GITHUB_REPOSITORY" --title "$TRACKING_ISSUE_TITLE" --body-file "$issue_body_file")
+          fi
+
+          # Do not claim success until the fallback issue was confirmed.
+          [[ -n "$issue_url" ]]
+          echo "Published GeoRelay tracking issue fallback: $issue_url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Clean obsolete automation review state
+        if: steps.changes.outputs.changed == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh auth setup-git
+
+          existing_pr=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --base main --head "$UPDATE_BRANCH" --json number --jq '.[0].number // empty')
+          if [[ -n "$existing_pr" ]]; then
+            gh pr close "$existing_pr" --repo "$GITHUB_REPOSITORY" --comment "Upstream now matches the reviewed file on main; closing this obsolete automation proposal."
+            echo "Closed obsolete PR #$existing_pr." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          tracking_issue_numbers=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TRACKING_ISSUE_TITLE\" in:title" --limit 100 --json number,title --jq ".[] | select(.title == \"$TRACKING_ISSUE_TITLE\") | .number")
+          if [[ -n "$tracking_issue_numbers" ]]; then
+            while IFS= read -r issue_number; do
+              gh issue close "$issue_number" --repo "$GITHUB_REPOSITORY" --comment "Upstream now matches the reviewed file on main; closing this obsolete automation tracker."
+              echo "Closed obsolete tracking issue #$issue_number." >> "$GITHUB_STEP_SUMMARY"
+            done <<< "$tracking_issue_numbers"
+          fi
+
+          if git ls-remote --exit-code --heads origin "refs/heads/$UPDATE_BRANCH" > /dev/null; then
+            git push origin --delete "$UPDATE_BRANCH"
+            echo "Deleted obsolete automation branch $UPDATE_BRANCH." >> "$GITHUB_STEP_SUMMARY"
+          else
+            ls_remote_status=$?
+            if (( ls_remote_status != 2 )); then
+              echo "::error::Could not inspect the obsolete automation branch"
+              exit "$ls_remote_status"
+            fi
+          fi

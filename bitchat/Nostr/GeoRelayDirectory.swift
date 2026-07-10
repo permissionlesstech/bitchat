@@ -32,6 +32,23 @@ struct GeoRelayDirectoryDependencies {
     var retrySleep: (TimeInterval) async -> Void
     var activeNotificationName: Notification.Name?
     var autoStart: Bool
+    var validationPolicy: GeoRelayDirectoryValidationPolicy
+}
+
+struct GeoRelayDirectoryValidationPolicy: Sendable {
+    let maximumBytes: Int
+    let maximumRows: Int
+    let maximumEntries: Int
+    let minimumRemoteEntries: Int
+    let minimumRetainedFraction: Double
+
+    static let live = GeoRelayDirectoryValidationPolicy(
+        maximumBytes: 512 * 1024,
+        maximumRows: 5_000,
+        maximumEntries: 5_000,
+        minimumRemoteEntries: 50,
+        minimumRetainedFraction: 0.5
+    )
 }
 
 private extension GeoRelayDirectoryDependencies {
@@ -44,12 +61,16 @@ private extension GeoRelayDirectoryDependencies {
 #else
         let activeNotificationName: Notification.Name? = nil
 #endif
+        let validationPolicy = GeoRelayDirectoryValidationPolicy.live
 
         return Self(
             userDefaults: .standard,
             notificationCenter: .default,
             now: Date.init,
-            remoteURL: URL(string: "https://raw.githubusercontent.com/permissionlesstech/georelays/refs/heads/main/nostr_relays.csv")!,
+            // Runtime refreshes only from bitchat's reviewed copy. Upstream
+            // georelays/main is imported by a validator-backed pull request,
+            // so an upstream mutation cannot immediately retarget clients.
+            remoteURL: URL(string: "https://raw.githubusercontent.com/permissionlesstech/bitchat/refs/heads/main/relays/online_relays_gps.csv")!,
             fetchInterval: TransportConfig.geoRelayFetchIntervalSeconds,
             refreshCheckInterval: TransportConfig.geoRelayRefreshCheckIntervalSeconds,
             retryInitialSeconds: TransportConfig.geoRelayRetryInitialSeconds,
@@ -58,7 +79,27 @@ private extension GeoRelayDirectoryDependencies {
             makeFetchData: {
                 let session = TorURLSession.shared.session
                 return { request in
-                    let (data, _) = try await session.data(for: request)
+                    let (bytes, response) = try await session.bytes(for: request)
+                    guard let response = response as? HTTPURLResponse,
+                          (200...299).contains(response.statusCode),
+                          response.url == request.url else {
+                        throw URLError(.badServerResponse)
+                    }
+
+                    let maximumBytes = validationPolicy.maximumBytes
+                    guard response.expectedContentLength <= Int64(maximumBytes) else {
+                        throw URLError(.dataLengthExceedsMaximum)
+                    }
+                    var data = Data()
+                    if response.expectedContentLength > 0 {
+                        data.reserveCapacity(Int(response.expectedContentLength))
+                    }
+                    for try await byte in bytes {
+                        guard data.count < maximumBytes else {
+                            throw URLError(.dataLengthExceedsMaximum)
+                        }
+                        data.append(byte)
+                    }
                     return data
                 }
             },
@@ -76,7 +117,11 @@ private extension GeoRelayDirectoryDependencies {
                     )
                     let dir = base.appendingPathComponent("bitchat", isDirectory: true)
                     try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-                    return dir.appendingPathComponent("georelays_cache.csv")
+                    // v2 ignores caches populated from the old direct-upstream
+                    // trust path and subjects every load to strict validation.
+                    let legacyCache = dir.appendingPathComponent("georelays_cache.csv")
+                    try? FileManager.default.removeItem(at: legacyCache)
+                    return dir.appendingPathComponent("georelays_cache_v2.csv")
                 } catch {
                     return nil
                 }
@@ -94,7 +139,8 @@ private extension GeoRelayDirectoryDependencies {
                 try? await Task.sleep(nanoseconds: nanoseconds)
             },
             activeNotificationName: activeNotificationName,
-            autoStart: true
+            autoStart: true,
+            validationPolicy: validationPolicy
         )
     }
 }
@@ -125,7 +171,7 @@ final class GeoRelayDirectory {
     }
 
     private enum DetachedFetchOutcome: Sendable {
-        case success(entries: [Entry], csv: String)
+        case success(entries: [Entry], csv: Data)
         case torNotReady
         case invalidData
         case network(String)
@@ -212,6 +258,8 @@ final class GeoRelayDirectory {
         )
         let awaitTorReady = dependencies.awaitTorReady
         let fetchData = dependencies.makeFetchData()
+        let validationPolicy = dependencies.validationPolicy
+        let baselineEntries = Set(entries)
 
         Task { [weak self] in
             guard let self else { return }
@@ -219,7 +267,9 @@ final class GeoRelayDirectory {
             let outcome = await Self.fetchRemoteOutcome(
                 request: request,
                 awaitTorReady: awaitTorReady,
-                fetchData: fetchData
+                fetchData: fetchData,
+                validationPolicy: validationPolicy,
+                baselineEntries: baselineEntries
             )
 
             switch outcome {
@@ -238,7 +288,9 @@ final class GeoRelayDirectory {
     nonisolated private static func fetchRemoteOutcome(
         request: URLRequest,
         awaitTorReady: @escaping @Sendable () async -> Bool,
-        fetchData: @escaping @Sendable (URLRequest) async throws -> Data
+        fetchData: @escaping @Sendable (URLRequest) async throws -> Data,
+        validationPolicy: GeoRelayDirectoryValidationPolicy,
+        baselineEntries: Set<Entry>
     ) async -> DetachedFetchOutcome {
         await Task.detached(priority: .utility) {
             let ready = await awaitTorReady()
@@ -246,16 +298,16 @@ final class GeoRelayDirectory {
 
             do {
                 let data = try await fetchData(request)
-                guard let text = String(data: data, encoding: .utf8) else {
+                guard let parsed = Self.validatedEntries(
+                    from: data,
+                    policy: validationPolicy,
+                    minimumEntries: validationPolicy.minimumRemoteEntries,
+                    baselineEntries: baselineEntries
+                ) else {
                     return .invalidData
                 }
 
-                let parsed = Self.parseCSV(text)
-                guard !parsed.isEmpty else {
-                    return .invalidData
-                }
-
-                return .success(entries: parsed, csv: text)
+                return .success(entries: parsed, csv: data)
             } catch {
                 return .network(error.localizedDescription)
             }
@@ -269,7 +321,7 @@ final class GeoRelayDirectory {
     }
 
     @MainActor
-    private func handleFetchSuccess(entries parsed: [Entry], csv: String) {
+    private func handleFetchSuccess(entries parsed: [Entry], csv: Data) {
         entries = parsed
         persistCache(csv)
         dependencies.userDefaults.set(dependencies.now(), forKey: lastFetchKey)
@@ -321,9 +373,8 @@ final class GeoRelayDirectory {
         cleanupState.retryTask = nil
     }
 
-    private func persistCache(_ text: String) {
+    private func persistCache(_ data: Data) {
         guard let url = dependencies.cacheURL() else { return }
-        guard let data = text.data(using: .utf8) else { return }
         do {
             try dependencies.writeData(data, url)
         } catch {
@@ -336,9 +387,12 @@ final class GeoRelayDirectory {
         // Prefer cached file if present
         if let cache = dependencies.cacheURL(),
            let data = dependencies.readData(cache),
-           let text = String(data: data, encoding: .utf8) {
-            let arr = Self.parseCSV(text)
-            if !arr.isEmpty { return arr }
+           let entries = Self.validatedEntries(
+               from: data,
+               policy: dependencies.validationPolicy,
+               minimumEntries: 1
+           ) {
+            return entries
         }
 
         // Try bundled resource(s)
@@ -346,36 +400,157 @@ final class GeoRelayDirectory {
 
         for url in bundleCandidates {
             if let data = dependencies.readData(url),
-               let text = String(data: data, encoding: .utf8) {
-                let arr = Self.parseCSV(text)
-                if !arr.isEmpty { return arr }
+               let entries = Self.validatedEntries(
+                   from: data,
+                   policy: dependencies.validationPolicy,
+                   minimumEntries: 1
+               ) {
+                return entries
             }
         }
 
         // Try filesystem path (development/test)
         if let cwd = dependencies.currentDirectoryPath(),
            let data = dependencies.readData(URL(fileURLWithPath: cwd).appendingPathComponent("relays/online_relays_gps.csv")),
-           let text = String(data: data, encoding: .utf8) {
-            return Self.parseCSV(text)
+           let entries = Self.validatedEntries(
+               from: data,
+               policy: dependencies.validationPolicy,
+               minimumEntries: 1
+           ) {
+            return entries
         }
 
         SecureLogger.warning("GeoRelayDirectory: no local CSV found; entries empty", category: .session)
         return []
     }
 
-    nonisolated static func parseCSV(_ text: String) -> [Entry] {
-        var result: Set<Entry> = []
-        let lines = text.split(whereSeparator: { $0.isNewline })
-        for (idx, raw) in lines.enumerated() {
-            guard let line = raw.trimmedOrNilIfEmpty else { continue }
-            if idx == 0 && line.lowercased().contains("relay url") { continue }
-            let parts = line.split(separator: ",").map { $0.trimmed }
-            guard parts.count >= 3 else { continue }
-            guard let host = NostrRelayURL.directoryAddress(parts[0]) else { continue }
-            guard let lat = Double(parts[1]), let lon = Double(parts[2]) else { continue }
-            result.insert(Entry(host: host, lat: lat, lon: lon))
+    /// Parses the fixed three-column format as an all-or-nothing trust unit.
+    /// One malformed or conflicting row rejects the complete dataset rather
+    /// than silently shrinking or partially replacing the current directory.
+    nonisolated static func validatedEntries(
+        from data: Data,
+        policy: GeoRelayDirectoryValidationPolicy,
+        minimumEntries: Int,
+        baselineEntries: Set<Entry>? = nil
+    ) -> [Entry]? {
+        guard !data.isEmpty, data.count <= policy.maximumBytes,
+              let text = String(data: data, encoding: .utf8),
+              !text.hasPrefix("\u{feff}") else {
+            return nil
         }
-        return Array(result)
+
+        let lines = text.split(whereSeparator: { $0.isNewline })
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard let header = lines.first,
+              lines.count - 1 <= policy.maximumRows else {
+            return nil
+        }
+
+        let headerParts = header
+            .split(separator: ",", omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+        let supportedHeaders = [
+            ["relay url", "latitude", "longitude"],
+            ["relay url", "lat", "lon"]
+        ]
+        guard supportedHeaders.contains(headerParts) else {
+            return nil
+        }
+
+        var entriesByHost: [String: Entry] = [:]
+        for line in lines.dropFirst() {
+            let parts = line
+                .split(separator: ",", omittingEmptySubsequences: false)
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            guard parts.count == 3,
+                  let host = validatedDirectoryAddress(parts[0]),
+                  let latitude = Double(parts[1]), latitude.isFinite,
+                  (-90.0...90.0).contains(latitude),
+                  let longitude = Double(parts[2]), longitude.isFinite,
+                  (-180.0...180.0).contains(longitude) else {
+                return nil
+            }
+
+            let entry = Entry(host: host, lat: latitude, lon: longitude)
+            if let existing = entriesByHost[host], existing != entry {
+                // One endpoint cannot truthfully occupy two coordinates. Do
+                // not let row ordering choose which location clients trust.
+                return nil
+            }
+            entriesByHost[host] = entry
+            guard entriesByHost.count <= policy.maximumEntries else { return nil }
+        }
+
+        let parsedEntries = Set(entriesByHost.values)
+        guard parsedEntries.count >= minimumEntries else { return nil }
+
+        if let baselineEntries {
+            guard (0...1).contains(policy.minimumRetainedFraction) else { return nil }
+            let requiredOverlap = Int(
+                ceil(Double(baselineEntries.count) * policy.minimumRetainedFraction)
+            )
+            guard parsedEntries.intersection(baselineEntries).count >= requiredOverlap else {
+                return nil
+            }
+        }
+
+        return parsedEntries.sorted {
+            ($0.host, $0.lat, $0.lon) < ($1.host, $1.lat, $1.lon)
+        }
+    }
+
+    nonisolated private static func validatedDirectoryAddress(_ rawValue: String) -> String? {
+        let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty,
+              value.unicodeScalars.allSatisfy({
+                  $0.isASCII && !CharacterSet.controlCharacters.contains($0)
+              }) else {
+            return nil
+        }
+
+        let candidate = value.contains("://") ? value : "wss://\(value)"
+        guard let components = URLComponents(string: candidate),
+              let scheme = components.scheme?.lowercased(),
+              scheme == "wss" || scheme == "https",
+              components.user == nil,
+              components.password == nil,
+              components.query == nil,
+              components.fragment == nil,
+              components.path.isEmpty || components.path == "/",
+              let rawHost = components.host else {
+            return nil
+        }
+
+        let host = rawHost.lowercased()
+        guard !host.isEmpty, host.count <= 253,
+              host.unicodeScalars.allSatisfy({ $0.isASCII }),
+              !host.hasSuffix("."),
+              host != "localhost",
+              !host.hasSuffix(".localhost"),
+              !host.hasSuffix(".local"),
+              !host.hasSuffix(".internal") else {
+            return nil
+        }
+
+        let labels = host.split(separator: ".", omittingEmptySubsequences: false)
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789-")
+        guard labels.count >= 2,
+              !labels.allSatisfy({ $0.allSatisfy(\.isNumber) }),
+              labels.allSatisfy({ label in
+                  (1...63).contains(label.count) &&
+                  label.first != "-" &&
+                  label.last != "-" &&
+                  label.unicodeScalars.allSatisfy { allowed.contains($0) }
+              }) else {
+            return nil
+        }
+
+        if let port = components.port {
+            guard (1...65_535).contains(port) else { return nil }
+            if port != 443 { return "\(host):\(port)" }
+        }
+        return host
     }
 
     // MARK: - Observers & Timers
