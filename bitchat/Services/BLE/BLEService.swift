@@ -134,7 +134,7 @@ final class BLEService: NSObject {
     private let incomingFileStore = BLEIncomingFileStore()
     
     // Simple announce throttling
-    private var announceThrottle = BLEAnnounceThrottle()
+    private let announceThrottle = BLEAnnounceThrottle()
     
     // Application state tracking (thread-safe)
     #if os(iOS)
@@ -162,9 +162,7 @@ final class BLEService: NSObject {
     private let identityManager: SecureIdentityStateManagerProtocol
     private let keychain: KeychainManagerProtocol
     private let idBridge: NostrIdentityBridge
-    /// Binary form of `myPeerID`; same contract — mutated only inside a
-    /// `messageQueue` barrier via `refreshPeerIdentity()`.
-    private var myPeerIDData: Data = Data()
+    private let localIdentityState = BLELocalIdentityStateStore()
 
     // MARK: - Advertising Privacy
     // No Local Name by default for maximum privacy. No rotating alias.
@@ -417,7 +415,7 @@ final class BLEService: NSObject {
     }
 
     func resetIdentityForPanic(currentNickname: String) {
-        messageQueue.sync(flags: .barrier) {
+        collectionsQueue.sync(flags: .barrier) {
             pendingNoiseSessionQueues.removeAll()
         }
 
@@ -537,20 +535,17 @@ final class BLEService: NSObject {
     
     // MARK: Identity
 
-    /// Derived from the Noise identity fingerprint; rotated only via
-    /// `refreshPeerIdentity()` (e.g. panic reset), which performs the swap
-    /// inside a `messageQueue` barrier so concurrent queue work never sees a
-    /// half-updated identity. Externally read-only — no out-of-band mutation
-    /// may bypass that derivation.
-    private(set) var myPeerID = PeerID(str: "")
-    /// Externally read-only; mutate via `setNickname(_:)`, which also
-    /// broadcasts the change to peers.
-    private(set) var myNickname: String = "anon"
+    /// Derived from the Noise identity fingerprint. Reads can originate from
+    /// the main actor, message queue, Bluetooth queue, and maintenance timer,
+    /// so all three local identity fields live in one lock-backed snapshot.
+    var myPeerID: PeerID { localIdentityState.snapshot().peerID }
+    var myNickname: String { localIdentityState.snapshot().nickname }
+    private var myPeerIDData: Data { localIdentityState.snapshot().peerIDData }
 
     /// Sole mutator for `myNickname`: updates the stored value and force-sends
     /// an announce so peers learn the new name.
     func setNickname(_ nickname: String) {
-        self.myNickname = nickname
+        localIdentityState.setNickname(nickname)
         // Send announce to notify peers of nickname change (force send)
         sendAnnounce(forceSend: true)
     }
@@ -596,10 +591,11 @@ final class BLEService: NSObject {
     }
     
     func stopServices() {
+        let localIdentity = localIdentityState.snapshot()
         // Send leave message synchronously to ensure delivery
         var leavePacket = BitchatPacket(
             type: MessageType.leave.rawValue,
-            senderID: myPeerIDData,
+            senderID: localIdentity.peerIDData,
             recipientID: nil,
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             payload: Data(),
@@ -1637,6 +1633,16 @@ final class BLEService: NSObject {
         }
     }
     private func sendAnnounce(forceSend: Bool = false) {
+        // Announce construction reads the replaceable Noise service and several
+        // related state snapshots. Serialize the whole operation with identity
+        // rotation instead of letting CoreBluetooth and maintenance callbacks
+        // execute it directly on their own queues.
+        messageQueue.async(flags: .barrier) { [weak self] in
+            self?.sendAnnounceNow(forceSend: forceSend)
+        }
+    }
+
+    private func sendAnnounceNow(forceSend: Bool) {
         // Throttle announces to prevent flooding
         if !announceThrottle.shouldSend(force: forceSend, now: Date()) {
             return
@@ -1656,8 +1662,9 @@ final class BLEService: NSObject {
             )
         }
 
+        let localIdentity = localIdentityState.snapshot()
         let announcement = AnnouncementPacket(
-            nickname: myNickname,
+            nickname: localIdentity.nickname,
             noisePublicKey: noisePub,
             signingPublicKey: signingPub,
             directNeighbors: connectedPeerIDs,
@@ -1673,7 +1680,7 @@ final class BLEService: NSObject {
         // Create packet with signature using the noise private key
         let packet = BitchatPacket(
             type: MessageType.announce.rawValue,
-            senderID: myPeerIDData,
+            senderID: localIdentity.peerIDData,
             recipientID: nil,
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             payload: payload,
@@ -1687,14 +1694,7 @@ final class BLEService: NSObject {
             return
         }
         
-        // Call directly if on messageQueue, otherwise dispatch
-        if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
-            broadcastPacket(signedPacket)
-        } else {
-            messageQueue.async { [weak self] in
-                self?.broadcastPacket(signedPacket)
-            }
-        }
+        broadcastPacket(signedPacket)
         // Ensure our own announce is included in sync state
         gossipSyncManager?.onPublicPacketSeen(signedPacket)
 
@@ -3358,8 +3358,9 @@ extension BLEService {
     private func refreshPeerIdentity() {
         let swap = {
             let fingerprint = self.noiseService.getIdentityFingerprint()
-            self.myPeerID = PeerID(str: fingerprint.prefix(16))
-            self.myPeerIDData = Data(hexString: self.myPeerID.id) ?? Data()
+            self.localIdentityState.replacePeerIdentity(
+                with: PeerID(str: fingerprint.prefix(16))
+            )
             self.meshTopology.reset()
         }
         if DispatchQueue.getSpecific(key: messageQueueKey) != nil {
