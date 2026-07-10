@@ -45,10 +45,6 @@ struct SharedContentPayload: Codable, Sendable, Equatable, Identifiable {
         SharedContentPayload(kind: .text, content: content, createdAt: createdAt)
     }
 
-    static func url(_ url: URL, title: String?, createdAt: Date = Date()) -> SharedContentPayload {
-        SharedContentPayload(kind: .url, content: url.absoluteString, title: title, createdAt: createdAt)
-    }
-
     var composerText: String { content }
 
     var preview: String {
@@ -146,11 +142,6 @@ final class SharedContentStore {
         self.defaults = defaults
         self.encoder = JSONEncoder()
         self.decoder = JSONDecoder()
-    }
-
-    convenience init?(suiteName: String) {
-        guard let defaults = UserDefaults(suiteName: suiteName) else { return nil }
-        self.init(defaults: defaults)
     }
 
     /// Replaces any older pending share with a validated, bounded envelope.

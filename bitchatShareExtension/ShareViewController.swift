@@ -148,8 +148,9 @@ final class ShareViewController: UIViewController {
 
     // MARK: - Save + Finish
     private func saveAndFinish(url: URL, title: String?) {
-        let payload = SharedContentPayload.url(
-            url,
+        let payload = SharedContentPayload(
+            kind: .url,
+            content: url.absoluteString,
             title: title ?? url.host ?? Strings.sharedLinkTitleFallback
         )
         stageAndFinish(payload)
@@ -160,10 +161,11 @@ final class ShareViewController: UIViewController {
     }
 
     private func stageAndFinish(_ payload: SharedContentPayload) {
-        guard let store = SharedContentStore(suiteName: Self.groupID) else {
+        guard let defaults = UserDefaults(suiteName: Self.groupID) else {
             finishWithMessage(Strings.failedToSave)
             return
         }
+        let store = SharedContentStore(defaults: defaults)
 
         do {
             try store.stage(payload)
