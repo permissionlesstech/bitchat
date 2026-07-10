@@ -48,9 +48,6 @@ final class KeychainManager: KeychainManagerProtocol {
     // Use consistent service name for all keychain items
     private let service = BitchatApp.bundleID
     private let appGroup = "group.\(BitchatApp.bundleID)"
-    private static let installMarkerAccount = "install_lifecycle_marker"
-    private static let installMarkerDefaultsKey = "keychain.installLifecycleMarker.present"
-
     // AfterFirstUnlock, not WhenUnlocked: the mesh keeps running with the
     // device locked (identity-cache saves failed with -25308 throughout
     // locked-phone testing), and a wake-on-proximity relaunch via BLE state
@@ -81,6 +78,9 @@ final class KeychainManager: KeychainManagerProtocol {
     }
 
     #if os(iOS)
+
+    private static let installMarkerAccount = "install_lifecycle_marker"
+    private static let installMarkerDefaultsKey = "keychain.installLifecycleMarker.present"
 
     /// Keychain items can survive app removal while the app container and its
     /// UserDefaults do not. The first version carrying this marker bootstraps
