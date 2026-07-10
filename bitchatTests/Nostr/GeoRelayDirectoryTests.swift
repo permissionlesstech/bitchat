@@ -5,19 +5,25 @@ import XCTest
 
 @MainActor
 final class GeoRelayDirectoryTests: XCTestCase {
-    func test_parseCSV_normalizesRelaySchemesAndDeduplicatesEntries() {
+    private func parse(_ csv: String) -> [GeoRelayDirectory.Entry] {
+        GeoRelayDirectory.validatedEntries(
+            from: Data(csv.utf8),
+            policy: .live,
+            minimumEntries: 1
+        ) ?? []
+    }
+
+    func test_parseCSV_normalizesSecureRelaySchemesAndDeduplicatesEntries() {
         let csv = """
         relay url,lat,lon
         wss://one.example/,10,20
         https://one.example,10,20
         wss://one.example:443/,10,20
-        http://two.example/,11,21
+        two.example,11,21
         wss://two.example:443,11,21
-        invalid row
-        ws://three.example,not-a-lat,22
         """
 
-        let parsed = Set(GeoRelayDirectory.parseCSV(csv))
+        let parsed = Set(parse(csv))
 
         XCTAssertEqual(
             parsed,
@@ -26,6 +32,136 @@ final class GeoRelayDirectoryTests: XCTestCase {
                 GeoRelayDirectory.Entry(host: "two.example", lat: 11, lon: 21)
             ])
         )
+    }
+
+    func test_parseCSV_rejectsWholeDatasetWhenAnyRowOrHeaderIsUnsafe() {
+        let invalidCSVs = [
+            "relay,lat,lon\nrelay.example,1,2\n",
+            "relay url,lat,lon\nrelay.example,1\n",
+            "relay url,lat,lon\nhttp://relay.example,1,2\n",
+            "relay url,lat,lon\nwss://user@relay.example,1,2\n",
+            "relay url,lat,lon\nwss://relay.example/path,1,2\n",
+            "relay url,lat,lon\nwss://relay.example?,1,2\n",
+            "relay url,lat,lon\nwss://relay.example#,1,2\n",
+            "relay url,lat,lon\nrelay.example:0,1,2\n",
+            "relay url,lat,lon\nrelay.example:99999,1,2\n",
+            "relay url,lat,lon\nlocalhost,1,2\n",
+            "relay url,lat,lon\nr\u{00e9}lay.example,1,2\n",
+            "relay url,lat,lon\nrelay\u{202e}.example,1,2\n",
+            "relay url,lat,lon\nrelay.example,NaN,2\n",
+            "relay url,lat,lon\nrelay.example,1_0,2\n",
+            "relay url,lat,lon\nrelay.example,\u{0661}\u{0660},2\n",
+            "relay url,lat,lon\nrelay.example,\u{ff11}\u{ff10},2\n",
+            "relay url,lat,lon\nrelay.example,91,2\n",
+            "relay url,lat,lon\nrelay.example,1,181\n",
+            "relay url,lat,lon\nrelay.example,1,2\nrelay.example,3,4\n"
+        ]
+
+        for csv in invalidCSVs {
+            XCTAssertTrue(parse(csv).isEmpty, csv)
+        }
+    }
+
+    func test_validatedEntries_enforcesByteRowEntryAndRetentionLimits() {
+        let restrictive = GeoRelayDirectoryValidationPolicy(
+            maximumBytes: 100,
+            maximumRows: 2,
+            maximumEntries: 2,
+            minimumRemoteEntries: 1,
+            minimumRetainedFraction: 0.5
+        )
+        let one = Data("relay url,lat,lon\none.example,1,2\n".utf8)
+        let three = Data("relay url,lat,lon\none.example,1,2\ntwo.example,3,4\nthree.example,5,6\n".utf8)
+
+        XCTAssertNil(GeoRelayDirectory.validatedEntries(
+            from: one,
+            policy: restrictive,
+            minimumEntries: 2
+        ))
+        XCTAssertNil(GeoRelayDirectory.validatedEntries(
+            from: Data(repeating: 0x41, count: 101),
+            policy: restrictive,
+            minimumEntries: 1
+        ))
+        XCTAssertNil(GeoRelayDirectory.validatedEntries(
+            from: three,
+            policy: restrictive,
+            minimumEntries: 1
+        ))
+    }
+
+    func test_validatedEntries_requiresExactBaselineEntryOverlap() throws {
+        let policy = GeoRelayDirectoryValidationPolicy(
+            maximumBytes: 1_000,
+            maximumRows: 10,
+            maximumEntries: 10,
+            minimumRemoteEntries: 1,
+            minimumRetainedFraction: 0.5
+        )
+        let baseline = Set(try XCTUnwrap(GeoRelayDirectory.validatedEntries(
+            from: Data("""
+            relay url,lat,lon
+            one.example,1,1
+            two.example,2,2
+            three.example,3,3
+            """.utf8),
+            policy: policy,
+            minimumEntries: 1
+        )))
+        let disjoint = Data("""
+        relay url,lat,lon
+        four.example,1,1
+        five.example,2,2
+        six.example,3,3
+        """.utf8)
+        let rewrittenCoordinates = Data("""
+        relay url,lat,lon
+        one.example,11,11
+        two.example,12,12
+        three.example,13,13
+        """.utf8)
+        let halfRetained = Data("""
+        relay url,lat,lon
+        wss://one.example:443/,1,1
+        https://two.example/,2,2
+        replacement.example,4,4
+        """.utf8)
+
+        XCTAssertNil(GeoRelayDirectory.validatedEntries(
+            from: disjoint,
+            policy: policy,
+            minimumEntries: 1,
+            baselineEntries: baseline
+        ))
+        XCTAssertNil(GeoRelayDirectory.validatedEntries(
+            from: rewrittenCoordinates,
+            policy: policy,
+            minimumEntries: 1,
+            baselineEntries: baseline
+        ))
+        XCTAssertNotNil(GeoRelayDirectory.validatedEntries(
+            from: halfRetained,
+            policy: policy,
+            minimumEntries: 1,
+            baselineEntries: baseline
+        ))
+    }
+
+    func test_bundledReviewedCSV_passesStrictProductionValidation() throws {
+        let repositoryRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let data = try Data(
+            contentsOf: repositoryRoot.appendingPathComponent("relays/online_relays_gps.csv")
+        )
+
+        let entries = try XCTUnwrap(GeoRelayDirectory.validatedEntries(
+            from: data,
+            policy: .live,
+            minimumEntries: GeoRelayDirectoryValidationPolicy.live.minimumRemoteEntries
+        ))
+        XCTAssertGreaterThan(entries.count, 250)
     }
 
     func test_closestRelays_sortsByDistanceForLatLonAndGeohash() {
@@ -243,6 +379,53 @@ final class GeoRelayDirectoryTests: XCTestCase {
         XCTAssertFalse(directory.debugHasRetryTask)
     }
 
+    func test_prefetchIfNeeded_rejectsSharpValidLookingTruncationBeforeCaching() async {
+        let cached = """
+        relay url,lat,lon
+        old-one.example,1,1
+        old-two.example,2,2
+        old-three.example,3,3
+        """
+        let truncated = """
+        relay url,lat,lon
+        attacker.example,9,9
+        """
+        let recovered = """
+        relay url,lat,lon
+        old-one.example,1,1
+        old-two.example,2,2
+        new-three.example,6,6
+        """
+        let harness = makeHarness(
+            cacheCSV: cached,
+            fetchResults: [
+                .success(Data(truncated.utf8)),
+                .success(Data(recovered.utf8))
+            ],
+            validationPolicy: GeoRelayDirectoryValidationPolicy(
+                maximumBytes: 64 * 1024,
+                maximumRows: 1_000,
+                maximumEntries: 1_000,
+                minimumRemoteEntries: 1,
+                minimumRetainedFraction: 0.5
+            )
+        )
+        let directory = GeoRelayDirectory(dependencies: harness.dependencies)
+
+        directory.prefetchIfNeeded()
+
+        let refreshed = await waitUntil {
+            directory.entries.contains(where: { $0.host == "new-three.example" })
+        }
+        XCTAssertTrue(refreshed)
+        XCTAssertFalse(directory.entries.contains(where: { $0.host == "attacker.example" }))
+        let requestCount = await harness.fetcher.recordedRequestCount()
+        let retryDelays = await harness.retryRecorder.recordedDelays()
+        XCTAssertEqual(requestCount, 2)
+        XCTAssertEqual(retryDelays, [5])
+        XCTAssertEqual(harness.fileStore.dataByURL[harness.cacheURL], Data(recovered.utf8))
+    }
+
     func test_observers_triggerPrefetchesForTorReadyAndAppActivation() async {
         let activeNotification = Notification.Name("GeoRelayDirectoryTests.didBecomeActive")
         let harness = makeHarness(
@@ -289,7 +472,14 @@ final class GeoRelayDirectoryTests: XCTestCase {
         fetchFactoryObserver: (@MainActor @Sendable () -> Void)? = nil,
         fetchObserver: (@Sendable () async -> Void)? = nil,
         autoStart: Bool = false,
-        activeNotificationName: Notification.Name? = nil
+        activeNotificationName: Notification.Name? = nil,
+        validationPolicy: GeoRelayDirectoryValidationPolicy = GeoRelayDirectoryValidationPolicy(
+            maximumBytes: 64 * 1024,
+            maximumRows: 1_000,
+            maximumEntries: 1_000,
+            minimumRemoteEntries: 1,
+            minimumRetainedFraction: 0
+        )
     ) -> GeoRelayHarness {
         let userDefaultsSuite = "GeoRelayDirectoryTests.\(UUID().uuidString)"
         let userDefaults = UserDefaults(suiteName: userDefaultsSuite)!
@@ -347,7 +537,8 @@ final class GeoRelayDirectoryTests: XCTestCase {
                 await retryRecorder.record(delay)
             },
             activeNotificationName: activeNotificationName,
-            autoStart: autoStart
+            autoStart: autoStart,
+            validationPolicy: validationPolicy
         )
 
         return GeoRelayHarness(
