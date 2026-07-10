@@ -229,6 +229,7 @@ struct VoiceRecorderTests {
         let finishedURL = await voiceRecorder.stopRecording()
         await coordinator.drain()
         #expect(finishedURL == firstURL)
+        #expect(firstRecorder.stopCallCount == 0)
         #expect(FileManager.default.fileExists(atPath: firstURL.path))
         #expect(session.activationCalls == [true, false])
 
@@ -236,9 +237,11 @@ struct VoiceRecorderTests {
         #expect(secondURL != firstURL)
         #expect(FileManager.default.fileExists(atPath: firstURL.path))
         #expect(factory.recorders.count == 2)
+        let secondRecorder = try #require(factory.recorders.last)
 
         #expect(await voiceRecorder.stopRecording() == secondURL)
         await coordinator.drain()
+        #expect(secondRecorder.stopCallCount == 1)
         #expect(session.activationCalls == [true, false, true, false])
         #expect(FileManager.default.fileExists(atPath: firstURL.path))
         #expect(FileManager.default.fileExists(atPath: secondURL.path))
