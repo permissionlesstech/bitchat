@@ -21,8 +21,8 @@ extension ChatViewModel {
     }
 
     @MainActor
-    func subscribeGiftWrap(_ giftWrap: NostrEvent, id: NostrIdentity) {
-        nostrCoordinator.inbound.subscribeGiftWrap(giftWrap, id: id)
+    func subscribePrivateEnvelope(_ envelope: NostrEvent, id: NostrIdentity) {
+        nostrCoordinator.inbound.subscribePrivateEnvelope(envelope, id: id)
     }
 
     @MainActor
@@ -36,8 +36,8 @@ extension ChatViewModel {
     }
 
     @MainActor
-    func handleGiftWrap(_ giftWrap: NostrEvent, id: NostrIdentity) {
-        nostrCoordinator.inbound.handleGiftWrap(giftWrap, id: id)
+    func handlePrivateEnvelope(_ envelope: NostrEvent, id: NostrIdentity) {
+        nostrCoordinator.inbound.handlePrivateEnvelope(envelope, id: id)
     }
 
     @MainActor

@@ -11,8 +11,9 @@ final class NostrTransport: Transport, @unchecked Sendable {
         let favoriteStatusForNoiseKey: @MainActor (Data) -> FavoritesPersistenceService.FavoriteRelationship?
         let favoriteStatusForPeerID: @MainActor (PeerID) -> FavoritesPersistenceService.FavoriteRelationship?
         let currentIdentity: @MainActor () throws -> NostrIdentity?
-        let registerPendingGiftWrap: @MainActor (String) -> Void
+        let registerPendingPrivateEnvelope: @MainActor (String) -> Void
         let sendEvent: @MainActor (NostrEvent) -> Void
+        let now: @MainActor () -> Date
         /// Emits whether a relay that carries private messages is up
         /// (fail-closed behind Tor). A connected geohash/custom relay alone
         /// doesn't count: DM sends target the default relay set and would
@@ -28,19 +29,21 @@ final class NostrTransport: Transport, @unchecked Sendable {
             favoriteStatusForNoiseKey: @escaping @MainActor (Data) -> FavoritesPersistenceService.FavoriteRelationship?,
             favoriteStatusForPeerID: @escaping @MainActor (PeerID) -> FavoritesPersistenceService.FavoriteRelationship?,
             currentIdentity: @escaping @MainActor () throws -> NostrIdentity?,
-            registerPendingGiftWrap: @escaping @MainActor (String) -> Void,
+            registerPendingPrivateEnvelope: @escaping @MainActor (String) -> Void,
             sendEvent: @escaping @MainActor (NostrEvent) -> Void,
             scheduleAfter: @escaping @Sendable (TimeInterval, @escaping @Sendable () -> Void) -> Void,
             relayConnectivity: @escaping @MainActor () -> AnyPublisher<Bool, Never>,
-            ackPacer: AckPacer? = nil
+            ackPacer: AckPacer? = nil,
+            now: @escaping @MainActor () -> Date = Date.init
         ) {
             self.notificationCenter = notificationCenter
             self.loadFavorites = loadFavorites
             self.favoriteStatusForNoiseKey = favoriteStatusForNoiseKey
             self.favoriteStatusForPeerID = favoriteStatusForPeerID
             self.currentIdentity = currentIdentity
-            self.registerPendingGiftWrap = registerPendingGiftWrap
+            self.registerPendingPrivateEnvelope = registerPendingPrivateEnvelope
             self.sendEvent = sendEvent
+            self.now = now
             self.relayConnectivity = relayConnectivity
             // Default pacer drives its throttle through the same injected
             // scheduler, so tests that step scheduleAfter manually keep
@@ -56,7 +59,7 @@ final class NostrTransport: Transport, @unchecked Sendable {
                 favoriteStatusForNoiseKey: { FavoritesPersistenceService.shared.getFavoriteStatus(for: $0) },
                 favoriteStatusForPeerID: { FavoritesPersistenceService.shared.getFavoriteStatus(forPeerID: $0) },
                 currentIdentity: { try idBridge.getCurrentNostrIdentity() },
-                registerPendingGiftWrap: { NostrRelayManager.registerPendingGiftWrap(id: $0) },
+                registerPendingPrivateEnvelope: { NostrRelayManager.registerPendingPrivateEnvelope(id: $0) },
                 sendEvent: { NostrRelayManager.shared.sendEvent($0) },
                 scheduleAfter: { delay, action in
                     DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: action)
@@ -261,7 +264,7 @@ final class NostrTransport: Transport, @unchecked Sendable {
                 SecureLogger.error("NostrTransport: failed to embed PM packet", category: .session)
                 return
             }
-            sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: senderIdentity)
+            sendPrivateEnvelope(content: embedded, recipientHex: recipientHex, senderIdentity: senderIdentity)
         }
     }
 
@@ -287,7 +290,7 @@ final class NostrTransport: Transport, @unchecked Sendable {
                 SecureLogger.error("NostrTransport: failed to embed favorite notification", category: .session)
                 return
             }
-            sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: senderIdentity)
+            sendPrivateEnvelope(content: embedded, recipientHex: recipientHex, senderIdentity: senderIdentity)
         }
     }
 
@@ -319,7 +322,7 @@ extension NostrTransport {
                 SecureLogger.error("NostrTransport: failed to embed geohash PM packet", category: .session)
                 return
             }
-            sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: identity, registerPending: true)
+            sendPrivateEnvelope(content: embedded, recipientHex: recipientHex, senderIdentity: identity, registerPending: true)
         }
     }
 }
@@ -340,17 +343,24 @@ extension NostrTransport {
         }
     }
 
-    /// Creates and sends a gift-wrapped private message event
+    /// Creates and sends a BitChat private-envelope event over Nostr.
     @MainActor
-    private func sendWrappedMessage(content: String, recipientHex: String, senderIdentity: NostrIdentity, registerPending: Bool = false) {
-        guard let event = try? NostrProtocol.createPrivateMessage(content: content, recipientPubkey: recipientHex, senderIdentity: senderIdentity) else {
-            SecureLogger.error("NostrTransport: failed to build Nostr event", category: .session)
+    private func sendPrivateEnvelope(content: String, recipientHex: String, senderIdentity: NostrIdentity, registerPending: Bool = false) {
+        guard let events = try? NostrProtocol.createPrivateEnvelopePublicationBatch(
+            content: content,
+            recipientPubkey: recipientHex,
+            senderIdentity: senderIdentity,
+            now: dependencies.now()
+        ) else {
+            SecureLogger.error("NostrTransport: failed to build Nostr private-envelope batch", category: .session)
             return
         }
-        if registerPending {
-            dependencies.registerPendingGiftWrap(event.id)
+        for event in events {
+            if registerPending {
+                dependencies.registerPendingPrivateEnvelope(event.id)
+            }
+            dependencies.sendEvent(event)
         }
-        dependencies.sendEvent(event)
     }
 
 
@@ -367,7 +377,7 @@ extension NostrTransport {
                     SecureLogger.error("NostrTransport: failed to embed READ ack", category: .session)
                     return
                 }
-                sendWrappedMessage(content: ack, recipientHex: recipientHex, senderIdentity: senderIdentity)
+                sendPrivateEnvelope(content: ack, recipientHex: recipientHex, senderIdentity: senderIdentity)
 
             case .deliveredDirect(let messageID, let peerID):
                 guard let recipientNpub = resolveRecipientNpub(for: peerID),
@@ -378,17 +388,17 @@ extension NostrTransport {
                     SecureLogger.error("NostrTransport: failed to embed DELIVERED ack", category: .session)
                     return
                 }
-                sendWrappedMessage(content: ack, recipientHex: recipientHex, senderIdentity: senderIdentity)
+                sendPrivateEnvelope(content: ack, recipientHex: recipientHex, senderIdentity: senderIdentity)
 
             case .deliveredGeohash(let messageID, let recipientHex, let identity):
                 SecureLogger.debug("GeoDM: send DELIVERED mid=\(messageID.prefix(8))…", category: .session)
                 guard let embedded = NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(type: .delivered, messageID: messageID, senderPeerID: senderPeerID) else { return }
-                sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: identity, registerPending: true)
+                sendPrivateEnvelope(content: embedded, recipientHex: recipientHex, senderIdentity: identity, registerPending: true)
 
             case .readGeohash(let messageID, let recipientHex, let identity):
                 SecureLogger.debug("GeoDM: send READ mid=\(messageID.prefix(8))…", category: .session)
                 guard let embedded = NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(type: .readReceipt, messageID: messageID, senderPeerID: senderPeerID) else { return }
-                sendWrappedMessage(content: embedded, recipientHex: recipientHex, senderIdentity: identity, registerPending: true)
+                sendPrivateEnvelope(content: embedded, recipientHex: recipientHex, senderIdentity: identity, registerPending: true)
             }
         }
     }

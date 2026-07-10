@@ -73,7 +73,7 @@ Private group members receive the group's name, roster, key epoch, and encrypted
 
 Internet-backed features are optional. When enabled or used:
 
-- Private fallback messages use encrypted NIP-17 gift wraps. Relays can observe event and network metadata but not the message plaintext.
+- Private fallback messages use BitChat's app-specific encrypted envelopes. This format is not NIP-17, NIP-44, or NIP-59 compatible. Relays can observe the recipient public-key tag, event timing and size, and network metadata, but not the message plaintext or stable sender identity.
 - Public location-channel messages, notes, notices, and presence include a geohash tag, event kind, timestamp, and a public key. A geohash reveals an approximate area; finer precision reveals a smaller area.
 - The optional mesh bridge publishes bridge-enabled public mesh messages and presence to a neighborhood rendezvous cell. Those messages are public to participants and relays for that cell. A per-message “nearby only” choice prevents that message from crossing the bridge.
 - Bridge courier drops contain opaque end-to-end encrypted envelopes and a rotating recipient tag. Relays still observe timing and network metadata.
@@ -103,7 +103,7 @@ Private and public features use different protections:
 
 - Mesh private sessions use Noise XX with X25519, ChaCha20-Poly1305, and SHA-256.
 - Private group messages use ChaCha20-Poly1305; group state and relevant mesh packets use Ed25519 signatures.
-- Nostr events use secp256k1 Schnorr signatures. NIP-44 v2 private payloads use secp256k1 key agreement, HKDF-SHA256, and XChaCha20-Poly1305.
+- Nostr events use secp256k1 Schnorr signatures. BitChat private envelopes use secp256k1 key agreement, HKDF-SHA256 with a BitChat-specific domain separator, and XChaCha20-Poly1305. The envelope format is proprietary, only interoperates with BitChat clients, and does not provide forward secrecy against later compromise of the recipient's static Nostr private key.
 - The persistent private-message outbox uses ChaCha20-Poly1305 with a key held in the keychain. Some other protected local identity state uses AES-GCM.
 - Public mesh, bridge, geohash, and board content is signed or authenticated as appropriate but is intentionally not confidential.
 

@@ -63,7 +63,11 @@ let package = Package(
                 // Only the vector fixture: declaring the whole "Noise"
                 // directory would claim its .swift test files as resources
                 // and silently drop them from compilation.
-                .process("Noise/NoiseTestVectors.json")
+                .process("Noise/NoiseTestVectors.json"),
+                // Frozen output produced by the released 733098bb private-DM
+                // implementation; proves receive compatibility independently
+                // of the refactored legacy generator.
+                .process("Nostr/Fixtures")
             ]
         )
     ]

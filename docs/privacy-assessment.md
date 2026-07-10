@@ -54,9 +54,9 @@ Public archives contain content already intended for public mesh/board distribut
 
 ## Nostr and Mesh Bridge
 
-- NIP-17/NIP-44 v2 private fallback protects plaintext with secp256k1 key agreement, HKDF-SHA256, and XChaCha20-Poly1305. Relays still see event and network metadata.
+- BitChat's proprietary private-envelope fallback protects plaintext with secp256k1 key agreement, HKDF-SHA256 with a BitChat-specific domain separator, and XChaCha20-Poly1305. It is not NIP-17, NIP-44, or NIP-59 compatible and does not provide forward secrecy against later compromise of the recipient's static Nostr private key. Relays still see the recipient public-key tag, event timing and size, and network metadata.
 - Bridge courier drops use a throwaway publisher key, an opaque Noise-sealed envelope, and a day-rotating recipient tag. Only a party already holding the recipient's Noise static key can compute candidate tags.
-- Relay publication is considered successful only after an explicit NIP-20 `OK true` from at least one target relay. Rejected, disconnected, timed-out, or merely socket-written events stay retryable.
+- Relay publication is considered successful only after an explicit NIP-01 `OK true` from at least one target relay. Rejected, disconnected, timed-out, or merely socket-written events stay retryable.
 - When mesh bridge is enabled, public mesh messages not marked “nearby only” are signed under a per-cell Nostr identity and published to a neighborhood rendezvous geohash. Presence and public bridge traffic therefore expose a coarse area to relays and participants.
 - A bridge gateway can carry signed bridge/location events and opaque courier drops for nearby mesh-only peers. It cannot validly publish a neighbor's radio-only message because the author must first sign the bridge event.
 

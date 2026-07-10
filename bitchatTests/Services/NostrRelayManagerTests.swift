@@ -893,11 +893,11 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertTrue(secondDelivered)
     }
 
-    func test_okMessages_clearPendingGiftWrapIDs() async throws {
+    func test_okMessages_clearPendingPrivateEnvelopeIDs() async throws {
         let relayURL = "wss://ok.example"
         let context = makeContext(permission: .denied)
-        let successID = "gift-wrap-success"
-        let failureID = "gift-wrap-failure"
+        let successID = "private-envelope-success"
+        let failureID = "private-envelope-failure"
 
         context.manager.ensureConnections(to: [relayURL])
         let connected = await waitUntil {
@@ -906,17 +906,17 @@ final class NostrRelayManagerTests: XCTestCase {
         }
         XCTAssertTrue(connected)
 
-        NostrRelayManager.registerPendingGiftWrap(id: successID)
+        NostrRelayManager.registerPendingPrivateEnvelope(id: successID)
         try context.sessionFactory.latestConnection(for: relayURL)?.emitOK(eventID: successID, success: true, reason: "ok")
         let successCleared = await waitUntil {
-            !NostrRelayManager.pendingGiftWrapIDs.contains(successID)
+            !NostrRelayManager.pendingPrivateEnvelopeIDs.contains(successID)
         }
         XCTAssertTrue(successCleared)
 
-        NostrRelayManager.registerPendingGiftWrap(id: failureID)
+        NostrRelayManager.registerPendingPrivateEnvelope(id: failureID)
         try context.sessionFactory.latestConnection(for: relayURL)?.emitOK(eventID: failureID, success: false, reason: "rejected")
         let failureCleared = await waitUntil {
-            !NostrRelayManager.pendingGiftWrapIDs.contains(failureID)
+            !NostrRelayManager.pendingPrivateEnvelopeIDs.contains(failureID)
         }
         XCTAssertTrue(failureCleared)
     }

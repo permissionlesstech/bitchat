@@ -172,11 +172,11 @@ final class MessageDeduplicationService {
     /// Cache for Nostr ACK deduplication (messageId:ackType:senderPubkey format)
     private let nostrAckCache: LRUDeduplicationCache<Bool>
 
-    /// Optional cross-launch persistence for the Nostr event cache. NIP-59
-    /// randomizes gift-wrap timestamps, so DM subscriptions look back 24h and
-    /// relays redeliver the same events on every launch; without this record
-    /// each relaunch reprocesses old PMs and acks. Nil (tests, macOS callers
-    /// that don't opt in) keeps the cache purely in-memory.
+    /// Optional cross-launch persistence for the Nostr event cache. BitChat
+    /// randomizes private-envelope timestamps, so DM subscriptions look back
+    /// 24h and relays redeliver the same events on every launch; without this
+    /// record each relaunch reprocesses old PMs and acks. Nil (tests, macOS
+    /// callers that don't opt in) keeps the cache purely in-memory.
     private let nostrEventStore: NostrProcessedEventStore?
     private let nostrEventCapacity: Int
     private var persistScheduled = false
@@ -314,7 +314,7 @@ final class MessageDeduplicationService {
     // MARK: - Clear
 
     /// Clears all caches. This is the wipe/panic path: the persisted
-    /// gift-wrap record goes with everything else.
+    /// private-envelope record goes with everything else.
     func clearAll() {
         contentCache.clear()
         nostrEventCache.clear()
@@ -325,7 +325,7 @@ final class MessageDeduplicationService {
 
     /// Clears only the in-memory Nostr caches (events and ACKs). Runs on
     /// every geohash channel switch, so the disk record deliberately
-    /// survives — wiping it here would forfeit cross-launch gift-wrap dedup
+    /// survives — wiping it here would forfeit cross-launch private-envelope dedup
     /// each time the user changes channels (flagged by Codex on #1398).
     func clearNostrCaches() {
         nostrEventCache.clear()

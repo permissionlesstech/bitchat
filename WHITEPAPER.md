@@ -25,7 +25,7 @@ bitchat is a decentralized, peer-to-peer messaging application for secure, priva
 Two transports implement a common `Transport` interface and are coordinated by a `MessageRouter`:
 
 * **BLE mesh** — every device is simultaneously a GATT central and peripheral, relaying packets in a controlled flood. No infrastructure, pairing, or accounts.
-* **Nostr** — private messages to mutual favorites travel as NIP-17 gift-wrapped events over public relays (over Tor where enabled), bridging separate meshes through the internet.
+* **Nostr** — private messages to mutual favorites travel in BitChat's app-specific encrypted envelopes over public relays (over Tor where enabled), bridging separate meshes through the internet.
 
 The router prefers a live mesh link, falls back to Nostr, and engages the courier system when neither can deliver promptly.
 
@@ -78,7 +78,9 @@ Courier envelopes are sealed to the recipient's *static* key with the one-way No
 
 ### 5.3 Nostr Path
 
-Private messages to mutual favorites are wrapped per NIP-17/NIP-59: a rumor (kind 14) sealed (kind 13) and gift-wrapped (kind 1059) under a throwaway ephemeral key, so relays learn neither sender nor content.
+Private messages to mutual favorites use BitChat's proprietary private-envelope protocol. An unsigned inner message (kind 1404) is encrypted and placed in a sender-signed seal (kind 1403); that seal is encrypted again inside a public envelope (kind 1402) signed by a one-time key. Kind 1402 is a provisional BitChat-specific assignment, not a formally reserved Nostr kind. Each encrypted content field is `bitchat-pm-v1:` followed by base64url of a 24-byte nonce, XChaCha20-Poly1305 ciphertext, and its 16-byte tag. Keys come from secp256k1 ECDH and HKDF-SHA256 with a BitChat-specific domain separator.
+
+This format is **not NIP-17, NIP-44, or NIP-59 compatible** and interoperates only with BitChat clients. The outer `p` tag exposes the recipient's Nostr public key to relays; the stable sender identity and plaintext remain inside authenticated ciphertext. Seal and envelope timestamps are randomized up to 15 minutes into the past, while the actual message timestamp is encrypted. The protocol does not provide forward secrecy: compromise of the recipient's static Nostr private key can expose stored envelopes.
 
 ## 6. Store and Forward
 
@@ -105,7 +107,7 @@ Public broadcast messages are cached (1000 packets) and reconciled between peers
 
 ### 6.4 Nostr Mailboxes
 
-Gift-wrapped messages rest on Nostr relays; clients re-subscribe with a 24-hour lookback on reconnect, covering the both-devices-offline case for mutual favorites whenever either side touches the internet.
+BitChat private envelopes rest on Nostr relays; clients re-subscribe across the 24-hour retention window plus the full 15-minute timestamp fuzz. During the rolling format migration, clients subscribe to both the provisional BitChat-specific kind 1402 and historical kind 1059. Through October 15, 2026 at 00:00 UTC, each logical payload is published first in the primary kind-1402 format and then as a compatibility-only legacy copy for older BitChat clients; after that deadline clients publish only kind 1402. Bounded dedup of the authenticated embedded payload collapses the migration pair at receivers.
 
 ### 6.5 Delivery Metrics
 
@@ -127,7 +129,7 @@ Bare local counters (deposits, handovers, sprays, opens, outbox flushes and drop
 * **Flooding abuse** is bounded by TTL clamps, deduplication, per-depositor quotas, connect-rate limits, and announce-rate limiting.
 * **Replay** of public broadcasts is bounded by the 6-hour acceptance window plus deduplication; private payloads are protected by Noise nonces.
 * **Metadata.** BLE proximity is inherently observable; ephemeral IDs and daily-rotating courier tags limit long-term correlation. Nostr traffic can ride Tor.
-* **No forward secrecy for sealed mail** (§5.2) is the main cryptographic trade-off of the offline path.
+* **No forward secrecy for sealed mail or Nostr envelopes** (§5.2–5.3) means compromise of a recipient's static key can expose retained ciphertext addressed to that key.
 
 ## 9. Future Work
 

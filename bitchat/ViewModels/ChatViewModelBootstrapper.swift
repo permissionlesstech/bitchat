@@ -41,7 +41,7 @@ struct ChatViewModelServiceBundle {
         self.privateChatManager = privateChatManager
         self.unifiedPeerService = unifiedPeerService
         self.autocompleteService = AutocompleteService()
-        // Persist processed gift-wrap event IDs: NIP-59 randomizes their
+        // Persist processed private-envelope event IDs: BitChat randomizes their
         // timestamps, so the 24h-lookback DM subscriptions redeliver the same
         // events on every launch and only a cross-launch record stops the
         // reprocessing (re-sent DELIVERED bursts, phantom-ack noise).
@@ -547,7 +547,7 @@ private extension ChatViewModelBootstrapper {
             // Default (DM) relays: drops need the standing global relay set,
             // not geo relays — sender and recipient share no cell.
             // This confirmed path never falls back to the volatile relay
-            // queue; bridge dedup is committed only after NIP-20 OK.
+            // queue; bridge dedup is committed only after NIP-01 `OK`.
             NostrRelayManager.shared.sendEventImmediately(event, completion: completion)
         }
         courier.openSubscription = { tagsHex in

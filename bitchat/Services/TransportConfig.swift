@@ -171,7 +171,13 @@ enum TransportConfig {
     static let nostrGeoRelayCount: Int = 5
     static let nostrGeohashSampleLookbackSeconds: TimeInterval = 300
     static let nostrGeohashSampleLimit: Int = 100
-    static let nostrDMSubscribeLookbackSeconds: TimeInterval = 86400
+    /// Public envelope timestamps are deliberately shifted into the past for
+    /// privacy and relay compatibility. Mailbox queries must add the complete
+    /// shift to the 24-hour delivery window or boundary messages disappear
+    /// from `since` filters early.
+    static let nostrPrivateEnvelopeTimestampFuzzSeconds: TimeInterval = 15 * 60
+    static let nostrDMSubscribeLookbackSeconds: TimeInterval = (24 * 60 * 60)
+        + nostrPrivateEnvelopeTimestampFuzzSeconds
     // A sampled chat message this recent means "a conversation is happening
     // there" for the empty-timeline nearby-activity hint.
     static let uiGeohashChatActivityWindowSeconds: TimeInterval = 900
@@ -215,7 +221,7 @@ enum TransportConfig {
     // Fallback deadline for treating a subscription's initial fetch as complete
     // when a relay never sends EOSE (generous to cover Tor circuit setup).
     static let nostrSubscriptionEOSEFallbackSeconds: TimeInterval = 10.0
-    // A bridge drop is durable only after NIP-20 OK. Relays that omit OK must
+    // A bridge drop is durable only after NIP-01 `OK`. Relays that omit `OK` must
     // not pin the router's in-flight state indefinitely.
     static let nostrConfirmedSendAckTimeoutSeconds: TimeInterval = 10.0
     // After this long, a relay marked permanently failed gets another chance.
