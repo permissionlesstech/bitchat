@@ -367,16 +367,16 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
     }
 
     func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
-        updatePermissionState(from: status)
-        if case .authorized = permissionState {
+        let newState = updatePermissionState(from: status)
+        if newState == .authorized {
             requestOneShotLocation()
         }
     }
 
     @available(iOS 14.0, macOS 11.0, *)
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        updatePermissionState(from: manager.authorizationStatus)
-        if case .authorized = permissionState {
+        let newState = updatePermissionState(from: manager.authorizationStatus)
+        if newState == .authorized {
             requestOneShotLocation()
         }
     }
@@ -393,7 +393,8 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
 
     // MARK: - Private Helpers (Permission)
 
-    private func updatePermissionState(from status: CLAuthorizationStatus) {
+    @discardableResult
+    private func updatePermissionState(from status: CLAuthorizationStatus) -> PermissionState {
         let newState: PermissionState
         switch status {
         case .notDetermined: newState = .notDetermined
@@ -402,7 +403,15 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
         case .authorizedAlways, .authorizedWhenInUse, .authorized: newState = .authorized
         @unknown default: newState = .restricted
         }
+        // Do not rely on a mounted SwiftUI consumer to stop high-accuracy
+        // updates. Authorization can change while the app is backgrounded,
+        // and stopping here also closes the gap before the published state is
+        // delivered on the main actor.
+        if newState != .authorized {
+            endLiveRefresh()
+        }
         Task { @MainActor in self.permissionState = newState }
+        return newState
     }
 
     // MARK: - Private Helpers (Channel Computation)

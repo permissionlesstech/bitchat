@@ -45,7 +45,7 @@ struct BLEAnnounceThrottleTests {
         let now = Date(timeIntervalSince1970: 100)
         var throttle = BLEAnnounceThrottle(normalMinimumInterval: 10, forcedMinimumInterval: 2)
 
-        throttle.shouldSend(force: false, now: now)
+        _ = throttle.shouldSend(force: false, now: now)
 
         #expect(throttle.elapsed(since: now.addingTimeInterval(3)) == 3)
     }

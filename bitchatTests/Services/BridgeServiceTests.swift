@@ -14,7 +14,7 @@ import Testing
 @Suite("Mesh bridge policy")
 @MainActor
 struct BridgeServiceTests {
-    private static let cell = "u4pruy"
+    nonisolated private static let cell = "u4pruy"
 
     /// Closure-injected harness around `BridgeService` recording every side
     /// effect, with a controllable clock, location, and connectivity.
@@ -30,6 +30,7 @@ struct BridgeServiceTests {
         var bridgePeers: [PeerID] = []
         var sendSucceeds = true
         var locallySeenMessageIDs: Set<String> = []
+        var injectedPresenceOverride: ((String) -> Bool)?
         var nickname = "tester"
 
         private(set) var published: [(event: NostrEvent, cell: String)] = []
@@ -41,6 +42,7 @@ struct BridgeServiceTests {
         }
         private(set) var broadcasts: [Data] = []
         private(set) var injected: [BridgeService.InboundBridgeMessage] = []
+        private(set) var removedInjectedMessageIDs: [String] = []
         private(set) var uplinkSends: [(payload: Data, peer: PeerID)] = []
         private(set) var openedSubscriptions: [[String]] = []
         private(set) var closedSubscriptions = 0
@@ -54,13 +56,20 @@ struct BridgeServiceTests {
         let defaults: UserDefaults
         let service: BridgeService
 
-        init(enabled: Bool = true) {
+        init(
+            enabled: Bool = true,
+            verifyEventSignature: @escaping (NostrEvent) -> Bool = { $0.isValidSignature() }
+        ) {
             let suite = "BridgeServiceTests-\(UUID().uuidString)"
             defaults = UserDefaults(suiteName: suite)!
             defaults.removePersistentDomain(forName: suite)
             identity = try! NostrIdentity.generate()
             let clock = clock
-            service = BridgeService(defaults: defaults) { clock.now }
+            service = BridgeService(
+                defaults: defaults,
+                now: { clock.now },
+                verifyEventSignature: verifyEventSignature
+            )
             service.publishToRelays = { [weak self] event, cell in
                 self?.published.append((event, cell))
             }
@@ -85,6 +94,14 @@ struct BridgeServiceTests {
             }
             service.injectInbound = { [weak self] message in
                 self?.injected.append(message)
+            }
+            service.removeInjectedInbound = { [weak self] messageID in
+                self?.removedInjectedMessageIDs.append(messageID)
+            }
+            service.isInjectedInboundPresent = { [weak self] messageID in
+                guard let self else { return false }
+                return self.injectedPresenceOverride?(messageID)
+                    ?? self.injected.contains { $0.messageID == messageID }
             }
             service.isMessageSeenLocally = { [weak self] id in
                 self?.locallySeenMessageIDs.contains(id) ?? false
@@ -117,8 +134,8 @@ struct BridgeServiceTests {
 
     // MARK: Event helpers
 
-    private static let remoteMeshSenderID = "feedfacecafef00d"
-    private static let remoteMeshTimestampMs: UInt64 = 1_750_000_000_000
+    nonisolated private static let remoteMeshSenderID = "feedfacecafef00d"
+    nonisolated private static let remoteMeshTimestampMs: UInt64 = 1_750_000_000_000
 
     private func makeRemoteEvent(
         cell: String = BridgeServiceTests.cell,
@@ -233,7 +250,7 @@ struct BridgeServiceTests {
             "m",
             MeshMessageIdentity.stableID(senderIDHex: sender.id, timestampMs: timestampMs, content: "hello hill"),
             sender.id,
-            String(timestampMs),
+            String(timestampMs)
         ]))
         #expect(published.event.tags.contains(["n", "tester"]))
     }
@@ -263,7 +280,7 @@ struct BridgeServiceTests {
         let timestampMs = MeshMessageIdentity.millisecondTimestamp(timestamp)
         #expect(oldParserKeys == [
             MeshMessageIdentity.stableID(senderIDHex: sender.id, timestampMs: timestampMs, content: "first"),
-            MeshMessageIdentity.stableID(senderIDHex: sender.id, timestampMs: timestampMs, content: "second"),
+            MeshMessageIdentity.stableID(senderIDHex: sender.id, timestampMs: timestampMs, content: "second")
         ])
     }
 
@@ -340,6 +357,8 @@ struct BridgeServiceTests {
 
         #expect(fixture.injected.count == 1)
         #expect(fixture.injected.first?.content == event.content)
+        #expect(fixture.injected.first?.messageID == event.id)
+        #expect(fixture.injected.first?.senderNickname == "remote#\(event.pubkey.suffix(4))")
         #expect(fixture.service.bridgedPeerCount == 1)
         // Serving duty: after the jitter holdoff, the remote event rides out
         // as a fromBridge broadcast — one switch, no gateway toggle.
@@ -401,18 +420,118 @@ struct BridgeServiceTests {
 
         fixture.service.handleRendezvousEvent(event)
 
-        // The island already heard this over radio: no duplicate render, no
-        // wasted airtime — but the sender still counts as a (local)
-        // participant, never a bridged one.
+        // The island already heard this over radio: no duplicate render or
+        // wasted airtime. The public hint cannot attribute the Nostr signer,
+        // so it does not mutate participant state either.
         #expect(fixture.injected.isEmpty)
         #expect(fixture.broadcasts.isEmpty)
         #expect(fixture.service.bridgedPeerCount == 0)
     }
 
-    @Test func radioConfirmedSenderStaysLocalForLaterEvents() throws {
-        // Sticky local attribution keyed on the derived stable ID: one
-        // radio-confirmed message marks the pubkey as an islander, so their
-        // later events never inflate the bridged count.
+    @Test func bridgeFirstThenAuthenticatedRadioReplacesAliasesAndCancelsDownlink() throws {
+        let fixture = Fixture(enabled: true)
+        fixture.service.refreshRendezvous()
+        let content = "bridge arrived first"
+        let radioMessageID = stableID(content: content)
+        let event = try makeRemoteEvent(content: content)
+
+        fixture.service.handleRendezvousEvent(event)
+        #expect(fixture.injected.map(\.messageID) == [event.id])
+        #expect(fixture.service.bridgedPeerCount == 1)
+
+        // This entry point is called only after the BLE packet signature has
+        // authenticated. The radio row must win; the public m-tag hint is not
+        // trusted enough to suppress it.
+        fixture.service.handleAuthenticatedRadioMessage(messageID: radioMessageID)
+        fixture.fireScheduledTimers()
+
+        #expect(fixture.removedInjectedMessageIDs == [event.id])
+        #expect(fixture.broadcasts.isEmpty)
+        #expect(fixture.service.bridgedPeerCount == 1)
+
+        // A different signer copying the same public mesh coordinates after
+        // radio authentication cannot put a bridge alias back into the row.
+        fixture.service.handleRendezvousEvent(try makeRemoteEvent(content: content))
+        #expect(fixture.injected.count == 1)
+    }
+
+    @Test func disablingBridgeDoesNotForgetAliasNeededByLaterRadioCopy() throws {
+        let fixture = Fixture(enabled: true)
+        fixture.service.refreshRendezvous()
+        let content = "radio arrives after opt-out"
+        let event = try makeRemoteEvent(content: content)
+
+        fixture.service.handleRendezvousEvent(event)
+        fixture.service.setEnabled(false)
+        fixture.service.handleAuthenticatedRadioMessage(messageID: stableID(content: content))
+
+        #expect(fixture.removedInjectedMessageIDs == [event.id])
+    }
+
+    @Test func aliasPruningUsesExactRowLivenessWithoutDeletingHistory() throws {
+        let fixture = Fixture(enabled: true, verifyEventSignature: { _ in true })
+        fixture.service.refreshRendezvous()
+
+        func event(index: Int) -> NostrEvent {
+            let senderID = String(format: "%016llx", UInt64(index + 1))
+            let content = "bridge overflow \(index)"
+            let timestampMs = UInt64(1_750_000_000_000) + UInt64(index)
+            var event = NostrEvent(
+                pubkey: String(format: "%064llx", UInt64(index + 1)),
+                createdAt: Date(),
+                kind: .ephemeralEvent,
+                tags: [
+                    ["r", Self.cell],
+                    ["n", "remote"],
+                    ["m", "unused", senderID, String(timestampMs)]
+                ],
+                content: content
+            )
+            event.id = String(format: "%064llx", UInt64(index + 10_000))
+            event.sig = String(repeating: "0", count: 128)
+            return event
+        }
+
+        let oldest = event(index: 0)
+        fixture.service.handleRendezvousEvent(oldest)
+        for index in 1...BridgeService.Limits.maxTrackedEventIDs {
+            if index.isMultiple(of: 500) { fixture.advance(61) }
+            fixture.service.handleRendezvousEvent(event(index: index))
+        }
+
+        // The loop/dedup caches are intentionally smaller, but valid ingress
+        // through that boundary must not delete a still-visible bridge row.
+        #expect(fixture.removedInjectedMessageIDs.isEmpty)
+
+        for index in (BridgeService.Limits.maxTrackedEventIDs + 1)..<BridgeService.Limits.maxTrackedRadioAliases {
+            if index.isMultiple(of: 500) { fixture.advance(61) }
+            fixture.service.handleRendezvousEvent(event(index: index))
+        }
+
+        // Timestamp-order trimming need not match arrival order. Model the
+        // store having evicted a middle-arrival row, then exceed alias capacity.
+        let noLongerVisibleID = event(index: 700).id
+        fixture.injectedPresenceOverride = { $0 != noLongerVisibleID }
+        fixture.service.handleRendezvousEvent(event(index: BridgeService.Limits.maxTrackedRadioAliases))
+
+        // Pruning discarded only proof for a row already absent. It never
+        // invokes active row deletion, and the still-visible oldest row keeps
+        // its radio-replacement proof despite out-of-order timestamps.
+        #expect(fixture.removedInjectedMessageIDs.isEmpty)
+        fixture.service.handleAuthenticatedRadioMessage(
+            messageID: stableID(
+                content: oldest.content,
+                meshSenderID: "0000000000000001",
+                meshTimestampMs: 1_750_000_000_000
+            )
+        )
+        #expect(fixture.removedInjectedMessageIDs == [oldest.id])
+    }
+
+    @Test func copiedRadioHintCannotMakeSignerStickyLocal() throws {
+        // A remote signer can copy public radio coordinates and content. That
+        // suppresses only the duplicate row; it cannot mark the signing key as
+        // local and hide the signer's later bridge traffic from the people UI.
         let fixture = Fixture(enabled: true)
         fixture.service.refreshRendezvous()
         let identity = try NostrIdentity.generate()
@@ -427,33 +546,34 @@ struct BridgeServiceTests {
             meshTimestampMs: Self.remoteMeshTimestampMs + 1,
             identity: identity
         ))
-        #expect(fixture.service.bridgedPeerCount == 0)
+        #expect(fixture.service.bridgedPeerCount == 1)
     }
 
     @Test func spoofedOriginCoordinatesCannotSuppressTheGenuineMessage() throws {
-        // Attack: sign an event claiming a victim's origin coordinates in the
-        // `m` tag to pre-poison the dedup key. The key is recomputed from the
-        // event's own content, so the spoof lands under a different ID and the
-        // genuine message still renders.
+        // Attack: copy the victim's exact content + mesh sender + timestamp,
+        // then sign under another Nostr key and arrive first. Public mesh
+        // coordinates are only a radio-copy hint; signed event IDs own bridge
+        // dedup, so the attacker cannot reserve the genuine event's slot.
         let fixture = Fixture(enabled: true)
         fixture.service.refreshRendezvous()
-        let spoof = try makeRemoteEvent(content: "impostor payload")
-        let genuine = try makeRemoteEvent(content: "the real message")
+        let spoof = try makeRemoteEvent(content: "the exact victim message")
+        let genuine = try makeRemoteEvent(content: "the exact victim message")
 
         fixture.service.handleRendezvousEvent(spoof)
         fixture.service.handleRendezvousEvent(genuine)
 
         #expect(fixture.injected.count == 2)
-        #expect(fixture.injected.map(\.messageID) == [
-            stableID(content: "impostor payload"),
-            stableID(content: "the real message"),
+        #expect(fixture.injected.map(\.messageID) == [spoof.id, genuine.id])
+        #expect(fixture.injected.map(\.senderNickname) == [
+            "remote#\(spoof.pubkey.suffix(4))",
+            "remote#\(genuine.pubkey.suffix(4))"
         ])
     }
 
     @Test func forgedStableIDElementIsNeverTrusted() throws {
         // Element 1 of the `m` tag exists only for old parsers. An event
         // claiming the genuine message's stable ID there — over different
-        // content — must still key on its own derived ID, so it cannot
+        // content — must still key on its signed event ID, so it cannot
         // pre-poison the genuine message's dedup slot.
         let fixture = Fixture(enabled: true)
         fixture.service.refreshRendezvous()
@@ -465,7 +585,7 @@ struct BridgeServiceTests {
             kind: .ephemeralEvent,
             tags: [
                 ["r", Self.cell],
-                ["m", genuineID, Self.remoteMeshSenderID, String(Self.remoteMeshTimestampMs)],
+                ["m", genuineID, Self.remoteMeshSenderID, String(Self.remoteMeshTimestampMs)]
             ],
             content: "impostor payload"
         ).sign(with: identity.schnorrSigningKey())
@@ -474,15 +594,12 @@ struct BridgeServiceTests {
         fixture.service.handleRendezvousEvent(forged)
         fixture.service.handleRendezvousEvent(genuine)
 
-        #expect(fixture.injected.map(\.messageID) == [
-            stableID(content: "impostor payload"),
-            genuineID,
-        ])
+        #expect(fixture.injected.map(\.messageID) == [forged.id, genuine.id])
     }
 
-    @Test func oldFormatMeshTagFallsBackToEventID() throws {
-        // A 2-element `m` tag from an old sender carries an ID no other
-        // device can recompute; the event ID keeps today's behavior.
+    @Test func oldFormatMeshTagAlsoUsesAuthenticatedEventID() throws {
+        // A 2-element `m` tag from an old sender is just as unauthenticated as
+        // the current coordinates; the signed event ID remains authoritative.
         let fixture = Fixture(enabled: true)
         fixture.service.refreshRendezvous()
         let identity = try NostrIdentity.generate()
@@ -520,6 +637,53 @@ struct BridgeServiceTests {
 
         #expect(fixture.injected.isEmpty)
         #expect(fixture.service.bridgedPeerCount == 1)
+    }
+
+    @Test func participantStateIsCappedUnderRotatingKeyFlood() throws {
+        let fixture = Fixture(enabled: true)
+        fixture.service.refreshRendezvous()
+
+        for _ in 0..<(BridgeService.Limits.maxParticipants + 20) {
+            fixture.service.handleRendezvousEvent(try makePresenceEvent())
+        }
+
+        #expect(fixture.service.bridgedPeerCount == BridgeService.Limits.maxParticipants)
+        #expect(fixture.service.bridgedParticipants.count == BridgeService.Limits.maxParticipants)
+    }
+
+    @Test func relayIngressRateLimitsOneSigningKey() throws {
+        let fixture = Fixture(enabled: true)
+        fixture.service.refreshRendezvous()
+        let identity = try NostrIdentity.generate()
+
+        for index in 0..<(BridgeService.Limits.inboundEventsPerMinutePerSigner + 10) {
+            fixture.service.handleRendezvousEvent(try makeRemoteEvent(
+                content: "rate \(index)",
+                meshTimestampMs: Self.remoteMeshTimestampMs + UInt64(index),
+                identity: identity
+            ))
+        }
+
+        #expect(fixture.injected.count == BridgeService.Limits.inboundEventsPerMinutePerSigner)
+    }
+
+    @Test func invalidIngressCannotTriggerUnboundedSignatureVerification() throws {
+        var verificationCount = 0
+        let fixture = Fixture(enabled: true) { _ in
+            verificationCount += 1
+            return false
+        }
+        fixture.service.refreshRendezvous()
+        let event = try makeRemoteEvent()
+
+        for _ in 0..<(BridgeService.Limits.signatureVerificationAttemptsPerMinute + 20) {
+            fixture.service.handleRendezvousEvent(event)
+        }
+
+        #expect(verificationCount == BridgeService.Limits.signatureVerificationAttemptsPerMinute)
+        fixture.advance(61)
+        fixture.service.handleRendezvousEvent(event)
+        #expect(verificationCount == BridgeService.Limits.signatureVerificationAttemptsPerMinute + 1)
     }
 
     @Test func staleParticipantsAgeOutOfTheCount() throws {

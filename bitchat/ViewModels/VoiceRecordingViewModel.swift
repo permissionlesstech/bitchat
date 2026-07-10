@@ -63,6 +63,10 @@ final class VoiceRecordingViewModel: ObservableObject {
     /// live push-to-talk session when the current DM peer can hear it now.
     var sessionProvider: () -> VoiceCaptureSession = { VoiceNoteCaptureSession() }
     private var activeSession: VoiceCaptureSession?
+    /// Monotonic press identity. A slow permission/start/finalize task from an
+    /// older hold may still deliver its file, but it must never mutate the UI
+    /// state of a newer hold.
+    private var holdGeneration: UInt64 = 0
 
     func formattedDuration(for date: Date) -> String {
         let clamped = max(0, state.duration(for: date))
@@ -75,13 +79,18 @@ final class VoiceRecordingViewModel: ObservableObject {
 
     func start(shouldShow: Bool) {
         guard shouldShow, state == .idle else { return }
+        holdGeneration &+= 1
+        let generation = holdGeneration
         let session = sessionProvider()
         SecureLogger.info("PTT: mic hold began (backend: \(session.isLive ? "live" : "classic"))", category: .session)
         activeSession = session
         state = .requestingPermission
         Task {
             let granted = await session.requestPermission()
-            guard state == .requestingPermission, activeSession === session else { return }
+            guard generation == holdGeneration,
+                  state == .requestingPermission,
+                  activeSession === session
+            else { return }
             guard granted else {
                 state = .permissionDenied
                 activeSession = nil
@@ -90,16 +99,36 @@ final class VoiceRecordingViewModel: ObservableObject {
             state = .preparing
             do {
                 try await session.start()
-                guard state == .preparing, activeSession === session else {
+                guard generation == holdGeneration,
+                      state == .preparing,
+                      activeSession === session
+                else {
                     await session.cancel()
                     return
                 }
                 state = .recording(startDate: Date())
                 isLiveStreaming = session.isLive
+            } catch VoiceRecorder.RecorderError.recordingInProgress {
+                // The previous classic hold may still be in its intentional
+                // finalize-padding window. This press owns no recorder, so
+                // its owner-scoped cancel is harmless; return to idle instead
+                // of surfacing a false capture failure while the prior note
+                // finishes and delivers normally.
+                SecureLogger.info("Voice recording start deferred while the previous hold finalizes", category: .session)
+                await session.cancel()
+                guard generation == holdGeneration,
+                      state == .preparing,
+                      activeSession === session
+                else { return }
+                activeSession = nil
+                state = .idle
             } catch {
                 SecureLogger.error("Voice recording failed to start: \(error)", category: .session)
                 await session.cancel()
-                guard state == .preparing, activeSession === session else { return }
+                guard generation == holdGeneration,
+                      state == .preparing,
+                      activeSession === session
+                else { return }
                 // The live engine and the classic recorder are separate
                 // capture stacks: when the live one hits an audio-route
                 // glitch, fall back within the same hold so the user still
@@ -109,7 +138,10 @@ final class VoiceRecordingViewModel: ObservableObject {
                     activeSession = fallback
                     do {
                         try await fallback.start()
-                        guard state == .preparing, activeSession === fallback else {
+                        guard generation == holdGeneration,
+                              state == .preparing,
+                              activeSession === fallback
+                        else {
                             await fallback.cancel()
                             return
                         }
@@ -120,7 +152,7 @@ final class VoiceRecordingViewModel: ObservableObject {
                     } catch {
                         SecureLogger.error("Voice recording fallback failed to start: \(error)", category: .session)
                         await fallback.cancel()
-                        guard state == .preparing else { return }
+                        guard generation == holdGeneration, state == .preparing else { return }
                     }
                 }
                 activeSession = nil
@@ -142,6 +174,7 @@ final class VoiceRecordingViewModel: ObservableObject {
         state = .idle
         isLiveStreaming = false
         let session = activeSession
+        let generation = holdGeneration
         activeSession = nil
 
         guard case .recording(let startDate) = previousState, let completion, let session else {
@@ -159,7 +192,7 @@ final class VoiceRecordingViewModel: ObservableObject {
                isValidRecording(at: url, duration: finalDuration) {
                 completion(url)
             } else {
-                guard state == .idle else { return }
+                guard generation == holdGeneration, state == .idle else { return }
                 state = .error(
                     message: finalDuration < VoiceRecorder.minRecordingDuration
                     ? "Recording is too short."

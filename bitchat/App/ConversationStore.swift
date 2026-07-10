@@ -229,15 +229,17 @@ final class Conversation: ObservableObject, Identifiable {
         // sending < sent < carried < delivered < read. A late `.sent` write
         // (e.g. the optimistic stamp after routing) must not clobber the
         // `.carried` the router already set when it handed a copy to a
-        // courier/bridge, nor a `.delivered`/`.read` ack. Same for the
+        // courier/bridge, nor a `.delivered`/`.read` ack. A late asynchronous
+        // failure is weaker than a confirmed recipient receipt too, so it may
+        // not replace `.delivered`/`.read`. Same for the
         // `.sending` stamp a pre-handshake resend emits asynchronously: it
         // can land after the message already reached `.sent`, and "Sent" was
         // already truthful. (`.failed` → `.sending` stays allowed so a real
         // failure retry is visible.)
         switch (current, new) {
-        case (.read, .delivered), (.read, .carried), (.read, .sent), (.read, .sending):
+        case (.read, .delivered), (.read, .carried), (.read, .sent), (.read, .sending), (.read, .failed):
             return true
-        case (.delivered, .carried), (.delivered, .sent), (.delivered, .sending):
+        case (.delivered, .carried), (.delivered, .sent), (.delivered, .sending), (.delivered, .failed):
             return true
         case (.carried, .sent), (.carried, .sending):
             return true

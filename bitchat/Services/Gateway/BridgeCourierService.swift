@@ -65,8 +65,11 @@ final class BridgeCourierService: ObservableObject {
 
     var bridgeEnabled: (@MainActor () -> Bool)?
     var relaysConnected: (@MainActor () -> Bool)?
-    /// Publishes a signed drop event to the default (DM) relays.
-    var publishEvent: (@MainActor (NostrEvent) -> Void)?
+    /// Publishes a signed drop event directly to connected default (DM)
+    /// relays. Completion is true only after at least one relay explicitly
+    /// accepts the event via NIP-20 OK; this must never mean "queued in RAM"
+    /// or merely "written to a socket".
+    var publishEvent: (@MainActor (NostrEvent, @escaping @MainActor (Bool) -> Void) -> Void)?
     /// (Re)opens the drop subscription for the given hex tags.
     var openSubscription: (@MainActor ([String]) -> Void)?
     var closeSubscription: (@MainActor () -> Void)?
@@ -76,14 +79,21 @@ final class BridgeCourierService: ObservableObject {
     var localVerifiedPeers: (@MainActor () -> [(peerID: PeerID, noiseKey: Data)])?
     /// Seals content into a carry-only envelope for a recipient key.
     var sealEnvelope: (@MainActor (String, String, Data) -> CourierEnvelope?)?
-    /// Opens a drop addressed to us (tag verified inside).
-    var openEnvelope: (@MainActor (CourierEnvelope) -> Void)?
+    /// Opens a drop addressed to us. True means the inner envelope was
+    /// delivered, deduplicated, or intentionally rejected after decryption;
+    /// false leaves the relay event retryable after a transient crypto/key
+    /// failure.
+    var openEnvelope: (@MainActor (CourierEnvelope) -> Bool)?
     /// Hands a drop to a matching local peer as a directed courier packet.
-    /// Returns false when the handoff could not even be attempted (peer no
-    /// longer reachable), so the drop event stays retryable.
+    /// Returns true only when the transport accepted the packet onto a live
+    /// physical link or its link-specific backpressure queue. Stale
+    /// reachability and process-local directed spooling return false so the
+    /// drop event stays retryable.
     var deliverToPeer: (@MainActor (CourierEnvelope, PeerID) -> Bool)?
     /// Held envelopes eligible for (re)publish, honoring the cooldown.
     var heldEnvelopes: (@MainActor (TimeInterval) -> [CourierEnvelope])?
+    /// Commits a held envelope's cooldown after confirmed relay acceptance.
+    var markHeldEnvelopePublished: (@MainActor (CourierEnvelope) -> Void)?
     /// Timer injection for tests; nil arms a real `Task`.
     var scheduleTimer: (@MainActor (TimeInterval, @escaping @MainActor () -> Void) -> Void)?
 
@@ -91,7 +101,11 @@ final class BridgeCourierService: ObservableObject {
 
     private(set) var myTagsHex: Set<String> = []
     private(set) var watchedPeerTags: [(peerID: PeerID, tagsHex: Set<String>)] = []
-    private(set) var pendingDrops: [(envelope: CourierEnvelope, dedupKey: String?)] = []
+    private(set) var pendingDrops: [(
+        envelope: CourierEnvelope,
+        dedupKey: String?,
+        operationID: UUID?
+    )] = []
     /// Message IDs already published as drops (sender-side dedup) and drop
     /// event IDs already handled (multi-relay dedup). Both persist across
     /// relaunches: relays hold drops for the full 24h NIP-40 window and the
@@ -104,7 +118,27 @@ final class BridgeCourierService: ObservableObject {
     private var subscriptionOpen = false
     private var lastSubscribedTags: Set<String> = []
     private var refreshTimerArmed = false
+    private var announceRefreshTimerArmed = false
     private var lastAnnounceRefresh = Date.distantPast
+    private struct ActiveDropOperation {
+        let id: UUID
+        let completion: @MainActor (Bool) -> Void
+    }
+    /// Sender operations queued locally or awaiting relay confirmation.
+    /// The per-attempt ID prevents a stale pre-wipe callback from completing
+    /// a newer attempt for the same message.
+    private var activeDropOperations: [String: ActiveDropOperation] = [:]
+    /// Held-envelope publishes have no sender message ID, but still need an
+    /// in-flight identity: repeated refreshes inside the NIP-20 wait window
+    /// must not mint duplicate relay events for the same opaque envelope.
+    private var heldDropOperations: [Data: UUID] = [:]
+    /// Deterministically invalid envelopes are suppressed for this process,
+    /// but never persisted as if a relay accepted them. Bound and age them so
+    /// rotating oversize IDs cannot grow process memory forever.
+    private var rejectedDropKeys = ExpiringIDSet(
+        capacity: Limits.maxTrackedIDs,
+        lifetime: CourierEnvelope.maxLifetimeSeconds
+    )
 
     private let now: () -> Date
     private let dedupStore: BridgeDropDedupStore
@@ -156,23 +190,23 @@ final class BridgeCourierService: ObservableObject {
         }
     }
 
-    /// Writes the dedup record now. Sender keys still sitting in the
-    /// in-memory `pendingDrops` queue are excluded: their drop is not durable
-    /// until it actually reaches a relay, and persisting the key early would
-    /// turn "app killed before relays connected" into a silent 24h blackhole
-    /// (the relaunch loses the queued drop but the persisted key blocks every
-    /// re-deposit). `flushPendingDrops` re-persists once they publish.
+    /// Writes the dedup record now. `publishedDropKeys` contains only drops
+    /// a relay explicitly accepted; queued and in-flight keys
+    /// live in `activeDropOperations` and are intentionally process-local.
     func flushDedupSnapshot() {
-        let pendingKeys = Set(pendingDrops.compactMap(\.dedupKey))
         dedupStore.save(BridgeDropDedupStore.Snapshot(
-            publishedDropKeys: publishedDropKeys.entries.filter { !pendingKeys.contains($0.key) },
+            publishedDropKeys: publishedDropKeys.entries,
             seenDropEventIDs: seenDropEventIDs.entries
         ))
     }
 
     /// Panic wipe: forget queued drops and the persisted dedup record.
     func wipe() {
-        pendingDrops.removeAll()
+        cancelActivePublishes()
+        rejectedDropKeys = ExpiringIDSet(
+            capacity: Limits.maxTrackedIDs,
+            lifetime: CourierEnvelope.maxLifetimeSeconds
+        )
         publishedDropKeys = ExpiringIDSet(capacity: Limits.maxTrackedIDs, lifetime: CourierEnvelope.maxLifetimeSeconds)
         seenDropEventIDs = ExpiringIDSet(capacity: Limits.maxTrackedIDs, lifetime: CourierEnvelope.maxLifetimeSeconds)
         dedupStore.wipe()
@@ -182,32 +216,41 @@ final class BridgeCourierService: ObservableObject {
 
     /// Parallel-deposit a sealed copy of an outbound private message as a
     /// relay drop. Called by the message router alongside physical courier
-    /// deposits; idempotent per message ID. Returns true when a fresh drop
-    /// was sealed (published now or queued for the next relay connection) —
-    /// the router marks the message "carried" so the sender sees progress.
-    @discardableResult
-    func depositDrop(content: String, messageID: String, recipientNoiseKey: Data) -> Bool {
-        guard bridgeEnabled?() ?? false else { return false }
-        guard !publishedDropKeys.contains(messageID, now: now()) else { return false }
-        guard let envelope = sealEnvelope?(content, messageID, recipientNoiseKey) else { return false }
+    /// deposits; idempotent per message ID. Completion becomes true only
+    /// after a real relay acceptance arrives, which is when the router may
+    /// show "carried".
+    func depositDrop(
+        content: String,
+        messageID: String,
+        recipientNoiseKey: Data,
+        completion: @escaping @MainActor (Bool) -> Void = { _ in }
+    ) {
+        guard bridgeEnabled?() ?? false else {
+            completion(false)
+            return
+        }
+        guard !publishedDropKeys.contains(messageID, now: now()),
+              activeDropOperations[messageID] == nil,
+              !rejectedDropKeys.contains(messageID, now: now()) else {
+            completion(false)
+            return
+        }
+        guard let envelope = sealEnvelope?(content, messageID, recipientNoiseKey) else {
+            completion(false)
+            return
+        }
         // An envelope that can't encode within the drop size caps fails the
         // same way on every attempt (size is a function of the content, not
-        // of the sealing); consume the dedup slot so the retry sweep stops
-        // re-running Noise sealing on a drop that can never ship.
+        // of the sealing); suppress it in-memory so the retry sweep does not
+        // churn, but never persist it as a published drop.
         guard let encoded = envelope.encode(), encoded.count <= Limits.maxDropEnvelopeBytes else {
-            publishedDropKeys.insert(messageID, now: now())
-            persistDedup()
-            return false
+            rejectedDropKeys.insert(messageID, now: now())
+            completion(false)
+            return
         }
-        // Only consume the sender-side dedup slot once the drop is durably
-        // accepted (published, or safely queued for the next relay
-        // connection). If the compose fails, leave the slot open so the
-        // router's retry sweep can attempt a fresh deposit rather than
-        // marking the message "carried" and blocking retries forever.
-        guard publishDrop(envelope, messageID: messageID) else { return false }
-        publishedDropKeys.insert(messageID, now: now())
-        persistDedup()
-        return true
+        let operationID = UUID()
+        activeDropOperations[messageID] = ActiveDropOperation(id: operationID, completion: completion)
+        publishDrop(envelope, messageID: messageID, operationID: operationID)
     }
 
     /// Publishes held envelopes (mail we carry for others) as drops,
@@ -215,32 +258,59 @@ final class BridgeCourierService: ObservableObject {
     func publishHeldEnvelopes() {
         guard bridgeEnabled?() ?? false, relaysConnected?() ?? false else { return }
         for envelope in heldEnvelopes?(Limits.heldEnvelopePublishCooldown) ?? [] {
-            publishDrop(envelope)
+            let key = envelope.ciphertext
+            guard heldDropOperations[key] == nil else { continue }
+            let operationID = UUID()
+            heldDropOperations[key] = operationID
+            publishDrop(envelope) { [weak self] succeeded in
+                guard let self, self.heldDropOperations[key] == operationID else { return }
+                self.heldDropOperations.removeValue(forKey: key)
+                if succeeded {
+                    self.markHeldEnvelopePublished?(envelope)
+                }
+            }
         }
     }
 
     /// Publishes a drop, or queues it when relays are down. `messageID` is the
     /// sender-side dedup key (nil for held/relayed envelopes we don't track);
-    /// it rides the pending queue so an evicted drop can release its slot.
-    /// Returns false only when the drop could not be made durable (bad
-    /// encode/expired/compose failure) so callers can keep it retryable.
-    @discardableResult
-    private func publishDrop(_ envelope: CourierEnvelope, messageID: String? = nil) -> Bool {
+    /// it rides the pending queue so an evicted or failed drop can release its
+    /// in-flight slot. Completion reports actual NIP-20 relay acceptance.
+    private func publishDrop(
+        _ envelope: CourierEnvelope,
+        messageID: String? = nil,
+        operationID: UUID? = nil,
+        untrackedCompletion: (@MainActor (Bool) -> Void)? = nil
+    ) {
         guard let encoded = envelope.encode(),
               encoded.count <= Limits.maxDropEnvelopeBytes,
-              !envelope.isExpired else { return false }
+              !envelope.isExpired else {
+            finishPublish(
+                messageID: messageID,
+                operationID: operationID,
+                succeeded: false,
+                untrackedCompletion: untrackedCompletion
+            )
+            return
+        }
         guard relaysConnected?() ?? false else {
-            pendingDrops.append((envelope, messageID))
+            // Held mail remains in CourierStore and has no sender operation to
+            // recover after an in-memory queue loss. Leave its cooldown unset
+            // and let the next connected refresh offer it again.
+            guard messageID != nil else {
+                untrackedCompletion?(false)
+                return
+            }
+            pendingDrops.append((envelope, messageID, operationID))
             while pendingDrops.count > Limits.maxPendingDrops {
                 let evicted = pendingDrops.removeFirst()
-                // The oldest queued drop is being dropped before it ever
-                // published; release its dedup slot so it stays retryable.
-                if let key = evicted.dedupKey {
-                    publishedDropKeys.remove(key)
-                    persistDedup()
-                }
+                finishPublish(
+                    messageID: evicted.dedupKey,
+                    operationID: evicted.operationID,
+                    succeeded: false
+                )
             }
-            return true
+            return
         }
         guard let identity = try? NostrIdentity.generate(),
               let event = try? NostrProtocol.createCourierDropEvent(
@@ -250,10 +320,62 @@ final class BridgeCourierService: ObservableObject {
                 senderIdentity: identity
               ) else {
             SecureLogger.error("📦🌉 Failed to compose courier drop", category: .encryption)
-            return false
+            finishPublish(
+                messageID: messageID,
+                operationID: operationID,
+                succeeded: false,
+                untrackedCompletion: untrackedCompletion
+            )
+            return
         }
-        publishEvent?(event)
-        SecureLogger.debug("📦🌉 Published courier drop for tag \(envelope.recipientTag.hexEncodedString().prefix(8))…", category: .session)
+        guard let publishEvent else {
+            SecureLogger.error("📦🌉 Courier drop publisher is not configured", category: .session)
+            finishPublish(
+                messageID: messageID,
+                operationID: operationID,
+                succeeded: false,
+                untrackedCompletion: untrackedCompletion
+            )
+            return
+        }
+        publishEvent(event) { [weak self] succeeded in
+            guard let self else { return }
+            guard self.finishPublish(
+                messageID: messageID,
+                operationID: operationID,
+                succeeded: succeeded,
+                untrackedCompletion: untrackedCompletion
+            ) else { return }
+            if succeeded {
+                SecureLogger.debug("📦🌉 Published courier drop for tag \(envelope.recipientTag.hexEncodedString().prefix(8))…", category: .session)
+            } else {
+                SecureLogger.warning("📦🌉 No relay accepted courier drop", category: .session)
+            }
+        }
+    }
+
+    @discardableResult
+    private func finishPublish(
+        messageID: String?,
+        operationID: UUID?,
+        succeeded: Bool,
+        untrackedCompletion: (@MainActor (Bool) -> Void)? = nil
+    ) -> Bool {
+        guard let messageID else {
+            untrackedCompletion?(succeeded)
+            return true
+        }
+        // Missing/mismatched means this callback was duplicated, invalidated
+        // by panic wipe, or belongs to an older attempt for the same key.
+        guard let operationID,
+              let operation = activeDropOperations[messageID],
+              operation.id == operationID else { return false }
+        activeDropOperations.removeValue(forKey: messageID)
+        if succeeded {
+            publishedDropKeys.insert(messageID, now: now())
+            persistDedup()
+        }
+        operation.completion(succeeded)
         return true
     }
 
@@ -262,16 +384,13 @@ final class BridgeCourierService: ObservableObject {
         guard bridgeEnabled?() ?? false, relaysConnected?() ?? false, !pendingDrops.isEmpty else { return }
         let queued = pendingDrops
         pendingDrops.removeAll()
-        for item in queued where !publishDrop(item.envelope, messageID: item.dedupKey) {
-            // Compose failed with relays up: release the slot so the router's
-            // retry sweep can attempt a fresh deposit.
-            if let key = item.dedupKey {
-                publishedDropKeys.remove(key)
-            }
+        for item in queued {
+            publishDrop(
+                item.envelope,
+                messageID: item.dedupKey,
+                operationID: item.operationID
+            )
         }
-        // Flushed keys just became durable (published, so no longer excluded
-        // as pending) or were released above; either way the record changed.
-        persistDedup()
     }
 
     // MARK: - Subscription (recipient + gateway watch)
@@ -281,7 +400,15 @@ final class BridgeCourierService: ObservableObject {
     /// (tags rotate daily); idempotent.
     func refresh() {
         armRefreshTimerIfNeeded()
-        guard bridgeEnabled?() ?? false, relaysConnected?() ?? false else {
+        guard bridgeEnabled?() ?? false else {
+            cancelActivePublishes()
+            if subscriptionOpen {
+                closeSubscription?()
+                subscriptionOpen = false
+            }
+            return
+        }
+        guard relaysConnected?() ?? false else {
             if subscriptionOpen {
                 closeSubscription?()
                 subscriptionOpen = false
@@ -323,11 +450,37 @@ final class BridgeCourierService: ObservableObject {
 
     /// Announce-driven refresh, debounced — a newly verified peer should be
     /// watched promptly, but announce storms must not thrash subscriptions.
+    /// Calls inside the window coalesce into one trailing refresh so peers
+    /// learned after the leading edge are not omitted until the 30-minute
+    /// periodic timer.
     func refreshAfterVerifiedAnnounce() {
         guard bridgeEnabled?() ?? false else { return }
-        guard now().timeIntervalSince(lastAnnounceRefresh) >= Limits.announceRefreshDebounceSeconds else { return }
-        lastAnnounceRefresh = now()
-        refresh()
+        let date = now()
+        let elapsed = date.timeIntervalSince(lastAnnounceRefresh)
+        if elapsed >= Limits.announceRefreshDebounceSeconds {
+            lastAnnounceRefresh = date
+            refresh()
+            return
+        }
+
+        guard !announceRefreshTimerArmed else { return }
+        announceRefreshTimerArmed = true
+        let delay = max(0, Limits.announceRefreshDebounceSeconds - elapsed)
+        let fire: @MainActor () -> Void = { [weak self] in
+            guard let self else { return }
+            self.announceRefreshTimerArmed = false
+            guard self.bridgeEnabled?() ?? false else { return }
+            self.lastAnnounceRefresh = self.now()
+            self.refresh()
+        }
+        if let scheduleTimer {
+            scheduleTimer(delay, fire)
+        } else {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                fire()
+            }
+        }
     }
 
     private func armRefreshTimerIfNeeded() {
@@ -355,8 +508,10 @@ final class BridgeCourierService: ObservableObject {
     func handleDropEvent(_ event: NostrEvent) {
         guard bridgeEnabled?() ?? false else { return }
         guard event.kind == NostrProtocol.EventKind.courierDrop.rawValue else { return }
-        guard seenDropEventIDs.insert(event.id, now: now()) else { return }
-        persistDedup()
+        // A resubscribe can still deliver an event from the old watch set.
+        // Do not durably consume it until it actually belongs to us/current
+        // local peer and is opened or accepted for physical delivery.
+        guard !seenDropEventIDs.contains(event.id, now: now()) else { return }
         guard let data = Data(base64Encoded: event.content),
               data.count <= Limits.maxDropEnvelopeBytes,
               let envelope = CourierEnvelope.decode(data),
@@ -371,23 +526,35 @@ final class BridgeCourierService: ObservableObject {
 
         if myTagsHex.contains(tagHex) {
             SecureLogger.info("📦🌉 Courier drop for us arrived via bridge", category: .session)
-            openEnvelope?(envelope)
+            if openEnvelope?(envelope) == true {
+                seenDropEventIDs.insert(event.id, now: now())
+                persistDedup()
+            }
             return
         }
         if let match = watchedPeerTags.first(where: { $0.tagsHex.contains(tagHex) }) {
             SecureLogger.info("📦🌉 Courier drop fetched for local peer \(match.peerID.id.prefix(8))…", category: .session)
-            if deliverToPeer?(envelope, match.peerID) != true {
-                // The best-effort handoff never left this device (the peer
-                // walked away between the relay fetch and the mesh send).
-                // Release the seen slot so a relaunch or backlog redelivery
-                // retries — a single-gateway island has no other carrier.
-                seenDropEventIDs.remove(event.id)
+            if deliverToPeer?(envelope, match.peerID) == true {
+                seenDropEventIDs.insert(event.id, now: now())
                 persistDedup()
             }
         }
     }
 
     // MARK: - Helpers
+
+    /// Cancels queued and in-flight sender operations after bridge disable or
+    /// panic wipe. Invalidate first, then resolve false so callback re-entry
+    /// cannot be mistaken for an active operation; late relay callbacks no-op.
+    private func cancelActivePublishes() {
+        let invalidated = activeDropOperations.values.map(\.completion)
+        pendingDrops.removeAll()
+        activeDropOperations.removeAll()
+        // Untracked held publishes are invalidated too. Their late relay
+        // callbacks compare operation IDs and no-op after this reset.
+        heldDropOperations.removeAll()
+        invalidated.forEach { $0(false) }
+    }
 
     /// A fresh random Nostr identity for signing one drop. Delegates to the
     /// canonical generator (Schnorr key that can't fail validity) instead of

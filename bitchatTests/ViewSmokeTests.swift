@@ -646,7 +646,7 @@ struct ViewSmokeTests {
         playback.stop()
         VoiceNotePlaybackCoordinator.shared.activate(playback)
         VoiceNotePlaybackCoordinator.shared.deactivate(playback)
-        await VoiceRecorder.shared.cancelRecording()
+        await VoiceRecorder.shared.cancelRecording(owner: VoiceRecorder.RecordingOwner())
 
         #expect(bins.count == 16)
         #expect(WaveformCache.shared.cachedWaveform(for: waveformProbeURL)?.count == 16)

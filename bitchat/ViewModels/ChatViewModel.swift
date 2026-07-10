@@ -698,12 +698,30 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         conversations.conversationsByID[conversationID]?.containsMessage(withID: messageID) ?? false
     }
 
+    @MainActor
+    func bridgeInjectedPublicMessageIsPresent(withID messageID: String) -> Bool {
+        publicMessagePipeline.containsMessage(withID: messageID) ||
+            publicConversationContainsMessage(withID: messageID, in: .mesh)
+    }
+
     /// Removes a message by ID from whichever public conversation contains
     /// it. Returns the removed message, if any.
     @MainActor
     @discardableResult
     func removePublicMessage(withID messageID: String) -> BitchatMessage? {
-        conversations.removePublicMessage(withID: messageID)
+        publicMessagePipeline.removeMessage(withID: messageID)
+        return conversations.removePublicMessage(withID: messageID)
+    }
+
+    /// Replaces an unauthenticated bridge alias with a later authenticated
+    /// radio row. In addition to both storage layers, clear the content-window
+    /// marker written by an already-flushed alias or it would suppress the
+    /// genuine row during the next public-message batch.
+    @MainActor
+    func removeBridgeInjectedPublicMessage(withID messageID: String) {
+        publicMessagePipeline.removeMessage(withID: messageID)
+        guard let removed = conversations.removePublicMessage(withID: messageID) else { return }
+        deduplicationService.forgetContent(removed.content, ifRecordedAt: removed.timestamp)
     }
 
     /// Removes every message matching `predicate` from a geohash
@@ -1755,6 +1773,14 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     /// Handle incoming public message
     @MainActor
     func handlePublicMessage(_ message: BitchatMessage) {
+        // Bridge hints are unauthenticated and may never suppress a genuine
+        // BLE sender. Once the radio packet has passed BLE signature checks,
+        // replace any earlier bridge alias before this row is enqueued.
+        if !message.isBridged,
+           let senderPeerID = message.senderPeerID,
+           !senderPeerID.isGeoChat {
+            BridgeService.shared.handleAuthenticatedRadioMessage(messageID: message.id)
+        }
         // A finalized voice note whose burst already streamed in live swaps
         // into the existing bubble instead of appearing twice.
         if liveVoiceCoordinator.absorbFinalizedVoiceNote(message) { return }

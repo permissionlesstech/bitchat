@@ -791,6 +791,10 @@ private final class PerfPipelineFixture {
         let identityManager = MockIdentityManager(keychain)
         let transport = MockTransport()
         let conversations = ConversationStore()
+        let locationSuite = "PerformanceBaselineTests.\(UUID().uuidString)"
+        let locationStorage = UserDefaults(suiteName: locationSuite) ?? .standard
+        locationStorage.removePersistentDomain(forName: locationSuite)
+        let locationManager = LocationChannelManager(storage: locationStorage)
 
         self.conversations = conversations
         self.viewModel = ChatViewModel(
@@ -798,7 +802,8 @@ private final class PerfPipelineFixture {
             idBridge: idBridge,
             identityManager: identityManager,
             transport: transport,
-            conversations: conversations
+            conversations: conversations,
+            locationManager: locationManager
         )
         self.privateInbox = PrivateInboxModel(conversations: conversations)
         self.publicChat = PublicChatModel(conversations: conversations)

@@ -219,10 +219,53 @@ struct BLEServiceCoreTests {
         )
         let payload = try #require(announcement.encode(), "Failed to encode announcement")
         let victimPeerID = PeerID(publicKey: announcement.noisePublicKey)
+        let courierStore = CourierStore(persistsToDisk: false)
+        ble.courierStore = courierStore
+        let carriedEnvelope = CourierEnvelope(
+            recipientTag: CourierEnvelope.recipientTag(
+                noiseStaticKey: announcement.noisePublicKey,
+                epochDay: CourierEnvelope.epochDay(for: Date())
+            ),
+            expiry: UInt64(Date().addingTimeInterval(3600).timeIntervalSince1970 * 1000),
+            ciphertext: Data(repeating: 0xA5, count: 128)
+        )
+        #expect(courierStore.deposit(
+            carriedEnvelope,
+            from: Data(repeating: 0xC0, count: 32),
+            tier: .favorite
+        ))
+        let sprayRecipientKey = Data(repeating: 0xB4, count: 32)
+        let sprayEnvelope = CourierEnvelope(
+            recipientTag: CourierEnvelope.recipientTag(
+                noiseStaticKey: sprayRecipientKey,
+                epochDay: CourierEnvelope.epochDay(for: Date())
+            ),
+            expiry: UInt64(Date().addingTimeInterval(3600).timeIntervalSince1970 * 1000),
+            ciphertext: Data(repeating: 0xB5, count: 128),
+            copies: 4
+        )
+        #expect(courierStore.deposit(
+            sprayEnvelope,
+            from: Data(repeating: 0xC0, count: 32),
+            tier: .favorite
+        ))
         ble._test_seedConnectedPeer(victimPeerID, nickname: "victim")
         ble._test_bindCentral(victimLink, to: victimPeerID)
         ble._test_seedConnectedPeer(attackerPeerID, nickname: "attacker")
         ble._test_bindCentral(attackerLink, to: attackerPeerID)
+
+        // Preserve the hard case: a valid victim session still exists on the
+        // victim's own physical link when the announce is replayed elsewhere.
+        let message1 = try ble._test_noiseInitiateHandshake(with: victimPeerID)
+        let message2 = try #require(
+            try victimSigner.processHandshakeMessage(from: ble.myPeerID, message: message1)
+        )
+        let message3 = try #require(
+            try ble._test_noiseProcessHandshakeMessage(from: victimPeerID, message: message2)
+        )
+        _ = try victimSigner.processHandshakeMessage(from: ble.myPeerID, message: message3)
+        #expect(ble.canDeliverSecurely(to: victimPeerID))
+        ble._test_markNoiseAuthenticatedCentral(victimLink, to: victimPeerID)
 
         // The victim's fresh signed announce replayed on the attacker's bound
         // link with its direct TTL restored (TTL is excluded from signing, so
@@ -249,6 +292,16 @@ struct BLEServiceCoreTests {
         #expect(!stolen)
         #expect(ble._test_centralBinding(attackerLink) == attackerPeerID)
         #expect(ble._test_centralBinding(victimLink) == victimPeerID)
+        // A valid signature authenticates the announce contents, not the
+        // unsigned direct TTL. Without a Noise-authenticated session on the
+        // ingress link, the replay must not retire mail or consume spray state.
+        #expect(!courierStore.isEmpty)
+        await Task.yield()
+        await Task.yield()
+        let stillEligibleForSpray = courierStore.takeSprayCopies(for: announcement.noisePublicKey)
+        #expect(stillEligibleForSpray.map(\.copies) == [2])
+        #expect(courierStore.takeEnvelopes(for: announcement.noisePublicKey) == [carriedEnvelope])
+        #expect(ble.canDeliverSecurely(to: victimPeerID))
         // And the replay must not retire the link's real bound peer.
         #expect(ble.currentPeerSnapshots().map(\.peerID).contains(attackerPeerID))
     }
@@ -313,6 +366,78 @@ struct BLEServiceCoreTests {
         // … but secure delivery stays impossible — the DM gate holds, and
         // MessageRouter retains + couriers instead of trusting the link.
         #expect(!ble.canDeliverSecurely(to: victimPeerID))
+    }
+
+    @Test
+    func replayedDirectAnnounceWithStaleVictimSessionCannotBridgeThroughForeignLink() async throws {
+        let ble = makeService()
+        // Keep announce handling out of the carried-mail path: the regression
+        // is specifically BridgeCourierService's direct delivery preflight.
+        ble.courierStore = CourierStore(persistsToDisk: false)
+        let attackerPeerID = PeerID(str: "1122334455667788")
+        let attackerLink = "central-attacker-stale-victim-session"
+        ble._test_seedConnectedPeer(attackerPeerID, nickname: "attacker")
+        ble._test_bindCentral(attackerLink, to: attackerPeerID)
+
+        let victim = NoiseEncryptionService(keychain: MockKeychain())
+        let announcement = AnnouncementPacket(
+            nickname: "victim",
+            noisePublicKey: victim.getStaticPublicKeyData(),
+            signingPublicKey: victim.getSigningPublicKeyData(),
+            directNeighbors: nil
+        )
+        let victimPeerID = PeerID(publicKey: announcement.noisePublicKey)
+
+        // Establish a real peer-level victim session without associating it
+        // with the attacker's physical link. This is the stale-session case
+        // that a plain `canDeliverSecurely` check cannot distinguish.
+        let message1 = try ble._test_noiseInitiateHandshake(with: victimPeerID)
+        let message2 = try #require(
+            try victim.processHandshakeMessage(from: ble.myPeerID, message: message1)
+        )
+        let message3 = try #require(
+            try ble._test_noiseProcessHandshakeMessage(from: victimPeerID, message: message2)
+        )
+        _ = try victim.processHandshakeMessage(from: ble.myPeerID, message: message3)
+        #expect(ble.canDeliverSecurely(to: victimPeerID))
+
+        let payload = try #require(announcement.encode(), "Failed to encode announcement")
+        let unsigned = BitchatPacket(
+            type: MessageType.announce.rawValue,
+            senderID: Data(hexString: victimPeerID.id) ?? Data(),
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: payload,
+            signature: nil,
+            ttl: 7
+        )
+        let replay = try #require(victim.signPacket(unsigned), "Failed to sign replayed announce")
+        #expect(ble._test_recordIngressIfNew(packet: replay, linkID: attackerLink))
+        ble._test_handlePacket(replay, fromPeerID: victimPeerID, preseedPeer: false)
+
+        let rebound = await TestHelpers.waitUntil(
+            { ble._test_centralBinding(attackerLink) == victimPeerID },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(rebound)
+        #expect(ble.canDeliverSecurely(to: victimPeerID))
+
+        let outbound = OutboundPacketTap()
+        ble._test_onOutboundPacket = { outbound.record($0) }
+        let envelope = CourierEnvelope(
+            recipientTag: CourierEnvelope.recipientTag(
+                noiseStaticKey: announcement.noisePublicKey,
+                epochDay: CourierEnvelope.epochDay(for: Date())
+            ),
+            expiry: UInt64(Date().addingTimeInterval(3600).timeIntervalSince1970 * 1000),
+            ciphertext: Data(repeating: 0xA5, count: 128)
+        )
+
+        #expect(!ble.deliverBridgedEnvelope(envelope, to: victimPeerID))
+        // Reject before even entering the outbound pipeline: otherwise a
+        // real attacker CBCentral could accept the opaque courier packet and
+        // cause the relay drop's persisted seen ID to be consumed forever.
+        #expect(outbound.count(ofType: .courierEnvelope) == 0)
     }
 
     /// A legitimate rotation announce necessarily arrives on a link still

@@ -39,25 +39,38 @@ final class GeoChannelCoordinator {
     private var cancellables = Set<AnyCancellable>()
     private var regionalChannels: [GeohashChannel] = []
     private var bookmarkedGeohashes: [String] = []
+    private var permissionState: LocationChannelManager.PermissionState
+    private var locationNotesEnabled: Bool
     /// Mirrors `NearbyNotesCounter.revealed` (injectable for tests): the
     /// session's one explicit notes act. Until it happens, background
     /// sampling must not include the building-precision cell — see
     /// `sampledRegionalGeohashes`.
     private var notesRevealed = false
     private let notesRevealedPublisher: AnyPublisher<Bool, Never>
+    private let locationNotesSettingsPublisher: AnyPublisher<Bool, Never>
 
     init(
         locationManager: LocationChannelManager? = nil,
         bookmarksStore: GeohashBookmarksStore? = nil,
         torManager: TorManager? = nil,
         notesRevealed: AnyPublisher<Bool, Never>? = nil,
+        locationNotesEnabled: Bool? = nil,
+        locationNotesSettings: AnyPublisher<Bool, Never>? = nil,
         context: any GeoChannelContext
     ) {
-        self.locationManager = locationManager ?? Self.defaultLocationManager()
+        let resolvedLocationManager = locationManager ?? Self.defaultLocationManager()
+        self.locationManager = resolvedLocationManager
         self.bookmarksStore = bookmarksStore ?? GeohashBookmarksStore.shared
         self.torManager = torManager ?? Self.defaultTorManager()
+        self.permissionState = resolvedLocationManager.permissionState
+        self.locationNotesEnabled = locationNotesEnabled ?? LocationNotesSettings.enabled
         self.notesRevealedPublisher = notesRevealed
             ?? NearbyNotesCounter.shared.$revealed.eraseToAnyPublisher()
+        self.locationNotesSettingsPublisher = locationNotesSettings
+            ?? NotificationCenter.default
+                .publisher(for: LocationNotesSettings.didChangeNotification)
+                .map { _ in LocationNotesSettings.enabled }
+                .eraseToAnyPublisher()
         self.context = context
 
         start()
@@ -97,6 +110,18 @@ final class GeoChannelCoordinator {
             }
             .store(in: &cancellables)
 
+        // The location-notes preference is a live privacy kill switch. It
+        // removes the device-derived building cell even if the session was
+        // previously revealed. Explicit bookmarks remain eligible below.
+        locationNotesSettingsPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] enabled in
+                guard let self, self.locationNotesEnabled != enabled else { return }
+                self.locationNotesEnabled = enabled
+                self.updateSampling()
+            }
+            .store(in: &cancellables)
+
         bookmarksStore.$bookmarks
             .receive(on: DispatchQueue.main)
             .sink { [weak self] bookmarks in
@@ -109,10 +134,15 @@ final class GeoChannelCoordinator {
         locationManager.$permissionState
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
-                guard let self, state == .authorized else { return }
-                Task { @MainActor [weak self] in
-                    self?.locationManager.refreshChannels()
+                guard let self else { return }
+                self.permissionState = state
+                if state == .authorized {
+                    self.locationManager.refreshChannels()
                 }
+                // Cached channels outlive authorization by design. Recompute
+                // regardless of direction so revocation tears down regional
+                // sampling instead of continuing from stale coordinates.
+                self.updateSampling()
             }
             .store(in: &cancellables)
 
@@ -130,23 +160,22 @@ final class GeoChannelCoordinator {
     /// the nearby-conversation hint and channel participant counts working.
     /// Bookmarks are exempt: bookmarking a geohash is itself explicit.
     private var sampledRegionalGeohashes: [String] {
-        regionalChannels
-            .filter { notesRevealed || $0.level != .building }
+        guard permissionState == .authorized else { return [] }
+        return regionalChannels
+            .filter { (notesRevealed && locationNotesEnabled) || $0.level != .building }
             .map { $0.geohash }
     }
 
     private func updateSampling() {
         let union = Array(Set(sampledRegionalGeohashes).union(bookmarkedGeohashes))
-        Task { @MainActor in
-            guard !union.isEmpty else {
-                context?.endGeohashSampling()
-                return
-            }
-            if torManager.isForeground() {
-                context?.beginGeohashSampling(for: union)
-            } else {
-                context?.endGeohashSampling()
-            }
+        guard !union.isEmpty else {
+            context?.endGeohashSampling()
+            return
+        }
+        if torManager.isForeground() {
+            context?.beginGeohashSampling(for: union)
+        } else {
+            context?.endGeohashSampling()
         }
     }
 

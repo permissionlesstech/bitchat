@@ -299,23 +299,59 @@ extension VoiceNotePlaybackController: ExclusivePlayback {
 final class VoiceNotePlaybackCoordinator {
     static let shared = VoiceNotePlaybackCoordinator()
 
+    struct Reservation: Equatable {
+        fileprivate let generation: UInt64
+    }
+
     private weak var activeController: (any ExclusivePlayback)?
+    private weak var latestReservedController: (any ExclusivePlayback)?
+    private var latestReservation = Reservation(generation: 0)
 
     /// Internal so tests can isolate their own exclusivity slot; the app
     /// uses `shared`.
     init() {}
 
-    func activate(_ controller: any ExclusivePlayback) {
+    /// Records playback intent without interrupting audio that is already
+    /// audible. Async starters reserve before suspension, then activate only
+    /// after their audio resource is ready.
+    func reserve(_ controller: any ExclusivePlayback) -> Reservation {
+        latestReservation = Reservation(generation: latestReservation.generation &+ 1)
+        latestReservedController = controller
+        return latestReservation
+    }
+
+    /// Immediate activation for synchronous/user-initiated playback.
+    @discardableResult
+    func activate(_ controller: any ExclusivePlayback) -> Reservation {
+        let reservation = reserve(controller)
+        _ = activate(controller, reservation: reservation)
+        return reservation
+    }
+
+    /// Commits an earlier reservation only when it is still the newest
+    /// playback request. This prevents an older async acquire from stealing
+    /// the floor after a newer play gesture.
+    @discardableResult
+    func activate(_ controller: any ExclusivePlayback, reservation: Reservation) -> Bool {
+        guard isCurrent(reservation, for: controller) else { return false }
         if activeController === controller {
-            return
+            return true
         }
         activeController?.pauseForExclusivity()
         activeController = controller
+        return true
+    }
+
+    func isCurrent(_ reservation: Reservation, for controller: any ExclusivePlayback) -> Bool {
+        latestReservation == reservation && latestReservedController === controller
     }
 
     func deactivate(_ controller: any ExclusivePlayback) {
         if activeController === controller {
             activeController = nil
+        }
+        if latestReservedController === controller {
+            latestReservedController = nil
         }
     }
 }

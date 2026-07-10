@@ -46,6 +46,33 @@ struct BLEOutboundLinkPlannerTests {
         )
 
         #expect(plan.fragmentChunkSize == BLEOutboundPacketPolicy.fragmentChunkSize(forLinkLimit: smallestLimit))
+        #expect(plan.selectedLinks.peripheralIDs == Set(["p1"]))
+        #expect(plan.selectedLinks.centralIDs == Set(["c1"]))
+        #expect(!plan.shouldSpoolDirectedPacket)
+    }
+
+    @Test
+    func oversizedDirectedCourierDoesNotUseUnrelatedPeersMTUAsHandoffSuccess() {
+        let recipient = PeerID(str: "1122334455667788")
+        let unrelated = PeerID(str: "8877665544332211")
+        let packet = makePacket(type: .courierEnvelope, recipient: recipient)
+
+        let plan = BLEOutboundLinkPlanner.plan(
+            packet: packet,
+            dataCount: 512,
+            peripheralIDs: ["unrelated-link"],
+            peripheralWriteLimits: [64],
+            centralIDs: [],
+            centralNotifyLimits: [],
+            ingressRecord: nil,
+            excludedLinks: [],
+            peripheralPeerBindings: ["unrelated-link": unrelated],
+            directedOnlyPeer: recipient,
+            requireDirectPeerLink: true
+        )
+
+        #expect(plan.directedPeerHint == recipient)
+        #expect(plan.fragmentChunkSize == nil)
         #expect(plan.selectedLinks.peripheralIDs.isEmpty)
         #expect(plan.selectedLinks.centralIDs.isEmpty)
         #expect(!plan.shouldSpoolDirectedPacket)
@@ -91,6 +118,28 @@ struct BLEOutboundLinkPlannerTests {
 
         #expect(plan.directedPeerHint == recipient)
         #expect(plan.shouldSpoolDirectedPacket)
+    }
+
+    @Test
+    func bridgeCourierPacketDoesNotTurnProcessLocalSpoolIntoHandoffSuccess() {
+        let recipient = PeerID(str: "1122334455667788")
+        let packet = makePacket(type: .courierEnvelope, recipient: recipient)
+
+        let plan = BLEOutboundLinkPlanner.plan(
+            packet: packet,
+            dataCount: 32,
+            peripheralIDs: [],
+            peripheralWriteLimits: [],
+            centralIDs: [],
+            centralNotifyLimits: [],
+            ingressRecord: nil,
+            excludedLinks: [],
+            directedOnlyPeer: recipient
+        )
+
+        #expect(plan.selectedLinks.peripheralIDs.isEmpty)
+        #expect(plan.selectedLinks.centralIDs.isEmpty)
+        #expect(!plan.shouldSpoolDirectedPacket)
     }
 
     @Test

@@ -46,8 +46,25 @@ struct BLEOutboundWriteBuffer {
         priority: BLEOutboundWritePriority,
         capBytes: Int
     ) -> EnqueueResult {
+        enqueueReportingAcceptance(
+            data: data,
+            for: peripheralID,
+            priority: priority,
+            capBytes: capBytes
+        ).result
+    }
+
+    /// Enqueues while also reporting whether the newly offered write survived
+    /// priority trimming. `EnqueueResult.enqueued` alone cannot express that:
+    /// a full queue may immediately trim the new lowest-priority item.
+    mutating func enqueueReportingAcceptance(
+        data: Data,
+        for peripheralID: String,
+        priority: BLEOutboundWritePriority,
+        capBytes: Int
+    ) -> (result: EnqueueResult, accepted: Bool) {
         guard data.count <= capBytes else {
-            return .oversized(bytes: data.count)
+            return (.oversized(bytes: data.count), false)
         }
 
         var queue = writesByPeripheralID[peripheralID] ?? []
@@ -65,13 +82,21 @@ struct BLEOutboundWriteBuffer {
         }
 
         writesByPeripheralID[peripheralID] = queue.isEmpty ? nil : queue
-        return .enqueued(trimmedBytes: trimmedBytes, remainingBytes: total)
+        let accepted = insertIndex < queue.count
+        return (.enqueued(trimmedBytes: trimmedBytes, remainingBytes: total), accepted)
     }
 
     mutating func takeAll(for peripheralID: String) -> [BLEPendingWrite] {
         let items = writesByPeripheralID[peripheralID] ?? []
         writesByPeripheralID[peripheralID] = nil
         return items
+    }
+
+    /// Drops link-specific ciphertext when that physical link is gone. Keeping
+    /// the dictionary entry would let rotating peripheral UUIDs accumulate a
+    /// fresh per-link byte cap indefinitely.
+    mutating func discardAll(for peripheralID: String) {
+        writesByPeripheralID[peripheralID] = nil
     }
 
     mutating func prepend(_ items: [BLEPendingWrite], for peripheralID: String) {

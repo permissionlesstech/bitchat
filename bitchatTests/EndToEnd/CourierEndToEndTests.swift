@@ -96,6 +96,20 @@ struct CourierEndToEndTests {
         service._test_handlePacket(packet, fromPeerID: peer.myPeerID)
     }
 
+    /// Establishes the Noise session that proves the direct link's peer owns
+    /// its announced static identity. CoreBluetooth is disabled in this suite,
+    /// so the handshake is ferried in-process just like courier packets.
+    private func establishNoiseSession(between initiator: BLEService, and responder: BLEService) throws {
+        let message1 = try initiator._test_noiseInitiateHandshake(with: responder.myPeerID)
+        let message2 = try #require(
+            try responder._test_noiseProcessHandshakeMessage(from: initiator.myPeerID, message: message1)
+        )
+        let message3 = try #require(
+            try initiator._test_noiseProcessHandshakeMessage(from: responder.myPeerID, message: message2)
+        )
+        _ = try responder._test_noiseProcessHandshakeMessage(from: initiator.myPeerID, message: message3)
+    }
+
     // MARK: - Tests
 
     @Test func courierCarriesMessageAcrossDisjointConnectivity() async throws {
@@ -141,7 +155,9 @@ struct CourierEndToEndTests {
         )
         #expect(carried)
 
-        // 3. Later, Bob announces near Carol → handover fires.
+        // 3. Later, Bob proves link ownership and announces near Carol →
+        // handover fires.
+        try establishNoiseSession(between: carol, and: bob)
         bob.sendBroadcastAnnounce()
         let announced = await TestHelpers.waitUntil(
             { bobOut.first(ofType: .announce) != nil },
@@ -156,7 +172,10 @@ struct CourierEndToEndTests {
             timeout: TestConstants.defaultTimeout
         )
         #expect(handedOver)
-        #expect(carol.courierStore.isEmpty)
+        // With CoreBluetooth disabled there is no physical link for the send
+        // planner to accept, so Carol truthfully retains the durable copy even
+        // though the packet tap lets us ferry the attempted handover below.
+        #expect(!carol.courierStore.isEmpty)
         let handoverPacket = try #require(carolOut.first(ofType: .courierEnvelope))
         #expect(PeerID(hexData: handoverPacket.recipientID) == bob.myPeerID)
 
@@ -222,6 +241,7 @@ struct CourierEndToEndTests {
         )
         #expect(carried)
 
+        try establishNoiseSession(between: carol, and: bob)
         bob.sendBroadcastAnnounce()
         let announced = await TestHelpers.waitUntil(
             { bobOut.first(ofType: .announce) != nil },
@@ -309,7 +329,7 @@ struct CourierEndToEndTests {
             timeout: TestConstants.defaultTimeout
         )
         #expect(handedOver)
-        #expect(carol.courierStore.isEmpty)
+        #expect(!carol.courierStore.isEmpty)
     }
 
     @Test func relayedAnnounceTriggersNonDestructiveRemoteHandover() async throws {
@@ -395,7 +415,11 @@ struct CourierEndToEndTests {
         #expect(!refloodedInCooldown)
         #expect(!carol.courierStore.isEmpty)
 
-        // A later *direct* announce still performs the destructive handover.
+        // A peer-level Noise session is still insufficient without a physical
+        // ingress link that completed that handshake. This CoreBluetooth-free
+        // harness deliberately has no such link proof, so restoring the
+        // unsigned direct TTL cannot authorize destructive handover.
+        try establishNoiseSession(between: carol, and: bob)
         try await Task.sleep(nanoseconds: 1_100_000_000)
         bob.sendBroadcastAnnounce()
         let announcedAgain = await TestHelpers.waitUntil(
@@ -408,12 +432,12 @@ struct CourierEndToEndTests {
         )
         carol._test_handlePacket(directAgain, fromPeerID: bob.myPeerID, preseedPeer: false)
 
-        let handedOver = await TestHelpers.waitUntil(
-            { carolOut.count(ofType: .courierEnvelope) == 2 },
-            timeout: TestConstants.defaultTimeout
+        let handedOverWithoutLinkProof = await TestHelpers.waitUntil(
+            { carolOut.count(ofType: .courierEnvelope) > 1 },
+            timeout: TestConstants.shortTimeout
         )
-        #expect(handedOver)
-        #expect(carol.courierStore.isEmpty)
+        #expect(!handedOverWithoutLinkProof)
+        #expect(!carol.courierStore.isEmpty)
     }
 
     @Test func sendCourierMessageRejectsInvalidRecipientKeyBeforeQueueing() async throws {
@@ -755,9 +779,9 @@ struct MessageRouterCourierTests {
         )
         let router = MessageRouter(transports: [transport], courierDirectory: directory)
         var drops: [(content: String, messageID: String, key: Data)] = []
-        router.bridgeCourierDeposit = { content, messageID, key in
+        router.bridgeCourierDeposit = { content, messageID, key, completion in
             drops.append((content, messageID, key))
-            return true
+            completion(true)
         }
         var carried: [String] = []
         router.onMessageCarried = { messageID, _ in carried.append(messageID) }

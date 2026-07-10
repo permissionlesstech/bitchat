@@ -60,6 +60,21 @@ final class PublicMessagePipeline {
         scheduleFlush()
     }
 
+    /// Discards an uncommitted row by ID. Bridge-first/radio-second dedup uses
+    /// this before inserting the authenticated radio copy, so the ~80 ms UI
+    /// batch cannot resurrect the replaced bridge alias after store removal.
+    func removeMessage(withID messageID: String) {
+        buffer.removeAll { $0.message.id == messageID }
+        if buffer.isEmpty {
+            timer?.invalidate()
+            timer = nil
+        }
+    }
+
+    func containsMessage(withID messageID: String) -> Bool {
+        buffer.contains { $0.message.id == messageID }
+    }
+
     func flushIfNeeded() {
         flushBuffer()
     }

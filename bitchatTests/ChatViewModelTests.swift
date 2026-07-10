@@ -761,6 +761,40 @@ struct ChatViewModelRateLimitingTests {
 struct ChatViewModelPublicConversationTests {
 
     @Test @MainActor
+    func bridgeAliasReplacementDoesNotContentDedupAwayAuthenticatedRadioRow() {
+        let (viewModel, _) = makeTestableViewModel()
+        let content = "same bridge and radio payload"
+        let timestamp = Date()
+        let bridgeMessage = BitchatMessage(
+            id: "bridge-event-id",
+            sender: "remote#beef",
+            content: content,
+            timestamp: timestamp,
+            isRelay: false,
+            senderPeerID: PeerID(bridge: String(repeating: "a", count: 64)),
+            isBridged: true
+        )
+        viewModel.handlePublicMessage(bridgeMessage)
+        viewModel.publicMessagePipeline.flushIfNeeded()
+        #expect(viewModel.publicConversationContainsMessage(withID: bridgeMessage.id, in: .mesh))
+
+        viewModel.removeBridgeInjectedPublicMessage(withID: bridgeMessage.id)
+        let radioMessage = BitchatMessage(
+            id: "radio-stable-id",
+            sender: "remote",
+            content: content,
+            timestamp: timestamp,
+            isRelay: false,
+            senderPeerID: PeerID(str: "1122334455667788")
+        )
+        viewModel.handlePublicMessage(radioMessage)
+        viewModel.publicMessagePipeline.flushIfNeeded()
+
+        #expect(!viewModel.publicConversationContainsMessage(withID: bridgeMessage.id, in: .mesh))
+        #expect(viewModel.publicConversationContainsMessage(withID: radioMessage.id, in: .mesh))
+    }
+
+    @Test @MainActor
     func addPublicSystemMessage_persistsAcrossTimelineRefresh() async {
         let (viewModel, _) = makeTestableViewModel()
 

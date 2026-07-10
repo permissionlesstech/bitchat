@@ -128,4 +128,18 @@ struct PublicMessagePipelineTests {
         #expect(delegate.messages(in: .mesh).isEmpty)
         #expect(delegate.recordedContentKeys.isEmpty)
     }
+
+    @Test @MainActor
+    func removeMessage_discardsBridgeAliasBeforeBatchFlush() {
+        let pipeline = PublicMessagePipeline()
+        let delegate = TestPipelineDelegate()
+        pipeline.delegate = delegate
+
+        pipeline.enqueue(makeMessage(id: "bridge-event", content: "same radio payload", timestamp: Date()), to: .mesh)
+        pipeline.removeMessage(withID: "bridge-event")
+        pipeline.flushIfNeeded()
+
+        #expect(delegate.committed.isEmpty)
+        #expect(delegate.recordedContentKeys.isEmpty)
+    }
 }

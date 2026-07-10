@@ -130,6 +130,14 @@ struct ChatViewModelDeliveryStatusTests {
 
         #expect(Conversation.shouldSkipStatusUpdate(current: .delivered(to: "Peer", at: Date()), new: .sending))
         #expect(Conversation.shouldSkipStatusUpdate(current: .read(by: "Peer", at: Date()), new: .sending))
+        #expect(Conversation.shouldSkipStatusUpdate(
+            current: .delivered(to: "Peer", at: Date()),
+            new: .failed(reason: "late transport failure")
+        ))
+        #expect(Conversation.shouldSkipStatusUpdate(
+            current: .read(by: "Peer", at: Date()),
+            new: .failed(reason: "late transfer failure")
+        ))
         // A late async `.sending` (pre-handshake resend) must not visibly
         // downgrade a truthful "Sent" either...
         #expect(Conversation.shouldSkipStatusUpdate(current: .sent, new: .sending))

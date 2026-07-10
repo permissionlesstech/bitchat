@@ -268,10 +268,9 @@ struct NostrProtocol {
     /// `[stable ID, mesh sender ID, wire timestamp in ms]`. Element 1 is the
     /// content-stable mesh message ID (`MeshMessageIdentity`) for v1.7.0
     /// parsers, which key their dedup on `m[1]` unconditionally and need it
-    /// per-message-unique; current parsers ignore it and recompute the ID
-    /// from the origin coordinates (elements 2-3) plus the event's own
-    /// content to dedup the bridged copy against the radio copy by
-    /// timeline ID.
+    /// per-message-unique. Current parsers key bridge rows by the authenticated
+    /// event ID and recompute elements 2-3 only as a radio-copy hint; the mesh
+    /// coordinates are public and cannot authenticate the Nostr signer.
     static func createBridgeMeshEvent(
         content: String,
         cell: String,

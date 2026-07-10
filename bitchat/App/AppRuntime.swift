@@ -313,21 +313,29 @@ private extension AppRuntime {
     }
 
     func checkForSharedContent() {
-        guard let userDefaults = UserDefaults(suiteName: BitchatApp.groupID),
-              let sharedContent = userDefaults.string(forKey: "sharedContent"),
+        guard let userDefaults = UserDefaults(suiteName: BitchatApp.groupID) else { return }
+        let clearSharedContent = {
+            userDefaults.removeObject(forKey: "sharedContent")
+            userDefaults.removeObject(forKey: "sharedContentType")
+            userDefaults.removeObject(forKey: "sharedContentDate")
+        }
+
+        guard let sharedContent = userDefaults.string(forKey: "sharedContent"),
               let sharedDate = userDefaults.object(forKey: "sharedContentDate") as? Date else {
+            // A partial or malformed handoff must not linger in the shared
+            // app-group container indefinitely.
+            clearSharedContent()
             return
         }
 
         guard Date().timeIntervalSince(sharedDate) < TransportConfig.uiShareAcceptWindowSeconds else {
+            clearSharedContent()
             return
         }
 
         let contentKind = SharedContentKind(rawValue: userDefaults.string(forKey: "sharedContentType") ?? "") ?? .text
 
-        userDefaults.removeObject(forKey: "sharedContent")
-        userDefaults.removeObject(forKey: "sharedContentType")
-        userDefaults.removeObject(forKey: "sharedContentDate")
+        clearSharedContent()
 
         switch contentKind {
         case .url:

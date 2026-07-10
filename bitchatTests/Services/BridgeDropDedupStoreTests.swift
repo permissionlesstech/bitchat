@@ -63,7 +63,7 @@ struct BridgeDropDedupStoreTests {
             lifetime: 3600,
             entries: [
                 "stale": now.addingTimeInterval(-7200),
-                "fresh": now.addingTimeInterval(-60),
+                "fresh": now.addingTimeInterval(-60)
             ],
             now: now
         )

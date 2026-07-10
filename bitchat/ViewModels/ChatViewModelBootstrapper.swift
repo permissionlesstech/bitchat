@@ -464,6 +464,12 @@ private extension ChatViewModelBootstrapper {
                 isBridged: true
             ))
         }
+        bridge.removeInjectedInbound = { [weak viewModel] messageID in
+            viewModel?.removeBridgeInjectedPublicMessage(withID: messageID)
+        }
+        bridge.isInjectedInboundPresent = { [weak viewModel] messageID in
+            viewModel?.bridgeInjectedPublicMessageIsPresent(withID: messageID) ?? false
+        }
         bridge.isMessageSeenLocally = { [weak viewModel] messageID in
             viewModel?.publicConversationContainsMessage(withID: messageID, in: .mesh) ?? false
         }
@@ -532,11 +538,17 @@ private extension ChatViewModelBootstrapper {
         let courier = BridgeCourierService.shared
 
         courier.bridgeEnabled = { BridgeService.shared.isEnabled }
-        courier.relaysConnected = { NostrRelayManager.shared.isConnected }
-        courier.publishEvent = { event in
+        // A geo/custom relay does not make a global courier drop durable.
+        // Require an actually connected default (DM) relay so `sendEvent`
+        // writes to at least one intended relay instead of only entering its
+        // process-local pending queue.
+        courier.relaysConnected = { NostrRelayManager.shared.isDMRelayConnected }
+        courier.publishEvent = { event, completion in
             // Default (DM) relays: drops need the standing global relay set,
             // not geo relays — sender and recipient share no cell.
-            NostrRelayManager.shared.sendEvent(event)
+            // This confirmed path never falls back to the volatile relay
+            // queue; bridge dedup is committed only after NIP-20 OK.
+            NostrRelayManager.shared.sendEventImmediately(event, completion: completion)
         }
         courier.openSubscription = { tagsHex in
             NostrRelayManager.shared.unsubscribe(id: Self.courierDropSubscriptionID)
@@ -564,7 +576,7 @@ private extension ChatViewModelBootstrapper {
             bleService?.sealBridgeCourierEnvelope(content, messageID: messageID, recipientNoiseKey: recipientKey)
         }
         courier.openEnvelope = { [weak bleService] envelope in
-            bleService?.openBridgedCourierEnvelope(envelope)
+            bleService?.openBridgedCourierEnvelope(envelope) ?? false
         }
         courier.deliverToPeer = { [weak bleService] envelope, peerID in
             bleService?.deliverBridgedEnvelope(envelope, to: peerID) ?? false
@@ -572,12 +584,20 @@ private extension ChatViewModelBootstrapper {
         courier.heldEnvelopes = { cooldown in
             CourierStore.shared.envelopesForBridgePublish(cooldown: cooldown)
         }
-
-        viewModel.messageRouter.bridgeCourierDeposit = { content, messageID, recipientKey in
-            BridgeCourierService.shared.depositDrop(content: content, messageID: messageID, recipientNoiseKey: recipientKey)
+        courier.markHeldEnvelopePublished = { envelope in
+            CourierStore.shared.markBridgePublished(envelope)
         }
-        // (depositDrop's Bool flows back so a dropped message shows the
-        // "carried" state — a drop's delivery ack can't return over radio.)
+
+        viewModel.messageRouter.bridgeCourierDeposit = { content, messageID, recipientKey, completion in
+            BridgeCourierService.shared.depositDrop(
+                content: content,
+                messageID: messageID,
+                recipientNoiseKey: recipientKey,
+                completion: completion
+            )
+        }
+        // The completion flows back only after a default relay accepts the
+        // event, so a rejected or unacknowledged write never becomes carried.
         viewModel.messageRouter.startBridgeDepositSweep()
         bleService.onVerifiedPeerAnnounce = { _ in
             Task { @MainActor in
@@ -588,7 +608,7 @@ private extension ChatViewModelBootstrapper {
         // Relay connectivity gates everything; refresh (re)opens or closes.
         // Deduped: refresh() resubscribes, and the raw publisher re-emits on
         // every relay state recompute (6x in 300ms in field logs).
-        NostrRelayManager.shared.$isConnected
+        NostrRelayManager.shared.$isDMRelayConnected
             .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .sink { _ in BridgeCourierService.shared.refresh() }

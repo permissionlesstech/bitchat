@@ -47,11 +47,15 @@ import Foundation
 ///    already holds the radio copy (`isMessageSeenLocally` on the event's
 ///    mesh message ID) — remote islands' traffic is the only thing worth
 ///    airtime.
-/// Receivers additionally dedup by timeline message ID: the wire carries no
-/// public message ID, so every device derives the same content-stable one
-/// (`MeshMessageIdentity`) from the origin coordinates in the event's `m`
-/// tag — recomputed locally, never trusted — and the store's insert-by-ID
-/// absorbs radio/bridge duplicates in either arrival order.
+/// Receivers key bridge rows by the signed Nostr event ID. The event's `m` tag
+/// is only a radio-copy hint: its mesh sender/timestamp fields are public and
+/// cannot authenticate the event signer, so letting them own the timeline ID
+/// would allow a different signer to front-run the genuine event's dedup slot.
+/// When the radio copy is already present the hint avoids duplicate rendering
+/// and downlink airtime. If the bridge copy wins the race, a later
+/// authenticated radio copy replaces every bridge row that claimed the same
+/// hint; the untrusted hint can therefore merge a duplicate but can never
+/// suppress the radio-authenticated origin.
 ///
 /// All dependencies are closure-injected (repo convention) so the policy
 /// layer is unit-testable without relays, radios, or CoreLocation.
@@ -71,11 +75,25 @@ final class BridgeService: ObservableObject {
         static let maxEventAgeSeconds: TimeInterval = 15 * 60
         /// Bounded loop-prevention ID caches (oldest evicted).
         static let maxTrackedEventIDs = 512
+        /// Keep radio-replacement aliases for every bridge row that can still
+        /// be visible in the bounded mesh timeline. Retiring an alias earlier
+        /// would let valid high-volume ingress delete otherwise visible
+        /// history merely to preserve the radio-wins invariant.
+        static let maxTrackedRadioAliases = TransportConfig.meshTimelineCap
         /// Presence heartbeat cadence while the bridge is active.
         static let presenceIntervalSeconds: TimeInterval = 4 * 60
         /// A rendezvous participant counts toward "via bridge" for this long
         /// after their last event.
         static let participantFreshnessSeconds: TimeInterval = 10 * 60
+        /// Relay ingress is adversarial: bound both accepted work and the
+        /// people-sheet state even when an attacker rotates signing keys.
+        static let inboundEventsPerMinute = 600
+        static let inboundEventsPerMinutePerSigner = 120
+        /// Cheap pre-crypto gate for both valid and invalid ingress. Without
+        /// it, invalid carrier events could force unbounded Schnorr work while
+        /// never reaching the accepted-event limiter below.
+        static let signatureVerificationAttemptsPerMinute = 720
+        static let maxParticipants = 128
         /// Content cap, matching the public-message pipeline's own limit.
         static let maxContentBytes = 16_000
         /// Geohash-cell precision of the rendezvous (neighborhood, ~1.2 km).
@@ -91,7 +109,11 @@ final class BridgeService: ObservableObject {
     /// A validated rendezvous message ready for the timeline.
     struct InboundBridgeMessage {
         let messageID: String
+        /// Unauthenticated mesh coordinates can only be used to notice that a
+        /// verified radio copy is already present; they never own bridge dedup.
+        let radioMessageIDHint: String?
         let senderNickname: String
+        let participantNickname: String?
         let senderPubkey: String
         let content: String
         let timestamp: Date
@@ -116,10 +138,9 @@ final class BridgeService: ObservableObject {
     /// The user toggle. While true this device publishes its own public mesh
     /// messages to the rendezvous and subscribes to it when online.
     @Published private(set) var isEnabled: Bool
-    /// Distinct remote rendezvous participants seen within the freshness
-    /// window. Approximate by design: local participants are subtracted by
-    /// matching their events' mesh message IDs against the local timeline,
-    /// which cannot attribute silent (presence-only) local peers.
+    /// Distinct rendezvous participants seen within the freshness window.
+    /// Radio-copy hints never alter signer locality: their public coordinates
+    /// can suppress a duplicate row but cannot authenticate a Nostr signer.
     @Published private(set) var bridgedPeerCount: Int = 0
     /// The people behind the count, newest activity first.
     @Published private(set) var bridgedParticipants: [BridgedParticipant] = []
@@ -159,6 +180,13 @@ final class BridgeService: ObservableObject {
     var broadcastToMesh: (@MainActor (Data) -> Void)?
     /// Delivers a validated inbound bridge message to the mesh timeline.
     var injectInbound: (@MainActor (InboundBridgeMessage) -> Void)?
+    /// Removes a previously injected bridge row when an authenticated radio
+    /// copy arrives later. The UI hook also discards a not-yet-flushed row.
+    var removeInjectedInbound: (@MainActor (String) -> Void)?
+    /// Exact liveness check for a bridge row in either the pending UI pipeline
+    /// or bounded conversation store. Alias pruning may discard proof only
+    /// after the corresponding row is already gone.
+    var isInjectedInboundPresent: (@MainActor (String) -> Bool)?
     /// True when the mesh timeline already holds this message ID (the radio
     /// copy) — used to skip pointless downlink airtime.
     var isMessageSeenLocally: (@MainActor (String) -> Bool)?
@@ -185,32 +213,56 @@ final class BridgeService: ObservableObject {
     private var rebroadcastEventIDs: BoundedIDSet
     /// Timeline message IDs already injected (either arrival path).
     private var injectedMessageIDs: BoundedIDSet
+    /// Signed relay/carrier events already accepted. Kept separate from the
+    /// loop caches so a mesh arrival can still mark loop suppression even when
+    /// the relay copy won the race.
+    private var receivedEventIDs: BoundedIDSet
+    /// Authenticated radio IDs observed this session. These close the
+    /// bridge-first race even before the UI pipeline flushes its radio row.
+    private var observedRadioMessageIDs: BoundedIDSet
+    /// event ID -> untrusted radio hint. Event IDs own bridge
+    /// dedup; this bounded reverse index is used only to replace bridge rows
+    /// after the genuine radio packet has authenticated successfully.
+    private var injectedRadioAliases: [String: String] = [:]
+    private var injectedRadioAliasOrder: [String] = []
 
     /// Cells the rendezvous subscription covers (own + neighbor ring).
     private(set) var subscribedCells: Set<String> = []
     private(set) var queuedUplinks: [QueuedUplink] = []
     private var uplinkDepositTimes: [PeerID: [Date]] = [:]
     private var downlinkSendTimes: [Date] = []
+    private var inboundEventTimes: [Date] = []
+    private var inboundEventTimesBySigner: [String: [Date]] = [:]
+    private var signatureVerificationTokens = Double(Limits.signatureVerificationAttemptsPerMinute)
+    private var signatureVerificationLastRefillAt: Date?
     private var pendingDownlinks: [(event: NostrEvent, cell: String)] = []
     private var downlinkDrainScheduled = false
     private var presenceTimerArmed = false
     private var lastPresenceAt = Date.distantPast
 
-    /// pubkey -> (lastSeen, attributed-to-local-island, last known nickname).
-    private var participants: [String: (lastSeen: Date, isLocal: Bool, nickname: String?)] = [:]
+    /// pubkey -> (lastSeen, last known nickname).
+    private var participants: [String: (lastSeen: Date, nickname: String?)] = [:]
 
     private let defaults: UserDefaults
     private let now: () -> Date
+    private let verifyEventSignature: (NostrEvent) -> Bool
     private static let enabledKey = "bridge.userEnabled"
 
-    init(defaults: UserDefaults = .standard, now: @escaping () -> Date = Date.init) {
+    init(
+        defaults: UserDefaults = .standard,
+        now: @escaping () -> Date = Date.init,
+        verifyEventSignature: @escaping (NostrEvent) -> Bool = { $0.isValidSignature() }
+    ) {
         self.defaults = defaults
         self.now = now
+        self.verifyEventSignature = verifyEventSignature
         self.isEnabled = defaults.bool(forKey: Self.enabledKey)
         self.meshBroadcastEventIDs = BoundedIDSet(capacity: Limits.maxTrackedEventIDs)
         self.publishedEventIDs = BoundedIDSet(capacity: Limits.maxTrackedEventIDs)
         self.rebroadcastEventIDs = BoundedIDSet(capacity: Limits.maxTrackedEventIDs)
         self.injectedMessageIDs = BoundedIDSet(capacity: Limits.maxTrackedEventIDs)
+        self.receivedEventIDs = BoundedIDSet(capacity: Limits.maxTrackedEventIDs)
+        self.observedRadioMessageIDs = BoundedIDSet(capacity: Limits.maxTrackedEventIDs)
     }
 
     // MARK: - Toggle & lifecycle
@@ -223,6 +275,8 @@ final class BridgeService: ObservableObject {
             queuedUplinks.removeAll()
             pendingDownlinks.removeAll()
             uplinkDepositTimes.removeAll()
+            inboundEventTimes.removeAll()
+            inboundEventTimesBySigner.removeAll()
             participants.removeAll()
             bridgedPeerCount = 0
             bridgedParticipants = []
@@ -301,11 +355,6 @@ final class BridgeService: ObservableObject {
         guard isEnabled, !nearbyOnly, let cell = activeCell ?? currentCell() else { return }
         guard content.utf8.count <= Limits.maxContentBytes else { return }
         let timestampMs = MeshMessageIdentity.millisecondTimestamp(timestamp)
-        let stableID = MeshMessageIdentity.stableID(
-            senderIDHex: senderPeerID.id,
-            timestampMs: timestampMs,
-            content: content
-        )
         guard let identity = try? deriveIdentity?(cell),
               let event = try? NostrProtocol.createBridgeMeshEvent(
                 content: content,
@@ -319,7 +368,7 @@ final class BridgeService: ObservableObject {
             return
         }
         publishedEventIDs.insert(event.id)
-        injectedMessageIDs.insert(stableID) // our own timeline already has it
+        injectedMessageIDs.insert(event.id) // our own timeline already has it
         if relaysConnected?() ?? false {
             publishToRelays?(event, cell)
         } else if let carrier = NostrCarrierPacket(direction: .toBridge, geohash: cell, event: event),
@@ -388,7 +437,6 @@ final class BridgeService: ObservableObject {
               subscribedCells.contains(cell) else {
             return
         }
-        guard let kind = classify(event, cell: cell) else { return }
         // Events we published come back from our own subscription; they are
         // presence-neutral (we never count ourselves) and never re-injected
         // or rebroadcast. Two layers: the published-ID cache (this session)
@@ -401,18 +449,23 @@ final class BridgeService: ObservableObject {
             publishedEventIDs.insert(event.id) // never downlink it either
             return
         }
-        guard event.isValidSignature() else { return }
+        guard allowSignatureVerificationAttempt(), verifyEventSignature(event) else { return }
+        guard receivedEventIDs.insert(event.id), allowInboundEvent(from: event.pubkey) else { return }
+        guard let kind = classify(event, cell: cell) else { return }
 
         switch kind {
         case .presence:
-            recordParticipant(event.pubkey, isLocal: false, nickname: nil)
+            recordParticipant(event.pubkey, nickname: nil)
         case .message(let message):
-            let isLocalRadioCopy = isMessageSeenLocally?(message.messageID) ?? false
+            let isLocalRadioCopy = message.radioMessageIDHint.map(radioCopyAlreadyPresent) ?? false
             if isLocalRadioCopy {
-                SecureLogger.debug("🌉 Bridge: radio copy of \(message.messageID.prefix(8))… already present; sender counted as local", category: .session)
+                // The public m-tag proves only that identical radio content is
+                // already present, not that this Nostr signer authored it.
+                // Skip the duplicate row without changing signer locality.
+                SecureLogger.debug("🌉 Bridge: authenticated radio copy already present; bridge alias skipped", category: .session)
+            } else if inject(message) {
+                recordParticipant(event.pubkey, nickname: message.participantNickname)
             }
-            recordParticipant(event.pubkey, isLocal: isLocalRadioCopy, nickname: message.senderNickname)
-            inject(message)
             // Serving duty: carry remote islands' messages onto the radio for
             // mesh-only peers. Local-origin events are skipped — the island
             // already heard them (loop rule 3). The drain is jitter-delayed:
@@ -428,6 +481,33 @@ final class BridgeService: ObservableObject {
                 }
                 scheduleDownlinkDrainIfNeeded(jitter: true)
             }
+        }
+    }
+
+    /// Called only after the BLE public-message signature has authenticated.
+    /// A bridge hint is not trusted enough to drop this radio row. Instead,
+    /// the radio row wins and any earlier bridge aliases are removed, which
+    /// gives both arrival orders one timeline row without restoring the
+    /// origin-spoof vulnerability.
+    func handleAuthenticatedRadioMessage(messageID: String) {
+        guard !messageID.isEmpty else { return }
+        observedRadioMessageIDs.insert(messageID)
+
+        let matching = injectedRadioAliases.filter { $0.value == messageID }
+        guard !matching.isEmpty else { return }
+        let eventIDs = Set(matching.keys)
+        for eventID in matching.keys {
+            removeInjectedInbound?(eventID)
+            injectedRadioAliases.removeValue(forKey: eventID)
+        }
+        injectedRadioAliasOrder.removeAll { eventIDs.contains($0) }
+
+        // A relay event can already be waiting inside the multi-gateway jitter
+        // window. Remove it now so it cannot consume BLE airtime after the
+        // authenticated radio packet proved this island already has a copy.
+        pendingDownlinks.removeAll { item in
+            guard case .message(let message)? = classify(item.event, cell: item.cell) else { return false }
+            return message.radioMessageIDHint == messageID
         }
     }
 
@@ -467,7 +547,7 @@ final class BridgeService: ObservableObject {
             SecureLogger.debug("🌉 Bridge: rate-limited deposit from \(depositor.id.prefix(8))…", category: .session)
             return
         }
-        guard event.isValidSignature() else {
+        guard allowSignatureVerificationAttempt(), verifyEventSignature(event) else {
             SecureLogger.debug("🌉 Bridge: rejected deposit from \(depositor.id.prefix(8))… (bad signature)", category: .security)
             return
         }
@@ -523,6 +603,52 @@ final class BridgeService: ObservableObject {
         return true
     }
 
+    /// Bounds relay/carrier work independently of the downlink airtime budget.
+    /// A valid signature proves control of one key, not that the sender is
+    /// entitled to unbounded main-actor state or CPU.
+    private func allowInboundEvent(from signer: String) -> Bool {
+        let date = now()
+        let cutoff = date.addingTimeInterval(-60)
+        inboundEventTimes.removeAll { $0 < cutoff }
+        guard inboundEventTimes.count < Limits.inboundEventsPerMinute else { return false }
+
+        var signerTimes = inboundEventTimesBySigner[signer, default: []]
+        signerTimes.removeAll { $0 < cutoff }
+        guard signerTimes.count < Limits.inboundEventsPerMinutePerSigner else {
+            inboundEventTimesBySigner[signer] = signerTimes
+            return false
+        }
+
+        inboundEventTimes.append(date)
+        signerTimes.append(date)
+        inboundEventTimesBySigner[signer] = signerTimes
+        if inboundEventTimesBySigner.count > Limits.maxTrackedEventIDs {
+            inboundEventTimesBySigner = inboundEventTimesBySigner.filter { entry in
+                entry.value.contains { $0 >= cutoff }
+            }
+        }
+        return true
+    }
+
+    /// Bounds expensive signature checks before signer identity is trusted.
+    /// Kept independent from accepted-event accounting so invalid events do
+    /// not create signer state or poison any dedup cache.
+    private func allowSignatureVerificationAttempt() -> Bool {
+        let date = now()
+        if let lastRefillAt = signatureVerificationLastRefillAt {
+            let elapsed = max(0, date.timeIntervalSince(lastRefillAt))
+            let refillPerSecond = Double(Limits.signatureVerificationAttemptsPerMinute) / 60
+            signatureVerificationTokens = min(
+                Double(Limits.signatureVerificationAttemptsPerMinute),
+                signatureVerificationTokens + elapsed * refillPerSecond
+            )
+        }
+        signatureVerificationLastRefillAt = date
+        guard signatureVerificationTokens >= 1 else { return false }
+        signatureVerificationTokens -= 1
+        return true
+    }
+
     // MARK: - Downlink (gateway role: internet -> mesh)
 
     private func drainPendingDownlinks() {
@@ -533,9 +659,15 @@ final class BridgeService: ObservableObject {
             let (event, cell) = pendingDownlinks.removeFirst()
             guard isFresh(event) else { continue }
             // Suppression recheck at send time: another gateway may have
-            // broadcast this event during our jitter holdoff.
+            // broadcast this event, or the authenticated radio copy may have
+            // arrived, during our jitter holdoff.
             guard !meshBroadcastEventIDs.contains(event.id),
                   !rebroadcastEventIDs.contains(event.id) else { continue }
+            if case .message(let message)? = classify(event, cell: cell),
+               let radioMessageID = message.radioMessageIDHint,
+               radioCopyAlreadyPresent(radioMessageID) {
+                continue
+            }
             guard let carrier = NostrCarrierPacket(direction: .fromBridge, geohash: cell, event: event),
                   let payload = carrier.encode() else { continue }
             broadcastToMesh?(payload)
@@ -584,36 +716,90 @@ final class BridgeService: ObservableObject {
         guard let event = structurallyValidEvent(from: carrier),
               !publishedEventIDs.contains(event.id),
               !isOwnRendezvousEvent(event, cell: carrier.geohash),
-              event.isValidSignature() else {
+              allowSignatureVerificationAttempt(),
+              verifyEventSignature(event) else {
             return
         }
         // Mark after verification (a forged copy must not poison the cache),
-        // and use the marking as multi-path dedup.
-        guard meshBroadcastEventIDs.insert(event.id) else { return }
+        // even when the relay copy won the injection race: pending gateway
+        // downlinks consult this cache and must stand down.
+        let firstMeshArrival = meshBroadcastEventIDs.insert(event.id)
+        guard firstMeshArrival,
+              receivedEventIDs.insert(event.id),
+              allowInboundEvent(from: event.pubkey) else { return }
         guard case .message(let message)? = classify(event, cell: carrier.geohash) else {
             return
         }
-        recordParticipant(event.pubkey, isLocal: false, nickname: message.senderNickname)
-        inject(message)
+        if inject(message) {
+            recordParticipant(event.pubkey, nickname: message.participantNickname)
+        }
     }
 
     // MARK: - Injection & participants
 
-    private func inject(_ message: InboundBridgeMessage) {
-        guard injectedMessageIDs.insert(message.messageID) else { return }
-        guard !(isMessageSeenLocally?(message.messageID) ?? false) else { return }
+    @discardableResult
+    private func inject(_ message: InboundBridgeMessage) -> Bool {
+        guard injectedMessageIDs.insert(message.messageID) else { return false }
+        guard !(message.radioMessageIDHint.map(radioCopyAlreadyPresent) ?? false) else {
+            return false
+        }
         SecureLogger.info("🌉 Bridge: injected bridged message \(message.messageID.prefix(8))… from \(message.senderNickname)", category: .session)
         injectInbound?(message)
+        if let radioMessageID = message.radioMessageIDHint {
+            recordRadioAlias(
+                eventID: message.messageID,
+                radioMessageID: radioMessageID
+            )
+        }
+        return true
     }
 
-    private func recordParticipant(_ pubkey: String, isLocal: Bool, nickname: String?) {
+    private func radioCopyAlreadyPresent(_ messageID: String) -> Bool {
+        observedRadioMessageIDs.contains(messageID) || (isMessageSeenLocally?(messageID) ?? false)
+    }
+
+    private func recordRadioAlias(
+        eventID: String,
+        radioMessageID: String
+    ) {
+        guard injectedRadioAliases[eventID] == nil else { return }
+        injectedRadioAliases[eventID] = radioMessageID
+        injectedRadioAliasOrder.append(eventID)
+        guard injectedRadioAliasOrder.count > Limits.maxTrackedRadioAliases,
+              let isInjectedInboundPresent else { return }
+
+        // Arrival order and signed event timestamps are independent. The
+        // conversation cap trims by timestamp, so blindly evicting the oldest
+        // alias could discard the proof for a still-visible row and then
+        // actively delete that history. Prune only aliases whose exact row is
+        // already absent; temporary overflow is safer than losing radio-wins
+        // reconciliation for any visible bridge message.
+        var overflow = injectedRadioAliasOrder.count - Limits.maxTrackedRadioAliases
+        var retained: [String] = []
+        retained.reserveCapacity(injectedRadioAliasOrder.count)
+        for candidate in injectedRadioAliasOrder {
+            if overflow > 0, !isInjectedInboundPresent(candidate) {
+                injectedRadioAliases.removeValue(forKey: candidate)
+                overflow -= 1
+            } else {
+                retained.append(candidate)
+            }
+        }
+        injectedRadioAliasOrder = retained
+    }
+
+    private func recordParticipant(_ pubkey: String, nickname: String?) {
+        let cutoff = now().addingTimeInterval(-Limits.participantFreshnessSeconds)
+        participants = participants.filter { $0.value.lastSeen >= cutoff }
+        if participants[pubkey] == nil, participants.count >= Limits.maxParticipants,
+           let oldest = participants.min(by: { $0.value.lastSeen < $1.value.lastSeen })?.key {
+            participants.removeValue(forKey: oldest)
+        }
         let previous = participants[pubkey]
-        // Local attribution is sticky: one radio-confirmed message marks the
-        // pubkey as an islander for as long as they stay fresh. Presence
-        // events carry no nickname, so a known name is never forgotten.
+        // Presence events carry no nickname, so a known name is never
+        // forgotten. Radio hints deliberately do not mutate this record.
         participants[pubkey] = (
             lastSeen: now(),
-            isLocal: (previous?.isLocal ?? false) || isLocal,
             nickname: nickname?.trimmedOrNilIfEmpty ?? previous?.nickname
         )
         recomputeBridgedCount()
@@ -628,7 +814,7 @@ final class BridgeService: ObservableObject {
     private func recomputeBridgedCount() {
         let cutoff = now().addingTimeInterval(-Limits.participantFreshnessSeconds)
         let visible = participants
-            .filter { $0.value.lastSeen >= cutoff && !$0.value.isLocal }
+            .filter { $0.value.lastSeen >= cutoff }
             .map { BridgedParticipant(pubkey: $0.key, nickname: $0.value.nickname, lastSeen: $0.value.lastSeen) }
             .sorted { $0.lastSeen > $1.lastSeen }
         if visible.count != bridgedPeerCount {
@@ -660,28 +846,30 @@ final class BridgeService: ObservableObject {
             let content = event.content
             guard !content.trimmed.isEmpty, content.utf8.count <= Limits.maxContentBytes else { return nil }
             let nickname = event.tags.first(where: { $0.count >= 2 && $0[0] == "n" })?[1]
-            // Recompute — never trust — the mesh message ID: the `m` tag is
-            // `[stable ID, sender ID, wire timestamp ms]`. Element 1 exists
-            // for v1.7.0 parsers; we ignore it and derive the ID from the
-            // origin coordinates (elements 2-3) plus the event's own content,
-            // so a forged tag cannot bind a chosen ID to different content
-            // (see `MeshMessageIdentity` for the exact property and its
-            // limits).
+            // The `m` tag is `[stable ID, sender ID, wire timestamp ms]` for
+            // radio/bridge duplicate detection. Those coordinates are public
+            // and not cryptographically bound to this Nostr signer, so they
+            // are never allowed to own bridge dedup. A copied tag can at most
+            // make the attacker's own event look like a radio duplicate; it
+            // cannot reserve the genuine signed event's timeline ID.
             let m = event.tags.first(where: { $0.count >= 2 && $0[0] == "m" })
-            let messageID: String
+            let radioMessageIDHint: String?
             if let m, m.count >= 4, m[2].count == 16, m[2].allSatisfy(\.isHexDigit),
                let timestampMs = UInt64(m[3]) {
-                messageID = MeshMessageIdentity.stableID(
+                radioMessageIDHint = MeshMessageIdentity.stableID(
                     senderIDHex: m[2],
                     timestampMs: timestampMs,
                     content: content
                 )
             } else {
-                messageID = event.id // old-format or absent tag
+                radioMessageIDHint = nil
             }
+            let baseNickname = nickname?.trimmedOrNilIfEmpty ?? "anon"
             return .message(InboundBridgeMessage(
-                messageID: messageID,
-                senderNickname: nickname?.trimmedOrNilIfEmpty ?? "anon#\(event.pubkey.suffix(4))",
+                messageID: event.id,
+                radioMessageIDHint: radioMessageIDHint,
+                senderNickname: baseNickname + "#" + String(event.pubkey.suffix(4)),
+                participantNickname: nickname?.trimmedOrNilIfEmpty,
                 senderPubkey: event.pubkey,
                 content: content,
                 timestamp: Date(timeIntervalSince1970: TimeInterval(event.created_at))

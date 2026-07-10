@@ -493,6 +493,40 @@ struct MessageRouterTests {
         #expect(transport.sentCourierMessages.isEmpty)
     }
 
+    @Test @MainActor
+    func bridgeDepositCarriesOnlyAfterConfirmedSendAndRetriesFailure() async {
+        let recipient = PeerID(str: "00000000000000ba")
+        let recipientKey = Data(repeating: 0xBA, count: 32)
+        let transport = MockTransport()
+        let router = MessageRouter(
+            transports: [transport],
+            courierDirectory: Self.directory(recipient: recipient, recipientKey: recipientKey)
+        )
+        var completions: [@MainActor (Bool) -> Void] = []
+        router.bridgeCourierDeposit = { _, _, _, completion in
+            completions.append(completion)
+        }
+        var carried: [String] = []
+        router.onMessageCarried = { messageID, _ in carried.append(messageID) }
+
+        router.sendPrivate("Hello", to: recipient, recipientNickname: "Peer", messageID: "bridge-ack")
+        #expect(completions.count == 1)
+        #expect(carried.isEmpty)
+
+        // Sweeps while the WebSocket write is pending must not duplicate it.
+        router.retryBridgeCourierDeposits()
+        #expect(completions.count == 1)
+
+        completions.removeFirst()(false)
+        #expect(carried.isEmpty)
+
+        // A failed socket write releases the in-flight slot for a real retry.
+        router.retryBridgeCourierDeposits()
+        #expect(completions.count == 1)
+        completions.removeFirst()(true)
+        #expect(carried == ["bridge-ack"])
+    }
+
     // MARK: - Outbox persistence
 
     @Test @MainActor
@@ -546,6 +580,295 @@ struct MessageRouterTests {
         )
         router2.flushOutbox(for: peerID)
         #expect(transport2.sentPrivateMessages.isEmpty)
+    }
+
+    @Test @MainActor
+    func protectedDataRecoveryMergesDurableAndLockedWakeMessagesIntoRouter() async {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("router-protected-data-\(UUID().uuidString).sealed")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let keychain = MockKeychain()
+        let peerID = PeerID(str: "00000000000000df")
+
+        let durable = MessageOutboxStore.QueuedMessage(
+            content: "Before reboot",
+            nickname: "Peer",
+            messageID: "durable",
+            timestamp: Date()
+        )
+        MessageOutboxStore(keychain: keychain, fileURL: fileURL).save([peerID: [durable]])
+
+        var protectedDataUnavailable = true
+        let restoredStore = MessageOutboxStore(
+            keychain: keychain,
+            fileURL: fileURL,
+            readData: { url in
+                if protectedDataUnavailable {
+                    throw NSError(domain: NSCocoaErrorDomain, code: NSFileReadNoPermissionError)
+                }
+                return try Data(contentsOf: url)
+            }
+        )
+        let transport = MockTransport()
+        let router = MessageRouter(transports: [transport], outboxStore: restoredStore)
+        router.sendPrivate("During wake", to: peerID, recipientNickname: "Peer", messageID: "wake")
+
+        transport.reachablePeers.insert(peerID)
+        protectedDataUnavailable = false
+        restoredStore.retryDeferredLoad()
+        // Recovery is delivered to the main actor without blocking the
+        // protected-data notification callback.
+        await Task.yield()
+        await Task.yield()
+
+        #expect(Set(transport.sentPrivateMessages.map(\.messageID)) == ["durable", "wake"])
+    }
+
+    @Test @MainActor
+    func ackWhileColdLoadIsLockedDoesNotResurrectUnseenDurableMessage() async {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("router-locked-ack-\(UUID().uuidString).sealed")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let keychain = MockKeychain()
+        let peerID = PeerID(str: "00000000000000e0")
+        let durable = MessageOutboxStore.QueuedMessage(
+            content: "Already delivered",
+            nickname: "Peer",
+            messageID: "acked-while-locked",
+            timestamp: Date()
+        )
+        MessageOutboxStore(keychain: keychain, fileURL: fileURL).save([peerID: [durable]])
+
+        var protectedDataUnavailable = true
+        let restoredStore = MessageOutboxStore(
+            keychain: keychain,
+            fileURL: fileURL,
+            readData: { url in
+                if protectedDataUnavailable {
+                    throw NSError(domain: NSCocoaErrorDomain, code: NSFileReadNoPermissionError)
+                }
+                return try Data(contentsOf: url)
+            }
+        )
+        let transport = MockTransport()
+        transport.reachablePeers.insert(peerID)
+        let router = MessageRouter(transports: [transport], outboxStore: restoredStore)
+
+        // The router's locked cold-load view is empty, but the ack still has
+        // to suppress the durable message hidden on disk.
+        router.markDelivered("acked-while-locked")
+        protectedDataUnavailable = false
+        restoredStore.retryDeferredLoad()
+        await Task.yield()
+        await Task.yield()
+
+        #expect(transport.sentPrivateMessages.isEmpty)
+        #expect(MessageOutboxStore(keychain: keychain, fileURL: fileURL).load().isEmpty)
+    }
+
+    @Test @MainActor
+    func ackAfterRecoveryCaptureBeforeMainActorMergeCannotResurrectMessage() async {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("router-recovery-gap-ack-\(UUID().uuidString).sealed")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let keychain = MockKeychain()
+        let peerID = PeerID(str: "00000000000000e1")
+        let durable = MessageOutboxStore.QueuedMessage(
+            content: "Captured then acked",
+            nickname: "Peer",
+            messageID: "recovery-gap-ack",
+            timestamp: Date()
+        )
+        MessageOutboxStore(keychain: keychain, fileURL: fileURL).save([peerID: [durable]])
+
+        var protectedDataUnavailable = true
+        let restoredStore = MessageOutboxStore(
+            keychain: keychain,
+            fileURL: fileURL,
+            readData: { url in
+                if protectedDataUnavailable {
+                    throw NSError(domain: NSCocoaErrorDomain, code: NSFileReadNoPermissionError)
+                }
+                return try Data(contentsOf: url)
+            }
+        )
+        let transport = MockTransport()
+        transport.reachablePeers.insert(peerID)
+        let router = MessageRouter(transports: [transport], outboxStore: restoredStore)
+
+        protectedDataUnavailable = false
+        restoredStore.retryDeferredLoad() // captures recovery and queues MainActor merge
+        router.markDelivered("recovery-gap-ack") // runs before that queued Task
+        await Task.yield()
+        await Task.yield()
+
+        #expect(transport.sentPrivateMessages.isEmpty)
+        #expect(MessageOutboxStore(keychain: keychain, fileURL: fileURL).load().isEmpty)
+    }
+
+    @Test @MainActor
+    func enqueueAfterRecoveryCapturePreservesUnseenDurableAndNewMessages() async {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("router-recovery-gap-enqueue-\(UUID().uuidString).sealed")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let keychain = MockKeychain()
+        let peerID = PeerID(str: "00000000000000e2")
+        let durable = MessageOutboxStore.QueuedMessage(
+            content: "Before unlock",
+            nickname: "Peer",
+            messageID: "recovery-gap-durable",
+            timestamp: Date()
+        )
+        MessageOutboxStore(keychain: keychain, fileURL: fileURL).save([peerID: [durable]])
+
+        var protectedDataUnavailable = true
+        let restoredStore = MessageOutboxStore(
+            keychain: keychain,
+            fileURL: fileURL,
+            readData: { url in
+                if protectedDataUnavailable {
+                    throw NSError(domain: NSCocoaErrorDomain, code: NSFileReadNoPermissionError)
+                }
+                return try Data(contentsOf: url)
+            }
+        )
+        let transport = MockTransport()
+        let router = MessageRouter(transports: [transport], outboxStore: restoredStore)
+
+        protectedDataUnavailable = false
+        restoredStore.retryDeferredLoad() // queues merge of the durable message
+        router.sendPrivate("During gap", to: peerID, recipientNickname: "Peer", messageID: "recovery-gap-new")
+        transport.reachablePeers.insert(peerID)
+        await Task.yield()
+        await Task.yield()
+
+        #expect(Set(transport.sentPrivateMessages.map(\.messageID)) == ["recovery-gap-durable", "recovery-gap-new"])
+        let relaunched = MessageOutboxStore(keychain: keychain, fileURL: fileURL).load()
+        #expect(Set(relaunched[peerID]?.map(\.messageID) ?? []) == ["recovery-gap-durable", "recovery-gap-new"])
+    }
+
+    @Test @MainActor
+    func removingKnownWakeMessageInRecoveryGapPreservesOnlyUnseenDurableState() async {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("router-recovery-gap-known-removal-\(UUID().uuidString).sealed")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let keychain = MockKeychain()
+        let peerID = PeerID(str: "00000000000000e3")
+        let durable = MessageOutboxStore.QueuedMessage(
+            content: "Unseen durable",
+            nickname: "Peer",
+            messageID: "recovery-gap-unseen",
+            timestamp: Date()
+        )
+        MessageOutboxStore(keychain: keychain, fileURL: fileURL).save([peerID: [durable]])
+
+        var protectedDataUnavailable = true
+        let restoredStore = MessageOutboxStore(
+            keychain: keychain,
+            fileURL: fileURL,
+            readData: { url in
+                if protectedDataUnavailable {
+                    throw NSError(domain: NSCocoaErrorDomain, code: NSFileReadNoPermissionError)
+                }
+                return try Data(contentsOf: url)
+            }
+        )
+        let transport = MockTransport()
+        let router = MessageRouter(transports: [transport], outboxStore: restoredStore)
+        router.sendPrivate("Known wake", to: peerID, recipientNickname: "Peer", messageID: "recovery-gap-known")
+
+        protectedDataUnavailable = false
+        restoredStore.retryDeferredLoad() // captures unseen durable + known wake
+
+        // Secure direct flush removes the wake message before recovery's
+        // MainActor merge. It must remain removed, while the unseen durable
+        // message still arrives through the pending recovery claim.
+        transport.connectedPeers.insert(peerID)
+        transport.securePeers = [peerID]
+        router.flushOutbox(for: peerID)
+        await Task.yield()
+        await Task.yield()
+
+        let sentIDs = transport.sentPrivateMessages.map(\.messageID)
+        #expect(sentIDs.filter { $0 == "recovery-gap-known" }.count == 1)
+        #expect(sentIDs.filter { $0 == "recovery-gap-unseen" }.count == 1)
+    }
+
+    @Test @MainActor
+    func failedRecoveryWriteStillPreservesUnseenDurableStateAcrossGapRemoval() async {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("router-recovery-write-failure-\(UUID().uuidString).sealed")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let keychain = MockKeychain()
+        let peerID = PeerID(str: "00000000000000e4")
+        let durable = MessageOutboxStore.QueuedMessage(
+            content: "Unseen before unlock",
+            nickname: "Peer",
+            messageID: "recovery-write-failure-unseen",
+            timestamp: Date()
+        )
+        MessageOutboxStore(keychain: keychain, fileURL: fileURL).save([peerID: [durable]])
+
+        var protectedDataUnavailable = true
+        var failWrites = false
+        var injectedFailureCount = 0
+        let restoredStore = MessageOutboxStore(
+            keychain: keychain,
+            fileURL: fileURL,
+            readData: { url in
+                if protectedDataUnavailable {
+                    throw NSError(domain: NSCocoaErrorDomain, code: NSFileReadNoPermissionError)
+                }
+                return try Data(contentsOf: url)
+            },
+            writeData: { data, url, options in
+                if failWrites {
+                    injectedFailureCount += 1
+                    throw NSError(domain: NSCocoaErrorDomain, code: NSFileWriteNoPermissionError)
+                }
+                try data.write(to: url, options: options)
+            }
+        )
+        let transport = MockTransport()
+        let router = MessageRouter(transports: [transport], outboxStore: restoredStore)
+        router.sendPrivate(
+            "Known wake",
+            to: peerID,
+            recipientNickname: "Peer",
+            messageID: "recovery-write-failure-known"
+        )
+
+        // The first post-unlock save reads durable D and knows router state W,
+        // but its D+W write fails. A later retry must retain the original
+        // unseen-D classification instead of mistaking the cached union for
+        // a fully router-known snapshot.
+        protectedDataUnavailable = false
+        failWrites = true
+        router.sendPrivate(
+            "Known wake",
+            to: peerID,
+            recipientNickname: "Peer",
+            messageID: "recovery-write-failure-known"
+        )
+        failWrites = false
+        #expect(injectedFailureCount == 1)
+
+        restoredStore.retryDeferredLoad() // persists D+W and queues recovery
+        transport.connectedPeers.insert(peerID)
+        transport.securePeers = [peerID]
+        router.flushOutbox(for: peerID) // removes W before queued callback
+
+        // The gap save may remove W, but it must leave unseen D durable until
+        // MessageRouter receives the pending recovery callback.
+        let gapSnapshot = MessageOutboxStore(keychain: keychain, fileURL: fileURL).load()
+        #expect(gapSnapshot[peerID]?.map(\.messageID) == ["recovery-write-failure-unseen"])
+
+        await Task.yield()
+        await Task.yield()
+
+        let sentIDs = transport.sentPrivateMessages.map(\.messageID)
+        #expect(sentIDs.filter { $0 == "recovery-write-failure-known" }.count == 1)
+        #expect(sentIDs.filter { $0 == "recovery-write-failure-unseen" }.count == 1)
     }
 }
 

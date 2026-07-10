@@ -42,22 +42,36 @@ actor VoiceRecorder {
 
     static let minRecordingDuration: TimeInterval = 1
 
+    /// Identity of one press/hold. Every lifecycle mutation must present the
+    /// same owner that started the recorder, so a stale finish or cancel from
+    /// another hold cannot stop or delete the current recording.
+    final class RecordingOwner: @unchecked Sendable {}
+
+    /// Test-only scheduling seams for lifecycle boundaries that otherwise rely
+    /// on wall-clock sleeps. Production uses the real padding delay.
+    struct TestingHooks: Sendable {
+        let waitForStopPadding: (@Sendable (TimeInterval) async -> Void)?
+
+        init(waitForStopPadding: (@Sendable (TimeInterval) async -> Void)? = nil) {
+            self.waitForStopPadding = waitForStopPadding
+        }
+    }
+
     private let sessionCoordinator: AudioSessionCoordinator
     private let recorderFactory: any VoiceAudioRecorderCreating
     private let permissionGranted: () -> Bool
     private let paddingInterval: TimeInterval
     private let maxRecordingDuration: TimeInterval
     private let outputDirectory: URL?
+    private let testingHooks: TestingHooks
 
     private var recorder: (any VoiceAudioRecording)?
     private var currentURL: URL?
     private var sessionToken: AudioSessionCoordinator.Token?
+    private var activeOwner: RecordingOwner?
     /// True only while `startRecording()` is suspended in session acquire.
     /// A second start is rejected instead of superseding the first one.
     private var startInFlight = false
-    /// Bumped when the current hold ends. A session acquire that resumes with
-    /// an older generation must release its token without opening the mic.
-    private var holdGeneration: UInt = 0
 
     init(
         sessionCoordinator: AudioSessionCoordinator = .shared,
@@ -65,7 +79,8 @@ actor VoiceRecorder {
         permissionGranted: (() -> Bool)? = nil,
         paddingInterval: TimeInterval = 0.5,
         maxRecordingDuration: TimeInterval = 120,
-        outputDirectory: URL? = nil
+        outputDirectory: URL? = nil,
+        testingHooks: TestingHooks = TestingHooks()
     ) {
         self.sessionCoordinator = sessionCoordinator
         self.recorderFactory = recorderFactory
@@ -73,6 +88,7 @@ actor VoiceRecorder {
         self.paddingInterval = paddingInterval
         self.maxRecordingDuration = maxRecordingDuration
         self.outputDirectory = outputDirectory
+        self.testingHooks = testingHooks
     }
 
     // MARK: - Permissions
@@ -99,27 +115,16 @@ actor VoiceRecorder {
     // MARK: - Recording Lifecycle
 
     @discardableResult
-    func startRecording() async throws -> URL {
-        if startInFlight || recorder?.isRecording == true {
+    func startRecording(owner: RecordingOwner) async throws -> URL {
+        if activeOwner != nil {
             throw RecorderError.recordingInProgress
-        }
-
-        // `record(forDuration:)` stops the recorder automatically at the
-        // limit. If the caller starts again before asking for the old result,
-        // drop only the stale ownership state; the URL was already returned
-        // and may still be queued for delivery, so its file must survive.
-        if recorder != nil || currentURL != nil || sessionToken != nil {
-            releaseSessionToken()
-            recorder = nil
-            currentURL = nil
         }
 
         guard permissionGranted() else {
             throw RecorderError.microphoneAccessDenied
         }
 
-        holdGeneration &+= 1
-        let generation = holdGeneration
+        activeOwner = owner
         startInFlight = true
 
         // The acquire suspends while the blocking session IPC runs on the
@@ -127,19 +132,20 @@ actor VoiceRecorder {
         let token: AudioSessionCoordinator.Token
         do {
             token = try await sessionCoordinator.acquire(.capture) { [weak self] in
-                Task { await self?.handleSessionInterruption(for: generation) }
+                Task { await self?.handleSessionInterruption(for: owner) }
             }
         } catch {
-            guard generation == holdGeneration else {
+            guard activeOwner === owner else {
                 throw CancellationError()
             }
             startInFlight = false
+            activeOwner = nil
             throw error
         }
 
         // Actor reentrancy: release/cancel may have ended this hold while the
         // blocking session activation was still in progress.
-        guard generation == holdGeneration, startInFlight else {
+        guard activeOwner === owner, startInFlight else {
             sessionCoordinator.release(token)
             throw CancellationError()
         }
@@ -166,6 +172,7 @@ actor VoiceRecorder {
             releaseSessionToken()
             recorder = nil
             currentURL = nil
+            activeOwner = nil
             if let outputURL {
                 try? FileManager.default.removeItem(at: outputURL)
             }
@@ -173,44 +180,60 @@ actor VoiceRecorder {
         }
     }
 
-    func stopRecording() async -> URL? {
+    func stopRecording(owner: RecordingOwner) async -> URL? {
+        guard activeOwner === owner else { return nil }
+
         // `finish()` can race a still-suspended start on a direct caller even
         // though the UI normally routes quick releases through cancel().
         if startInFlight {
-            holdGeneration &+= 1
+            activeOwner = nil
             startInFlight = false
+            return nil
         }
 
         guard let activeRecorder = recorder else {
             let sessionURL = currentURL
             releaseSessionToken()
             currentURL = nil
+            activeOwner = nil
             return sessionURL
         }
 
         let sessionURL = currentURL
 
         if activeRecorder.isRecording, paddingInterval > 0 {
-            try? await Task.sleep(nanoseconds: UInt64(paddingInterval * 1_000_000_000))
+            if let waitForStopPadding = testingHooks.waitForStopPadding {
+                await waitForStopPadding(paddingInterval)
+            } else {
+                try? await Task.sleep(nanoseconds: UInt64(paddingInterval * 1_000_000_000))
+            }
         }
 
         // Cancellation or interruption may have run during the padding sleep.
         // Only the recorder whose stop began here may be finalized by it.
-        if let recorder = self.recorder, recorder === activeRecorder {
-            holdGeneration &+= 1
-            if activeRecorder.isRecording {
-                activeRecorder.stop()
-            }
-            releaseSessionToken()
-            self.recorder = nil
-            currentURL = nil
+        guard activeOwner === owner,
+              let recorder = self.recorder,
+              recorder === activeRecorder
+        else { return nil }
+
+        if activeRecorder.isRecording {
+            activeRecorder.stop()
         }
+        releaseSessionToken()
+        self.recorder = nil
+        currentURL = nil
+        activeOwner = nil
 
         return sessionURL
     }
 
-    func cancelRecording() async {
-        holdGeneration &+= 1
+    func cancelRecording(owner: RecordingOwner) async {
+        guard activeOwner === owner else { return }
+
+        // Invalidate ownership before cleanup. An actor-reentrant start whose
+        // session acquire resumes later will observe the mismatch and release
+        // its token without opening the microphone.
+        activeOwner = nil
         startInFlight = false
         if let recorder, recorder.isRecording {
             recorder.stop()
@@ -226,12 +249,16 @@ actor VoiceRecorder {
     /// The audio session was interrupted (call, Siri) or reconfigured: stop
     /// the recorder but keep `recorder`/`currentURL` so the caller's pending
     /// `stopRecording()` still returns the partial note.
-    private func handleSessionInterruption(for generation: UInt) async {
+    private func handleSessionInterruption(for owner: RecordingOwner) async {
         // A callback captured for a released token must never stop a newer
         // recording. Conversely, an interruption delivered while acquire is
         // still suspended invalidates that acquire before it can open the mic.
-        guard generation == holdGeneration else { return }
-        holdGeneration &+= 1
+        guard activeOwner === owner else { return }
+        if startInFlight {
+            activeOwner = nil
+            startInFlight = false
+            return
+        }
         startInFlight = false
         if let recorder, recorder.isRecording {
             recorder.stop()

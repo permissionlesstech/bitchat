@@ -45,6 +45,33 @@ struct BLEOutboundFragmentTransferSchedulerTests {
     }
 
     @Test
+    func strictDirectTransferIsRejectedWithoutBeingQueuedWhenSlotsAreFull() {
+        var scheduler = BLEOutboundFragmentTransferScheduler()
+        let active = makeRequest(type: MessageType.fileTransfer.rawValue, transferId: "active")
+        let strict = makeRequest(
+            type: MessageType.fileTransfer.rawValue,
+            transferId: "strict",
+            requireDirectPeerLink: true
+        )
+
+        guard case .start = scheduler.submit(active, maxConcurrentTransfers: 1) else {
+            Issue.record("Expected active transfer to reserve the only slot")
+            return
+        }
+
+        let result = scheduler.submit(strict, maxConcurrentTransfers: 1)
+
+        if case let .rejectedStrict(request, transferId) = result {
+            #expect(request.requireDirectPeerLink)
+            #expect(transferId == "strict")
+            #expect(scheduler.activeCount == 1)
+            #expect(scheduler.pendingCount == 0)
+        } else {
+            Issue.record("Expected strict transfer to reject instead of entering the pending queue")
+        }
+    }
+
+    @Test
     func submitQueuesDuplicateActiveTransferAtFront() {
         var scheduler = BLEOutboundFragmentTransferScheduler()
         let request = makeRequest(type: MessageType.fileTransfer.rawValue, transferId: "same")
@@ -240,7 +267,8 @@ struct BLEOutboundFragmentTransferSchedulerTests {
         type: UInt8,
         transferId: String?,
         payload: String? = nil,
-        directedPeer: PeerID? = nil
+        directedPeer: PeerID? = nil,
+        requireDirectPeerLink: Bool = false
     ) -> BLEOutboundFragmentTransferRequest {
         BLEOutboundFragmentTransferRequest(
             packet: BitchatPacket(
@@ -255,7 +283,8 @@ struct BLEOutboundFragmentTransferSchedulerTests {
             pad: false,
             maxChunk: nil,
             directedPeer: directedPeer,
-            transferId: transferId
+            transferId: transferId,
+            requireDirectPeerLink: requireDirectPeerLink
         )
     }
 }

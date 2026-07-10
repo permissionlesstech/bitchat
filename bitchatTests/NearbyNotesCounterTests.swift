@@ -91,6 +91,62 @@ final class NearbyNotesCounterTests: XCTestCase {
         XCTAssertEqual(counter.noteCount, 0)
     }
 
+    func test_permissionRevocation_releasesBuildingSubscriptionDespiteCachedChannels() async throws {
+        let relays = SubscriptionRecorder()
+        let locationManager = try await makeAuthorizedLocationManager()
+        let counter = NearbyNotesCounter(
+            locationManager: locationManager,
+            managerFactory: { LocationNotesManager(geohash: $0, dependencies: relays.dependencies) },
+            releaseManager: { $0?.cancel() }
+        )
+
+        counter.activate()
+        counter.reveal()
+        XCTAssertEqual(relays.subscribeCount, 1)
+
+        locationManager.locationManager(CLLocationManager(), didChangeAuthorization: .denied)
+
+        let denied = await waitUntil { locationManager.permissionState == .denied }
+        XCTAssertTrue(denied)
+        let released = await waitUntil { relays.unsubscribeCount == 1 }
+        XCTAssertTrue(released)
+        XCTAssertTrue(
+            locationManager.availableChannels.contains { $0.level == .building },
+            "the privacy boundary must not depend on cached channels being cleared"
+        )
+        XCTAssertEqual(counter.noteCount, 0)
+
+        counter.deactivate()
+        XCTAssertEqual(relays.unsubscribeCount, 1, "revocation already released the manager")
+    }
+
+    func test_locationNotesKillSwitch_releasesAndCanReacquireBuildingSubscription() async throws {
+        let relays = SubscriptionRecorder()
+        let locationManager = try await makeAuthorizedLocationManager()
+        let counter = NearbyNotesCounter(
+            locationManager: locationManager,
+            managerFactory: { LocationNotesManager(geohash: $0, dependencies: relays.dependencies) },
+            releaseManager: { $0?.cancel() }
+        )
+
+        counter.activate()
+        counter.reveal()
+        XCTAssertEqual(relays.subscribeCount, 1)
+
+        LocationNotesSettings.enabled = false
+
+        let released = await waitUntil { relays.unsubscribeCount == 1 }
+        XCTAssertTrue(released)
+        XCTAssertEqual(counter.noteCount, 0)
+
+        LocationNotesSettings.enabled = true
+
+        let reacquired = await waitUntil { relays.subscribeCount == 2 }
+        XCTAssertTrue(reacquired)
+        counter.deactivate()
+        XCTAssertEqual(relays.unsubscribeCount, 2)
+    }
+
     func test_checkNotesHint_requiresAuthorizedLocationPermission() {
         let relays = SubscriptionRecorder()
         let counter = NearbyNotesCounter(
@@ -125,6 +181,107 @@ final class NearbyNotesCounterTests: XCTestCase {
         XCTAssertTrue(NoticesView.revealsNearbyNotes(onSwitchingTo: .geo, geoGeohash: "u4pruydq"))
         XCTAssertFalse(NoticesView.revealsNearbyNotes(onSwitchingTo: .geo, geoGeohash: nil))
         XCTAssertFalse(NoticesView.revealsNearbyNotes(onSwitchingTo: .mesh, geoGeohash: "u4pruydq"))
+    }
+
+    func test_noticesGeoPresentation_disabledOverridesSelectedScopeAndHidesOnlyGeoComposer() {
+        XCTAssertEqual(
+            NoticesView.geoPresentationState(notesEnabled: false, geohash: "9q8yyk8y"),
+            .disabled,
+            "a selected remote channel must not leave a blank manager-less notes view"
+        )
+        XCTAssertNil(
+            NoticesView.composerGeohash(
+                tab: .geo,
+                notesEnabled: false,
+                geoGeohash: "9q8yyk8y"
+            ),
+            "the dead geo composer must be hidden while the notes kill switch is off"
+        )
+        XCTAssertEqual(
+            NoticesView.composerGeohash(tab: .mesh, notesEnabled: false, geoGeohash: nil),
+            "",
+            "the location-notes setting must not disable mesh notices"
+        )
+    }
+
+    func test_noticesGeoSession_revocationEndsLiveRefreshAndReleasesDeviceScope() {
+        let relays = SubscriptionRecorder()
+        let manager = LocationNotesManager(geohash: "u4pruydq", dependencies: relays.dependencies)
+        var beginCount = 0
+        var endCount = 0
+        var releaseCount = 0
+
+        let next = NoticesView.reconcileGeoSession(
+            tab: .geo,
+            needsDeviceLocation: true,
+            permissionState: .denied,
+            notesEnabled: true,
+            geohash: "u4pruydq",
+            manager: manager,
+            ownsLiveRefresh: true,
+            beginLiveRefresh: { beginCount += 1 },
+            endLiveRefresh: { endCount += 1 },
+            acquire: { _ in XCTFail("revocation must not acquire"); return manager },
+            release: {
+                releaseCount += 1
+                $0?.cancel()
+            }
+        )
+
+        XCTAssertNil(next.manager)
+        XCTAssertFalse(next.ownsLiveRefresh)
+        XCTAssertEqual(beginCount, 0)
+        XCTAssertEqual(endCount, 1)
+        XCTAssertEqual(releaseCount, 1)
+        XCTAssertEqual(relays.unsubscribeCount, 1)
+    }
+
+    func test_noticesGeoSession_killSwitchClosesLocalScope_butDeniedRemoteScopeRemainsUsable() {
+        let relays = SubscriptionRecorder()
+        let localManager = LocationNotesManager(geohash: "u4pruydq", dependencies: relays.dependencies)
+        var endCount = 0
+        var releaseCount = 0
+
+        let disabled = NoticesView.reconcileGeoSession(
+            tab: .geo,
+            needsDeviceLocation: true,
+            permissionState: .authorized,
+            notesEnabled: false,
+            geohash: "u4pruydq",
+            manager: localManager,
+            ownsLiveRefresh: true,
+            beginLiveRefresh: {},
+            endLiveRefresh: { endCount += 1 },
+            acquire: { _ in XCTFail("disabled notes must not acquire"); return localManager },
+            release: {
+                releaseCount += 1
+                $0?.cancel()
+            }
+        )
+
+        XCTAssertNil(disabled.manager)
+        XCTAssertFalse(disabled.ownsLiveRefresh)
+        XCTAssertEqual(endCount, 1)
+        XCTAssertEqual(releaseCount, 1)
+
+        let remoteManager = LocationNotesManager(geohash: "9q8yyk8y", dependencies: relays.dependencies)
+        let remote = NoticesView.reconcileGeoSession(
+            tab: .geo,
+            needsDeviceLocation: false,
+            permissionState: .denied,
+            notesEnabled: true,
+            geohash: "9q8yyk8y",
+            manager: remoteManager,
+            ownsLiveRefresh: false,
+            beginLiveRefresh: {},
+            endLiveRefresh: { endCount += 1 },
+            acquire: { _ in XCTFail("matching remote manager should be reused"); return remoteManager },
+            release: { _ in XCTFail("device permission must not release an explicit remote scope") }
+        )
+
+        XCTAssertTrue(remote.manager === remoteManager)
+        XCTAssertFalse(remote.ownsLiveRefresh)
+        XCTAssertEqual(endCount, 1)
     }
 
     func test_pool_sharesOneManagerPerGeohash_andCancelsOnLastRelease() {

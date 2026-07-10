@@ -22,21 +22,9 @@ enum BLEOutboundLinkPlanner {
         centralPeerBindings: [String: PeerID] = [:],
         preferredPeripheralPerPeer: [PeerID: String] = [:],
         directAnnounceTTL: UInt8 = TransportConfig.messageTTLDefault,
-        directedOnlyPeer: PeerID?
+        directedOnlyPeer: PeerID?,
+        requireDirectPeerLink: Bool = false
     ) -> BLEOutboundLinkPlan {
-        if let minLimit = minimumLinkLimit(
-            peripheralWriteLimits: peripheralWriteLimits,
-            centralNotifyLimits: centralNotifyLimits
-        ), packet.type != MessageType.fragment.rawValue,
-           dataCount > minLimit {
-            return BLEOutboundLinkPlan(
-                directedPeerHint: directedPeerHint(for: packet, explicitPeer: directedOnlyPeer),
-                fragmentChunkSize: BLEOutboundPacketPolicy.fragmentChunkSize(forLinkLimit: minLimit),
-                selectedLinks: BLEFanoutSelection(peripheralIDs: [], centralIDs: []),
-                shouldSpoolDirectedPacket: false
-            )
-        }
-
         let directedPeerHint = directedPeerHint(for: packet, explicitPeer: directedOnlyPeer)
         // Direct announces bypass the per-peer duplicate-link collapse so
         // every live link gets bound (see BLEFanoutSelector.selectLinks).
@@ -51,9 +39,33 @@ enum BLEOutboundLinkPlanner {
             preferredPeripheralPerPeer: preferredPeripheralPerPeer,
             collapseDuplicatePeerLinks: !isDirectAnnounce,
             directedPeerHint: directedPeerHint,
+            requireDirectPeerLink: requireDirectPeerLink,
             packetType: packet.type,
             messageID: BLEOutboundPacketPolicy.messageID(for: packet)
         )
+
+        // Fragment only for links that this packet can actually use. Looking
+        // at every connected link before directed-peer selection lets an
+        // unrelated peer's MTU make an oversized directed send look routable,
+        // even though every resulting fragment will select zero target links.
+        let selectedPeripheralLimits = zip(peripheralIDs, peripheralWriteLimits).compactMap { id, limit in
+            selectedLinks.peripheralIDs.contains(id) ? limit : nil
+        }
+        let selectedCentralLimits = zip(centralIDs, centralNotifyLimits).compactMap { id, limit in
+            selectedLinks.centralIDs.contains(id) ? limit : nil
+        }
+        if let minLimit = minimumLinkLimit(
+            peripheralWriteLimits: selectedPeripheralLimits,
+            centralNotifyLimits: selectedCentralLimits
+        ), packet.type != MessageType.fragment.rawValue,
+           dataCount > minLimit {
+            return BLEOutboundLinkPlan(
+                directedPeerHint: directedPeerHint,
+                fragmentChunkSize: BLEOutboundPacketPolicy.fragmentChunkSize(forLinkLimit: minLimit),
+                selectedLinks: selectedLinks,
+                shouldSpoolDirectedPacket: false
+            )
+        }
 
         return BLEOutboundLinkPlan(
             directedPeerHint: directedPeerHint,

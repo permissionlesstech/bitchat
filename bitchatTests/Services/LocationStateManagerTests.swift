@@ -86,6 +86,46 @@ final class LocationStateManagerTests: XCTestCase {
         XCTAssertEqual(locationManager.distanceFilter, TransportConfig.locationDistanceFilterMeters)
     }
 
+    func test_permissionRevocation_endsLiveRefreshWithoutDiscardingExplicitState() async {
+        let storage = makeStorage()
+        let locationManager = MockLocationManager(authorizationStatus: .authorizedAlways)
+        let manager = LocationStateManager(
+            storage: storage,
+            locationManager: locationManager,
+            geocoder: MockLocationGeocoder(),
+            shouldInitializeCoreLocation: true
+        )
+        let authorized = await waitUntil { manager.permissionState == .authorized }
+        XCTAssertTrue(authorized)
+
+        manager.locationManager(
+            CLLocationManager(),
+            didUpdateLocations: [CLLocation(latitude: 21.2850, longitude: -157.8357)]
+        )
+        let channelsLoaded = await waitUntil { !manager.availableChannels.isEmpty }
+        XCTAssertTrue(channelsLoaded)
+        let cachedChannels = manager.availableChannels
+        manager.addBookmark("u4pru")
+        manager.markTeleported(for: "9q8yy", true)
+        manager.select(.location(GeohashChannel(level: .city, geohash: "9q8yy")))
+        let teleported = await waitUntil { manager.teleported }
+        XCTAssertTrue(teleported)
+
+        manager.beginLiveRefresh()
+        XCTAssertEqual(locationManager.startUpdatingLocationCallCount, 1)
+
+        manager.locationManager(CLLocationManager(), didChangeAuthorization: .restricted)
+
+        let restricted = await waitUntil { manager.permissionState == .restricted }
+        XCTAssertTrue(restricted)
+        XCTAssertEqual(locationManager.stopUpdatingLocationCallCount, 1)
+        XCTAssertEqual(locationManager.desiredAccuracy, kCLLocationAccuracyHundredMeters)
+        XCTAssertEqual(locationManager.distanceFilter, TransportConfig.locationDistanceFilterMeters)
+        XCTAssertEqual(manager.availableChannels, cachedChannels, "cached display state can remain")
+        XCTAssertEqual(manager.bookmarks, ["u4pru"])
+        XCTAssertTrue(manager.teleported, "an explicit remote selection survives device revocation")
+    }
+
     func test_didUpdateLocations_computesChannelsAndReverseGeocodesFriendlyNames() async {
         let geocoder = MockLocationGeocoder()
         geocoder.enqueue(

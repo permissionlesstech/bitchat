@@ -246,6 +246,16 @@ final class MessageDeduplicationService {
         ContentNormalizer.normalizedKey(content)
     }
 
+    /// Removes the near-duplicate marker for a row that is being replaced,
+    /// not merely deleted. Bridge-first/radio-second reconciliation needs the
+    /// authenticated radio copy to pass the next pipeline flush after its
+    /// unauthenticated bridge alias is removed.
+    func forgetContent(_ content: String, ifRecordedAt timestamp: Date) {
+        let key = ContentNormalizer.normalizedKey(content)
+        guard contentCache.value(for: key) == timestamp else { return }
+        contentCache.remove(key)
+    }
+
     // MARK: - Nostr Event Deduplication
 
     /// Checks if a Nostr event has already been processed.

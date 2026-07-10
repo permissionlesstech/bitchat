@@ -6,7 +6,7 @@
 // For more information, see <https://unlicense.org>
 //
 
-import AVFoundation
+@preconcurrency import AVFoundation
 import BitLogger
 import Foundation
 
@@ -21,7 +21,27 @@ protocol PTTPlaybackEngine: AnyObject {
     func start() throws
     func play()
     func stop()
-    func schedule(_ buffer: AVAudioPCMBuffer, completionHandler: @escaping @Sendable () -> Void)
+    func schedule(
+        _ buffer: AVAudioPCMBuffer,
+        completionType: PTTPlaybackCompletionType,
+        completionHandler: @escaping @Sendable (PTTPlaybackCompletionEvent) -> Void
+    )
+}
+
+/// The lifecycle point requested from `AVAudioPlayerNode` for a scheduled
+/// buffer. `dataConsumed` only means the node no longer needs the bytes; it
+/// may arrive before the render pipeline has made the audio audible.
+enum PTTPlaybackCompletionType: Equatable, Sendable {
+    case dataConsumed
+    case dataPlayedBack
+}
+
+enum PTTPlaybackCompletionEvent: Equatable, Sendable {
+    case dataConsumed
+    case dataPlayedBack
+    /// AVAudioPlayerNode invokes the requested callback when the node is
+    /// stopped too. That is not audible completion and must remain replayable.
+    case playbackStopped
 }
 
 /// One `AVAudioEngine` + `AVAudioPlayerNode` pair. Created fresh per (re)start:
@@ -54,8 +74,36 @@ private final class SystemPTTPlaybackEngine: PTTPlaybackEngine {
         engine.stop()
     }
 
-    func schedule(_ buffer: AVAudioPCMBuffer, completionHandler: @escaping @Sendable () -> Void) {
-        node.scheduleBuffer(buffer, completionHandler: completionHandler)
+    func schedule(
+        _ buffer: AVAudioPCMBuffer,
+        completionType: PTTPlaybackCompletionType,
+        completionHandler: @escaping @Sendable (PTTPlaybackCompletionEvent) -> Void
+    ) {
+        let callbackType: AVAudioPlayerNodeCompletionCallbackType = switch completionType {
+        case .dataConsumed: .dataConsumed
+        case .dataPlayedBack: .dataPlayedBack
+        }
+        let scheduledEngine = engine
+        node.scheduleBuffer(buffer, completionCallbackType: callbackType) { [weak scheduledEngine] callbackType in
+            // The API invokes this callback when the player is stopped as
+            // well. A configuration change can stop the engine before its
+            // notification reaches MainActor, so do not misclassify that
+            // flushed tail as audible playback.
+            guard scheduledEngine?.isRunning == true else {
+                completionHandler(.playbackStopped)
+                return
+            }
+            switch callbackType {
+            case .dataConsumed:
+                completionHandler(.dataConsumed)
+            case .dataRendered:
+                completionHandler(.dataConsumed)
+            case .dataPlayedBack:
+                completionHandler(.dataPlayedBack)
+            @unknown default:
+                completionHandler(.playbackStopped)
+            }
+        }
     }
 }
 
@@ -147,6 +195,9 @@ final class PTTBurstPlayer {
     private var acquiringSession = false
     private var deadlineTask: Task<Void, Never>?
     private var sessionToken: AudioSessionCoordinator.Token?
+    /// Reserved before the session acquire suspends. Activation succeeds only
+    /// if no newer playback request claimed the floor in the meantime.
+    private var playbackReservation: VoiceNotePlaybackCoordinator.Reservation?
     private var configChangeObserver: NSObjectProtocol?
 
     private(set) var isPlaying = false
@@ -244,6 +295,7 @@ final class PTTBurstPlayer {
         // actor); frames arriving meanwhile keep queueing and are flushed
         // onto the engine once it starts.
         acquiringSession = true
+        playbackReservation = exclusivity.reserve(self)
         Task { [weak self] in
             await self?.acquireSessionAndStart()
         }
@@ -277,6 +329,14 @@ final class PTTBurstPlayer {
             return
         }
         sessionToken = token
+        guard let playbackReservation,
+              exclusivity.isCurrent(playbackReservation, for: self)
+        else {
+            // The request was superseded while audio-session activation was
+            // suspended. Do not even start the retired engine.
+            stop()
+            return
+        }
 
         // Observe reconfiguration before starting so nothing lands between.
         registerConfigObserver()
@@ -304,8 +364,15 @@ final class PTTBurstPlayer {
             }
         }
         engineStarted = true
+        guard exclusivity.activate(self, reservation: playbackReservation)
+        else {
+            // A newer user-initiated playback reserved the floor while this
+            // older PTT request was suspended in audio-session activation.
+            // Never let the late completion steal playback back.
+            stop()
+            return
+        }
         isPlaying = true
-        exclusivity.activate(self)
         engine.play()
 
         let buffered = queuedBuffers
@@ -393,7 +460,8 @@ final class PTTBurstPlayer {
             completionState: completionState
         ))
         let generation = engineGeneration
-        engine.schedule(buffer) { [weak self, completionState] in
+        engine.schedule(buffer, completionType: .dataPlayedBack) { [weak self, completionState] event in
+            guard event == .dataPlayedBack else { return }
             // Mark completion before hopping to MainActor. A rebuild can then
             // distinguish already-completed audio from an unfinished tail
             // even when this task has not run yet.

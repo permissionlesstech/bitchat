@@ -31,22 +31,29 @@ protocol VoiceCaptureSession: AnyObject {
 /// The classic record-then-send backend, wrapping the shared `VoiceRecorder`.
 @MainActor
 final class VoiceNoteCaptureSession: VoiceCaptureSession {
+    private let recorder: VoiceRecorder
+    private let owner = VoiceRecorder.RecordingOwner()
+
     var isLive: Bool { false }
 
+    init(recorder: VoiceRecorder = .shared) {
+        self.recorder = recorder
+    }
+
     func requestPermission() async -> Bool {
-        await VoiceRecorder.shared.requestPermission()
+        await recorder.requestPermission()
     }
 
     func start() async throws {
-        try await VoiceRecorder.shared.startRecording()
+        try await recorder.startRecording(owner: owner)
     }
 
     func finish() async -> URL? {
-        await VoiceRecorder.shared.stopRecording()
+        await recorder.stopRecording(owner: owner)
     }
 
     func cancel() async {
-        await VoiceRecorder.shared.cancelRecording()
+        await recorder.cancelRecording(owner: owner)
     }
 }
 

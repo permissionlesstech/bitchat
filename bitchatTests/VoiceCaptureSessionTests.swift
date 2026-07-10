@@ -56,7 +56,59 @@ private final class CaptureLeaseSession: SessionApplying, @unchecked Sendable {
 }
 
 @MainActor
+private final class GatedVoiceCaptureSession: VoiceCaptureSession {
+    let isLive = false
+    private let startError: Error?
+    private(set) var finishStarted = false
+    private(set) var cancelCount = 0
+    private var finishContinuation: CheckedContinuation<URL?, Never>?
+
+    init(startError: Error? = nil) {
+        self.startError = startError
+    }
+
+    func requestPermission() async -> Bool { true }
+    func start() async throws {
+        if let startError { throw startError }
+    }
+
+    func finish() async -> URL? {
+        finishStarted = true
+        return await withCheckedContinuation { continuation in
+            finishContinuation = continuation
+        }
+    }
+
+    func cancel() async {
+        cancelCount += 1
+    }
+
+    func resolveFinish(with url: URL?) {
+        let continuation = finishContinuation
+        finishContinuation = nil
+        continuation?.resume(returning: url)
+    }
+}
+
+@MainActor
 struct VoiceCaptureSessionTests {
+    private func waitUntil(
+        _ condition: () -> Bool,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) async {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while !condition(), ContinuousClock.now < deadline {
+            await Task.yield()
+            try? await Task.sleep(nanoseconds: 1_000_000)
+        }
+        #expect(condition(), sourceLocation: sourceLocation)
+    }
+
+    private func isRecording(_ state: VoiceRecordingViewModel.State) -> Bool {
+        if case .recording = state { return true }
+        return false
+    }
+
     @Test func staleCaptureCallbackCannotInvalidateNewGeneration() {
         let generations = PTTCaptureGeneration()
         let old = generations.begin()
@@ -124,5 +176,32 @@ struct VoiceCaptureSessionTests {
         await coordinator.drain()
 
         #expect(rawSession.activationCalls == [true, false])
+    }
+
+    @Test func rejectedNewHoldAndStaleFinalizeLeaveNewerGenerationIdle() async {
+        let oldSession = GatedVoiceCaptureSession()
+        let newSession = GatedVoiceCaptureSession(
+            startError: VoiceRecorder.RecorderError.recordingInProgress
+        )
+        var sessions: [GatedVoiceCaptureSession] = [oldSession, newSession]
+        let viewModel = VoiceRecordingViewModel()
+        viewModel.sessionProvider = { sessions.removeFirst() }
+
+        viewModel.start(shouldShow: true)
+        await waitUntil { self.isRecording(viewModel.state) }
+        viewModel.finish(completion: { _ in })
+        await waitUntil { oldSession.finishStarted }
+
+        viewModel.start(shouldShow: true)
+        await waitUntil { newSession.cancelCount == 1 && viewModel.state == .idle }
+        #expect(viewModel.state == .idle)
+
+        // The older finalize now fails after the newer press has completed.
+        // It must not replace the newer generation's idle state with an alert.
+        oldSession.resolveFinish(with: nil)
+        for _ in 0..<20 {
+            await Task.yield()
+        }
+        #expect(viewModel.state == .idle)
     }
 }

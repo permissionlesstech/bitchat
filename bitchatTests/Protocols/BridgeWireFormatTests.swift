@@ -186,7 +186,12 @@ struct CourierStoreBridgePublishTests {
         // eligible again after the cooldown. `carriedCount` publishes
         // asynchronously, so it is not asserted here.)
 
-        // Within cooldown: nothing to publish.
+        // Merely offering the envelope does not start the cooldown; a relay
+        // rejection/timeout must remain immediately retryable.
+        #expect(store.envelopesForBridgePublish(cooldown: 600).count == 1)
+        store.markBridgePublished(first[0])
+
+        // A confirmed publish starts the cooldown.
         #expect(store.envelopesForBridgePublish(cooldown: 600).isEmpty)
 
         // After cooldown: eligible again.

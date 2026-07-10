@@ -14,14 +14,11 @@ import Foundation
 /// The BLE wire carries no message ID for public broadcasts, so every device
 /// recomputes the same stable ID from the signed wire fields (sender ID,
 /// millisecond timestamp, content). That gives the mesh bridge a
-/// cross-device-consistent dedup/attribution key with zero wire change — and
-/// because receivers derive the key themselves instead of trusting a claimed
-/// ID, forging a bridge tag that binds a chosen ID to *different* content is
-/// infeasible. The inputs are cleartext on the radio, though: an attacker in
-/// radio range can re-sign the identical sender/timestamp/content under
-/// their own Nostr key and win first-wins injection on remote islands —
-/// duplicate-content spoofing the unbridged mesh already permits, so no
-/// worse than before.
+/// cross-device-consistent radio identity with zero wire change. Bridge events
+/// carry this value only as a hint for detecting a radio copy that is already
+/// present: sender/timestamp/content are public, so a different Nostr signer
+/// can copy them and must never be allowed to reserve the genuine event's
+/// authenticated dedup slot.
 enum MeshMessageIdentity {
     /// Matches the wire truncation in `BLEService.sendMessage`.
     static func millisecondTimestamp(_ date: Date) -> UInt64 {

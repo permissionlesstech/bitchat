@@ -7,6 +7,26 @@ struct BLEOutboundFragmentTransferRequest {
     let maxChunk: Int?
     let directedPeer: PeerID?
     let transferId: String?
+    let requireDirectPeerLink: Bool
+    let requireNoiseAuthenticatedPeerLink: Bool
+
+    init(
+        packet: BitchatPacket,
+        pad: Bool,
+        maxChunk: Int?,
+        directedPeer: PeerID?,
+        transferId: String?,
+        requireDirectPeerLink: Bool = false,
+        requireNoiseAuthenticatedPeerLink: Bool = false
+    ) {
+        self.packet = packet
+        self.pad = pad
+        self.maxChunk = maxChunk
+        self.directedPeer = directedPeer
+        self.transferId = transferId
+        self.requireDirectPeerLink = requireDirectPeerLink
+        self.requireNoiseAuthenticatedPeerLink = requireNoiseAuthenticatedPeerLink
+    }
 
     var resolvedTransferId: String? {
         guard packet.type == MessageType.fileTransfer.rawValue else { return nil }
@@ -22,6 +42,21 @@ struct BLEOutboundFragmentTransferRequest {
     }
 }
 
+/// Transactional admission for strict fragment trains. Durable callers may
+/// commit only when every fragment was accepted; the first rejection stops
+/// the train and reports failure so the original remains retryable.
+enum BLEStrictFragmentAdmission {
+    static func admitAll<Fragment>(
+        _ fragments: [Fragment],
+        accepting: (Fragment) -> Bool
+    ) -> Bool {
+        for fragment in fragments where !accepting(fragment) {
+            return false
+        }
+        return true
+    }
+}
+
 struct BLEOutboundFragmentTransferScheduler {
     enum QueuePosition {
         case front
@@ -31,6 +66,11 @@ struct BLEOutboundFragmentTransferScheduler {
     enum SubmitResult {
         case start(request: BLEOutboundFragmentTransferRequest, reservedTransferId: String?)
         case queued(request: BLEOutboundFragmentTransferRequest, transferId: String?, position: QueuePosition)
+        /// Strict direct-link requests are transactional: returning false to
+        /// their durable owner must mean no process-local copy remains that
+        /// can transmit later. They are therefore start-or-reject, never
+        /// admitted to `pendingTransfers`.
+        case rejectedStrict(request: BLEOutboundFragmentTransferRequest, transferId: String?)
         /// The same file is already being (or waiting to be) fragmented out
         /// to an audience covering this request; sending it again would just
         /// double the airtime (field-verified: one 41KB voice file went out
@@ -113,11 +153,17 @@ struct BLEOutboundFragmentTransferScheduler {
         }
 
         guard activeTransfers.count < maxConcurrentTransfers else {
+            if request.requireDirectPeerLink {
+                return .rejectedStrict(request: request, transferId: transferId)
+            }
             pendingTransfers.append(request)
             return .queued(request: request, transferId: transferId, position: .back)
         }
 
         guard activeTransfers[transferId] == nil else {
+            if request.requireDirectPeerLink {
+                return .rejectedStrict(request: request, transferId: transferId)
+            }
             pendingTransfers.insert(request, at: 0)
             return .queued(request: request, transferId: transferId, position: .front)
         }

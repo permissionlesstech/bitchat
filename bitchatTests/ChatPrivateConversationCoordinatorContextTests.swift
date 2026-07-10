@@ -80,7 +80,7 @@ private final class MockChatPrivateConversationContext: ChatPrivateConversationC
 
     @discardableResult
     func setPrivateDeliveryStatus(_ status: DeliveryStatus, forMessageID messageID: String, peerID: PeerID) -> Bool {
-        guard var chat = privateChats[peerID],
+        guard let chat = privateChats[peerID],
               let index = chat.firstIndex(where: { $0.id == messageID }) else {
             return false
         }

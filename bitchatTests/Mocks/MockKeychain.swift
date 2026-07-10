@@ -17,6 +17,7 @@ final class MockKeychain: KeychainManagerProtocol {
     // BCH-01-009: Configurable error simulation for testing
     var simulatedReadError: KeychainReadResult?
     var simulatedSaveError: KeychainSaveResult?
+    var simulatedGenericReadError: KeychainReadResult?
 
     func saveIdentityKey(_ keyData: Data, forKey key: String) -> Bool {
         storage[key] = keyData
@@ -80,6 +81,16 @@ final class MockKeychain: KeychainManagerProtocol {
 
     func load(key: String, service: String) -> Data? {
         serviceStorage[service]?[key]
+    }
+
+    func loadWithResult(key: String, service: String) -> KeychainReadResult {
+        if let simulatedGenericReadError {
+            return simulatedGenericReadError
+        }
+        if let data = serviceStorage[service]?[key] {
+            return .success(data)
+        }
+        return .itemNotFound
     }
 
     func delete(key: String, service: String) {

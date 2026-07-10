@@ -542,6 +542,15 @@ final class KeychainManager: KeychainManagerProtocol {
 
     /// Load data from a custom service
     func load(key: String, service customService: String) -> Data? {
+        guard case .success(let data) = loadWithResult(key: key, service: customService) else {
+            return nil
+        }
+        return data
+    }
+
+    /// Load custom-service data without collapsing `itemNotFound` and
+    /// protected-data/keychain failures into the same nil result.
+    func loadWithResult(key: String, service customService: String) -> KeychainReadResult {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: customService,
@@ -551,9 +560,7 @@ final class KeychainManager: KeychainManagerProtocol {
 
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
-
-        guard status == errSecSuccess else { return nil }
-        return result as? Data
+        return classifyReadStatus(status, data: result as? Data)
     }
 
     /// Delete data from a custom service

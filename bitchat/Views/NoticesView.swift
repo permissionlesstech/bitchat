@@ -34,6 +34,9 @@ struct NoticesView: View {
     /// Days until the notice fades; `permanentExpiry` (geo default) means no
     /// NIP-40 tag — the note stays until its relay drops it.
     @State private var expiryDays: Int
+    /// Mirrors the app-info kill switch so its notification produces an
+    /// immediate presentation update as well as tearing down subscriptions.
+    @State private var locationNotesEnabled = LocationNotesSettings.enabled
 
     /// Sentinel picker tag for the ∞ option (geo tab only).
     private static let permanentExpiry = 0
@@ -45,6 +48,10 @@ struct NoticesView: View {
     /// Acquired from `LocationNotesPool` (shared with the nearby-notes
     /// counter, one REQ per geohash) and released on dismissal.
     @State private var liveGeoManager: LocationNotesManager?
+    /// Tracks only this sheet's high-accuracy refresh ownership, so repeated
+    /// Combine/SwiftUI invalidations do not restart CoreLocation and a
+    /// revocation or kill-switch transition balances the begin call once.
+    @State private var ownsLiveGeoRefresh = false
 
     init(
         senderNickname: String,
@@ -73,24 +80,127 @@ struct NoticesView: View {
         tab == .geo && geoGeohash != nil
     }
 
-    /// Acquires (or retargets/revives) the pooled notes manager for the
-    /// current geo scope.
-    private func ensureGeoNotesManager() {
-        guard tab == .geo else { return }
-        guard notesManager == nil, let geohash = geoGeohash else { return }
-        if let manager = liveGeoManager {
+    struct GeoSessionState {
+        let manager: LocationNotesManager?
+        let ownsLiveRefresh: Bool
+    }
+
+    enum GeoPresentationState: Equatable {
+        case disabled
+        case locationUnavailable
+        case available(String)
+    }
+
+    static func geoPresentationState(notesEnabled: Bool, geohash: String?) -> GeoPresentationState {
+        guard notesEnabled else { return .disabled }
+        guard let geohash else { return .locationUnavailable }
+        return .available(geohash)
+    }
+
+    static func composerGeohash(tab: Tab, notesEnabled: Bool, geoGeohash: String?) -> String? {
+        switch tab {
+        case .geo:
+            guard case .available(let geohash) = geoPresentationState(
+                notesEnabled: notesEnabled,
+                geohash: geoGeohash
+            ) else {
+                return nil
+            }
+            return geohash
+        case .mesh:
+            return ""
+        }
+    }
+
+    /// Reconciles both privacy-sensitive resources owned by the sheet: the
+    /// high-accuracy CoreLocation refresh and the precise notes REQ. Kept as
+    /// a callback-driven function so permission and kill-switch transitions
+    /// can be regression tested without presenting SwiftUI.
+    @MainActor
+    static func reconcileGeoSession(
+        tab: Tab,
+        needsDeviceLocation: Bool,
+        permissionState: LocationChannelManager.PermissionState,
+        notesEnabled: Bool,
+        geohash: String?,
+        manager: LocationNotesManager?,
+        ownsLiveRefresh: Bool,
+        beginLiveRefresh: () -> Void,
+        endLiveRefresh: () -> Void,
+        acquire: (String) -> LocationNotesManager,
+        release: (LocationNotesManager?) -> Void
+    ) -> GeoSessionState {
+        let geoTabActive = tab == .geo && notesEnabled
+        let wantsLiveRefresh = geoTabActive && needsDeviceLocation && permissionState == .authorized
+
+        if wantsLiveRefresh != ownsLiveRefresh {
+            if wantsLiveRefresh {
+                beginLiveRefresh()
+            } else {
+                endLiveRefresh()
+            }
+        }
+
+        // A selected location channel is an explicit remote/teleported scope
+        // and remains usable without device permission. Only device-derived
+        // scope requires current authorization.
+        let mayUseNotes = geoTabActive &&
+            (!needsDeviceLocation || permissionState == .authorized)
+        guard mayUseNotes, let geohash else {
+            if manager != nil {
+                release(manager)
+            }
+            return GeoSessionState(manager: nil, ownsLiveRefresh: wantsLiveRefresh)
+        }
+
+        if let manager {
             if manager.geohash != geohash.lowercased() {
-                // Pooled managers are shared; never retarget one in place —
-                // release the old cell and acquire the new one.
-                LocationNotesPool.shared.release(manager)
-                liveGeoManager = LocationNotesPool.shared.acquire(geohash)
-            } else if manager.state == .idle {
-                // Revived after a cancel elsewhere; returning re-subscribes.
+                // Pooled managers are shared; never retarget one in place.
+                release(manager)
+                return GeoSessionState(
+                    manager: acquire(geohash),
+                    ownsLiveRefresh: wantsLiveRefresh
+                )
+            }
+            if manager.state == .idle {
                 manager.refresh()
             }
-        } else {
-            liveGeoManager = LocationNotesPool.shared.acquire(geohash)
+            return GeoSessionState(manager: manager, ownsLiveRefresh: wantsLiveRefresh)
         }
+
+        return GeoSessionState(
+            manager: acquire(geohash),
+            ownsLiveRefresh: wantsLiveRefresh
+        )
+    }
+
+    private func reconcileGeoSession(notesEnabled: Bool? = nil) {
+        let notesEnabled = notesEnabled ?? locationNotesEnabled
+        let next = Self.reconcileGeoSession(
+            tab: tab,
+            needsDeviceLocation: geoTabNeedsDeviceLocation,
+            permissionState: locationChannelsModel.permissionState,
+            notesEnabled: notesEnabled,
+            geohash: geoGeohash,
+            manager: liveGeoManager,
+            ownsLiveRefresh: ownsLiveGeoRefresh,
+            beginLiveRefresh: {
+                locationChannelsModel.enableLocationChannels()
+                locationChannelsModel.beginLiveRefresh()
+            },
+            endLiveRefresh: { locationChannelsModel.endLiveRefresh() },
+            acquire: { geohash in
+                notesManager ?? LocationNotesPool.shared.acquire(geohash)
+            },
+            release: { manager in
+                guard notesManager == nil else { return }
+                LocationNotesPool.shared.release(manager)
+            }
+        )
+        // A test-injected manager is owned by the caller, not by the pool or
+        // this view's lifecycle state.
+        liveGeoManager = notesManager == nil ? next.manager : nil
+        ownsLiveGeoRefresh = next.ownsLiveRefresh
     }
 
     private var maxDraftLines: Int { dynamicTypeSize.isAccessibilitySize ? 5 : 3 }
@@ -100,6 +210,9 @@ struct NoticesView: View {
     private var geoGeohash: String? {
         if case .location(let channel) = locationChannelsModel.selectedChannel {
             return channel.geohash
+        }
+        guard locationChannelsModel.permissionState == .authorized else {
+            return nil
         }
         return locationChannelsModel.currentBuildingGeohash
     }
@@ -112,10 +225,11 @@ struct NoticesView: View {
     }
 
     private var activeGeohash: String? {
-        switch tab {
-        case .geo: return geoGeohash
-        case .mesh: return ""
-        }
+        Self.composerGeohash(
+            tab: tab,
+            notesEnabled: locationNotesEnabled,
+            geoGeohash: geoGeohash
+        )
     }
 
     enum Strings {
@@ -141,6 +255,8 @@ struct NoticesView: View {
         static let nostrSource = String(localized: "notices.source.nostr", defaultValue: "net", comment: "Source badge for notices seen on internet relays")
         static let locationUnavailable = String(localized: "content.notes.location_unavailable", comment: "Shown when the device location is unavailable for geo notices")
         static let enableLocation = String(localized: "content.location.enable", comment: "Button enabling location for geo notices")
+        static let locationNotesTitle: LocalizedStringKey = "app_info.location.notes.title"
+        static let locationNotesDescription: LocalizedStringKey = "app_info.location.notes.description"
         static let loadingNotes: LocalizedStringKey = "location_notes.loading_notes"
         static let connectingRelays: LocalizedStringKey = "location_notes.connecting_relays"
         static let noRelaysNearby: LocalizedStringKey = "location_notes.no_relays_nearby"
@@ -190,53 +306,46 @@ struct NoticesView: View {
         #endif
         .themedSheetBackground()
         .onAppear {
-            beginGeoLocationIfNeeded()
-            ensureGeoNotesManager()
+            reconcileGeoSession()
         }
         .onChange(of: tab) { newTab in
             if newTab == .geo {
-                beginGeoLocationIfNeeded()
                 if Self.revealsNearbyNotes(onSwitchingTo: newTab, geoGeohash: geoGeohash) {
                     NearbyNotesCounter.shared.reveal()
                 }
-                ensureGeoNotesManager()
-            } else {
-                locationChannelsModel.endLiveRefresh()
-                // Leaving the geo tab must take its REQ down with it, not
-                // leave the geohash subscription streaming behind the mesh
-                // board. The pool makes the return trip cheap (re-acquire
-                // revives the manager), and the dismissal release below is
-                // safe: `liveGeoManager` is nil until re-acquired.
-                LocationNotesPool.shared.release(liveGeoManager)
-                liveGeoManager = nil
             }
+            reconcileGeoSession()
             // Each tab keeps its natural default: geo notes stay until
             // deleted (∞), mesh board posts fade within a week.
             expiryDays = newTab == .geo ? Self.permanentExpiry : 7
             urgent = false
         }
-        // Catches permission granted from the geo tab's enable button.
+        // Catches both grant and revocation. Revocation must balance the live
+        // refresh and release a device-derived building REQ immediately.
         .onChange(of: locationChannelsModel.permissionState) { _ in
-            beginGeoLocationIfNeeded()
+            reconcileGeoSession()
         }
         .onChange(of: geoGeohash) { _ in
-            ensureGeoNotesManager()
+            reconcileGeoSession()
+        }
+        .onChange(of: geoTabNeedsDeviceLocation) { _ in
+            reconcileGeoSession()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: LocationNotesSettings.didChangeNotification)) { _ in
+            let enabled = LocationNotesSettings.enabled
+            locationNotesEnabled = enabled
+            reconcileGeoSession(notesEnabled: enabled)
         }
         .onDisappear {
-            locationChannelsModel.endLiveRefresh()
-            LocationNotesPool.shared.release(liveGeoManager)
+            if ownsLiveGeoRefresh {
+                locationChannelsModel.endLiveRefresh()
+                ownsLiveGeoRefresh = false
+            }
+            if notesManager == nil {
+                LocationNotesPool.shared.release(liveGeoManager)
+            }
             liveGeoManager = nil
         }
-    }
-
-    /// The geo tab tracks the device's building geohash while on mesh; keep
-    /// location fresh only in that case (a selected location channel already
-    /// fixes the scope).
-    private func beginGeoLocationIfNeeded() {
-        guard tab == .geo, geoTabNeedsDeviceLocation,
-              locationChannelsModel.permissionState == .authorized else { return }
-        locationChannelsModel.enableLocationChannels()
-        locationChannelsModel.beginLiveRefresh()
     }
 
     private var headerSection: some View {
@@ -288,19 +397,54 @@ struct NoticesView: View {
                 notesManager: nil
             )
         case .geo:
-            if let geohash = geoGeohash {
+            switch Self.geoPresentationState(
+                notesEnabled: locationNotesEnabled,
+                geohash: geoGeohash
+            ) {
+            case .disabled:
+                locationNotesDisabledSection
+            case .available(let geohash):
                 if let manager = activeNotesManager {
                     GeoNoticesList(geohash: geohash, board: board, manager: manager)
                 } else {
                     // Manager is created on appear; visible for one frame.
                     Color.clear
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .onAppear { ensureGeoNotesManager() }
+                        .onAppear { reconcileGeoSession() }
                 }
-            } else {
+            case .locationUnavailable:
                 locationUnavailableSection
             }
         }
+    }
+
+    private var locationNotesDisabledSection: some View {
+        ScrollView {
+            Toggle(
+                isOn: Binding(
+                    get: { locationNotesEnabled },
+                    set: { enabled in
+                        locationNotesEnabled = enabled
+                        LocationNotesSettings.enabled = enabled
+                    }
+                )
+            ) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(Strings.locationNotesTitle)
+                        .bitchatFont(size: 14)
+                    Text(Strings.locationNotesDescription)
+                        .bitchatFont(size: 12)
+                        .foregroundColor(palette.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .toggleStyle(.switch)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .themedSurface()
     }
 
     private var locationUnavailableSection: some View {

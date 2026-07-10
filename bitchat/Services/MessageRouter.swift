@@ -56,11 +56,15 @@ final class MessageRouter {
     /// relays as a courier drop, so delivery stops requiring a physical
     /// courier encounter. No-op unless the bridge is enabled. Runs alongside
     /// (not instead of) mesh couriers; receivers dedup by message ID.
-    /// Returns true when a fresh drop was sealed, so the sender's message
-    /// can show the "carried" state instead of sitting on "sending" forever
-    /// (the delivery ack has no radio route back until the peers next share
-    /// a transport).
-    var bridgeCourierDeposit: ((_ content: String, _ messageID: String, _ recipientNoiseKey: Data) -> Bool)?
+    /// Completion is true only after at least one default relay explicitly
+    /// accepts the event, so a socket write followed by rejection cannot
+    /// falsely show the sender's message as "carried".
+    var bridgeCourierDeposit: ((
+        _ content: String,
+        _ messageID: String,
+        _ recipientNoiseKey: Data,
+        _ completion: @escaping @MainActor (Bool) -> Void
+    ) -> Void)?
 
     /// Re-attempts bridge drops for retained messages whose recipient no
     /// transport can promptly reach anymore. Covers sends that raced the BLE
@@ -77,9 +81,7 @@ final class MessageRouter {
             }
             guard !promptlyDeliverable else { continue }
             for message in queue where now().timeIntervalSince(message.timestamp) <= Self.messageTTLSeconds {
-                if bridgeCourierDeposit?(message.content, message.messageID, recipientKey) == true {
-                    onMessageCarried?(message.messageID, peerID)
-                }
+                requestBridgeCourierDeposit(message, for: peerID, recipientKey: recipientKey)
             }
         }
     }
@@ -102,6 +104,7 @@ final class MessageRouter {
     }
 
     private var bridgeSweepTask: Task<Void, Never>?
+    private var bridgeDepositsInFlight = Set<String>()
 
     private var outbox: [PeerID: [QueuedMessage]] = [:]
 
@@ -127,6 +130,9 @@ final class MessageRouter {
         self.outboxStore = outboxStore
         self.metrics = metrics
         self.outbox = outboxStore?.load() ?? [:]
+        outboxStore?.setRecoveryHandler { [weak self] recovered in
+            self?.mergeRecoveredOutbox(recovered)
+        }
 
         // Observe favorites changes to learn Nostr mapping and flush queued messages
         NotificationCenter.default.addObserver(
@@ -237,9 +243,7 @@ final class MessageRouter {
               let entry = queuedMessage(messageID, for: peerID) else { return }
         // The bridge drop needs no connected courier — only the recipient
         // key — so it runs before the courier-slot bookkeeping.
-        if bridgeCourierDeposit?(entry.content, messageID, recipientKey) == true {
-            onMessageCarried?(messageID, peerID)
-        }
+        requestBridgeCourierDeposit(entry, for: peerID, recipientKey: recipientKey)
         let remainingSlots = Self.maxCouriersPerMessage - entry.depositedCourierKeys.count
         guard remainingSlots > 0 else { return }
 
@@ -324,6 +328,23 @@ final class MessageRouter {
         outbox[peerID]?.first { $0.messageID == messageID }
     }
 
+    private func requestBridgeCourierDeposit(
+        _ message: QueuedMessage,
+        for peerID: PeerID,
+        recipientKey: Data
+    ) {
+        guard let bridgeCourierDeposit,
+              bridgeDepositsInFlight.insert(message.messageID).inserted else { return }
+        bridgeCourierDeposit(message.content, message.messageID, recipientKey) { [weak self] succeeded in
+            guard let self else { return }
+            self.bridgeDepositsInFlight.remove(message.messageID)
+            // A direct delivery may have cleared the outbox while the relay
+            // relay confirmation was in flight; do not regress its UI state.
+            guard succeeded, self.queuedMessage(message.messageID, for: peerID) != nil else { return }
+            self.onMessageCarried?(message.messageID, peerID)
+        }
+    }
+
     private func recordCourierDeposit(messageID: String, for peerID: PeerID, courierKeys: [Data]) {
         metrics?.record(.courierDeposited)
         guard var queue = outbox[peerID],
@@ -344,10 +365,14 @@ final class MessageRouter {
             outbox[peerID] = filtered.isEmpty ? nil : filtered
             cleared = true
         }
+        // The durable snapshot may still be hidden by protected data. Record
+        // the ack even when this cold-load view cannot find the message, then
+        // persist the current view so the store retains a removal tombstone.
+        outboxStore?.recordRemoval(messageID: messageID)
         if cleared {
             metrics?.record(.outboxDelivered)
-            persistOutbox()
         }
+        persistOutbox()
     }
 
     private func enqueue(_ message: QueuedMessage, for peerID: PeerID) {
@@ -380,6 +405,38 @@ final class MessageRouter {
 
     private func persistOutbox() {
         outboxStore?.save(outbox)
+    }
+
+    /// A cold BLE restoration can launch before protected files are readable.
+    /// The store initially returns an empty snapshot in that case, then calls
+    /// back after first unlock. Merge by message ID instead of replacing work
+    /// accepted during the locked wake, persist the union, and immediately
+    /// resume normal delivery attempts.
+    private func mergeRecoveredOutbox(_ recovered: MessageOutboxStore.Snapshot) {
+        for (peerID, recoveredQueue) in recovered {
+            var queue = outbox[peerID] ?? []
+            for var recoveredMessage in recoveredQueue {
+                if let index = queue.firstIndex(where: { $0.messageID == recoveredMessage.messageID }) {
+                    recoveredMessage.sendAttempts = max(recoveredMessage.sendAttempts, queue[index].sendAttempts)
+                    recoveredMessage.depositedCourierKeys.formUnion(queue[index].depositedCourierKeys)
+                    queue[index] = recoveredMessage
+                } else {
+                    queue.append(recoveredMessage)
+                }
+            }
+            queue.sort { $0.timestamp < $1.timestamp }
+            if queue.count > Self.maxMessagesPerPeer {
+                let overflow = queue.count - Self.maxMessagesPerPeer
+                for dropped in queue.prefix(overflow) {
+                    dropMessage(dropped.messageID, for: peerID)
+                }
+                queue.removeFirst(overflow)
+            }
+            outbox[peerID] = queue
+        }
+        persistOutbox()
+        flushAllOutbox()
+        retryBridgeCourierDeposits()
     }
 
     /// Panic wipe: forget queued mail on disk and in memory.

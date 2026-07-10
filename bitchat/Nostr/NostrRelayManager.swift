@@ -216,6 +216,15 @@ final class NostrRelayManager: ObservableObject {
     }
     private var messageQueue: [PendingSend] = []
     private let messageQueueLock = NSLock()
+    /// Non-queued sends whose callers require relay durability. A WebSocket
+    /// write only proves bytes left this process; NIP-20 OK is the relay's
+    /// accept/reject acknowledgment.
+    private struct ConfirmedSendState {
+        let token: UUID
+        var awaitingRelays: Set<String>
+        let completion: (Bool) -> Void
+    }
+    private var confirmedSends: [String: ConfirmedSendState] = [:]
     // Total pending sends dropped at the queue cap; drives the sampled
     // overflow warning (first + every Nth drop).
     private var pendingSendDropCount = 0
@@ -312,6 +321,9 @@ final class NostrRelayManager: ObservableObject {
         for (_, tracker) in trackers {
             tracker.callback()
         }
+        let confirmed = confirmedSends.values.map(\.completion)
+        confirmedSends.removeAll()
+        confirmed.forEach { $0(false) }
         pendingTorConnectionURLs.removeAll()
         awaitingTorForConnections = false
         torReadyWaitAttempts = 0
@@ -345,6 +357,7 @@ final class NostrRelayManager: ObservableObject {
         duplicateInboundEventDropCountBySubscription.removeAll()
         inboundEventLogCount = 0
         Self.pendingGiftWrapIDs.removeAll()
+        confirmedSends.removeAll()
 
         messageQueueLock.lock()
         messageQueue.removeAll()
@@ -417,6 +430,97 @@ final class NostrRelayManager: ObservableObject {
         if !stillPending.isEmpty {
             enqueuePendingSend(event, pendingRelays: stillPending)
         }
+    }
+
+    /// Attempts an event only on currently connected target relays and
+    /// reports whether at least one relay explicitly accepted it via NIP-20
+    /// OK. A successful WebSocket write alone is not durable acceptance.
+    /// Unlike `sendEvent`, this never enters the process-local pending queue;
+    /// callers use it when success unlocks durable state or user-visible
+    /// delivery progress.
+    func sendEventImmediately(
+        _ event: NostrEvent,
+        to relayUrls: [String]? = nil,
+        completion: @escaping (Bool) -> Void
+    ) {
+        guard dependencies.activationAllowed() else {
+            completion(false)
+            return
+        }
+        guard !(shouldUseTor && dependencies.torEnforced() && !dependencies.torIsReady()) else {
+            completion(false)
+            return
+        }
+
+        let requestedRelays = relayUrls ?? Self.defaultRelays
+        let targetRelays = allowedRelayList(from: requestedRelays)
+        let connectedTargets = targetRelays.compactMap { relayUrl -> (String, NostrRelayConnectionProtocol)? in
+            guard let connection = connectedConnection(for: relayUrl) else { return nil }
+            return (relayUrl, connection)
+        }
+        guard !connectedTargets.isEmpty else {
+            completion(false)
+            return
+        }
+
+        let token = UUID()
+        let eventID = event.id
+        if let replaced = confirmedSends.removeValue(forKey: eventID) {
+            replaced.completion(false)
+        }
+        confirmedSends[eventID] = ConfirmedSendState(
+            token: token,
+            awaitingRelays: Set(connectedTargets.map(\.0)),
+            completion: completion
+        )
+        dependencies.scheduleAfter(TransportConfig.nostrConfirmedSendAckTimeoutSeconds) { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.timeoutConfirmedSend(eventID: eventID, token: token)
+            }
+        }
+
+        for (relayUrl, connection) in connectedTargets {
+            sendToRelay(event: event, connection: connection, relayUrl: relayUrl) { [weak self] succeeded in
+                guard let self else { return }
+                // Success only means the bytes reached the socket; wait for
+                // the matching relay OK. A failed write settles this target
+                // as rejected because no OK can arrive for it.
+                if !succeeded {
+                    self.resolveConfirmedSend(
+                        eventID: eventID,
+                        relayURL: relayUrl,
+                        accepted: false,
+                        token: token
+                    )
+                }
+            }
+        }
+    }
+
+    private func resolveConfirmedSend(
+        eventID: String,
+        relayURL: String,
+        accepted: Bool,
+        token: UUID? = nil
+    ) {
+        guard var state = confirmedSends[eventID],
+              token == nil || state.token == token,
+              state.awaitingRelays.remove(relayURL) != nil else { return }
+        if accepted {
+            confirmedSends.removeValue(forKey: eventID)
+            state.completion(true)
+        } else if state.awaitingRelays.isEmpty {
+            confirmedSends.removeValue(forKey: eventID)
+            state.completion(false)
+        } else {
+            confirmedSends[eventID] = state
+        }
+    }
+
+    private func timeoutConfirmedSend(eventID: String, token: UUID) {
+        guard let state = confirmedSends[eventID], state.token == token else { return }
+        confirmedSends.removeValue(forKey: eventID)
+        state.completion(false)
     }
 
     private func enqueuePendingSend(_ event: NostrEvent, pendingRelays: Set<String>) {
@@ -923,6 +1027,7 @@ final class NostrRelayManager: ObservableObject {
         // Send initial ping to verify connection
         task.sendPing { [weak self] error in
             DispatchQueue.main.async {
+                guard self?.connections[urlString] === task else { return }
                 if error == nil {
                     SecureLogger.debug("✅ Connected to Nostr relay: \(urlString)", category: .session)
                     self?.updateRelayStatus(urlString, isConnected: true)
@@ -932,7 +1037,11 @@ final class NostrRelayManager: ObservableObject {
                     SecureLogger.error("❌ Failed to connect to Nostr relay \(urlString): \(error?.localizedDescription ?? "Unknown error")", category: .session)
                     self?.updateRelayStatus(urlString, isConnected: false, error: error)
                     // Trigger disconnection handler for proper backoff
-                    self?.handleDisconnection(relayUrl: urlString, error: error ?? NSError(domain: "NostrRelay", code: -1, userInfo: nil))
+                    self?.handleDisconnection(
+                        relayUrl: urlString,
+                        error: error ?? NSError(domain: "NostrRelay", code: -1, userInfo: nil),
+                        connection: task
+                    )
                 }
             }
         }
@@ -990,18 +1099,20 @@ final class NostrRelayManager: ObservableObject {
                 Task.detached(priority: .utility) {
                     guard let parsed = ParsedInbound(message) else { return }
                     await MainActor.run {
+                        guard self.connections[relayUrl] === task else { return }
                         self.handleParsedMessage(parsed, from: relayUrl)
                     }
                 }
                 
                 // Continue receiving
                 Task { @MainActor in
+                    guard self.connections[relayUrl] === task else { return }
                     self.receiveMessage(from: task, relayUrl: relayUrl)
                 }
                 
             case .failure(let error):
                 DispatchQueue.main.async {
-                    self.handleDisconnection(relayUrl: relayUrl, error: error)
+                    self.handleDisconnection(relayUrl: relayUrl, error: error, connection: task)
                 }
             }
         }
@@ -1055,6 +1166,7 @@ final class NostrRelayManager: ObservableObject {
                 }
             }
         case .ok(let eventId, let success, let reason):
+            resolveConfirmedSend(eventID: eventId, relayURL: relayUrl, accepted: success)
             if success {
                 _ = Self.pendingGiftWrapIDs.remove(eventId)
                 SecureLogger.debug("✅ Accepted id=\(eventId.prefix(16))… relay=\(relayUrl)", category: .session)
@@ -1071,7 +1183,12 @@ final class NostrRelayManager: ObservableObject {
         }
     }
     
-    private func sendToRelay(event: NostrEvent, connection: NostrRelayConnectionProtocol, relayUrl: String) {
+    private func sendToRelay(
+        event: NostrEvent,
+        connection: NostrRelayConnectionProtocol,
+        relayUrl: String,
+        completion: ((Bool) -> Void)? = nil
+    ) {
         let req = NostrRequest.event(event)
         
         do {
@@ -1084,17 +1201,20 @@ final class NostrRelayManager: ObservableObject {
                 DispatchQueue.main.async {
                     if let error = error {
                         SecureLogger.error("❌ Failed to send event to \(relayUrl): \(error)", category: .session)
+                        completion?(false)
                     } else {
                         // SecureLogger.debug("✅ Event sent to relay: \(relayUrl)", category: .session)
                         // Update relay stats
                         if let index = self?.relays.firstIndex(where: { $0.url == relayUrl }) {
                             self?.relays[index].messagesSent += 1
                         }
+                        completion?(true)
                     }
                 }
             }
         } catch {
             SecureLogger.error("Failed to encode event: \(error)", category: .session)
+            completion?(false)
         }
     }
     
@@ -1158,9 +1278,20 @@ final class NostrRelayManager: ObservableObject {
         eoseTrackers[id] = tracker
     }
 
-    private func handleDisconnection(relayUrl: String, error: Error) {
+    private func handleDisconnection(
+        relayUrl: String,
+        error: Error,
+        connection: NostrRelayConnectionProtocol? = nil
+    ) {
+        if let connection, connections[relayUrl] !== connection { return }
         connections.removeValue(forKey: relayUrl)
         subscriptions.removeValue(forKey: relayUrl)
+        let awaitingConfirmation = confirmedSends.compactMap { eventID, state in
+            state.awaitingRelays.contains(relayUrl) ? eventID : nil
+        }
+        for eventID in awaitingConfirmation {
+            resolveConfirmedSend(eventID: eventID, relayURL: relayUrl, accepted: false)
+        }
         updateRelayStatus(relayUrl, isConnected: false, error: error)
         settleEOSETrackers(droppingRelay: relayUrl)
         // If networking is disallowed, do not schedule reconnection

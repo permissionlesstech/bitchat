@@ -10,7 +10,7 @@ import Foundation
 import CryptoKit
 @testable import BitFoundation
 
-// TODO: Create a module for test helpers
+// Kept local until the test-helper module is split out.
 final class TestHelpers {
     
     // MARK: - Key Generation

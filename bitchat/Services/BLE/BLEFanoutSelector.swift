@@ -18,6 +18,7 @@ enum BLEFanoutSelector {
         preferredPeripheralPerPeer: [PeerID: String] = [:],
         collapseDuplicatePeerLinks: Bool = true,
         directedPeerHint: PeerID?,
+        requireDirectPeerLink: Bool = false,
         packetType: UInt8,
         messageID: String
     ) -> BLEFanoutSelection {
@@ -37,6 +38,9 @@ enum BLEFanoutSelector {
                preferredPeripheralPerPeer: preferredPeripheralPerPeer
            ) {
             return directedSelection
+        }
+        if directedPeerHint != nil, requireDirectPeerLink {
+            return BLEFanoutSelection(peripheralIDs: [], centralIDs: [])
         }
         if let directedPeerHint,
            hasBoundLink(

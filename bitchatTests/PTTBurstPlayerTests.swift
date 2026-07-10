@@ -35,6 +35,14 @@ private final class StubAudioSession: SessionApplying, @unchecked Sendable {
 
 private struct StubSessionError: Error {}
 
+private final class StubExclusivePlayback: ExclusivePlayback {
+    private(set) var pauseCount = 0
+
+    func pauseForExclusivity() {
+        pauseCount += 1
+    }
+}
+
 /// Blocks activation until released, so a test can land events inside the
 /// window where the (off-main) session acquire is still in flight.
 private final class GatedAudioSession: SessionApplying, @unchecked Sendable {
@@ -65,7 +73,12 @@ private final class MockPlaybackEngine: PTTPlaybackEngine {
     private(set) var startCount = 0
     private(set) var stopCount = 0
     private(set) var scheduledBuffers: [AVAudioPCMBuffer] = []
-    private var heldCompletions: [@Sendable () -> Void] = []
+    private struct HeldCompletion {
+        let type: PTTPlaybackCompletionType
+        let callback: @Sendable (PTTPlaybackCompletionEvent) -> Void
+    }
+    private var heldCompletions: [HeldCompletion] = []
+    private(set) var requestedCompletionTypes: [PTTPlaybackCompletionType] = []
     var startError: Error?
 
     // No object -> the player registers no configuration-change observer.
@@ -82,29 +95,52 @@ private final class MockPlaybackEngine: PTTPlaybackEngine {
         stopCount += 1
     }
 
-    func schedule(_ buffer: AVAudioPCMBuffer, completionHandler: @escaping @Sendable () -> Void) {
+    func schedule(
+        _ buffer: AVAudioPCMBuffer,
+        completionType: PTTPlaybackCompletionType,
+        completionHandler: @escaping @Sendable (PTTPlaybackCompletionEvent) -> Void
+    ) {
         // Completions are held, not fired automatically: most tests exercise
-        // lifecycle, not drain-out. `fireScheduledCompletions` plays them out.
+        // lifecycle, not drain-out. The mock models the important distinction
+        // between the node consuming bytes and audio actually playing out.
         scheduledBuffers.append(buffer)
-        heldCompletions.append(completionHandler)
+        requestedCompletionTypes.append(completionType)
+        heldCompletions.append(HeldCompletion(type: completionType, callback: completionHandler))
     }
 
-    /// "The scheduled audio played out": fires (and clears) the held
-    /// completions so the player's drain path runs.
-    func fireScheduledCompletions() {
-        let completions = heldCompletions
-        heldCompletions = []
-        for completion in completions {
-            completion()
+    /// Advances the node only to the point where it has consumed each
+    /// buffer. A `.dataPlayedBack` request must remain pending here.
+    func fireDataConsumedCallbacks() {
+        for completion in heldCompletions {
+            completion.callback(.dataConsumed)
         }
     }
 
-    /// Completes only the oldest scheduled buffer, leaving the rest as an
+    /// Advances all scheduled audio through audible playback.
+    func fireDataPlayedBackCallbacks() {
+        let completions = heldCompletions
+        heldCompletions = []
+        for completion in completions {
+            completion.callback(.dataPlayedBack)
+        }
+    }
+
+    /// Models AVAudioPlayerNode flushing its callbacks because an external
+    /// engine reconfiguration stopped the node before MainActor rebuilt it.
+    func firePlaybackStoppedCallbacks() {
+        let completions = heldCompletions
+        heldCompletions = []
+        for completion in completions {
+            completion.callback(.playbackStopped)
+        }
+    }
+
+    /// Plays only the oldest scheduled buffer, leaving the rest as an
     /// audible tail that an engine rebuild must preserve.
-    func fireNextScheduledCompletion() {
-        guard !heldCompletions.isEmpty else { return }
-        let completion = heldCompletions.removeFirst()
-        completion()
+    func fireNextDataPlayedBackCallback() {
+        guard let index = heldCompletions.firstIndex(where: { $0.type == .dataPlayedBack }) else { return }
+        let completion = heldCompletions.remove(at: index)
+        completion.callback(.dataPlayedBack)
     }
 }
 
@@ -162,6 +198,58 @@ struct PTTBurstPlayerTests {
 
     // MARK: - Talk-over (bidirectional)
 
+    @Test func burstDrainWaitsForAudiblePlaybackNotDataConsumption() async throws {
+        let coordinator = AudioSessionCoordinator(session: StubAudioSession())
+        let (player, engines) = try makePlayer(coordinator: coordinator)
+
+        player.enqueue(try encodeSineFrames())
+        await waitUntil { player.isPlaying }
+        let engine = try #require(engines().first)
+        #expect(engine.requestedCompletionTypes.allSatisfy { $0 == .dataPlayedBack })
+
+        player.finishAfterDrain()
+        engine.fireDataConsumedCallbacks()
+        await Task.yield()
+        #expect(!player.stopped)
+        #expect(player.isPlaying)
+
+        engine.fireDataPlayedBackCallbacks()
+        await waitUntil { player.stopped }
+        #expect(!player.isPlaying)
+    }
+
+    @Test func olderPTTSessionAcquireCannotStealNewerPlaybackReservation() async throws {
+        let session = GatedAudioSession()
+        let coordinator = AudioSessionCoordinator(session: session)
+        let exclusivity = VoiceNotePlaybackCoordinator()
+        final class EngineBox { var engines: [MockPlaybackEngine] = [] }
+        let box = EngineBox()
+        let player = try #require(PTTBurstPlayer(
+            coordinator: coordinator,
+            exclusivity: exclusivity,
+            makeEngine: {
+                let engine = MockPlaybackEngine()
+                box.engines.append(engine)
+                return engine
+            }
+        ))
+
+        player.enqueue(try encodeSineFrames())
+        await waitUntil { session.categoryCallCount == 1 }
+
+        // A user taps a voice note while the older inbound burst is blocked
+        // in audio-session activation. Its immediate play intent is newer.
+        let voiceNote = StubExclusivePlayback()
+        exclusivity.activate(voiceNote)
+        session.open()
+
+        await waitUntil { player.stopped }
+        #expect(box.engines.count == 1)
+        #expect(box.engines[0].startCount == 0)
+        #expect(voiceNote.pauseCount == 0)
+        #expect(!player.isPlaying)
+    }
+
     @Test func categoryEscalationRestartsEngineAndKeepsStreaming() async throws {
         let coordinator = AudioSessionCoordinator(session: StubAudioSession())
         let (player, engines) = try makePlayer(coordinator: coordinator)
@@ -207,8 +295,13 @@ struct PTTBurstPlayerTests {
         // One buffer has played, but deliberately do not yield for its
         // MainActor completion task. The completion latch itself must keep
         // the rebuild from replaying this already-completed prefix.
-        originalEngine.fireNextScheduledCompletion()
+        originalEngine.fireNextDataPlayedBackCallback()
         player.finishAfterDrain()
+
+        // A real AVAudioPlayerNode also invokes requested callbacks when its
+        // engine is stopped by a configuration change. Those callbacks must
+        // leave the unheard tail pending for the fresh engine.
+        originalEngine.firePlaybackStoppedCallbacks()
 
         // Capture joins after END while the remaining tail is still handed
         // to the old engine. The fresh engine must replay that tail instead
@@ -220,15 +313,12 @@ struct PTTBurstPlayerTests {
         #expect(player.isPlaying)
         #expect(!player.stopped)
 
-        // Callbacks flushed by stopping the retired node must not drain the
-        // replayed generation. Only the fresh engine's completions may stop
-        // this finished burst.
-        originalEngine.fireScheduledCompletions()
-        await Task.yield()
+        // Only the fresh engine's audible completions may stop this finished
+        // burst; the stop callbacks above did not drain it.
         #expect(player.isPlaying)
         #expect(!player.stopped)
 
-        restartedEngine.fireScheduledCompletions()
+        restartedEngine.fireDataPlayedBackCallbacks()
         await waitUntil { player.stopped }
         #expect(!player.isPlaying)
 
@@ -277,7 +367,7 @@ struct PTTBurstPlayerTests {
             }
         )
         try #require(owner != nil)
-        weak var player = owner
+        let weakPlayer = { [weak owner] in owner }
 
         let frames = try encodeSineFrames()
         owner?.enqueue(frames)
@@ -291,17 +381,17 @@ struct PTTBurstPlayerTests {
         owner = nil
 
         session.open()
-        await waitUntil { player?.isPlaying == true }
+        await waitUntil { weakPlayer()?.isPlaying == true }
         #expect(box.engines.count == 1)
         #expect(box.engines[0].startCount == 1)
         #expect(!box.engines[0].scheduledBuffers.isEmpty)
 
         // Play the tail out: the drain must stop the player, hand the token
         // back (deactivation reaches the mock), and unpark the drain owner.
-        box.engines[0].fireScheduledCompletions()
+        box.engines[0].fireDataPlayedBackCallbacks()
         await waitUntil { session.activationCalls == [true, false] }
         #expect(draining == nil)
-        #expect(player == nil)
+        #expect(weakPlayer() == nil)
     }
 
     /// Backstop: if every owner drops the player before it stopped, `deinit`
