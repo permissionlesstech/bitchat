@@ -49,7 +49,11 @@ final class BLENoisePacketHandler {
         self.environment = environment
     }
 
-    func handleHandshake(_ packet: BitchatPacket, from peerID: PeerID) {
+    /// Returns true when the handshake message was processed successfully.
+    /// Callers use this to distinguish an authenticated replacement completion
+    /// from a rejected candidate while an older session remains established.
+    @discardableResult
+    func handleHandshake(_ packet: BitchatPacket, from peerID: PeerID) -> Bool {
         let env = environment
         // Use NoiseEncryptionService for handshake processing
         if PeerID(hexData: packet.recipientID) == env.localPeerID() {
@@ -72,14 +76,26 @@ final class BLENoisePacketHandler {
 
                 // Session establishment will trigger onPeerAuthenticated callback
                 // which will send any pending messages at the right time
+                return true
+            } catch NoiseSessionError.peerIdentityMismatch {
+                // The candidate was already discarded by the session manager.
+                // Do not let a spoofed claimed ID trigger a fresh outbound
+                // handshake or recreate state for the attacker-selected ID.
+                SecureLogger.warning(
+                    "Rejected Noise handshake whose static key does not match \(peerID.id.prefix(8))…",
+                    category: .security
+                )
+                return false
             } catch {
                 SecureLogger.error("Failed to process handshake: \(error)")
                 // Try initiating a new handshake
                 if !env.hasNoiseSession(peerID) {
                     env.initiateHandshake(peerID)
                 }
+                return false
             }
         }
+        return false
     }
 
     func handleEncrypted(_ packet: BitchatPacket, from peerID: PeerID) {

@@ -91,39 +91,150 @@ struct NoiseEncryptionServiceTests {
     func handshakeEncryptionAndFingerprintLifecycle() async throws {
         let alice = NoiseEncryptionService(keychain: MockKeychain())
         let bob = NoiseEncryptionService(keychain: MockKeychain())
-        let alicePeerID = PeerID(str: "0011223344556677")
-        let bobPeerID = PeerID(str: "8899aabbccddeeff")
+        let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
+        let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
         let recorder = AuthenticationRecorder()
 
         #expect(alice.onPeerAuthenticated == nil)
         alice.addOnPeerAuthenticatedHandler(recorder.record(peerID:fingerprint:))
         bob.onPeerAuthenticated = recorder.record(peerID:fingerprint:)
 
-        try establishSessions(alice: alice, bob: bob, alicePeerID: alicePeerID, bobPeerID: bobPeerID)
+        try establishSessions(alice: alice, bob: bob)
 
         let authenticated = await TestHelpers.waitUntil({ recorder.count >= 2 }, timeout: 5.0)
         #expect(authenticated)
-        #expect(alice.hasEstablishedSession(with: alicePeerID))
-        #expect(bob.hasEstablishedSession(with: bobPeerID))
-        #expect(alice.hasSession(with: alicePeerID))
-        #expect(bob.hasSession(with: bobPeerID))
-        #expect(alice.getPeerPublicKeyData(alicePeerID)?.count == 32)
-        #expect(bob.getPeerPublicKeyData(bobPeerID)?.count == 32)
-        #expect(alice.getPeerFingerprint(alicePeerID) != nil)
-        #expect(bob.getPeerFingerprint(bobPeerID) != nil)
+        #expect(alice.hasEstablishedSession(with: bobPeerID))
+        #expect(bob.hasEstablishedSession(with: alicePeerID))
+        #expect(alice.hasSession(with: bobPeerID))
+        #expect(bob.hasSession(with: alicePeerID))
+        #expect(alice.getPeerPublicKeyData(bobPeerID)?.count == 32)
+        #expect(bob.getPeerPublicKeyData(alicePeerID)?.count == 32)
+        #expect(alice.getPeerFingerprint(bobPeerID) != nil)
+        #expect(bob.getPeerFingerprint(alicePeerID) != nil)
 
         let plaintext = Data("secret payload".utf8)
-        let ciphertext = try alice.encrypt(plaintext, for: alicePeerID)
-        let decrypted = try bob.decrypt(ciphertext, from: bobPeerID)
+        let ciphertext = try alice.encrypt(plaintext, for: bobPeerID)
+        let decrypted = try bob.decrypt(ciphertext, from: alicePeerID)
         #expect(decrypted == plaintext)
 
-        alice.clearSession(for: alicePeerID)
-        #expect(!alice.hasSession(with: alicePeerID))
-        #expect(alice.getPeerFingerprint(alicePeerID) == nil)
+        alice.clearSession(for: bobPeerID)
+        #expect(!alice.hasSession(with: bobPeerID))
+        #expect(alice.getPeerFingerprint(bobPeerID) == nil)
 
         bob.clearEphemeralStateForPanic()
-        #expect(!bob.hasSession(with: bobPeerID))
-        #expect(bob.getPeerFingerprint(bobPeerID) == nil)
+        #expect(!bob.hasSession(with: alicePeerID))
+        #expect(bob.getPeerFingerprint(alicePeerID) == nil)
+    }
+
+    @Test("Handshake rejects a claimed peer ID that does not match the authenticated static key")
+    func handshakeRejectsClaimedPeerIDStaticKeyMismatch() async throws {
+        let receiver = NoiseEncryptionService(keychain: MockKeychain())
+        let claimedAlice = NoiseEncryptionService(keychain: MockKeychain())
+        let mallory = NoiseEncryptionService(keychain: MockKeychain())
+        let receiverPeerID = PeerID(publicKey: receiver.getStaticPublicKeyData())
+        let claimedAlicePeerID = PeerID(publicKey: claimedAlice.getStaticPublicKeyData())
+        let recorder = AuthenticationRecorder()
+        receiver.addOnPeerAuthenticatedHandler(recorder.record(peerID:fingerprint:))
+
+        let message1 = try mallory.initiateHandshake(with: receiverPeerID)
+        let message2 = try #require(
+            try receiver.processHandshakeMessage(from: claimedAlicePeerID, message: message1)
+        )
+        let message3 = try #require(
+            try mallory.processHandshakeMessage(from: receiverPeerID, message: message2)
+        )
+
+        do {
+            _ = try receiver.processHandshakeMessage(from: claimedAlicePeerID, message: message3)
+            Issue.record("Expected the authenticated Mallory key to be rejected for Alice's peer ID")
+        } catch let error as NoiseSessionError {
+            #expect(error == .peerIdentityMismatch)
+        } catch {
+            Issue.record("Unexpected mismatch error: \(error)")
+        }
+
+        #expect(!receiver.hasSession(with: claimedAlicePeerID))
+        let emittedAuthentication = await TestHelpers.waitUntil(
+            { recorder.count > 0 },
+            timeout: TestConstants.shortTimeout
+        )
+        #expect(!emittedAuthentication)
+    }
+
+    @Test("Failed forged replacement preserves the established peer session")
+    func forgedReplacementPreservesEstablishedSession() async throws {
+        let alice = NoiseEncryptionService(keychain: MockKeychain())
+        let receiver = NoiseEncryptionService(keychain: MockKeychain())
+        let mallory = NoiseEncryptionService(keychain: MockKeychain())
+        let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
+        let receiverPeerID = PeerID(publicKey: receiver.getStaticPublicKeyData())
+        let recorder = AuthenticationRecorder()
+        receiver.addOnPeerAuthenticatedHandler(recorder.record(peerID:fingerprint:))
+
+        try establishSessions(alice: alice, bob: receiver)
+        let initialAuthentication = await TestHelpers.waitUntil(
+            { recorder.count == 1 },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(initialAuthentication)
+
+        let before = try alice.encrypt(Data("before".utf8), for: receiverPeerID)
+        #expect(try receiver.decrypt(before, from: alicePeerID) == Data("before".utf8))
+
+        let forgedMessage1 = try mallory.initiateHandshake(with: receiverPeerID)
+        let forgedMessage2 = try #require(
+            try receiver.processHandshakeMessage(from: alicePeerID, message: forgedMessage1)
+        )
+        // The replacement has not authenticated yet; the working Alice
+        // transport session must remain available throughout the candidate.
+        #expect(receiver.hasEstablishedSession(with: alicePeerID))
+        let forgedMessage3 = try #require(
+            try mallory.processHandshakeMessage(from: receiverPeerID, message: forgedMessage2)
+        )
+
+        do {
+            _ = try receiver.processHandshakeMessage(from: alicePeerID, message: forgedMessage3)
+            Issue.record("Expected forged replacement to fail peer binding")
+        } catch let error as NoiseSessionError {
+            #expect(error == .peerIdentityMismatch)
+        } catch {
+            Issue.record("Unexpected replacement error: \(error)")
+        }
+
+        #expect(receiver.hasEstablishedSession(with: alicePeerID))
+        let after = try alice.encrypt(Data("after".utf8), for: receiverPeerID)
+        #expect(try receiver.decrypt(after, from: alicePeerID) == Data("after".utf8))
+        let emittedReplacementAuthentication = await TestHelpers.waitUntil(
+            { recorder.count > 1 },
+            timeout: TestConstants.shortTimeout
+        )
+        #expect(!emittedReplacementAuthentication)
+    }
+
+    @Test("Valid rehandshake atomically replaces the established session")
+    func validRehandshakeReplacesEstablishedSession() throws {
+        let alice = NoiseEncryptionService(keychain: MockKeychain())
+        let receiver = NoiseEncryptionService(keychain: MockKeychain())
+        let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
+        let receiverPeerID = PeerID(publicKey: receiver.getStaticPublicKeyData())
+
+        try establishSessions(alice: alice, bob: receiver)
+        alice.clearSession(for: receiverPeerID)
+
+        let message1 = try alice.initiateHandshake(with: receiverPeerID)
+        let message2 = try #require(
+            try receiver.processHandshakeMessage(from: alicePeerID, message: message1)
+        )
+        #expect(receiver.hasEstablishedSession(with: alicePeerID))
+        let message3 = try #require(
+            try alice.processHandshakeMessage(from: receiverPeerID, message: message2)
+        )
+        _ = try receiver.processHandshakeMessage(from: alicePeerID, message: message3)
+
+        #expect(alice.hasEstablishedSession(with: receiverPeerID))
+        #expect(receiver.hasEstablishedSession(with: alicePeerID))
+        let ciphertext = try alice.encrypt(Data("new session".utf8), for: receiverPeerID)
+        #expect(try receiver.decrypt(ciphertext, from: alicePeerID) == Data("new session".utf8))
     }
 
     @Test("Encrypt without a session requests handshake and decrypt without session fails")
@@ -200,16 +311,16 @@ struct NoiseEncryptionServiceTests {
 
     private func establishSessions(
         alice: NoiseEncryptionService,
-        bob: NoiseEncryptionService,
-        alicePeerID: PeerID,
-        bobPeerID: PeerID
+        bob: NoiseEncryptionService
     ) throws {
-        let message1 = try alice.initiateHandshake(with: alicePeerID)
-        let response = try bob.processHandshakeMessage(from: bobPeerID, message: message1)
+        let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
+        let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
+        let message1 = try alice.initiateHandshake(with: bobPeerID)
+        let response = try bob.processHandshakeMessage(from: alicePeerID, message: message1)
         let message2 = try #require(response, "Expected handshake response")
-        let final = try alice.processHandshakeMessage(from: alicePeerID, message: message2)
+        let final = try alice.processHandshakeMessage(from: bobPeerID, message: message2)
         let message3 = try #require(final, "Expected handshake final")
-        let finalMessage = try bob.processHandshakeMessage(from: bobPeerID, message: message3)
+        let finalMessage = try bob.processHandshakeMessage(from: alicePeerID, message: message3)
         #expect(finalMessage == nil)
     }
 }
