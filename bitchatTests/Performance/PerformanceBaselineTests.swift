@@ -501,6 +501,62 @@ final class PerformanceBaselineTests: XCTestCase {
         reportThroughput("store.append", samples: samples, operations: messageCount, unit: "messages")
     }
 
+    // MARK: - 7b. ConversationStore append at the retention cap
+
+    /// Steady-state public timeline traffic after the 1337-message retention
+    /// cap has been reached. Every tail append evicts the oldest row, which is
+    /// the long-lived workload the cold `store.append` benchmark does not
+    /// exercise.
+    func testConversationStoreSteadyStateAppend() {
+        let store = ConversationStore()
+        let cap = TransportConfig.meshTimelineCap
+        let messagesPerPass = 500
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+
+        for i in 0..<cap {
+            store.append(
+                BitchatMessage(
+                    id: "perf-steady-seed-\(i)",
+                    sender: "perfsender",
+                    content: "steady-state seed \(i)",
+                    timestamp: base.addingTimeInterval(Double(i)),
+                    isRelay: false
+                ),
+                to: .mesh
+            )
+        }
+
+        var pass = 0
+        var samples: [TimeInterval] = []
+        measure {
+            let startIndex = cap + pass * messagesPerPass
+            let start = Date()
+            for offset in 0..<messagesPerPass {
+                let i = startIndex + offset
+                store.append(
+                    BitchatMessage(
+                        id: "perf-steady-\(i)",
+                        sender: "perfsender",
+                        content: "steady-state message \(i)",
+                        timestamp: base.addingTimeInterval(Double(i)),
+                        isRelay: false
+                    ),
+                    to: .mesh
+                )
+            }
+            samples.append(Date().timeIntervalSince(start))
+            pass += 1
+            XCTAssertEqual(store.conversation(for: .mesh).messages.count, cap)
+        }
+
+        reportThroughput(
+            "store.steadyStateAppend",
+            samples: samples,
+            operations: messagesPerPass,
+            unit: "messages"
+        )
+    }
+
     // MARK: - 8. ConversationStore invariant audit (field observability)
 
     /// `ConversationStore.auditInvariants()` over a realistic 5k-message
