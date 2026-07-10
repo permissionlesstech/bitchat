@@ -30,6 +30,10 @@
     "store.append": 213201,
     "store.audit": 362
   },
+  "_reference_local_numbers_2026_07": {
+    "store.steadyStateAppend_before": 2315,
+    "store.steadyStateAppend": 53976
+  },
   "floors": {
     "nostrInbound.fresh": 450,
     "nostrInbound.duplicate": 250000,
@@ -41,6 +45,7 @@
     "pipeline.privateIngest": 3000,
     "pipeline.publicIngest": 2400,
     "store.append": 48000,
+    "store.steadyStateAppend": 10000,
     "store.audit": 70
   },
   "_slowest_observed_ci_numbers_2026_06": {

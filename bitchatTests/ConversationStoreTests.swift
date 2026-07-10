@@ -45,6 +45,154 @@ private func makeDirectConversationID(_ suffix: String) -> ConversationID {
     ))
 }
 
+/// Deliberately simple O(n) model used to differentially test the store's
+/// optimized logical-index bookkeeping. It models observable behavior only;
+/// it has no offset or ID index and therefore cannot reproduce the same bug.
+private struct ReferenceConversationTimeline {
+    struct Message: Equatable {
+        let id: String
+        let timestamp: Date
+        let content: String
+        var deliveryStatus: DeliveryStatus?
+
+        init(_ message: BitchatMessage) {
+            id = message.id
+            timestamp = message.timestamp
+            content = message.content
+            deliveryStatus = message.deliveryStatus
+        }
+    }
+
+    struct AppendResult {
+        let inserted: Bool
+        let trimmedCount: Int
+    }
+
+    let cap: Int
+    private(set) var messages: [Message] = []
+
+    func contains(_ id: String) -> Bool {
+        messages.contains { $0.id == id }
+    }
+
+    mutating func append(_ message: BitchatMessage) -> AppendResult {
+        guard !contains(message.id) else {
+            return AppendResult(inserted: false, trimmedCount: 0)
+        }
+
+        let snapshot = Message(message)
+        var low = 0
+        var high = messages.count
+        while low < high {
+            let mid = (low + high) / 2
+            if messages[mid].timestamp <= snapshot.timestamp {
+                low = mid + 1
+            } else {
+                high = mid
+            }
+        }
+        messages.insert(snapshot, at: low)
+
+        let overflow = max(0, messages.count - cap)
+        if overflow > 0 {
+            messages.removeFirst(overflow)
+        }
+        return AppendResult(inserted: true, trimmedCount: overflow)
+    }
+
+    mutating func upsert(_ message: BitchatMessage) -> Int {
+        if let index = messages.firstIndex(where: { $0.id == message.id }) {
+            messages[index] = Message(message)
+            return 0
+        }
+        return append(message).trimmedCount
+    }
+
+    mutating func applyDeliveryStatus(_ status: DeliveryStatus, to id: String) -> Bool {
+        guard let index = messages.firstIndex(where: { $0.id == id }),
+              messages[index].deliveryStatus != status else {
+            return false
+        }
+        // The differential stream uses only unique `.delivered` values (or
+        // an exact repeat), so no-downgrade policy is intentionally outside
+        // this index-focused reference model.
+        messages[index].deliveryStatus = status
+        return true
+    }
+
+    mutating func remove(at index: Int) -> Message {
+        messages.remove(at: index)
+    }
+
+    mutating func removeAll(where predicate: (Message) -> Bool) {
+        messages.removeAll(where: predicate)
+    }
+
+    mutating func clear() {
+        messages.removeAll()
+    }
+}
+
+private struct ConversationStoreDifferentialRNG {
+    private var state: UInt64
+
+    init(seed: UInt64) {
+        state = seed
+    }
+
+    mutating func next() -> UInt64 {
+        state &+= 0x9E37_79B9_7F4A_7C15
+        var value = state
+        value = (value ^ (value >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        value = (value ^ (value >> 27)) &* 0x94D0_49BB_1331_11EB
+        return value ^ (value >> 31)
+    }
+
+    mutating func index(upperBound: Int) -> Int {
+        precondition(upperBound > 0)
+        return Int(next() % UInt64(upperBound))
+    }
+}
+
+@MainActor
+private func expectStore(
+    _ store: ConversationStore,
+    matches reference: ReferenceConversationTimeline,
+    issuedIDs: [String],
+    checkpoint: String
+) {
+    let conversation = store.conversation(for: .mesh)
+    let actual = conversation.messages.map(ReferenceConversationTimeline.Message.init)
+    #expect(actual == reference.messages, "timeline mismatch at \(checkpoint)")
+
+    let lookupSnapshot = reference.messages.compactMap { expected in
+        conversation.message(withID: expected.id).map(ReferenceConversationTimeline.Message.init)
+    }
+    #expect(lookupSnapshot == reference.messages, "ID lookup mismatch at \(checkpoint)")
+    #expect(
+        Set(conversation.messageIDs) == Set(reference.messages.map(\.id)),
+        "per-conversation ID set mismatch at \(checkpoint)"
+    )
+
+    if !reference.messages.isEmpty {
+        for index in Set([0, reference.messages.count / 2, reference.messages.count - 1]) {
+            let id = reference.messages[index].id
+            #expect(store.conversationIDs(forMessageID: id) == [.mesh], "store ID map mismatch at \(checkpoint)")
+        }
+    }
+
+    let activeIDs = Set(reference.messages.map(\.id))
+    var checkedStaleIDs = 0
+    for id in issuedIDs.reversed() where !activeIDs.contains(id) {
+        #expect(conversation.message(withID: id) == nil, "stale conversation index entry at \(checkpoint)")
+        #expect(store.conversationIDs(forMessageID: id).isEmpty, "stale store ID map entry at \(checkpoint)")
+        checkedStaleIDs += 1
+        if checkedStaleIDs == 16 { break }
+    }
+
+    #expect(store.auditInvariants().isEmpty, "invariant audit failed at \(checkpoint)")
+}
+
 @Suite("ConversationStore")
 struct ConversationStoreTests {
 
@@ -138,6 +286,282 @@ struct ConversationStoreTests {
         #expect(conversation.message(withID: probeID)?.id == probeID)
         #expect(store.setDeliveryStatus(.sent, forMessageID: probeID, in: .mesh))
         #expect(conversation.message(withID: probeID)?.deliveryStatus == .sent)
+    }
+
+    @Test("steady-state cap trimming keeps lookups exact across mixed mutations")
+    @MainActor
+    func steadyStateCapTrimmingKeepsLogicalIndexExact() {
+        let store = ConversationStore()
+        let conversation = store.conversation(for: .mesh)
+        let overflow = 64
+
+        for i in 0..<(conversation.cap + overflow) {
+            store.append(makeMessage(id: "m\(i)", timestamp: TimeInterval(i)), to: .mesh)
+        }
+
+        #expect(conversation.messages.first?.id == "m\(overflow)")
+        #expect(conversation.message(withID: "m\(overflow)")?.id == "m\(overflow)")
+
+        // Exercise a suffix reindex after the head offset has advanced, then
+        // trim the old head. The late row becomes the new first element.
+        let late = makeMessage(id: "late", timestamp: TimeInterval(overflow) + 0.5)
+        #expect(store.append(late, to: .mesh))
+        #expect(conversation.messages.first?.id == "late")
+        #expect(conversation.message(withID: "m\(overflow + 1)")?.id == "m\(overflow + 1)")
+
+        // Head and middle removals, an in-place upsert, and a status update
+        // must all resolve through the same logical index representation.
+        #expect(store.removeMessage(withID: "late", from: .mesh)?.id == "late")
+        let middleID = "m\(overflow + conversation.cap / 2)"
+        #expect(store.removeMessage(withID: middleID, from: .mesh)?.id == middleID)
+
+        let probeID = "m\(overflow + 10)"
+        store.upsertByID(
+            makeMessage(id: probeID, timestamp: TimeInterval(overflow + 10), content: "edited"),
+            in: .mesh
+        )
+        #expect(conversation.message(withID: probeID)?.content == "edited")
+        #expect(store.setDeliveryStatus(.sent, forMessageID: probeID, in: .mesh))
+        #expect(conversation.message(withID: probeID)?.deliveryStatus == .sent)
+        #expect(store.auditInvariants().isEmpty)
+
+        // Clearing resets the logical offset as well as the maps.
+        store.clear(.mesh)
+        #expect(store.append(makeMessage(id: "after-clear", timestamp: 10_000), to: .mesh))
+        #expect(conversation.message(withID: "after-clear")?.id == "after-clear")
+        #expect(store.auditInvariants().isEmpty)
+    }
+
+    @Test("logical index offset matches a reference model under adversarial mutations")
+    @MainActor
+    func logicalIndexOffsetDifferentialStress() async {
+        let store = ConversationStore()
+        let cap = store.conversation(for: .mesh).cap
+        var reference = ReferenceConversationTimeline(cap: cap)
+        var rng = ConversationStoreDifferentialRNG(seed: 0xC0FF_EE13_37CA_FE42)
+        var issuedIDs: [String] = []
+        var nextID = 0
+        var nextTailTimestamp: TimeInterval = 1_700_000_000
+        var trimmedCount = 0
+
+        var tailAppendCount = 0
+        var outOfOrderCount = 0
+        var duplicateOrReuseCount = 0
+        var headRemovalCount = 0
+        var middleRemovalCount = 0
+        var upsertCount = 0
+        var deliveryUpdateCount = 0
+        var filterCount = 0
+        var clearCount = 0
+
+        func issueMessage(timestamp: TimeInterval? = nil, tag: String) -> BitchatMessage {
+            let number = nextID
+            nextID += 1
+            let id = "diff-\(number)"
+            issuedIDs.append(id)
+            let resolvedTimestamp: TimeInterval
+            if let timestamp {
+                resolvedTimestamp = timestamp
+            } else {
+                resolvedTimestamp = nextTailTimestamp
+                nextTailTimestamp += 1
+            }
+            let dropMarker = number.isMultiple(of: 11) ? " [drop]" : ""
+            return makeMessage(
+                id: id,
+                timestamp: resolvedTimestamp,
+                content: "\(tag) \(number)\(dropMarker)"
+            )
+        }
+
+        @discardableResult
+        func appendAndCompare(_ message: BitchatMessage, checkpoint: String) -> ReferenceConversationTimeline.AppendResult {
+            let expected = reference.append(message)
+            let actual = store.append(message, to: .mesh)
+            #expect(actual == expected.inserted, "append result mismatch at \(checkpoint)")
+            trimmedCount += expected.trimmedCount
+            return expected
+        }
+
+        func refill(extra: Int, checkpoint: String) async {
+            let appendCount = max(0, cap - reference.messages.count) + extra
+            for index in 0..<appendCount {
+                appendAndCompare(
+                    issueMessage(tag: "refill"),
+                    checkpoint: "\(checkpoint)-\(index)"
+                )
+                if index.isMultiple(of: 64) {
+                    await Task.yield()
+                }
+            }
+            expectStore(store, matches: reference, issuedIDs: issuedIDs, checkpoint: checkpoint)
+        }
+
+        // Start well into steady state so the offset is already non-zero
+        // before any mixed operations begin.
+        await refill(extra: 384, checkpoint: "initial steady-state fill")
+
+        for step in 0..<1_200 {
+            if step == 300 || step == 900 {
+                store.removeMessages(from: .mesh) { $0.content.contains("[drop]") }
+                reference.removeAll { $0.content.contains("[drop]") }
+                filterCount += 1
+                expectStore(
+                    store,
+                    matches: reference,
+                    issuedIDs: issuedIDs,
+                    checkpoint: "filter at step \(step)"
+                )
+            }
+
+            if step == 600 {
+                store.clear(.mesh)
+                reference.clear()
+                clearCount += 1
+                expectStore(
+                    store,
+                    matches: reference,
+                    issuedIDs: issuedIDs,
+                    checkpoint: "clear at step \(step)"
+                )
+            }
+
+            switch rng.index(upperBound: 100) {
+            case 0..<35:
+                appendAndCompare(issueMessage(tag: "tail"), checkpoint: "tail append \(step)")
+                tailAppendCount += 1
+
+            case 35..<55:
+                if reference.messages.isEmpty {
+                    appendAndCompare(issueMessage(tag: "tail-fallback"), checkpoint: "OOO fallback \(step)")
+                } else {
+                    let target = reference.messages[rng.index(upperBound: reference.messages.count)]
+                    let jitter = [-0.25, 0.0, 0.25][rng.index(upperBound: 3)]
+                    let timestamp = target.timestamp.timeIntervalSince1970 + jitter
+                    appendAndCompare(
+                        issueMessage(timestamp: timestamp, tag: "out-of-order"),
+                        checkpoint: "out-of-order append \(step)"
+                    )
+                    outOfOrderCount += 1
+                }
+
+            case 55..<65:
+                if issuedIDs.isEmpty {
+                    appendAndCompare(issueMessage(tag: "reuse-fallback"), checkpoint: "reuse fallback \(step)")
+                } else {
+                    let reusedID = issuedIDs[rng.index(upperBound: issuedIDs.count)]
+                    let message = makeMessage(
+                        id: reusedID,
+                        timestamp: nextTailTimestamp,
+                        content: "duplicate-or-trimmed-reuse \(step)"
+                    )
+                    nextTailTimestamp += 1
+                    appendAndCompare(message, checkpoint: "duplicate or reuse \(step)")
+                    duplicateOrReuseCount += 1
+                }
+
+            case 65..<73:
+                if !reference.messages.isEmpty {
+                    let expected = reference.remove(at: 0)
+                    let actual = store.removeMessage(withID: expected.id, from: .mesh)
+                        .map(ReferenceConversationTimeline.Message.init)
+                    #expect(actual == expected, "head removal mismatch at step \(step)")
+                    headRemovalCount += 1
+                }
+
+            case 73..<81:
+                if !reference.messages.isEmpty {
+                    let middleStart = reference.messages.count / 4
+                    let middleWidth = max(1, reference.messages.count / 2)
+                    let index = min(
+                        reference.messages.count - 1,
+                        middleStart + rng.index(upperBound: middleWidth)
+                    )
+                    let expected = reference.remove(at: index)
+                    let actual = store.removeMessage(withID: expected.id, from: .mesh)
+                        .map(ReferenceConversationTimeline.Message.init)
+                    #expect(actual == expected, "middle removal mismatch at step \(step)")
+                    middleRemovalCount += 1
+                }
+
+            case 81..<90:
+                let message: BitchatMessage
+                if step.isMultiple(of: 4) || reference.messages.isEmpty {
+                    let timestamp = reference.messages.isEmpty
+                        ? nil
+                        : reference.messages[rng.index(upperBound: reference.messages.count)]
+                            .timestamp.timeIntervalSince1970
+                    message = issueMessage(timestamp: timestamp, tag: "upsert-new")
+                } else {
+                    let current = reference.messages[rng.index(upperBound: reference.messages.count)]
+                    message = makeMessage(
+                        id: current.id,
+                        timestamp: current.timestamp.timeIntervalSince1970,
+                        content: "upsert-existing \(step)",
+                        deliveryStatus: current.deliveryStatus
+                    )
+                }
+                trimmedCount += reference.upsert(message)
+                store.upsertByID(message, in: .mesh)
+                upsertCount += 1
+
+            default:
+                let id: String
+                let repeatedStatus: DeliveryStatus?
+                if step.isMultiple(of: 6) || reference.messages.isEmpty {
+                    id = "missing-\(step)"
+                    repeatedStatus = nil
+                } else {
+                    let current = reference.messages[rng.index(upperBound: reference.messages.count)]
+                    id = current.id
+                    repeatedStatus = current.deliveryStatus
+                }
+                let status: DeliveryStatus
+                if step.isMultiple(of: 4), let repeatedStatus {
+                    status = repeatedStatus
+                } else {
+                    status = .delivered(
+                        to: "peer",
+                        at: Date(timeIntervalSince1970: 2_000_000_000 + Double(step))
+                    )
+                }
+                let expected = reference.applyDeliveryStatus(status, to: id)
+                let actual = store.setDeliveryStatus(status, forMessageID: id, in: .mesh)
+                #expect(actual == expected, "delivery update mismatch at step \(step)")
+                deliveryUpdateCount += 1
+            }
+
+            expectStore(
+                store,
+                matches: reference,
+                issuedIDs: issuedIDs,
+                checkpoint: "mixed operation \(step)"
+            )
+
+            // This intentionally expensive MainActor stress test runs beside
+            // async audio/UI tests in SwiftPM's parallel phase. Cooperatively
+            // release the actor so their bounded waits can make progress.
+            await Task.yield()
+
+            if (step + 1).isMultiple(of: 100) {
+                await refill(extra: 32, checkpoint: "periodic refill after step \(step)")
+            }
+        }
+
+        // Guarantee another long run of one-row evictions after every other
+        // mutation family has perturbed and rebuilt the offset/index state.
+        await refill(extra: 512, checkpoint: "final steady-state trim run")
+
+        #expect(trimmedCount > 1_200)
+        #expect(tailAppendCount > 300)
+        #expect(outOfOrderCount > 150)
+        #expect(duplicateOrReuseCount > 75)
+        #expect(headRemovalCount > 50)
+        #expect(middleRemovalCount > 50)
+        #expect(upsertCount > 75)
+        #expect(deliveryUpdateCount > 75)
+        #expect(filterCount == 2)
+        #expect(clearCount == 1)
     }
 
     // MARK: - Upsert

@@ -39,15 +39,17 @@ final class Conversation: ObservableObject, Identifiable {
     @Published private(set) var messages: [BitchatMessage] = []
     @Published private(set) var isUnread: Bool = false
 
-    /// Incrementally-maintained message-ID → index map for O(1) dedup and
-    /// delivery-status lookup. Kept in sync on every mutation:
-    /// - tail append: single insert
-    /// - out-of-order insert: suffix reindex from the insertion point
-    /// - trim: full rebuild — `removeFirst(k)` is already O(n), so the
-    ///   rebuild does not change the asymptotics, and trim only happens once
-    ///   the cap (1337) is reached. Simple and correct beats the
-    ///   offset-tracking alternative here.
+    /// Incrementally-maintained message-ID → logical-index map for O(1)
+    /// dedup and delivery-status lookup. Logical indexes are physical array
+    /// indexes plus `indexOffset`; trimming from the head advances the offset
+    /// instead of rewriting every surviving dictionary entry. This matters
+    /// after the 1337-message cap is reached, when every steady-state tail
+    /// append evicts one old row.
+    ///
+    /// Out-of-order inserts and middle removals still reindex only the
+    /// affected suffix. Full filtering resets the offset while rebuilding.
     private var indexByMessageID: [String: Int] = [:]
+    private var indexOffset = 0
 
     fileprivate init(id: ConversationID, cap: Int) {
         self.id = id
@@ -61,7 +63,7 @@ final class Conversation: ObservableObject, Identifiable {
     }
 
     func message(withID messageID: String) -> BitchatMessage? {
-        guard let index = indexByMessageID[messageID] else { return nil }
+        guard let index = physicalIndex(forMessageID: messageID) else { return nil }
         return messages[index]
     }
 
@@ -101,7 +103,7 @@ final class Conversation: ObservableObject, Identifiable {
             reindex(from: index)
         } else {
             messages.append(message)
-            indexByMessageID[message.id] = messages.count - 1
+            indexByMessageID[message.id] = indexOffset + messages.count - 1
         }
 
         return InsertResult(inserted: true, trimmedMessageIDs: trimIfNeeded())
@@ -111,7 +113,7 @@ final class Conversation: ObservableObject, Identifiable {
     /// timeline position (in-place updates like media progress reuse the
     /// original timestamp); a new message goes through ordered insertion.
     fileprivate func upsert(_ message: BitchatMessage) -> UpsertOutcome {
-        if let index = indexByMessageID[message.id] {
+        if let index = physicalIndex(forMessageID: message.id) {
             messages[index] = message
             return .updated
         }
@@ -125,7 +127,7 @@ final class Conversation: ObservableObject, Identifiable {
     /// `.read` is never downgraded to `.delivered` or `.sent`.
     /// Returns `true` when the status was applied.
     fileprivate func applyDeliveryStatus(_ status: DeliveryStatus, forMessageID messageID: String) -> Bool {
-        guard let index = indexByMessageID[messageID] else { return false }
+        guard let index = physicalIndex(forMessageID: messageID) else { return false }
         let message = messages[index]
         guard !Self.shouldSkipStatusUpdate(current: message.deliveryStatus, new: status) else { return false }
 
@@ -142,7 +144,7 @@ final class Conversation: ObservableObject, Identifiable {
     /// observers still need an @Published emission to re-render.
     @discardableResult
     fileprivate func republishMessage(withID messageID: String) -> Bool {
-        guard let index = indexByMessageID[messageID] else { return false }
+        guard let index = physicalIndex(forMessageID: messageID) else { return false }
         messages[index] = messages[index]
         return true
     }
@@ -157,10 +159,14 @@ final class Conversation: ObservableObject, Identifiable {
     /// Removes a single message by ID. Returns the removed message, or
     /// `nil` when no message with that ID exists.
     fileprivate func remove(messageID: String) -> BitchatMessage? {
-        guard let index = indexByMessageID[messageID] else { return nil }
+        guard let index = physicalIndex(forMessageID: messageID) else { return nil }
         let removed = messages.remove(at: index)
         indexByMessageID.removeValue(forKey: messageID)
-        reindex(from: index)
+        if index == 0 {
+            indexOffset += 1
+        } else {
+            reindex(from: index)
+        }
         return removed
     }
 
@@ -177,6 +183,7 @@ final class Conversation: ObservableObject, Identifiable {
         for id in removedIDs {
             indexByMessageID.removeValue(forKey: id)
         }
+        indexOffset = 0
         reindex(from: 0)
         return removedIDs
     }
@@ -184,6 +191,7 @@ final class Conversation: ObservableObject, Identifiable {
     fileprivate func clearMessages() {
         messages.removeAll()
         indexByMessageID.removeAll()
+        indexOffset = 0
     }
 
     // MARK: Diagnostics
@@ -205,9 +213,10 @@ final class Conversation: ObservableObject, Identifiable {
             let message = messages[position]
             // Count equality + every message resolving to its own position
             // proves the index is exactly the inverse map (no stale extras).
-            if let index = indexByMessageID[message.id] {
-                if index != position {
-                    violations.append("\(label): message \(message.id.prefix(8))… at \(position) indexed at \(index)")
+            if let logicalIndex = indexByMessageID[message.id] {
+                let expectedIndex = indexOffset + position
+                if logicalIndex != expectedIndex {
+                    violations.append("\(label): message \(message.id.prefix(8))… at \(position) indexed at \(logicalIndex - indexOffset)")
                 }
             } else {
                 violations.append("\(label): message \(message.id.prefix(8))… at \(position) missing from index")
@@ -269,8 +278,15 @@ final class Conversation: ObservableObject, Identifiable {
 
     private func reindex(from start: Int) {
         for index in start..<messages.count {
-            indexByMessageID[messages[index].id] = index
+            indexByMessageID[messages[index].id] = indexOffset + index
         }
+    }
+
+    private func physicalIndex(forMessageID messageID: String) -> Int? {
+        guard let logicalIndex = indexByMessageID[messageID] else { return nil }
+        let index = logicalIndex - indexOffset
+        guard messages.indices.contains(index) else { return nil }
+        return index
     }
 
     /// Trims oldest messages over the cap; returns the trimmed message IDs.
@@ -282,7 +298,7 @@ final class Conversation: ObservableObject, Identifiable {
             indexByMessageID.removeValue(forKey: id)
         }
         messages.removeFirst(overflow)
-        reindex(from: 0)
+        indexOffset += overflow
         return trimmedIDs
     }
 }
@@ -844,8 +860,8 @@ extension Conversation {
     /// (positions 0 and 1 swap their index entries). Requires >= 2 messages.
     func _testCorruptIndexEntries() {
         guard messages.count >= 2 else { return }
-        indexByMessageID[messages[0].id] = 1
-        indexByMessageID[messages[1].id] = 0
+        indexByMessageID[messages[0].id] = indexOffset + 1
+        indexByMessageID[messages[1].id] = indexOffset
     }
 
     /// Drops a message's index entry entirely (count mismatch + missing).
@@ -859,8 +875,8 @@ extension Conversation {
     func _testCorruptOrderingPreservingIndex() {
         guard messages.count >= 2 else { return }
         messages.swapAt(0, messages.count - 1)
-        indexByMessageID[messages[0].id] = 0
-        indexByMessageID[messages[messages.count - 1].id] = messages.count - 1
+        indexByMessageID[messages[0].id] = indexOffset
+        indexByMessageID[messages[messages.count - 1].id] = indexOffset + messages.count - 1
     }
 }
 
@@ -900,7 +916,7 @@ extension ConversationStore {
 extension Conversation {
     fileprivate func _testAppendBypassingTrim(_ message: BitchatMessage) {
         messages.append(message)
-        indexByMessageID[message.id] = messages.count - 1
+        indexByMessageID[message.id] = indexOffset + messages.count - 1
     }
 }
 #endif
