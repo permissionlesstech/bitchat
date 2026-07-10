@@ -94,6 +94,24 @@ jobs:
           kill "$watchdog_pid" 2>/dev/null || true
           exit "$status"
 
+      # Read coverage before the serial benchmark command below rebuilds the
+      # test binary without instrumentation. Reporting against that newer
+      # binary makes llvm-cov reject the profile as out of date.
+      # Informational only: there is deliberately no percentage threshold, but
+      # a broken/missing report is a CI configuration error and must be visible.
+      - name: Coverage summary
+        run: |
+          BIN_PATH=$(swift build --show-bin-path --package-path ${{ matrix.path }})
+          PROF="$BIN_PATH/codecov/default.profdata"
+          XCTEST=$(find "$BIN_PATH" -maxdepth 1 -name '*.xctest' | head -1)
+          BINARY="$XCTEST/Contents/MacOS/$(basename "$XCTEST" .xctest)"
+          if [ ! -f "$PROF" ] || [ ! -f "$BINARY" ]; then
+            echo "::error::Coverage profile or test binary is missing"
+            exit 1
+          fi
+          xcrun llvm-cov report "$BINARY" -instr-profile "$PROF" \
+            -ignore-filename-regex='(Tests|\.build|checkouts|Mocks|_PreviewHelpers)'
+
       # Benchmarks run serially on an otherwise idle runner for stable
       # numbers; BITCHAT_PERF_LOG captures the PERF[...] lines for the gate.
       - name: Run performance benchmarks (serial)
@@ -114,22 +132,6 @@ jobs:
         if: matrix.name == 'app'
         timeout-minutes: 10
         run: ./scripts/check-perf-floors.sh perf-output.log
-
-      # Informational only: surfaces per-file and total line coverage in the
-      # job log so coverage trends are visible on every PR. No thresholds —
-      # this must never be the reason a build goes red.
-      - name: Coverage summary
-        run: |
-          BIN_PATH=$(swift build --show-bin-path --package-path ${{ matrix.path }})
-          PROF="$BIN_PATH/codecov/default.profdata"
-          XCTEST=$(find "$BIN_PATH" -maxdepth 1 -name '*.xctest' | head -1)
-          BINARY="$XCTEST/Contents/MacOS/$(basename "$XCTEST" .xctest)"
-          if [ -f "$PROF" ] && [ -f "$BINARY" ]; then
-            xcrun llvm-cov report "$BINARY" -instr-profile "$PROF" \
-              -ignore-filename-regex='(Tests|\.build|checkouts|Mocks|_PreviewHelpers)' || true
-          else
-            echo "No coverage data found; skipping summary."
-          fi
 
   # SPM tests do not link the shipping app targets. This job covers the
   # iOS-conditional paths and both universal Release link configurations.
@@ -168,6 +170,52 @@ jobs:
             ONLY_ACTIVE_ARCH=NO \
             CODE_SIGNING_ALLOWED=NO \
             build
+
+  # The SwiftPM matrix runs on macOS and cannot execute UIKit/CoreBluetooth
+  # conditional tests. Build the shared iOS test target and run it on the first
+  # available iPhone simulator from the runner image instead of hard-coding a
+  # model that changes when GitHub updates Xcode. The suite intentionally runs
+  # in one test runner: a number of integration tests exercise process-global
+  # stores and notification centers, so overlapping workers can corrupt each
+  # other's fixtures and turn sub-second tests into multi-minute timeouts.
+  ios-tests:
+    name: Run iOS simulator tests
+    runs-on: macos-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Select available iPhone simulator
+        id: destination
+        run: |
+          destinations=$(xcodebuild -project bitchat.xcodeproj -scheme "bitchat (iOS)" -showdestinations)
+          destination_id=$(awk -F'id:' '
+            /platform:iOS Simulator/ && /name:iPhone/ && !found {
+              value=$2
+              sub(/,.*/, "", value)
+              gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+              print value
+              found=1
+            }
+          ' <<< "$destinations")
+          if [ -z "$destination_id" ]; then
+            echo "::error::No available iPhone simulator destination found"
+            exit 1
+          fi
+          echo "id=$destination_id" >> "$GITHUB_OUTPUT"
+
+      - name: Run iOS tests
+        run: |
+          set -o pipefail
+          xcodebuild -project bitchat.xcodeproj \
+            -scheme "bitchat (iOS)" \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=${{ steps.destination.outputs.id }}" \
+            -parallel-testing-enabled NO \
+            CODE_SIGNING_ALLOWED=NO \
+            test
 
   # Advisory only: SwiftLint reports style violations without ever failing the
   # build. Runs in a pinned container (no Xcode plugin, no pbxproj changes) so
