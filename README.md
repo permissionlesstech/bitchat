@@ -93,30 +93,62 @@ For detailed protocol documentation, see the [Technical Whitepaper](WHITEPAPER.m
 
 ### Option 1: Using Xcode
 
-   ```bash
-   cd bitchat
-   open bitchat.xcodeproj
-   ```
+```bash
+open bitchat.xcodeproj
+```
 
-   To run on a device there're a few steps to prepare the code:
-   - Clone the local configs: `cp Configs/Local.xcconfig.example Configs/Local.xcconfig`
-   - Add your Developer Team ID into the newly created `Configs/Local.xcconfig`
-      - Bundle ID would be set to `chat.bitchat.<team_id>` (unless you set to something else)
-   - Entitlements need to be updated manually (TODO: Automate):
-      - Search and replace `group.chat.bitchat` with `group.<your_bundle_id>` (e.g. `group.chat.bitchat.ABC123`)
+For a signed device build, create your ignored local configuration and replace
+the example team ID with your Apple Developer Team ID:
+
+```bash
+cp Configs/Local.xcconfig.example Configs/Local.xcconfig
+```
+
+`Local.xcconfig.example` derives unique app and App Group identifiers from that
+team ID. The entitlement files already reference `$(APP_GROUP_ID)`, so tracked
+project or entitlement files do not need to be edited.
+
+Useful command-line checks from the repository root:
+
+```bash
+# macOS Debug build without signing
+xcodebuild -project bitchat.xcodeproj -scheme "bitchat (macOS)" \
+  -configuration Debug CODE_SIGNING_ALLOWED=NO build
+
+# Full SwiftPM test suite
+swift test
+
+# iOS simulator tests
+xcodebuild -project bitchat.xcodeproj -scheme "bitchat (iOS)" \
+  -sdk iphonesimulator \
+  -destination 'platform=iOS Simulator,name=iPhone 17' test
+```
+
+If `iPhone 17` is unavailable, choose an installed simulator from:
+
+```bash
+xcodebuild -showdestinations -project bitchat.xcodeproj -scheme "bitchat (iOS)"
+```
 
 ### Option 2: Using `just`
 
-   ```bash
-   brew install just
-   ```
+```bash
+brew install just
+just check
+just run
+```
 
-Want to try this on macos: `just run` will set it up and run from source.
-Run `just clean` afterwards to restore things to original state for mobile app building and development.
+`just build` and `just run` use the current `bitchat (macOS)` scheme and keep
+Xcode output in the ignored `.DerivedData/` directory. They never patch source,
+project, configuration, or entitlement files.
+
+`just clean` removes only `.DerivedData/` and `.build/`. It does not invoke Git
+or restore tracked files, so uncommitted work is preserved. `just test` runs the
+SwiftPM suite and `just test-ios` runs the iPhone 17 simulator suite.
 
 ## Localization
 
-- Base app resources live under `bitchat/Localization/Base.lproj/`. Add new copy to `Localizable.strings` and plural rules to `Localizable.stringsdict`.
-- Share extension strings are separate in `bitchatShareExtension/Localization/Base.lproj/Localizable.strings`.
+- App localizations live in `bitchat/Localizable.xcstrings`.
+- Share extension strings are separate in `bitchatShareExtension/Localization/Localizable.xcstrings`.
 - Prefer keys that describe intent (`app_info.features.offline.title`) and reuse existing ones where possible.
 - Run `xcodebuild -project bitchat.xcodeproj -scheme "bitchat (macOS)" -configuration Debug CODE_SIGNING_ALLOWED=NO build` to compile-check any localization updates.
