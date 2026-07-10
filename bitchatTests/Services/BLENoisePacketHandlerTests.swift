@@ -152,6 +152,21 @@ struct BLENoisePacketHandlerTests {
         #expect(recorder.initiatedHandshakes.isEmpty)
     }
 
+    @Test
+    func peerIdentityMismatchDoesNotRecreateHandshakeState() {
+        let recorder = Recorder()
+        recorder.handshakeResult = .failure(NoiseSessionError.peerIdentityMismatch)
+        recorder.hasSession = false
+        let handler = makeHandler(recorder: recorder)
+        let packet = makeHandshakePacket(recipientID: Data(hexString: localPeerID.id))
+
+        #expect(!handler.handleHandshake(packet, from: remotePeerID))
+
+        #expect(recorder.hasSessionQueries.isEmpty)
+        #expect(recorder.initiatedHandshakes.isEmpty)
+        #expect(recorder.broadcastPackets.isEmpty)
+    }
+
     // MARK: Encrypted
 
     @Test

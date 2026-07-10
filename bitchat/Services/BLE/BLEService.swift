@@ -1618,7 +1618,44 @@ final class BLEService: NSObject {
         }
     }
 
-    private func handleLeave(_: BitchatPacket, from peerID: PeerID) {
+    /// Accept a leave only when the claimed sender proves possession of the
+    /// signing key bound by a verified announce. The persisted identity cache
+    /// keeps delayed/relayed leaves verifiable after the live registry entry
+    /// has aged out.
+    private func handleLeave(_ packet: BitchatPacket, from peerID: PeerID) -> Bool {
+        let registrySigningKey = collectionsQueue.sync {
+            peerRegistry.info(for: peerID)?.signingPublicKey
+        }
+        let verifiedViaRegistry = registrySigningKey.map {
+            noiseService.verifyPacketSignature(packet, publicKey: $0)
+        } ?? false
+        let verifiedViaPersistedIdentity = !verifiedViaRegistry
+            && identityManager.getCryptoIdentitiesByPeerIDPrefix(peerID).contains { identity in
+                PeerID(publicKey: identity.publicKey) == peerID
+                    && identity.signingPublicKey.map {
+                        noiseService.verifyPacketSignature(packet, publicKey: $0)
+                    } == true
+            }
+
+        guard verifiedViaRegistry || verifiedViaPersistedIdentity else {
+            SecureLogger.warning(
+                "🚫 Dropping leave with missing/invalid signature for claimed sender \(peerID.id.prefix(8))…",
+                category: .security
+            )
+            return false
+        }
+
+        // A valid departure retires transport state too; otherwise
+        // canDeliverSecurely could remain true for a peer we just removed.
+        noiseService.clearSession(for: peerID)
+        readLinkState { _ in
+            let departedLinks = noiseAuthenticatedLinkOwners.compactMap { link, owner in
+                owner == peerID ? link : nil
+            }
+            for link in departedLinks {
+                noiseAuthenticatedLinkOwners.removeValue(forKey: link)
+            }
+        }
         _ = collectionsQueue.sync(flags: .barrier) {
             // Remove the peer when they leave
             peerRegistry.remove(peerID)
@@ -1635,6 +1672,7 @@ final class BLEService: NSObject {
             self.deliverTransportEvent(.peerDisconnected(peerID))
             self.deliverTransportEvent(.peerListUpdated(currentPeerIDs))
         }
+        return true
     }
     private func sendAnnounce(forceSend: Bool = false) {
         // Throttle announces to prevent flooding
@@ -2333,6 +2371,12 @@ extension BLEService {
         bleQueue.sync {
             guard linkStateStore.peerID(forCentralUUID: centralUUID) == peerID else { return }
             noiseAuthenticatedLinkOwners[.central(centralUUID)] = peerID
+        }
+    }
+
+    func _test_isNoiseAuthenticatedCentral(_ centralUUID: String, for peerID: PeerID) -> Bool {
+        bleQueue.sync {
+            noiseAuthenticatedLinkOwners[.central(centralUUID)] == peerID
         }
     }
 
@@ -4785,7 +4829,9 @@ extension BLEService {
             handleMeshPong(packet, from: senderID)
 
         case .leave:
-            handleLeave(packet, from: senderID)
+            // A forged leave must neither evict the claimed peer nor spread
+            // to downstream nodes.
+            guard handleLeave(packet, from: senderID) else { return }
 
         case .none:
             SecureLogger.warning("⚠️ Unknown message type: \(packet.type)", category: .session)
@@ -5426,8 +5472,14 @@ extension BLEService {
 
     private func handleNoiseHandshake(_ packet: BitchatPacket, from peerID: PeerID) {
         let wasEstablished = noiseService.hasEstablishedSession(with: peerID)
-        noisePacketHandler.handleHandshake(packet, from: peerID)
-        if !wasEstablished, noiseService.hasEstablishedSession(with: peerID) {
+        let processed = noisePacketHandler.handleHandshake(packet, from: peerID)
+        let isEstablished = noiseService.hasEstablishedSession(with: peerID)
+        // XX message 1 is exactly the unauthenticated 32-byte ephemeral key.
+        // While replacing an existing session, do not authenticate its ingress
+        // link until a later message completes and validates the candidate.
+        let completedAuthenticatedHandshake = !wasEstablished
+            || packet.payload.count != NoiseSecurityConstants.xxInitialMessageSize
+        if processed, isEstablished, completedAuthenticatedHandshake {
             markNoiseAuthenticatedIngressLink(for: packet, peerID: peerID)
         }
     }

@@ -100,6 +100,95 @@ struct BLEServiceCoreTests {
     }
 
     @Test
+    func unsignedAndBadSignatureLeaveDoNotEvictOrRelayClaimedPeer() async throws {
+        let ble = makeService()
+        let alice = NoiseEncryptionService(keychain: MockKeychain())
+        let mallory = NoiseEncryptionService(keychain: MockKeychain())
+        let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
+        let outbound = OutboundPacketTap()
+        ble._test_onOutboundPacket = outbound.record
+
+        let unsigned = makeLeavePacket(sender: alicePeerID, marker: "unsigned")
+        ble._test_handlePacket(
+            unsigned,
+            fromPeerID: alicePeerID,
+            signingPublicKey: alice.getSigningPublicKeyData()
+        )
+
+        let unsignedRelayed = await TestHelpers.waitUntil(
+            { outbound.count(ofType: .leave) > 0 },
+            timeout: TestConstants.shortTimeout
+        )
+        #expect(!unsignedRelayed)
+        #expect(ble.currentPeerSnapshots().contains { $0.peerID == alicePeerID })
+
+        let badSignature = try #require(
+            mallory.signPacket(makeLeavePacket(sender: alicePeerID, marker: "bad-signature"))
+        )
+        ble._test_handlePacket(
+            badSignature,
+            fromPeerID: alicePeerID,
+            signingPublicKey: alice.getSigningPublicKeyData()
+        )
+
+        let badSignatureRelayed = await TestHelpers.waitUntil(
+            { outbound.count(ofType: .leave) > 0 },
+            timeout: TestConstants.shortTimeout
+        )
+        #expect(!badSignatureRelayed)
+        #expect(ble.currentPeerSnapshots().contains { $0.peerID == alicePeerID })
+    }
+
+    @Test
+    func validSignedLeaveEvictsSessionAndRelays() async throws {
+        let ble = makeService()
+        let alice = NoiseEncryptionService(keychain: MockKeychain())
+        let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
+
+        // Establish a real session so the leave regression also verifies that
+        // stale secure-delivery state is retired, not just the peer-list row.
+        let message1 = try ble._test_noiseInitiateHandshake(with: alicePeerID)
+        let message2 = try #require(
+            try alice.processHandshakeMessage(from: ble.myPeerID, message: message1)
+        )
+        let message3 = try #require(
+            try ble._test_noiseProcessHandshakeMessage(from: alicePeerID, message: message2)
+        )
+        _ = try alice.processHandshakeMessage(from: ble.myPeerID, message: message3)
+        #expect(ble.canDeliverSecurely(to: alicePeerID))
+        let centralUUID = "central-valid-leave"
+        ble._test_bindCentral(centralUUID, to: alicePeerID)
+        ble._test_markNoiseAuthenticatedCentral(centralUUID, to: alicePeerID)
+        #expect(ble._test_isNoiseAuthenticatedCentral(centralUUID, for: alicePeerID))
+
+        let outbound = OutboundPacketTap()
+        ble._test_onOutboundPacket = outbound.record
+        let signedLeave = try #require(
+            alice.signPacket(makeLeavePacket(sender: alicePeerID, marker: "valid"))
+        )
+        ble._test_handlePacket(
+            signedLeave,
+            fromPeerID: alicePeerID,
+            signingPublicKey: alice.getSigningPublicKeyData()
+        )
+
+        let evicted = await TestHelpers.waitUntil(
+            {
+                !ble.currentPeerSnapshots().contains { $0.peerID == alicePeerID }
+                    && !ble.canDeliverSecurely(to: alicePeerID)
+                    && !ble._test_isNoiseAuthenticatedCentral(centralUUID, for: alicePeerID)
+            },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(evicted)
+        let relayed = await TestHelpers.waitUntil(
+            { outbound.count(ofType: .leave) == 1 },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(relayed)
+    }
+
+    @Test
     func ingressAllowsRelayedSenderOnBoundLink() async throws {
         let ble = makeService()
         let boundPeer = PeerID(str: "1122334455667788")
@@ -687,6 +776,18 @@ private func makePublicPacket(content: String, sender: PeerID, timestamp: UInt64
         payload: Data(content.utf8),
         signature: nil,
         ttl: 3
+    )
+}
+
+private func makeLeavePacket(sender: PeerID, marker: String) -> BitchatPacket {
+    BitchatPacket(
+        type: MessageType.leave.rawValue,
+        senderID: Data(hexString: sender.id) ?? Data(),
+        recipientID: nil,
+        timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+        payload: Data(marker.utf8),
+        signature: nil,
+        ttl: TransportConfig.messageTTLDefault
     )
 }
 
