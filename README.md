@@ -49,9 +49,12 @@ BitChat uses a **hybrid messaging architecture** with two complementary transpor
 
 BitChat's private-envelope format is proprietary and is **not** NIP-17,
 NIP-44, or NIP-59 compatible. It uses Nostr as a relay transport but only
-interoperates with BitChat clients: private payloads travel inside kind-1059
-events whose `v2:`-prefixed content is a BitChat-specific XChaCha20-Poly1305
-construction, not NIP-44 encryption.
+interoperates with BitChat clients. New envelopes use provisional,
+BitChat-specific public kind 1402 (not a formally reserved Nostr kind),
+encrypted inner kinds 1403/1404, and the `bitchat-pm-v1:` content prefix.
+For mixed-version delivery, clients also publish a compatibility-only legacy
+kind-1059 copy through October 15, 2026 at 00:00 UTC; kind 1402 remains the
+primary format and is the only format published after that deadline.
 
 ### Channel Types
 

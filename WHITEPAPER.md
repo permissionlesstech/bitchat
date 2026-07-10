@@ -78,9 +78,9 @@ Courier envelopes are sealed to the recipient's *static* key with the one-way No
 
 ### 5.3 Nostr Path
 
-Private messages to mutual favorites use BitChat's proprietary private-envelope protocol. An unsigned inner message (kind 14) is encrypted and placed in a sender-signed seal (kind 13); that seal is encrypted again inside a public envelope (kind 1059) signed by a one-time key, so relays learn neither the stable sender identity nor the content. Each encrypted content field is `v2:` followed by base64url of a 24-byte nonce, XChaCha20-Poly1305 ciphertext, and its 16-byte tag. Keys come from secp256k1 ECDH and HKDF-SHA256 (the derivation reuses a "nip44-v2" info label but is not the NIP-44 key schedule).
+Private messages to mutual favorites use BitChat's proprietary private-envelope protocol. An unsigned inner message (kind 1404) is encrypted and placed in a sender-signed seal (kind 1403); that seal is encrypted again inside a public envelope (kind 1402) signed by a one-time key. Kind 1402 is a provisional BitChat-specific assignment, not a formally reserved Nostr kind. Each encrypted content field is `bitchat-pm-v1:` followed by base64url of a 24-byte nonce, XChaCha20-Poly1305 ciphertext, and its 16-byte tag. Keys come from secp256k1 ECDH and HKDF-SHA256 with a BitChat-specific domain separator.
 
-This format reuses NIP-17/NIP-59 kind numbers but is **not NIP-17, NIP-44, or NIP-59 compatible** and interoperates only with BitChat clients. The outer `p` tag exposes the recipient's Nostr public key to relays; the plaintext and stable sender identity remain inside authenticated ciphertext. Public seal and envelope timestamps are randomized by up to ±15 minutes, while the actual message timestamp is encrypted. The protocol does not provide forward secrecy: compromise of the recipient's static Nostr private key can expose stored envelopes addressed to that key.
+This format is **not NIP-17, NIP-44, or NIP-59 compatible** and interoperates only with BitChat clients. The outer `p` tag exposes the recipient's Nostr public key to relays; the stable sender identity and plaintext remain inside authenticated ciphertext. Seal and envelope timestamps are randomized up to 15 minutes into the past, while the actual message timestamp is encrypted. The protocol does not provide forward secrecy: compromise of the recipient's static Nostr private key can expose stored envelopes.
 
 ## 6. Store and Forward
 
@@ -107,7 +107,7 @@ Public broadcast messages are cached (1000 packets) and reconciled between peers
 
 ### 6.4 Nostr Mailboxes
 
-BitChat private envelopes rest on Nostr relays; clients re-subscribe with a 24-hour lookback on reconnect, covering the both-devices-offline case for mutual favorites whenever either side touches the internet.
+BitChat private envelopes rest on Nostr relays; clients re-subscribe across the 24-hour retention window plus the full 15-minute timestamp fuzz. During the rolling format migration, clients subscribe to both the provisional BitChat-specific kind 1402 and historical kind 1059. Through October 15, 2026 at 00:00 UTC, each logical payload is published first in the primary kind-1402 format and then as a compatibility-only legacy copy for older BitChat clients; after that deadline clients publish only kind 1402. Bounded dedup of the authenticated embedded payload collapses the migration pair at receivers.
 
 ### 6.5 Delivery Metrics
 

@@ -86,13 +86,21 @@ extension ChatViewModel: NostrInboundPipelineContext {
 /// pipeline (which records events into its own dedup cache only AFTER
 /// verification, so forged copies can't suppress genuine events). This
 /// pipeline therefore never re-verifies; it keeps its own event-ID dedup
-/// (cheap main-actor lookups) and moves NIP-17 gift-wrap decryption — two
+/// (cheap main-actor lookups) and moves private-envelope decryption — two
 /// ECDH+ChaCha layers — off the main actor with an atomic main-actor
 /// check-and-record.
 final class NostrInboundPipeline {
     private weak var context: (any NostrInboundPipelineContext)?
     private let presence: GeoPresenceTracker
     private var geoEventLogCount = 0
+    // During the bounded wire-format migration, one logical private payload
+    // is published under both the primary and compatibility formats. Outer
+    // event IDs differ, so collapse the authenticated embedded payload before
+    // invoking message/ack side effects. Keep this bounded like the outer-ID
+    // caches; the recipient and authenticated sender are part of the key.
+    private var recentPrivatePayloadFormats: [String: UInt8] = [:]
+    private var recentPrivatePayloadKeyOrder: [String] = []
+    private static let privatePayloadDedupCapacity = 2_048
 
     /// Monotonic panic-wipe generation for this pipeline. A panic wipe clears
     /// relay handlers so no NEW events flow, but a detached decrypt task
@@ -286,13 +294,13 @@ final class NostrInboundPipeline {
     }
 
     @MainActor
-    func subscribeGiftWrap(_ giftWrap: NostrEvent, id: NostrIdentity) {
+    func subscribePrivateEnvelope(_ envelope: NostrEvent, id: NostrIdentity) {
         guard let context else { return }
-        // Cheap dedup pre-check only; processGeohashGiftWrap does the
+        // Cheap dedup pre-check only; processGeohashPrivateEnvelope does the
         // authoritative main-actor check-and-record before the off-main
-        // NIP-17 unwrap. The outer signature was already verified (exactly
-        // once, off the main actor) by NostrRelayManager.
-        guard !context.hasProcessedNostrEvent(giftWrap.id) else { return }
+        // private-envelope unwrap. The outer signature was already verified
+        // (exactly once, off the main actor) by NostrRelayManager.
+        guard !context.hasProcessedNostrEvent(envelope.id) else { return }
 
         // Capture the wipe generation at spawn, alongside the per-geohash
         // identity (private key) the detached task strongly captures. A panic
@@ -300,29 +308,29 @@ final class NostrInboundPipeline {
         // drops its result instead of delivering plaintext post-wipe.
         let wipeGeneration = self.wipeGeneration
         Task.detached(priority: .userInitiated) { [weak self] in
-            await self?.processGeohashGiftWrap(giftWrap, id: id, verbose: false, wipeGeneration: wipeGeneration)
+            await self?.processGeohashPrivateEnvelope(envelope, id: id, verbose: false, wipeGeneration: wipeGeneration)
         }
     }
 
     @MainActor
-    func handleGiftWrap(_ giftWrap: NostrEvent, id: NostrIdentity) {
+    func handlePrivateEnvelope(_ envelope: NostrEvent, id: NostrIdentity) {
         guard let context else { return }
-        // Cheap dedup pre-check only; see subscribeGiftWrap.
-        if context.hasProcessedNostrEvent(giftWrap.id) {
+        // Cheap dedup pre-check only; see subscribePrivateEnvelope.
+        if context.hasProcessedNostrEvent(envelope.id) {
             return
         }
 
-        // Spawn-time wipe-generation capture; see subscribeGiftWrap.
+        // Spawn-time wipe-generation capture; see subscribePrivateEnvelope.
         let wipeGeneration = self.wipeGeneration
         Task.detached(priority: .userInitiated) { [weak self] in
-            await self?.processGeohashGiftWrap(giftWrap, id: id, verbose: true, wipeGeneration: wipeGeneration)
+            await self?.processGeohashPrivateEnvelope(envelope, id: id, verbose: true, wipeGeneration: wipeGeneration)
         }
     }
 
-    /// Geohash-DM gift wrap ingest. The NIP-17 unwrap (two ECDH+ChaCha
-    /// layers) runs off the main actor; results hop back for state updates.
-    /// `verbose` keeps `handleGiftWrap`'s decrypt logging without adding it
-    /// to the sampling path.
+    /// Geohash-DM private-envelope ingest. The envelope unwrap (two
+    /// ECDH+ChaCha layers) runs off the main actor; results hop back for
+    /// state updates. `verbose` keeps `handlePrivateEnvelope`'s decrypt
+    /// logging without adding it to the sampling path.
     ///
     /// `wipeGeneration` is this pipeline's generation captured at spawn (the
     /// moment the pre-wipe `id` was captured); a mismatch at either main-actor
@@ -330,8 +338,8 @@ final class NostrInboundPipeline {
     /// decrypting (first hop) or without delivering the plaintext (second
     /// hop) — the captured identity and any decrypted material are simply
     /// dropped with the task.
-    private func processGeohashGiftWrap(
-        _ giftWrap: NostrEvent,
+    private func processGeohashPrivateEnvelope(
+        _ envelope: NostrEvent,
         id: NostrIdentity,
         verbose: Bool,
         wipeGeneration: UInt64
@@ -341,25 +349,25 @@ final class NostrInboundPipeline {
         // concurrent detached tasks can't both process the same event.
         let alreadyProcessed: Bool = await MainActor.run {
             guard self.wipeGeneration == wipeGeneration else { return true }
-            if context.hasProcessedNostrEvent(giftWrap.id) { return true }
-            context.recordProcessedNostrEvent(giftWrap.id)
+            if context.hasProcessedNostrEvent(envelope.id) { return true }
+            context.recordProcessedNostrEvent(envelope.id)
             return false
         }
         if alreadyProcessed { return }
 
-        guard let (content, senderPubkey, rumorTs) = try? NostrProtocol.decryptPrivateMessage(
-            giftWrap: giftWrap,
+        guard let (content, senderPubkey, messageTs) = try? NostrProtocol.decryptPrivateEnvelope(
+            envelope: envelope,
             recipientIdentity: id
         ) else {
             if verbose {
-                SecureLogger.warning("GeoDM: failed decrypt giftWrap id=\(giftWrap.id.prefix(8))…", category: .session)
+                SecureLogger.warning("GeoDM: failed decrypt private envelope id=\(envelope.id.prefix(8))…", category: .session)
             }
             return
         }
 
         if verbose {
             SecureLogger.debug(
-                "GeoDM: decrypted gift-wrap id=\(giftWrap.id.prefix(16))... from=\(senderPubkey.prefix(8))...",
+                "GeoDM: decrypted private envelope id=\(envelope.id.prefix(16))... from=\(senderPubkey.prefix(8))...",
                 category: .session
             )
         }
@@ -375,13 +383,19 @@ final class NostrInboundPipeline {
             else {
                 return
             }
+            guard self.shouldProcessPrivatePayload(
+                payload,
+                senderPubkey: senderPubkey,
+                recipientPubkey: id.publicKeyHex,
+                envelopeKind: envelope.kind
+            ) else { return }
 
             let convKey = PeerID(nostr_: senderPubkey)
             context.registerNostrKeyMapping(senderPubkey, for: convKey)
 
             switch payload.type {
             case .privateMessage:
-                let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTs))
+                let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(messageTs))
                 context.handlePrivateMessage(
                     payload,
                     senderPubkey: senderPubkey,
@@ -404,44 +418,44 @@ final class NostrInboundPipeline {
     }
 
     @MainActor
-    func handleNostrMessage(_ giftWrap: NostrEvent) {
+    func handleAccountPrivateEnvelope(_ envelope: NostrEvent) {
         guard let context else { return }
-        // Cheap dedup pre-check only; processNostrMessage does the
-        // authoritative check-and-record before the off-main NIP-17 unwrap.
-        // The outer signature was already verified (exactly once, off the
-        // main actor) by NostrRelayManager, and only verified events are
+        // Cheap dedup pre-check only; processAccountPrivateEnvelope does the
+        // authoritative check-and-record before the off-main private-envelope
+        // unwrap. The outer signature was already verified (exactly once, off
+        // the main actor) by NostrRelayManager, and only verified events are
         // recorded, so a forged-signature copy can never poison the dedup
         // set and suppress the genuine event.
-        if context.hasProcessedNostrEvent(giftWrap.id) { return }
+        if context.hasProcessedNostrEvent(envelope.id) { return }
 
         Task.detached(priority: .userInitiated) { [weak self] in
-            await self?.processNostrMessage(giftWrap)
+            await self?.processAccountPrivateEnvelope(envelope)
         }
     }
 
-    func processNostrMessage(_ giftWrap: NostrEvent) async {
+    func processAccountPrivateEnvelope(_ envelope: NostrEvent) async {
         guard let context else { return }
         // Authoritative check-and-record, atomic on the main actor so two
         // concurrent detached tasks can't both process the same event.
         let alreadyProcessed: Bool = await MainActor.run {
-            if context.hasProcessedNostrEvent(giftWrap.id) { return true }
-            context.recordProcessedNostrEvent(giftWrap.id)
+            if context.hasProcessedNostrEvent(envelope.id) { return true }
+            context.recordProcessedNostrEvent(envelope.id)
             return false
         }
         if alreadyProcessed { return }
         // Fetch the identity and the wipe generation in ONE main-actor hop:
         // the generation then vouches for exactly this identity. A wipe after
         // this point bumps the generation and the delivery hop below drops
-        // the decrypted result (same guard as processGeohashGiftWrap; this
-        // account-mailbox path had the identical hazard).
+        // the decrypted result (same guard as processGeohashPrivateEnvelope;
+        // this account-mailbox path had the identical hazard).
         let (currentIdentity, wipeGeneration): (NostrIdentity?, UInt64) = await MainActor.run {
             (context.currentNostrIdentity(), self.wipeGeneration)
         }
         guard let currentIdentity else { return }
 
         do {
-            let (content, senderPubkey, rumorTimestamp) = try NostrProtocol.decryptPrivateMessage(
-                giftWrap: giftWrap,
+            let (content, senderPubkey, messageTimestampSeconds) = try NostrProtocol.decryptPrivateEnvelope(
+                envelope: envelope,
                 recipientIdentity: currentIdentity
             )
 
@@ -465,11 +479,17 @@ final class NostrInboundPipeline {
 
                 if packet.type == MessageType.noiseEncrypted.rawValue,
                    let payload = NoisePayload.decode(packet.payload) {
-                    let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTimestamp))
+                    let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(messageTimestampSeconds))
                     await MainActor.run {
                         // Drop pre-wipe plaintext if a panic wipe landed
                         // during the off-main decrypt (see above).
                         guard self.wipeGeneration == wipeGeneration else { return }
+                        guard self.shouldProcessPrivatePayload(
+                            payload,
+                            senderPubkey: senderPubkey,
+                            recipientPubkey: currentIdentity.publicKeyHex,
+                            envelopeKind: envelope.kind
+                        ) else { return }
                         context.registerNostrKeyMapping(senderPubkey, for: targetPeerID)
 
                         switch payload.type {
@@ -543,6 +563,47 @@ final class NostrInboundPipeline {
 }
 
 private extension NostrInboundPipeline {
+    @MainActor
+    func shouldProcessPrivatePayload(
+        _ payload: NoisePayload,
+        senderPubkey: String,
+        recipientPubkey: String,
+        envelopeKind: Int
+    ) -> Bool {
+        let digest = payload.encode().sha256Fingerprint()
+        let key = "\(recipientPubkey.lowercased()):\(senderPubkey.lowercased()):\(digest)"
+        let formatBit: UInt8
+        switch envelopeKind {
+        case NostrProtocol.EventKind.privateEnvelope.rawValue:
+            formatBit = 1 << 0
+        case NostrProtocol.EventKind.legacyNIP59GiftWrap.rawValue:
+            formatBit = 1 << 1
+        default:
+            return true
+        }
+
+        if let observedFormats = recentPrivatePayloadFormats[key] {
+            if observedFormats & formatBit != 0 {
+                // A same-format re-envelope is a delivery retry. Let it reach
+                // the coordinator so a lost DELIVERED acknowledgement can be
+                // sent again; downstream message-ID dedup prevents rerendering.
+                return true
+            }
+            // The same authenticated payload under the other migration format
+            // is the compatibility twin, not a new message or acknowledgement.
+            recentPrivatePayloadFormats[key] = observedFormats | formatBit
+            return false
+        }
+
+        recentPrivatePayloadFormats[key] = formatBit
+        recentPrivatePayloadKeyOrder.append(key)
+        if recentPrivatePayloadKeyOrder.count > Self.privatePayloadDedupCapacity {
+            let evicted = recentPrivatePayloadKeyOrder.removeFirst()
+            recentPrivatePayloadFormats.removeValue(forKey: evicted)
+        }
+        return true
+    }
+
     @MainActor
     static func decodeEmbeddedBitChatPacket(from content: String) -> BitchatPacket? {
         guard content.hasPrefix("bitchat1:") else { return nil }

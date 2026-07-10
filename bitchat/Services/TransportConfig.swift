@@ -215,7 +215,13 @@ enum TransportConfig {
     static let nostrGeoRelayCount: Int = 5
     static let nostrGeohashSampleLookbackSeconds: TimeInterval = 300
     static let nostrGeohashSampleLimit: Int = 100
-    static let nostrDMSubscribeLookbackSeconds: TimeInterval = 86400
+    /// Public envelope timestamps are deliberately shifted into the past for
+    /// privacy and relay compatibility. Mailbox queries must add the complete
+    /// shift to the 24-hour delivery window or boundary messages disappear
+    /// from `since` filters early.
+    static let nostrPrivateEnvelopeTimestampFuzzSeconds: TimeInterval = 15 * 60
+    static let nostrDMSubscribeLookbackSeconds: TimeInterval = (24 * 60 * 60)
+        + nostrPrivateEnvelopeTimestampFuzzSeconds
     // A sampled chat message this recent means "a conversation is happening
     // there" for the empty-timeline nearby-activity hint.
     static let uiGeohashChatActivityWindowSeconds: TimeInterval = 900

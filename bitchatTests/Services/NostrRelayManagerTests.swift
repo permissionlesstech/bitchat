@@ -854,7 +854,7 @@ final class NostrRelayManagerTests: XCTestCase {
 
     /// The relay boundary is the single signature-verification point for the
     /// whole inbound path (downstream pipelines no longer re-verify), so a
-    /// tampered gift wrap (kind 1059, the DM/mailbox path) must be dropped
+    /// tampered private envelope (the DM/mailbox path) must be dropped
     /// here — and must not poison the dedup cache against the genuine copy.
     func test_receiveGiftWrap_tamperedSignatureIsDroppedAndDoesNotPoisonDedup() async throws {
         let firstRelayURL = "wss://giftwrap-one.example"
@@ -862,7 +862,7 @@ final class NostrRelayManagerTests: XCTestCase {
         let context = makeContext(permission: .denied)
         let sender = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
-        let giftWrap = try NostrProtocol.createPrivateMessage(
+        let giftWrap = try NostrProtocol.createPrivateEnvelope(
             content: "psst",
             recipientPubkey: recipient.publicKeyHex,
             senderIdentity: sender
@@ -1039,11 +1039,11 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertTrue(secondDelivered)
     }
 
-    func test_okMessages_clearPendingGiftWrapIDs() async throws {
+    func test_okMessages_clearPendingPrivateEnvelopeIDs() async throws {
         let relayURL = "wss://ok.example"
         let context = makeContext(permission: .denied)
-        let successID = "gift-wrap-success"
-        let failureID = "gift-wrap-failure"
+        let successID = "private-envelope-success"
+        let failureID = "private-envelope-failure"
 
         context.manager.ensureConnections(to: [relayURL])
         let connected = await waitUntil {
@@ -1052,17 +1052,17 @@ final class NostrRelayManagerTests: XCTestCase {
         }
         XCTAssertTrue(connected)
 
-        NostrRelayManager.registerPendingGiftWrap(id: successID)
+        NostrRelayManager.registerPendingPrivateEnvelope(id: successID)
         try context.sessionFactory.latestConnection(for: relayURL)?.emitOK(eventID: successID, success: true, reason: "ok")
         let successCleared = await waitUntil {
-            !NostrRelayManager.pendingGiftWrapIDs.contains(successID)
+            !NostrRelayManager.pendingPrivateEnvelopeIDs.contains(successID)
         }
         XCTAssertTrue(successCleared)
 
-        NostrRelayManager.registerPendingGiftWrap(id: failureID)
+        NostrRelayManager.registerPendingPrivateEnvelope(id: failureID)
         try context.sessionFactory.latestConnection(for: relayURL)?.emitOK(eventID: failureID, success: false, reason: "rejected")
         let failureCleared = await waitUntil {
-            !NostrRelayManager.pendingGiftWrapIDs.contains(failureID)
+            !NostrRelayManager.pendingPrivateEnvelopeIDs.contains(failureID)
         }
         XCTAssertTrue(failureCleared)
     }

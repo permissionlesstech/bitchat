@@ -153,7 +153,7 @@ struct NostrTransportTests {
                 favoriteStatusForNoiseKey: { _ in nil },
                 favoriteStatusForPeerID: { $0 == shortPeerID ? relationship : nil },
                 currentIdentity: { sender },
-                registerPendingGiftWrap: probe.recordPendingGiftWrap(id:),
+                registerPendingPrivateEnvelope: probe.recordPendingPrivateEnvelope(id:),
                 sendEvent: probe.record(event:),
                 scheduleAfter: { delay, action in
                     probe.enqueueScheduledAction(delay: delay, action: action)
@@ -173,7 +173,87 @@ struct NostrTransportTests {
         #expect(privateMessage.messageID == "pm-1")
         #expect(privateMessage.content == "hello over nostr")
         #expect(result.packet.recipientID == shortPeerID.routingData)
-        #expect(probe.pendingGiftWrapIDs.isEmpty)
+        #expect(probe.pendingPrivateEnvelopeIDs.isEmpty)
+    }
+
+    @Test("Migration window publishes primary and compatibility envelopes, then stops")
+    @MainActor
+    func migrationWindowDualPublishesUntilDeadline() async throws {
+        let keychain = MockKeychain()
+        let idBridge = NostrIdentityBridge(keychain: keychain)
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let noiseKey = Data((192..<224).map(UInt8.init))
+        let peerID = PeerID(hexData: noiseKey)
+        let relationship = makeRelationship(
+            peerNoisePublicKey: noiseKey,
+            peerNostrPublicKey: recipient.npub,
+            peerNickname: "Migration peer"
+        )
+
+        let migrationProbe = NostrTransportProbe()
+        let migrationTransport = NostrTransport(
+            keychain: keychain,
+            idBridge: idBridge,
+            dependencies: makeDependencies(
+                favoriteStatusForNoiseKey: { $0 == noiseKey ? relationship : nil },
+                currentIdentity: { sender },
+                sendEvent: migrationProbe.record(event:),
+                now: {
+                    NostrProtocol.legacyPrivateEnvelopePublicationDeadline
+                        .addingTimeInterval(-1)
+                }
+            )
+        )
+        migrationTransport.senderPeerID = PeerID(str: "0123456789abcdef")
+        migrationTransport.sendPrivateMessage(
+            "migration payload",
+            to: peerID,
+            recipientNickname: "Migration peer",
+            messageID: "migration-pm"
+        )
+
+        let sentPair = await TestHelpers.waitUntil(
+            { migrationProbe.sentEvents.count == 2 },
+            timeout: 5.0
+        )
+        #expect(sentPair)
+        #expect(migrationProbe.sentEvents.map(\.kind) == [
+            NostrProtocol.EventKind.privateEnvelope.rawValue,
+            NostrProtocol.EventKind.legacyNIP59GiftWrap.rawValue
+        ])
+        for event in migrationProbe.sentEvents {
+            let result = try decodeEmbeddedPayload(from: event, recipient: recipient)
+            let message = try decodePrivateMessage(from: result.payload)
+            #expect(message.messageID == "migration-pm")
+            #expect(message.content == "migration payload")
+        }
+
+        let postMigrationProbe = NostrTransportProbe()
+        let postMigrationTransport = NostrTransport(
+            keychain: keychain,
+            idBridge: idBridge,
+            dependencies: makeDependencies(
+                favoriteStatusForNoiseKey: { $0 == noiseKey ? relationship : nil },
+                currentIdentity: { sender },
+                sendEvent: postMigrationProbe.record(event:),
+                now: { NostrProtocol.legacyPrivateEnvelopePublicationDeadline }
+            )
+        )
+        postMigrationTransport.senderPeerID = PeerID(str: "0123456789abcdef")
+        postMigrationTransport.sendPrivateMessage(
+            "post migration",
+            to: peerID,
+            recipientNickname: "Migration peer",
+            messageID: "post-migration-pm"
+        )
+
+        let sentPrimaryOnly = await TestHelpers.waitUntil(
+            { postMigrationProbe.sentEvents.count == 1 },
+            timeout: 5.0
+        )
+        #expect(sentPrimaryOnly)
+        #expect(postMigrationProbe.sentEvents.first?.kind == NostrProtocol.EventKind.privateEnvelope.rawValue)
     }
 
     @Test("Favorite notification embeds current npub")
@@ -198,7 +278,7 @@ struct NostrTransportTests {
                 favoriteStatusForNoiseKey: { $0 == noiseKey ? relationship : nil },
                 favoriteStatusForPeerID: { _ in nil },
                 currentIdentity: { sender },
-                registerPendingGiftWrap: probe.recordPendingGiftWrap(id:),
+                registerPendingPrivateEnvelope: probe.recordPendingPrivateEnvelope(id:),
                 sendEvent: probe.record(event:),
                 scheduleAfter: { delay, action in
                     probe.enqueueScheduledAction(delay: delay, action: action)
@@ -239,7 +319,7 @@ struct NostrTransportTests {
                 favoriteStatusForNoiseKey: { $0 == noiseKey ? relationship : nil },
                 favoriteStatusForPeerID: { _ in nil },
                 currentIdentity: { sender },
-                registerPendingGiftWrap: probe.recordPendingGiftWrap(id:),
+                registerPendingPrivateEnvelope: probe.recordPendingPrivateEnvelope(id:),
                 sendEvent: probe.record(event:),
                 scheduleAfter: { delay, action in
                     probe.enqueueScheduledAction(delay: delay, action: action)
@@ -259,9 +339,9 @@ struct NostrTransportTests {
         #expect(result.packet.recipientID == fullPeerID.toShort().routingData)
     }
 
-    @Test("Geohash private message registers pending gift wrap")
+    @Test("Geohash private message registers pending private envelope")
     @MainActor
-    func sendPrivateMessageGeohashRegistersPendingGiftWrap() async throws {
+    func sendPrivateMessageGeohashRegistersPendingPrivateEnvelope() async throws {
         let keychain = MockKeychain()
         let idBridge = NostrIdentityBridge(keychain: keychain)
         let sender = try NostrIdentity.generate()
@@ -272,7 +352,7 @@ struct NostrTransportTests {
             idBridge: idBridge,
             dependencies: makeDependencies(
                 currentIdentity: { sender },
-                registerPendingGiftWrap: probe.recordPendingGiftWrap(id:),
+                registerPendingPrivateEnvelope: probe.recordPendingPrivateEnvelope(id:),
                 sendEvent: probe.record(event:),
                 scheduleAfter: { delay, action in
                     probe.enqueueScheduledAction(delay: delay, action: action)
@@ -297,7 +377,7 @@ struct NostrTransportTests {
         #expect(privateMessage.messageID == "geo-1")
         #expect(privateMessage.content == "geo hello")
         #expect(result.packet.recipientID == nil)
-        #expect(probe.pendingGiftWrapIDs == [event.id])
+        #expect(probe.pendingPrivateEnvelopeIDs == [event.id])
     }
 
     @Test("Read receipt queue sends in order and waits for scheduler")
@@ -322,7 +402,7 @@ struct NostrTransportTests {
                 favoriteStatusForNoiseKey: { $0 == noiseKey ? relationship : nil },
                 favoriteStatusForPeerID: { _ in nil },
                 currentIdentity: { sender },
-                registerPendingGiftWrap: probe.recordPendingGiftWrap(id:),
+                registerPendingPrivateEnvelope: probe.recordPendingPrivateEnvelope(id:),
                 sendEvent: probe.record(event:),
                 scheduleAfter: { delay, action in
                     probe.enqueueScheduledAction(delay: delay, action: action)
@@ -419,10 +499,13 @@ struct NostrTransportTests {
         favoriteStatusForNoiseKey: @escaping @MainActor (Data) -> FavoriteRelationship? = { _ in nil },
         favoriteStatusForPeerID: @escaping @MainActor (PeerID) -> FavoriteRelationship? = { _ in nil },
         currentIdentity: @escaping @MainActor () throws -> NostrIdentity? = { nil },
-        registerPendingGiftWrap: @escaping @MainActor (String) -> Void = { _ in },
+        registerPendingPrivateEnvelope: @escaping @MainActor (String) -> Void = { _ in },
         sendEvent: @escaping @MainActor (NostrEvent) -> Void = { _ in },
         scheduleAfter: @escaping @Sendable (TimeInterval, @escaping @Sendable () -> Void) -> Void = { _, _ in },
-        relayConnectivity: @escaping @MainActor () -> AnyPublisher<Bool, Never> = { Just(false).eraseToAnyPublisher() }
+        relayConnectivity: @escaping @MainActor () -> AnyPublisher<Bool, Never> = { Just(false).eraseToAnyPublisher() },
+        now: @escaping @MainActor () -> Date = {
+            NostrProtocol.legacyPrivateEnvelopePublicationDeadline.addingTimeInterval(1)
+        }
     ) -> NostrTransport.Dependencies {
         NostrTransport.Dependencies(
             notificationCenter: notificationCenter,
@@ -430,10 +513,11 @@ struct NostrTransportTests {
             favoriteStatusForNoiseKey: favoriteStatusForNoiseKey,
             favoriteStatusForPeerID: favoriteStatusForPeerID,
             currentIdentity: currentIdentity,
-            registerPendingGiftWrap: registerPendingGiftWrap,
+            registerPendingPrivateEnvelope: registerPendingPrivateEnvelope,
             sendEvent: sendEvent,
             scheduleAfter: scheduleAfter,
-            relayConnectivity: relayConnectivity
+            relayConnectivity: relayConnectivity,
+            now: now
         )
     }
 
@@ -457,8 +541,8 @@ struct NostrTransportTests {
         from event: NostrEvent,
         recipient: NostrIdentity
     ) throws -> (packet: BitchatPacket, payload: NoisePayload, senderPubkey: String) {
-        let (content, senderPubkey, _) = try NostrProtocol.decryptPrivateMessage(
-            giftWrap: event,
+        let (content, senderPubkey, _) = try NostrProtocol.decryptPrivateEnvelope(
+            envelope: event,
             recipientIdentity: recipient
         )
         guard content.hasPrefix("bitchat1:") else {
@@ -503,7 +587,7 @@ private func base64URLDecode(_ string: String) -> Data? {
 private final class NostrTransportProbe: @unchecked Sendable {
     private let lock = NSLock()
     private var sentEventsStorage: [NostrEvent] = []
-    private var pendingGiftWrapIDsStorage: [String] = []
+    private var pendingPrivateEnvelopeIDsStorage: [String] = []
     private var scheduledActionsStorage: [(@Sendable () -> Void)] = []
 
     var sentEvents: [NostrEvent] {
@@ -512,10 +596,10 @@ private final class NostrTransportProbe: @unchecked Sendable {
         return sentEventsStorage
     }
 
-    var pendingGiftWrapIDs: [String] {
+    var pendingPrivateEnvelopeIDs: [String] {
         lock.lock()
         defer { lock.unlock() }
-        return pendingGiftWrapIDsStorage
+        return pendingPrivateEnvelopeIDsStorage
     }
 
     var scheduledActionCount: Int {
@@ -530,9 +614,9 @@ private final class NostrTransportProbe: @unchecked Sendable {
         lock.unlock()
     }
 
-    func recordPendingGiftWrap(id: String) {
+    func recordPendingPrivateEnvelope(id: String) {
         lock.lock()
-        pendingGiftWrapIDsStorage.append(id)
+        pendingPrivateEnvelopeIDsStorage.append(id)
         lock.unlock()
     }
 

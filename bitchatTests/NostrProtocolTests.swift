@@ -12,7 +12,7 @@ import BitFoundation
 
 struct NostrProtocolTests {
     
-    @Test func nip17MessageRoundTrip() throws {
+    @Test func privateEnvelopeRoundTrip() throws {
         // Create sender and recipient identities
         let sender = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
@@ -21,21 +21,19 @@ struct NostrProtocolTests {
         print("Recipient pubkey: \(recipient.publicKeyHex)")
         
         // Create a test message
-        let originalContent = "Hello from NIP-17 test!"
+        let originalContent = "Hello from BitChat private-envelope test!"
         
-        // Create encrypted gift wrap
-        let giftWrap = try NostrProtocol.createPrivateMessage(
+        let envelope = try NostrProtocol.createPrivateEnvelope(
             content: originalContent,
             recipientPubkey: recipient.publicKeyHex,
             senderIdentity: sender
         )
         
-        print("Gift wrap created with ID: \(giftWrap.id)")
-        print("Gift wrap pubkey: \(giftWrap.pubkey)")
+        print("Private envelope created with ID: \(envelope.id)")
+        print("Private envelope pubkey: \(envelope.pubkey)")
         
-        // Decrypt the gift wrap
-        let (decryptedContent, senderPubkey, timestamp) = try NostrProtocol.decryptPrivateMessage(
-            giftWrap: giftWrap,
+        let (decryptedContent, senderPubkey, timestamp) = try NostrProtocol.decryptPrivateEnvelope(
+            envelope: envelope,
             recipientIdentity: recipient
         )
         
@@ -51,156 +49,97 @@ struct NostrProtocolTests {
         print("✅ Successfully decrypted message: '\(decryptedContent)' from \(senderPubkey) at \(messageDate)")
     }
     
-    @Test func giftWrapUsesUniqueEphemeralKeys() throws {
+    @Test func privateEnvelopesUseUniqueEphemeralKeys() throws {
         // Create identities
         let sender = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
         
         // Create two messages
-        let message1 = try NostrProtocol.createPrivateMessage(
+        let message1 = try NostrProtocol.createPrivateEnvelope(
             content: "Message 1",
             recipientPubkey: recipient.publicKeyHex,
             senderIdentity: sender
         )
         
-        let message2 = try NostrProtocol.createPrivateMessage(
+        let message2 = try NostrProtocol.createPrivateEnvelope(
             content: "Message 2",
             recipientPubkey: recipient.publicKeyHex,
             senderIdentity: sender
         )
         
-        // Gift wrap pubkeys should be different (unique ephemeral keys)
+        // Public envelope keys must be one-time use.
         #expect(message1.pubkey != message2.pubkey)
         
-        print("Message 1 gift wrap pubkey: \(message1.pubkey)")
-        print("Message 2 gift wrap pubkey: \(message2.pubkey)")
+        print("Message 1 envelope pubkey: \(message1.pubkey)")
+        print("Message 2 envelope pubkey: \(message2.pubkey)")
         
         // Both should decrypt successfully
-        let (content1, _, _) = try NostrProtocol.decryptPrivateMessage(
-            giftWrap: message1,
+        let (content1, _, _) = try NostrProtocol.decryptPrivateEnvelope(
+            envelope: message1,
             recipientIdentity: recipient
         )
-        let (content2, _, _) = try NostrProtocol.decryptPrivateMessage(
-            giftWrap: message2,
+        let (content2, _, _) = try NostrProtocol.decryptPrivateEnvelope(
+            envelope: message2,
             recipientIdentity: recipient
         )
         
         #expect(content1 == "Message 1")
         #expect(content2 == "Message 2")
     }
-    
-    @Test func decryptionFailsWithWrongRecipient() throws {
+
+    @Test func privateEnvelopeUsesBitChatWireFormatAtEveryLayer() throws {
         let sender = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
-        let wrongRecipient = try NostrIdentity.generate()
-        
-        // Create message for recipient
-        let giftWrap = try NostrProtocol.createPrivateMessage(
-            content: "Secret message",
+        let envelope = try NostrProtocol.createPrivateEnvelope(
+            content: "bitchat-specific",
             recipientPubkey: recipient.publicKeyHex,
             senderIdentity: sender
         )
-        
-        // Try to decrypt with wrong recipient. The outer envelope is bound to
-        // the addressed recipient's `p` tag, so this now fails validation
-        // before any decryption is attempted.
-        expectInvalidEvent {
-            _ = try NostrProtocol.decryptPrivateMessage(
-                giftWrap: giftWrap,
-                recipientIdentity: wrongRecipient
-            )
-        }
-    }
 
-    @Test func decryptAcceptsCurrentAndroidInnerRecipientTag() throws {
-        let sender = try NostrIdentity.generate()
-        let recipient = try NostrIdentity.generate()
-
-        // Current Android's `createPrivateMessage` emits an unsigned kind-14
-        // inner event with exactly [["p", recipient]], while released iOS
-        // uses no inner tags. This isolated generator reproduces the Android
-        // wire shape without making the production encoder depend on it.
-        let giftWrap = try NostrProtocol.createPrivateMessageWithInnerTagsForTesting(
-            content: "legacy message from Android",
-            recipientPubkey: recipient.publicKeyHex,
-            senderIdentity: sender,
-            innerMessageTags: [["p", recipient.publicKeyHex]]
-        )
-
-        let result = try NostrProtocol.decryptPrivateMessage(
-            giftWrap: giftWrap,
-            recipientIdentity: recipient
-        )
-        #expect(result.content == "legacy message from Android")
-        #expect(result.senderPubkey == sender.publicKeyHex)
-    }
-
-    @Test func decryptRejectsAlternateInnerTagShapes() throws {
-        let sender = try NostrIdentity.generate()
-        let recipient = try NostrIdentity.generate()
-        let otherRecipient = try NostrIdentity.generate()
-        let invalidTagShapes = [
-            [["p", otherRecipient.publicKeyHex]],
-            [["p", recipient.publicKeyHex], ["p", recipient.publicKeyHex]],
-            [["p", recipient.publicKeyHex, "unexpected"]],
-            [["x", recipient.publicKeyHex]]
-        ]
-
-        for tags in invalidTagShapes {
-            let giftWrap = try NostrProtocol.createPrivateMessageWithInnerTagsForTesting(
-                content: "invalid inner tag shape",
-                recipientPubkey: recipient.publicKeyHex,
-                senderIdentity: sender,
-                innerMessageTags: tags
-            )
-            expectInvalidEvent {
-                _ = try NostrProtocol.decryptPrivateMessage(
-                    giftWrap: giftWrap,
-                    recipientIdentity: recipient
-                )
-            }
-        }
-    }
-
-    @Test func decryptsFrozenLegacyEnvelopeProducedByAndroidB7f0b33d() throws {
-        let eventData = try Data(contentsOf: fixtureURL(
-            name: "AndroidLegacyPrivateEnvelopeB7f0b33d"
-        ))
-        let metadataData = try Data(contentsOf: fixtureURL(
-            name: "AndroidLegacyPrivateEnvelopeB7f0b33dMetadata"
-        ))
-        let envelope = try JSONDecoder().decode(NostrEvent.self, from: eventData)
-        let metadata = try JSONDecoder().decode(AndroidLegacyEnvelopeFixture.self, from: metadataData)
-        let recipientKey = try #require(Data(hexString: metadata.recipientPrivateKey))
-        let recipient = try NostrIdentity(privateKeyData: recipientKey)
-
-        #expect(metadata.androidCommit == "b7f0b33d3a267c770d3d5a65ee2d8c7e755450db")
-        #expect(metadata.generator == "NostrProtocol.createPrivateMessage")
-        // The generator patch ships as .patch.txt so the Xcode synchronized
-        // test group reliably copies it as a text resource; its pinned SHA-256
-        // covers the unchanged patch content.
-        #expect(metadata.generatorPatch == "AndroidLegacyPrivateEnvelopeB7f0b33dGenerator.patch.txt")
-        #expect(metadata.fixtureSHA256 == eventData.sha256Fingerprint())
-        #expect(metadata.gradleTest.contains("NostrProtocolTest.emitCrossPlatformFixtures"))
-        let generatorPatch = try String(contentsOf: fixtureURL(
-            name: "AndroidLegacyPrivateEnvelopeB7f0b33dGenerator.patch",
-            extension: "txt"
-        ))
-        #expect(metadata.generatorPatchSHA256 == Data(generatorPatch.utf8).sha256Fingerprint())
-        #expect(generatorPatch.contains("fun emitCrossPlatformFixtures()"))
-        #expect(generatorPatch.contains(metadata.recipientPrivateKey))
-        #expect(envelope.isValidSignature())
-        #expect(envelope.kind == NostrProtocol.EventKind.giftWrap.rawValue)
+        #expect(envelope.kind == NostrProtocol.EventKind.privateEnvelope.rawValue)
+        #expect(envelope.kind != NostrProtocol.EventKind.legacyNIP59GiftWrap.rawValue)
+        #expect(envelope.content.hasPrefix(NostrProtocol.privateEnvelopeContentPrefix))
+        #expect(!envelope.content.hasPrefix("v2:"))
         #expect(envelope.tags == [["p", recipient.publicKeyHex]])
+        #expect(envelope.created_at <= Int(Date().timeIntervalSince1970))
 
-        // The Android inner event carries exactly the recipient `p` tag, so a
-        // successful decrypt also proves the Android inner-tag acceptance.
-        let result = try NostrProtocol.decryptPrivateMessage(
-            giftWrap: envelope,
+        let layers = try NostrProtocol.decodePrivateEnvelopeLayersForTesting(
+            envelope: envelope,
             recipientIdentity: recipient
         )
-        #expect(result.content == "legacy fixture from Android b7f0b33d")
-        #expect(result.senderPubkey == metadata.senderPublicKey)
+        #expect(layers.seal.kind == NostrProtocol.EventKind.privateSeal.rawValue)
+        #expect(layers.seal.content.hasPrefix(NostrProtocol.privateEnvelopeContentPrefix))
+        #expect(layers.seal.tags.isEmpty)
+        #expect(layers.message.kind == NostrProtocol.EventKind.privateMessage.rawValue)
+        #expect(layers.message.tags.isEmpty)
+        #expect(layers.message.sig == nil)
+    }
+
+    @Test func decryptAcceptsReceiveOnlyLegacyBitChatEnvelope() throws {
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let envelope = try NostrProtocol.createLegacyPrivateEnvelopeForTesting(
+            content: "legacy in-flight message",
+            recipientPubkey: recipient.publicKeyHex,
+            senderIdentity: sender
+        )
+
+        #expect(envelope.kind == NostrProtocol.EventKind.legacyNIP59GiftWrap.rawValue)
+        #expect(envelope.content.hasPrefix("v2:"))
+
+        let result = try NostrProtocol.decryptPrivateEnvelope(
+            envelope: envelope,
+            recipientIdentity: recipient
+        )
+        #expect(result.content == "legacy in-flight message")
+        #expect(result.senderPubkey == sender.publicKeyHex)
+
+        let layers = try NostrProtocol.decodePrivateEnvelopeLayersForTesting(
+            envelope: envelope,
+            recipientIdentity: recipient
+        )
+        #expect(layers.seal.kind == NostrProtocol.EventKind.legacyNIP59Seal.rawValue)
+        #expect(layers.message.kind == NostrProtocol.EventKind.legacyNIP17DirectMessage.rawValue)
     }
 
     @Test func decryptsFrozenLegacyEnvelopeProducedByRelease733098bb() throws {
@@ -216,18 +155,88 @@ struct NostrProtocolTests {
         let recipient = try NostrIdentity(privateKeyData: recipientKey)
 
         #expect(envelope.isValidSignature())
-        let result = try NostrProtocol.decryptPrivateMessage(
-            giftWrap: envelope,
+        let result = try NostrProtocol.decryptPrivateEnvelope(
+            envelope: envelope,
             recipientIdentity: recipient
         )
         #expect(result.content == "legacy fixture from 733098bb")
         #expect(result.senderPubkey == "2e3d79df7047204f02b726c574e256f8de1dd80510f7dcb8b0d12df13acb87e6")
     }
 
-    @Test func decryptRejectsOversizedCiphertextBeforeDecoding() throws {
+    @Test func publicationBatchDualPublishesOnlyBeforeExplicitDeadline() throws {
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let beforeDeadline = NostrProtocol.legacyPrivateEnvelopePublicationDeadline
+            .addingTimeInterval(-1)
+
+        let migrationBatch = try NostrProtocol.createPrivateEnvelopePublicationBatch(
+            content: "mixed-version",
+            recipientPubkey: recipient.publicKeyHex,
+            senderIdentity: sender,
+            now: beforeDeadline
+        )
+        #expect(migrationBatch.map(\.kind) == [
+            NostrProtocol.EventKind.privateEnvelope.rawValue,
+            NostrProtocol.EventKind.legacyNIP59GiftWrap.rawValue
+        ])
+        for envelope in migrationBatch {
+            let result = try NostrProtocol.decryptPrivateEnvelope(
+                envelope: envelope,
+                recipientIdentity: recipient
+            )
+            #expect(result.content == "mixed-version")
+        }
+
+        let postMigrationBatch = try NostrProtocol.createPrivateEnvelopePublicationBatch(
+            content: "new-only",
+            recipientPubkey: recipient.publicKeyHex,
+            senderIdentity: sender,
+            now: NostrProtocol.legacyPrivateEnvelopePublicationDeadline
+        )
+        #expect(postMigrationBatch.map(\.kind) == [
+            NostrProtocol.EventKind.privateEnvelope.rawValue
+        ])
+    }
+
+    @Test func mailboxLookbackCoversFullRetentionWindowAndTimestampFuzz() {
+        let sentAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let earliestPublicTimestamp = sentAt.addingTimeInterval(
+            -TransportConfig.nostrPrivateEnvelopeTimestampFuzzSeconds
+        )
+        let reconnectAtRetentionBoundary = sentAt.addingTimeInterval(24 * 60 * 60)
+        let filterSince = reconnectAtRetentionBoundary.addingTimeInterval(
+            -TransportConfig.nostrDMSubscribeLookbackSeconds
+        )
+
+        #expect(TransportConfig.nostrDMSubscribeLookbackSeconds == (24 * 60 * 60) + (15 * 60))
+        #expect(filterSince <= earliestPublicTimestamp)
+    }
+
+    @Test func largePrivateEnvelopeFitsLayerSpecificExpansionLimits() throws {
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        // Large enough that the nested Base64 seal exceeds the inner 32 KiB
+        // cap, while the inner message JSON itself remains below that cap.
+        let content = String(repeating: "A", count: 30 * 1024)
+
+        let envelope = try NostrProtocol.createPrivateEnvelope(
+            content: content,
+            recipientPubkey: recipient.publicKeyHex,
+            senderIdentity: sender
+        )
+        let decrypted = try NostrProtocol.decryptPrivateEnvelope(
+            envelope: envelope,
+            recipientIdentity: recipient
+        )
+
+        #expect(decrypted.content == content)
+        #expect(envelope.content.utf8.count <= NostrProtocol.maximumPrivateEnvelopeCiphertextBytes)
+    }
+
+    @Test func privateEnvelopeRejectsOversizedCiphertextBeforeDecoding() throws {
         let recipient = try NostrIdentity.generate()
         let wrapper = try NostrIdentity.generate()
-        let oversizedContent = "v2:"
+        let oversizedContent = NostrProtocol.privateEnvelopeContentPrefix
             + String(
                 repeating: "A",
                 count: NostrProtocol.maximumPrivateEnvelopeCiphertextBytes
@@ -235,21 +244,48 @@ struct NostrProtocolTests {
         let event = NostrEvent(
             pubkey: wrapper.publicKeyHex,
             createdAt: Date(),
-            kind: .giftWrap,
+            kind: .privateEnvelope,
             tags: [["p", recipient.publicKeyHex]],
             content: oversizedContent
         )
         let signed = try event.sign(with: wrapper.schnorrSigningKey())
 
         expectInvalidCiphertext {
-            _ = try NostrProtocol.decryptPrivateMessage(
-                giftWrap: signed,
+            _ = try NostrProtocol.decryptPrivateEnvelope(
+                envelope: signed,
                 recipientIdentity: recipient
             )
         }
     }
 
-    @Test func decryptDoesNotMisinterpretStandardNIP44Payload() throws {
+    @Test func privateEnvelopeRejectsOversizedPlaintextBeforeEncryption() throws {
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let oversizedPlaintext = String(
+            repeating: "x",
+            count: NostrProtocol.maximumPrivateEnvelopePlaintextBytes + 1
+        )
+
+        expectInvalidCiphertext {
+            _ = try NostrProtocol.createPrivateEnvelope(
+                content: oversizedPlaintext,
+                recipientPubkey: recipient.publicKeyHex,
+                senderIdentity: sender
+            )
+        }
+    }
+
+    @Test func privateEnvelopeRejectsOversizedNestedJSONBeforeParsing() {
+        let oversizedJSON = String(
+            repeating: "{",
+            count: NostrProtocol.maximumPrivateEnvelopePlaintextBytes + 1
+        )
+        expectInvalidCiphertext {
+            _ = try NostrProtocol.decodePrivateEnvelopeEventJSONForTesting(oversizedJSON)
+        }
+    }
+
+    @Test func decryptDoesNotMisinterpretStandardNIP44PayloadAsLegacyBitChat() throws {
         let recipient = try NostrIdentity.generate()
         let wrapper = try NostrIdentity.generate()
         // A valid NIP-44 v2 payload from the official test vectors. Its wire
@@ -259,40 +295,36 @@ struct NostrProtocolTests {
         let event = NostrEvent(
             pubkey: wrapper.publicKeyHex,
             createdAt: Date(),
-            kind: .giftWrap,
+            kind: .legacyNIP59GiftWrap,
             tags: [["p", recipient.publicKeyHex]],
             content: standardPayload
         )
         let signed = try event.sign(with: wrapper.schnorrSigningKey())
 
         expectInvalidCiphertext {
-            _ = try NostrProtocol.decryptPrivateMessage(
-                giftWrap: signed,
+            _ = try NostrProtocol.decryptPrivateEnvelope(
+                envelope: signed,
                 recipientIdentity: recipient
             )
         }
     }
-
-    @Test func decryptRejectsWrongOuterKind() throws {
+    
+    @Test func decryptionFailsWithWrongRecipient() throws {
         let sender = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
-        var giftWrap = try NostrProtocol.createPrivateMessage(
-            content: "wrong outer kind",
+        let wrongRecipient = try NostrIdentity.generate()
+        
+        // Create message for recipient
+        let envelope = try NostrProtocol.createPrivateEnvelope(
+            content: "Secret message",
             recipientPubkey: recipient.publicKeyHex,
             senderIdentity: sender
         )
-        giftWrap = NostrEvent(
-            pubkey: giftWrap.pubkey,
-            createdAt: Date(timeIntervalSince1970: TimeInterval(giftWrap.created_at)),
-            kind: .textNote,
-            tags: giftWrap.tags,
-            content: giftWrap.content
-        )
-
+        
         expectInvalidEvent {
-            _ = try NostrProtocol.decryptPrivateMessage(
-                giftWrap: giftWrap,
-                recipientIdentity: recipient
+            _ = try NostrProtocol.decryptPrivateEnvelope(
+                envelope: envelope,
+                recipientIdentity: wrongRecipient
             )
         }
     }
@@ -300,41 +332,41 @@ struct NostrProtocolTests {
     @Test func decryptRejectsInvalidSealSignature() throws {
         let sender = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
-        let giftWrap = try NostrProtocol.createPrivateMessageWithInvalidSealSignatureForTesting(
+        let envelope = try NostrProtocol.createPrivateEnvelopeWithInvalidSealSignatureForTesting(
             content: "forged signature",
             recipientPubkey: recipient.publicKeyHex,
             senderIdentity: sender
         )
 
         expectInvalidEvent {
-            _ = try NostrProtocol.decryptPrivateMessage(
-                giftWrap: giftWrap,
+            _ = try NostrProtocol.decryptPrivateEnvelope(
+                envelope: envelope,
                 recipientIdentity: recipient
             )
         }
     }
 
-    @Test func decryptRejectsSealRumorPubkeyMismatch() throws {
+    @Test func decryptRejectsSealMessagePubkeyMismatch() throws {
         let claimedSender = try NostrIdentity.generate()
         let sealSigner = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
-        let giftWrap = try NostrProtocol.createPrivateMessageWithMismatchedSealRumorPubkeyForTesting(
+        let envelope = try NostrProtocol.createPrivateEnvelopeWithMismatchedSealMessagePubkeyForTesting(
             content: "spoofed sender",
             recipientPubkey: recipient.publicKeyHex,
-            rumorIdentity: claimedSender,
+            messageIdentity: claimedSender,
             sealSignerIdentity: sealSigner
         )
 
         expectInvalidEvent {
-            _ = try NostrProtocol.decryptPrivateMessage(
-                giftWrap: giftWrap,
+            _ = try NostrProtocol.decryptPrivateEnvelope(
+                envelope: envelope,
                 recipientIdentity: recipient
             )
         }
     }
 
     @Test
-    func testAckRoundTripNIP44V2_Delivered() throws {
+    func deliveredAckRoundTripsInsidePrivateEnvelope() throws {
         // Identities
         let sender = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
@@ -348,19 +380,17 @@ struct NostrProtocolTests {
             "Failed to embed delivered ack"
         )
 
-        // Create NIP-17 gift wrap to recipient (uses NIP-44 v2 internally)
-        let giftWrap = try NostrProtocol.createPrivateMessage(
+        let envelope = try NostrProtocol.createPrivateEnvelope(
             content: embedded,
             recipientPubkey: recipient.publicKeyHex,
             senderIdentity: sender
         )
 
-        // Ensure v2 format was used for ciphertext
-        #expect(giftWrap.content.hasPrefix("v2:"))
+        #expect(envelope.content.hasPrefix(NostrProtocol.privateEnvelopeContentPrefix))
 
         // Decrypt as recipient
-        let (content, senderPubkey, _) = try NostrProtocol.decryptPrivateMessage(
-            giftWrap: giftWrap,
+        let (content, senderPubkey, _) = try NostrProtocol.decryptPrivateEnvelope(
+            envelope: envelope,
             recipientIdentity: recipient
         )
 
@@ -385,7 +415,7 @@ struct NostrProtocolTests {
         }
     }
 
-    @Test func ackRoundTripNIP44V2_ReadReceipt() throws {
+    @Test func readReceiptRoundTripsInsidePrivateEnvelope() throws {
         // Identities
         let sender = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
@@ -397,16 +427,16 @@ struct NostrProtocolTests {
             "Failed to embed read ack"
         )
 
-        let giftWrap = try NostrProtocol.createPrivateMessage(
+        let envelope = try NostrProtocol.createPrivateEnvelope(
             content: embedded,
             recipientPubkey: recipient.publicKeyHex,
             senderIdentity: sender
         )
 
-        #expect(giftWrap.content.hasPrefix("v2:"))
+        #expect(envelope.content.hasPrefix(NostrProtocol.privateEnvelopeContentPrefix))
 
-        let (content, senderPubkey, _) = try NostrProtocol.decryptPrivateMessage(
-            giftWrap: giftWrap,
+        let (content, senderPubkey, _) = try NostrProtocol.decryptPrivateEnvelope(
+            envelope: envelope,
             recipientIdentity: recipient
         )
         #expect(senderPubkey == sender.publicKeyHex)
@@ -467,7 +497,6 @@ struct NostrProtocolTests {
         #expect(object["limit"] as? Int == 42)
     }
 
-
     @Test func inboundNostrEventRejectsTooManyTags() throws {
         var eventDict = Self.validInboundEventDict()
         eventDict["tags"] = Array(
@@ -513,6 +542,24 @@ struct NostrProtocolTests {
         #expect(event.tags.count == 2)
     }
 
+    @Test func privateEnvelopeFilterIncludesPrimaryAndCompatibilityKinds() throws {
+        let since = Date(timeIntervalSince1970: 1_234_567)
+        let filter = NostrFilter.privateEnvelopesFor(pubkey: "recipient", since: since)
+        let data = try JSONEncoder().encode(filter)
+        let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        #expect(object["kinds"] as? [Int] == [
+            NostrProtocol.EventKind.privateEnvelope.rawValue,
+            NostrProtocol.EventKind.legacyNIP59GiftWrap.rawValue
+        ])
+        #expect(object["#p"] as? [String] == ["recipient"])
+        #expect(object["since"] as? Int == 1_234_567)
+        #expect(object["limit"] as? Int ==
+            TransportConfig.nostrRelayDefaultFetchLimit
+                * NostrProtocol.acceptedPrivateEnvelopeKinds.count
+        )
+    }
+
     // MARK: - Helpers
     private static func validInboundEventDict() -> [String: Any] {
         [
@@ -534,38 +581,13 @@ struct NostrProtocolTests {
         }
     }
 
-    private struct AndroidLegacyEnvelopeFixture: Decodable {
-        let androidCommit: String
-        let generator: String
-        let generatorPatch: String
-        let generatorPatchSHA256: String
-        let gradleTest: String
-        let fixtureSHA256: String
-        let recipientPrivateKey: String
-        let senderPublicKey: String
-
-        enum CodingKeys: String, CodingKey {
-            case androidCommit = "android_commit"
-            case generator
-            case generatorPatch = "generator_patch"
-            case generatorPatchSHA256 = "generator_patch_sha256"
-            case gradleTest = "gradle_test"
-            case fixtureSHA256 = "fixture_sha256"
-            case recipientPrivateKey = "recipient_private_key"
-            case senderPublicKey = "sender_public_key"
-        }
-    }
-
-    private func fixtureURL(name: String, extension fileExtension: String = "json") throws -> URL {
-        // Bundle.module only exists under SwiftPM; the Xcode test targets
-        // resolve resources through the test bundle (same pattern as
-        // NoiseProtocolTests' NoiseTestVectors.json loader).
+    private func fixtureURL(name: String) throws -> URL {
         #if SWIFT_PACKAGE
         let bundle = Bundle.module
         #else
         let bundle = Bundle(for: MockKeychain.self)
         #endif
-        return try #require(bundle.url(forResource: name, withExtension: fileExtension))
+        return try #require(bundle.url(forResource: name, withExtension: "json"))
     }
 
     private static func base64URLDecode(_ s: String) -> Data? {

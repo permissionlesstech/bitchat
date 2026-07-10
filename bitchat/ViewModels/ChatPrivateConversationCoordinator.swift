@@ -227,7 +227,7 @@ extension ChatViewModel: ChatPrivateConversationContext {
 final class ChatPrivateConversationCoordinator {
     private unowned let context: any ChatPrivateConversationContext
 
-    // Outbox retries re-wrap the same message in fresh gift-wrap events, so
+    // Outbox retries re-envelope the same message in fresh private events, so
     // relay-level event-ID dedup can't catch them; track inbound GeoDM
     // message IDs so each copy past the first costs one (already-deduped)
     // ack check and nothing else.

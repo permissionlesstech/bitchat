@@ -113,13 +113,14 @@ private extension NostrRelayManagerDependencies {
 @MainActor
 final class NostrRelayManager: ObservableObject {
     static let shared = NostrRelayManager()
-    // Track gift-wraps (kind 1059) we initiated so we can log OK acks at info.
+    // Track BitChat private envelopes we initiated so relay rejections can be
+    // reported without misclassifying ordinary public-event failures.
     // Entries are removed only on OK acks (or panic wipe); relays that never
     // ack leave entries behind for the process lifetime. Observability-only
     // state, bounded in practice by outbound DM volume.
-    private(set) static var pendingGiftWrapIDs = Set<String>()
-    static func registerPendingGiftWrap(id: String) {
-        pendingGiftWrapIDs.insert(id)
+    private(set) static var pendingPrivateEnvelopeIDs = Set<String>()
+    static func registerPendingPrivateEnvelope(id: String) {
+        pendingPrivateEnvelopeIDs.insert(id)
     }
     
     struct Relay: Identifiable {
@@ -134,7 +135,7 @@ final class NostrRelayManager: ObservableObject {
         var nextReconnectTime: Date?
     }
     
-    // Default relays carry NIP-17 gift wraps, so avoid relays known to reject kind 1059.
+    // Default relays carry persisted BitChat private-envelope events.
     private static let defaultRelays = [
         "wss://relay.damus.io",
         "wss://nos.lol",
@@ -147,7 +148,7 @@ final class NostrRelayManager: ObservableObject {
     @Published private(set) var relays: [Relay] = []
     @Published private(set) var isConnected = false
     /// Whether a relay that carries private messages is connected. DMs
-    /// target the default (gift-wrap-capable) relay set, so a connected
+    /// target the default private-envelope relay set, so a connected
     /// geohash/custom relay alone must not count — sends would still queue.
     @Published private(set) var isDMRelayConnected = false
     
@@ -458,7 +459,7 @@ final class NostrRelayManager: ObservableObject {
         duplicateInboundEventDropCount = 0
         duplicateInboundEventDropCountBySubscription.removeAll()
         inboundEventLogCount = 0
-        Self.pendingGiftWrapIDs.removeAll()
+        Self.pendingPrivateEnvelopeIDs.removeAll()
         confirmedSends.removeAll()
 
         messageQueueLock.lock()
@@ -1255,7 +1256,7 @@ final class NostrRelayManager: ObservableObject {
         guard shouldDeliverInboundEvent(subscriptionID: subId, eventID: event.id) else {
             return
         }
-        if event.kind != 1059 {
+        if !NostrProtocol.acceptedPrivateEnvelopeKinds.contains(event.kind) {
             // Per-event logging floods dev builds in busy geohashes; sample it.
             inboundEventLogCount += 1
             if inboundEventLogCount == 1 || inboundEventLogCount.isMultiple(of: TransportConfig.nostrInboundEventLogInterval) {
@@ -1294,11 +1295,11 @@ final class NostrRelayManager: ObservableObject {
         case .ok(let eventId, let success, let reason):
             resolveConfirmedSend(eventID: eventId, relayURL: relayUrl, accepted: success)
             if success {
-                _ = Self.pendingGiftWrapIDs.remove(eventId)
+                _ = Self.pendingPrivateEnvelopeIDs.remove(eventId)
                 SecureLogger.debug("✅ Accepted id=\(eventId.prefix(16))… relay=\(relayUrl)", category: .session)
             } else {
-                let isGiftWrap = Self.pendingGiftWrapIDs.remove(eventId) != nil
-                if isGiftWrap {
+                let isPrivateEnvelope = Self.pendingPrivateEnvelopeIDs.remove(eventId) != nil
+                if isPrivateEnvelope {
                     SecureLogger.warning("📮 Rejected id=\(eventId.prefix(16))… relay=\(relayUrl) reason=\(reason)", category: .session)
                 } else {
                     SecureLogger.error("📮 Rejected id=\(eventId.prefix(16))… relay=\(relayUrl) reason=\(reason)", category: .session)
@@ -1809,13 +1810,19 @@ struct NostrFilter: Encodable {
         }
     }
     
-    // For NIP-17 gift wraps
-    static func giftWrapsFor(pubkey: String, since: Date? = nil) -> NostrFilter {
+    // BitChat private envelopes, plus compatibility legacy envelopes emitted
+    // during the bounded migration and stored by older releases as kind 1059.
+    static func privateEnvelopesFor(pubkey: String, since: Date? = nil) -> NostrFilter {
         var filter = NostrFilter()
-        filter.kinds = [1059] // Gift wrap kind
+        filter.kinds = NostrProtocol.acceptedPrivateEnvelopeKinds
         filter.since = since?.timeIntervalSince1970.toInt()
         filter.tagFilters = ["p": [pubkey]]
-        filter.limit = TransportConfig.nostrRelayDefaultFetchLimit // reasonable limit
+        // Before the migration deadline each logical payload is stored once
+        // per accepted wire kind. Scale the combined filter so compatibility
+        // copies do not halve the number of logical messages/acks recovered
+        // after a reconnect.
+        filter.limit = TransportConfig.nostrRelayDefaultFetchLimit
+            * NostrProtocol.acceptedPrivateEnvelopeKinds.count
         return filter
     }
 
