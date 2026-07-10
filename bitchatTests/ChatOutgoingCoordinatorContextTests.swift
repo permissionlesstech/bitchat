@@ -87,6 +87,11 @@ private final class MockChatOutgoingContext: ChatOutgoingContext {
         sentGeohashContexts.append(context)
     }
 
+    private(set) var bridgedMessages: [(content: String, senderPeerID: PeerID, timestamp: Date)] = []
+    func bridgeOutgoingPublicMessage(_ content: String, senderPeerID: PeerID, timestamp: Date) {
+        bridgedMessages.append((content, senderPeerID, timestamp))
+    }
+
     // Geohash identity
     struct IdentityUnavailable: Error {}
     var deriveNostrIdentityError: Error?
@@ -192,6 +197,9 @@ struct ChatOutgoingCoordinatorContextTests {
         context.isTeleported = true
 
         coordinator.sendMessage("hello geo")
+        // Geohash sends mine a NIP-13 nonce tag off-main before echoing and
+        // sending; await the send task, then drain the main queue.
+        await coordinator.geohashMiningTask?.value
         await drainMainActorTasks()
 
         // Local echo carries the geohash sender suffix (#last-4-of-pubkey) and
@@ -214,5 +222,36 @@ struct ChatOutgoingCoordinatorContextTests {
         #expect(context.systemMessages.count == 1)
         #expect(context.appendedPublicMessages.count == 1)
         #expect(context.sentGeohashContexts.count == 1)
+    }
+
+    @Test @MainActor
+    func sendMessage_onLocationChannel_serializesRapidSendsInSendOrder() async {
+        let context = MockChatOutgoingContext()
+        let coordinator = ChatOutgoingCoordinator(context: context)
+        let channel = GeohashChannel(level: .city, geohash: "u4pruydq")
+        context.activeChannel = .location(channel)
+
+        // Two back-to-back sends. The first carries much larger content, so
+        // its NIP-13 mining hashes a bigger event per attempt and runs longer
+        // than the second's. Without serialization the second (faster) task
+        // could finish first and reorder both the local timeline and the
+        // relayed events. The coordinator chains the mining tasks — each send
+        // awaits the previous send's task before it echoes and relays — so the
+        // visible order must always match the send order.
+        let first = "first " + String(repeating: "x", count: 4000)
+        let second = "second"
+        coordinator.sendMessage(first)
+        coordinator.sendMessage(second)
+
+        // The stored task is the second send, which awaits the first.
+        await coordinator.geohashMiningTask?.value
+        await drainMainActorTasks()
+
+        // Local echoes land in send order…
+        #expect(context.appendedPublicMessages.map(\.message.content) == [first, second])
+        // …and so do the relayed events (IDs match the echoes 1:1, in order).
+        #expect(context.sentGeohashContexts.count == 2)
+        #expect(context.sentGeohashContexts.map(\.event.id)
+                == context.appendedPublicMessages.map(\.message.id))
     }
 }

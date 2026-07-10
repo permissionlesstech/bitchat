@@ -202,10 +202,6 @@ public extension SecureLogger {
         }
     }
     
-    static func debug(_ event: SecurityEvent, file: String = #file, line: Int = #line, function: String = #function) {
-        logSecurityEvent(event, level: .debug, file: file, line: line, function: function)
-    }
-    
     static func info(_ event: SecurityEvent, file: String = #file, line: Int = #line, function: String = #function) {
         logSecurityEvent(event, level: .info, file: file, line: line, function: function)
     }
@@ -278,16 +274,4 @@ private extension SecureLogger {
         let timestamp = timestampFormatter.string(from: Date())
         return "[\(timestamp)] [\(fileName):\(line) \(function)]"
     }
-}
-
-// MARK: - Migration Helper
-
-/// Helper to migrate from print statements to SecureLogger
-/// Usage: Replace print(...) with secureLog(...)
-public func secureLog(_ items: Any..., separator: String = " ", terminator: String = "\n",
-                      file: String = #file, line: Int = #line, function: String = #function) {
-    #if DEBUG
-    let message = items.map { String(describing: $0) }.joined(separator: separator)
-    SecureLogger.debug(message, file: file, line: line, function: function)
-    #endif
 }

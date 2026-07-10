@@ -101,9 +101,7 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
 
     private let cl: LocationStateManaging
     private let geocoder: LocationStateGeocoding
-    private var lastLocation: CLLocation?
     private var refreshTimer: Timer?
-    private var isGeocoding: Bool = false
 
     // MARK: - Persistence Keys
 
@@ -268,7 +266,7 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
         }
     }
 
-    func beginLiveRefresh(interval: TimeInterval = TransportConfig.locationLiveRefreshInterval) {
+    func beginLiveRefresh(interval _: TimeInterval = TransportConfig.locationLiveRefreshInterval) {
         guard permissionState == .authorized else { return }
         refreshTimer?.invalidate()
         refreshTimer = nil
@@ -369,23 +367,22 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
     }
 
     func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
-        updatePermissionState(from: status)
-        if case .authorized = permissionState {
+        let newState = updatePermissionState(from: status)
+        if newState == .authorized {
             requestOneShotLocation()
         }
     }
 
     @available(iOS 14.0, macOS 11.0, *)
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        updatePermissionState(from: manager.authorizationStatus)
-        if case .authorized = permissionState {
+        let newState = updatePermissionState(from: manager.authorizationStatus)
+        if newState == .authorized {
             requestOneShotLocation()
         }
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let loc = locations.last else { return }
-        lastLocation = loc
         computeChannels(from: loc.coordinate)
         reverseGeocodeLocation(loc)
     }
@@ -396,7 +393,8 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
 
     // MARK: - Private Helpers (Permission)
 
-    private func updatePermissionState(from status: CLAuthorizationStatus) {
+    @discardableResult
+    private func updatePermissionState(from status: CLAuthorizationStatus) -> PermissionState {
         let newState: PermissionState
         switch status {
         case .notDetermined: newState = .notDetermined
@@ -405,7 +403,15 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
         case .authorizedAlways, .authorizedWhenInUse, .authorized: newState = .authorized
         @unknown default: newState = .restricted
         }
+        // Do not rely on a mounted SwiftUI consumer to stop high-accuracy
+        // updates. Authorization can change while the app is backgrounded,
+        // and stopping here also closes the gap before the published state is
+        // delivered on the main actor.
+        if newState != .authorized {
+            endLiveRefresh()
+        }
         Task { @MainActor in self.permissionState = newState }
+        return newState
     }
 
     // MARK: - Private Helpers (Channel Computation)
@@ -441,10 +447,8 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
 
     private func reverseGeocodeLocation(_ location: CLLocation) {
         geocoder.cancelGeocode()
-        isGeocoding = true
         geocoder.reverseGeocodeLocation(location) { [weak self] placemarks, _ in
             guard let self = self else { return }
-            self.isGeocoding = false
             if let pm = placemarks?.first {
                 let names = self.locationNamesByLevel(from: pm)
                 Task { @MainActor in self.locationNames = names }
@@ -631,16 +635,6 @@ extension LocationStateManager {
     /// Backward compatibility: toggle bookmark (was GeohashBookmarksStore.toggle)
     func toggle(_ geohash: String) {
         toggleBookmark(geohash)
-    }
-
-    /// Backward compatibility: add bookmark (was GeohashBookmarksStore.add)
-    func add(_ geohash: String) {
-        addBookmark(geohash)
-    }
-
-    /// Backward compatibility: remove bookmark (was GeohashBookmarksStore.remove)
-    func remove(_ geohash: String) {
-        removeBookmark(geohash)
     }
 }
 #endif

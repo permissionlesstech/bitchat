@@ -33,12 +33,20 @@ final class BLEFragmentHandler {
 
     func handle(_ packet: BitchatPacket, from peerID: PeerID) {
         let env = environment
-        // Don't process our own fragments
+        guard let header = BLEFragmentHeader(packet: packet) else { return }
+
+        // Sync replay legitimately hands us our own fragments back (the RSR
+        // ttl=0 restore path): after a relaunch the fragment store starts
+        // empty, so our sync filter doesn't cover them and peers re-offer
+        // them. Record them as seen — the next round's filter then covers
+        // them and the redelivery stops — but skip assembly: we authored
+        // the original, there is nothing to reassemble.
         if peerID == env.localPeerID() {
+            if header.isBroadcastFragment {
+                env.trackPacketSeen(packet)
+            }
             return
         }
-
-        guard let header = BLEFragmentHeader(packet: packet) else { return }
 
         if header.isBroadcastFragment {
             env.trackPacketSeen(packet)

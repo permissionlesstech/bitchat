@@ -23,10 +23,6 @@ private final class DefaultTransportProbe: Transport {
     var myNickname = "Tester"
     private(set) var sentMessages: [(content: String, mentions: [String])] = []
 
-    var peerSnapshotPublisher: AnyPublisher<[TransportPeerSnapshot], Never> {
-        subject.eraseToAnyPublisher()
-    }
-
     func currentPeerSnapshots() -> [TransportPeerSnapshot] { subject.value }
     func setNickname(_ nickname: String) { myNickname = nickname }
     func startServices() {}
@@ -50,14 +46,19 @@ private final class DefaultTransportProbe: Transport {
 struct ProtocolContractTests {
     @Test
     func commandInfo_exposesAliasesPlaceholdersAndGeoVariants() {
-        #expect(CommandInfo.message.id == "dm")
-        #expect(CommandInfo.message.alias == "/dm")
+        // Aliases must match what CommandProcessor actually accepts —
+        // the suggestion panel is the only command-discovery surface.
+        #expect(CommandInfo.message.id == "msg")
+        #expect(CommandInfo.message.alias == "/msg")
         #expect(CommandInfo.message.placeholder != nil)
         #expect(CommandInfo.clear.placeholder == nil)
         #expect(CommandInfo.favorite.description.isEmpty == false)
-        #expect(CommandInfo.all(isGeoPublic: false, isGeoDM: false).contains(.favorite) == false)
-        #expect(CommandInfo.all(isGeoPublic: true, isGeoDM: false).contains(.favorite))
-        #expect(CommandInfo.all(isGeoPublic: false, isGeoDM: true).contains(.unfavorite))
+        #expect(CommandInfo.all(isGeoPublic: false, isGeoDM: false).contains(.help))
+        // Favorites are rejected by the processor in geohash contexts, so
+        // they are suggested only in mesh.
+        #expect(CommandInfo.all(isGeoPublic: false, isGeoDM: false).contains(.favorite))
+        #expect(CommandInfo.all(isGeoPublic: true, isGeoDM: false).contains(.favorite) == false)
+        #expect(CommandInfo.all(isGeoPublic: false, isGeoDM: true).contains(.unfavorite) == false)
     }
 
     @Test
@@ -102,6 +103,9 @@ struct ProtocolContractTests {
         #expect(probe.sentMessages.count == 1)
         #expect(probe.sentMessages.first?.content == "hello")
         #expect(probe.acceptPendingFile(id: "pending") == nil)
+        // Secure delivery defaults to prompt delivery (itself defaulting to
+        // reachability) for transports without a forgeable link layer.
+        #expect(probe.canDeliverSecurely(to: peerID) == false)
     }
 
     @Test

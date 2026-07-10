@@ -19,6 +19,11 @@ struct NostrProtocol {
         case giftWrap = 1059 // NIP-59 gift wrap
         case ephemeralEvent = 20000
         case geohashPresence = 20001
+        case deletion = 5 // NIP-09 event deletion request
+        /// Sealed courier envelope parked on relays under its rotating
+        /// recipient tag (`#x`). Regular (stored) kind so it survives until
+        /// its NIP-40 expiration — the whole point is store-and-forward.
+        case courierDrop = 1401
     }
     
     /// Create a NIP-17 private message
@@ -170,6 +175,63 @@ struct NostrProtocol {
         nickname: String? = nil,
         teleported: Bool = false
     ) throws -> NostrEvent {
+        let event = NostrEvent(
+            pubkey: senderIdentity.publicKeyHex,
+            createdAt: Date(),
+            kind: .ephemeralEvent,
+            tags: ephemeralGeohashTags(geohash: geohash, nickname: nickname, teleported: teleported),
+            content: content
+        )
+        let schnorrKey = try senderIdentity.schnorrSigningKey()
+        return try event.sign(with: schnorrKey)
+    }
+
+    /// Create a kind-20000 geohash message carrying a NIP-13 proof-of-work
+    /// nonce tag (see `NostrPoW`). Mining runs off the calling actor and is
+    /// bounded by `NostrPoW.miningTimeCap`; when the cap hits (or the
+    /// surrounding task is cancelled) the event ships at the highest
+    /// committed difficulty still met, and if mining is impossible it ships
+    /// unmined — sending is never blocked.
+    static func createMinedEphemeralGeohashEvent(
+        content: String,
+        geohash: String,
+        senderIdentity: NostrIdentity,
+        nickname: String? = nil,
+        teleported: Bool = false,
+        powTargetBits: Int = NostrPoW.targetBits
+    ) async throws -> NostrEvent {
+        var tags = ephemeralGeohashTags(geohash: geohash, nickname: nickname, teleported: teleported)
+        // Fix created_at up front: the mined nonce commits to the full
+        // serialized event, so the signed event must reuse the exact value.
+        let createdAt = Int(Date().timeIntervalSince1970)
+        if let nonceTag = await NostrPoW.mineNonceTag(
+            pubkey: senderIdentity.publicKeyHex,
+            createdAt: createdAt,
+            kind: EventKind.ephemeralEvent.rawValue,
+            tags: tags,
+            content: content,
+            targetBits: powTargetBits
+        ) {
+            tags.append(nonceTag)
+        }
+        let event = NostrEvent(
+            pubkey: senderIdentity.publicKeyHex,
+            createdAt: Date(timeIntervalSince1970: TimeInterval(createdAt)),
+            kind: .ephemeralEvent,
+            tags: tags,
+            content: content
+        )
+        let schnorrKey = try senderIdentity.schnorrSigningKey()
+        return try event.sign(with: schnorrKey)
+    }
+
+    /// Tags for a kind-20000 geohash message (shared by the plain and mined
+    /// variants).
+    private static func ephemeralGeohashTags(
+        geohash: String,
+        nickname: String?,
+        teleported: Bool
+    ) -> [[String]] {
         var tags = [["g", geohash]]
         if let nickname = nickname?.trimmedOrNilIfEmpty {
             tags.append(["n", nickname])
@@ -177,15 +239,7 @@ struct NostrProtocol {
         if teleported {
             tags.append(["t", "teleport"])
         }
-        let event = NostrEvent(
-            pubkey: senderIdentity.publicKeyHex,
-            createdAt: Date(),
-            kind: .ephemeralEvent,
-            tags: tags,
-            content: content
-        )
-        let schnorrKey = try senderIdentity.schnorrSigningKey()
-        return try event.sign(with: schnorrKey)
+        return tags
     }
 
     /// Create a geohash presence heartbeat (kind 20001)
@@ -206,16 +260,114 @@ struct NostrProtocol {
         return try event.sign(with: schnorrKey)
     }
 
+    // MARK: - Mesh bridge (rendezvous) events
+
+    /// Create a mesh-bridge public message (kind 20000) for a geohash-cell
+    /// rendezvous. The distinct `r` tag keeps bridge traffic out of geohash
+    /// channel subscriptions (which filter on `#g`); `m` is
+    /// `[stable ID, mesh sender ID, wire timestamp in ms]`. Element 1 is the
+    /// content-stable mesh message ID (`MeshMessageIdentity`) for v1.7.0
+    /// parsers, which key their dedup on `m[1]` unconditionally and need it
+    /// per-message-unique. Current parsers key bridge rows by the authenticated
+    /// event ID and recompute elements 2-3 only as a radio-copy hint; the mesh
+    /// coordinates are public and cannot authenticate the Nostr signer.
+    static func createBridgeMeshEvent(
+        content: String,
+        cell: String,
+        senderIdentity: NostrIdentity,
+        nickname: String? = nil,
+        meshSenderID: String? = nil,
+        meshTimestampMs: UInt64? = nil
+    ) throws -> NostrEvent {
+        var tags = [["r", cell]]
+        if let nickname = nickname?.trimmedOrNilIfEmpty {
+            tags.append(["n", nickname])
+        }
+        if let meshSenderID = meshSenderID?.trimmedOrNilIfEmpty, let meshTimestampMs {
+            let stableID = MeshMessageIdentity.stableID(
+                senderIDHex: meshSenderID,
+                timestampMs: meshTimestampMs,
+                content: content
+            )
+            tags.append(["m", stableID, meshSenderID, String(meshTimestampMs)])
+        }
+        let event = NostrEvent(
+            pubkey: senderIdentity.publicKeyHex,
+            createdAt: Date(),
+            kind: .ephemeralEvent,
+            tags: tags,
+            content: content
+        )
+        let schnorrKey = try senderIdentity.schnorrSigningKey()
+        return try event.sign(with: schnorrKey)
+    }
+
+    /// Create a mesh-bridge presence heartbeat (kind 20001) on a rendezvous
+    /// cell: empty content, `r` tag only — the bridge analogue of geohash
+    /// presence, counted into "people across the bridge".
+    static func createBridgePresenceEvent(
+        cell: String,
+        senderIdentity: NostrIdentity
+    ) throws -> NostrEvent {
+        let event = NostrEvent(
+            pubkey: senderIdentity.publicKeyHex,
+            createdAt: Date(),
+            kind: .geohashPresence,
+            tags: [["r", cell]],
+            content: ""
+        )
+        let schnorrKey = try senderIdentity.schnorrSigningKey()
+        return try event.sign(with: schnorrKey)
+    }
+
+    /// Create a courier drop (kind 1401): an opaque sealed courier envelope
+    /// parked on relays. `x` is the hex recipient tag the recipient (or a
+    /// gateway acting for them) subscribes for; the NIP-40 expiration tracks
+    /// the envelope expiry so honoring relays garbage-collect the drop. The
+    /// signing identity should be a throwaway — the envelope authenticates
+    /// its sender internally via Noise-X, and linking drops to a stable
+    /// publisher key would leak courier traffic patterns.
+    static func createCourierDropEvent(
+        envelope: Data,
+        recipientTagHex: String,
+        expiresAt: Date,
+        senderIdentity: NostrIdentity
+    ) throws -> NostrEvent {
+        let tags = [
+            ["x", recipientTagHex],
+            ["expiration", String(Int(expiresAt.timeIntervalSince1970))]
+        ]
+        let event = NostrEvent(
+            pubkey: senderIdentity.publicKeyHex,
+            createdAt: Date(),
+            kind: .courierDrop,
+            tags: tags,
+            content: envelope.base64EncodedString()
+        )
+        let schnorrKey = try senderIdentity.schnorrSigningKey()
+        return try event.sign(with: schnorrKey)
+    }
+
     /// Create a persistent location note (kind 1: text note) tagged to a street-level geohash.
+    /// An optional `expiresAt` adds a NIP-40 expiration tag so honoring relays
+    /// drop the note in step with a bridged board post's expiry.
     static func createGeohashTextNote(
         content: String,
         geohash: String,
         senderIdentity: NostrIdentity,
-        nickname: String? = nil
+        nickname: String? = nil,
+        expiresAt: Date? = nil,
+        urgent: Bool = false
     ) throws -> NostrEvent {
         var tags = [["g", geohash]]
         if let nickname = nickname?.trimmedOrNilIfEmpty {
             tags.append(["n", nickname])
+        }
+        if let expiresAt {
+            tags.append(["expiration", String(Int(expiresAt.timeIntervalSince1970))])
+        }
+        if urgent {
+            tags.append(["t", "urgent"])
         }
         let event = NostrEvent(
             pubkey: senderIdentity.publicKeyHex,
@@ -227,7 +379,25 @@ struct NostrProtocol {
         let schnorrKey = try senderIdentity.schnorrSigningKey()
         return try event.sign(with: schnorrKey)
     }
-    
+
+    /// Create a NIP-09 deletion request for one of our own events. Relays that
+    /// honor NIP-09 drop the referenced event; it must be signed by the same
+    /// key that signed the original.
+    static func createDeleteEvent(
+        ofEventID eventID: String,
+        senderIdentity: NostrIdentity
+    ) throws -> NostrEvent {
+        let event = NostrEvent(
+            pubkey: senderIdentity.publicKeyHex,
+            createdAt: Date(),
+            kind: .deletion,
+            tags: [["e", eventID]],
+            content: ""
+        )
+        let schnorrKey = try senderIdentity.schnorrSigningKey()
+        return try event.sign(with: schnorrKey)
+    }
+
     // MARK: - Private Methods
     
     private static func createSeal(
@@ -474,37 +644,6 @@ struct NostrProtocol {
         return sharedSecretData
     }
     
-    // Direct version that doesn't try to add prefixes
-    private static func deriveSharedSecretDirect(
-        privateKey: P256K.Schnorr.PrivateKey,
-        publicKey: Data
-    ) throws -> Data {
-        // Direct shared secret calculation
-        
-        // Convert Schnorr private key to KeyAgreement private key
-        let keyAgreementPrivateKey = try P256K.KeyAgreement.PrivateKey(
-            dataRepresentation: privateKey.dataRepresentation
-        )
-        
-        // Use the public key as-is (should already have prefix)
-        let keyAgreementPublicKey = try P256K.KeyAgreement.PublicKey(
-            dataRepresentation: publicKey,
-            format: .compressed
-        )
-        
-        // Perform ECDH
-        let sharedSecret = try keyAgreementPrivateKey.sharedSecretFromKeyAgreement(
-            with: keyAgreementPublicKey,
-            format: .compressed
-        )
-        
-        // Convert SharedSecret to Data
-        let sharedSecretData = sharedSecret.withUnsafeBytes { Data($0) }
-        
-        // Return raw ECDH shared secret; HKDF is applied by deriveNIP44V2Key
-        return sharedSecretData
-    }
-    
     private static func randomizedTimestamp() -> Date {
         // Add random offset to current time for privacy
         // This prevents timing correlation attacks while the actual message timestamp
@@ -634,11 +773,8 @@ struct NostrEvent: Codable {
 
 enum NostrError: Error {
     case invalidPublicKey
-    case invalidPrivateKey
     case invalidEvent
     case invalidCiphertext
-    case signingFailed
-    case encryptionFailed
 }
 
 // MARK: - NIP-44 v2 helpers (XChaCha20-Poly1305)
@@ -648,7 +784,7 @@ private extension NostrProtocol {
         let derivedKey = HKDF<CryptoKit.SHA256>.deriveKey(
             inputKeyMaterial: SymmetricKey(data: sharedSecretData),
             salt: Data(),
-            info: "nip44-v2".data(using: .utf8)!,
+            info: Data("nip44-v2".utf8),
             outputByteCount: 32
         )
         return derivedKey.withUnsafeBytes { Data($0) }

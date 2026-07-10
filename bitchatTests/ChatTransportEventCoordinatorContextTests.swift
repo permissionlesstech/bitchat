@@ -121,9 +121,11 @@ private final class MockChatTransportEventContext: ChatTransportEventContext {
 
     // Routing & acknowledgements
     private(set) var flushedOutboxPeerIDs: [PeerID] = []
+    private(set) var courierRetryPeerIDs: [PeerID] = []
     private(set) var meshDeliveryAcks: [(messageID: String, peerID: PeerID)] = []
 
     func flushRouterOutbox(for peerID: PeerID) { flushedOutboxPeerIDs.append(peerID) }
+    func retryCourierDeposits(via peerID: PeerID) { courierRetryPeerIDs.append(peerID) }
     func sendMeshDeliveryAck(for messageID: String, to peerID: PeerID) {
         meshDeliveryAcks.append((messageID, peerID))
     }
@@ -153,6 +155,31 @@ private final class MockChatTransportEventContext: ChatTransportEventContext {
 
     func handleVerifyResponsePayload(from peerID: PeerID, payload: Data) {
         verifyResponsePayloads.append((peerID, payload))
+    }
+
+    // Group payloads
+    private(set) var groupInvitePayloads: [(peerID: PeerID, payload: Data)] = []
+    private(set) var groupKeyUpdatePayloads: [(peerID: PeerID, payload: Data)] = []
+
+    func handleGroupInvitePayload(from peerID: PeerID, payload: Data) {
+        groupInvitePayloads.append((peerID, payload))
+    }
+
+    func handleGroupKeyUpdatePayload(from peerID: PeerID, payload: Data) {
+        groupKeyUpdatePayloads.append((peerID, payload))
+    }
+
+    private(set) var vouchPayloads: [(peerID: PeerID, payload: Data)] = []
+
+    func handleVouchPayload(from peerID: PeerID, payload: Data) {
+        vouchPayloads.append((peerID, payload))
+    }
+
+    // Live voice payloads
+    private(set) var voiceFramePayloads: [(peerID: PeerID, payload: Data, timestamp: Date)] = []
+
+    func handleVoiceFramePayload(from peerID: PeerID, payload: Data, timestamp: Date) {
+        voiceFramePayloads.append((peerID, payload, timestamp))
     }
 }
 
@@ -259,7 +286,7 @@ struct ChatTransportEventCoordinatorContextTests {
         context.privateChats[peerID] = [
             makeMessage(id: "theirs-1", isPrivate: true, senderPeerID: peerID),
             makeMessage(id: "mine-1", sender: "me", isPrivate: true, senderPeerID: context.myPeerID),
-            makeMessage(id: "theirs-2", isPrivate: true, senderPeerID: peerID),
+            makeMessage(id: "theirs-2", isPrivate: true, senderPeerID: peerID)
         ]
         coordinator.didDisconnectFromPeer(peerID)
         await drainMainActorTasks()
@@ -282,7 +309,7 @@ struct ChatTransportEventCoordinatorContextTests {
         context.unreadPrivateMessages = [peerID]
         context.privateChats[peerID] = [
             makeMessage(id: "m1", isPrivate: true, senderPeerID: peerID),
-            makeMessage(id: "mine", sender: "me", isPrivate: true, senderPeerID: context.myPeerID),
+            makeMessage(id: "mine", sender: "me", isPrivate: true, senderPeerID: context.myPeerID)
         ]
 
         coordinator.didDisconnectFromPeer(peerID)

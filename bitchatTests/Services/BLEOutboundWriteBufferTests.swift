@@ -72,4 +72,38 @@ struct BLEOutboundWriteBufferTests {
 
         #expect(buffer.peripheralIDs.isEmpty)
     }
+
+    @Test
+    func acceptanceReportsWhenNewLowPriorityWriteIsTrimmed() {
+        var buffer = BLEOutboundWriteBuffer()
+        let peerID = "peer-1"
+        _ = buffer.enqueue(
+            data: Data(repeating: 0x01, count: 8),
+            for: peerID,
+            priority: .high,
+            capBytes: 8
+        )
+
+        let attempt = buffer.enqueueReportingAcceptance(
+            data: Data(repeating: 0x02, count: 8),
+            for: peerID,
+            priority: .low,
+            capBytes: 8
+        )
+
+        #expect(!attempt.accepted)
+        #expect(buffer.takeAll(for: peerID).compactMap(\.data.first) == [0x01])
+    }
+
+    @Test
+    func disconnectDiscardRemovesOnlyThatPeripheralQueue() {
+        var buffer = BLEOutboundWriteBuffer()
+        _ = buffer.enqueue(data: Data([1]), for: "gone", priority: .high, capBytes: 100)
+        _ = buffer.enqueue(data: Data([2]), for: "live", priority: .high, capBytes: 100)
+
+        buffer.discardAll(for: "gone")
+
+        #expect(buffer.takeAll(for: "gone").isEmpty)
+        #expect(buffer.takeAll(for: "live").map(\.data) == [Data([2])])
+    }
 }

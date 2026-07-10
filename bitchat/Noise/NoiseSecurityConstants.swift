@@ -21,12 +21,6 @@ enum NoiseSecurityConstants {
     // Maximum number of messages before rekey (2^64 - 1 is the nonce limit)
     static let maxMessagesPerSession: UInt64 = 1_000_000_000 // 1 billion messages
     
-    // Handshake timeout - abandon incomplete handshakes
-    static let handshakeTimeout: TimeInterval = 60 // 1 minute
-    
-    // Maximum concurrent sessions per peer
-    static let maxSessionsPerPeer = 3
-    
     // Rate limiting
     static let maxHandshakesPerMinute = 10
     static let maxMessagesPerSecond = 100

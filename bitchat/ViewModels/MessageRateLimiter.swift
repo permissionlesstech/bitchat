@@ -48,15 +48,25 @@ struct MessageRateLimiter {
         self.contentRefill = contentRefillPerSec
     }
 
-    mutating func allow(senderKey: String, contentKey: String, now: Date = Date()) -> Bool {
-        var senderBucket = senderBuckets[senderKey] ?? TokenBucket(
-            capacity: senderCapacity,
-            tokens: senderCapacity,
-            refillPerSec: senderRefill,
-            lastRefill: now
-        )
-        let senderAllowed = senderBucket.allow(now: now)
-        senderBuckets[senderKey] = senderBucket
+    /// - Parameter powBits: validated NIP-13 difficulty of the event
+    ///   (`NostrPoW.validatedDifficulty`; 0 for mesh or no-PoW events).
+    ///   At or above `NostrPoW.rateLimitBypassBits` the per-sender bucket is
+    ///   skipped entirely — each such message paid for itself with work — but
+    ///   the per-content flood bucket still applies.
+    mutating func allow(senderKey: String, contentKey: String, powBits: Int = 0, now: Date = Date()) -> Bool {
+        let senderAllowed: Bool
+        if powBits >= NostrPoW.rateLimitBypassBits {
+            senderAllowed = true
+        } else {
+            var senderBucket = senderBuckets[senderKey] ?? TokenBucket(
+                capacity: senderCapacity,
+                tokens: senderCapacity,
+                refillPerSec: senderRefill,
+                lastRefill: now
+            )
+            senderAllowed = senderBucket.allow(now: now)
+            senderBuckets[senderKey] = senderBucket
+        }
 
         var contentBucket = contentBuckets[contentKey] ?? TokenBucket(
             capacity: contentCapacity,
@@ -68,10 +78,5 @@ struct MessageRateLimiter {
         contentBuckets[contentKey] = contentBucket
 
         return senderAllowed && contentAllowed
-    }
-
-    mutating func reset() {
-        senderBuckets.removeAll()
-        contentBuckets.removeAll()
     }
 }

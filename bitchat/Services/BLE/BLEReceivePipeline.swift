@@ -48,11 +48,29 @@ struct BLEReceivePipeline {
             senderIsSelf: senderID == localPeerID,
             recipientIsSelf: PeerID(hexData: packet.recipientID) == localPeerID,
             isEncrypted: packet.type == MessageType.noiseEncrypted.rawValue,
-            isDirectedEncrypted: packet.type == MessageType.noiseEncrypted.rawValue && packet.recipientID != nil,
+            // Courier envelopes are directed opaque ciphertext like DMs; a
+            // remote handover toward a relayed announce rides this same
+            // deterministic relay treatment instead of the broadcast clamp.
+            // Ping/pong diagnostics ride it too: probes need the same
+            // deterministic multi-hop relay as DMs (always relay, jitter,
+            // no TTL cap) so RTT and hop counts reflect the real path.
+            // Directed nostrCarrier uplinks (mesh-only peer -> gateway) need
+            // the same multi-hop treatment to reach a non-adjacent gateway.
+            isDirectedEncrypted: (packet.type == MessageType.noiseEncrypted.rawValue
+                || packet.type == MessageType.courierEnvelope.rawValue
+                || packet.type == MessageType.ping.rawValue
+                || packet.type == MessageType.pong.rawValue
+                || packet.type == MessageType.nostrCarrier.rawValue) && packet.recipientID != nil,
             isFragment: packet.type == MessageType.fragment.rawValue,
             isDirectedFragment: packet.type == MessageType.fragment.rawValue && packet.recipientID != nil,
             isHandshake: packet.type == MessageType.noiseHandshake.rawValue,
             isAnnounce: packet.type == MessageType.announce.rawValue,
+            isRequestSync: packet.type == MessageType.requestSync.rawValue,
+            // Board posts relay like broadcast messages; urgent ones get the
+            // announce-class TTL headroom so alerts travel the extra hop.
+            isUrgentBoardPost: packet.type == MessageType.boardPost.rawValue
+                && BoardWire.urgentFlag(in: packet.payload),
+            isVoiceFrame: packet.type == MessageType.voiceFrame.rawValue,
             degree: degree,
             highDegreeThreshold: highDegreeThreshold
         )

@@ -67,4 +67,19 @@ struct BLEOutboundNotificationBufferTests {
 
         #expect(buffer.isEmpty)
     }
+
+    @Test
+    func unsubscribeRemovesTargetSpecificCiphertextOnlyForThatCentral() {
+        var buffer = BLEOutboundNotificationBuffer<String>()
+        _ = buffer.enqueue(data: Data([1]), targets: ["gone"], capCount: 4)
+        _ = buffer.enqueue(data: Data([2]), targets: ["gone", "live"], capCount: 4)
+        _ = buffer.enqueue(data: Data([3]), targets: nil, capCount: 4)
+
+        buffer.removeTarget { $0 == "gone" }
+        let remaining = buffer.takeAll()
+
+        #expect(remaining.map(\.data) == [Data([2]), Data([3])])
+        #expect(remaining[0].targets == ["live"])
+        #expect(remaining[1].targets == nil)
+    }
 }

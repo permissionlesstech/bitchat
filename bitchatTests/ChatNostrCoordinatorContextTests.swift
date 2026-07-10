@@ -70,7 +70,7 @@ private final class MockChatNostrContext: ChatNostrContext {
     private(set) var mentionCheckedMessageIDs: [String] = []
     private(set) var hapticMessageIDs: [String] = []
 
-    func handlePublicMessage(_ message: BitchatMessage) { handledPublicMessages.append(message) }
+    func handlePublicMessage(_ message: BitchatMessage, powBits: Int) { handledPublicMessages.append(message) }
     func checkForMentions(_ message: BitchatMessage) { mentionCheckedMessageIDs.append(message.id) }
     func sendHapticFeedback(for message: BitchatMessage) { hapticMessageIDs.append(message.id) }
     func parseMentions(from content: String) -> [String] { [] }
@@ -213,8 +213,6 @@ private final class MockChatNostrContext: ChatNostrContext {
 
     // Favorites & notifications
     var favoriteRelationshipsByNoiseKey: [Data: FavoritesPersistenceService.FavoriteRelationship] = [:]
-    private(set) var addedFavorites: [(noiseKey: Data, nostrPublicKey: String?, nickname: String)] = []
-    private(set) var postedLocalNotifications: [(title: String, body: String, identifier: String)] = []
     private(set) var geohashActivityNotifications: [(geohash: String, bodyPreview: String)] = []
 
     func favoriteRelationship(forNoiseKey noiseKey: Data) -> FavoritesPersistenceService.FavoriteRelationship? {
@@ -223,14 +221,6 @@ private final class MockChatNostrContext: ChatNostrContext {
 
     func allFavoriteRelationships() -> [FavoritesPersistenceService.FavoriteRelationship] {
         Array(favoriteRelationshipsByNoiseKey.values)
-    }
-
-    func addFavorite(noiseKey: Data, nostrPublicKey: String?, nickname: String) {
-        addedFavorites.append((noiseKey, nostrPublicKey, nickname))
-    }
-
-    func postLocalNotification(title: String, body: String, identifier: String) {
-        postedLocalNotifications.append((title, body, identifier))
     }
 
     func notifyGeohashActivity(geohash: String, bodyPreview: String) {
@@ -247,24 +237,6 @@ private func drainMainQueue() async {
     for _ in 0..<5 {
         await Task.yield()
     }
-}
-
-private func makeFavoriteRelationship(
-    noiseKey: Data,
-    nostrPublicKey: String? = nil,
-    nickname: String = "alice",
-    isFavorite: Bool = false,
-    theyFavoritedUs: Bool = false
-) -> FavoritesPersistenceService.FavoriteRelationship {
-    FavoritesPersistenceService.FavoriteRelationship(
-        peerNoisePublicKey: noiseKey,
-        peerNostrPublicKey: nostrPublicKey,
-        peerNickname: nickname,
-        isFavorite: isFavorite,
-        theyFavoritedUs: theyFavoritedUs,
-        favoritedAt: Date(timeIntervalSince1970: 0),
-        lastUpdated: Date(timeIntervalSince1970: 0)
-    )
 }
 
 // MARK: - Coordinator Tests Against Mock Context
@@ -607,34 +579,6 @@ struct GeoPresenceTrackerTests {
         let stamped = try #require(context.lastGeoNotificationAt["9q8yy"])
         #expect(stamped > stale)
         #expect(context.appendedGeohashMessages.count == 1)
-    }
-    @Test @MainActor
-    func handleFavoriteNotification_persistsFavoriteAndPostsLocalNotification() async throws {
-        let context = MockChatNostrContext()
-        let coordinator = ChatNostrCoordinator(context: context)
-        let sender = try NostrIdentity.generate()
-        let noiseKey = Data(repeating: 0x42, count: 32)
-        // The favorites store bridges the sender's npub back to a Noise key.
-        context.favoriteRelationshipsByNoiseKey[noiseKey] = makeFavoriteRelationship(
-            noiseKey: noiseKey,
-            nostrPublicKey: sender.npub
-        )
-
-        coordinator.handleFavoriteNotification(content: "FAVORITE:TRUE|alice", from: sender.publicKeyHex)
-
-        #expect(context.addedFavorites.count == 1)
-        #expect(context.addedFavorites.first?.noiseKey == noiseKey)
-        #expect(context.addedFavorites.first?.nostrPublicKey == sender.publicKeyHex)
-        #expect(context.addedFavorites.first?.nickname == "alice")
-        #expect(context.postedLocalNotifications.count == 1)
-        #expect(context.postedLocalNotifications.first?.title == "New Favorite")
-        #expect(context.postedLocalNotifications.first?.body == "alice favorited you")
-
-        // Unfavorite: no store write, but the removal notification still posts.
-        coordinator.handleFavoriteNotification(content: "FAVORITE:FALSE|alice", from: sender.publicKeyHex)
-        #expect(context.addedFavorites.count == 1)
-        #expect(context.postedLocalNotifications.last?.title == "Favorite Removed")
-        #expect(context.postedLocalNotifications.last?.body == "alice unfavorited you")
     }
 
     @Test @MainActor

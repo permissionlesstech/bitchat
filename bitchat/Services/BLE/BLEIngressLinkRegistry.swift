@@ -78,10 +78,21 @@ struct BLEIngressLinkRegistry {
             return .failure(.selfLoopback(packetType: packet.type))
         }
 
-        if let boundPeerID,
-           boundPeerID != claimedSenderID,
-           requiresDirectSenderBinding(packet, directAnnounceTTL: directAnnounceTTL) {
-            return .failure(.directSenderMismatch(boundPeerID: boundPeerID, claimedSenderID: claimedSenderID))
+        if let boundPeerID, boundPeerID != claimedSenderID {
+            if requiresDirectSenderBinding(packet) {
+                return .failure(.directSenderMismatch(boundPeerID: boundPeerID, claimedSenderID: claimedSenderID))
+            }
+            // A direct announce claiming a new sender on a bound link is either
+            // a spoof or a legitimate peer-ID rotation on a connection that
+            // outlived the old ID. Attribute it to the claimed sender and let
+            // it through: announces are self-authenticating, and only a
+            // signature-verified announce may rebind the link (BLEService).
+            if isDirectAnnounce(packet, directAnnounceTTL: directAnnounceTTL) {
+                return .success(BLEIngressPacketContext(
+                    receivedFromPeerID: claimedSenderID,
+                    validationPeerID: claimedSenderID
+                ))
+            }
         }
 
         let receivedFromPeerID = boundPeerID ?? claimedSenderID
@@ -98,7 +109,14 @@ struct BLEIngressLinkRegistry {
         return "\(senderID)-\(packet.timestamp)-\(packet.type)-\(digestPrefix)"
     }
 
-    private static func requiresDirectSenderBinding(_ packet: BitchatPacket, directAnnounceTTL: UInt8) -> Bool {
+    private static func requiresDirectSenderBinding(_ packet: BitchatPacket) -> Bool {
+        // REQUEST_SYNC is never relayed, so on a bound link the claimed sender
+        // must be the link peer — it elicits a full store replay, and the
+        // response is addressed to whoever the sender claims to be.
+        packet.type == MessageType.requestSync.rawValue
+    }
+
+    static func isDirectAnnounce(_ packet: BitchatPacket, directAnnounceTTL: UInt8) -> Bool {
         packet.type == MessageType.announce.rawValue && packet.ttl == directAnnounceTTL
     }
 

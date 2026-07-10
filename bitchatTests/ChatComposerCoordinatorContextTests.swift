@@ -82,7 +82,7 @@ struct ChatComposerCoordinatorContextTests {
         context.meshNicknamesByPeerID = [
             PeerID(str: "1111111111111111"): "alice",
             PeerID(str: "2222222222222222"): "bob",
-            PeerID(str: "3333333333333333"): "me",
+            PeerID(str: "3333333333333333"): "me"
         ]
 
         // Matching query: suggestions and range are published, index resets.
@@ -113,7 +113,7 @@ struct ChatComposerCoordinatorContextTests {
             "aaaabbbbccccdddd": "carol",
             // Own token (nickname#last-4-of-pubkey) must be removed; the dummy
             // identity's public key hex ends in "2222".
-            "ffffeeeeddddcccc2222": "me",
+            "ffffeeeeddddcccc2222": "me"
         ]
 
         coordinator.updateAutocomplete(for: "@ca", cursorPosition: 3)

@@ -84,7 +84,7 @@ final class ShareViewController: UIViewController {
                 self.loadFirstPlainText(from: providers) { text in
                     if let t = text, !t.isEmpty {
                         // Treat as URL if parseable http(s), else plain text
-                        if let u = URL(string: t), ["http","https"].contains(u.scheme?.lowercased() ?? "") {
+                        if let u = URL(string: t), ["http", "https"].contains(u.scheme?.lowercased() ?? "") {
                             self.saveAndFinish(url: u, title: item.attributedTitle?.string)
                         } else {
                             self.saveAndFinish(text: t)
@@ -107,38 +107,46 @@ final class ShareViewController: UIViewController {
 
     private func loadFirstURL(from providers: [NSItemProvider], completion: @escaping (URL?) -> Void) {
         let identifiers = [UTType.url.identifier, "public.url", "public.file-url"]
-        let grp = DispatchGroup()
-        var found: URL?
-
-        for p in providers where found == nil {
-            for id in identifiers where p.hasItemConformingToTypeIdentifier(id) {
-                grp.enter()
-                p.loadItem(forTypeIdentifier: id, options: nil) { item, _ in
-                    defer { grp.leave() }
-                    if let u = item as? URL { found = u; return }
-                    if let s = item as? String, let u = URL(string: s) { found = u; return }
-                    if let d = item as? Data, let s = String(data: d, encoding: .utf8), let u = URL(string: s) { found = u; return }
-                }
-                break
+        for provider in providers {
+            guard let identifier = identifiers.first(where: { provider.hasItemConformingToTypeIdentifier($0) }) else {
+                continue
             }
+            provider.loadItem(forTypeIdentifier: identifier, options: nil) { item, _ in
+                let result: URL?
+                if let url = item as? URL {
+                    result = url
+                } else if let string = item as? String {
+                    result = URL(string: string)
+                } else if let data = item as? Data,
+                          let string = String(data: data, encoding: .utf8) {
+                    result = URL(string: string)
+                } else {
+                    result = nil
+                }
+                DispatchQueue.main.async { completion(result) }
+            }
+            return
         }
-        grp.notify(queue: .main) { completion(found) }
+        DispatchQueue.main.async { completion(nil) }
     }
 
     private func loadFirstPlainText(from providers: [NSItemProvider], completion: @escaping (String?) -> Void) {
-        let id = UTType.plainText.identifier
-        let grp = DispatchGroup()
-        var text: String?
-        for p in providers where p.hasItemConformingToTypeIdentifier(id) {
-            grp.enter()
-            p.loadItem(forTypeIdentifier: id, options: nil) { item, _ in
-                defer { grp.leave() }
-                if let s = item as? String { text = s }
-                else if let d = item as? Data, let s = String(data: d, encoding: .utf8) { text = s }
-            }
-            break
+        let identifier = UTType.plainText.identifier
+        guard let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(identifier) }) else {
+            DispatchQueue.main.async { completion(nil) }
+            return
         }
-        grp.notify(queue: .main) { completion(text) }
+        provider.loadItem(forTypeIdentifier: identifier, options: nil) { item, _ in
+            let result: String?
+            if let string = item as? String {
+                result = string
+            } else if let data = item as? Data {
+                result = String(data: data, encoding: .utf8)
+            } else {
+                result = nil
+            }
+            DispatchQueue.main.async { completion(result) }
+        }
     }
 
     // MARK: - Save + Finish
@@ -170,10 +178,13 @@ final class ShareViewController: UIViewController {
     }
 
     private func finishWithMessage(_ msg: String) {
-        statusLabel.text = msg
-        // Complete shortly after showing status
-        DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiShareExtensionDismissDelaySeconds) {
-            self.extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.statusLabel.text = msg
+            // Complete shortly after showing status.
+            DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiShareExtensionDismissDelaySeconds) { [weak self] in
+                self?.extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
+            }
         }
     }
 }

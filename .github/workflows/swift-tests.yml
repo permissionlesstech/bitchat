@@ -12,7 +12,10 @@ jobs:
     runs-on: macos-latest
     # A hung test must fail fast, not hold a runner for GitHub's 360-minute
     # default (observed: intermittent app-suite hangs starving the queue).
-    timeout-minutes: 15
+    # The long steps carry tighter individual bounds (5-minute test watchdog,
+    # 6-minute benchmark step, 10-minute floor gate that may re-run the
+    # benchmarks up to twice on a noisy runner); this is the backstop.
+    timeout-minutes: 25
 
     strategy:
       fail-fast: false # Don't cancel other matrix jobs when one fails
@@ -29,17 +32,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Set up Swift
-        uses: swift-actions/setup-swift@v2
+      # Use the Xcode-bundled Swift toolchain: it always matches the SDK on
+      # the runner image. A standalone swift.org toolchain (setup-swift) broke
+      # whenever the image's Xcode moved ahead of it ("this SDK is not
+      # supported by the compiler").
+      - name: Note toolchain version (cache key)
+        id: swift-version
+        run: echo "version=$(swift --version 2>/dev/null | head -1 | shasum | cut -c1-12)" >> "$GITHUB_OUTPUT"
 
       - name: Cache build artifacts
         uses: actions/cache@v4
         with:
           path: ${{ matrix.path }}/.build
-          key: ${{ runner.os }}-${{ matrix.name }}-${{ hashFiles(format('{0}/**/*.swift', matrix.path), format('{0}/**/Package.resolved', matrix.path)) }}
+          key: ${{ runner.os }}-${{ steps.swift-version.outputs.version }}-${{ matrix.name }}-${{ hashFiles(format('{0}/**/*.swift', matrix.path), format('{0}/**/Package.resolved', matrix.path)) }}
           restore-keys: |
-            ${{ runner.os }}-${{ matrix.name }}-${{ hashFiles(format('{0}/**/Package.resolved', matrix.path)) }}
-            ${{ runner.os }}-${{ matrix.name }}-
+            ${{ runner.os }}-${{ steps.swift-version.outputs.version }}-${{ matrix.name }}-${{ hashFiles(format('{0}/**/Package.resolved', matrix.path)) }}
+            ${{ runner.os }}-${{ steps.swift-version.outputs.version }}-${{ matrix.name }}-
 
       - name: Build tests
         # Built separately so the hang watchdog below times only test
@@ -97,9 +105,14 @@ jobs:
 
       # Order-of-magnitude performance regression gate. Floors are deliberately
       # generous (see bitchatTests/Performance/perf-floors.json) so this
-      # catches algorithmic regressions, never runner variance.
+      # catches algorithmic regressions, never runner variance. If a metric
+      # still lands below floor (a saturated runner can dip one), the script
+      # re-runs the benchmarks — appending to the same log and keeping each
+      # benchmark's best value per metric — so noise clears on retry while a
+      # real regression fails every attempt. Floors are never lowered by this.
       - name: Performance floor gate
         if: matrix.name == 'app'
+        timeout-minutes: 10
         run: ./scripts/check-perf-floors.sh perf-output.log
 
       # Informational only: surfaces per-file and total line coverage in the
@@ -118,10 +131,10 @@ jobs:
             echo "No coverage data found; skipping summary."
           fi
 
-  # SPM tests above only compile the macOS slice; this job covers the
-  # iOS-conditional code paths (UIKit, CoreBluetooth restoration, etc.).
+  # SPM tests do not link the shipping app targets. This job covers the
+  # iOS-conditional paths and both universal Release link configurations.
   ios-build:
-    name: Build iOS app (simulator)
+    name: Build Release apps (universal)
     runs-on: macos-latest
     timeout-minutes: 15
 
@@ -130,13 +143,52 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Build iOS (simulator, no signing)
-        # arm64 only: the vendored arti.xcframework has no x86_64 simulator slice.
+        # Build both simulator architectures so CI validates every vendored
+        # Arti simulator slice and the configuration that ships.
         run: |
           set -o pipefail
           xcodebuild -project bitchat.xcodeproj \
             -scheme "bitchat (iOS)" \
+            -configuration Release \
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
-            ARCHS=arm64 \
+            ARCHS='arm64 x86_64' \
+            ONLY_ACTIVE_ARCH=NO \
             CODE_SIGNING_ALLOWED=NO \
             build
+
+      - name: Build macOS (universal, no signing)
+        run: |
+          set -o pipefail
+          xcodebuild -project bitchat.xcodeproj \
+            -scheme "bitchat (macOS)" \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            ARCHS='arm64 x86_64' \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+  # Advisory only: SwiftLint reports style violations without ever failing the
+  # build. Runs in a pinned container (no Xcode plugin, no pbxproj changes) so
+  # it can never break the documented xcodebuild path or block a merge.
+  lint:
+    name: SwiftLint (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # This job runs a third-party container image, so give it the least
+    # privilege we can: a read-only token, and no credentials left in the
+    # checkout for the container to find.
+    permissions:
+      contents: read
+    container:
+      # Tag for readability, digest for immutability (tags can be repointed).
+      # Bump both together, deliberately — never a floating tag.
+      image: ghcr.io/realm/swiftlint:0.65.0@sha256:a482729f4b58741875af1566f23397f3f6db300372756fc31606d0a4527fab9e
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Run SwiftLint
+        run: swiftlint lint --reporter github-actions-logging

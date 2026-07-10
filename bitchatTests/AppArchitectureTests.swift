@@ -591,6 +591,45 @@ struct AppArchitectureTests {
         #expect(!verificationModel.isVerified(peerID: peerID))
     }
 
+    @Test("VerificationModel refreshes when peer trust changes (vouch accepted)")
+    @MainActor
+    func verificationModelRefreshesOnPeerTrustChange() async {
+        let viewModel = makeArchitectureViewModel()
+        var privateConversationModel: PrivateConversationModel? = PrivateConversationModel(
+            chatViewModel: viewModel,
+            conversations: viewModel.conversations,
+            locationChannelsModel: LocationChannelsModel(manager: makeArchitectureLocationManager())
+        )
+        let verificationModel = VerificationModel(
+            chatViewModel: viewModel,
+            privateConversationModel: privateConversationModel!
+        )
+
+        // PrivateConversationModel happens to observe the same notification
+        // and re-assign its published selection, which would ripple into
+        // VerificationModel; release it so this test pins VerificationModel's
+        // own subscription rather than that incidental chain.
+        privateConversationModel = nil
+
+        // The bound @Published sources replay their current values on
+        // subscription; let those initial main-queue emissions settle so the
+        // sink below observes only the trust-change signal.
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        // ChatVouchCoordinator.notifyPeerTrustChanged() signals accepted
+        // vouches via "peerStatusUpdated"; an open fingerprint sheet must
+        // re-render its vouched badge from that signal alone.
+        var refreshed = false
+        let cancellable = verificationModel.objectWillChange.sink { _ in
+            refreshed = true
+        }
+        defer { cancellable.cancel() }
+
+        NotificationCenter.default.post(name: Notification.Name("peerStatusUpdated"), object: nil)
+        await waitUntil { refreshed }
+        #expect(refreshed)
+    }
+
     @Test("PeerListModel publishes mesh and geohash directory state")
     @MainActor
     func peerListModelPublishesDirectoryState() async {

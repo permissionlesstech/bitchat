@@ -1,4 +1,3 @@
-import BitFoundation
 import Combine
 import Foundation
 
@@ -12,20 +11,25 @@ final class LocationChannelsModel: ObservableObject {
     @Published private(set) var bookmarkNames: [String: String]
     @Published private(set) var locationNames: [GeohashChannelLevel: String]
     @Published private(set) var userTorEnabled: Bool
+    @Published private(set) var gatewayEnabled: Bool
 
     private let manager: LocationChannelManager
     private let network: NetworkActivationService
-    private var cancellables = Set<AnyCancellable>()
+    private let gateway: GatewayService
 
     init(
         manager: LocationChannelManager? = nil,
-        network: NetworkActivationService? = nil
+        network: NetworkActivationService? = nil,
+        gateway: GatewayService? = nil
     ) {
         let manager = manager ?? .shared
         let network = network ?? .shared
+        let gateway = gateway ?? .shared
 
         self.manager = manager
         self.network = network
+        self.gateway = gateway
+        self.gatewayEnabled = gateway.isEnabled
         self.permissionState = manager.permissionState
         self.availableChannels = manager.availableChannels
         self.selectedChannel = manager.selectedChannel
@@ -160,6 +164,10 @@ final class LocationChannelsModel: ObservableObject {
         network.$userTorEnabled
             .receive(on: DispatchQueue.main)
             .assign(to: &$userTorEnabled)
+
+        gateway.$isEnabled
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$gatewayEnabled)
     }
 
     private func level(forLength length: Int) -> GeohashChannelLevel {

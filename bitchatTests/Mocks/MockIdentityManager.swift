@@ -11,18 +11,11 @@ import BitFoundation
 @testable import bitchat
 
 final class MockIdentityManager: SecureIdentityStateManagerProtocol {
-    private let keychain: KeychainManagerProtocol
     private var blockedFingerprints: Set<String> = []
     private var blockedNostrPubkeys: Set<String> = []
     private var socialIdentities: [String: SocialIdentity] = [:]
-    
-    init(_ keychain: KeychainManagerProtocol) {
-        self.keychain = keychain
-    }
-    
-    func loadIdentityCache() {}
-    
-    func saveIdentityCache() {}
+
+    init(_: KeychainManagerProtocol) {}
     
     func forceSave() {}
     
@@ -44,12 +37,6 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
             blockedFingerprints.remove(identity.fingerprint)
         }
     }
-    
-    func getFavorites() -> Set<String> {
-        Set()
-    }
-    
-    func setFavorite(_ fingerprint: String, isFavorite: Bool) {}
     
     func isFavorite(fingerprint: String) -> Bool {
         false
@@ -99,20 +86,57 @@ final class MockIdentityManager: SecureIdentityStateManagerProtocol {
     }
     
     func registerEphemeralSession(peerID: PeerID, handshakeState: HandshakeState) {}
-    
-    func updateHandshakeState(peerID: PeerID, state: HandshakeState) {}
-    
+
     func clearAllIdentityData() {}
     
     func removeEphemeralSession(peerID: PeerID) {}
     
     func setVerified(fingerprint: String, verified: Bool) {}
-    
+
     func isVerified(fingerprint: String) -> Bool {
         true
     }
-    
+
     func getVerifiedFingerprints() -> Set<String> {
         Set()
+    }
+
+    // MARK: Vouching (transitive verification)
+
+    private var vouchesByVouchee: [String: [VouchRecord]] = [:]
+    private var vouchBatchSentAt: [String: Date] = [:]
+
+    @discardableResult
+    func recordVouch(voucheeFingerprint: String, voucherFingerprint: String, timestamp: Date) -> Bool {
+        guard voucheeFingerprint != voucherFingerprint else { return false }
+        var records = vouchesByVouchee[voucheeFingerprint] ?? []
+        records.removeAll { $0.voucherFingerprint == voucherFingerprint }
+        records.append(VouchRecord(voucherFingerprint: voucherFingerprint, timestamp: timestamp))
+        vouchesByVouchee[voucheeFingerprint] = records
+        return true
+    }
+
+    func validVouchers(for fingerprint: String) -> [VouchRecord] {
+        vouchesByVouchee[fingerprint] ?? []
+    }
+
+    func isVouched(fingerprint: String) -> Bool {
+        !(vouchesByVouchee[fingerprint] ?? []).isEmpty
+    }
+
+    func lastVouchBatchSent(to fingerprint: String) -> Date? {
+        vouchBatchSentAt[fingerprint]
+    }
+
+    func markVouchBatchSent(to fingerprint: String, at date: Date) {
+        vouchBatchSentAt[fingerprint] = date
+    }
+
+    func signingPublicKey(forFingerprint fingerprint: String) -> Data? {
+        nil
+    }
+
+    func mostRecentlyVerifiedFingerprints(limit: Int, excluding fingerprint: String) -> [String] {
+        []
     }
 }

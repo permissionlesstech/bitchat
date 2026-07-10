@@ -13,9 +13,9 @@ let package = Package(
         .executable(
             name: "bitchat",
             targets: ["bitchat"]
-        ),
+        )
     ],
-    dependencies:[
+    dependencies: [
         .package(path: "localPackages/Arti"),
         .package(path: "localPackages/BitFoundation"),
         .package(path: "localPackages/BitLogger"),

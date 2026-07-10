@@ -40,14 +40,17 @@ struct BLEFragmentHandlerTests {
     }
 
     @Test
-    func ownFragmentIsIgnored() {
+    func ownFragmentIsTrackedForSyncButNotAssembled() {
         let recorder = Recorder()
         let handler = makeHandler(recorder: recorder)
         let packet = makeFragmentPacket(sender: localPeerID, index: 0, total: 2)
 
         handler.handle(packet, from: localPeerID)
 
-        #expect(recorder.trackedPackets.isEmpty)
+        // Sync replay hands own fragments back after a relaunch; they must
+        // re-enter the sync store (so the next round's filter covers them
+        // and redelivery stops) without being reassembled.
+        #expect(recorder.trackedPackets.count == 1)
         #expect(recorder.appendedHeaders.isEmpty)
         #expect(recorder.reinjectedPackets.isEmpty)
     }

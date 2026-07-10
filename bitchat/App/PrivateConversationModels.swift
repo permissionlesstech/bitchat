@@ -108,7 +108,13 @@ struct PrivateConversationHeaderState: Equatable {
     let encryptionStatus: EncryptionStatus?
 
     var supportsFavoriteToggle: Bool {
-        !conversationPeerID.isGeoDM
+        !conversationPeerID.isGeoDM && !conversationPeerID.isGroup
+    }
+
+    /// Group chats have no single peer identity behind the header: no
+    /// fingerprint screen, no per-peer encryption badge.
+    var isGroupConversation: Bool {
+        conversationPeerID.isGroup
     }
 }
 
@@ -206,6 +212,13 @@ final class PrivateConversationModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        chatViewModel.groupStore.$groups
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.refreshSelectedConversation()
+            }
+            .store(in: &cancellables)
+
         NotificationCenter.default.publisher(for: Notification.Name("peerStatusUpdated"))
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
@@ -229,10 +242,36 @@ final class PrivateConversationModel: ObservableObject {
     }
 
     private func makeHeaderState(for conversationPeerID: PeerID) -> PrivateConversationHeaderState {
+        // Group chats: the "peer" is the whole crew. Name + member count in
+        // the header; availability reads as mesh since group traffic floods
+        // the local mesh, and the per-peer encryption badge does not apply.
+        if conversationPeerID.isGroup {
+            let displayName: String
+            if let group = chatViewModel.groupStore.group(for: conversationPeerID) {
+                displayName = "#\(group.name) (\(group.members.count))"
+            } else {
+                displayName = String(localized: "common.unknown", comment: "Fallback label for unknown peer")
+            }
+            return PrivateConversationHeaderState(
+                conversationPeerID: conversationPeerID,
+                headerPeerID: conversationPeerID,
+                displayName: displayName,
+                availability: .meshReachable,
+                isFavorite: false,
+                encryptionStatus: nil
+            )
+        }
+
         let headerPeerID = chatViewModel.getShortIDForNoiseKey(conversationPeerID)
         let peer = chatViewModel.getPeer(byID: headerPeerID)
         let displayName = resolveDisplayName(for: conversationPeerID, headerPeerID: headerPeerID, peer: peer)
-        let availability = resolveAvailability(for: headerPeerID, peer: peer)
+        // Geo DMs are always routed over Nostr (NIP-17); their nostr_ keys
+        // never resolve to a reachable mesh peer, so resolveAvailability would
+        // report .offline. Report .nostrAvailable so the header shows the
+        // globe instead of a misleading "offline" tag.
+        let availability = conversationPeerID.isGeoDM
+            ? .nostrAvailable
+            : resolveAvailability(for: headerPeerID, peer: peer)
         let encryptionStatus: EncryptionStatus? = conversationPeerID.isGeoDM
             ? nil
             : chatViewModel.getEncryptionStatus(for: headerPeerID)

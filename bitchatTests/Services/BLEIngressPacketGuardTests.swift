@@ -26,13 +26,13 @@ struct BLEIngressPacketGuardTests {
         #expect(context.validationPeerID == sender)
     }
 
-    @Test("self loopback and direct announce spoofing are rejected before timestamp checks")
+    @Test("self loopback and request-sync spoofing are rejected before timestamp checks")
     func linkBindingRejectionsWinBeforeTimestampChecks() {
         let local = PeerID(str: "0011223344556677")
         let bound = PeerID(str: "1122334455667788")
         let claimed = PeerID(str: "8899aabbccddeeff")
         let selfPacket = makePacket(sender: local, timestamp: 0)
-        let spoofedAnnounce = makePacket(type: .announce, sender: claimed, timestamp: 0, ttl: 7)
+        let spoofedRequestSync = makePacket(type: .requestSync, sender: claimed, timestamp: 0, ttl: 0)
 
         let selfResult = BLEIngressPacketGuard.evaluate(
             packet: selfPacket,
@@ -44,7 +44,7 @@ struct BLEIngressPacketGuardTests {
             isValidSyncResponse: { _ in false }
         )
         let spoofResult = BLEIngressPacketGuard.evaluate(
-            packet: spoofedAnnounce,
+            packet: spoofedRequestSync,
             claimedSenderID: claimed,
             boundPeerID: bound,
             localPeerID: local,
@@ -55,6 +55,44 @@ struct BLEIngressPacketGuardTests {
 
         #expect(selfResult == .failure(.selfLoopback(packetType: MessageType.message.rawValue)))
         #expect(spoofResult == .failure(.directSenderMismatch(boundPeerID: bound, claimedSenderID: claimed)))
+    }
+
+    @Test("direct announce with a mismatched binding flows through to normal validation")
+    func directAnnounceMismatchStillValidatesTimestamp() throws {
+        // Rotation heal path: the announce passes the binding check attributed
+        // to the claimed sender, but stays subject to timestamp validation.
+        let local = PeerID(str: "0011223344556677")
+        let bound = PeerID(str: "1122334455667788")
+        let claimed = PeerID(str: "8899aabbccddeeff")
+        let freshAnnounce = makePacket(type: .announce, sender: claimed, timestamp: 1_000_000, ttl: 7)
+        let staleAnnounce = makePacket(type: .announce, sender: claimed, timestamp: 0, ttl: 7)
+
+        let freshContext = try #require(success(BLEIngressPacketGuard.evaluate(
+            packet: freshAnnounce,
+            claimedSenderID: claimed,
+            boundPeerID: bound,
+            localPeerID: local,
+            directAnnounceTTL: 7,
+            nowMs: 1_000_000,
+            isValidSyncResponse: { _ in false }
+        )))
+        let staleResult = BLEIngressPacketGuard.evaluate(
+            packet: staleAnnounce,
+            claimedSenderID: claimed,
+            boundPeerID: bound,
+            localPeerID: local,
+            directAnnounceTTL: 7,
+            nowMs: 1_000_000,
+            isValidSyncResponse: { _ in false }
+        )
+
+        #expect(freshContext.receivedFromPeerID == claimed)
+        #expect(freshContext.validationPeerID == claimed)
+        #expect(staleResult == .failure(.timestampSkew(
+            peerID: claimed,
+            skewMs: 1_000_000,
+            maxSkewMs: 120_000
+        )))
     }
 
     @Test("timestamp skew outside the window is rejected")

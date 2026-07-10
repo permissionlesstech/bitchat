@@ -70,7 +70,7 @@ struct NoiseEncryptionTests {
     }
 }
 
-// TODO: Reuse
+// Local error type for the keychain failure cases in this suite.
 private struct KeychainTestError: Error, CustomStringConvertible {
     let message: String
     init(_ message: String) { self.message = message }

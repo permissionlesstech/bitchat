@@ -18,7 +18,7 @@
 /// - Efficient binary message encoding
 /// - Message fragmentation for large payloads
 /// - TTL-based routing for mesh networks
-/// - Privacy features like padding and timing obfuscation
+/// - Privacy features: message padding and randomized relay jitter
 /// - Integration points for end-to-end encryption
 ///
 /// ## Protocol Design
@@ -38,18 +38,20 @@
 /// 7. **Decoding**: Binary data parsed back to message objects
 ///
 /// ## Security Considerations
-/// - Message padding obscures actual content length
-/// - Timing obfuscation prevents traffic analysis
+/// - Message padding (to 256/512/1024/2048-byte blocks) obscures actual content length
+/// - Randomized relay jitter reduces the traffic-analysis signal; there is no
+///   cover traffic or per-message timing obfuscation
 /// - Integration with Noise Protocol for E2E encryption
 /// - No persistent identifiers in protocol headers
 ///
 /// ## Message Types
 /// - **Announce/Leave**: Peer presence notifications
-/// - **Message**: User chat messages (broadcast or directed)
+/// - **Message**: Public chat messages
 /// - **Fragment**: Multi-part message handling
-/// - **Delivery/Read**: Message acknowledgments
-/// - **Noise**: Encrypted channel establishment
-/// - **Version**: Protocol version negotiation
+/// - **NoiseHandshake/NoiseEncrypted**: Encrypted channel establishment and
+///   all private payloads (messages, delivery acks, read receipts)
+/// - **CourierEnvelope**: Sealed store-and-forward mail
+/// - **RequestSync/FileTransfer**: Gossip history sync and media transfer
 ///
 /// ## Future Extensions
 /// The protocol is designed to be extensible:
@@ -72,17 +74,28 @@ enum NoisePayloadType: UInt8 {
     case privateMessage = 0x01      // Private chat message
     case readReceipt = 0x02         // Message was read
     case delivered = 0x03           // Message was delivered
+    // Private groups (0x04/0x05 reserved by other features)
+    case groupInvite = 0x06         // Creator-signed group state (invite)
+    case groupKeyUpdate = 0x07      // Creator-signed group state (key rotation / roster update)
+    // Live voice (push-to-talk)
+    case voiceFrame = 0x08          // One live voice-burst packet (see VoiceBurstPacket)
     // Verification (QR-based OOB binding)
     case verifyChallenge = 0x10     // Verification challenge
     case verifyResponse  = 0x11     // Verification response
-    
+    // Transitive verification (web of trust)
+    case vouch = 0x12               // Batch of vouch attestations
+
     var description: String {
         switch self {
         case .privateMessage: return "privateMessage"
         case .readReceipt: return "readReceipt"
         case .delivered: return "delivered"
+        case .groupInvite: return "groupInvite"
+        case .groupKeyUpdate: return "groupKeyUpdate"
+        case .voiceFrame: return "voiceFrame"
         case .verifyChallenge: return "verifyChallenge"
         case .verifyResponse: return "verifyResponse"
+        case .vouch: return "vouch"
         }
     }
 }
@@ -114,6 +127,12 @@ protocol BitchatDelegate: AnyObject {
     // Low-level events for better separation of concerns
     func didReceiveNoisePayload(from peerID: PeerID, type: NoisePayloadType, payload: Data, timestamp: Date)
 
+    // Encrypted group broadcast (opaque envelope; decrypted by the group coordinator)
+    func didReceiveGroupMessage(payload: Data, timestamp: Date)
+
+    // Public live-voice burst packet (signature-verified by the transport)
+    func didReceivePublicVoiceFrame(from peerID: PeerID, nickname: String, payload: Data, timestamp: Date)
+
     // Bluetooth state updates for user notifications
     func didUpdateBluetoothState(_ state: CBManagerState)
     func didReceivePublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date, messageID: String?)
@@ -130,6 +149,14 @@ extension BitchatDelegate {
     }
 
     func didReceiveNoisePayload(from peerID: PeerID, type: NoisePayloadType, payload: Data, timestamp: Date) {
+        // Default empty implementation
+    }
+
+    func didReceiveGroupMessage(payload: Data, timestamp: Date) {
+        // Default empty implementation
+    }
+
+    func didReceivePublicVoiceFrame(from peerID: PeerID, nickname: String, payload: Data, timestamp: Date) {
         // Default empty implementation
     }
 

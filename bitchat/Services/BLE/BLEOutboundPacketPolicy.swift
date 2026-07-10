@@ -12,12 +12,15 @@ enum BLEOutboundPacketPolicy {
         switch MessageType(rawValue: packetType) {
         case .noiseEncrypted, .noiseHandshake:
             return true
-        case .none, .announce, .message, .leave, .requestSync, .fragment, .fileTransfer:
+        // voiceFrame is deliberately unpadded: padding to the 512 block would
+        // push every ~490-byte signed voice packet over the MTU into the
+        // fragment path.
+        case .none, .announce, .message, .leave, .requestSync, .fragment, .fileTransfer, .courierEnvelope, .boardPost, .ping, .pong, .nostrCarrier, .prekeyBundle, .groupMessage, .voiceFrame:
             return false
         }
     }
 
-    static func priority(for packet: BitchatPacket, data: Data) -> BLEOutboundWritePriority {
+    static func priority(for packet: BitchatPacket, data _: Data) -> BLEOutboundWritePriority {
         guard let messageType = MessageType(rawValue: packet.type) else { return .low }
         switch messageType {
         case .fragment:

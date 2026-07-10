@@ -12,15 +12,24 @@ struct RelayController {
     static func decide(ttl: UInt8,
                        senderIsSelf: Bool,
                        recipientIsSelf: Bool = false,
-                       isEncrypted: Bool,
+                       isEncrypted _: Bool,
                        isDirectedEncrypted: Bool,
                        isFragment: Bool,
                        isDirectedFragment: Bool,
                        isHandshake: Bool,
                        isAnnounce: Bool,
+                       isRequestSync: Bool = false,
+                       isUrgentBoardPost: Bool = false,
+                       isVoiceFrame: Bool = false,
                        degree: Int,
                        highDegreeThreshold: Int) -> RelayDecision {
         let ttlCap = min(ttl, TransportConfig.messageTTLDefault)
+
+        // REQUEST_SYNC is link-local: never relay it, even when a peer crafts
+        // one with TTL headroom to turn every reachable node into a responder.
+        if isRequestSync {
+            return RelayDecision(shouldRelay: false, newTTL: ttlCap, delayMs: 0)
+        }
 
         // Suppress obvious non-relays
         if ttlCap <= 1 || senderIsSelf || recipientIsSelf {
@@ -38,7 +47,11 @@ struct RelayController {
             return RelayDecision(shouldRelay: true, newTTL: newTTL, delayMs: delayMs)
         }
 
-        if isFragment {
+        // Live voice floods with the fragment policy: the dense clamp
+        // contains the sustained ~15 pkt/s per-talker stream, and the tight
+        // jitter window keeps per-hop latency inside the receiver's ~350 ms
+        // jitter buffer across multi-hop paths.
+        if isFragment || isVoiceFrame {
             // Dense graphs clamp harder to contain full-fanout fragment floods;
             // sparse graphs get full depth so media reaches as far as text.
             let fragmentCap = degree >= highDegreeThreshold
@@ -57,7 +70,7 @@ struct RelayController {
         // - Dense graphs: keep lower but still allow multi-hop bridging
         // - Thin chains (degree <= 2): every hop counts and flood cost is
         //   minimal, so relay at full incoming depth
-        // - Announces get a bit more headroom
+        // - Announces (and urgent board posts) get a bit more headroom
         let ttlLimit: UInt8 = {
             if degree >= highDegreeThreshold {
                 return max(UInt8(2), min(ttlCap, UInt8(5)))
@@ -65,7 +78,7 @@ struct RelayController {
             if degree <= 2 {
                 return ttlCap
             }
-            let preferred = UInt8(isAnnounce ? 7 : 6)
+            let preferred = UInt8((isAnnounce || isUrgentBoardPost) ? 7 : 6)
             return max(UInt8(2), min(ttlCap, preferred))
         }()
         let newTTL = ttlLimit &- 1

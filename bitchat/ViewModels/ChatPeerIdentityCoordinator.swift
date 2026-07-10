@@ -29,7 +29,6 @@ protocol ChatPeerIdentityContext: AnyObject {
     func migratePrivateChat(from oldPeerID: PeerID, to newPeerID: PeerID)
     var selectedPrivateChatPeer: PeerID? { get set }
     var selectedPrivateChatFingerprint: String? { get set }
-    var nickname: String { get }
     var myPeerID: PeerID { get }
     var activeChannel: ChannelID { get }
     /// Signals that message state changed so observers refresh (e.g. `objectWillChange.send()`).
@@ -104,7 +103,7 @@ protocol ChatPeerIdentityContext: AnyObject {
 
 extension ChatViewModel: ChatPeerIdentityContext {
     // `privateChats`, `unreadPrivateMessages`, `selectedPrivateChatPeer`,
-    // `selectedPrivateChatFingerprint`, `nickname`, `myPeerID`,
+    // `selectedPrivateChatFingerprint`, `myPeerID`,
     // `activeChannel`, `connectedPeers`, `geoNicknames`, `notifyUIChanged()`,
     // `addSystemMessage(_:)`, `peerNickname(for:)`, `meshPeerNicknames()`,
     // `ephemeralPeerID(forNoiseKey:)`, `unifiedPeer(for:)`,
@@ -323,6 +322,15 @@ final class ChatPeerIdentityCoordinator {
     func startPrivateChat(with peerID: PeerID) {
         guard peerID != context.myPeerID else { return }
 
+        // Group chats are virtual conversations: no peer identity, favorites,
+        // handshake, or message consolidation applies — just select the chat.
+        if peerID.isGroup {
+            context.selectedPrivateChatFingerprint = nil
+            context.beginPrivateChatSession(with: peerID)
+            context.markPrivateChatRead(peerID)
+            return
+        }
+
         let peerNickname = context.peerNickname(for: peerID) ?? "unknown"
 
         if context.unifiedIsBlocked(peerID) {
@@ -339,20 +347,10 @@ final class ChatPeerIdentityCoordinator {
             return
         }
 
-        if let peer = context.unifiedPeer(for: peerID),
-           peer.isFavorite && !peer.theyFavoritedUs && !peer.isConnected {
-            context.addSystemMessage(
-                String(
-                    format: String(
-                        localized: "system.chat.requires_favorite",
-                        comment: "System message when mutual favorite requirement blocks chat"
-                    ),
-                    locale: .current,
-                    peerNickname
-                )
-            )
-            return
-        }
+        // No mutual-favorite gate: store-and-forward (couriers, bridge drops,
+        // retained outbox) only needs the recipient's noise key, so an
+        // offline non-mutual favorite is still worth writing to — the router
+        // decides what delivery looks like, not chat entry.
 
         _ = context.consolidatePrivateMessages(for: peerID, peerNickname: peerNickname)
 
@@ -545,7 +543,8 @@ final class ChatPeerIdentityCoordinator {
            !favorite.peerNickname.isEmpty {
             return favorite.peerNickname
         }
-        return "user"
+        // "anon" matches the default-nickname convention; "user" is banned copy.
+        return "anon"
     }
 }
 

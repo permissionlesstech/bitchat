@@ -30,12 +30,6 @@ private func arti_bootstrap_progress() -> Int32
 @_silgen_name("arti_bootstrap_summary")
 private func arti_bootstrap_summary(_ buf: UnsafeMutablePointer<CChar>, _ len: Int32) -> Int32
 
-@_silgen_name("arti_go_dormant")
-private func arti_go_dormant() -> Int32
-
-@_silgen_name("arti_wake")
-private func arti_wake() -> Int32
-
 /// Arti-based Tor integration for BitChat.
 /// - Boots a local Arti client and exposes a SOCKS5 proxy
 ///   on 127.0.0.1:socksPort. All app networking should await readiness and
@@ -75,10 +69,14 @@ public final class TorManager: ObservableObject {
     }
 
     private var didStart = false
+    // shutdownCompletely() resets `didStart` asynchronously (after Arti has
+    // actually stopped). A startIfNeeded() arriving in that window must not be
+    // dropped — it is recorded here and honored when the shutdown finishes.
+    private var shutdownsInFlight = 0
+    private var startPendingAfterShutdown = false
     private var bootstrapMonitorStarted = false
     private var pathMonitor: NWPathMonitor?
     private var isAppForeground: Bool = true
-    private var isDormant: Bool = false
     private var lastRestartAt: Date? = nil
     private var startedAt: Date? = nil  // Tracks initial startup time for grace period
     private(set) var allowAutoStart: Bool = false
@@ -90,9 +88,13 @@ public final class TorManager: ObservableObject {
     public func startIfNeeded() {
         guard allowAutoStart else { return }
         guard isAppForeground else { return }
+        if shutdownsInFlight > 0 {
+            SecureLogger.debug("TorManager: startIfNeeded() deferred - shutdown in flight", category: .session)
+            startPendingAfterShutdown = true
+            return
+        }
         guard !didStart else { return }
         didStart = true
-        isDormant = false
         isStarting = true
         startedAt = Date()  // Track startup time for grace period
         SecureLogger.debug("TorManager: startIfNeeded() - startedAt set", category: .session)
@@ -329,6 +331,8 @@ public final class TorManager: ObservableObject {
 
     public func shutdownCompletely() {
         SecureLogger.debug("TorManager: shutdownCompletely() called", category: .session)
+        startPendingAfterShutdown = false
+        shutdownsInFlight += 1
         Task.detached { [weak self] in
             guard let self = self else { return }
             _ = arti_stop()
@@ -341,7 +345,6 @@ public final class TorManager: ObservableObject {
             }
 
             await MainActor.run {
-                self.isDormant = false
                 self.isReady = false
                 self.socksReady = false
                 self.bootstrapProgress = 0
@@ -352,6 +355,12 @@ public final class TorManager: ObservableObject {
                 self.bootstrapMonitorStarted = false
                 // Note: Don't clear startedAt here - it will be set fresh on next startIfNeeded()
                 // Clearing it here races with startup and defeats the grace period
+                self.shutdownsInFlight -= 1
+                if self.shutdownsInFlight == 0 && self.startPendingAfterShutdown {
+                    self.startPendingAfterShutdown = false
+                    SecureLogger.debug("TorManager: honoring start deferred during shutdown", category: .session)
+                    self.startIfNeeded()
+                }
             }
         }
     }
@@ -365,7 +374,6 @@ public final class TorManager: ObservableObject {
             self.bootstrapProgress = 0
             self.bootstrapSummary = ""
             self.isStarting = true
-            self.isDormant = false
             self.lastRestartAt = Date()
         }
 

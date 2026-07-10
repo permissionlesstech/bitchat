@@ -36,11 +36,6 @@ extension ChatViewModel {
     }
 
     @MainActor
-    func subscribeToGeoChat(_ ch: GeohashChannel) {
-        nostrCoordinator.subscriptions.subscribeToGeoChat(ch)
-    }
-
-    @MainActor
     func handleGiftWrap(_ giftWrap: NostrEvent, id: NostrIdentity) {
         nostrCoordinator.inbound.handleGiftWrap(giftWrap, id: id)
     }
@@ -56,18 +51,8 @@ extension ChatViewModel {
     }
 
     @MainActor
-    func subscribe(_ gh: String) {
-        nostrCoordinator.subscriptions.subscribe(gh)
-    }
-
-    @MainActor
     func subscribeNostrEvent(_ event: NostrEvent, gh: String) {
         nostrCoordinator.presence.subscribeNostrEvent(event, gh: gh)
-    }
-
-    @MainActor
-    func cooldownPerGeohash(_ gh: String, content: String, event: NostrEvent) {
-        nostrCoordinator.presence.cooldownPerGeohash(gh, content: content, event: event)
     }
 
     @MainActor
@@ -81,37 +66,8 @@ extension ChatViewModel {
     }
 
     @MainActor
-    func handleNostrMessage(_ giftWrap: NostrEvent) {
-        nostrCoordinator.inbound.handleNostrMessage(giftWrap)
-    }
-
-    func processNostrMessage(_ giftWrap: NostrEvent) async {
-        await nostrCoordinator.inbound.processNostrMessage(giftWrap)
-    }
-
-    @MainActor
     func findNoiseKey(for nostrPubkey: String) -> Data? {
         nostrCoordinator.inbound.findNoiseKey(for: nostrPubkey)
-    }
-
-    @MainActor
-    func sendDeliveryAckViaNostrEmbedded(
-        _ message: BitchatMessage,
-        wasReadBefore: Bool,
-        senderPubkey: String,
-        key: Data?
-    ) {
-        nostrCoordinator.sendDeliveryAckViaNostrEmbedded(
-            message,
-            wasReadBefore: wasReadBefore,
-            senderPubkey: senderPubkey,
-            key: key
-        )
-    }
-
-    @MainActor
-    func handleFavoriteNotification(content: String, from nostrPubkey: String) {
-        nostrCoordinator.handleFavoriteNotification(content: content, from: nostrPubkey)
     }
 
     @MainActor

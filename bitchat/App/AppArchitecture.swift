@@ -36,34 +36,12 @@ enum AppEvent: Sendable, Equatable {
 actor AppEventStream {
     private var continuations: [UUID: AsyncStream<AppEvent>.Continuation] = [:]
 
-    func stream() -> AsyncStream<AppEvent> {
-        let id = UUID()
-        return AsyncStream { continuation in
-            continuations[id] = continuation
-            continuation.onTermination = { [id] _ in
-                Task {
-                    await self.removeContinuation(id)
-                }
-            }
-        }
-    }
-
     func emit(_ event: AppEvent) {
         for continuation in continuations.values {
             continuation.yield(event)
         }
     }
 
-    func finish() {
-        for continuation in continuations.values {
-            continuation.finish()
-        }
-        continuations.removeAll()
-    }
-
-    private func removeContinuation(_ id: UUID) {
-        continuations.removeValue(forKey: id)
-    }
 }
 
 /// Identity key for a direct conversation. Equality and hashing use the

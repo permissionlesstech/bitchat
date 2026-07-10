@@ -5,10 +5,19 @@
 # Output: Frameworks/arti.xcframework containing static libraries for:
 #   - aarch64-apple-ios (iOS device)
 #   - aarch64-apple-ios-sim (iOS simulator, Apple Silicon)
-#   - x86_64-apple-ios (iOS simulator, Intel - optional)
-#   - aarch64-apple-darwin (macOS)
+#   - x86_64-apple-ios (iOS simulator, Intel)
+#   - aarch64-apple-darwin (macOS, Apple Silicon)
+#   - x86_64-apple-darwin (macOS, Intel)
 #
 set -e
+
+# rustup/cargo install tools here on standard setups; GUI/Xcode shells often
+# omit it from PATH even though `cargo` itself is available elsewhere.
+export PATH="$HOME/.cargo/bin:$PATH"
+RUST_TOOLCHAIN="${RUST_TOOLCHAIN:-1.96.0}"
+RUSTC_VERSION="${RUSTC_VERSION:-1.96.0}"
+CBINDGEN_VERSION="${CBINDGEN_VERSION:-0.29.4}"
+export RUSTC="$(rustup which --toolchain "$RUST_TOOLCHAIN" rustc)"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -23,7 +32,9 @@ OUTPUT_DIR="$SCRIPT_DIR/Frameworks"
 TARGETS=(
     "aarch64-apple-ios"           # iOS device
     "aarch64-apple-ios-sim"       # iOS simulator (Apple Silicon)
-    "aarch64-apple-darwin"        # macOS
+    "x86_64-apple-ios"            # iOS simulator (Intel)
+    "aarch64-apple-darwin"        # macOS (Apple Silicon)
+    "x86_64-apple-darwin"         # macOS (Intel)
 )
 
 # Colors for output
@@ -45,23 +56,35 @@ check_prerequisites() {
         exit 1
     fi
 
-    if ! command -v cargo &> /dev/null; then
-        log_error "Cargo is not installed. Please install via rustup."
+    if ! rustup run "$RUST_TOOLCHAIN" cargo --version &> /dev/null; then
+        log_error "Cargo is not installed in rustup toolchain $RUST_TOOLCHAIN."
+        exit 1
+    fi
+
+    local actual_rustc
+    actual_rustc="$(rustup run "$RUST_TOOLCHAIN" rustc --version)"
+    if [[ "$actual_rustc" != "rustc $RUSTC_VERSION "* ]]; then
+        log_error "Expected rustc $RUSTC_VERSION in $RUST_TOOLCHAIN; found $actual_rustc."
         exit 1
     fi
 
     # Check/install targets
     for target in "${TARGETS[@]}"; do
-        if ! rustup target list --installed | grep -q "$target"; then
+        if ! rustup target list --toolchain "$RUST_TOOLCHAIN" --installed | grep -q "$target"; then
             log_info "Installing target: $target"
-            rustup target add "$target"
+            rustup target add --toolchain "$RUST_TOOLCHAIN" "$target"
         fi
     done
 
     # Install cbindgen if needed
     if ! command -v cbindgen &> /dev/null; then
-        log_info "Installing cbindgen..."
-        cargo install cbindgen
+        log_info "Installing cbindgen $CBINDGEN_VERSION..."
+        rustup run "$RUST_TOOLCHAIN" cargo install cbindgen --version "$CBINDGEN_VERSION" --locked
+    fi
+
+    if [[ "$(cbindgen --version)" != "cbindgen $CBINDGEN_VERSION" ]]; then
+        log_error "Expected cbindgen $CBINDGEN_VERSION; found $(cbindgen --version)."
+        exit 1
     fi
 
     log_info "Prerequisites OK"
@@ -100,7 +123,7 @@ build_target() {
     setup_rustflags "$target"
 
     # Build release
-    cargo build --release --target "$target" -p "$CRATE_NAME"
+    rustup run "$RUST_TOOLCHAIN" cargo build --release --target "$target" -p "$CRATE_NAME"
 
     # Check output
     local lib_path="target/$target/release/$LIB_NAME"
@@ -123,9 +146,7 @@ create_xcframework() {
     rm -rf "$xcframework_path"
     mkdir -p "$OUTPUT_DIR"
 
-    # Build the xcodebuild command
-    local cmd="xcodebuild -create-xcframework"
-
+    # Normalize each architecture before combining the universal slices.
     for target in "${TARGETS[@]}"; do
         local lib_path="$SCRIPT_DIR/target/$target/release/$LIB_NAME"
         if [[ -f "$lib_path" ]]; then
@@ -138,18 +159,43 @@ create_xcframework() {
             xcrun libtool -static -D -no_warning_for_no_symbols "$lib_path" -o "$normalized_path"
             mv "$normalized_path" "$lib_path"
 
-            cmd="$cmd -library $lib_path"
-
-            # Add headers if they exist
-            local header_dir="$OUTPUT_DIR/include"
-            if [[ -d "$header_dir" ]]; then
-                cmd="$cmd -headers $header_dir"
-            fi
         else
-            log_warn "Skipping missing library: $lib_path"
+            log_error "Missing required library: $lib_path"
+            exit 1
         fi
     done
 
+    local simulator_dir="$SCRIPT_DIR/target/ios-universal-simulator/release"
+    local simulator_lib="$simulator_dir/$LIB_NAME"
+    mkdir -p "$simulator_dir"
+    xcrun lipo -create \
+        "$SCRIPT_DIR/target/aarch64-apple-ios-sim/release/$LIB_NAME" \
+        "$SCRIPT_DIR/target/x86_64-apple-ios/release/$LIB_NAME" \
+        -output "$simulator_lib"
+
+    # Normalize the universal archive after lipo so repeated rebuilds remain
+    # byte-stable just like the single-architecture inputs.
+    local normalized_simulator="$simulator_lib.normalized"
+    xcrun libtool -static -D -no_warning_for_no_symbols "$simulator_lib" -o "$normalized_simulator"
+    mv "$normalized_simulator" "$simulator_lib"
+
+    local macos_dir="$SCRIPT_DIR/target/macos-universal/release"
+    local macos_lib="$macos_dir/$LIB_NAME"
+    mkdir -p "$macos_dir"
+    xcrun lipo -create \
+        "$SCRIPT_DIR/target/aarch64-apple-darwin/release/$LIB_NAME" \
+        "$SCRIPT_DIR/target/x86_64-apple-darwin/release/$LIB_NAME" \
+        -output "$macos_lib"
+
+    local normalized_macos="$macos_lib.normalized"
+    xcrun libtool -static -D -no_warning_for_no_symbols "$macos_lib" -o "$normalized_macos"
+    mv "$normalized_macos" "$macos_lib"
+
+    local header_dir="$OUTPUT_DIR/include"
+    local cmd="xcodebuild -create-xcframework"
+    cmd="$cmd -library $SCRIPT_DIR/target/aarch64-apple-ios/release/$LIB_NAME -headers $header_dir"
+    cmd="$cmd -library $simulator_lib -headers $header_dir"
+    cmd="$cmd -library $macos_lib -headers $header_dir"
     cmd="$cmd -output $xcframework_path"
 
     log_info "Running: $cmd"
@@ -185,12 +231,13 @@ create_xcframework() {
 			<key>HeadersPath</key>
 			<string>Headers</string>
 			<key>LibraryIdentifier</key>
-			<string>ios-arm64-simulator</string>
+			<string>ios-arm64_x86_64-simulator</string>
 			<key>LibraryPath</key>
 			<string>libarti_bitchat.a</string>
 			<key>SupportedArchitectures</key>
 			<array>
 				<string>arm64</string>
+				<string>x86_64</string>
 			</array>
 			<key>SupportedPlatform</key>
 			<string>ios</string>
@@ -203,12 +250,13 @@ create_xcframework() {
 			<key>HeadersPath</key>
 			<string>Headers</string>
 			<key>LibraryIdentifier</key>
-			<string>macos-arm64</string>
+			<string>macos-arm64_x86_64</string>
 			<key>LibraryPath</key>
 			<string>libarti_bitchat.a</string>
 			<key>SupportedArchitectures</key>
 			<array>
 				<string>arm64</string>
+				<string>x86_64</string>
 			</array>
 			<key>SupportedPlatform</key>
 			<string>macos</string>

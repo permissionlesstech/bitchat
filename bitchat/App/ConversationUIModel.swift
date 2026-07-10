@@ -12,6 +12,9 @@ final class ConversationUIModel: ObservableObject {
     @Published private(set) var currentNickname: String
     @Published private(set) var isBatchingPublic = false
     @Published private(set) var canSendMediaInCurrentContext = true
+    /// Who is talking live in the public mesh channel right now (floor
+    /// courtesy: the composer mic tints "busy" while someone holds the floor).
+    @Published private(set) var activeLiveVoiceTalker: String?
 
     private let chatViewModel: ChatViewModel
     private let privateConversationModel: PrivateConversationModel
@@ -49,6 +52,14 @@ final class ConversationUIModel: ObservableObject {
         chatViewModel.sendMessage(message)
     }
 
+    /// Resends a failed private message through the normal send path,
+    /// removing the failed original so the re-submission replaces it
+    /// instead of stacking a duplicate under the red bubble.
+    func resendFailedPrivateMessage(_ message: BitchatMessage) {
+        chatViewModel.removePrivateMessage(withID: message.id)
+        chatViewModel.sendMessage(message.content)
+    }
+
     func clearCurrentConversation() {
         chatViewModel.sendMessage("/clear")
     }
@@ -67,9 +78,21 @@ final class ConversationUIModel: ObservableObject {
         if let peerID, peerID.isGeoChat,
            let full = chatViewModel.fullNostrHex(forSenderPeerID: peerID) {
             chatViewModel.blockGeohashUser(pubkeyHexLowercased: full, displayName: displayName)
+        } else if let peerID, !peerID.isGeoDM, !peerID.isGeoChat {
+            // Mesh: block the peer's stable Noise identity resolved from the
+            // tapped peerID rather than re-resolving a display-name string.
+            chatViewModel.blockMeshPeer(peerID: peerID, displayName: displayName)
         } else {
             chatViewModel.sendMessage("/block \(displayName)")
         }
+    }
+
+    /// Mesh counterpart of `block(peerID:displayName:)`. Resolves the unblock by
+    /// the tapped peer's stable identity so the exact row is unblocked — this
+    /// also works for offline peers, which the `/unblock <displayName>` command
+    /// cannot resolve.
+    func unblock(peerID: PeerID, displayName: String) {
+        chatViewModel.unblockMeshPeer(peerID: peerID, displayName: displayName)
     }
 
     func updateAutocomplete(for text: String, cursorPosition: Int) {
@@ -130,6 +153,17 @@ final class ConversationUIModel: ObservableObject {
         chatViewModel.sendVoiceNote(at: url)
     }
 
+    /// Capture backend for the mic gesture: live PTT when the current DM
+    /// peer can hear it now, classic voice note otherwise.
+    func makeVoiceCaptureSession() -> VoiceCaptureSession {
+        chatViewModel.makeVoiceCaptureSession()
+    }
+
+    /// Whether this message is a live voice burst still streaming in.
+    func isLiveVoiceMessage(_ message: BitchatMessage) -> Bool {
+        chatViewModel.liveVoiceCoordinator.isLiveVoiceMessage(message)
+    }
+
     func cancelMediaSend(messageID: String) {
         chatViewModel.cancelMediaSend(messageID: messageID)
     }
@@ -155,6 +189,10 @@ final class ConversationUIModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .assign(to: &$isBatchingPublic)
 
+        chatViewModel.$activePublicVoiceTalker
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$activeLiveVoiceTalker)
+
         conversations.$activeChannel
             .receive(on: DispatchQueue.main)
             .sink { [weak self] channel in
@@ -173,7 +211,9 @@ final class ConversationUIModel: ObservableObject {
 
     private func refreshComputedState() {
         if let selectedPeerID = privateConversationModel.selectedPeerID {
-            canSendMediaInCurrentContext = !(selectedPeerID.isGeoDM || selectedPeerID.isGeoChat)
+            // Media transfer is not wired for groups in v1; keep it off so the
+            // composer can't strand a media placeholder that never sends.
+            canSendMediaInCurrentContext = !(selectedPeerID.isGeoDM || selectedPeerID.isGeoChat || selectedPeerID.isGroup)
             return
         }
 

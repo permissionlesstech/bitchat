@@ -10,6 +10,10 @@ final class MeshTopologyTracker {
     private var claims: [RoutingID: Set<RoutingID>] = [:]
     // Last time we received an update from a node
     private var lastSeen: [RoutingID: Date] = [:]
+    // Highest protocol version observed from each node's decoded packets.
+    // Nodes absent from this map are assumed v1-only and are never used as
+    // hops (or targets) for version-gated routes.
+    private var observedVersions: [RoutingID: (version: UInt8, seenAt: Date)] = [:]
 
     // Maximum age for topology claims to be considered fresh for routing
     // Routes computed using stale topology can fail when the network has changed
@@ -19,19 +23,37 @@ final class MeshTopologyTracker {
         queue.sync(flags: .barrier) {
             self.claims.removeAll()
             self.lastSeen.removeAll()
+            self.observedVersions.removeAll()
         }
     }
 
     /// Update the topology with a node's self-reported neighbor list
-    func updateNeighbors(for sourceData: Data?, neighbors: [Data]) {
+    func updateNeighbors(for sourceData: Data?, neighbors: [Data], at now: Date = Date()) {
         guard let source = sanitize(sourceData) else { return }
         // Sanitize neighbors and exclude self-loops
         let validNeighbors = Set(neighbors.compactMap { sanitize($0) }).subtracting([source])
-        
+
         queue.sync(flags: .barrier) {
             self.claims[source] = validNeighbors
-            self.lastSeen[source] = Date()
+            self.lastSeen[source] = now
         }
+    }
+
+    /// Record the protocol version observed on a decoded packet from a node.
+    /// Only versions above the v1 baseline are stored; the highest wins.
+    func recordObservedVersion(_ version: UInt8, for peerData: Data?, at now: Date = Date()) {
+        guard version > 1, let peer = sanitize(peerData) else { return }
+        queue.sync(flags: .barrier) {
+            let current = self.observedVersions[peer]?.version ?? 1
+            self.observedVersions[peer] = (version: max(version, current), seenAt: now)
+        }
+    }
+
+    /// Raw directed neighbor claims, for diagnostics (topology map, /trace).
+    /// Callers treat the claims as advisory: announces cap `directNeighbors`
+    /// at 10, so an edge may be claimed by only one of its endpoints.
+    func adjacencySnapshot() -> [Data: Set<Data>] {
+        queue.sync { claims }
     }
 
     func removePeer(_ data: Data?) {
@@ -39,28 +61,37 @@ final class MeshTopologyTracker {
         queue.sync(flags: .barrier) {
             self.claims.removeValue(forKey: peer)
             self.lastSeen.removeValue(forKey: peer)
+            self.observedVersions.removeValue(forKey: peer)
         }
     }
-    
+
     /// Prune nodes that haven't updated their topology in `age` seconds
-    func prune(olderThan age: TimeInterval) {
-        let deadline = Date().addingTimeInterval(-age)
+    func prune(olderThan age: TimeInterval, now: Date = Date()) {
+        let deadline = now.addingTimeInterval(-age)
         queue.sync(flags: .barrier) {
             let stale = self.lastSeen.filter { $0.value < deadline }
             for (peer, _) in stale {
                 self.claims.removeValue(forKey: peer)
                 self.lastSeen.removeValue(forKey: peer)
             }
+            self.observedVersions = self.observedVersions.filter { $0.value.seenAt >= deadline }
         }
     }
 
-    func computeRoute(from start: Data?, to goal: Data?, maxHops: Int = 10) -> [Data]? {
+    /// BFS over confirmed, fresh edges. When `requiringVersion` is set, every
+    /// node on the path except the source (i.e. all intermediate hops and the
+    /// target) must have been observed speaking at least that protocol
+    /// version — a v1-only hop cannot decode a v2 routed packet.
+    func computeRoute(from start: Data?, to goal: Data?, maxHops: Int = 10, requiringVersion: UInt8? = nil, now: Date = Date()) -> [Data]? {
         guard let source = sanitize(start), let target = sanitize(goal) else { return nil }
         if source == target { return [] } // Direct connection, no intermediate hops
 
         return queue.sync {
-            let now = Date()
             let freshnessDeadline = now.addingTimeInterval(-Self.routeFreshnessThreshold)
+            func meetsRequiredVersion(_ peer: RoutingID) -> Bool {
+                guard let requiringVersion else { return true }
+                return (observedVersions[peer]?.version ?? 1) >= requiringVersion
+            }
 
             // BFS
             var visited: Set<RoutingID> = [source]
@@ -85,6 +116,10 @@ final class MeshTopologyTracker {
 
                 for neighbor in neighbors {
                     if visited.contains(neighbor) { continue }
+
+                    // Version gate: skip nodes not known to speak the
+                    // required protocol version.
+                    guard meetsRequiredVersion(neighbor) else { continue }
 
                     // CONFIRMED EDGE CHECK:
                     // 'last' claims 'neighbor' (checked above)

@@ -174,7 +174,7 @@ struct IntegrationTests {
             }
             
             // Encrypted path: use NoiseSessionManager explicitly
-            let plaintext = "Encrypted message".data(using: .utf8)!
+            let plaintext = Data("Encrypted message".utf8)
             let ciphertext = try helper.noiseManagers["Alice"]!.encrypt(plaintext, for: helper.nodes["Bob"]!.peerID)
             
             helper.nodes["Bob"]!.packetDeliveryHandler = { packet in
@@ -206,7 +206,7 @@ struct IntegrationTests {
         
         try await confirmation("Messages delivered despite churn", expectedCount: totalMessages) { completion in
             // David tracks received messages
-            helper.nodes["David"]!.messageDeliveryHandler = { message in
+            helper.nodes["David"]!.messageDeliveryHandler = { _ in
                 completion()
             }
             
@@ -288,7 +288,7 @@ struct IntegrationTests {
             }
             
             do {
-                let plaintext = "After restart success".data(using: .utf8)!
+                let plaintext = Data("After restart success".utf8)
                 let ciphertext = try helper.noiseManagers["Bob"]!.encrypt(plaintext, for: helper.nodes["Alice"]!.peerID)
                 let packet = TestHelpers.createTestPacket(type: MessageType.noiseEncrypted.rawValue, payload: ciphertext)
                 helper.nodes["Alice"]!.packetDeliveryHandler = { pkt in

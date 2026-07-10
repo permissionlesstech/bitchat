@@ -172,17 +172,37 @@ final class MessageDeduplicationService {
     /// Cache for Nostr ACK deduplication (messageId:ackType:senderPubkey format)
     private let nostrAckCache: LRUDeduplicationCache<Bool>
 
+    /// Optional cross-launch persistence for the Nostr event cache. NIP-59
+    /// randomizes gift-wrap timestamps, so DM subscriptions look back 24h and
+    /// relays redeliver the same events on every launch; without this record
+    /// each relaunch reprocesses old PMs and acks. Nil (tests, macOS callers
+    /// that don't opt in) keeps the cache purely in-memory.
+    private let nostrEventStore: NostrProcessedEventStore?
+    private let nostrEventCapacity: Int
+    private var persistScheduled = false
+    private var pendingPersistIDs: [String] = []
+
     /// Creates a new deduplication service with specified capacities.
     /// - Parameters:
     ///   - contentCapacity: Max entries for content cache
     ///   - nostrEventCapacity: Max entries for Nostr event cache
+    ///   - nostrEventStore: Optional disk store preloading and persisting
+    ///     processed Nostr event IDs across launches
     init(
         contentCapacity: Int = TransportConfig.contentLRUCap,
-        nostrEventCapacity: Int = TransportConfig.uiProcessedNostrEventsCap
+        nostrEventCapacity: Int = TransportConfig.uiProcessedNostrEventsCap,
+        nostrEventStore: NostrProcessedEventStore? = nil
     ) {
         self.contentCache = LRUDeduplicationCache(capacity: contentCapacity)
         self.nostrEventCache = LRUDeduplicationCache(capacity: nostrEventCapacity)
         self.nostrAckCache = LRUDeduplicationCache(capacity: nostrEventCapacity)
+        self.nostrEventStore = nostrEventStore
+        self.nostrEventCapacity = nostrEventCapacity
+        if let nostrEventStore {
+            for eventID in nostrEventStore.load() {
+                nostrEventCache.record(eventID, value: true)
+            }
+        }
     }
 
     // MARK: - Content Deduplication
@@ -226,6 +246,16 @@ final class MessageDeduplicationService {
         ContentNormalizer.normalizedKey(content)
     }
 
+    /// Removes the near-duplicate marker for a row that is being replaced,
+    /// not merely deleted. Bridge-first/radio-second reconciliation needs the
+    /// authenticated radio copy to pass the next pipeline flush after its
+    /// unauthenticated bridge alias is removed.
+    func forgetContent(_ content: String, ifRecordedAt timestamp: Date) {
+        let key = ContentNormalizer.normalizedKey(content)
+        guard contentCache.value(for: key) == timestamp else { return }
+        contentCache.remove(key)
+    }
+
     // MARK: - Nostr Event Deduplication
 
     /// Checks if a Nostr event has already been processed.
@@ -239,6 +269,26 @@ final class MessageDeduplicationService {
     /// - Parameter eventId: The event ID
     func recordNostrEvent(_ eventId: String) {
         nostrEventCache.record(eventId, value: true)
+        if nostrEventStore != nil {
+            pendingPersistIDs.append(eventId)
+            schedulePersistIfNeeded()
+        }
+    }
+
+    /// Debounced persistence: bursts of inbound events (reconnect redelivery)
+    /// collapse into one append. Append-merge rather than snapshot, so a
+    /// transient in-memory clear between flushes can't shrink the disk record.
+    private func schedulePersistIfNeeded() {
+        guard let nostrEventStore, !persistScheduled else { return }
+        persistScheduled = true
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard let self else { return }
+            self.persistScheduled = false
+            let newIDs = self.pendingPersistIDs
+            self.pendingPersistIDs.removeAll()
+            nostrEventStore.append(newIDs, cap: self.nostrEventCapacity)
+        }
     }
 
     // MARK: - Nostr ACK Deduplication
@@ -263,14 +313,20 @@ final class MessageDeduplicationService {
 
     // MARK: - Clear
 
-    /// Clears all caches
+    /// Clears all caches. This is the wipe/panic path: the persisted
+    /// gift-wrap record goes with everything else.
     func clearAll() {
         contentCache.clear()
         nostrEventCache.clear()
         nostrAckCache.clear()
+        pendingPersistIDs.removeAll()
+        nostrEventStore?.wipe()
     }
 
-    /// Clears only the Nostr caches (events and ACKs)
+    /// Clears only the in-memory Nostr caches (events and ACKs). Runs on
+    /// every geohash channel switch, so the disk record deliberately
+    /// survives — wiping it here would forfeit cross-launch gift-wrap dedup
+    /// each time the user changes channels (flagged by Codex on #1398).
     func clearNostrCaches() {
         nostrEventCache.clear()
         nostrAckCache.clear()

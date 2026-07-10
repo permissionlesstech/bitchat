@@ -26,9 +26,6 @@ final class MockTransport: Transport {
     var myNickname: String = "TestUser"
 
     private let peerSnapshotSubject = CurrentValueSubject<[TransportPeerSnapshot], Never>([])
-    var peerSnapshotPublisher: AnyPublisher<[TransportPeerSnapshot], Never> {
-        peerSnapshotSubject.eraseToAnyPublisher()
-    }
 
     // MARK: - Recording Properties (for test assertions)
 
@@ -42,16 +39,22 @@ final class MockTransport: Transport {
     private(set) var cancelledTransfers: [String] = []
     private(set) var sentVerifyChallenges: [(peerID: PeerID, noiseKeyHex: String, nonceA: Data)] = []
     private(set) var sentVerifyResponses: [(peerID: PeerID, noiseKeyHex: String, nonceA: Data)] = []
+    private(set) var sentCourierMessages: [(content: String, messageID: String, recipientNoiseKey: Data, couriers: [PeerID])] = []
     private(set) var startServicesCallCount = 0
     private(set) var stopServicesCallCount = 0
     private(set) var emergencyDisconnectCallCount = 0
     private(set) var broadcastAnnounceCallCount = 0
     private(set) var triggeredHandshakes: [PeerID] = []
+    private(set) var purgedArchivePeers: [PeerID] = []
 
     // MARK: - Configurable Mock State
 
     var connectedPeers: Set<PeerID> = []
     var reachablePeers: Set<PeerID> = []
+    /// Peers with an established secure session. `nil` mirrors the protocol
+    /// default (prompt delivery), so connected peers stay "secure" for tests
+    /// that never care about the distinction.
+    var securePeers: Set<PeerID>?
     var peerNicknames: [PeerID: String] = [:]
     var peerFingerprints: [PeerID: String] = [:]
     var peerNoiseStates: [PeerID: LazyHandshakeState] = [:]
@@ -89,6 +92,10 @@ final class MockTransport: Transport {
         reachablePeers.contains(peerID) || connectedPeers.contains(peerID)
     }
 
+    func canDeliverSecurely(to peerID: PeerID) -> Bool {
+        securePeers?.contains(peerID) ?? canDeliverPromptly(to: peerID)
+    }
+
     func peerNickname(peerID: PeerID) -> String? {
         peerNicknames[peerID]
     }
@@ -107,6 +114,10 @@ final class MockTransport: Transport {
 
     func triggerHandshake(with peerID: PeerID) {
         triggeredHandshakes.append(peerID)
+    }
+
+    func purgeArchivedPublicMessages(from peerID: PeerID) {
+        purgedArchivePeers.append(peerID)
     }
 
     // Noise identity wrappers backed by a mock-keychain encryption service
@@ -187,6 +198,33 @@ final class MockTransport: Transport {
 
     func sendVerifyResponse(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {
         sentVerifyResponses.append((peerID, noiseKeyHex, nonceA))
+    }
+
+    var courierSendResult = true
+    func sendCourierMessage(_ content: String, messageID: String, recipientNoiseKey: Data, via couriers: [PeerID]) -> Bool {
+        sentCourierMessages.append((content, messageID, recipientNoiseKey, couriers))
+        return courierSendResult
+    }
+
+    // MARK: - Mesh Diagnostics
+
+    private(set) var sentMeshPings: [PeerID] = []
+    var meshPingResult: MeshPingResult?
+    var meshPaths: [PeerID: [PeerID]] = [:]
+    var meshTopologySnapshot: MeshTopologySnapshot?
+
+    func sendMeshPing(to peerID: PeerID, completion: @escaping @MainActor (MeshPingResult?) -> Void) {
+        sentMeshPings.append(peerID)
+        let result = meshPingResult
+        Task { @MainActor in completion(result) }
+    }
+
+    func computeMeshPath(to peerID: PeerID) -> [PeerID]? {
+        meshPaths[peerID]
+    }
+
+    func currentMeshTopology() -> MeshTopologySnapshot? {
+        meshTopologySnapshot
     }
 
     // MARK: - Test Helpers

@@ -13,8 +13,6 @@ struct LocationChannelsSheet: View {
     @State private var customGeohash: String = ""
     @State private var customError: String? = nil
 
-    private var backgroundColor: Color { palette.background }
-
     private enum Strings {
         static let title: LocalizedStringKey = "location_channels.title"
         static let description: LocalizedStringKey = "location_channels.description"
@@ -22,15 +20,14 @@ struct LocationChannelsSheet: View {
         static let permissionDenied: LocalizedStringKey = "location_channels.permission_denied"
         static let openSettings: LocalizedStringKey = "location_channels.action.open_settings"
         static let loadingNearby: LocalizedStringKey = "location_channels.loading_nearby"
+        static let grantToFind: LocalizedStringKey = "location_channels.grant_to_find"
         static let teleport: LocalizedStringKey = "location_channels.action.teleport"
         static let bookmarked: LocalizedStringKey = "location_channels.bookmarked_section_title"
-        static let removeAccess: LocalizedStringKey = "location_channels.action.remove_access"
-        static let torTitle: LocalizedStringKey = "location_channels.tor.title"
-        static let torSubtitle: LocalizedStringKey = "location_channels.tor.subtitle"
-        static let toggleOn: LocalizedStringKey = "common.toggle.on"
-        static let toggleOff: LocalizedStringKey = "common.toggle.off"
 
         static let invalidGeohash = String(localized: "location_channels.error.invalid_geohash", comment: "Error shown when a custom geohash is invalid")
+        static let switchChannelHint = String(localized: "location_channels.accessibility.switch_hint", comment: "Accessibility hint on a channel row explaining activation switches to it")
+        static let addBookmark = String(localized: "location_channels.accessibility.add_bookmark", comment: "Accessibility action name for bookmarking a channel")
+        static let removeBookmark = String(localized: "location_channels.accessibility.remove_bookmark", comment: "Accessibility action name for removing a channel bookmark")
 
         static func meshTitle(_ count: Int) -> String {
             let label = String(localized: "location_channels.mesh_label", comment: "Label for the mesh channel row")
@@ -103,7 +100,7 @@ struct LocationChannelsSheet: View {
                 }
                 Text(Strings.description)
                     .bitchatFont(size: 12)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(palette.secondary)
 
                 Group {
                     switch locationChannelsModel.permissionState {
@@ -122,7 +119,7 @@ struct LocationChannelsSheet: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(Strings.permissionDenied)
                                 .bitchatFont(size: 12)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(palette.secondary)
                             Button(Strings.openSettings, action: SystemSettings.location.open)
                             .buttonStyle(.plain)
                         }
@@ -169,13 +166,7 @@ struct LocationChannelsSheet: View {
     }
 
     private var closeButton: some View {
-        Button(action: { isPresented = false }) {
-            Image(systemName: "xmark")
-                .bitchatFont(size: 13, weight: .semibold)
-                .frame(width: 32, height: 32)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Close")
+        SheetCloseButton { isPresented = false }
     }
 
     private var channelList: some View {
@@ -210,7 +201,10 @@ struct LocationChannelsSheet: View {
                                 }
                                 .buttonStyle(.plain)
                                 .padding(.leading, 8)
-                            }
+                                .accessibilityLabel(locationChannelsModel.isBookmarked(channel.geohash) ? Strings.removeBookmark : Strings.addBookmark)
+                            },
+                            accessoryActionTitle: locationChannelsModel.isBookmarked(channel.geohash) ? Strings.removeBookmark : Strings.addBookmark,
+                            accessoryAction: { locationChannelsModel.toggleBookmark(channel.geohash) }
                         ) {
                             locationChannelsModel.markTeleported(for: channel.geohash, false)
                             locationChannelsModel.select(ChannelID.location(channel))
@@ -218,7 +212,7 @@ struct LocationChannelsSheet: View {
                         }
                         .padding(.vertical, 6)
                     }
-                } else {
+                } else if locationChannelsModel.permissionState == .authorized {
                     sectionDivider
                     HStack(spacing: 8) {
                         ProgressView()
@@ -227,6 +221,15 @@ struct LocationChannelsSheet: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 10)
+                } else {
+                    // No permission means no fix is coming: an honest hint
+                    // beats a spinner that would never finish.
+                    sectionDivider
+                    Text(Strings.grantToFind)
+                        .bitchatFont(size: 12)
+                        .foregroundColor(palette.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 10)
                 }
 
                 sectionDivider
@@ -240,22 +243,6 @@ struct LocationChannelsSheet: View {
                         .padding(.vertical, 8)
                 }
 
-                if locationChannelsModel.permissionState == .authorized {
-                    sectionDivider
-                    torToggleSection
-                        .padding(.top, 12)
-                    Button(action: SystemSettings.location.open) {
-                        Text(Strings.removeAccess)
-                            .bitchatFont(size: 12)
-                            .foregroundColor(palette.alertRed)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
-                            .background(Color.red.opacity(0.08))
-                            .cornerRadius(6)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.vertical, 8)
-                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, 6)
@@ -277,7 +264,7 @@ struct LocationChannelsSheet: View {
             HStack(spacing: 2) {
                 Text(verbatim: "#")
                     .bitchatFont(size: 14)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(palette.secondary)
                 TextField("geohash", text: $customGeohash)
                     #if os(iOS)
                     .textInputAutocapitalization(.never)
@@ -319,7 +306,7 @@ struct LocationChannelsSheet: View {
                 .bitchatFont(size: 14)
                 .padding(.vertical, 6)
                 .padding(.horizontal, 10)
-                .background(Color.secondary.opacity(0.12))
+                .background(palette.secondary.opacity(0.12))
                 .cornerRadius(6)
                 .opacity(isValid ? 1.0 : 0.4)
                 .disabled(!isValid)
@@ -336,7 +323,7 @@ struct LocationChannelsSheet: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(Strings.bookmarked)
                 .bitchatFont(size: 12)
-                .foregroundColor(.secondary)
+                .foregroundColor(palette.secondary)
             LazyVStack(spacing: 0) {
                 ForEach(Array(entries.enumerated()), id: \.offset) { index, gh in
                     let level = levelForLength(gh.count)
@@ -357,7 +344,10 @@ struct LocationChannelsSheet: View {
                             }
                             .buttonStyle(.plain)
                             .padding(.leading, 8)
-                        }
+                            .accessibilityLabel(locationChannelsModel.isBookmarked(gh) ? Strings.removeBookmark : Strings.addBookmark)
+                        },
+                        accessoryActionTitle: locationChannelsModel.isBookmarked(gh) ? Strings.removeBookmark : Strings.addBookmark,
+                        accessoryAction: { locationChannelsModel.toggleBookmark(gh) }
                     ) {
                         let inRegional = locationChannelsModel.availableChannels.contains { $0.geohash == gh }
                         if !inRegional && !locationChannelsModel.availableChannels.isEmpty {
@@ -394,11 +384,13 @@ struct LocationChannelsSheet: View {
         title: String,
         subtitlePrefix: String,
         subtitleName: String? = nil,
-        subtitleNameBold: Bool = false,
+        subtitleNameBold _: Bool = false,
         isSelected: Bool,
         titleColor: Color? = nil,
         titleBold: Bool = false,
         @ViewBuilder trailingAccessory: () -> some View = { EmptyView() },
+        accessoryActionTitle: String? = nil,
+        accessoryAction: (() -> Void)? = nil,
         action: @escaping () -> Void
     ) -> some View {
         HStack(alignment: .center, spacing: 8) {
@@ -409,17 +401,17 @@ struct LocationChannelsSheet: View {
                     Text(parts.base)
                             .bitchatFont(size: 14)
                             .fontWeight(titleBold ? .bold : .regular)
-                            .foregroundColor(titleColor ?? Color.primary)
+                            .foregroundColor(titleColor ?? palette.primary)
                         if let count = parts.countSuffix, !count.isEmpty {
                             Text(count)
                                 .bitchatFont(size: 11)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(palette.secondary)
                         }
                     }
                 let subtitleFull = Strings.subtitle(prefix: subtitlePrefix, name: subtitleName)
                 Text(subtitleFull)
                     .bitchatFont(size: 12)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(palette.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 }
@@ -434,6 +426,19 @@ struct LocationChannelsSheet: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .onTapGesture(perform: action)
+        // The row is a plain HStack with a tap gesture, which VoiceOver reads
+        // as disconnected static text. Expose it as one activatable button;
+        // the visible bookmark accessory is mirrored as a named action.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: "\(title), \(Strings.subtitle(prefix: subtitlePrefix, name: subtitleName))"))
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : [.isButton])
+        .accessibilityHint(Strings.switchChannelHint)
+        .accessibilityAction(.default, action)
+        .accessibilityActions {
+            if let accessoryActionTitle, let accessoryAction {
+                Button(accessoryActionTitle, action: accessoryAction)
+            }
+        }
     }
 
     // Split a title like "#mesh [3 people]" into base and suffix "[3 people]"
@@ -462,66 +467,12 @@ struct LocationChannelsSheet: View {
     }
 }
 
-// MARK: - TOR Toggle & Standardized Colors
+// MARK: - Standardized Colors
+// (The tor and internet-gateway toggles moved to AppInfoView's Settings pane;
+// IRCToggleStyle now lives in Views/Components.)
 extension LocationChannelsSheet {
-    private var torToggleBinding: Binding<Bool> {
-        Binding(
-            get: { locationChannelsModel.userTorEnabled },
-            set: { locationChannelsModel.setUserTorEnabled($0) }
-        )
-    }
-
-    private var torToggleSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Toggle(isOn: torToggleBinding) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(Strings.torTitle)
-                        .bitchatFont(size: 12, weight: .semibold)
-                        .foregroundColor(.primary)
-                    Text(Strings.torSubtitle)
-                        .bitchatFont(size: 11)
-                        .foregroundColor(.secondary)
-                }
-            }
-            .toggleStyle(IRCToggleStyle(accent: palette.accent, onLabel: Strings.toggleOn, offLabel: Strings.toggleOff))
-        }
-        .padding(12)
-        .background(Color.secondary.opacity(0.12))
-        .cornerRadius(8)
-    }
-
     private var standardGreen: Color { palette.primary }
     private var standardBlue: Color { palette.accentBlue }
-}
-
-private struct IRCToggleStyle: ToggleStyle {
-    let accent: Color
-    let onLabel: LocalizedStringKey
-    let offLabel: LocalizedStringKey
-
-    func makeBody(configuration: Configuration) -> some View {
-        Button(action: { configuration.isOn.toggle() }) {
-            HStack(spacing: 12) {
-                configuration.label
-                Spacer()
-                Text(configuration.isOn ? onLabel : offLabel)
-                    .textCase(.uppercase)
-                    .bitchatFont(size: 12, weight: .semibold)
-                    .foregroundColor(configuration.isOn ? accent : .secondary)
-                    .padding(.vertical, 4)
-                    .padding(.horizontal, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(accent.opacity(configuration.isOn ? 0.18 : 0.08))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(accent.opacity(configuration.isOn ? 0.35 : 0.15), lineWidth: 1)
-                    )
-            }
-        }
-        .buttonStyle(.plain)
-    }
 }
 
 // MARK: - Coverage helpers

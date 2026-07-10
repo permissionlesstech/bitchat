@@ -25,9 +25,4 @@ final class BLELogRateLimiter {
         }
     }
 
-    func removeAll() {
-        queue.sync {
-            lastLogTimeByKey.removeAll()
-        }
-    }
 }

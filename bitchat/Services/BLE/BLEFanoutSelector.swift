@@ -15,20 +15,58 @@ enum BLEFanoutSelector {
         excludedLinks: Set<BLEIngressLinkID> = [],
         peripheralPeerBindings: [String: PeerID] = [:],
         centralPeerBindings: [String: PeerID] = [:],
+        preferredPeripheralPerPeer: [PeerID: String] = [:],
+        collapseDuplicatePeerLinks: Bool = true,
         directedPeerHint: PeerID?,
+        requireDirectPeerLink: Bool = false,
         packetType: UInt8,
         messageID: String
     ) -> BLEFanoutSelection {
-        let allowed = collapseDuplicateLinksPerPeer(
-            allowedLinks(
-                peripheralIDs: peripheralIDs,
-                centralIDs: centralIDs,
-                ingressLink: ingressLink,
-                excludedLinks: excludedLinks
-            ),
-            peripheralPeerBindings: peripheralPeerBindings,
-            centralPeerBindings: centralPeerBindings
+        let rawAllowed = allowedLinks(
+            peripheralIDs: peripheralIDs,
+            centralIDs: centralIDs,
+            ingressLink: ingressLink,
+            excludedLinks: excludedLinks
         )
+
+        if let directedPeerHint,
+           let directedSelection = directLinks(
+               to: directedPeerHint,
+               links: rawAllowed,
+               peripheralPeerBindings: peripheralPeerBindings,
+               centralPeerBindings: centralPeerBindings,
+               preferredPeripheralPerPeer: preferredPeripheralPerPeer
+           ) {
+            return directedSelection
+        }
+        if directedPeerHint != nil, requireDirectPeerLink {
+            return BLEFanoutSelection(peripheralIDs: [], centralIDs: [])
+        }
+        if let directedPeerHint,
+           hasBoundLink(
+               to: directedPeerHint,
+               peripheralIDs: peripheralIDs,
+               centralIDs: centralIDs,
+               peripheralPeerBindings: peripheralPeerBindings,
+               centralPeerBindings: centralPeerBindings
+           ) {
+            return BLEFanoutSelection(peripheralIDs: [], centralIDs: [])
+        }
+
+        // Direct announces are the packet that binds a link to its peer
+        // (BLEService's raw bind and verified rebind). Collapsing them per
+        // peer starves duplicate same-peer links of the announce they need to
+        // become bound — the duplicates then look "pre-announce" forever and
+        // every broadcast sprays down all of them. Announces are small and
+        // throttled, so they go on every live link.
+        let allowed = collapseDuplicatePeerLinks
+            ? collapseDuplicateLinksPerPeer(
+                rawAllowed,
+                peripheralPeerBindings: peripheralPeerBindings,
+                centralPeerBindings: centralPeerBindings,
+                preferredPeripheralPerPeer: preferredPeripheralPerPeer
+            )
+            : rawAllowed
 
         guard shouldSubset(packetType: packetType, directedPeerHint: directedPeerHint) else {
             return BLEFanoutSelection(
@@ -71,6 +109,44 @@ enum BLEFanoutSelector {
         return (allowedPeripheralIDs, allowedCentralIDs)
     }
 
+    private static func directLinks(
+        to peerID: PeerID,
+        links: (peripheralIDs: [String], centralIDs: [String]),
+        peripheralPeerBindings: [String: PeerID],
+        centralPeerBindings: [String: PeerID],
+        preferredPeripheralPerPeer: [PeerID: String]
+    ) -> BLEFanoutSelection? {
+        let directLinks = collapseDuplicateLinksPerPeer(
+            (
+                peripheralIDs: links.peripheralIDs.filter { peripheralPeerBindings[$0] == peerID },
+                centralIDs: links.centralIDs.filter { centralPeerBindings[$0] == peerID }
+            ),
+            peripheralPeerBindings: peripheralPeerBindings,
+            centralPeerBindings: centralPeerBindings,
+            preferredPeripheralPerPeer: preferredPeripheralPerPeer
+        )
+
+        guard !directLinks.peripheralIDs.isEmpty || !directLinks.centralIDs.isEmpty else {
+            return nil
+        }
+
+        return BLEFanoutSelection(
+            peripheralIDs: Set(directLinks.peripheralIDs),
+            centralIDs: Set(directLinks.centralIDs)
+        )
+    }
+
+    private static func hasBoundLink(
+        to peerID: PeerID,
+        peripheralIDs: [String],
+        centralIDs: [String],
+        peripheralPeerBindings: [String: PeerID],
+        centralPeerBindings: [String: PeerID]
+    ) -> Bool {
+        peripheralIDs.contains { peripheralPeerBindings[$0] == peerID }
+            || centralIDs.contains { centralPeerBindings[$0] == peerID }
+    }
+
     // Dual-role pairs hold two live links (we-as-central writing to their
     // peripheral, and they-as-central subscribed to ours). Sending the same
     // packet down both doubles airtime for nothing — the receiver's assembler
@@ -82,7 +158,8 @@ enum BLEFanoutSelector {
     private static func collapseDuplicateLinksPerPeer(
         _ links: (peripheralIDs: [String], centralIDs: [String]),
         peripheralPeerBindings: [String: PeerID],
-        centralPeerBindings: [String: PeerID]
+        centralPeerBindings: [String: PeerID],
+        preferredPeripheralPerPeer: [PeerID: String]
     ) -> (peripheralIDs: [String], centralIDs: [String]) {
         guard !peripheralPeerBindings.isEmpty || !centralPeerBindings.isEmpty else {
             return links
@@ -90,13 +167,30 @@ enum BLEFanoutSelector {
 
         var seenPeers = Set<PeerID>()
         var keptPeripheralIDs: [String] = []
+        // When a peer has several bound peripheral links (duplicate
+        // connections after a restore), collapse onto its preferred one (the
+        // most recently bound) instead of dictionary order — an arbitrary
+        // pick could route a peer's single collapsed copy down a stale link.
         for id in links.peripheralIDs {
-            if let peer = peripheralPeerBindings[id], !seenPeers.insert(peer).inserted {
-                continue
+            guard let peer = peripheralPeerBindings[id],
+                  preferredPeripheralPerPeer[peer] == id,
+                  seenPeers.insert(peer).inserted else { continue }
+            keptPeripheralIDs.append(id)
+        }
+        for id in links.peripheralIDs {
+            if let peer = peripheralPeerBindings[id] {
+                if preferredPeripheralPerPeer[peer] == id { continue }
+                if !seenPeers.insert(peer).inserted { continue }
             }
             keptPeripheralIDs.append(id)
         }
 
+        // Known limitation: centrals collapse in subscription order (oldest
+        // first) — there is no recency signal like the peripheral reverse
+        // map. A central-only peer with duplicate subscriptions rides the
+        // oldest one until the remote side (which owns those connections)
+        // consolidates on its next verified announce (bounded by its
+        // retirement cooldown).
         var keptCentralIDs: [String] = []
         for id in links.centralIDs {
             if let peer = centralPeerBindings[id], !seenPeers.insert(peer).inserted {

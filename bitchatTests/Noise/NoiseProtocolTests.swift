@@ -31,11 +31,8 @@ struct NoiseTestVector: Codable {
     let init_prologue: String
     let init_static: String
     let init_ephemeral: String
-    let init_psks: [String]?
-    let resp_prologue: String
     let resp_static: String
     let resp_ephemeral: String
-    let resp_psks: [String]?
     let handshake_hash: String?
     let messages: [TestMessage]
     
@@ -151,7 +148,7 @@ struct NoiseProtocolTests {
     @Test func basicEncryptionDecryption() throws {
         try performHandshake(initiator: aliceSession, responder: bobSession)
         
-        let plaintext = "Hello, Bob!".data(using: .utf8)!
+        let plaintext = Data("Hello, Bob!".utf8)
         
         // Alice encrypts
         let ciphertext = try aliceSession.encrypt(plaintext)
@@ -167,13 +164,13 @@ struct NoiseProtocolTests {
         try performHandshake(initiator: aliceSession, responder: bobSession)
         
         // Alice -> Bob
-        let aliceMessage = "Hello from Alice".data(using: .utf8)!
+        let aliceMessage = Data("Hello from Alice".utf8)
         let aliceCiphertext = try aliceSession.encrypt(aliceMessage)
         let bobReceived = try bobSession.decrypt(aliceCiphertext)
         #expect(bobReceived == aliceMessage)
         
         // Bob -> Alice
-        let bobMessage = "Hello from Bob".data(using: .utf8)!
+        let bobMessage = Data("Hello from Bob".utf8)
         let bobCiphertext = try bobSession.encrypt(bobMessage)
         let aliceReceived = try aliceSession.decrypt(bobCiphertext)
         #expect(aliceReceived == bobMessage)
@@ -193,7 +190,7 @@ struct NoiseProtocolTests {
     }
     
     @Test func encryptionBeforeHandshake() {
-        let plaintext = "test".data(using: .utf8)!
+        let plaintext = Data("test".utf8)
         
         #expect(throws: NoiseSessionError.notEstablished) {
             try aliceSession.encrypt(plaintext)
@@ -270,7 +267,7 @@ struct NoiseProtocolTests {
         try establishManagerSessions(aliceManager: aliceManager, bobManager: bobManager)
         
         // Encrypt with manager
-        let plaintext = "Test message".data(using: .utf8)!
+        let plaintext = Data("Test message".utf8)
         let ciphertext = try aliceManager.encrypt(plaintext, for: alicePeerID)
         
         // Decrypt with manager
@@ -283,7 +280,7 @@ struct NoiseProtocolTests {
     @Test func tamperedCiphertextDetection() throws {
         try performHandshake(initiator: aliceSession, responder: bobSession)
         
-        let plaintext = "Secret message".data(using: .utf8)!
+        let plaintext = Data("Secret message".utf8)
         var ciphertext = try aliceSession.encrypt(plaintext)
         
         // Tamper with ciphertext
@@ -304,7 +301,7 @@ struct NoiseProtocolTests {
     @Test func replayPrevention() throws {
         try performHandshake(initiator: aliceSession, responder: bobSession)
         
-        let plaintext = "Test message".data(using: .utf8)!
+        let plaintext = Data("Test message".utf8)
         let ciphertext = try aliceSession.encrypt(plaintext)
         
         // First decryption should succeed
@@ -337,7 +334,7 @@ struct NoiseProtocolTests {
         try performHandshake(initiator: aliceSession2, responder: bobSession2)
         
         // Encrypt with session 1
-        let plaintext = "Secret".data(using: .utf8)!
+        let plaintext = Data("Secret".utf8)
         let ciphertext1 = try aliceSession1.encrypt(plaintext)
         
         // Should not be able to decrypt with session 2
@@ -366,10 +363,10 @@ struct NoiseProtocolTests {
         try establishManagerSessions(aliceManager: aliceManager, bobManager: bobManager)
         
         // Exchange some messages to establish nonce state
-        let message1 = try aliceManager.encrypt("Hello".data(using: .utf8)!, for: alicePeerID)
+        let message1 = try aliceManager.encrypt(Data("Hello".utf8), for: alicePeerID)
         _ = try bobManager.decrypt(message1, from: bobPeerID)
         
-        let message2 = try bobManager.encrypt("World".data(using: .utf8)!, for: bobPeerID)
+        let message2 = try bobManager.encrypt(Data("World".utf8), for: bobPeerID)
         _ = try aliceManager.decrypt(message2, from: alicePeerID)
         
         // Simulate Bob restart by creating new manager with same key
@@ -391,7 +388,7 @@ struct NoiseProtocolTests {
         _ = try aliceManager.handleIncomingHandshake(from: alicePeerID, message: newHandshake3!)
         
         // Should be able to exchange messages with new sessions
-        let testMessage = "After restart".data(using: .utf8)!
+        let testMessage = Data("After restart".utf8)
         let encrypted = try bobManagerRestarted.encrypt(testMessage, for: bobPeerID)
         let decrypted = try aliceManager.decrypt(encrypted, from: alicePeerID)
         #expect(decrypted == testMessage)
@@ -409,17 +406,17 @@ struct NoiseProtocolTests {
         
         // Exchange messages to advance nonces
         for i in 0..<5 {
-            let msg = try aliceSession.encrypt("Message \(i)".data(using: .utf8)!)
+            let msg = try aliceSession.encrypt(Data("Message \(i)".utf8))
             _ = try bobSession.decrypt(msg)
         }
         
         // Simulate desynchronization by encrypting but not decrypting
         for i in 0..<3 {
-            _ = try aliceSession.encrypt("Lost message \(i)".data(using: .utf8)!)
+            _ = try aliceSession.encrypt(Data("Lost message \(i)".utf8))
         }
         
         // With per-packet nonce carried, decryption should not throw here
-        let desyncMessage = try aliceSession.encrypt("This now succeeds".data(using: .utf8)!)
+        let desyncMessage = try aliceSession.encrypt(Data("This now succeeds".utf8))
         #expect(throws: Never.self) {
             try bobSession.decrypt(desyncMessage)
         }
@@ -434,12 +431,11 @@ struct NoiseProtocolTests {
         
         let messageCount = 100
         
-        try await confirmation("All messages encrypted and decrypted", expectedCount: messageCount)
-        { completion in
+        try await confirmation("All messages encrypted and decrypted", expectedCount: messageCount) { completion in
             var encryptedMessages: [Int: Data] = [:]
             // Encrypt messages sequentially to avoid nonce races in manager
             for i in 0..<messageCount {
-                let plaintext = "Concurrent message \(i)".data(using: .utf8)!
+                let plaintext = Data("Concurrent message \(i)".utf8)
                 let encrypted = try aliceManager.encrypt(plaintext, for: alicePeerID)
                 encryptedMessages[i] = encrypted
             }
@@ -452,7 +448,7 @@ struct NoiseProtocolTests {
                         return
                     }
                     let decrypted = try bobManager.decrypt(encrypted, from: bobPeerID)
-                    let expected = "Concurrent message \(i)".data(using: .utf8)!
+                    let expected = Data("Concurrent message \(i)".utf8)
                     #expect(decrypted == expected)
                     completion()
                 } catch {
@@ -485,7 +481,7 @@ struct NoiseProtocolTests {
         try establishManagerSessions(aliceManager: aliceManager, bobManager: bobManager)
         
         // Create a corrupted message
-        var encrypted = try aliceManager.encrypt("Test".data(using: .utf8)!, for: alicePeerID)
+        var encrypted = try aliceManager.encrypt(Data("Test".utf8), for: alicePeerID)
         encrypted[10] ^= 0xFF  // Corrupt the data
         
         // Decryption should fail
@@ -516,7 +512,7 @@ struct NoiseProtocolTests {
         #expect(bobManager.getSession(for: bobPeerID)?.isEstablished() == true)
         
         // Exchange messages to verify sessions work
-        let testMessage = "Session works".data(using: .utf8)!
+        let testMessage = Data("Session works".utf8)
         let encrypted = try aliceManager.encrypt(testMessage, for: alicePeerID)
         let decrypted = try bobManager.decrypt(encrypted, from: bobPeerID)
         #expect(decrypted == testMessage)
@@ -539,7 +535,7 @@ struct NoiseProtocolTests {
         _ = try bobManager.handleIncomingHandshake(from: bobPeerID, message: newHandshake3!)
         
         // Verify new sessions work
-        let testMessage2 = "New session works".data(using: .utf8)!
+        let testMessage2 = Data("New session works".utf8)
         let encrypted2 = try aliceManager.encrypt(testMessage2, for: alicePeerID)
         let decrypted2 = try bobManager.decrypt(encrypted2, from: bobPeerID)
         #expect(decrypted2 == testMessage2)
@@ -555,18 +551,18 @@ struct NoiseProtocolTests {
         
         // Exchange messages normally
         for i in 0..<5 {
-            let msg = try aliceManager.encrypt("Message \(i)".data(using: .utf8)!, for: alicePeerID)
+            let msg = try aliceManager.encrypt(Data("Message \(i)".utf8), for: alicePeerID)
             _ = try bobManager.decrypt(msg, from: bobPeerID)
         }
         
         // Simulate desynchronization - Alice sends messages that Bob doesn't receive
         for i in 0..<3 {
-            _ = try aliceManager.encrypt("Lost message \(i)".data(using: .utf8)!, for: alicePeerID)
+            _ = try aliceManager.encrypt(Data("Lost message \(i)".utf8), for: alicePeerID)
         }
         
         // With nonce carried in packet, decryption should not throw here
         let desyncMessage = try aliceManager.encrypt(
-            "This now succeeds".data(using: .utf8)!, for: alicePeerID)
+            Data("This now succeeds".utf8), for: alicePeerID)
         #expect(throws: Never.self) {
             try bobManager.decrypt(desyncMessage, from: bobPeerID)
         }
@@ -587,7 +583,7 @@ struct NoiseProtocolTests {
         _ = try aliceManager.handleIncomingHandshake(from: alicePeerID, message: rehandshake3!)
         
         // Verify communication works again
-        let testResynced = "Resynced".data(using: .utf8)!
+        let testResynced = Data("Resynced".utf8)
         let encryptedResync = try aliceManager.encrypt(testResynced, for: alicePeerID)
         let decryptedResync = try bobManager.decrypt(encryptedResync, from: bobPeerID)
         #expect(decryptedResync == testResynced)
@@ -900,20 +896,20 @@ struct NoiseProtocolTests {
         #expect(trackingKeychain.secureClearDataCallCount > 0)
 
         // Test encryption from Alice to Bob
-        let plaintext1 = "Hello from Alice after secureClear!".data(using: .utf8)!
+        let plaintext1 = Data("Hello from Alice after secureClear!".utf8)
         let ciphertext1 = try alice.encrypt(plaintext1)
         let decrypted1 = try bob.decrypt(ciphertext1)
         #expect(decrypted1 == plaintext1)
 
         // Test encryption from Bob to Alice
-        let plaintext2 = "Hello from Bob after secureClear!".data(using: .utf8)!
+        let plaintext2 = Data("Hello from Bob after secureClear!".utf8)
         let ciphertext2 = try bob.encrypt(plaintext2)
         let decrypted2 = try alice.decrypt(ciphertext2)
         #expect(decrypted2 == plaintext2)
 
         // Test multiple messages to verify cipher state is correct
         for i in 1...10 {
-            let msg = "Message \(i) from Alice".data(using: .utf8)!
+            let msg = Data("Message \(i) from Alice".utf8)
             let cipher = try alice.encrypt(msg)
             let dec = try bob.decrypt(cipher)
             #expect(dec == msg)

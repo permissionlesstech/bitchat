@@ -68,6 +68,13 @@ private final class MockChatPeerListContext: ChatPeerListContext {
     func notifyNetworkAvailable(peerCount: Int) {
         networkAvailableNotifications.append(peerCount)
     }
+
+    // Sightings
+    private(set) var recordedSightings: [[PeerID]] = []
+
+    func recordMeshSightings(peerIDs: [PeerID]) {
+        recordedSightings.append(peerIDs)
+    }
 }
 
 // MARK: - Helpers
@@ -154,18 +161,18 @@ struct ChatPeerListCoordinatorContextTests {
                 peerID: currentPeer,
                 noisePublicKey: Data(repeating: 0x01, count: 32),
                 nickname: "alice"
-            ),
+            )
         ]
         context.unreadPrivateMessages = [
             currentPeer,
             staleShortPeer,
             geoDMWithMessages,
             geoDMWithoutMessages,
-            noiseKeyWithMessages,
+            noiseKeyWithMessages
         ]
         context.privateChats = [
             geoDMWithMessages: [makeMessage(id: "geo-1")],
-            noiseKeyWithMessages: [makeMessage(id: "noise-1")],
+            noiseKeyWithMessages: [makeMessage(id: "noise-1")]
         ]
 
         coordinator.didUpdatePeerList([currentPeer])

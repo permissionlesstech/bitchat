@@ -83,7 +83,13 @@ struct BLEPublicMessageHandlerTests {
         #expect(recorder.deliveries.first?.nickname == "Alice")
         #expect(recorder.deliveries.first?.content == "hello mesh")
         #expect(recorder.deliveries.first?.timestamp == now)
-        #expect(recorder.deliveries.first?.messageID == nil)
+        // No message ID on the wire: the handler derives the stable one
+        // every device agrees on for the same sender/timestamp/content.
+        #expect(recorder.deliveries.first?.messageID == MeshMessageIdentity.stableID(
+            senderIDHex: remotePeerID.id,
+            timestampMs: timestamp(now),
+            content: "hello mesh"
+        ))
     }
 
     @Test
@@ -100,11 +106,11 @@ struct BLEPublicMessageHandlerTests {
 
     @Test
     func staleBroadcastIsDropped() {
-        let now = Date(timeIntervalSince1970: 1_000)
+        let now = Date(timeIntervalSince1970: 1_000_000)
         let recorder = Recorder()
         recorder.peers = [remotePeerID: makePeerInfo(remotePeerID, nickname: "Alice", isVerified: true)]
         let handler = makeHandler(recorder: recorder, now: now)
-        let staleTimestamp = UInt64((now.timeIntervalSince1970 - 901) * 1000)
+        let staleTimestamp = UInt64((now.timeIntervalSince1970 - TransportConfig.syncPublicMessageMaxAgeSeconds - 1) * 1000)
         let packet = makeMessagePacket(sender: remotePeerID, content: "old", timestamp: staleTimestamp)
 
         handler.handle(packet, from: remotePeerID)

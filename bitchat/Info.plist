@@ -31,6 +31,8 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.social-networking</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
@@ -40,9 +42,9 @@
 	<key>NSCameraUsageDescription</key>
 	<string>bitchat uses the camera to scan QR codes to verify peers.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>bitchat uses your approximate location to compute local geohash channels for optional public chats. Exact GPS is never shared.</string>
+	<string>bitchat uses your location to compute optional geohash channels, bridge cells, and nearby place labels. Exact coordinates are not included in bitchat messages.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>bitchat uses the microphone to record voice notes that relay across the mesh.</string>
+	<string>bitchat uses the microphone while you record voice notes or hold live push-to-talk, then sends that audio to your selected mesh conversation.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>bitchat lets you pick images from your photo library to share with nearby peers.</string>
 	<key>UIBackgroundModes</key>

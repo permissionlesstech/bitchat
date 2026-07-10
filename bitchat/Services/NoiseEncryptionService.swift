@@ -153,11 +153,11 @@ enum EncryptionStatus: Equatable {
 final class NoiseEncryptionService {
     // Static identity key (persistent across sessions)
     private let staticIdentityKey: Curve25519.KeyAgreement.PrivateKey
-    public let staticIdentityPublicKey: Curve25519.KeyAgreement.PublicKey
+    let staticIdentityPublicKey: Curve25519.KeyAgreement.PublicKey
     
     // Ed25519 signing key (persistent across sessions)
     private let signingKey: Curve25519.Signing.PrivateKey
-    public let signingPublicKey: Curve25519.Signing.PublicKey
+    let signingPublicKey: Curve25519.Signing.PublicKey
     
     // Session manager
     private let sessionManager: NoiseSessionManager
@@ -172,6 +172,10 @@ final class NoiseEncryptionService {
     // Security components
     private let rateLimiter = NoiseRateLimiter()
     private let keychain: KeychainManagerProtocol
+
+    // One-time prekeys for forward-secret courier sealing (lazy generation
+    // inside the store; the batch is minted on first bundle build).
+    private let localPrekeys: LocalPrekeyStore
     
     // Session maintenance
     private var rekeyTimer: Timer?
@@ -200,6 +204,7 @@ final class NoiseEncryptionService {
     
     init(keychain: KeychainManagerProtocol) {
         self.keychain = keychain
+        self.localPrekeys = LocalPrekeyStore(keychain: keychain)
 
         // BCH-01-009: Load or create static identity key with proper error handling
         let loadedKey: Curve25519.KeyAgreement.PrivateKey
@@ -369,13 +374,154 @@ final class NoiseEncryptionService {
     func getPeerPublicKeyData(_ peerID: PeerID) -> Data? {
         return sessionManager.getRemoteStaticKey(for: peerID)?.rawRepresentation
     }
-    
+
+    // MARK: - Courier Envelopes (one-way Noise X)
+
+    /// Domain separation for courier envelopes so X-pattern transcripts can
+    /// never be confused with interactive XX handshakes.
+    private static let courierPrologue = Data("bitchat-courier-v1".utf8)
+
+    /// Encrypt a payload to a peer's known static key without an interactive
+    /// handshake (Noise X pattern). Used for store-and-forward envelopes
+    /// carried by couriers while the recipient is offline.
+    /// - Warning: One-way messages have no forward secrecy: a later compromise
+    ///   of the recipient's static key exposes envelopes captured in transit.
+    ///   Use established sessions whenever the peer is reachable.
+    func sealCourierPayload(_ payload: Data, recipientStaticKey: Data) throws -> Data {
+        let remoteKey = try NoiseHandshakeState.validatePublicKey(recipientStaticKey)
+        let handshake = NoiseHandshakeState(
+            role: .initiator,
+            pattern: .X,
+            keychain: keychain,
+            localStaticKey: staticIdentityKey,
+            remoteStaticKey: remoteKey,
+            prologue: Self.courierPrologue
+        )
+        return try handshake.writeMessage(payload: payload)
+    }
+
+    /// Decrypt a courier envelope addressed to our static key. Returns the
+    /// payload and the sender's authenticated static public key (the `ss`
+    /// DH in the X pattern binds the sender's identity to the ciphertext).
+    func openCourierPayload(_ envelopeCiphertext: Data) throws -> (payload: Data, senderStaticKey: Data) {
+        let handshake = NoiseHandshakeState(
+            role: .responder,
+            pattern: .X,
+            keychain: keychain,
+            localStaticKey: staticIdentityKey,
+            prologue: Self.courierPrologue
+        )
+        let payload = try handshake.readMessage(envelopeCiphertext)
+        guard let senderKey = handshake.getRemoteStaticPublicKey() else {
+            throw NoiseError.missingKeys
+        }
+        return (payload: payload, senderStaticKey: senderKey.rawRepresentation)
+    }
+
+    // MARK: - One-Time Prekey Envelopes (forward-secret Noise X)
+
+    /// Domain separation for prekey-sealed envelopes: distinct from both the
+    /// interactive XX transcripts and static-sealed courier envelopes, and
+    /// bound to the specific prekey ID so a ciphertext cannot be replayed
+    /// against a different prekey.
+    private static let prekeyProloguePrefix = Data("bitchat-prekey-v1".utf8)
+
+    private static func prekeyPrologue(for prekeyID: UInt32) -> Data {
+        var prologue = prekeyProloguePrefix
+        var big = prekeyID.bigEndian
+        withUnsafeBytes(of: &big) { prologue.append(contentsOf: $0) }
+        return prologue
+    }
+
+    /// Encrypt a payload to one of the recipient's gossiped one-time prekeys
+    /// (Noise X where the responder static is the prekey, not the identity
+    /// key). Unlike `sealCourierPayload`, this is forward secret: once the
+    /// recipient consumes the prekey and its grace window lapses, the private
+    /// key is deleted and captured ciphertext becomes undecryptable even if
+    /// the recipient's identity key is later compromised. The initiator's
+    /// static still rides inside (encrypted), so the recipient authenticates
+    /// the sender exactly as with static-sealed envelopes.
+    func sealPrekeyPayload(_ payload: Data, recipientPrekey: PrekeyBundle.Prekey) throws -> Data {
+        let remoteKey = try NoiseHandshakeState.validatePublicKey(recipientPrekey.publicKey)
+        let handshake = NoiseHandshakeState(
+            role: .initiator,
+            pattern: .X,
+            keychain: keychain,
+            localStaticKey: staticIdentityKey,
+            remoteStaticKey: remoteKey,
+            prologue: Self.prekeyPrologue(for: recipientPrekey.id)
+        )
+        return try handshake.writeMessage(payload: payload)
+    }
+
+    /// Decrypt an envelope sealed to one of our one-time prekeys. On success
+    /// the prekey is marked consumed (its private key survives a 48h grace
+    /// window for spray-and-wait redeliveries, then is deleted for good).
+    /// Returns the payload, the sender's authenticated static key (same
+    /// contract as `openCourierPayload`), and whether this open actually
+    /// retired the prekey — false for a redelivery of already-consumed mail —
+    /// so the caller can re-gossip the shrunken bundle only when it changed.
+    func openPrekeyPayload(_ envelopeCiphertext: Data, prekeyID: UInt32) throws -> (payload: Data, senderStaticKey: Data, consumedPrekey: Bool) {
+        guard let prekeyPrivate = localPrekeys.privateKey(for: prekeyID) else {
+            throw NoiseEncryptionError.unknownPrekey
+        }
+        let handshake = NoiseHandshakeState(
+            role: .responder,
+            pattern: .X,
+            keychain: keychain,
+            localStaticKey: prekeyPrivate,
+            prologue: Self.prekeyPrologue(for: prekeyID)
+        )
+        let payload = try handshake.readMessage(envelopeCiphertext)
+        guard let senderKey = handshake.getRemoteStaticPublicKey() else {
+            throw NoiseError.missingKeys
+        }
+        let consumedPrekey = localPrekeys.markConsumed(prekeyID)
+        return (payload: payload, senderStaticKey: senderKey.rawRepresentation, consumedPrekey: consumedPrekey)
+    }
+
+    /// Current signed prekey bundle for gossip, minting the initial batch on
+    /// first use. Nil only when signing fails.
+    func currentPrekeyBundle() -> PrekeyBundle? {
+        let (prekeys, generatedAt) = localPrekeys.currentBundlePrekeys()
+        guard !prekeys.isEmpty else { return nil }
+        let unsigned = PrekeyBundle(
+            noiseStaticPublicKey: getStaticPublicKeyData(),
+            prekeys: prekeys,
+            generatedAt: generatedAt,
+            signature: Data(count: PrekeyBundle.signatureLength)
+        )
+        guard let signature = signData(unsigned.signableBytes()) else { return nil }
+        return PrekeyBundle(
+            noiseStaticPublicKey: unsigned.noiseStaticPublicKey,
+            prekeys: prekeys,
+            generatedAt: generatedAt,
+            signature: signature
+        )
+    }
+
+    /// Verify a peer's bundle signature against their announce-bound Ed25519
+    /// signing key.
+    func verifyPrekeyBundleSignature(_ bundle: PrekeyBundle, signingPublicKey: Data) -> Bool {
+        verifySignature(bundle.signature, for: bundle.signableBytes(), publicKey: signingPublicKey)
+    }
+
+    /// Prune dead prekeys and top the batch back up when consumption runs it
+    /// low. Returns true when the published bundle changed and should be
+    /// re-gossiped.
+    @discardableResult
+    func replenishPrekeysIfNeeded() -> Bool {
+        localPrekeys.replenishIfNeeded()
+    }
+
     /// Clear persistent identity (for panic mode)
     func clearPersistentIdentity() {
         // Clear from keychain
         let deletedStatic = keychain.deleteIdentityKey(forKey: "noiseStaticKey")
         let deletedSigning = keychain.deleteIdentityKey(forKey: "ed25519SigningKey")
         SecureLogger.logKeyOperation(.delete, keyType: "identity keys", success: deletedStatic && deletedSigning)
+        // One-time prekey privates go with the identity they were bound to.
+        localPrekeys.wipe()
         SecureLogger.warning("Panic mode activated - identity cleared", category: .security)
         // Stop rekey timer
         stopRekeyTimer()
@@ -428,7 +574,7 @@ final class NoiseEncryptionService {
     private func canonicalAnnounceBytes(peerID: Data, noiseKey: Data, ed25519Key: Data, nickname: String, timestampMs: UInt64) -> Data {
         var out = Data()
         // context
-        let context = "bitchat-announce-v1".data(using: .utf8) ?? Data()
+        let context = Data("bitchat-announce-v1".utf8)
         out.append(UInt8(min(context.count, 255)))
         out.append(context.prefix(255))
         // peerID (expect 8 bytes; pad/truncate to 8 for canonicalization)
@@ -444,7 +590,7 @@ final class NoiseEncryptionService {
         out.append(ed32)
         if ed32.count < 32 { out.append(Data(repeating: 0, count: 32 - ed32.count)) }
         // nickname length + bytes
-        let nickData = nickname.data(using: .utf8) ?? Data()
+        let nickData = Data(nickname.utf8)
         out.append(UInt8(min(nickData.count, 255)))
         out.append(nickData.prefix(255))
         // timestamp
@@ -769,4 +915,7 @@ struct NoiseMessage: Codable {
 enum NoiseEncryptionError: Error {
     case handshakeRequired
     case sessionNotEstablished
+    /// Envelope references a prekey ID we don't hold (never ours, already
+    /// deleted after its grace window, or wiped in a panic).
+    case unknownPrekey
 }

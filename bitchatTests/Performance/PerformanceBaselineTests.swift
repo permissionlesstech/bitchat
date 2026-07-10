@@ -225,8 +225,9 @@ final class PerformanceBaselineTests: XCTestCase {
     /// `ConversationStore`'s message-ID → conversation map: 2000 public
     /// (split mesh + geohash to stay under the per-conversation cap) + 50x40
     /// private messages, 500 status updates per pass. Statuses alternate
-    /// sent <-> delivered so every call performs a real update (never the
-    /// skip path).
+    /// between two `delivered` timestamps so every call performs a real update
+    /// (never the skip path). A sent <-> delivered alternation would now hit
+    /// the store's no-downgrade guard on the delivered -> sent half.
     func testDeliveryStatusIncrementalUpdates() {
         let context = PerfDeliveryContext.makeCorpus(publicCount: 2000, peerCount: 50, messagesPerPeer: 40)
         let coordinator = ChatDeliveryCoordinator(context: context)
@@ -234,12 +235,13 @@ final class PerformanceBaselineTests: XCTestCase {
         XCTAssertEqual(targetIDs.count, 500)
 
         let fixedDate = Date(timeIntervalSince1970: 1_700_000_000)
+        let fixedDate2 = Date(timeIntervalSince1970: 1_700_000_001)
         var toggle = false
         var samples: [TimeInterval] = []
 
         measure {
             toggle.toggle()
-            let status: DeliveryStatus = toggle ? .delivered(to: "peer", at: fixedDate) : .sent
+            let status: DeliveryStatus = toggle ? .delivered(to: "peer", at: fixedDate) : .delivered(to: "peer", at: fixedDate2)
             let start = Date()
             var updated = 0
             for id in targetIDs where coordinator.updateMessageDeliveryStatus(id, status: status) {
@@ -267,13 +269,16 @@ final class PerformanceBaselineTests: XCTestCase {
         let targetIDs = context.makeTargetIDs(publicTargets: 250, privateTargets: 250)
         XCTAssertEqual(targetIDs.count, 500)
 
+        // Alternate two delivered timestamps so every update is real; a
+        // sent <-> delivered swing would hit the no-downgrade guard.
         let fixedDate = Date(timeIntervalSince1970: 1_700_000_000)
+        let fixedDate2 = Date(timeIntervalSince1970: 1_700_000_001)
         var toggle = false
         var samples: [TimeInterval] = []
 
         measure {
             toggle.toggle()
-            let status: DeliveryStatus = toggle ? .delivered(to: "peer", at: fixedDate) : .sent
+            let status: DeliveryStatus = toggle ? .delivered(to: "peer", at: fixedDate) : .delivered(to: "peer", at: fixedDate2)
             let start = Date()
             var updated = 0
             for id in targetIDs where store.setDeliveryStatus(status, forMessageID: id) {
@@ -301,7 +306,7 @@ final class PerformanceBaselineTests: XCTestCase {
             ("@carol#a1b2 did you see this? https://example.com/threads/42", ["carol"]),
             ("checking in from the harbor #bitchat #mesh", nil),
             ("@bob#0042 ping me when you get this", ["bob#0042"]),
-            ("long form update with a link https://news.example.org/articles/2026/06/mesh-networks and a tag #geohash", nil),
+            ("long form update with a link https://news.example.org/articles/2026/06/mesh-networks and a tag #geohash", nil)
         ]
         let batches: [[BitchatMessage]] = (0..<batchCount).map { batch in
             (0..<batchSize).map { i in
@@ -547,7 +552,7 @@ final class PerformanceBaselineTests: XCTestCase {
             "anyone near the station?",
             "@bob#0042 are you on mesh too?",
             "check this out https://example.com/p/123 #bitchat",
-            "teleport check, who's local?",
+            "teleport check, who's local?"
         ]
         return try (0..<count).map { i in
             try NostrProtocol.createEphemeralGeohashEvent(
@@ -610,7 +615,7 @@ private final class PerfNostrContext: ChatNostrContext {
     func appendGeohashMessageIfAbsent(_ message: BitchatMessage, toGeohash geohash: String) -> Bool { true }
 
     private(set) var handledPublicMessageCount = 0
-    func handlePublicMessage(_ message: BitchatMessage) { handledPublicMessageCount += 1 }
+    func handlePublicMessage(_ message: BitchatMessage, powBits: Int) { handledPublicMessageCount += 1 }
     func checkForMentions(_ message: BitchatMessage) {}
     func sendHapticFeedback(for message: BitchatMessage) {}
     func parseMentions(from content: String) -> [String] {
@@ -667,8 +672,6 @@ private final class PerfNostrContext: ChatNostrContext {
 
     func favoriteRelationship(forNoiseKey noiseKey: Data) -> FavoritesPersistenceService.FavoriteRelationship? { nil }
     func allFavoriteRelationships() -> [FavoritesPersistenceService.FavoriteRelationship] { [] }
-    func addFavorite(noiseKey: Data, nostrPublicKey: String?, nickname: String) {}
-    func postLocalNotification(title: String, body: String, identifier: String) {}
     func notifyGeohashActivity(geohash: String, bodyPreview: String) {}
 }
 
@@ -778,7 +781,6 @@ private final class PerfDeliveryContext: ChatDeliveryContext {
 @MainActor
 private final class PerfPipelineFixture {
     let viewModel: ChatViewModel
-    let transport: MockTransport
     let conversations: ConversationStore
     let privateInbox: PrivateInboxModel
     let publicChat: PublicChatModel
@@ -789,15 +791,19 @@ private final class PerfPipelineFixture {
         let identityManager = MockIdentityManager(keychain)
         let transport = MockTransport()
         let conversations = ConversationStore()
+        let locationSuite = "PerformanceBaselineTests.\(UUID().uuidString)"
+        let locationStorage = UserDefaults(suiteName: locationSuite) ?? .standard
+        locationStorage.removePersistentDomain(forName: locationSuite)
+        let locationManager = LocationChannelManager(storage: locationStorage)
 
-        self.transport = transport
         self.conversations = conversations
         self.viewModel = ChatViewModel(
             keychain: keychain,
             idBridge: idBridge,
             identityManager: identityManager,
             transport: transport,
-            conversations: conversations
+            conversations: conversations,
+            locationManager: locationManager
         )
         self.privateInbox = PrivateInboxModel(conversations: conversations)
         self.publicChat = PublicChatModel(conversations: conversations)

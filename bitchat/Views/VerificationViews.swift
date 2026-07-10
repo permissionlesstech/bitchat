@@ -11,7 +11,10 @@ import AppKit
 struct MyQRView: View {
     let qrString: String
     @Environment(\.colorScheme) var colorScheme
-    private var boxColor: Color { Color.gray.opacity(0.1) }
+    @ThemedPalette private var palette
+    // Palette-tinted so the box follows the theme (green under matrix)
+    // instead of a fixed gray band over the glass gradient.
+    private var boxColor: Color { palette.secondary.opacity(0.1) }
 
     private enum Strings {
         static let title: LocalizedStringKey = "verification.my_qr.title"
@@ -50,6 +53,7 @@ struct MyQRView: View {
 struct QRCodeImage: View {
     let data: String
     let size: CGFloat
+    @ThemedPalette private var palette
 
     private let context = CIContext()
     private let filter = CIFilter.qrCodeGenerator()
@@ -65,12 +69,12 @@ struct QRCodeImage: View {
                     .frame(width: size, height: size)
             } else {
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.gray.opacity(0.5), lineWidth: 1)
+                    .stroke(palette.secondary.opacity(0.5), lineWidth: 1)
                     .frame(width: size, height: size)
                     .overlay(
                         Text(Strings.unavailable)
                             .bitchatFont(size: 12)
-                            .foregroundColor(.gray)
+                            .foregroundColor(palette.secondary)
                     )
             }
         }
@@ -108,6 +112,7 @@ struct ImageWrapper: View {
 /// Placeholder scanner UI; real camera scanning will be added later.
 struct QRScanView: View {
     @EnvironmentObject private var verificationModel: VerificationModel
+    @ThemedPalette private var palette
     var isActive: Bool = true
     var onSuccess: (() -> Void)? = nil  // Called when verification succeeds
     @State private var input = ""
@@ -153,7 +158,7 @@ struct QRScanView: View {
                 .bitchatFont(size: 14, weight: .medium)
             TextEditor(text: $input)
                 .frame(height: 100)
-                .border(Color.gray.opacity(0.4))
+                .border(palette.secondary.opacity(0.4))
             Button(Strings.validate) {
                 // Deduplicate: ignore if we just processed this exact QR
                 guard input != lastValid else {
@@ -265,7 +270,7 @@ struct CameraScannerView: UIViewRepresentable {
     }
 
     final class PreviewView: UIView {
-        override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
+        override static var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
         var videoPreviewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -283,9 +288,8 @@ struct VerificationSheetView: View {
     @State private var showingScanner = false
     @ThemedPalette private var palette
 
-    private var backgroundColor: Color { palette.background }
     private var accentColor: Color { palette.accent }
-    private var boxColor: Color { Color.gray.opacity(0.1) }
+    private var boxColor: Color { palette.secondary.opacity(0.1) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -295,15 +299,11 @@ struct VerificationSheetView: View {
                     .bitchatFont(size: 14, weight: .bold)
                     .foregroundColor(accentColor)
                 Spacer()
-                Button(action: {
+                SheetCloseButton {
                     showingScanner = false
                     isPresented = false
-                }) {
-                    Image(systemName: "xmark")
-                        .font(.bitchatSystem(size: 14, weight: .semibold))
-                        .foregroundColor(accentColor)
                 }
-                .buttonStyle(.plain)
+                .foregroundColor(accentColor)
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)

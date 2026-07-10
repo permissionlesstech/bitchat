@@ -88,8 +88,6 @@ import BitFoundation
 /// Represents the ephemeral layer of identity - short-lived peer IDs that provide network privacy.
 /// These IDs rotate periodically to prevent tracking while maintaining cryptographic relationships.
 struct EphemeralIdentity {
-    let peerID: PeerID          // 8 random bytes
-    let sessionStart: Date
     var handshakeState: HandshakeState
 }
 
@@ -98,7 +96,6 @@ enum HandshakeState {
     case initiated
     case inProgress
     case completed(fingerprint: String)
-    case failed(reason: String)
 }
 
 /// Represents the cryptographic layer of identity - the stable Noise Protocol static key pair.
@@ -110,7 +107,6 @@ struct CryptographicIdentity: Codable {
     // Optional Ed25519 signing public key (used to authenticate public messages)
     var signingPublicKey: Data? = nil
     let firstSeen: Date
-    let lastHandshake: Date?
 }
 
 /// Represents the social layer of identity - user-assigned names and trust relationships.
@@ -126,11 +122,35 @@ struct SocialIdentity: Codable {
     var notes: String?
 }
 
+/// Trust ladder: unknown → casual → vouched → trusted → verified.
+///
+/// Persistence compatibility: `TrustLevel` is stored by its *String* raw
+/// value ("unknown", "casual", …), not by ordinal position, so inserting
+/// `vouched` mid-ladder cannot corrupt previously persisted values — every
+/// pre-existing case keeps the exact raw value it was written with. The
+/// `vouched` tier is additionally never persisted into `SocialIdentity`
+/// (it's recomputed on read from stored vouches), so downgraded builds never
+/// encounter the unfamiliar raw value.
 enum TrustLevel: String, Codable {
-    case unknown = "unknown"
-    case casual = "casual"
-    case trusted = "trusted"
-    case verified = "verified"
+    case unknown
+    case casual
+    /// Transitively trusted: vouched for by at least one peer *I* verified.
+    /// Derived at read time — never written to persistent storage.
+    case vouched
+    case trusted
+    case verified
+}
+
+// MARK: - Vouching (transitive verification)
+
+/// One accepted vouch: a peer I verified (the voucher) attested that they
+/// verified the vouchee. Validity is recomputed on read — a record only
+/// counts while its voucher remains in `verifiedFingerprints` and its
+/// timestamp is within `VouchAttestation.maxAge` — so unverifying a voucher
+/// silently invalidates the vouches they gave without a cascade delete.
+struct VouchRecord: Codable, Equatable {
+    let voucherFingerprint: String
+    let timestamp: Date
 }
 
 // MARK: - Identity Cache
@@ -154,9 +174,21 @@ struct IdentityCache: Codable {
     
     // Blocked Nostr pubkeys (lowercased hex) for geohash chats
     var blockedNostrPubkeys: Set<String> = []
-    
-    // Schema version for future migrations
-    var version: Int = 1
+
+    // Vouching (transitive verification). All three fields are Optional so
+    // caches persisted before this feature decode cleanly — the synthesized
+    // decoder uses decodeIfPresent for optionals, and a missing key must not
+    // trip the "unreadable cache" recovery path that discards everything.
+
+    // Vouchee fingerprint -> accepted vouches (capped per vouchee)
+    var vouchesByVouchee: [String: [VouchRecord]]? = nil
+
+    // Peer fingerprint -> when we last sent them a vouch batch (rate limit)
+    var vouchBatchSentAt: [String: Date]? = nil
+
+    // Fingerprint -> when we verified it (orders outgoing vouch batches;
+    // entries verified before this field exists sort as oldest)
+    var verifiedAt: [String: Date]? = nil
 }
 
 //

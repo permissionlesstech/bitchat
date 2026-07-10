@@ -26,6 +26,10 @@ protocol NotificationRequestDelivering {
     func add(_ request: UNNotificationRequest)
 }
 
+protocol NotificationCategoryRegistering {
+    func setCategories(_ categories: Set<UNNotificationCategory>)
+}
+
 private final class NotificationCenterAuthorizerAdapter: NotificationAuthorizing {
     private let center: UNUserNotificationCenter
 
@@ -55,6 +59,18 @@ private final class NotificationCenterRequestDelivererAdapter: NotificationReque
     }
 }
 
+private final class NotificationCenterCategoryRegistrarAdapter: NotificationCategoryRegistering {
+    private let center: UNUserNotificationCenter
+
+    init(center: UNUserNotificationCenter) {
+        self.center = center
+    }
+
+    func setCategories(_ categories: Set<UNNotificationCategory>) {
+        center.setNotificationCategories(categories)
+    }
+}
+
 private struct NoopNotificationAuthorizer: NotificationAuthorizing {
     func requestAuthorization(
         options: UNAuthorizationOptions,
@@ -68,12 +84,21 @@ private struct NoopNotificationRequestDeliverer: NotificationRequestDelivering {
     func add(_ request: UNNotificationRequest) {}
 }
 
+private struct NoopNotificationCategoryRegistrar: NotificationCategoryRegistering {
+    func setCategories(_ categories: Set<UNNotificationCategory>) {}
+}
+
 final class NotificationService {
     static let shared = NotificationService()
+
+    /// Category for the "bitchatters nearby" notification, carrying the wave quick action.
+    static let nearbyCategoryID = "chat.bitchat.category.nearby"
+    static let waveActionID = "chat.bitchat.action.wave"
 
     private let isRunningTestsProvider: () -> Bool
     private let authorizer: NotificationAuthorizing
     private let requestDeliverer: NotificationRequestDelivering
+    private let categoryRegistrar: NotificationCategoryRegistering
 
     /// Returns true if running in test environment (XCTest, Swift Testing, or CI)
     private var isRunningTests: Bool {
@@ -92,26 +117,31 @@ final class NotificationService {
         if isRunningTestsProvider() {
             self.authorizer = NoopNotificationAuthorizer()
             self.requestDeliverer = NoopNotificationRequestDeliverer()
+            self.categoryRegistrar = NoopNotificationCategoryRegistrar()
         } else {
             let center = UNUserNotificationCenter.current()
             self.authorizer = NotificationCenterAuthorizerAdapter(center: center)
             self.requestDeliverer = NotificationCenterRequestDelivererAdapter(center: center)
+            self.categoryRegistrar = NotificationCenterCategoryRegistrarAdapter(center: center)
         }
     }
 
     internal init(
         isRunningTestsProvider: @escaping () -> Bool,
         authorizer: NotificationAuthorizing,
-        requestDeliverer: NotificationRequestDelivering
+        requestDeliverer: NotificationRequestDelivering,
+        categoryRegistrar: NotificationCategoryRegistering = NoopNotificationCategoryRegistrar()
     ) {
         self.isRunningTestsProvider = isRunningTestsProvider
         self.authorizer = authorizer
         self.requestDeliverer = requestDeliverer
+        self.categoryRegistrar = categoryRegistrar
     }
 
     func requestAuthorization() {
         guard !isRunningTests else { return }
-        authorizer.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+        registerCategories()
+        authorizer.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
             if granted {
                 // Permission granted
             } else {
@@ -119,13 +149,29 @@ final class NotificationService {
             }
         }
     }
+
+    private func registerCategories() {
+        let wave = UNNotificationAction(
+            identifier: Self.waveActionID,
+            title: String(localized: "notification.action.wave", comment: "Title of the notification action button that sends a friendly wave back to a nearby person"),
+            options: []
+        )
+        let nearby = UNNotificationCategory(
+            identifier: Self.nearbyCategoryID,
+            actions: [wave],
+            intentIdentifiers: [],
+            options: []
+        )
+        categoryRegistrar.setCategories([nearby])
+    }
     
     func sendLocalNotification(
         title: String,
         body: String,
         identifier: String,
         userInfo: [String: Any]? = nil,
-        interruptionLevel: UNNotificationInterruptionLevel = .active
+        interruptionLevel: UNNotificationInterruptionLevel = .active,
+        categoryIdentifier: String? = nil
     ) {
         guard !isRunningTests else { return }
         let content = UNMutableNotificationContent()
@@ -133,6 +179,9 @@ final class NotificationService {
         content.body = body
         content.sound = .default
         content.interruptionLevel = interruptionLevel
+        if let categoryIdentifier = categoryIdentifier {
+            content.categoryIdentifier = categoryIdentifier
+        }
 
         if let userInfo = userInfo {
             content.userInfo = userInfo
@@ -183,7 +232,8 @@ final class NotificationService {
             title: title,
             body: body,
             identifier: identifier,
-            interruptionLevel: .timeSensitive
+            interruptionLevel: .timeSensitive,
+            categoryIdentifier: Self.nearbyCategoryID
         )
     }
 }

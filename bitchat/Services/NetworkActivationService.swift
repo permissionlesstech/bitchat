@@ -25,14 +25,20 @@ extension NostrRelayManager: NetworkActivationRelayControlling {}
 extension TorURLSession: NetworkActivationProxyControlling {}
 
 /// Coordinates when the app is allowed to start Tor and connect to Nostr relays.
-/// Policy: permit start when either location permissions are authorized OR
-/// there exists at least one mutual favorite. Otherwise, do not start.
+/// Policy: permit start when (location permissions are authorized OR there
+/// exists at least one mutual favorite) AND the device has a usable network
+/// path. When there is provably no network at all we do not bootstrap Tor or
+/// spin relay reconnects — that only wastes battery on a mesh-only/offline
+/// device. BLE mesh is entirely independent of this gate.
 @MainActor
 final class NetworkActivationService: ObservableObject {
     static let shared = NetworkActivationService()
 
     @Published private(set) var activationAllowed: Bool = false
     @Published private(set) var userTorEnabled: Bool = true
+    /// Coarse, debounced network reachability. `false` only when the OS reports
+    /// no usable interface at all. Surfaced for UI ("offline" vs "connecting").
+    @Published private(set) var isNetworkReachable: Bool = true
 
     private var cancellables = Set<AnyCancellable>()
     private var started = false
@@ -43,6 +49,7 @@ final class NetworkActivationService: ObservableObject {
     private let mutualFavoritesPublisher: AnyPublisher<Set<Data>, Never>
     private let permissionProvider: () -> LocationChannelManager.PermissionState
     private let mutualFavoritesProvider: () -> Set<Data>
+    private let reachabilityMonitor: NetworkReachabilityMonitoring
     private let torController: NetworkActivationTorControlling
     // Resolved lazily: NostrRelayManager.init() reads NetworkActivationService.shared
     // (via its live dependencies), so capturing NostrRelayManager.shared here would
@@ -58,6 +65,7 @@ final class NetworkActivationService: ObservableObject {
         mutualFavoritesPublisher = FavoritesPersistenceService.shared.$mutualFavorites.eraseToAnyPublisher()
         permissionProvider = { LocationChannelManager.shared.permissionState }
         mutualFavoritesProvider = { FavoritesPersistenceService.shared.mutualFavorites }
+        reachabilityMonitor = NWPathReachabilityMonitor()
         torController = TorManager.shared
         relayControllerProvider = { NostrRelayManager.shared }
         proxyController = TorURLSession.shared
@@ -70,6 +78,7 @@ final class NetworkActivationService: ObservableObject {
         mutualFavoritesPublisher: AnyPublisher<Set<Data>, Never>,
         permissionProvider: @escaping () -> LocationChannelManager.PermissionState,
         mutualFavoritesProvider: @escaping () -> Set<Data>,
+        reachabilityMonitor: NetworkReachabilityMonitoring,
         torController: NetworkActivationTorControlling,
         relayController: NetworkActivationRelayControlling,
         proxyController: NetworkActivationProxyControlling,
@@ -80,6 +89,7 @@ final class NetworkActivationService: ObservableObject {
         self.mutualFavoritesPublisher = mutualFavoritesPublisher
         self.permissionProvider = permissionProvider
         self.mutualFavoritesProvider = mutualFavoritesProvider
+        self.reachabilityMonitor = reachabilityMonitor
         self.torController = torController
         self.relayControllerProvider = { relayController }
         self.proxyController = proxyController
@@ -96,8 +106,12 @@ final class NetworkActivationService: ObservableObject {
             userTorEnabled = true
         }
 
+        // Begin (idempotent) reachability monitoring and seed initial state.
+        reachabilityMonitor.start()
+        isNetworkReachable = reachabilityMonitor.isReachable
+
         // Initial compute
-        let allowed = basePolicyAllowed()
+        let allowed = effectiveAllowed()
         activationAllowed = allowed
         torAutoStartDesired = allowed && userTorEnabled
         torController.setAutoStartAllowed(torAutoStartDesired)
@@ -123,6 +137,21 @@ final class NetworkActivationService: ObservableObject {
                 self?.reevaluate()
             }
             .store(in: &cancellables)
+
+        // React to network reachability changes (debounced, unsatisfied-only).
+        reachabilityMonitor.reachabilityPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] reachable in
+                guard let self else { return }
+                guard reachable != self.isNetworkReachable else { return }
+                self.isNetworkReachable = reachable
+                SecureLogger.info(
+                    "NetworkActivationService: isNetworkReachable -> \(reachable)",
+                    category: .session
+                )
+                self.reevaluate()
+            }
+            .store(in: &cancellables)
     }
 
     func setUserTorEnabled(_ enabled: Bool) {
@@ -138,7 +167,7 @@ final class NetworkActivationService: ObservableObject {
     }
 
     private func reevaluate() {
-        let allowed = basePolicyAllowed()
+        let allowed = effectiveAllowed()
         let torDesired = allowed && userTorEnabled
         let statusChanged = allowed != activationAllowed
         let torChanged = torDesired != torAutoStartDesired
@@ -163,10 +192,18 @@ final class NetworkActivationService: ObservableObject {
         }
     }
 
+    /// Base policy: who is allowed to use the network at all (permission or a
+    /// mutual favorite), ignoring current link state.
     private func basePolicyAllowed() -> Bool {
         let permOK = permissionProvider() == .authorized
         let hasMutual = !mutualFavoritesProvider().isEmpty
         return permOK || hasMutual
+    }
+
+    /// Effective gate: base policy AND a usable network path. When there is
+    /// provably no network, Tor bootstrap and relay reconnects are suppressed.
+    private func effectiveAllowed() -> Bool {
+        basePolicyAllowed() && reachabilityMonitor.isReachable
     }
 
     private func applyTorState(torDesired: Bool) {

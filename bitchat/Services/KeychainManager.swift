@@ -12,10 +12,79 @@ import Foundation
 import Security
 
 final class KeychainManager: KeychainManagerProtocol {
+    /// Default keychain for components that construct their own rather than
+    /// having one injected. Under test this is an in-memory keychain: the
+    /// xctest runner's code signature changes every build, so any read of a
+    /// real login-keychain item triggers a macOS password prompt that
+    /// "Always Allow" can never satisfy — and tests must never read or
+    /// mutate the developer's real keychain (`SecItemCopyMatching` can also
+    /// hang in test environments). Production behavior is unchanged.
+    static func makeDefault() -> KeychainManagerProtocol {
+        // PreviewKeychainManager lives in _PreviewHelpers, a development
+        // asset excluded from archive builds — release code must not
+        // reference it. Tests always run Debug, so the guard is lossless.
+        #if DEBUG
+        if TestEnvironment.isRunningTests { return sharedTestKeychain }
+        #endif
+        return KeychainManager()
+    }
+
+    #if DEBUG
+    /// One store per process, mirroring the real keychain: separate
+    /// default-constructed components (e.g. two NostrIdentityBridge
+    /// instances in BoardManager's publish and delete paths) must see each
+    /// other's writes, or they would derive different Nostr identities
+    /// under test.
+    private static let sharedTestKeychain = PreviewKeychainManager()
+    #endif
+
     // Use consistent service name for all keychain items
     private let service = BitchatApp.bundleID
     private let appGroup = "group.\(BitchatApp.bundleID)"
-    
+
+    // AfterFirstUnlock, not WhenUnlocked: the mesh keeps running with the
+    // device locked (identity-cache saves failed with -25308 throughout
+    // locked-phone testing), and a wake-on-proximity relaunch via BLE state
+    // restoration must be able to read the noise keys before the user
+    // unlocks. Backup/sync semantics are unchanged (not ThisDeviceOnly).
+    private static let itemAccessibility = kSecAttrAccessibleAfterFirstUnlock
+
+    init() {
+        #if os(iOS)
+        migrateAccessibilityIfNeeded()
+        #endif
+    }
+
+    #if os(iOS)
+    /// One-time upgrade of items created under WhenUnlocked. New saves get
+    /// the right class on their own (saves are delete-then-add), but the
+    /// long-lived identity keys are written once and would otherwise stay
+    /// unreadable while the device is locked.
+    private func migrateAccessibilityIfNeeded() {
+        let flag = "keychain.accessibility.afterFirstUnlock.migrated"
+        guard !UserDefaults.standard.bool(forKey: flag) else { return }
+
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service
+        ]
+        let update: [String: Any] = [
+            kSecAttrAccessible as String: Self.itemAccessibility
+        ]
+        let status = SecItemUpdate(query as CFDictionary, update as CFDictionary)
+        switch status {
+        case errSecSuccess, errSecItemNotFound:
+            // Nothing to migrate on a fresh install; both are terminal.
+            UserDefaults.standard.set(true, forKey: flag)
+            SecureLogger.info("Keychain accessibility migrated to AfterFirstUnlock (status \(status))", category: .keychain)
+        default:
+            // Likely errSecInteractionNotAllowed (relaunched while locked) —
+            // leave the flag unset so the next launch retries.
+            SecureLogger.warning("Keychain accessibility migration deferred (status \(status))", category: .keychain)
+        }
+    }
+    #endif
+
     // MARK: - Identity Keys
     
     func saveIdentityKey(_ keyData: Data, forKey key: String) -> Bool {
@@ -62,7 +131,7 @@ final class KeychainManager: KeychainManagerProtocol {
             kSecAttrAccount as String: key,
             kSecValueData as String: data,
             kSecAttrService as String: service,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked,
+            kSecAttrAccessible as String: Self.itemAccessibility,
             kSecAttrLabel as String: "bitchat-\(key)"
         ]
         #if os(macOS)
@@ -212,11 +281,6 @@ final class KeychainManager: KeychainManagerProtocol {
 
     // MARK: - Generic Operations
     
-    private func save(_ value: String, forKey key: String) -> Bool {
-        guard let data = value.data(using: .utf8) else { return false }
-        return saveData(data, forKey: key)
-    }
-    
     private func saveData(_ data: Data, forKey key: String) -> Bool {
         // Delete any existing item first to ensure clean state
         _ = delete(forKey: key)
@@ -227,7 +291,7 @@ final class KeychainManager: KeychainManagerProtocol {
             kSecAttrAccount as String: key,
             kSecValueData as String: data,
             kSecAttrService as String: service,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked,
+            kSecAttrAccessible as String: Self.itemAccessibility,
             kSecAttrLabel as String: "bitchat-\(key)"
         ]
         #if os(macOS)
@@ -260,11 +324,6 @@ final class KeychainManager: KeychainManagerProtocol {
             SecureLogger.error(NSError(domain: "Keychain", code: Int(status)), context: "Error saving to keychain", category: .keychain)
         }
         return false
-    }
-    
-    private func retrieve(forKey key: String) -> String? {
-        guard let data = retrieveData(forKey: key) else { return nil }
-        return String(data: data, encoding: .utf8)
     }
     
     private func retrieveData(forKey key: String) -> Data? {
@@ -322,22 +381,7 @@ final class KeychainManager: KeychainManagerProtocol {
     }
     
     // MARK: - Cleanup
-    
-    func deleteAllPasswords() -> Bool {
-        var query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword
-        ]
-        
-        // Add service if not empty
-        if !service.isEmpty {
-            query[kSecAttrService as String] = service
-        }
-        
-        let status = SecItemDelete(query as CFDictionary)
-        return status == errSecSuccess || status == errSecItemNotFound
-    }
-    
-    
+
     // Delete ALL keychain data for panic mode
     func deleteAllKeychainData() -> Bool {
         SecureLogger.warning("Panic mode - deleting all keychain data", category: .security)
@@ -498,6 +542,15 @@ final class KeychainManager: KeychainManagerProtocol {
 
     /// Load data from a custom service
     func load(key: String, service customService: String) -> Data? {
+        guard case .success(let data) = loadWithResult(key: key, service: customService) else {
+            return nil
+        }
+        return data
+    }
+
+    /// Load custom-service data without collapsing `itemNotFound` and
+    /// protected-data/keychain failures into the same nil result.
+    func loadWithResult(key: String, service customService: String) -> KeychainReadResult {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: customService,
@@ -507,9 +560,7 @@ final class KeychainManager: KeychainManagerProtocol {
 
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
-
-        guard status == errSecSuccess else { return nil }
-        return result as? Data
+        return classifyReadStatus(status, data: result as? Data)
     }
 
     /// Delete data from a custom service
@@ -521,5 +572,31 @@ final class KeychainManager: KeychainManagerProtocol {
         ]
 
         SecItemDelete(query as CFDictionary)
+    }
+
+    /// Delete every item stored under a custom service
+    func deleteAll(service customService: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: customService,
+            kSecMatchLimit as String: kSecMatchLimitAll,
+            kSecReturnAttributes as String: true
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess, let items = result as? [[String: Any]] else {
+            return
+        }
+        for item in items {
+            var deleteQuery: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: customService
+            ]
+            if let account = item[kSecAttrAccount as String] as? String {
+                deleteQuery[kSecAttrAccount as String] = account
+            }
+            SecItemDelete(deleteQuery as CFDictionary)
+        }
     }
 }

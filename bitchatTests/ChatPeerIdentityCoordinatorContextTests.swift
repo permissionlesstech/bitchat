@@ -29,7 +29,6 @@ private final class MockChatPeerIdentityContext: ChatPeerIdentityContext {
     var unreadPrivateMessages: Set<PeerID> = []
     var selectedPrivateChatPeer: PeerID?
     var selectedPrivateChatFingerprint: String?
-    var nickname = "me"
     var myPeerID = PeerID(str: "0011223344556677")
     var activeChannel: ChannelID = .mesh
     private(set) var notifyUIChangedCount = 0

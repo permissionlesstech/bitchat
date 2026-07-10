@@ -34,23 +34,7 @@ final class FavoritesPersistenceService: ObservableObject {
     
     static let shared = FavoritesPersistenceService()
 
-    /// Default keychain for the `shared` singleton. Under test this is an
-    /// in-memory keychain so touching `shared` never blocks on securityd
-    /// (`SecItemCopyMatching` can hang in test environments) and never reads
-    /// or writes the developer's real keychain. Production behavior is
-    /// unchanged. Tests that need their own instance keep injecting a mock
-    /// via `init(keychain:)`.
-    private nonisolated static func makeDefaultKeychain() -> KeychainManagerProtocol {
-        // PreviewKeychainManager lives in _PreviewHelpers, a development
-        // asset excluded from archive builds — release code must not
-        // reference it. Tests always run Debug, so the guard is lossless.
-        #if DEBUG
-        if TestEnvironment.isRunningTests { return PreviewKeychainManager() }
-        #endif
-        return KeychainManager()
-    }
-
-    init(keychain: KeychainManagerProtocol = FavoritesPersistenceService.makeDefaultKeychain()) {
+    init(keychain: KeychainManagerProtocol = KeychainManager.makeDefault()) {
         self.keychain = keychain
         loadFavorites()
         
@@ -141,7 +125,13 @@ final class FavoritesPersistenceService: ObservableObject {
         peerNostrPublicKey: String? = nil
     ) {
         let existing = favorites[peerNoisePublicKey]
-        let displayName = peerNickname ?? existing?.peerNickname ?? "Unknown"
+        // Callers that can't resolve the live nickname pass the "Unknown"
+        // placeholder (e.g. a notification arriving before the announce);
+        // never let it clobber a real stored nickname.
+        let incoming = peerNickname.flatMap { name in
+            (name.isEmpty || name == "Unknown") ? nil : name
+        }
+        let displayName = incoming ?? existing?.peerNickname ?? "Unknown"
         
         SecureLogger.info("📨 Received favorite notification: \(displayName) \(favorited ? "favorited" : "unfavorited") us", category: .session)
         

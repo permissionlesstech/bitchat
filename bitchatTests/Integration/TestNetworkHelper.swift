@@ -33,14 +33,6 @@ final class TestNetworkHelper {
         return node
     }
     
-    func getNode(_ name: String) -> MockBLEService? {
-        nodes[name]
-    }
-    
-    func getManager(_ name: String) -> NoiseSessionManager? {
-        noiseManagers[name]
-    }
-    
     // MARK: - Topology
     
     func connect(_ a: String, _ b: String) {
@@ -121,4 +113,3 @@ final class TestNetworkHelper {
         _ = try manager2.handleIncomingHandshake(from: peer1ID, message: msg3)
     }
 }
-

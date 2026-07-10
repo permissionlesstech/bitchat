@@ -20,6 +20,79 @@ struct BLEFanoutSelectorTests {
     }
 
     @Test
+    func directedSendUsesOnlyBoundPeripheralLinkWhenAvailable() {
+        let target = PeerID(str: "1122334455667788")
+        let bystander = PeerID(str: "8877665544332211")
+        let selection = BLEFanoutSelector.selectLinks(
+            peripheralIDs: ["target-p", "bystander-p"],
+            centralIDs: ["target-c", "bystander-c"],
+            ingressLink: nil,
+            peripheralPeerBindings: [
+                "target-p": target,
+                "bystander-p": bystander
+            ],
+            centralPeerBindings: [
+                "target-c": target,
+                "bystander-c": bystander
+            ],
+            directedPeerHint: target,
+            packetType: MessageType.courierEnvelope.rawValue,
+            messageID: "message-1"
+        )
+
+        #expect(selection.peripheralIDs == Set(["target-p"]))
+        #expect(selection.centralIDs.isEmpty)
+    }
+
+    @Test
+    func directedSendUsesBoundCentralLinkWhenNoPeripheralLinkExists() {
+        let target = PeerID(str: "1122334455667788")
+        let bystander = PeerID(str: "8877665544332211")
+        let selection = BLEFanoutSelector.selectLinks(
+            peripheralIDs: ["bystander-p"],
+            centralIDs: ["target-c", "bystander-c"],
+            ingressLink: nil,
+            peripheralPeerBindings: [
+                "bystander-p": bystander
+            ],
+            centralPeerBindings: [
+                "target-c": target,
+                "bystander-c": bystander
+            ],
+            directedPeerHint: target,
+            packetType: MessageType.courierEnvelope.rawValue,
+            messageID: "message-1"
+        )
+
+        #expect(selection.peripheralIDs.isEmpty)
+        #expect(selection.centralIDs == Set(["target-c"]))
+    }
+
+    @Test
+    func directedSendToKnownPeerDoesNotFallBackWhenOnlyDirectLinkIsExcluded() {
+        let target = PeerID(str: "1122334455667788")
+        let bystander = PeerID(str: "8877665544332211")
+        let selection = BLEFanoutSelector.selectLinks(
+            peripheralIDs: ["bystander-p"],
+            centralIDs: ["target-c", "bystander-c"],
+            ingressLink: .central("target-c"),
+            peripheralPeerBindings: [
+                "bystander-p": bystander
+            ],
+            centralPeerBindings: [
+                "target-c": target,
+                "bystander-c": bystander
+            ],
+            directedPeerHint: target,
+            packetType: MessageType.courierEnvelope.rawValue,
+            messageID: "message-1"
+        )
+
+        #expect(selection.peripheralIDs.isEmpty)
+        #expect(selection.centralIDs.isEmpty)
+    }
+
+    @Test
     func directedSendExcludesAllLinksToIngressPeer() {
         let selection = BLEFanoutSelector.selectLinks(
             peripheralIDs: ["p1", "p2"],
@@ -117,6 +190,75 @@ struct BLEFanoutSelectorTests {
 
         #expect(selection.peripheralIDs == Set(["p1"]))
         #expect(selection.centralIDs == Set(["c-unbound"]))
+    }
+
+    @Test
+    func duplicateBoundLinksToOnePeerCollapseToItsPreferredLink() {
+        // After a restore the same phone can hold several live links bound to
+        // one peer; broadcasts must go down exactly one — the most recently
+        // bound (preferred) one, not dictionary order.
+        let peer = PeerID(str: "1122334455667788")
+        let selection = BLEFanoutSelector.selectLinks(
+            peripheralIDs: ["p-stale", "p-preferred", "p-stale-2"],
+            centralIDs: ["c-bound"],
+            ingressLink: nil,
+            peripheralPeerBindings: [
+                "p-stale": peer,
+                "p-preferred": peer,
+                "p-stale-2": peer
+            ],
+            centralPeerBindings: ["c-bound": peer],
+            preferredPeripheralPerPeer: [peer: "p-preferred"],
+            directedPeerHint: nil,
+            packetType: MessageType.fragment.rawValue,
+            messageID: "message-1"
+        )
+
+        #expect(selection.peripheralIDs == Set(["p-preferred"]))
+        #expect(selection.centralIDs.isEmpty)
+    }
+
+    @Test
+    func directedSendCollapsesDuplicateBoundLinksToPreferred() {
+        let peer = PeerID(str: "1122334455667788")
+        let selection = BLEFanoutSelector.selectLinks(
+            peripheralIDs: ["p-stale", "p-preferred"],
+            centralIDs: [],
+            ingressLink: nil,
+            peripheralPeerBindings: [
+                "p-stale": peer,
+                "p-preferred": peer
+            ],
+            preferredPeripheralPerPeer: [peer: "p-preferred"],
+            directedPeerHint: peer,
+            packetType: MessageType.noiseEncrypted.rawValue,
+            messageID: "message-1"
+        )
+
+        #expect(selection.peripheralIDs == Set(["p-preferred"]))
+        #expect(selection.centralIDs.isEmpty)
+    }
+
+    @Test
+    func uncollapsedSelectionReachesEveryLinkOfADuplicatelyLinkedPeer() {
+        // Announce fanout (collapse bypassed by the planner): the announce is
+        // the packet that binds links, so every live link must receive it.
+        let peer = PeerID(str: "1122334455667788")
+        let selection = BLEFanoutSelector.selectLinks(
+            peripheralIDs: ["p1", "p2"],
+            centralIDs: ["c1"],
+            ingressLink: nil,
+            peripheralPeerBindings: ["p1": peer, "p2": peer],
+            centralPeerBindings: ["c1": peer],
+            preferredPeripheralPerPeer: [peer: "p1"],
+            collapseDuplicatePeerLinks: false,
+            directedPeerHint: nil,
+            packetType: MessageType.announce.rawValue,
+            messageID: "message-1"
+        )
+
+        #expect(selection.peripheralIDs == Set(["p1", "p2"]))
+        #expect(selection.centralIDs == Set(["c1"]))
     }
 
     @Test

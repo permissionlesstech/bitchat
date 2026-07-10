@@ -46,6 +46,33 @@ struct BLEOutboundLinkPlannerTests {
         )
 
         #expect(plan.fragmentChunkSize == BLEOutboundPacketPolicy.fragmentChunkSize(forLinkLimit: smallestLimit))
+        #expect(plan.selectedLinks.peripheralIDs == Set(["p1"]))
+        #expect(plan.selectedLinks.centralIDs == Set(["c1"]))
+        #expect(!plan.shouldSpoolDirectedPacket)
+    }
+
+    @Test
+    func oversizedDirectedCourierDoesNotUseUnrelatedPeersMTUAsHandoffSuccess() {
+        let recipient = PeerID(str: "1122334455667788")
+        let unrelated = PeerID(str: "8877665544332211")
+        let packet = makePacket(type: .courierEnvelope, recipient: recipient)
+
+        let plan = BLEOutboundLinkPlanner.plan(
+            packet: packet,
+            dataCount: 512,
+            peripheralIDs: ["unrelated-link"],
+            peripheralWriteLimits: [64],
+            centralIDs: [],
+            centralNotifyLimits: [],
+            ingressRecord: nil,
+            excludedLinks: [],
+            peripheralPeerBindings: ["unrelated-link": unrelated],
+            directedOnlyPeer: recipient,
+            requireDirectPeerLink: true
+        )
+
+        #expect(plan.directedPeerHint == recipient)
+        #expect(plan.fragmentChunkSize == nil)
         #expect(plan.selectedLinks.peripheralIDs.isEmpty)
         #expect(plan.selectedLinks.centralIDs.isEmpty)
         #expect(!plan.shouldSpoolDirectedPacket)
@@ -94,6 +121,28 @@ struct BLEOutboundLinkPlannerTests {
     }
 
     @Test
+    func bridgeCourierPacketDoesNotTurnProcessLocalSpoolIntoHandoffSuccess() {
+        let recipient = PeerID(str: "1122334455667788")
+        let packet = makePacket(type: .courierEnvelope, recipient: recipient)
+
+        let plan = BLEOutboundLinkPlanner.plan(
+            packet: packet,
+            dataCount: 32,
+            peripheralIDs: [],
+            peripheralWriteLimits: [],
+            centralIDs: [],
+            centralNotifyLimits: [],
+            ingressRecord: nil,
+            excludedLinks: [],
+            directedOnlyPeer: recipient
+        )
+
+        #expect(plan.selectedLinks.peripheralIDs.isEmpty)
+        #expect(plan.selectedLinks.centralIDs.isEmpty)
+        #expect(!plan.shouldSpoolDirectedPacket)
+    }
+
+    @Test
     func publicBroadcastDoesNotSpoolWhenNoLinksAreAvailable() {
         let packet = makePacket(type: .message)
 
@@ -114,6 +163,45 @@ struct BLEOutboundLinkPlannerTests {
     }
 
     @Test
+    func directAnnounceBypassesDuplicateLinkCollapseButRelayedAnnounceDoesNot() {
+        let peer = PeerID(str: "1122334455667788")
+        let bindings: [String: PeerID] = ["p1": peer, "p2": peer]
+
+        let direct = BLEOutboundLinkPlanner.plan(
+            packet: makePacket(type: .announce),
+            dataCount: 32,
+            peripheralIDs: ["p1", "p2"],
+            peripheralWriteLimits: [128, 128],
+            centralIDs: [],
+            centralNotifyLimits: [],
+            ingressRecord: nil,
+            excludedLinks: [],
+            peripheralPeerBindings: bindings,
+            preferredPeripheralPerPeer: [peer: "p1"],
+            directedOnlyPeer: nil
+        )
+        // A direct announce is the link-binding packet: it must reach every
+        // live link, including a peer's duplicate connections.
+        #expect(direct.selectedLinks.peripheralIDs == Set(["p1", "p2"]))
+
+        let relayed = BLEOutboundLinkPlanner.plan(
+            packet: makePacket(type: .announce, ttl: TransportConfig.messageTTLDefault - 1),
+            dataCount: 32,
+            peripheralIDs: ["p1", "p2"],
+            peripheralWriteLimits: [128, 128],
+            centralIDs: [],
+            centralNotifyLimits: [],
+            ingressRecord: nil,
+            excludedLinks: [],
+            peripheralPeerBindings: bindings,
+            preferredPeripheralPerPeer: [peer: "p1"],
+            directedOnlyPeer: nil
+        )
+        // Relayed announces keep the per-peer collapse (relay hygiene).
+        #expect(relayed.selectedLinks.peripheralIDs == Set(["p1"]))
+    }
+
+    @Test
     func minimumLinkLimitUsesTheSmallestPresentRoleLimit() {
         #expect(BLEOutboundLinkPlanner.minimumLinkLimit(peripheralWriteLimits: [80, 120], centralNotifyLimits: []) == 80)
         #expect(BLEOutboundLinkPlanner.minimumLinkLimit(peripheralWriteLimits: [], centralNotifyLimits: [60, 90]) == 60)
@@ -123,7 +211,8 @@ struct BLEOutboundLinkPlannerTests {
     private func makePacket(
         type: MessageType,
         sender: PeerID = PeerID(str: "8877665544332211"),
-        recipient: PeerID? = nil
+        recipient: PeerID? = nil,
+        ttl: UInt8 = TransportConfig.messageTTLDefault
     ) -> BitchatPacket {
         BitchatPacket(
             type: type.rawValue,
@@ -132,7 +221,7 @@ struct BLEOutboundLinkPlannerTests {
             timestamp: 1234,
             payload: Data([0x01, 0x02]),
             signature: nil,
-            ttl: TransportConfig.messageTTLDefault
+            ttl: ttl
         )
     }
 }

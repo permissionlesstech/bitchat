@@ -12,6 +12,7 @@ import BitFoundation
 struct TextMessageView: View {
     @Environment(\.colorScheme) private var colorScheme: ColorScheme
     @Environment(\.appTheme) private var theme
+    @ThemedPalette private var palette
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
 
     let message: BitchatMessage
@@ -24,6 +25,7 @@ struct TextMessageView: View {
     /// the enum makes the change visible to SwiftUI's structural diff.
     private let deliveryStatus: DeliveryStatus?
     @State private var expandedMessageIDs: Set<String> = []
+    @State private var showDeliveryDetail = false
 
     init(message: BitchatMessage) {
         self.message = message
@@ -35,19 +37,68 @@ struct TextMessageView: View {
             // Precompute heavy token scans once per row
             let cashuLinks = message.content.extractCashuLinks()
             let lightningLinks = message.content.extractLightningLinks()
-            HStack(alignment: .top, spacing: 0) {
+            // Baseline alignment keeps the lock and delivery glyphs on the
+            // first text line; a fixed top padding left the lock's solid body
+            // hanging below the line's visual center.
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
                 let isLong = (message.content.count > TransportConfig.uiLongMessageLengthThreshold || message.content.hasVeryLongToken(threshold: TransportConfig.uiVeryLongTokenThreshold)) && cashuLinks.isEmpty
                 let isExpanded = expandedMessageIDs.contains(message.id)
+                if message.isPrivate {
+                    Image(systemName: "lock.fill")
+                        .font(.bitchatSystem(size: 8))
+                        .foregroundColor(Color.orange.opacity(0.75))
+                        .padding(.trailing, 4)
+                        .accessibilityHidden(true)
+                }
+                if message.isBridged {
+                    Image(systemName: "network")
+                        .font(.bitchatSystem(size: 8))
+                        .foregroundColor(Color.cyan.opacity(0.75))
+                        .padding(.trailing, 4)
+                        .accessibilityLabel(
+                            String(localized: "content.accessibility.bridged_message", defaultValue: "Arrived across a mesh bridge", comment: "Accessibility label for the glyph marking a message that arrived across a mesh bridge")
+                        )
+                }
                 Text(conversationUIModel.formatMessage(message, colorScheme: colorScheme, theme: theme))
                     .fixedSize(horizontal: false, vertical: true)
                     .lineLimit(isLong && !isExpanded ? TransportConfig.uiLongMessageLineLimit : nil)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 
-                // Delivery status indicator for private messages
+                // Delivery status indicator for private messages. Tappable:
+                // .help() tooltips only exist on macOS, so iOS users get the
+                // explanation as a caption under the row instead.
                 if message.isPrivate && conversationUIModel.isSentByCurrentUser(message),
                    let status = deliveryStatus {
-                    DeliveryStatusView(status: status)
-                        .padding(.leading, 4)
+                    Button {
+                        showDeliveryDetail.toggle()
+                    } label: {
+                        DeliveryStatusView(status: status)
+                            .padding(.leading, 4)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint(
+                        String(localized: "content.accessibility.delivery_detail_hint", comment: "Accessibility hint for the delivery status glyph explaining a tap reveals details")
+                    )
+                }
+            }
+
+            // Failure reasons stay visible without a tap; other statuses
+            // reveal on demand.
+            if message.isPrivate && conversationUIModel.isSentByCurrentUser(message),
+               let status = deliveryStatus {
+                if case .failed = status {
+                    Text(verbatim: status.bitchatDescription)
+                        .bitchatFont(size: 11)
+                        .foregroundColor(Color.red.opacity(0.9))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 2)
+                } else if showDeliveryDetail {
+                    Text(verbatim: status.bitchatDescription)
+                        .bitchatFont(size: 11)
+                        .foregroundColor(palette.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 2)
                 }
             }
             
@@ -60,7 +111,7 @@ struct TextMessageView: View {
                     else { expandedMessageIDs.insert(message.id) }
                 }
                 .bitchatFont(size: 11, weight: .medium)
-                .foregroundColor(Color.blue)
+                .foregroundColor(palette.accentBlue)
                 .padding(.top, 4)
             }
 
@@ -76,6 +127,17 @@ struct TextMessageView: View {
                 }
                 .padding(.top, 6)
                 .padding(.leading, 2)
+            }
+        }
+        // Collapse the revealed caption when the status advances (e.g.
+        // sending → sent → delivered) so a detail opened for one state
+        // doesn't linger and silently morph into another. Guarded write:
+        // under a message storm many rows change status within one frame,
+        // and an unconditional state write per change trips SwiftUI's
+        // "tried to update multiple times per frame" re-entrancy warning.
+        .onChange(of: deliveryStatus) { _ in
+            if showDeliveryDetail {
+                showDeliveryDetail = false
             }
         }
     }

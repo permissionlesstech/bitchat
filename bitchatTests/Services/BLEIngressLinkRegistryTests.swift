@@ -88,11 +88,54 @@ struct BLEIngressLinkRegistryTests {
     }
 
     @Test
-    func packetContextRejectsDirectAnnounceMismatchOnBoundLink() {
+    func packetContextAttributesDirectAnnounceMismatchToClaimedSender() throws {
+        // A rotated peer re-announces its new ID on a link still bound to the
+        // old one. The announce must flow through (attributed to the claimed
+        // sender) so signature verification can decide whether to rebind.
         let localPeer = PeerID(str: "0011223344556677")
         let boundPeer = PeerID(str: "1122334455667788")
         let claimedPeer = PeerID(str: "8899aabbccddeeff")
         let packet = makeAnnouncePacket(sender: claimedPeer, ttl: 7)
+
+        let context = try #require(trySuccess(BLEIngressLinkRegistry.packetContext(
+            for: packet,
+            claimedSenderID: claimedPeer,
+            boundPeerID: boundPeer,
+            localPeerID: localPeer,
+            directAnnounceTTL: 7
+        )))
+
+        #expect(context.receivedFromPeerID == claimedPeer)
+        #expect(context.validationPeerID == claimedPeer)
+    }
+
+    @Test
+    func packetContextAttributesRelayedAnnounceMismatchToBoundPeer() throws {
+        // Relayed announces (ttl below direct) keep relayed attribution: the
+        // link peer forwarded someone else's announce.
+        let localPeer = PeerID(str: "0011223344556677")
+        let boundPeer = PeerID(str: "1122334455667788")
+        let claimedPeer = PeerID(str: "8899aabbccddeeff")
+        let packet = makeAnnouncePacket(sender: claimedPeer, ttl: 6)
+
+        let context = try #require(trySuccess(BLEIngressLinkRegistry.packetContext(
+            for: packet,
+            claimedSenderID: claimedPeer,
+            boundPeerID: boundPeer,
+            localPeerID: localPeer,
+            directAnnounceTTL: 7
+        )))
+
+        #expect(context.receivedFromPeerID == boundPeer)
+        #expect(context.validationPeerID == claimedPeer)
+    }
+
+    @Test
+    func packetContextRejectsRequestSyncSenderMismatchOnBoundLink() {
+        let localPeer = PeerID(str: "0011223344556677")
+        let boundPeer = PeerID(str: "1122334455667788")
+        let claimedPeer = PeerID(str: "8899aabbccddeeff")
+        let packet = makeRequestSyncPacket(sender: claimedPeer)
 
         let result = BLEIngressLinkRegistry.packetContext(
             for: packet,
@@ -103,6 +146,23 @@ struct BLEIngressLinkRegistryTests {
         )
 
         #expect(result == .failure(.directSenderMismatch(boundPeerID: boundPeer, claimedSenderID: claimedPeer)))
+    }
+
+    @Test
+    func packetContextAllowsRequestSyncFromBoundPeer() throws {
+        let localPeer = PeerID(str: "0011223344556677")
+        let boundPeer = PeerID(str: "1122334455667788")
+        let packet = makeRequestSyncPacket(sender: boundPeer)
+
+        let context = try #require(trySuccess(BLEIngressLinkRegistry.packetContext(
+            for: packet,
+            claimedSenderID: boundPeer,
+            boundPeerID: boundPeer,
+            localPeerID: localPeer,
+            directAnnounceTTL: 7
+        )))
+
+        #expect(context.receivedFromPeerID == boundPeer)
     }
 
     @Test
@@ -155,6 +215,18 @@ private func makePacket(sender: PeerID, timestamp: UInt64) -> BitchatPacket {
         payload: Data("hello".utf8),
         signature: nil,
         ttl: 3
+    )
+}
+
+private func makeRequestSyncPacket(sender: PeerID) -> BitchatPacket {
+    BitchatPacket(
+        type: MessageType.requestSync.rawValue,
+        senderID: Data(hexString: sender.id) ?? Data(),
+        recipientID: nil,
+        timestamp: 1,
+        payload: Data(),
+        signature: nil,
+        ttl: 0
     )
 }
 

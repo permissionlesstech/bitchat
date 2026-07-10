@@ -106,8 +106,10 @@ private final class MockChatLifecycleContext: ChatLifecycleContext {
         routedPrivateMessages.append((content, peerID, recipientNickname))
     }
 
-    func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {
+    var routeReadReceiptResult = true
+    func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) -> Bool {
         routedReadReceipts.append((receipt.originalMessageID, peerID))
+        return routeReadReceiptResult
     }
 
     func sendMeshMessage(_ content: String, mentions: [String], messageID: String, timestamp: Date) {
@@ -214,10 +216,10 @@ struct ChatLifecycleCoordinatorContextTests {
         // Same message under both keys: the read copy must win over sent.
         context.privateChats[peerID] = [
             makePrivateMessage(id: "m1", timestamp: t1, deliveryStatus: .sent),
-            makePrivateMessage(id: "m2", timestamp: t2),
+            makePrivateMessage(id: "m2", timestamp: t2)
         ]
         context.privateChats[stablePeerID] = [
-            makePrivateMessage(id: "m1", timestamp: t1, deliveryStatus: .read(by: "alice", at: t2)),
+            makePrivateMessage(id: "m1", timestamp: t1, deliveryStatus: .read(by: "alice", at: t2))
         ]
 
         let merged = coordinator.getPrivateChatMessages(for: peerID)
@@ -245,7 +247,7 @@ struct ChatLifecycleCoordinatorContextTests {
             makePrivateMessage(id: "m1", senderPeerID: convKey),
             makePrivateMessage(id: "already-acked", senderPeerID: convKey),
             makePrivateMessage(id: "relay", senderPeerID: convKey, isRelay: true),
-            makePrivateMessage(id: "mine", sender: "me", senderPeerID: context.myPeerID),
+            makePrivateMessage(id: "mine", sender: "me", senderPeerID: context.myPeerID)
         ]
 
         coordinator.markPrivateMessagesAsRead(from: convKey)
@@ -328,7 +330,7 @@ struct ChatLifecycleCoordinatorContextTests {
         #expect(context.ownerLevelReadPasses == [peerID])
     }
     @Test @MainActor
-    func markPrivateMessagesAsRead_routesReceiptsOnlyForNostrReachableFavorites() {
+    func markPrivateMessagesAsRead_routesReceiptsForFavoritesAndNonFavorites() {
         let context = MockChatLifecycleContext()
         let coordinator = ChatLifecycleCoordinator(context: context)
         let noiseKey = Data(repeating: 0xAB, count: 32)
@@ -339,7 +341,7 @@ struct ChatLifecycleCoordinatorContextTests {
         )
         context.privateChats[peerID] = [
             makePrivateMessage(id: "in-1", senderPeerID: peerID),
-            makePrivateMessage(id: "in-relay", senderPeerID: peerID, isRelay: true),
+            makePrivateMessage(id: "in-relay", senderPeerID: peerID, isRelay: true)
         ]
 
         coordinator.markPrivateMessagesAsRead(from: peerID)
@@ -351,12 +353,15 @@ struct ChatLifecycleCoordinatorContextTests {
         #expect(context.routedReadReceipts.map(\.peerID) == [peerID])
         #expect(context.sentReadReceipts.contains("in-1"))
 
-        // No favorite relationship (no Nostr key): the receipt pass is skipped.
+        // No favorite relationship: receipts still route — the router picks
+        // whatever transport can reach the peer (mesh included). Gating on a
+        // stored Nostr key silently starved mesh-connected non-favorites.
         let otherKey = Data(repeating: 0xCD, count: 32)
         let otherPeer = PeerID(hexData: otherKey)
         context.privateChats[otherPeer] = [makePrivateMessage(id: "in-2", senderPeerID: otherPeer)]
         coordinator.markPrivateMessagesAsRead(from: otherPeer)
-        #expect(context.routedReadReceipts.map(\.messageID) == ["in-1"])
+        #expect(context.routedReadReceipts.map(\.messageID) == ["in-1", "in-2"])
+        #expect(context.sentReadReceipts.contains("in-2"))
     }
 
 }

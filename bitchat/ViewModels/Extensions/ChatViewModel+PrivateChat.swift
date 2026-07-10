@@ -6,6 +6,7 @@
 //
 
 import BitFoundation
+import BitLogger
 import Foundation
 import SwiftUI
 
@@ -13,6 +14,12 @@ extension ChatViewModel {
 
     @MainActor
     func sendPrivateMessage(_ content: String, to peerID: PeerID) {
+        // Group chats reuse the private-chat surface but broadcast a sealed
+        // envelope instead of routing to a single peer.
+        if peerID.isGroup {
+            groupCoordinator.sendGroupMessage(content, to: peerID)
+            return
+        }
         privateConversationCoordinator.sendPrivateMessage(content, to: peerID)
     }
 
@@ -49,18 +56,66 @@ extension ChatViewModel {
     }
 
     @MainActor
-    func sendDeliveryAckIfNeeded(to messageId: String, senderPubKey: String, from id: NostrIdentity) {
-        privateConversationCoordinator.sendDeliveryAckIfNeeded(to: messageId, senderPubKey: senderPubKey, from: id)
-    }
-
-    @MainActor
-    func sendReadReceiptIfNeeded(to messageId: String, senderPubKey: String, from id: NostrIdentity) {
-        privateConversationCoordinator.sendReadReceiptIfNeeded(to: messageId, senderPubKey: senderPubKey, from: id)
-    }
-
-    @MainActor
     func sendVoiceNote(at url: URL) {
         mediaTransferCoordinator.sendVoiceNote(at: url)
+    }
+
+    /// Where a live burst would stream right now, or nil when the hold would
+    /// fall back to a classic voice note.
+    private enum LiveVoiceTarget {
+        case peer(PeerID)
+        case publicMesh
+    }
+
+    @MainActor
+    private func liveVoiceTarget() -> LiveVoiceTarget? {
+        guard PTTSettings.liveVoiceEnabled else { return nil }
+
+        if let selectedPeer = selectedPrivateChatPeer {
+            guard !selectedPeer.isGeoDM, !selectedPeer.isGeoChat, !selectedPeer.isGroup else { return nil }
+            // A conversation can be selected under the stable 64-hex Noise key
+            // (e.g. after migration on disconnect), but Noise sessions are keyed
+            // by the 16-hex routing ID — normalize once and send to that same
+            // short ID, like the private-message/file paths do.
+            let peerID = selectedPeer.toShort()
+            guard meshService.isPeerReachable(peerID),
+                  case .established = meshService.getNoiseSessionState(for: peerID)
+            else { return nil }
+            return .peer(peerID)
+        }
+
+        // Public mesh timeline: signed live broadcast. Geohash channels never
+        // reach here (the composer hides media affordances there).
+        return activeChannel == .mesh ? .publicMesh : nil
+    }
+
+    /// Picks the capture backend for the composer's hold-to-record gesture:
+    /// live push-to-talk when the audience can hear it now — a DM peer that
+    /// is mesh-reachable with an established Noise session, or the public
+    /// mesh channel — otherwise the classic record-then-send voice note.
+    /// Either way the release delivers a normal voice note through
+    /// `sendVoiceNote(at:)`, which live receivers absorb into the live bubble.
+    @MainActor
+    func makeVoiceCaptureSession() -> VoiceCaptureSession {
+        switch liveVoiceTarget() {
+        case .peer(let peerID):
+            return PTTLiveVoiceSession(sendPacket: { [meshService] packet in
+                meshService.sendVoiceFrame(packet, to: peerID)
+            })
+        case .publicMesh:
+            return PTTLiveVoiceSession(sendPacket: { [meshService] packet in
+                meshService.sendVoiceFrameBroadcast(packet)
+            })
+        case nil:
+            SecureLogger.info("PTT: hold uses classic voice note (liveVoiceEnabled=\(PTTSettings.liveVoiceEnabled), dmSelected=\(selectedPrivateChatPeer != nil))", category: .session)
+            return VoiceNoteCaptureSession()
+        }
+    }
+
+    /// Inbound handler for `NoisePayloadType.voiceFrame`.
+    @MainActor
+    func handleVoiceFramePayload(from peerID: PeerID, payload: Data, timestamp: Date) {
+        liveVoiceCoordinator.handleVoiceFramePayload(from: peerID, payload: payload, timestamp: timestamp)
     }
 
     #if os(iOS)
@@ -98,11 +153,6 @@ extension ChatViewModel {
     }
 
     @MainActor
-    func handleMediaSendFailure(messageID: String, reason: String) {
-        mediaTransferCoordinator.handleMediaSendFailure(messageID: messageID, reason: reason)
-    }
-
-    @MainActor
     func handleTransferEvent(_ event: TransferProgressManager.Event) {
         mediaTransferCoordinator.handleTransferEvent(event)
     }
@@ -122,80 +172,11 @@ extension ChatViewModel {
     }
 
     @MainActor
-    func handlePrivateMessage(
-        _ payload: NoisePayload,
-        actualSenderNoiseKey: Data?,
-        senderNickname: String,
-        targetPeerID: PeerID,
-        messageTimestamp: Date,
-        senderPubkey: String
-    ) {
-        privateConversationCoordinator.handlePrivateMessage(
-            payload,
-            actualSenderNoiseKey: actualSenderNoiseKey,
-            senderNickname: senderNickname,
-            targetPeerID: targetPeerID,
-            messageTimestamp: messageTimestamp,
-            senderPubkey: senderPubkey
-        )
-    }
-
-    @MainActor
     func handlePrivateMessage(_ message: BitchatMessage) {
+        // A finalized voice note whose burst already streamed in live swaps
+        // into the existing bubble instead of appearing (and notifying) twice.
+        if liveVoiceCoordinator.absorbFinalizedVoiceNote(message) { return }
         privateConversationCoordinator.handlePrivateMessage(message)
-    }
-
-    @MainActor
-    func isDuplicateMessage(_ messageId: String, targetPeerID: PeerID) -> Bool {
-        privateConversationCoordinator.isDuplicateMessage(messageId, targetPeerID: targetPeerID)
-    }
-
-    @MainActor
-    func addMessageToPrivateChatsIfNeeded(_ message: BitchatMessage, targetPeerID: PeerID) {
-        privateConversationCoordinator.addMessageToPrivateChatsIfNeeded(message, targetPeerID: targetPeerID)
-    }
-
-    @MainActor
-    func mirrorToEphemeralIfNeeded(_ message: BitchatMessage, targetPeerID: PeerID, key: Data?) {
-        privateConversationCoordinator.mirrorToEphemeralIfNeeded(message, targetPeerID: targetPeerID, key: key)
-    }
-
-    @MainActor
-    func handleViewingThisChat(_ message: BitchatMessage, targetPeerID: PeerID, key: Data?, senderPubkey: String) {
-        privateConversationCoordinator.handleViewingThisChat(
-            message,
-            targetPeerID: targetPeerID,
-            key: key,
-            senderPubkey: senderPubkey
-        )
-    }
-
-    @MainActor
-    func markAsUnreadIfNeeded(
-        shouldMarkAsUnread: Bool,
-        targetPeerID: PeerID,
-        key: Data?,
-        isRecentMessage: Bool,
-        senderNickname: String,
-        messageContent: String
-    ) {
-        privateConversationCoordinator.markAsUnreadIfNeeded(
-            shouldMarkAsUnread: shouldMarkAsUnread,
-            targetPeerID: targetPeerID,
-            key: key,
-            isRecentMessage: isRecentMessage,
-            senderNickname: senderNickname,
-            messageContent: messageContent
-        )
-    }
-
-    @MainActor
-    func handleFavoriteNotificationFromMesh(_ content: String, from peerID: PeerID, senderNickname: String) {
-        privateConversationCoordinator.handleFavoriteNotificationFromMesh(
-            content,
-            from: peerID,
-            senderNickname: senderNickname
-        )
     }
 
     @MainActor
@@ -206,11 +187,6 @@ extension ChatViewModel {
     @MainActor
     func migratePrivateChatsIfNeeded(for peerID: PeerID, senderNickname: String) {
         privateConversationCoordinator.migratePrivateChatsIfNeeded(for: peerID, senderNickname: senderNickname)
-    }
-
-    @MainActor
-    func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {
-        privateConversationCoordinator.sendFavoriteNotification(to: peerID, isFavorite: isFavorite)
     }
 
     @MainActor

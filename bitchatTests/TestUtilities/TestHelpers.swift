@@ -12,20 +12,7 @@ import BitFoundation
 @testable import bitchat
 
 final class TestHelpers {
-    
-    // MARK: - Key Generation
-    
-    static func generateTestKeyPair() -> (privateKey: Curve25519.KeyAgreement.PrivateKey, publicKey: Curve25519.KeyAgreement.PublicKey) {
-        let privateKey = Curve25519.KeyAgreement.PrivateKey()
-        let publicKey = privateKey.publicKey
-        return (privateKey, publicKey)
-    }
-    
-    static func generateTestIdentity(peerID: String, nickname: String) -> (peerID: String, nickname: String, privateKey: Curve25519.KeyAgreement.PrivateKey, publicKey: Curve25519.KeyAgreement.PublicKey) {
-        let (privateKey, publicKey) = generateTestKeyPair()
-        return (peerID: peerID, nickname: nickname, privateKey: privateKey, publicKey: publicKey)
-    }
-    
+
     // MARK: - Message Creation
     
     static func createTestMessage(
@@ -54,13 +41,13 @@ final class TestHelpers {
         type: UInt8 = 0x01,
         senderID: PeerID = PeerID(str: UUID().uuidString),
         recipientID: PeerID? = nil,
-        payload: Data = "test payload".data(using: .utf8)!,
+        payload: Data = Data("test payload".utf8),
         signature: Data? = nil,
         ttl: UInt8 = 3
     ) -> BitchatPacket {
         return BitchatPacket(
             type: type,
-            senderID: senderID.id.data(using: .utf8)!,
+            senderID: Data(senderID.id.utf8),
             recipientID: recipientID?.id.data(using: .utf8),
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             payload: payload,
@@ -78,11 +65,7 @@ final class TestHelpers {
         }
         return data
     }
-    
-    static func generateTestPeerID() -> String {
-        return "PEER" + UUID().uuidString.prefix(8)
-    }
-    
+
     // MARK: - Async Helpers
     
     static func waitFor(_ condition: @escaping () -> Bool, timeout: TimeInterval = TestConstants.defaultTimeout) async throws {
@@ -110,32 +93,10 @@ final class TestHelpers {
         }
         return true
     }
-    
-    static func expectAsync<T>(
-        timeout: TimeInterval = TestConstants.defaultTimeout,
-        operation: @escaping () async throws -> T
-    ) async throws -> T {
-        return try await withThrowingTaskGroup(of: T.self) { group in
-            group.addTask {
-                return try await operation()
-            }
-            
-            group.addTask {
-                try await sleep(1)
-                throw TestError.timeout
-            }
-            
-            let result = try await group.next()!
-            group.cancelAll()
-            return result
-        }
-    }
 }
 
 enum TestError: Error {
     case timeout
-    case unexpectedValue
-    case testFailure(String)
 }
 
 // MARK: - Private chat seeding (ConversationStore migration)
@@ -164,18 +125,6 @@ extension ChatViewModel {
         }
     }
 
-    /// Test-only replacement for `messages.removeAll()`: empties a public
-    /// channel's conversation.
-    @MainActor
-    func clearPublicMessages(for channel: ChannelID = .mesh) {
-        conversations.clear(ConversationID(channelID: channel))
-    }
-
-    /// Test-only: drops every private chat and unread flag.
-    @MainActor
-    func clearAllPrivateChats() {
-        conversations.removeAllDirectConversations()
-    }
 }
 
 func sleep(_ seconds: TimeInterval) async throws {

@@ -28,7 +28,6 @@ final class PrivateChatManager: ObservableObject {
     @Published private(set) var selectedPeer: PeerID? = nil
     private var selectedPeerMirrorCancellable: AnyCancellable? = nil
 
-    private var selectedPeerFingerprint: String? = nil
     var sentReadReceipts: Set<String> = []  // Made accessible for ChatViewModel
 
     weak var meshService: Transport?
@@ -209,7 +208,7 @@ final class PrivateChatManager: ObservableObject {
                     case .read, .delivered:
                         externalReceipts.insert(message.id)
                         sentReadReceipts.insert(message.id)
-                    case .failed, .partiallyDelivered, .sending, .sent:
+                    case .failed, .partiallyDelivered, .sending, .sent, .carried:
                         break
                     }
                 }
@@ -219,17 +218,12 @@ final class PrivateChatManager: ObservableObject {
 
     /// Start a private chat with a peer. Selection is mutated through the
     /// store's intent (the store owns it); the manager keeps its side
-    /// effects (fingerprint tracking, read receipts, unread clearing).
+    /// effects (read receipts, unread clearing).
     @MainActor
     func startChat(with peerID: PeerID) {
         // Also creates the conversation if needed and updates the derived
         // `selectedConversationID`; `selectedPeer` mirrors the change.
         conversationStore?.setSelectedPrivatePeer(peerID)
-
-        // Store fingerprint for persistence across reconnections
-        if let fingerprint = meshService?.getFingerprint(for: peerID) {
-            selectedPeerFingerprint = fingerprint
-        }
 
         // Mark messages as read
         markAsRead(from: peerID)
@@ -239,14 +233,7 @@ final class PrivateChatManager: ObservableObject {
     /// channel's conversation).
     func endChat() {
         conversationStore?.setSelectedPrivatePeer(nil)
-        selectedPeerFingerprint = nil
     }
-
-    /// No-op since the `ConversationStore` cutover: the store maintains
-    /// chronological order and dedups by message ID on every insert, so the
-    /// per-append re-sort/dedup sweep this performed is no longer needed.
-    /// Kept only for API compatibility until step 5 removes the callers.
-    func sanitizeChat(for peerID: PeerID) {}
 
     /// Mark messages from a peer as read
     @MainActor
@@ -269,8 +256,6 @@ final class PrivateChatManager: ObservableObject {
             return
         }
 
-        sentReadReceipts.insert(message.id)
-
         // Create read receipt using the simplified method
         let receipt = ReadReceipt(
             originalMessageID: message.id,
@@ -281,11 +266,21 @@ final class PrivateChatManager: ObservableObject {
         // Route via MessageRouter to avoid handshakeRequired spam when session isn't established
         if let router = messageRouter {
             SecureLogger.debug("PrivateChatManager: sending READ ack for \(message.id.prefix(8))… to \(senderPeerID.id.prefix(8))… via router", category: .session)
-            Task { @MainActor in
-                router.sendReadReceipt(receipt, to: senderPeerID)
+            let messageID = message.id
+            // Claim the receipt synchronously so a second read scan in the
+            // same runloop pass (chat open triggers two) can't route a
+            // duplicate; release the claim on a failed route (no reachable
+            // transport) so a later read scan retries instead of permanently
+            // losing the receipt.
+            sentReadReceipts.insert(messageID)
+            Task { @MainActor [weak self] in
+                if !router.sendReadReceipt(receipt, to: senderPeerID) {
+                    self?.sentReadReceipts.remove(messageID)
+                }
             }
         } else {
-            // Fallback: preserve previous behavior
+            // Fallback: preserve previous behavior (best-effort mesh send).
+            sentReadReceipts.insert(message.id)
             meshService?.sendReadReceipt(receipt, to: senderPeerID)
         }
     }

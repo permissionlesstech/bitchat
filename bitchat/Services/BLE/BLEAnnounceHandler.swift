@@ -20,6 +20,12 @@ struct BLEAnnounceHandlerEnvironment {
     let verifySignature: (_ packet: BitchatPacket, _ signingPublicKey: Data) -> Bool
     /// Direct link state for the peer (BLE-queue read).
     let linkState: (PeerID) -> (hasPeripheral: Bool, hasCentral: Bool)
+    /// Whether the link this packet arrived on is already bound to a
+    /// different peer ID (ingress-registry + BLE-queue read). Directness
+    /// rides on the unsigned TTL, so a replayed announce can look "direct"
+    /// on the replayer's link; that link must not shortcut an absent peer
+    /// into "connected".
+    let linkBoundToOtherPeer: (_ packet: BitchatPacket, _ peerID: PeerID) -> Bool
     /// Runs the registry mutation phase under the collections barrier.
     let withRegistryBarrier: (() -> Void) -> Void
     /// Upserts the verified announce into the peer registry.
@@ -59,6 +65,15 @@ struct BLEAnnounceHandlerEnvironment {
     let scheduleAfterglow: (TimeInterval) -> Void
 }
 
+/// Outcome of an accepted announce, surfaced so the service can run
+/// follow-up work (e.g. courier handover) that keys off the announce.
+struct BLEAnnounceHandlingResult {
+    let peerID: PeerID
+    let announcement: AnnouncementPacket
+    let isDirectAnnounce: Bool
+    let isVerified: Bool
+}
+
 /// Orchestrates inbound announce packets: preflight validation, signature
 /// trust, registry/topology updates, identity persistence, UI notification,
 /// gossip tracking, and the reciprocal announce response.
@@ -69,7 +84,8 @@ final class BLEAnnounceHandler {
         self.environment = environment
     }
 
-    func handle(_ packet: BitchatPacket, from peerID: PeerID) {
+    @discardableResult
+    func handle(_ packet: BitchatPacket, from peerID: PeerID) -> BLEAnnounceHandlingResult? {
         let env = environment
         let now = env.now()
         let preflight = BLEAnnouncePreflightPolicy.evaluate(
@@ -85,15 +101,15 @@ final class BLEAnnounceHandler {
             announcement = acceptance.announcement
         case .reject(.malformed):
             SecureLogger.error("❌ Failed to decode announce packet from \(peerID.id.prefix(8))…", category: .session)
-            return
+            return nil
         case .reject(.senderMismatch(let derivedFromKey)):
             SecureLogger.warning("⚠️ Announce sender mismatch: derived \(derivedFromKey.id.prefix(8))… vs packet \(peerID.id.prefix(8))…", category: .security)
-            return
+            return nil
         case .reject(.selfAnnounce):
-            return
+            return nil
         case .reject(.stale(let ageSeconds)):
             SecureLogger.debug("⏰ Ignoring stale announce from \(peerID.id.prefix(8))… (age: \(ageSeconds)s)", category: .session)
-            return
+            return nil
         }
 
         // Suppress announce logs to reduce noise
@@ -125,6 +141,23 @@ final class BLEAnnounceHandler {
         var isReconnectedPeer = false
         let directLinkState = env.linkState(peerID)
         let isDirectAnnounce = packet.ttl == env.messageTTL
+        // A "direct" announce arriving on a link that another peer already
+        // owns is either a rotation heal or a replay with its TTL restored;
+        // both are ambiguous, so only the rebind (which containment-checks
+        // the claimed identity) may promote it — never this shortcut.
+        //
+        // Known limitation: denying the shortcut cannot prevent forged
+        // presence outright. A rebind that passes the containment checks
+        // promotes the claimed peer to connected — it must, or a legitimate
+        // rotation on an open link would read as disconnected — so a replay
+        // that wins the rebind (absent victim, cooldown clear) still forges
+        // presence. That residue is presence display only: DMs stay gated on
+        // canDeliverSecurely (no Noise session means retain + courier, see
+        // MessageRouter.sendPrivate). What this check buys: the ambiguous
+        // announce alone never flips presence — forging requires winning the
+        // containment-checked rebind (never steals an identity that owns a
+        // live link; at most one rebind per link per cooldown window).
+        let linkBoundToOtherPeer = isDirectAnnounce && env.linkBoundToOtherPeer(packet, peerID)
 
         env.withRegistryBarrier {
             let hasPeripheralConnection = directLinkState.hasPeripheral
@@ -142,7 +175,7 @@ final class BLEAnnounceHandler {
             let update = env.upsertVerifiedAnnounce(
                 peerID,
                 announcement,
-                isDirectAnnounce || hasPeripheralConnection || hasCentralSubscription,
+                hasPeripheralConnection || hasCentralSubscription || (isDirectAnnounce && !linkBoundToOtherPeer),
                 now
             )
             isNewPeer = update.isNewPeer
@@ -210,5 +243,12 @@ final class BLEAnnounceHandler {
             let delay = Double.random(in: 0.3...0.6)
             env.scheduleAfterglow(delay)
         }
+
+        return BLEAnnounceHandlingResult(
+            peerID: peerID,
+            announcement: announcement,
+            isDirectAnnounce: isDirectAnnounce,
+            isVerified: verifiedAnnounce
+        )
     }
 }

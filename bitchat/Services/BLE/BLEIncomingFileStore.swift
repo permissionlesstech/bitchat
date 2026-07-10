@@ -5,7 +5,16 @@ import Foundation
 struct BLEIncomingFileStore {
     private static let quotaBytes: Int64 = 100 * 1024 * 1024
 
-    private let fileManager: FileManager
+    /// Name prefix of in-flight live voice captures (progressively written by
+    /// `ChatLiveVoiceCoordinator`). Quota eviction skips them by pattern —
+    /// deleting one mid-stream unlinks the inode under an open `FileHandle`
+    /// and kills playback — and the coordinator's startup sweep deletes any
+    /// orphans a previous session left behind.
+    static let liveCapturePrefix = "voice_live_"
+
+    /// Exposed so callers that write progressively into the store's
+    /// directories (live voice captures) share the same file manager.
+    let fileManager: FileManager
     private let baseDirectory: URL?
     private let dateProvider: () -> Date
 
@@ -13,6 +22,14 @@ struct BLEIncomingFileStore {
         self.fileManager = fileManager
         self.baseDirectory = baseDirectory
         self.dateProvider = dateProvider
+    }
+
+    /// Resolves (and creates) an incoming-media directory for callers that
+    /// write progressively instead of via `save` (live voice captures).
+    func incomingDirectory(subdirectory: String) throws -> URL {
+        let directory = try filesDirectory().appendingPathComponent(subdirectory, isDirectory: true)
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true, attributes: nil)
+        return directory
     }
 
     func save(
@@ -39,6 +56,11 @@ struct BLEIncomingFileStore {
         }
     }
 
+    /// Frees least-recently-modified incoming files until `reservingBytes`
+    /// fits under the quota. Files named `voice_live_*` (in-flight live
+    /// captures) are never evicted regardless of who triggers enforcement —
+    /// a finalized transfer can arrive at quota while a burst is still
+    /// streaming — but they still count toward usage.
     func enforceQuota(reservingBytes: Int) {
         do {
             let base = try filesDirectory()
@@ -72,6 +94,7 @@ struct BLEIncomingFileStore {
             var freedSpace: Int64 = 0
             for file in allFiles.sorted(by: { $0.modified < $1.modified }) {
                 guard freedSpace < needToFree else { break }
+                guard !file.url.lastPathComponent.hasPrefix(Self.liveCapturePrefix) else { continue }
                 do {
                     try fileManager.removeItem(at: file.url)
                     freedSpace += file.size
