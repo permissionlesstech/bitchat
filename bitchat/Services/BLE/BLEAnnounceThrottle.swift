@@ -1,6 +1,13 @@
 import Foundation
 
-struct BLEAnnounceThrottle {
+/// Thread-safe announce admission state.
+///
+/// Announce requests originate from the Bluetooth delegate queue, the
+/// concurrent message queue, and the maintenance timer. Keeping the timestamp
+/// behind a lock makes admission and maintenance snapshots atomic when those
+/// request sources race.
+final class BLEAnnounceThrottle: @unchecked Sendable {
+    private let lock = NSLock()
     private var lastSent: Date
     private let normalMinimumInterval: TimeInterval
     private let forcedMinimumInterval: TimeInterval
@@ -16,16 +23,18 @@ struct BLEAnnounceThrottle {
     }
 
     func elapsed(since now: Date) -> TimeInterval {
-        now.timeIntervalSince(lastSent)
+        lock.withLock { now.timeIntervalSince(lastSent) }
     }
 
-    mutating func shouldSend(force: Bool, now: Date) -> Bool {
-        let minimumInterval = force ? forcedMinimumInterval : normalMinimumInterval
-        guard elapsed(since: now) >= minimumInterval else {
-            return false
-        }
+    func shouldSend(force: Bool, now: Date) -> Bool {
+        lock.withLock {
+            let minimumInterval = force ? forcedMinimumInterval : normalMinimumInterval
+            guard now.timeIntervalSince(lastSent) >= minimumInterval else {
+                return false
+            }
 
-        lastSent = now
-        return true
+            lastSent = now
+            return true
+        }
     }
 }
