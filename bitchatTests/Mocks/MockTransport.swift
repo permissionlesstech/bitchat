@@ -9,6 +9,7 @@
 import Foundation
 import Combine
 import CoreBluetooth
+import BitFoundation
 @testable import bitchat
 
 /// Mock Transport implementation for testing ChatViewModel in isolation.
@@ -18,15 +19,13 @@ final class MockTransport: Transport {
     // MARK: - Protocol Properties
 
     weak var delegate: BitchatDelegate?
+    weak var eventDelegate: TransportEventDelegate?
     weak var peerEventsDelegate: TransportPeerEventsDelegate?
 
     var myPeerID: PeerID = PeerID(str: "TESTPEER")
     var myNickname: String = "TestUser"
 
     private let peerSnapshotSubject = CurrentValueSubject<[TransportPeerSnapshot], Never>([])
-    var peerSnapshotPublisher: AnyPublisher<[TransportPeerSnapshot], Never> {
-        peerSnapshotSubject.eraseToAnyPublisher()
-    }
 
     // MARK: - Recording Properties (for test assertions)
 
@@ -35,18 +34,27 @@ final class MockTransport: Transport {
     private(set) var sentReadReceipts: [(receipt: ReadReceipt, peerID: PeerID)] = []
     private(set) var sentDeliveryAcks: [(messageID: String, peerID: PeerID)] = []
     private(set) var sentFavoriteNotifications: [(peerID: PeerID, isFavorite: Bool)] = []
+    private(set) var sentBroadcastFiles: [(packet: BitchatFilePacket, transferID: String)] = []
+    private(set) var sentPrivateFiles: [(packet: BitchatFilePacket, peerID: PeerID, transferID: String)] = []
+    private(set) var cancelledTransfers: [String] = []
     private(set) var sentVerifyChallenges: [(peerID: PeerID, noiseKeyHex: String, nonceA: Data)] = []
     private(set) var sentVerifyResponses: [(peerID: PeerID, noiseKeyHex: String, nonceA: Data)] = []
+    private(set) var sentCourierMessages: [(content: String, messageID: String, recipientNoiseKey: Data, couriers: [PeerID])] = []
     private(set) var startServicesCallCount = 0
     private(set) var stopServicesCallCount = 0
     private(set) var emergencyDisconnectCallCount = 0
     private(set) var broadcastAnnounceCallCount = 0
     private(set) var triggeredHandshakes: [PeerID] = []
+    private(set) var purgedArchivePeers: [PeerID] = []
 
     // MARK: - Configurable Mock State
 
     var connectedPeers: Set<PeerID> = []
     var reachablePeers: Set<PeerID> = []
+    /// Peers with an established secure session. `nil` mirrors the protocol
+    /// default (prompt delivery), so connected peers stay "secure" for tests
+    /// that never care about the distinction.
+    var securePeers: Set<PeerID>?
     var peerNicknames: [PeerID: String] = [:]
     var peerFingerprints: [PeerID: String] = [:]
     var peerNoiseStates: [PeerID: LazyHandshakeState] = [:]
@@ -84,6 +92,10 @@ final class MockTransport: Transport {
         reachablePeers.contains(peerID) || connectedPeers.contains(peerID)
     }
 
+    func canDeliverSecurely(to peerID: PeerID) -> Bool {
+        securePeers?.contains(peerID) ?? canDeliverPromptly(to: peerID)
+    }
+
     func peerNickname(peerID: PeerID) -> String? {
         peerNicknames[peerID]
     }
@@ -104,8 +116,38 @@ final class MockTransport: Transport {
         triggeredHandshakes.append(peerID)
     }
 
-    func getNoiseService() -> NoiseEncryptionService {
-        NoiseEncryptionService(keychain: mockKeychain)
+    func purgeArchivedPublicMessages(from peerID: PeerID) {
+        purgedArchivePeers.append(peerID)
+    }
+
+    // Noise identity wrappers backed by a mock-keychain encryption service
+    // (mirrors the previous `getNoiseService()` placeholder behavior: a real
+    // identity, but no peer sessions). Exposed so tests can assert against
+    // the same identity the wrappers use.
+    private(set) lazy var mockNoiseService = NoiseEncryptionService(keychain: mockKeychain)
+
+    func noiseSessionPublicKeyData(for peerID: PeerID) -> Data? {
+        mockNoiseService.getPeerPublicKeyData(peerID)
+    }
+
+    func noiseIdentityFingerprint() -> String {
+        mockNoiseService.getIdentityFingerprint()
+    }
+
+    func noiseStaticPublicKeyData() -> Data {
+        mockNoiseService.getStaticPublicKeyData()
+    }
+
+    func noiseSigningPublicKeyData() -> Data {
+        mockNoiseService.getSigningPublicKeyData()
+    }
+
+    func noiseSignData(_ data: Data) -> Data? {
+        mockNoiseService.signData(data)
+    }
+
+    func noiseVerifySignature(_ signature: Data, for data: Data, publicKey: Data) -> Bool {
+        mockNoiseService.verifySignature(signature, for: data, publicKey: publicKey)
     }
 
     // MARK: - Messaging
@@ -139,15 +181,15 @@ final class MockTransport: Transport {
     }
 
     func sendFileBroadcast(_ packet: BitchatFilePacket, transferId: String) {
-        // Not tracked for current tests
+        sentBroadcastFiles.append((packet, transferId))
     }
 
     func sendFilePrivate(_ packet: BitchatFilePacket, to peerID: PeerID, transferId: String) {
-        // Not tracked for current tests
+        sentPrivateFiles.append((packet, peerID, transferId))
     }
 
     func cancelTransfer(_ transferId: String) {
-        // Not tracked for current tests
+        cancelledTransfers.append(transferId)
     }
 
     func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {
@@ -156,6 +198,33 @@ final class MockTransport: Transport {
 
     func sendVerifyResponse(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {
         sentVerifyResponses.append((peerID, noiseKeyHex, nonceA))
+    }
+
+    var courierSendResult = true
+    func sendCourierMessage(_ content: String, messageID: String, recipientNoiseKey: Data, via couriers: [PeerID]) -> Bool {
+        sentCourierMessages.append((content, messageID, recipientNoiseKey, couriers))
+        return courierSendResult
+    }
+
+    // MARK: - Mesh Diagnostics
+
+    private(set) var sentMeshPings: [PeerID] = []
+    var meshPingResult: MeshPingResult?
+    var meshPaths: [PeerID: [PeerID]] = [:]
+    var meshTopologySnapshot: MeshTopologySnapshot?
+
+    func sendMeshPing(to peerID: PeerID, completion: @escaping @MainActor (MeshPingResult?) -> Void) {
+        sentMeshPings.append(peerID)
+        let result = meshPingResult
+        Task { @MainActor in completion(result) }
+    }
+
+    func computeMeshPath(to peerID: PeerID) -> [PeerID]? {
+        meshPaths[peerID]
+    }
+
+    func currentMeshTopology() -> MeshTopologySnapshot? {
+        meshTopologySnapshot
     }
 
     // MARK: - Test Helpers
@@ -167,6 +236,9 @@ final class MockTransport: Transport {
         sentReadReceipts.removeAll()
         sentDeliveryAcks.removeAll()
         sentFavoriteNotifications.removeAll()
+        sentBroadcastFiles.removeAll()
+        sentPrivateFiles.removeAll()
+        cancelledTransfers.removeAll()
         sentVerifyChallenges.removeAll()
         sentVerifyResponses.removeAll()
         startServicesCallCount = 0

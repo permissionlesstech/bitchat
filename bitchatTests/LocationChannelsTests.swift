@@ -45,36 +45,11 @@ struct LocationChannelsTests {
         #expect(id1.publicKeyHex == id2.publicKeyHex)
     }
 
-    @Test func bookmarkNamesMigrationDropsLowPrecisionEntries() throws {
-        let suite = "bitchat.tests.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite)!
-        defer { defaults.removePersistentDomain(forName: suite) }
+    @Test func geohashNeighborsNearPoleSkipOutOfBoundsCells() {
+        let nearPole = Geohash.encode(latitude: 89.9999, longitude: 0.0, precision: 8)
+        let neighbors = Geohash.neighbors(of: nearPole)
 
-        // Seed stale state: pre-fix cache has "England" for a 2-char UK geohash,
-        // plus higher-precision entries that must survive the migration.
-        let seeded: [String: String] = [
-            "gc": "England",
-            "u3": "Île-de-France",
-            "u4pr": "Paris",
-            "u4pruy": "Le Marais"
-        ]
-        let seededData = try JSONEncoder().encode(seeded)
-        defaults.set(seededData, forKey: "locationChannel.bookmarkNames")
-        #expect(defaults.integer(forKey: "locationChannel.bookmarkNamesSchemaVersion") == 0)
-
-        let mgr = LocationStateManager(storage: defaults)
-
-        // Low-precision entries are dropped so resolver recomputes them.
-        #expect(mgr.bookmarkNames["gc"] == nil)
-        #expect(mgr.bookmarkNames["u3"] == nil)
-        // Higher-precision entries are preserved.
-        #expect(mgr.bookmarkNames["u4pr"] == "Paris")
-        #expect(mgr.bookmarkNames["u4pruy"] == "Le Marais")
-        // Schema version bumped — migration runs once.
-        #expect(defaults.integer(forKey: "locationChannel.bookmarkNamesSchemaVersion") == 1)
-
-        // Second init is a no-op (idempotent); no crash, state preserved.
-        _ = LocationStateManager(storage: defaults)
-        #expect(defaults.integer(forKey: "locationChannel.bookmarkNamesSchemaVersion") == 1)
+        #expect(neighbors.isEmpty == false)
+        #expect(neighbors.count < 8)
     }
 }

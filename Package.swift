@@ -13,10 +13,11 @@ let package = Package(
         .executable(
             name: "bitchat",
             targets: ["bitchat"]
-        ),
+        )
     ],
-    dependencies:[
+    dependencies: [
         .package(path: "localPackages/Arti"),
+        .package(path: "localPackages/BitFoundation"),
         .package(path: "localPackages/BitLogger"),
         .package(url: "https://github.com/21-DOT-DEV/swift-secp256k1", exact: "0.21.1")
     ],
@@ -25,6 +26,7 @@ let package = Package(
             name: "bitchat",
             dependencies: [
                 .product(name: "P256K", package: "swift-secp256k1"),
+                .product(name: "BitFoundation", package: "BitFoundation"),
                 .product(name: "BitLogger", package: "BitLogger"),
                 .product(name: "Tor", package: "Arti")
             ],
@@ -32,6 +34,7 @@ let package = Package(
             exclude: [
                 "Info.plist",
                 "Assets.xcassets",
+                "_PreviewHelpers/PreviewAssets.xcassets",
                 "bitchat.entitlements",
                 "bitchat-macOS.entitlements",
                 "LaunchScreen.storyboard",
@@ -43,15 +46,24 @@ let package = Package(
         ),
         .testTarget(
             name: "bitchatTests",
-            dependencies: ["bitchat"],
+            dependencies: [
+                "bitchat",
+                .product(name: "BitFoundation", package: "BitFoundation")
+            ],
             path: "bitchatTests",
             exclude: [
                 "Info.plist",
-                "README.md"
+                "README.md",
+                // CI perf gate data (read by scripts/check-perf-floors.sh),
+                // not a test resource.
+                "Performance/perf-floors.json"
             ],
             resources: [
                 .process("Localization"),
-                .process("Noise")
+                // Only the vector fixture: declaring the whole "Noise"
+                // directory would claim its .swift test files as resources
+                // and silently drop them from compilation.
+                .process("Noise/NoiseTestVectors.json")
             ]
         )
     ]

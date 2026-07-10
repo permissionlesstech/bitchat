@@ -8,6 +8,12 @@
 import Testing
 import Foundation
 import Combine
+#if os(iOS)
+import UIKit
+#else
+import AppKit
+#endif
+import BitFoundation
 @testable import bitchat
 
 // MARK: - Test Helpers
@@ -65,8 +71,11 @@ struct ChatViewModelPrivateChatExtensionTests {
         // Check MockTransport implementation... it might need update or verification
     }
 
+    /// An unreachable recipient no longer means instant failure: the message
+    /// is routed anyway so the router's outbox/courier/bridge machinery can
+    /// deliver it, and it stays "sending" until a router callback resolves it.
     @Test @MainActor
-    func sendPrivateMessage_unreachable_setsFailedStatus() async {
+    func sendPrivateMessage_unreachable_staysSendingForStoreAndForward() async {
         let (viewModel, _) = makeTestableViewModel()
         let validHex = "0102030405060708090a0b0c0d0e0f100102030405060708090a0b0c0d0e0f10"
         let peerID = PeerID(str: validHex)
@@ -74,11 +83,7 @@ struct ChatViewModelPrivateChatExtensionTests {
         viewModel.sendPrivateMessage("Hello", to: peerID)
 
         #expect(viewModel.privateChats[peerID]?.count == 1)
-        let status = viewModel.privateChats[peerID]?.last?.deliveryStatus
-        #expect({
-            if case .failed = status { return true }
-            return false
-        }())
+        #expect(viewModel.privateChats[peerID]?.last?.deliveryStatus == .sending)
     }
     
     @Test @MainActor
@@ -171,7 +176,7 @@ struct ChatViewModelPrivateChatExtensionTests {
             isPrivate: true,
             senderPeerID: oldPeerID
         )
-        viewModel.privateChats[oldPeerID] = [oldMessage]
+        viewModel.seedPrivateChat([oldMessage], for: oldPeerID)
         viewModel.peerIDToPublicKeyFingerprint[oldPeerID] = fingerprint
         
         // Setup new peer fingerprint
@@ -219,7 +224,7 @@ struct ChatViewModelPrivateChatExtensionTests {
         // "Check geohash (Nostr) blocks using mapping to full pubkey"
         
         let hexPubkey = "0000000000000000000000000000000000000000000000000000000000000001"
-        viewModel.nostrKeyMapping[blockedPeerID] = hexPubkey
+        viewModel.registerNostrKeyMapping(hexPubkey, for: blockedPeerID)
         viewModel.identityManager.setNostrBlocked(hexPubkey, isBlocked: true)
         
         // Force isGeoChat/isGeoDM check to be true by setting prefix?
@@ -229,7 +234,7 @@ struct ChatViewModelPrivateChatExtensionTests {
         // We need a peerID that looks like geo.
         
         let geoPeerID = PeerID(nostr_: hexPubkey)
-        viewModel.nostrKeyMapping[geoPeerID] = hexPubkey
+        viewModel.registerNostrKeyMapping(hexPubkey, for: geoPeerID)
         
         let geoMessage = BitchatMessage(
             id: "msg-geo-blocked",
@@ -291,8 +296,23 @@ struct ChatViewModelNostrExtensionTests {
         
         let didAppend = await TestHelpers.waitUntil({
             viewModel.publicMessagePipeline.flushIfNeeded()
-            return viewModel.messages.contains { $0.content == "Hello Geo" }
-        })
+            if viewModel.messages.contains(where: { $0.content == "Hello Geo" }) { return true }
+            // LocationChannelManager is a process-wide singleton: a suite
+            // running in parallel (e.g. CommandProcessorTests) can flip the
+            // selected channel mid-test, which reroutes or drops the event
+            // permanently — no amount of waiting recovers it. Re-assert the
+            // channel and redeliver on each poll: every channel switch clears
+            // the processed-event set and the store dedups by message ID, so
+            // redelivery is idempotent and interference heals on the next
+            // poll while a genuine failure still times out.
+            if LocationChannelManager.shared.selectedChannel != channel {
+                LocationChannelManager.shared.select(channel)
+            }
+            if viewModel.activeChannel == channel {
+                viewModel.handleNostrEvent(signed)
+            }
+            return false
+        }, timeout: TestConstants.longTimeout)
         #expect(didAppend)
     }
 
@@ -404,6 +424,290 @@ struct ChatViewModelNostrExtensionTests {
 
         #expect(!viewModel.deduplicationService.hasProcessedNostrEvent("evt-cache"))
     }
+
+    @Test @MainActor
+    func handleNostrEvent_presenceTracksParticipantWithoutTimelineMessage() async throws {
+        let (viewModel, _) = makeTestableViewModel()
+        let geohash = "u4pruydq"
+        let identity = try NostrIdentity.generate()
+
+        viewModel.switchLocationChannel(to: .location(GeohashChannel(level: .city, geohash: geohash)))
+
+        let event = NostrEvent(
+            pubkey: identity.publicKeyHex,
+            createdAt: Date(),
+            kind: .geohashPresence,
+            tags: [["g", geohash]],
+            content: ""
+        )
+        let signed = try event.sign(with: identity.schnorrSigningKey())
+
+        viewModel.handleNostrEvent(signed)
+
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        #expect(viewModel.geohashParticipantCount(for: geohash) >= 1)
+        viewModel.publicMessagePipeline.flushIfNeeded()
+        #expect(viewModel.messages.isEmpty)
+    }
+
+    @Test @MainActor
+    func subscribeGiftWrap_deliveredAckUpdatesExistingMessage() async throws {
+        let (viewModel, _) = makeTestableViewModel()
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let convKey = PeerID(nostr_: sender.publicKeyHex)
+        let messageID = "geo-ack-delivered"
+
+        viewModel.seedPrivateChat([
+            BitchatMessage(
+                id: messageID,
+                sender: viewModel.nickname,
+                content: "Hello",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "Friend",
+                senderPeerID: viewModel.meshService.myPeerID,
+                deliveryStatus: .sent
+            )
+        ], for: convKey)
+
+        let content = try ackContent(type: .delivered, messageID: messageID, senderPeerID: PeerID(str: "0123456789abcdef"))
+        let giftWrap = try NostrProtocol.createPrivateMessage(
+            content: content,
+            recipientPubkey: recipient.publicKeyHex,
+            senderIdentity: sender
+        )
+
+        viewModel.subscribeGiftWrap(giftWrap, id: recipient)
+
+        let didUpdate = await TestHelpers.waitUntil(
+            { isDelivered(status: deliveryStatus(in: viewModel, peerID: convKey, messageID: messageID)) },
+            timeout: 5.0
+        )
+        #expect(didUpdate)
+    }
+
+    @Test @MainActor
+    func subscribeGiftWrap_readAckUpdatesExistingMessage() async throws {
+        let (viewModel, _) = makeTestableViewModel()
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let convKey = PeerID(nostr_: sender.publicKeyHex)
+        let messageID = "geo-ack-read"
+
+        viewModel.seedPrivateChat([
+            BitchatMessage(
+                id: messageID,
+                sender: viewModel.nickname,
+                content: "Hello",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "Friend",
+                senderPeerID: viewModel.meshService.myPeerID,
+                deliveryStatus: .delivered(to: "Friend", at: Date())
+            )
+        ], for: convKey)
+
+        let content = try ackContent(type: .readReceipt, messageID: messageID, senderPeerID: PeerID(str: "0123456789abcdef"))
+        let giftWrap = try NostrProtocol.createPrivateMessage(
+            content: content,
+            recipientPubkey: recipient.publicKeyHex,
+            senderIdentity: sender
+        )
+
+        viewModel.subscribeGiftWrap(giftWrap, id: recipient)
+
+        let didUpdate = await TestHelpers.waitUntil(
+            { isRead(status: deliveryStatus(in: viewModel, peerID: convKey, messageID: messageID)) },
+            timeout: 5.0
+        )
+        #expect(didUpdate)
+    }
+
+    @Test @MainActor
+    func handleGiftWrap_privateMessageStoresConversationAndMapping() async throws {
+        let (viewModel, _) = makeTestableViewModel()
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let messageID = "gift-private"
+        let convKey = PeerID(nostr_: sender.publicKeyHex)
+
+        let content = try privateMessageContent(
+            text: "Hello from gift wrap",
+            messageID: messageID,
+            senderPeerID: PeerID(str: "0123456789abcdef")
+        )
+        let giftWrap = try NostrProtocol.createPrivateMessage(
+            content: content,
+            recipientPubkey: recipient.publicKeyHex,
+            senderIdentity: sender
+        )
+
+        viewModel.handleGiftWrap(giftWrap, id: recipient)
+
+        let didStore = await TestHelpers.waitUntil(
+            { viewModel.privateChats[convKey]?.first?.content == "Hello from gift wrap" },
+            timeout: 5.0
+        )
+        #expect(didStore)
+        #expect(viewModel.nostrKeyMapping[convKey] == sender.publicKeyHex)
+        #expect(viewModel.sentGeoDeliveryAcks.contains(messageID))
+    }
+
+    @Test @MainActor
+    func handleGiftWrap_blockedSenderSkipsMessageStorage() async throws {
+        let (viewModel, _) = makeTestableViewModel()
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let messageID = "gift-blocked"
+        let convKey = PeerID(nostr_: sender.publicKeyHex)
+
+        viewModel.identityManager.setNostrBlocked(sender.publicKeyHex, isBlocked: true)
+
+        let content = try privateMessageContent(
+            text: "Blocked",
+            messageID: messageID,
+            senderPeerID: PeerID(str: "0123456789abcdef")
+        )
+        let giftWrap = try NostrProtocol.createPrivateMessage(
+            content: content,
+            recipientPubkey: recipient.publicKeyHex,
+            senderIdentity: sender
+        )
+
+        viewModel.handleGiftWrap(giftWrap, id: recipient)
+
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        #expect(viewModel.privateChats[convKey] == nil)
+        #expect(viewModel.sentGeoDeliveryAcks.contains(messageID))
+    }
+
+    @Test @MainActor
+    func handleGiftWrap_deliveredAckUpdatesExistingMessage() async throws {
+        let (viewModel, _) = makeTestableViewModel()
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let convKey = PeerID(nostr_: sender.publicKeyHex)
+        let messageID = "gift-delivered"
+
+        viewModel.seedPrivateChat([
+            BitchatMessage(
+                id: messageID,
+                sender: viewModel.nickname,
+                content: "Hello",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: "Friend",
+                senderPeerID: viewModel.meshService.myPeerID,
+                deliveryStatus: .sent
+            )
+        ], for: convKey)
+
+        let content = try ackContent(type: .delivered, messageID: messageID, senderPeerID: PeerID(str: "0123456789abcdef"))
+        let giftWrap = try NostrProtocol.createPrivateMessage(
+            content: content,
+            recipientPubkey: recipient.publicKeyHex,
+            senderIdentity: sender
+        )
+
+        viewModel.handleGiftWrap(giftWrap, id: recipient)
+
+        let didUpdate = await TestHelpers.waitUntil(
+            { isDelivered(status: deliveryStatus(in: viewModel, peerID: convKey, messageID: messageID)) },
+            timeout: 5.0
+        )
+        #expect(didUpdate)
+    }
+
+    @Test @MainActor
+    func findNoiseKey_matchesFavoriteStoredAsNpub() async throws {
+        let (viewModel, _) = makeTestableViewModel()
+        let identity = try NostrIdentity.generate()
+        let noiseKey = Data((0..<32).map { UInt8(($0 + 80) & 0xFF) })
+
+        FavoritesPersistenceService.shared.addFavorite(
+            peerNoisePublicKey: noiseKey,
+            peerNostrPublicKey: identity.npub,
+            peerNickname: "Alice"
+        )
+        defer { FavoritesPersistenceService.shared.removeFavorite(peerNoisePublicKey: noiseKey) }
+
+        #expect(viewModel.findNoiseKey(for: identity.publicKeyHex) == noiseKey)
+    }
+
+    @Test @MainActor
+    func findNoiseKey_matchesFavoriteStoredAsHex() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let nostrHex = String(repeating: "ab", count: 32)
+        let noiseKey = Data((0..<32).map { UInt8(($0 + 112) & 0xFF) })
+
+        FavoritesPersistenceService.shared.addFavorite(
+            peerNoisePublicKey: noiseKey,
+            peerNostrPublicKey: nostrHex,
+            peerNickname: "Bob"
+        )
+        defer { FavoritesPersistenceService.shared.removeFavorite(peerNoisePublicKey: noiseKey) }
+
+        #expect(viewModel.findNoiseKey(for: nostrHex) == noiseKey)
+    }
+
+    /// An inbound Nostr [FAVORITED] marker must flip theyFavoritedUs and stay
+    /// out of the conversation transcript.
+    @Test @MainActor
+    func handlePrivateMessage_nostrFavoritedMarkerUpdatesRelationship() async throws {
+        let (viewModel, _) = makeTestableViewModel()
+        let identity = try NostrIdentity.generate()
+        let noiseKey = Data((0..<32).map { UInt8(($0 + 144) & 0xFF) })
+
+        FavoritesPersistenceService.shared.addFavorite(
+            peerNoisePublicKey: noiseKey,
+            peerNostrPublicKey: identity.npub,
+            peerNickname: "Alice"
+        )
+        defer {
+            FavoritesPersistenceService.shared.updatePeerFavoritedUs(peerNoisePublicKey: noiseKey, favorited: false)
+            FavoritesPersistenceService.shared.removeFavorite(peerNoisePublicKey: noiseKey)
+        }
+
+        // The inbound pipeline resolves a known sender to their noise-key ID.
+        let convKey = PeerID(hexData: noiseKey)
+        let payloadData = try #require(
+            PrivateMessagePacket(messageID: "fav-e2e-1", content: "[FAVORITED]:\(identity.npub)").encode()
+        )
+        let payload = NoisePayload(type: .privateMessage, data: payloadData)
+
+        viewModel.handlePrivateMessage(
+            payload,
+            senderPubkey: identity.publicKeyHex,
+            convKey: convKey,
+            id: identity,
+            messageTimestamp: Date()
+        )
+
+        let relationship = FavoritesPersistenceService.shared.getFavoriteStatus(for: noiseKey)
+        #expect(relationship?.theyFavoritedUs == true)
+        #expect(relationship?.isMutual == true)
+        #expect(relationship?.peerNostrPublicKey == identity.npub)
+        #expect(viewModel.privateChats[convKey, default: []].isEmpty)
+    }
+
+    @Test @MainActor
+    func geohashDMHelpers_exposeMappingAndDisplayName() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let nostrHex = String(repeating: "cd", count: 32)
+        let convKey = PeerID(nostr_: nostrHex)
+
+        viewModel.geoNicknames[nostrHex] = "Alice"
+        viewModel.startGeohashDM(withPubkeyHex: nostrHex)
+
+        #expect(viewModel.selectedPrivateChatPeer == convKey)
+        #expect(viewModel.fullNostrHex(forSenderPeerID: convKey) == nostrHex)
+        #expect(viewModel.geohashDisplayName(for: convKey).hasPrefix("Alice"))
+        #expect(viewModel.nostrPubkeyForDisplayName("Alice") == nostrHex)
+    }
 }
 
 // MARK: - Geohash Queue Tests
@@ -449,6 +753,438 @@ struct ChatViewModelGeoDMTests {
         #expect(viewModel.privateChats[convKey]?.count == 1)
         #expect(viewModel.sentGeoDeliveryAcks.contains(messageID))
     }
+
+    @Test @MainActor
+    func sendGeohashDM_requiresActiveLocationChannel() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let convKey = PeerID(nostr_: "0000000000000000000000000000000000000000000000000000000000000001")
+
+        viewModel.sendGeohashDM("hello", to: convKey)
+
+        // The failure is surfaced inside the geoDM thread, not on the public
+        // timeline (matches the sibling in-thread errors from #1415).
+        #expect(viewModel.messages.isEmpty)
+        #expect(viewModel.privateChats[convKey]?.count == 1)
+        #expect(viewModel.privateChats[convKey]?.last?.sender == "system")
+    }
+
+    @Test @MainActor
+    func sendGeohashDM_missingRecipientMapping_marksFailed() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let geohash = "u4pruydq"
+        let convKey = PeerID(nostr_: "0000000000000000000000000000000000000000000000000000000000000002")
+
+        viewModel.switchLocationChannel(to: .location(GeohashChannel(level: .city, geohash: geohash)))
+        viewModel.sendGeohashDM("hello", to: convKey)
+
+        #expect(viewModel.privateChats[convKey]?.count == 1)
+        #expect(isFailed(status: viewModel.privateChats[convKey]?.last?.deliveryStatus))
+    }
+
+    /// The blocked notice belongs in the DM thread the person is typing in,
+    /// not on the active location-channel timeline.
+    @Test @MainActor
+    func sendGeohashDM_blockedRecipient_marksFailedAndAddsSystemMessageInThread() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let geohash = "u4pruydq"
+        let recipientHex = "0000000000000000000000000000000000000000000000000000000000000003"
+        let convKey = PeerID(nostr_: recipientHex)
+
+        viewModel.switchLocationChannel(to: .location(GeohashChannel(level: .city, geohash: geohash)))
+        viewModel.registerNostrKeyMapping(recipientHex, for: convKey)
+        viewModel.identityManager.setNostrBlocked(recipientHex, isBlocked: true)
+
+        viewModel.sendGeohashDM("hello", to: convKey)
+
+        let thread = viewModel.privateChats[convKey] ?? []
+        #expect(thread.count == 2)
+        #expect(isFailed(status: thread.first?.deliveryStatus))
+        #expect(thread.last?.sender == "system")
+        #expect(!viewModel.messages.contains(where: { $0.sender == "system" }))
+    }
+
+    @Test @MainActor
+    func handlePrivateMessage_geohashViewingConversationRecordsReadReceipt() async throws {
+        let (viewModel, _) = makeTestableViewModel()
+        let geohash = "u4pruydq"
+        let senderPubkey = "0000000000000000000000000000000000000000000000000000000000000004"
+        let convKey = PeerID(nostr_: senderPubkey)
+        let messageID = "pm-viewing"
+
+        viewModel.switchLocationChannel(to: .location(GeohashChannel(level: .city, geohash: geohash)))
+        viewModel.selectedPrivateChatPeer = convKey
+
+        let identity = try viewModel.idBridge.deriveIdentity(forGeohash: geohash)
+        let packet = PrivateMessagePacket(messageID: messageID, content: "Hello")
+        let payloadData = try #require(packet.encode(), "Failed to encode private message")
+        let payload = NoisePayload(type: .privateMessage, data: payloadData)
+
+        viewModel.handlePrivateMessage(
+            payload,
+            senderPubkey: senderPubkey,
+            convKey: convKey,
+            id: identity,
+            messageTimestamp: Date()
+        )
+
+        #expect(viewModel.sentGeoDeliveryAcks.contains(messageID))
+        #expect(viewModel.sentReadReceipts.contains(messageID))
+        #expect(!viewModel.unreadPrivateMessages.contains(convKey))
+    }
+}
+
+// MARK: - Single-Writer Intent Operation Tests
+
+/// Contracts for the owner-side intent ops that are the sole mutation paths
+/// for `ChatViewModel`'s shared coordinator state (`nostrKeyMapping`,
+/// `sentReadReceipts`, `sentGeoDeliveryAcks`, `isBatchingPublic`, the geo
+/// subscription IDs, and the selected private chat hand-off).
+struct ChatViewModelIntentOperationTests {
+
+    @Test @MainActor
+    func markGeoDeliveryAckSent_returnsFalseOnSecondCall() async {
+        let (viewModel, _) = makeTestableViewModel()
+
+        #expect(viewModel.markGeoDeliveryAckSent("geo-ack-1"))
+        #expect(!viewModel.markGeoDeliveryAckSent("geo-ack-1"))
+        #expect(viewModel.markGeoDeliveryAckSent("geo-ack-2"))
+        #expect(viewModel.sentGeoDeliveryAcks == ["geo-ack-1", "geo-ack-2"])
+    }
+
+    @Test @MainActor
+    func markReadReceiptSent_returnsFalseOnSecondCall() async {
+        let (viewModel, _) = makeTestableViewModel()
+
+        #expect(viewModel.markReadReceiptSent("read-1"))
+        #expect(!viewModel.markReadReceiptSent("read-1"))
+        #expect(viewModel.sentReadReceipts.contains("read-1"))
+    }
+
+    @Test @MainActor
+    func pruneSentReadReceipts_dropsStaleIDsAndReturnsRemovedCount() async {
+        let (viewModel, _) = makeTestableViewModel()
+        viewModel.sentReadReceipts = ["keep-1", "keep-2", "drop-1", "drop-2"]
+
+        let removed = viewModel.pruneSentReadReceipts(keeping: ["keep-1", "keep-2", "unrelated"])
+
+        #expect(removed == 2)
+        #expect(viewModel.sentReadReceipts == ["keep-1", "keep-2"])
+        // Nothing stale left: a second prune removes nothing.
+        #expect(viewModel.pruneSentReadReceipts(keeping: ["keep-1", "keep-2"]) == 0)
+    }
+
+    @Test @MainActor
+    func registerNostrKeyMapping_isVisibleToNostrCoordinatorLookups() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let hex = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+        let convKey = PeerID(nostr_: hex)
+
+        // Registered through the owner intent op (as e.g. the private
+        // conversation flow does) and resolved through the Nostr coordinator,
+        // which reads the same backing dictionary via `ChatNostrContext`.
+        viewModel.registerNostrKeyMapping(hex, for: convKey)
+
+        #expect(viewModel.nostrKeyMapping[convKey] == hex)
+        #expect(viewModel.nostrCoordinator.fullNostrHex(forSenderPeerID: convKey) == hex)
+    }
+
+    @Test @MainActor
+    func removeNostrKeyMappings_dropsEveryMappingForThePubkeyCaseInsensitively() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let hex = "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899"
+        let otherHex = "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100"
+        viewModel.registerNostrKeyMapping(hex.uppercased(), for: PeerID(nostr: hex))
+        viewModel.registerNostrKeyMapping(hex, for: PeerID(nostr_: hex))
+        viewModel.registerNostrKeyMapping(otherHex, for: PeerID(nostr_: otherHex))
+
+        viewModel.removeNostrKeyMappings(matchingPubkeyHexLowercased: hex)
+
+        #expect(viewModel.nostrKeyMapping[PeerID(nostr: hex)] == nil)
+        #expect(viewModel.nostrKeyMapping[PeerID(nostr_: hex)] == nil)
+        #expect(viewModel.nostrKeyMapping[PeerID(nostr_: otherHex)] == otherHex)
+    }
+
+    @Test @MainActor
+    func setPublicBatching_publishesBatchingState() async {
+        let (viewModel, _) = makeTestableViewModel()
+
+        #expect(!viewModel.isBatchingPublic)
+        viewModel.setPublicBatching(true)
+        #expect(viewModel.isBatchingPublic)
+        viewModel.setPublicBatching(false)
+        #expect(!viewModel.isBatchingPublic)
+    }
+
+    @Test @MainActor
+    func geoSubscriptionIntentOps_setClearAndDrainSubscriptions() async {
+        let (viewModel, _) = makeTestableViewModel()
+
+        viewModel.setGeoChatSubscriptionID("geo-u4pruy")
+        viewModel.setGeoDmSubscriptionID("geo-dm-u4pruy")
+        #expect(viewModel.geoSubscriptionID == "geo-u4pruy")
+        #expect(viewModel.geoDmSubscriptionID == "geo-dm-u4pruy")
+
+        viewModel.setGeoChatSubscriptionID(nil)
+        viewModel.setGeoDmSubscriptionID(nil)
+        #expect(viewModel.geoSubscriptionID == nil)
+        #expect(viewModel.geoDmSubscriptionID == nil)
+
+        viewModel.addGeoSamplingSub("geo-sample-aaaa", forGeohash: "aaaa")
+        viewModel.addGeoSamplingSub("geo-sample-bbbb", forGeohash: "bbbb")
+        viewModel.removeGeoSamplingSub("geo-sample-aaaa")
+        #expect(viewModel.geoSamplingSubs == ["geo-sample-bbbb": "bbbb"])
+
+        let cleared = viewModel.clearGeoSamplingSubs()
+        #expect(cleared == ["geo-sample-bbbb"])
+        #expect(viewModel.geoSamplingSubs.isEmpty)
+    }
+
+    @Test @MainActor
+    func handOffSelectedPrivateChat_movesSelectionOnlyWhenSelectedPeerIsMigrated() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let oldPeer = PeerID(str: "aaaaaaaaaaaaaaaa")
+        let unrelatedPeer = PeerID(str: "cccccccccccccccc")
+        let newPeer = PeerID(str: "bbbbbbbbbbbbbbbb")
+
+        // Selection not among the migrated peers: untouched.
+        viewModel.selectedPrivateChatPeer = unrelatedPeer
+        viewModel.handOffSelectedPrivateChat(from: [oldPeer], to: newPeer)
+        #expect(viewModel.selectedPrivateChatPeer == unrelatedPeer)
+
+        // Selection being migrated away: handed off to the new peer.
+        viewModel.selectedPrivateChatPeer = oldPeer
+        viewModel.handOffSelectedPrivateChat(from: [oldPeer], to: newPeer)
+        #expect(viewModel.selectedPrivateChatPeer == newPeer)
+    }
+}
+
+@Suite(.serialized)
+struct ChatViewModelMediaTransferTests {
+
+    @Test @MainActor
+    func handleTransferEvent_updatesPrivateMessageProgressAndClearsMappingOnCompletion() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let peerID = PeerID(str: "0102030405060708090a0b0c0d0e0f100102030405060708090a0b0c0d0e0f10")
+        let message = viewModel.enqueueMediaMessage(content: "[voice] clip.m4a", targetPeer: peerID)
+        let transferID = "transfer-1"
+
+        viewModel.registerTransfer(transferId: transferID, messageID: message.id)
+        viewModel.handleTransferEvent(.started(id: transferID, totalFragments: 4))
+        #expect(isPartiallyDelivered(status: deliveryStatus(in: viewModel, peerID: peerID, messageID: message.id), reached: 0, total: 4))
+
+        viewModel.handleTransferEvent(.updated(id: transferID, sentFragments: 2, totalFragments: 4))
+        #expect(isPartiallyDelivered(status: deliveryStatus(in: viewModel, peerID: peerID, messageID: message.id), reached: 2, total: 4))
+
+        viewModel.handleTransferEvent(.completed(id: transferID, totalFragments: 4))
+        #expect(isSent(status: deliveryStatus(in: viewModel, peerID: peerID, messageID: message.id)))
+        #expect(viewModel.messageIDToTransferId[message.id] == nil)
+        #expect(viewModel.transferIdToMessageIDs[transferID] == nil)
+    }
+
+    @Test @MainActor
+    func handleTransferEvent_cancelledRemovesOutgoingMessage() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let peerID = PeerID(str: "1111111111111111111111111111111111111111111111111111111111111111")
+        let message = viewModel.enqueueMediaMessage(content: "[image] pic.jpg", targetPeer: peerID)
+        let transferID = "transfer-2"
+
+        viewModel.registerTransfer(transferId: transferID, messageID: message.id)
+        viewModel.handleTransferEvent(.cancelled(id: transferID, sentFragments: 1, totalFragments: 3))
+
+        #expect(viewModel.privateChats[peerID]?.contains(where: { $0.id == message.id }) != true)
+        #expect(viewModel.messageIDToTransferId[message.id] == nil)
+    }
+
+    @Test @MainActor
+    func sendVoiceNote_outsideAllowedContextDeletesTempFile() async throws {
+        let (viewModel, _) = makeTestableViewModel()
+        let geohash = "u4pruydq"
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("voice-\(UUID().uuidString).m4a")
+
+        try Data("voice".utf8).write(to: url)
+        viewModel.switchLocationChannel(to: .location(GeohashChannel(level: .city, geohash: geohash)))
+
+        viewModel.sendVoiceNote(at: url)
+
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+        #expect(viewModel.messages.contains(where: { $0.sender == "system" }))
+    }
+
+    @Test @MainActor
+    func sendImage_outsideAllowedContextRunsCleanup() async {
+        let (viewModel, _) = makeTestableViewModel()
+        let geohash = "u4pruydq"
+        var cleanupCalled = false
+
+        viewModel.switchLocationChannel(to: .location(GeohashChannel(level: .city, geohash: geohash)))
+        viewModel.sendImage(from: URL(fileURLWithPath: "/tmp/ignored.jpg")) {
+            cleanupCalled = true
+        }
+
+        #expect(cleanupCalled)
+        #expect(viewModel.messages.contains(where: { $0.sender == "system" }))
+    }
+
+    @Test @MainActor
+    func sendVoiceNote_privateChatUsesPrivateFileTransfer() async throws {
+        let (viewModel, transport) = makeTestableViewModel()
+        let peerID = PeerID(str: "2222222222222222222222222222222222222222222222222222222222222222")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("voice-\(UUID().uuidString).m4a")
+        try Data("voice payload".utf8).write(to: url, options: .atomic)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        viewModel.selectedPrivateChatPeer = peerID
+        viewModel.sendVoiceNote(at: url)
+
+        // Media sends hop through Task.detached; the global executor is
+        // shared with every parallel test worker, so a loaded runner can
+        // exceed the 5s default. waitUntil returns as soon as the condition
+        // holds, so passing runs never pay the longer timeout.
+        let didSend = await TestHelpers.waitUntil({ transport.sentPrivateFiles.count == 1 }, timeout: TestConstants.longTimeout)
+        #expect(didSend)
+        #expect(transport.sentPrivateFiles.first?.peerID == peerID)
+        #expect(viewModel.privateChats[peerID]?.last?.content.contains("[voice]") == true)
+        #expect(viewModel.messageIDToTransferId.count == 1)
+        #expect(viewModel.transferIdToMessageIDs.count == 1)
+    }
+
+    @Test @MainActor
+    func sendVoiceNote_oversizedFileFailsAndDeletesTempFile() async throws {
+        let (viewModel, transport) = makeTestableViewModel()
+        let peerID = PeerID(str: "3333333333333333333333333333333333333333333333333333333333333333")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("voice-too-large-\(UUID().uuidString).m4a")
+        try Data(repeating: 0x55, count: FileTransferLimits.maxVoiceNoteBytes + 1).write(to: url, options: .atomic)
+
+        viewModel.selectedPrivateChatPeer = peerID
+        viewModel.sendVoiceNote(at: url)
+
+        let didFail = await TestHelpers.waitUntil({
+            isFailed(status: viewModel.privateChats[peerID]?.last?.deliveryStatus)
+        }, timeout: TestConstants.longTimeout)
+        #expect(didFail)
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+        #expect(transport.sentPrivateFiles.isEmpty)
+    }
+
+    @Test @MainActor
+    func sendImage_privateChatProcessesAndTransfersImage() async throws {
+        let (viewModel, transport) = makeTestableViewModel()
+        let peerID = PeerID(str: "4444444444444444444444444444444444444444444444444444444444444444")
+        let sourceURL = try makeTemporaryImageURL()
+        defer { try? FileManager.default.removeItem(at: sourceURL) }
+
+        viewModel.selectedPrivateChatPeer = peerID
+        viewModel.sendImage(from: sourceURL)
+
+        let didSend = await TestHelpers.waitUntil({ transport.sentPrivateFiles.count == 1 }, timeout: TestConstants.longTimeout)
+        #expect(didSend)
+        #expect(transport.sentPrivateFiles.first?.peerID == peerID)
+        #expect(transport.sentPrivateFiles.first?.packet.mimeType == "image/jpeg")
+        #expect(viewModel.privateChats[peerID]?.last?.content.contains("[image]") == true)
+        #expect(viewModel.messageIDToTransferId.count == 1)
+    }
+
+    @Test @MainActor
+    func sendImage_invalidSourceAddsFailureSystemMessage() async throws {
+        let (viewModel, transport) = makeTestableViewModel()
+        let peerID = PeerID(str: "5555555555555555555555555555555555555555555555555555555555555555")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("invalid-\(UUID().uuidString).jpg")
+        try Data("not-an-image".utf8).write(to: url, options: .atomic)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        viewModel.selectedPrivateChatPeer = peerID
+        viewModel.sendImage(from: url)
+
+        let didNotify = await TestHelpers.waitUntil({
+            viewModel.messages.contains(where: { $0.sender == "system" && $0.content.contains("Failed to prepare image") })
+        }, timeout: TestConstants.longTimeout)
+        #expect(didNotify)
+        #expect(transport.sentPrivateFiles.isEmpty)
+        #expect(viewModel.privateChats[peerID]?.isEmpty != false)
+    }
+
+    @Test @MainActor
+    func clearTransferMapping_promotesQueuedTransferForSameID() async {
+        let (viewModel, _) = makeTestableViewModel()
+        viewModel.registerTransfer(transferId: "transfer-queue", messageID: "first")
+        viewModel.registerTransfer(transferId: "transfer-queue", messageID: "second")
+
+        viewModel.clearTransferMapping(for: "first")
+
+        #expect(viewModel.messageIDToTransferId["first"] == nil)
+        #expect(viewModel.transferIdToMessageIDs["transfer-queue"] == ["second"])
+        #expect(viewModel.messageIDToTransferId["second"] == "transfer-queue")
+    }
+
+    @Test @MainActor
+    func cancelMediaSend_cancelsActiveTransferRemovesMessageAndDeletesFile() async throws {
+        let (viewModel, transport) = makeTestableViewModel()
+        let peerID = PeerID(str: "6666666666666666666666666666666666666666666666666666666666666666")
+        let fileName = "cancel-\(UUID().uuidString).m4a"
+        let fileURL = try mediaFileURL(subdirectory: "voicenotes/outgoing", fileName: fileName)
+        try Data("cancel me".utf8).write(to: fileURL, options: .atomic)
+
+        let message = BitchatMessage(
+            id: "cancel-msg",
+            sender: viewModel.nickname,
+            content: "[voice] \(fileName)",
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: true,
+            recipientNickname: "Peer",
+            senderPeerID: viewModel.meshService.myPeerID,
+            deliveryStatus: .sending
+        )
+        viewModel.seedPrivateChat([message], for: peerID)
+        viewModel.registerTransfer(transferId: "transfer-cancel", messageID: message.id)
+
+        viewModel.cancelMediaSend(messageID: message.id)
+
+        #expect(transport.cancelledTransfers == ["transfer-cancel"])
+        #expect(viewModel.privateChats[peerID] == nil)
+        #expect(!FileManager.default.fileExists(atPath: fileURL.path))
+    }
+
+    @Test @MainActor
+    func deleteMediaMessage_removesStoredMessageAndCleansImageFile() async throws {
+        let (viewModel, _) = makeTestableViewModel()
+        let peerID = PeerID(str: "7777777777777777777777777777777777777777777777777777777777777777")
+        let fileName = "delete-\(UUID().uuidString).jpg"
+        let fileURL = try mediaFileURL(subdirectory: "images/outgoing", fileName: fileName)
+        try Data("image bytes".utf8).write(to: fileURL, options: .atomic)
+
+        let message = BitchatMessage(
+            id: "delete-msg",
+            sender: viewModel.nickname,
+            content: "[image] \(fileName)",
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: true,
+            recipientNickname: "Peer",
+            senderPeerID: viewModel.meshService.myPeerID,
+            deliveryStatus: .sent
+        )
+        viewModel.seedPrivateChat([message], for: peerID)
+        viewModel.registerTransfer(transferId: "transfer-delete", messageID: message.id)
+
+        viewModel.deleteMediaMessage(messageID: message.id)
+
+        #expect(viewModel.privateChats[peerID] == nil)
+        #expect(viewModel.messageIDToTransferId[message.id] == nil)
+        #expect(!FileManager.default.fileExists(atPath: fileURL.path))
+    }
+
+    @Test @MainActor
+    func makeTransferID_isPrefixedByMessageIDAndUnique() async {
+        let (viewModel, _) = makeTestableViewModel()
+
+        let first = viewModel.makeTransferID(messageID: "base")
+        let second = viewModel.makeTransferID(messageID: "base")
+
+        #expect(first.hasPrefix("base-"))
+        #expect(second.hasPrefix("base-"))
+        #expect(first != second)
+    }
 }
 
 private func base64URLEncode(_ data: Data) -> String {
@@ -456,4 +1192,117 @@ private func base64URLEncode(_ data: Data) -> String {
         .replacingOccurrences(of: "+", with: "-")
         .replacingOccurrences(of: "/", with: "_")
         .replacingOccurrences(of: "=", with: "")
+}
+
+private func ackContent(type: NoisePayloadType, messageID: String, senderPeerID: PeerID) throws -> String {
+    if let content = NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(
+        type: type,
+        messageID: messageID,
+        senderPeerID: senderPeerID
+    ) {
+        return content
+    }
+    throw ChatViewModelExtensionsTestError.invalidAckContent
+}
+
+private func privateMessageContent(text: String, messageID: String, senderPeerID: PeerID) throws -> String {
+    if let content = NostrEmbeddedBitChat.encodePMForNostrNoRecipient(
+        content: text,
+        messageID: messageID,
+        senderPeerID: senderPeerID
+    ) {
+        return content
+    }
+    throw ChatViewModelExtensionsTestError.invalidPrivateMessageContent
+}
+
+@MainActor
+private func deliveryStatus(in viewModel: ChatViewModel, peerID: PeerID, messageID: String) -> DeliveryStatus? {
+    viewModel.privateChats[peerID]?.first(where: { $0.id == messageID })?.deliveryStatus
+}
+
+private func isFailed(status: DeliveryStatus?) -> Bool {
+    if case .failed = status {
+        return true
+    }
+    return false
+}
+
+private func isDelivered(status: DeliveryStatus?) -> Bool {
+    if case .delivered = status {
+        return true
+    }
+    return false
+}
+
+private func isRead(status: DeliveryStatus?) -> Bool {
+    if case .read = status {
+        return true
+    }
+    return false
+}
+
+private func isSent(status: DeliveryStatus?) -> Bool {
+    if case .sent = status {
+        return true
+    }
+    return false
+}
+
+private func isPartiallyDelivered(status: DeliveryStatus?, reached: Int, total: Int) -> Bool {
+    if case .partiallyDelivered(let actualReached, let actualTotal) = status {
+        return actualReached == reached && actualTotal == total
+    }
+    return false
+}
+
+private enum ChatViewModelExtensionsTestError: Error {
+    case invalidAckContent
+    case invalidPrivateMessageContent
+}
+
+private func mediaFileURL(subdirectory: String, fileName: String) throws -> URL {
+    let base = try FileManager.default.url(
+        for: .applicationSupportDirectory,
+        in: .userDomainMask,
+        appropriateFor: nil,
+        create: true
+    ).appendingPathComponent("files", isDirectory: true)
+    let directory = base.appendingPathComponent(subdirectory, isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    return directory.appendingPathComponent(fileName)
+}
+
+private func makeTemporaryImageURL() throws -> URL {
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent("image-\(UUID().uuidString).png")
+    let data = try makeImageData()
+    try data.write(to: url, options: .atomic)
+    return url
+}
+
+private func makeImageData() throws -> Data {
+    #if os(iOS)
+    let image = UIGraphicsImageRenderer(size: CGSize(width: 64, height: 64)).image { context in
+        UIColor.systemTeal.setFill()
+        context.fill(CGRect(x: 0, y: 0, width: 64, height: 64))
+    }
+    guard let data = image.pngData() else {
+        throw ChatViewModelExtensionsTestError.invalidPrivateMessageContent
+    }
+    return data
+    #else
+    let image = NSImage(size: CGSize(width: 64, height: 64))
+    image.lockFocus()
+    NSColor.systemTeal.setFill()
+    NSBezierPath(rect: CGRect(x: 0, y: 0, width: 64, height: 64)).fill()
+    image.unlockFocus()
+    guard
+        let tiffData = image.tiffRepresentation,
+        let bitmap = NSBitmapImageRep(data: tiffData),
+        let data = bitmap.representation(using: .png, properties: [:])
+    else {
+        throw ChatViewModelExtensionsTestError.invalidPrivateMessageContent
+    }
+    return data
+    #endif
 }

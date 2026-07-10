@@ -5,6 +5,79 @@ import Combine
 #if os(iOS) || os(macOS)
 import CoreLocation
 
+protocol LocationStateManaging: AnyObject {
+    var delegate: CLLocationManagerDelegate? { get set }
+    var desiredAccuracy: CLLocationAccuracy { get set }
+    var distanceFilter: CLLocationDistance { get set }
+    var authorizationStatus: CLAuthorizationStatus { get }
+    func requestWhenInUseAuthorization()
+    func requestLocation()
+    func startUpdatingLocation()
+    func stopUpdatingLocation()
+}
+
+protocol LocationStateGeocoding: AnyObject {
+    func cancelGeocode()
+    func reverseGeocodeLocation(
+        _ location: CLLocation,
+        completionHandler: @escaping ([CLPlacemark]?, Error?) -> Void
+    )
+}
+
+private final class CLLocationManagerAdapter: NSObject, LocationStateManaging {
+    private let base = CLLocationManager()
+
+    var delegate: CLLocationManagerDelegate? {
+        get { base.delegate }
+        set { base.delegate = newValue }
+    }
+
+    var desiredAccuracy: CLLocationAccuracy {
+        get { base.desiredAccuracy }
+        set { base.desiredAccuracy = newValue }
+    }
+
+    var distanceFilter: CLLocationDistance {
+        get { base.distanceFilter }
+        set { base.distanceFilter = newValue }
+    }
+
+    var authorizationStatus: CLAuthorizationStatus {
+        base.authorizationStatus
+    }
+
+    func requestWhenInUseAuthorization() {
+        base.requestWhenInUseAuthorization()
+    }
+
+    func requestLocation() {
+        base.requestLocation()
+    }
+
+    func startUpdatingLocation() {
+        base.startUpdatingLocation()
+    }
+
+    func stopUpdatingLocation() {
+        base.stopUpdatingLocation()
+    }
+}
+
+private final class CLGeocoderAdapter: LocationStateGeocoding {
+    private let base = CLGeocoder()
+
+    func cancelGeocode() {
+        base.cancelGeocode()
+    }
+
+    func reverseGeocodeLocation(
+        _ location: CLLocation,
+        completionHandler: @escaping ([CLPlacemark]?, Error?) -> Void
+    ) {
+        base.reverseGeocodeLocation(location, completionHandler: completionHandler)
+    }
+}
+
 /// Unified manager for location-based channel state including:
 /// - CoreLocation permissions and one-shot location retrieval
 /// - Geohash channel computation from coordinates
@@ -26,11 +99,9 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
 
     // MARK: - Private Properties (CoreLocation)
 
-    private let cl = CLLocationManager()
-    private let geocoder = CLGeocoder()
-    private var lastLocation: CLLocation?
+    private let cl: LocationStateManaging
+    private let geocoder: LocationStateGeocoding
     private var refreshTimer: Timer?
-    private var isGeocoding: Bool = false
 
     // MARK: - Persistence Keys
 
@@ -75,6 +146,8 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
 
     private override init() {
         self.storage = .standard
+        self.cl = CLLocationManagerAdapter()
+        self.geocoder = CLGeocoderAdapter()
         super.init()
 
         // Skip CoreLocation setup in test environments
@@ -94,8 +167,28 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
     /// Internal initializer for testing with custom storage
     init(storage: UserDefaults) {
         self.storage = storage
+        self.cl = CLLocationManagerAdapter()
+        self.geocoder = CLGeocoderAdapter()
         super.init()
         loadPersistedState()
+    }
+
+    internal init(
+        storage: UserDefaults,
+        locationManager: LocationStateManaging,
+        geocoder: LocationStateGeocoding,
+        shouldInitializeCoreLocation: Bool
+    ) {
+        self.storage = storage
+        self.cl = locationManager
+        self.geocoder = geocoder
+        super.init()
+        loadPersistedState()
+        guard shouldInitializeCoreLocation else { return }
+        cl.delegate = self
+        cl.desiredAccuracy = kCLLocationAccuracyHundredMeters
+        cl.distanceFilter = TransportConfig.locationDistanceFilterMeters
+        initializePermissionState()
     }
 
     private func loadPersistedState() {
@@ -135,26 +228,26 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
         migrateBookmarkNamesIfNeeded()
     }
 
-    // One-time migration: drop cached names for low-precision (≤2-char) geohashes
-    // so the country-first resolver recomputes them on next channel-list display
-    // (via resolveBookmarkNameIfNeeded on LocationChannelsSheet row .onAppear).
+    /// Drops names cached before low-precision geohashes became country-first.
+    /// Correctly resolved names written after this migration must survive
+    /// subsequent launches, so the migration is explicitly versioned.
     private func migrateBookmarkNamesIfNeeded() {
-        guard storage.integer(forKey: bookmarkNamesSchemaVersionKey) < bookmarkNamesCurrentSchemaVersion else { return }
-        let pruned = bookmarkNames.filter { $0.key.count > 2 }
-        if pruned.count != bookmarkNames.count {
-            bookmarkNames = pruned
+        guard storage.integer(forKey: bookmarkNamesSchemaVersionKey) < bookmarkNamesCurrentSchemaVersion else {
+            return
+        }
+
+        let retainedNames = bookmarkNames.filter {
+            Self.normalizeGeohash($0.key).count > 2
+        }
+        if retainedNames.count != bookmarkNames.count {
+            bookmarkNames = retainedNames
             persistBookmarkNames()
         }
         storage.set(bookmarkNamesCurrentSchemaVersion, forKey: bookmarkNamesSchemaVersionKey)
     }
 
     private func initializePermissionState() {
-        let status: CLAuthorizationStatus
-        if #available(iOS 14.0, macOS 11.0, *) {
-            status = cl.authorizationStatus
-        } else {
-            status = CLLocationManager.authorizationStatus()
-        }
+        let status = cl.authorizationStatus
         updatePermissionState(from: status)
 
         // Fall back to persisted teleport state if no location authorization
@@ -173,12 +266,7 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
     // MARK: - Public API (Permissions & Location)
 
     func enableLocationChannels() {
-        let status: CLAuthorizationStatus
-        if #available(iOS 14.0, macOS 11.0, *) {
-            status = cl.authorizationStatus
-        } else {
-            status = CLLocationManager.authorizationStatus()
-        }
+        let status = cl.authorizationStatus
         switch status {
         case .notDetermined:
             cl.requestWhenInUseAuthorization()
@@ -200,7 +288,7 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
         }
     }
 
-    func beginLiveRefresh(interval: TimeInterval = TransportConfig.locationLiveRefreshInterval) {
+    func beginLiveRefresh(interval _: TimeInterval = TransportConfig.locationLiveRefreshInterval) {
         guard permissionState == .authorized else { return }
         refreshTimer?.invalidate()
         refreshTimer = nil
@@ -301,23 +389,22 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
     }
 
     func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
-        updatePermissionState(from: status)
-        if case .authorized = permissionState {
+        let newState = updatePermissionState(from: status)
+        if newState == .authorized {
             requestOneShotLocation()
         }
     }
 
     @available(iOS 14.0, macOS 11.0, *)
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        updatePermissionState(from: manager.authorizationStatus)
-        if case .authorized = permissionState {
+        let newState = updatePermissionState(from: manager.authorizationStatus)
+        if newState == .authorized {
             requestOneShotLocation()
         }
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let loc = locations.last else { return }
-        lastLocation = loc
         computeChannels(from: loc.coordinate)
         reverseGeocodeLocation(loc)
     }
@@ -328,7 +415,8 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
 
     // MARK: - Private Helpers (Permission)
 
-    private func updatePermissionState(from status: CLAuthorizationStatus) {
+    @discardableResult
+    private func updatePermissionState(from status: CLAuthorizationStatus) -> PermissionState {
         let newState: PermissionState
         switch status {
         case .notDetermined: newState = .notDetermined
@@ -337,7 +425,15 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
         case .authorizedAlways, .authorizedWhenInUse, .authorized: newState = .authorized
         @unknown default: newState = .restricted
         }
+        // Do not rely on a mounted SwiftUI consumer to stop high-accuracy
+        // updates. Authorization can change while the app is backgrounded,
+        // and stopping here also closes the gap before the published state is
+        // delivered on the main actor.
+        if newState != .authorized {
+            endLiveRefresh()
+        }
         Task { @MainActor in self.permissionState = newState }
+        return newState
     }
 
     // MARK: - Private Helpers (Channel Computation)
@@ -373,10 +469,8 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
 
     private func reverseGeocodeLocation(_ location: CLLocation) {
         geocoder.cancelGeocode()
-        isGeocoding = true
         geocoder.reverseGeocodeLocation(location) { [weak self] placemarks, _ in
             guard let self = self else { return }
-            self.isGeocoding = false
             if let pm = placemarks?.first {
                 let names = self.locationNamesByLevel(from: pm)
                 Task { @MainActor in self.locationNames = names }
@@ -453,15 +547,15 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
     }
 
     private func resolveCompositeAdminName(geohash gh: String, points: [CLLocation]) {
-        var uniqueAdmins: [String] = []
-        var seenAdmins = Set<String>()
+        var uniqueRegions: [String] = []
+        var seenRegions = Set<String>()
         var idx = 0
 
         func step() {
             if idx >= points.count {
                 let finalName: String? = {
-                    if uniqueAdmins.count >= 2 { return uniqueAdmins[0] + " and " + uniqueAdmins[1] }
-                    return uniqueAdmins.first
+                    if uniqueRegions.count >= 2 { return uniqueRegions[0] + " and " + uniqueRegions[1] }
+                    return uniqueRegions.first
                 }()
                 if let finalName = finalName, !finalName.isEmpty {
                     DispatchQueue.main.async {
@@ -478,13 +572,15 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
                 guard self != nil else { return }
                 if let pm = placemarks?.first {
                     if let country = pm.country, !country.isEmpty {
-                        if !seenAdmins.contains(country) {
-                            seenAdmins.insert(country)
-                            uniqueAdmins.append(country)
+                        if !seenRegions.contains(country) {
+                            seenRegions.insert(country)
+                            uniqueRegions.append(country)
                         }
-                    } else if let admin = pm.administrativeArea, !admin.isEmpty, !seenAdmins.contains(admin) {
-                        seenAdmins.insert(admin)
-                        uniqueAdmins.append(admin)
+                    } else if let admin = pm.administrativeArea,
+                              !admin.isEmpty,
+                              !seenRegions.contains(admin) {
+                        seenRegions.insert(admin)
+                        uniqueRegions.append(admin)
                     }
                 }
                 step()
@@ -528,10 +624,26 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
         }
     }
 
+    /// Removes all persisted location state and resets the in-memory view.
+    /// Used by the panic wipe — selected channel, teleport set and bookmarks
+    /// (which reveal where the user has been) must not survive on device.
+    func panicWipe() {
+        storage.removeObject(forKey: selectedChannelKey)
+        storage.removeObject(forKey: teleportedStoreKey)
+        storage.removeObject(forKey: bookmarksKey)
+        storage.removeObject(forKey: bookmarkNamesKey)
+        teleportedSet.removeAll()
+        bookmarkMembership.removeAll()
+        bookmarks = []
+        bookmarkNames = [:]
+        teleported = false
+        selectedChannel = .mesh
+    }
+
     private static func normalizeGeohash(_ s: String) -> String {
         let allowed = Set("0123456789bcdefghjkmnpqrstuvwxyz")
         return s
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmed
             .lowercased()
             .replacingOccurrences(of: "#", with: "")
             .filter { allowed.contains($0) }
@@ -549,16 +661,6 @@ extension LocationStateManager {
     /// Backward compatibility: toggle bookmark (was GeohashBookmarksStore.toggle)
     func toggle(_ geohash: String) {
         toggleBookmark(geohash)
-    }
-
-    /// Backward compatibility: add bookmark (was GeohashBookmarksStore.add)
-    func add(_ geohash: String) {
-        addBookmark(geohash)
-    }
-
-    /// Backward compatibility: remove bookmark (was GeohashBookmarksStore.remove)
-    func remove(_ geohash: String) {
-        removeBookmark(geohash)
     }
 }
 #endif

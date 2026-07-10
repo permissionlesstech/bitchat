@@ -1,32 +1,99 @@
 import Foundation
 import AVFoundation
 
+/// The small surface of `AVAudioRecorder` that `VoiceRecorder` owns. Keeping
+/// it behind a protocol lets lifecycle races be tested without opening the
+/// microphone on the test host.
+protocol VoiceAudioRecording: AnyObject {
+    var isRecording: Bool { get }
+    var isMeteringEnabled: Bool { get set }
+    func prepareToRecord() -> Bool
+    func record(forDuration duration: TimeInterval) -> Bool
+    func stop()
+}
+
+extension AVAudioRecorder: VoiceAudioRecording {}
+
+protocol VoiceAudioRecorderCreating {
+    func makeRecorder(url: URL) throws -> any VoiceAudioRecording
+}
+
+private struct SystemVoiceAudioRecorderFactory: VoiceAudioRecorderCreating {
+    func makeRecorder(url: URL) throws -> any VoiceAudioRecording {
+        let settings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVSampleRateKey: 16_000,
+            AVNumberOfChannelsKey: 1,
+            AVEncoderBitRateKey: 16_000
+        ]
+        return try AVAudioRecorder(url: url, settings: settings)
+    }
+}
+
 /// Manages audio capture for mesh voice notes with predictable encoding settings.
-/// Recording runs on an internal serial queue to avoid AVAudioSession contention.
-final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
-    enum RecorderError: Error {
+actor VoiceRecorder {
+    enum RecorderError: Error, Equatable {
         case microphoneAccessDenied
-        case recorderInitializationFailed
         case recordingInProgress
+        case failedToStartRecording
     }
 
     static let shared = VoiceRecorder()
 
-    private let queue = DispatchQueue(label: "com.bitchat.voice-recorder")
-    private let paddingInterval: TimeInterval = 0.5
-    private let maxRecordingDuration: TimeInterval = 120
+    static let minRecordingDuration: TimeInterval = 1
 
-    private var recorder: AVAudioRecorder?
+    /// Identity of one press/hold. Every lifecycle mutation must present the
+    /// same owner that started the recorder, so a stale finish or cancel from
+    /// another hold cannot stop or delete the current recording.
+    final class RecordingOwner: @unchecked Sendable {}
+
+    /// Test-only scheduling seams for lifecycle boundaries that otherwise rely
+    /// on wall-clock sleeps. Production uses the real padding delay.
+    struct TestingHooks: Sendable {
+        let waitForStopPadding: (@Sendable (TimeInterval) async -> Void)?
+
+        init(waitForStopPadding: (@Sendable (TimeInterval) async -> Void)? = nil) {
+            self.waitForStopPadding = waitForStopPadding
+        }
+    }
+
+    private let sessionCoordinator: AudioSessionCoordinator
+    private let recorderFactory: any VoiceAudioRecorderCreating
+    private let permissionGranted: () -> Bool
+    private let paddingInterval: TimeInterval
+    private let maxRecordingDuration: TimeInterval
+    private let outputDirectory: URL?
+    private let testingHooks: TestingHooks
+
+    private var recorder: (any VoiceAudioRecording)?
     private var currentURL: URL?
-    private var stopWorkItem: DispatchWorkItem?
+    private var sessionToken: AudioSessionCoordinator.Token?
+    private var activeOwner: RecordingOwner?
+    /// True only while `startRecording()` is suspended in session acquire.
+    /// A second start is rejected instead of superseding the first one.
+    private var startInFlight = false
 
-    private override init() {
-        super.init()
+    init(
+        sessionCoordinator: AudioSessionCoordinator = .shared,
+        recorderFactory: any VoiceAudioRecorderCreating = SystemVoiceAudioRecorderFactory(),
+        permissionGranted: (() -> Bool)? = nil,
+        paddingInterval: TimeInterval = 0.5,
+        maxRecordingDuration: TimeInterval = 120,
+        outputDirectory: URL? = nil,
+        testingHooks: TestingHooks = TestingHooks()
+    ) {
+        self.sessionCoordinator = sessionCoordinator
+        self.recorderFactory = recorderFactory
+        self.permissionGranted = permissionGranted ?? Self.hasSystemPermission
+        self.paddingInterval = paddingInterval
+        self.maxRecordingDuration = maxRecordingDuration
+        self.outputDirectory = outputDirectory
+        self.testingHooks = testingHooks
     }
 
     // MARK: - Permissions
 
-    @discardableResult
+    nonisolated
     func requestPermission() async -> Bool {
         #if os(iOS)
         return await withCheckedContinuation { continuation in
@@ -47,116 +114,177 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
 
     // MARK: - Recording Lifecycle
 
-    func startRecording() throws -> URL {
-        try queue.sync {
-            if recorder?.isRecording == true {
-                throw RecorderError.recordingInProgress
-            }
+    @discardableResult
+    func startRecording(owner: RecordingOwner) async throws -> URL {
+        if activeOwner != nil {
+            throw RecorderError.recordingInProgress
+        }
 
-            #if os(iOS)
-            let session = AVAudioSession.sharedInstance()
-            guard session.recordPermission == .granted else {
-                throw RecorderError.microphoneAccessDenied
-            }
-            #if targetEnvironment(simulator)
-            // allowBluetoothHFP is not available on iOS Simulator
-            try session.setCategory(
-                .playAndRecord,
-                mode: .default,
-                options: [.defaultToSpeaker, .allowBluetoothA2DP]
-            )
-            #else
-            try session.setCategory(
-                .playAndRecord,
-                mode: .default,
-                options: [.defaultToSpeaker, .allowBluetoothA2DP, .allowBluetoothHFP]
-            )
-            #endif
-            try session.setActive(true, options: .notifyOthersOnDeactivation)
-            #endif
-            #if os(macOS)
-            guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else {
-                throw RecorderError.microphoneAccessDenied
-            }
-            #endif
+        guard permissionGranted() else {
+            throw RecorderError.microphoneAccessDenied
+        }
 
-            let outputURL = try makeOutputURL()
-            let settings: [String: Any] = [
-                AVFormatIDKey: kAudioFormatMPEG4AAC,
-                AVSampleRateKey: 16_000,
-                AVNumberOfChannelsKey: 1,
-                AVEncoderBitRateKey: 16_000
-            ]
+        activeOwner = owner
+        startInFlight = true
 
-            let audioRecorder = try AVAudioRecorder(url: outputURL, settings: settings)
-            audioRecorder.delegate = self
+        // The acquire suspends while the blocking session IPC runs on the
+        // coordinator's queue (never this actor's thread or main).
+        let token: AudioSessionCoordinator.Token
+        do {
+            token = try await sessionCoordinator.acquire(.capture) { [weak self] in
+                Task { await self?.handleSessionInterruption(for: owner) }
+            }
+        } catch {
+            guard activeOwner === owner else {
+                throw CancellationError()
+            }
+            startInFlight = false
+            activeOwner = nil
+            throw error
+        }
+
+        // Actor reentrancy: release/cancel may have ended this hold while the
+        // blocking session activation was still in progress.
+        guard activeOwner === owner, startInFlight else {
+            sessionCoordinator.release(token)
+            throw CancellationError()
+        }
+        startInFlight = false
+        sessionToken = token
+
+        var outputURL: URL?
+        do {
+            let newURL = try makeOutputURL()
+            outputURL = newURL
+            let audioRecorder = try recorderFactory.makeRecorder(url: newURL)
             audioRecorder.isMeteringEnabled = true
-            audioRecorder.prepareToRecord()
-            audioRecorder.record(forDuration: maxRecordingDuration)
+            guard audioRecorder.prepareToRecord() else {
+                throw RecorderError.failedToStartRecording
+            }
+            guard audioRecorder.record(forDuration: maxRecordingDuration) else {
+                throw RecorderError.failedToStartRecording
+            }
 
             recorder = audioRecorder
-            currentURL = outputURL
-            stopWorkItem?.cancel()
-            stopWorkItem = nil
-            return outputURL
+            currentURL = newURL
+            return newURL
+        } catch {
+            releaseSessionToken()
+            recorder = nil
+            currentURL = nil
+            activeOwner = nil
+            if let outputURL {
+                try? FileManager.default.removeItem(at: outputURL)
+            }
+            throw error
         }
     }
 
-    func stopRecording(completion: @escaping (URL?) -> Void) {
-        queue.async { [weak self] in
-            guard let self = self, let recorder = self.recorder, recorder.isRecording else {
-                completion(self?.currentURL)
-                return
-            }
+    func stopRecording(owner: RecordingOwner) async -> URL? {
+        guard activeOwner === owner else { return nil }
 
-            let item = DispatchWorkItem { [weak self] in
-                guard let self = self else { return }
-                recorder.stop()
-                self.cleanupSession()
-                let url = self.currentURL
-                self.recorder = nil
-                self.currentURL = url
-                completion(url)
-            }
-            self.stopWorkItem = item
-            self.queue.asyncAfter(deadline: .now() + self.paddingInterval, execute: item)
+        // `finish()` can race a still-suspended start on a direct caller even
+        // though the UI normally routes quick releases through cancel().
+        if startInFlight {
+            activeOwner = nil
+            startInFlight = false
+            return nil
         }
+
+        guard let activeRecorder = recorder else {
+            let sessionURL = currentURL
+            releaseSessionToken()
+            currentURL = nil
+            activeOwner = nil
+            return sessionURL
+        }
+
+        let sessionURL = currentURL
+
+        if activeRecorder.isRecording, paddingInterval > 0 {
+            if let waitForStopPadding = testingHooks.waitForStopPadding {
+                await waitForStopPadding(paddingInterval)
+            } else {
+                try? await Task.sleep(nanoseconds: UInt64(paddingInterval * 1_000_000_000))
+            }
+        }
+
+        // Cancellation or interruption may have run during the padding sleep.
+        // Only the recorder whose stop began here may be finalized by it.
+        guard activeOwner === owner,
+              let recorder = self.recorder,
+              recorder === activeRecorder
+        else { return nil }
+
+        if activeRecorder.isRecording {
+            activeRecorder.stop()
+        }
+        releaseSessionToken()
+        self.recorder = nil
+        currentURL = nil
+        activeOwner = nil
+
+        return sessionURL
     }
 
-    func cancelRecording() {
-        queue.async { [weak self] in
-            guard let self = self else { return }
-            self.stopWorkItem?.cancel()
-            self.stopWorkItem = nil
-            if let recorder = self.recorder, recorder.isRecording {
-                recorder.stop()
-            }
-            self.cleanupSession()
-            if let url = self.currentURL {
-                try? FileManager.default.removeItem(at: url)
-            }
-            self.recorder = nil
-            self.currentURL = nil
+    func cancelRecording(owner: RecordingOwner) async {
+        guard activeOwner === owner else { return }
+
+        // Invalidate ownership before cleanup. An actor-reentrant start whose
+        // session acquire resumes later will observe the mismatch and release
+        // its token without opening the microphone.
+        activeOwner = nil
+        startInFlight = false
+        if let recorder, recorder.isRecording {
+            recorder.stop()
         }
+        releaseSessionToken()
+        if let currentURL {
+            try? FileManager.default.removeItem(at: currentURL)
+        }
+        recorder = nil
+        currentURL = nil
     }
 
-    // MARK: - Metering
-
-    func currentAveragePower() -> Float {
-        queue.sync {
-            recorder?.updateMeters()
-            return recorder?.averagePower(forChannel: 0) ?? -160
+    /// The audio session was interrupted (call, Siri) or reconfigured: stop
+    /// the recorder but keep `recorder`/`currentURL` so the caller's pending
+    /// `stopRecording()` still returns the partial note.
+    private func handleSessionInterruption(for owner: RecordingOwner) async {
+        // A callback captured for a released token must never stop a newer
+        // recording. Conversely, an interruption delivered while acquire is
+        // still suspended invalidates that acquire before it can open the mic.
+        guard activeOwner === owner else { return }
+        if startInFlight {
+            activeOwner = nil
+            startInFlight = false
+            return
         }
+        startInFlight = false
+        if let recorder, recorder.isRecording {
+            recorder.stop()
+        }
+        releaseSessionToken()
     }
 
     // MARK: - Helpers
 
+    private static func hasSystemPermission() -> Bool {
+        #if os(iOS)
+        AVAudioSession.sharedInstance().recordPermission == .granted
+        #elseif os(macOS)
+        AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+        #else
+        true
+        #endif
+    }
+
     private func makeOutputURL() throws -> URL {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd_HHmmss"
-        let fileName = "voice_\(formatter.string(from: Date())).m4a"
+        let fileName = "voice_\(formatter.string(from: Date()))_\(UUID().uuidString).m4a"
 
-        let baseDirectory = try applicationFilesDirectory().appendingPathComponent("voicenotes/outgoing", isDirectory: true)
+        let baseDirectory = try outputDirectory
+            ?? applicationFilesDirectory().appendingPathComponent("voicenotes/outgoing", isDirectory: true)
         try FileManager.default.createDirectory(at: baseDirectory, withIntermediateDirectories: true, attributes: nil)
         return baseDirectory.appendingPathComponent(fileName)
     }
@@ -171,9 +299,11 @@ final class VoiceRecorder: NSObject, AVAudioRecorderDelegate {
         #endif
     }
 
-    private func cleanupSession() {
-        #if os(iOS)
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-        #endif
+    /// Fire-and-forget: the coordinator hops the blocking deactivation IPC
+    /// onto its own queue.
+    private func releaseSessionToken() {
+        guard let token = sessionToken else { return }
+        sessionToken = nil
+        sessionCoordinator.release(token)
     }
 }

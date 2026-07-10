@@ -78,6 +78,7 @@
 ///
 
 import BitLogger
+import BitFoundation
 import Foundation
 import CryptoKit
 
@@ -92,6 +93,7 @@ enum NoisePattern {
     case XX  // Most versatile, mutual authentication
     case IK  // Initiator knows responder's static key
     case NK  // Anonymous initiator
+    case X   // One-way: single message to a known static key (no response)
 }
 
 enum NoiseRole {
@@ -321,6 +323,13 @@ final class NoiseCipherState {
                 throw NoiseError.replayDetected
             }
             
+            // The 4-byte nonce prefix has been stripped, so the remaining bytes
+            // must still hold at least the 16-byte Poly1305 tag. The up-front
+            // `ciphertext.count >= 16` guard is not sufficient here (it counts
+            // the nonce), and `prefix(count - 16)` would trap on a short payload.
+            guard actualCiphertext.count >= 16 else {
+                throw NoiseError.invalidCiphertext
+            }
             // Split ciphertext and tag
             encryptedData = actualCiphertext.prefix(actualCiphertext.count - 16)
             tag = actualCiphertext.suffix(16)
@@ -384,6 +393,16 @@ final class NoiseCipherState {
             replayWindow[i] = 0
         }
     }
+
+    #if DEBUG
+    func setNonceForTesting(_ nonce: UInt64) {
+        self.nonce = nonce
+    }
+
+    func extractNonceFromCiphertextPayloadForTesting(_ combinedPayload: Data) throws -> (nonce: UInt64, ciphertext: Data)? {
+        try extractNonceFromCiphertextPayload(combinedPayload)
+    }
+    #endif
 }
 
 // MARK: - Symmetric State
@@ -583,10 +602,11 @@ final class NoiseHandshakeState {
         switch pattern {
         case .XX:
             break // No pre-message keys
-        case .IK, .NK:
+        case .IK, .NK, .X:
             if role == .initiator, let remoteStatic = remoteStaticPublic {
-                _ = symmetricState.getHandshakeHash()
                 symmetricState.mixHash(remoteStatic.rawRepresentation)
+            } else if role == .responder, let localStatic = localStaticPublic {
+                symmetricState.mixHash(localStatic.rawRepresentation)
             }
         }
     }
@@ -703,7 +723,7 @@ final class NoiseHandshakeState {
         return messageBuffer
     }
     
-    func readMessage(_ message: Data, expectedPayloadLength: Int = 0) throws -> Data {
+    func readMessage(_ message: Data, expectedPayloadLength _: Int = 0) throws -> Data {
         
         guard currentPattern < messagePatterns.count else {
             throw NoiseError.handshakeComplete
@@ -861,6 +881,20 @@ final class NoiseHandshakeState {
     func getHandshakeHash() -> Data {
         return symmetricState.getHandshakeHash()
     }
+
+    #if DEBUG
+    func performDHOperationForTesting(_ pattern: NoiseMessagePattern) throws {
+        try performDHOperation(pattern)
+    }
+
+    func setCurrentPatternForTesting(_ currentPattern: Int) {
+        self.currentPattern = currentPattern
+    }
+
+    func setRemoteEphemeralPublicKeyForTesting(_ key: Curve25519.KeyAgreement.PublicKey?) {
+        self.remoteEphemeralPublic = key
+    }
+    #endif
 }
 
 // MARK: - Pattern Extensions
@@ -871,6 +905,7 @@ extension NoisePattern {
         case .XX: return "XX"
         case .IK: return "IK"
         case .NK: return "NK"
+        case .X: return "X"
         }
     }
     
@@ -891,6 +926,10 @@ extension NoisePattern {
             return [
                 [.e, .es],      // -> e, es
                 [.e, .ee]       // <- e, ee
+            ]
+        case .X:
+            return [
+                [.e, .es, .s, .ss] // -> e, es, s, ss (single one-way message)
             ]
         }
     }

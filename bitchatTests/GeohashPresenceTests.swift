@@ -278,6 +278,75 @@ struct ChatViewModelPresenceHandlingTests {
         #expect(count >= 1)
     }
 
+    @Test func subscribeNostrEvent_samplingDeduplicatesSameEventAcrossGeohashes() async throws {
+        let (viewModel, _) = makeTestableViewModel()
+        let firstGeohash = "u4pru"
+        let secondGeohash = "u4pruy"
+        let identity = try NostrIdentity.generate()
+        let event = NostrEvent(
+            pubkey: identity.publicKeyHex,
+            createdAt: Date(),
+            kind: .geohashPresence,
+            tags: [["g", secondGeohash]],
+            content: ""
+        )
+        let signed = try event.sign(with: identity.schnorrSigningKey())
+
+        viewModel.subscribeNostrEvent(signed, gh: firstGeohash)
+        viewModel.subscribeNostrEvent(signed, gh: secondGeohash)
+
+        #expect(viewModel.geohashParticipantCount(for: firstGeohash) == 1)
+        #expect(viewModel.geohashParticipantCount(for: secondGeohash) == 0)
+    }
+
+    @Test func subscribeNostrEvent_samplingDedupDoesNotBlockActiveChannelProcessing() async throws {
+        let (viewModel, _) = makeTestableViewModel()
+        let sampleGeohash = "u4pru"
+        let activeGeohash = "u4pruy"
+        let identity = try NostrIdentity.generate()
+
+        viewModel.switchLocationChannel(to: .location(GeohashChannel(level: .city, geohash: activeGeohash)))
+
+        let event = NostrEvent(
+            pubkey: identity.publicKeyHex,
+            createdAt: Date(),
+            kind: .geohashPresence,
+            tags: [["g", sampleGeohash]],
+            content: ""
+        )
+        let signed = try event.sign(with: identity.schnorrSigningKey())
+
+        viewModel.subscribeNostrEvent(signed, gh: sampleGeohash)
+        #expect(!viewModel.deduplicationService.hasProcessedNostrEvent(signed.id))
+
+        viewModel.subscribeNostrEvent(signed)
+
+        #expect(viewModel.geohashParticipantCount(for: sampleGeohash) == 1)
+        #expect(viewModel.deduplicationService.hasProcessedNostrEvent(signed.id))
+        #expect(viewModel.geohashParticipantCount(for: activeGeohash) >= 1)
+    }
+
+    @Test func subscribeNostrEvent_samplingInvalidSignatureDoesNotPoisonDedup() async throws {
+        let (viewModel, _) = makeTestableViewModel()
+        let sampleGeohash = "u4pru"
+        let identity = try NostrIdentity.generate()
+        let event = NostrEvent(
+            pubkey: identity.publicKeyHex,
+            createdAt: Date(),
+            kind: .geohashPresence,
+            tags: [["g", sampleGeohash]],
+            content: ""
+        )
+        let signed = try event.sign(with: identity.schnorrSigningKey())
+        var invalid = signed
+        invalid.sig = String(repeating: "0", count: 128)
+
+        viewModel.subscribeNostrEvent(invalid, gh: sampleGeohash)
+        viewModel.subscribeNostrEvent(signed, gh: sampleGeohash)
+
+        #expect(viewModel.geohashParticipantCount(for: sampleGeohash) == 1)
+    }
+
     // MARK: - Test Helper
 
     private func makeTestableViewModel() -> (viewModel: ChatViewModel, transport: MockTransport) {

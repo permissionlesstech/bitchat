@@ -101,7 +101,8 @@ public final class SecureLogger {
     // MARK: - Global Threshold
 
     /// Minimum level that will be logged. Defaults to .info. Override via env BITCHAT_LOG_LEVEL.
-    private static let minimumLevel: LogLevel = {
+    /// Internal-settable so tests can verify level filtering; app code should not mutate it.
+    internal static var minimumLevel: LogLevel = {
         let env = ProcessInfo.processInfo.environment["BITCHAT_LOG_LEVEL"]?.lowercased()
         switch env {
         case "debug": return .debug
@@ -121,29 +122,46 @@ public final class SecureLogger {
 
 public extension SecureLogger {
     
+    // Each wrapper checks the level BEFORE evaluating the autoclosure so
+    // filtered messages never pay for string interpolation — this matters on
+    // hot paths that log per packet/event. Debug compiles out of release
+    // builds entirely (the core log() drops .debug there anyway).
     static func debug(_ message: @autoclosure () -> String, category: OSLog = .noise,
                       file: String = #file, line: Int = #line, function: String = #function) {
+        #if DEBUG
+        guard shouldLog(.debug) else { return }
         log(message(), category: category, level: .debug, file: file, line: line, function: function)
+        #endif
     }
-    
+
     static func info(_ message: @autoclosure () -> String, category: OSLog = .noise,
                      file: String = #file, line: Int = #line, function: String = #function) {
+        #if DEBUG
+        guard shouldLog(.info) else { return }
         log(message(), category: category, level: .info, file: file, line: line, function: function)
+        #endif
     }
-    
+
     static func warning(_ message: @autoclosure () -> String, category: OSLog = .noise,
                         file: String = #file, line: Int = #line, function: String = #function) {
+        #if DEBUG
+        guard shouldLog(.warning) else { return }
         log(message(), category: category, level: .warning, file: file, line: line, function: function)
+        #endif
     }
-    
+
     static func error(_ message: @autoclosure () -> String, category: OSLog = .noise,
                       file: String = #file, line: Int = #line, function: String = #function) {
+        #if DEBUG
+        guard shouldLog(.error) else { return }
         log(message(), category: category, level: .error, file: file, line: line, function: function)
+        #endif
     }
     
     /// Log errors with context
     static func error(_ error: Error, context: @autoclosure () -> String, category: OSLog = .noise,
                       file: String = #file, line: Int = #line, function: String = #function) {
+        #if DEBUG
         let location = formatLocation(file: file, line: line, function: function)
         let sanitized = context().sanitized()
         let errorDesc = error.localizedDescription.sanitized()
@@ -152,6 +170,7 @@ public extension SecureLogger {
         os_log("%{public}@ Error in %{public}@: %{public}@", log: category, type: .error, location, sanitized, errorDesc)
         #else
         os_log("%{private}@ Error in %{private}@: %{private}@", log: category, type: .error, location, sanitized, errorDesc)
+        #endif
         #endif
     }
 }
@@ -181,10 +200,6 @@ public extension SecureLogger {
                 return "Authentication failed for peer: \(peerID.sanitized())"
             }
         }
-    }
-    
-    static func debug(_ event: SecurityEvent, file: String = #file, line: Int = #line, function: String = #function) {
-        logSecurityEvent(event, level: .debug, file: file, line: line, function: function)
     }
     
     static func info(_ event: SecurityEvent, file: String = #file, line: Int = #line, function: String = #function) {
@@ -231,32 +246,25 @@ private extension SecureLogger {
     /// Log general messages with automatic sensitive data filtering
     static func log(_ message: @autoclosure () -> String, category: OSLog, level: LogLevel,
                     file: String, line: Int, function: String) {
+        // All public wrappers are compiled out of release builds; this core
+        // is gated too so no future call path can reintroduce production
+        // logging. bitchat is privacy-first: release builds emit nothing.
+        #if DEBUG
         guard shouldLog(level) else { return }
         let location = formatLocation(file: file, line: line, function: function)
         let sanitized = "\(location) \(message())".sanitized()
-        
-        #if DEBUG
         os_log("%{public}@", log: category, type: level.osLogType, sanitized)
-        #else
-        // In release builds, only log non-debug messages
-        if level != .debug {
-            os_log("%{private}@", log: category, type: level.osLogType, sanitized)
-        }
         #endif
     }
     
     /// Log a security event
     static func logSecurityEvent(_ event: SecurityEvent, level: LogLevel = .info,
                                  file: String, line: Int, function: String) {
+        #if DEBUG
         guard shouldLog(level) else { return }
         let location = formatLocation(file: file, line: line, function: function)
         let message = "\(location) \(event.message)"
-        
-        #if DEBUG
         os_log("%{public}@", log: .security, type: level.osLogType, message)
-        #else
-        // In release, use private logging to prevent sensitive data exposure
-        os_log("%{private}@", log: .security, type: level.osLogType, message)
         #endif
     }
     
@@ -266,16 +274,4 @@ private extension SecureLogger {
         let timestamp = timestampFormatter.string(from: Date())
         return "[\(timestamp)] [\(fileName):\(line) \(function)]"
     }
-}
-
-// MARK: - Migration Helper
-
-/// Helper to migrate from print statements to SecureLogger
-/// Usage: Replace print(...) with secureLog(...)
-public func secureLog(_ items: Any..., separator: String = " ", terminator: String = "\n",
-                      file: String = #file, line: Int = #line, function: String = #function) {
-    #if DEBUG
-    let message = items.map { String(describing: $0) }.joined(separator: separator)
-    SecureLogger.debug(message, file: file, line: line, function: function)
-    #endif
 }

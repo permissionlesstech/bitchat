@@ -91,6 +91,7 @@
 ///
 
 import BitLogger
+import BitFoundation
 import Foundation
 import CryptoKit
 
@@ -107,8 +108,6 @@ protocol SecureIdentityStateManagerProtocol {
     func updateSocialIdentity(_ identity: SocialIdentity)
     
     // MARK: Favorites Management
-    func getFavorites() -> Set<String>
-    func setFavorite(_ fingerprint: String, isFavorite: Bool)
     func isFavorite(fingerprint: String) -> Bool
     
     // MARK: Blocked Users Management
@@ -122,8 +121,7 @@ protocol SecureIdentityStateManagerProtocol {
     
     // MARK: Ephemeral Session Management
     func registerEphemeralSession(peerID: PeerID, handshakeState: HandshakeState)
-    func updateHandshakeState(peerID: PeerID, state: HandshakeState)
-    
+
     // MARK: Cleanup
     func clearAllIdentityData()
     func removeEphemeralSession(peerID: PeerID)
@@ -132,6 +130,16 @@ protocol SecureIdentityStateManagerProtocol {
     func setVerified(fingerprint: String, verified: Bool)
     func isVerified(fingerprint: String) -> Bool
     func getVerifiedFingerprints() -> Set<String>
+
+    // MARK: Vouching (transitive verification)
+    @discardableResult
+    func recordVouch(voucheeFingerprint: String, voucherFingerprint: String, timestamp: Date) -> Bool
+    func validVouchers(for fingerprint: String) -> [VouchRecord]
+    func isVouched(fingerprint: String) -> Bool
+    func lastVouchBatchSent(to fingerprint: String) -> Date?
+    func markVouchBatchSent(to fingerprint: String, at date: Date)
+    func signingPublicKey(forFingerprint fingerprint: String) -> Data?
+    func mostRecentlyVerifiedFingerprints(limit: Int, excluding fingerprint: String) -> [String]
 }
 
 /// Singleton manager for secure identity state persistence and retrieval.
@@ -150,38 +158,68 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     // Thread safety
     private let queue = DispatchQueue(label: "bitchat.identity.state", attributes: .concurrent)
     
-    // Debouncing for keychain saves
-    private var saveTimer: Timer?
-    private let saveDebounceInterval: TimeInterval = 2.0  // Save at most once every 2 seconds
+    // Pending-save coalescing flag. Reads/writes are serialized on `queue`.
+    // Persistence is done with a fire-and-forget `queue.async(.barrier)` rather
+    // than a retained DispatchSourceTimer: a lingering, never-cancelled timer
+    // keeps the dispatch machinery alive and prevents the unit-test process from
+    // exiting. (The original code used Timer.scheduledTimer on a GCD queue with
+    // no run loop, so saves never actually fired.)
     private var pendingSave = false
-    
+
     // Encryption key
     private let encryptionKey: SymmetricKey
+    /// True when `encryptionKey` is a throwaway generated this session because the
+    /// persisted key could not be read (device locked / access denied). In that
+    /// state we must NOT persist (it would overwrite the real cache with data the
+    /// next launch can't decrypt) and must NOT delete the existing cache.
+    private let encryptionKeyIsEphemeral: Bool
     
     init(_ keychain: KeychainManagerProtocol) {
         self.keychain = keychain
-        
-        // Generate or retrieve encryption key from keychain
+
+        // Retrieve (or, only on genuine first run, generate) the cache
+        // encryption key. We MUST distinguish "key doesn't exist yet" from a
+        // transient failure (device locked / access denied): the legacy
+        // getIdentityKey(forKey:) collapses both to nil, and generating+saving a
+        // new key deletes the existing one first — permanently orphaning the
+        // encrypted cache on a launch that merely couldn't read the key.
         let loadedKey: SymmetricKey
-        
-        // Try to load from keychain
-        if let keyData = keychain.getIdentityKey(forKey: encryptionKeyName) {
+        let keyIsEphemeral: Bool
+
+        switch keychain.getIdentityKeyWithResult(forKey: encryptionKeyName) {
+        case .success(let keyData):
             loadedKey = SymmetricKey(data: keyData)
+            keyIsEphemeral = false
             SecureLogger.logKeyOperation(.load, keyType: "identity cache encryption key", success: true)
-        }
-        // Generate new key if needed
-        else {
-            loadedKey = SymmetricKey(size: .bits256)
-            let keyData = loadedKey.withUnsafeBytes { Data($0) }
-            // Save to keychain
+
+        case .itemNotFound:
+            // Genuine first run: generate and persist a new key.
+            let newKey = SymmetricKey(size: .bits256)
+            let keyData = newKey.withUnsafeBytes { Data($0) }
             let saved = keychain.saveIdentityKey(keyData, forKey: encryptionKeyName)
+            loadedKey = newKey
+            // If even the save failed, treat the key as ephemeral so we don't
+            // later try to persist a cache the next launch can't read.
+            keyIsEphemeral = !saved
             SecureLogger.logKeyOperation(.generate, keyType: "identity cache encryption key", success: saved)
+
+        case .deviceLocked, .authenticationFailed, .accessDenied, .otherError:
+            // Transient/critical read failure. Do NOT overwrite the persisted
+            // key. Use a session-only ephemeral key; the real key and cache are
+            // left intact for a healthy launch.
+            SecureLogger.warning("Identity cache key unavailable; using ephemeral key for this session (not persisting)", category: .security)
+            loadedKey = SymmetricKey(size: .bits256)
+            keyIsEphemeral = true
         }
-        
+
         self.encryptionKey = loadedKey
-        
-        // Load identity cache on init
-        loadIdentityCache()
+        self.encryptionKeyIsEphemeral = keyIsEphemeral
+
+        // Only read the persisted cache when we hold the real key; with an
+        // ephemeral key the decrypt would fail and discard the real cache.
+        if !keyIsEphemeral {
+            loadIdentityCache()
+        }
     }
     
     deinit {
@@ -201,28 +239,37 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
             let decryptedData = try AES.GCM.open(sealedBox, using: encryptionKey)
             cache = try JSONDecoder().decode(IdentityCache.self, from: decryptedData)
         } catch {
-            // Log error but continue with empty cache
-            SecureLogger.error(error, context: "Failed to load identity cache", category: .security)
+            cache = IdentityCache()
+            let deleted = keychain.deleteIdentityKey(forKey: cacheKey)
+            SecureLogger.warning(
+                "Discarded unreadable identity cache; starting fresh (deleted=\(deleted), error=\(error.localizedDescription))",
+                category: .security
+            )
         }
     }
     
+    /// Persists the cache. Always invoked on `queue` under a barrier (its callers
+    /// run inside `queue.async(.barrier)`), so it simply marks the cache dirty
+    /// and persists it on the same serialized context — no timer, nothing left
+    /// scheduled to keep the process alive.
     private func saveIdentityCache() {
-        // Mark that we need to save
         pendingSave = true
-        
-        // Cancel any existing timer
-        saveTimer?.invalidate()
-        
-        // Schedule a new save after the debounce interval
-        saveTimer = Timer.scheduledTimer(withTimeInterval: saveDebounceInterval, repeats: false) { [weak self] _ in
-            self?.performSave()
-        }
+        performSave()
     }
-    
+
+    /// Writes the cache to the keychain. Must run on `queue` with exclusive
+    /// (barrier) access.
     private func performSave() {
         guard pendingSave else { return }
         pendingSave = false
-        
+
+        // Never persist under an ephemeral key — it would overwrite the real
+        // cache with data the next launch cannot decrypt.
+        guard !encryptionKeyIsEphemeral else {
+            SecureLogger.debug("Skipping identity cache save (ephemeral key this session)", category: .security)
+            return
+        }
+
         do {
             let data = try JSONEncoder().encode(cache)
             let sealedBox = try AES.GCM.seal(data, using: encryptionKey)
@@ -234,10 +281,14 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
             SecureLogger.error(error, context: "Failed to save identity cache", category: .security)
         }
     }
-    
-    // Force immediate save (for app termination)
+
+    // Force immediate save (for app termination / lifecycle events). Mutations
+    // already persist synchronously via saveIdentityCache, so this is normally a
+    // no-op (performSave early-returns when nothing is pending). Runs directly on
+    // the caller's thread — deliberately NOT a `queue.sync(barrier)`, which is
+    // reachable from `deinit` and from async tests on the swift-concurrency
+    // cooperative pool where a blocking barrier-sync can starve/deadlock it.
     func forceSave() {
-        saveTimer?.invalidate()
         performSave()
     }
     
@@ -267,21 +318,13 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
                         fingerprint: fingerprint,
                         publicKey: noisePublicKey,
                         signingPublicKey: signingPublicKey ?? existing.signingPublicKey,
-                        firstSeen: existing.firstSeen,
-                        lastHandshake: now
+                        firstSeen: existing.firstSeen
                     )
                     self.cryptographicIdentities[fingerprint] = existing
                 } else {
-                    // Update signing key and lastHandshake
+                    // Update signing key
                     existing.signingPublicKey = signingPublicKey ?? existing.signingPublicKey
-                    let updated = CryptographicIdentity(
-                        fingerprint: existing.fingerprint,
-                        publicKey: existing.publicKey,
-                        signingPublicKey: existing.signingPublicKey,
-                        firstSeen: existing.firstSeen,
-                        lastHandshake: now
-                    )
-                    self.cryptographicIdentities[fingerprint] = updated
+                    self.cryptographicIdentities[fingerprint] = existing
                 }
                 // Persist updated state (already assigned in branches above)
             } else {
@@ -290,8 +333,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
                     fingerprint: fingerprint,
                     publicKey: noisePublicKey,
                     signingPublicKey: signingPublicKey,
-                    firstSeen: now,
-                    lastHandshake: now
+                    firstSeen: now
                 )
                 self.cryptographicIdentities[fingerprint] = entry
             }
@@ -331,16 +373,15 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     
     func updateSocialIdentity(_ identity: SocialIdentity) {
         queue.async(flags: .barrier) {
+            let previousClaimedNickname = self.cache.socialIdentities[identity.fingerprint]?.claimedNickname
             self.cache.socialIdentities[identity.fingerprint] = identity
             
             // Update nickname index
-            if let existingIdentity = self.cache.socialIdentities[identity.fingerprint] {
-                // Remove old nickname from index if changed
-                if existingIdentity.claimedNickname != identity.claimedNickname {
-                    self.cache.nicknameIndex[existingIdentity.claimedNickname]?.remove(identity.fingerprint)
-                    if self.cache.nicknameIndex[existingIdentity.claimedNickname]?.isEmpty == true {
-                        self.cache.nicknameIndex.removeValue(forKey: existingIdentity.claimedNickname)
-                    }
+            if let previousClaimedNickname,
+               previousClaimedNickname != identity.claimedNickname {
+                self.cache.nicknameIndex[previousClaimedNickname]?.remove(identity.fingerprint)
+                if self.cache.nicknameIndex[previousClaimedNickname]?.isEmpty == true {
+                    self.cache.nicknameIndex.removeValue(forKey: previousClaimedNickname)
                 }
             }
             
@@ -457,11 +498,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     
     func registerEphemeralSession(peerID: PeerID, handshakeState: HandshakeState = .none) {
         queue.async(flags: .barrier) {
-            self.ephemeralSessions[peerID] = EphemeralIdentity(
-                peerID: peerID,
-                sessionStart: Date(),
-                handshakeState: handshakeState
-            )
+            self.ephemeralSessions[peerID] = EphemeralIdentity(handshakeState: handshakeState)
         }
     }
     
@@ -507,16 +544,20 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
         queue.async(flags: .barrier) {
             if verified {
                 self.cache.verifiedFingerprints.insert(fingerprint)
+                var verifiedAt = self.cache.verifiedAt ?? [:]
+                verifiedAt[fingerprint] = Date()
+                self.cache.verifiedAt = verifiedAt
             } else {
                 self.cache.verifiedFingerprints.remove(fingerprint)
+                self.cache.verifiedAt?.removeValue(forKey: fingerprint)
             }
-            
+
             // Update trust level if social identity exists
             if var identity = self.cache.socialIdentities[fingerprint] {
                 identity.trustLevel = verified ? .verified : .casual
                 self.cache.socialIdentities[fingerprint] = identity
             }
-            
+
             self.saveIdentityCache()
         }
     }
@@ -531,5 +572,170 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
         queue.sync {
             return cache.verifiedFingerprints
         }
+    }
+
+    // MARK: - Vouching (transitive verification)
+
+    /// Maximum vouchers retained per vouchee (most recent kept).
+    static let maxVouchersPerVouchee = 8
+
+    /// Records an accepted vouch, enforcing every accept-policy gate that can
+    /// be evaluated against stored state (signature verification is the
+    /// caller's job — it needs the sender's announce-bound signing key):
+    /// - the voucher must be a fingerprint *I* verified
+    /// - self-vouches are ignored
+    /// - vouches for peers I already verified are ignored (nothing to add)
+    /// - attestations outside the validity window are ignored
+    /// - at most `maxVouchersPerVouchee` vouchers are kept per vouchee
+    ///
+    /// Returns true when the vouch was stored (or refreshed).
+    @discardableResult
+    func recordVouch(voucheeFingerprint: String, voucherFingerprint: String, timestamp: Date) -> Bool {
+        recordVouch(
+            voucheeFingerprint: voucheeFingerprint,
+            voucherFingerprint: voucherFingerprint,
+            timestamp: timestamp,
+            now: Date()
+        )
+    }
+
+    @discardableResult
+    func recordVouch(voucheeFingerprint: String, voucherFingerprint: String, timestamp: Date, now: Date) -> Bool {
+        queue.sync(flags: .barrier) {
+            guard voucheeFingerprint != voucherFingerprint,
+                  self.cache.verifiedFingerprints.contains(voucherFingerprint),
+                  !self.cache.verifiedFingerprints.contains(voucheeFingerprint) else {
+                return false
+            }
+            let age = now.timeIntervalSince(timestamp)
+            guard age <= VouchAttestation.maxAge, age >= -VouchAttestation.maxClockSkew else {
+                return false
+            }
+
+            var records = self.cache.vouchesByVouchee?[voucheeFingerprint] ?? []
+            if let index = records.firstIndex(where: { $0.voucherFingerprint == voucherFingerprint }) {
+                let newest = max(records[index].timestamp, timestamp)
+                records[index] = VouchRecord(voucherFingerprint: voucherFingerprint, timestamp: newest)
+            } else {
+                records.append(VouchRecord(voucherFingerprint: voucherFingerprint, timestamp: timestamp))
+            }
+            // Keep the most recent vouchers up to the cap.
+            records.sort { $0.timestamp > $1.timestamp }
+            let capped = Array(records.prefix(Self.maxVouchersPerVouchee))
+            guard capped.contains(where: { $0.voucherFingerprint == voucherFingerprint }) else {
+                return false // Full of fresher vouches; nothing changed.
+            }
+
+            var vouches = self.cache.vouchesByVouchee ?? [:]
+            vouches[voucheeFingerprint] = capped
+            self.cache.vouchesByVouchee = vouches
+            self.saveIdentityCache()
+            return true
+        }
+    }
+
+    /// The vouches that currently count for `fingerprint`. Validity is
+    /// recomputed here rather than maintained by cascade deletes: a record
+    /// only counts while its voucher is still verified-by-me and its
+    /// timestamp is within the expiry window.
+    func validVouchers(for fingerprint: String) -> [VouchRecord] {
+        validVouchers(for: fingerprint, now: Date())
+    }
+
+    func validVouchers(for fingerprint: String, now: Date) -> [VouchRecord] {
+        queue.sync {
+            self.validVouchersLocked(for: fingerprint, now: now)
+        }
+    }
+
+    /// Requires `queue`.
+    private func validVouchersLocked(for fingerprint: String, now: Date) -> [VouchRecord] {
+        guard let records = cache.vouchesByVouchee?[fingerprint] else { return [] }
+        return records.filter { record in
+            record.voucherFingerprint != fingerprint
+                && cache.verifiedFingerprints.contains(record.voucherFingerprint)
+                && now.timeIntervalSince(record.timestamp) <= VouchAttestation.maxAge
+        }
+    }
+
+    /// True when the peer has at least one valid vouch and no explicit
+    /// verification of ours.
+    func isVouched(fingerprint: String) -> Bool {
+        isVouched(fingerprint: fingerprint, now: Date())
+    }
+
+    func isVouched(fingerprint: String, now: Date) -> Bool {
+        queue.sync {
+            guard !self.cache.verifiedFingerprints.contains(fingerprint) else { return false }
+            return !self.validVouchersLocked(for: fingerprint, now: now).isEmpty
+        }
+    }
+
+    /// The trust level to display: explicit verification wins, then the
+    /// persisted level, with `vouched` layered in (derived, never persisted)
+    /// between `casual` and `trusted`.
+    func effectiveTrustLevel(for fingerprint: String) -> TrustLevel {
+        effectiveTrustLevel(for: fingerprint, now: Date())
+    }
+
+    func effectiveTrustLevel(for fingerprint: String, now: Date) -> TrustLevel {
+        queue.sync {
+            if self.cache.verifiedFingerprints.contains(fingerprint) { return .verified }
+            let stored = self.cache.socialIdentities[fingerprint]?.trustLevel ?? .unknown
+            let vouched = !self.validVouchersLocked(for: fingerprint, now: now).isEmpty
+            switch stored {
+            case .verified, .trusted:
+                return stored
+            case .vouched, .casual, .unknown:
+                if vouched { return .vouched }
+                // `.vouched` should never be persisted; degrade defensively.
+                return stored == .vouched ? .casual : stored
+            }
+        }
+    }
+
+    func lastVouchBatchSent(to fingerprint: String) -> Date? {
+        queue.sync { cache.vouchBatchSentAt?[fingerprint] }
+    }
+
+    func markVouchBatchSent(to fingerprint: String, at date: Date) {
+        queue.async(flags: .barrier) {
+            var sentAt = self.cache.vouchBatchSentAt ?? [:]
+            sentAt[fingerprint] = date
+            self.cache.vouchBatchSentAt = sentAt
+            self.saveIdentityCache()
+        }
+    }
+
+    /// The peer's announce-bound Ed25519 signing key, if seen this session.
+    func signingPublicKey(forFingerprint fingerprint: String) -> Data? {
+        queue.sync { cryptographicIdentities[fingerprint]?.signingPublicKey }
+    }
+
+    /// Verified fingerprints ordered most recently verified first (entries
+    /// without a recorded verification time sort last), excluding the given
+    /// fingerprint. Feeds the outgoing vouch batch.
+    func mostRecentlyVerifiedFingerprints(limit: Int, excluding fingerprint: String) -> [String] {
+        queue.sync {
+            let verifiedAt = cache.verifiedAt ?? [:]
+            let ordered = cache.verifiedFingerprints
+                .filter { $0 != fingerprint }
+                .sorted {
+                    (verifiedAt[$0] ?? .distantPast, $0) > (verifiedAt[$1] ?? .distantPast, $1)
+                }
+            return Array(ordered.prefix(limit))
+        }
+    }
+
+    var debugNicknameIndex: [String: Set<String>] {
+        queue.sync { cache.nicknameIndex }
+    }
+
+    func debugEphemeralSession(for peerID: PeerID) -> EphemeralIdentity? {
+        queue.sync { ephemeralSessions[peerID] }
+    }
+
+    func debugLastInteraction(for fingerprint: String) -> Date? {
+        queue.sync { cache.lastInteractions[fingerprint] }
     }
 }

@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import BitFoundation
 
 struct ReadReceipt: Codable {
     let originalMessageID: String

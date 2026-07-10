@@ -5,16 +5,16 @@ let package = Package(
     name: "Tor",  // Keep name "Tor" for drop-in compatibility
     platforms: [
         .iOS(.v16),
-        .macOS(.v13),
+        .macOS(.v13)
     ],
     products: [
         .library(
             name: "Tor",
             targets: ["Tor"]
-        ),
+        )
     ],
     dependencies: [
-        .package(path: "../BitLogger"),
+        .package(path: "../BitLogger")
     ],
     targets: [
         // Main Swift target
@@ -22,25 +22,26 @@ let package = Package(
             name: "Tor",
             dependencies: [
                 "arti",
-                .product(name: "BitLogger", package: "BitLogger"),
+                .product(name: "BitLogger", package: "BitLogger")
             ],
             path: "Sources",
             exclude: ["C"],
             sources: [
                 "TorManager.swift",
                 "TorURLSession.swift",
-                "TorNotifications.swift",
+                "TorNotifications.swift"
             ],
             linkerSettings: [
                 .linkedLibrary("resolv"),
                 .linkedLibrary("z"),
-                .linkedLibrary("sqlite3"),
+                .linkedLibrary("sqlite3")
             ]
         ),
-        // Binary framework containing the Rust static library
+        // Binary framework containing the Rust static library.
+        // Provenance and rebuild steps: repo-root docs/ARTI-BINARY-PROVENANCE.md
         .binaryTarget(
             name: "arti",
             path: "Frameworks/arti.xcframework"
-        ),
+        )
     ]
 )

@@ -10,7 +10,7 @@ import Foundation
 
 final class SecureNoiseSession: NoiseSession {
     private(set) var messageCount: UInt64 = 0
-    private let sessionStartTime = Date()
+    private var sessionStartTime = Date()
     private(set) var lastActivityTime = Date()
     
     override func encrypt(_ plaintext: Data) throws -> Data {
@@ -76,6 +76,10 @@ final class SecureNoiseSession: NoiseSession {
     
     func setMessageCountForTesting(_ count: UInt64) {
         messageCount = count
+    }
+
+    func setSessionStartTimeForTesting(_ date: Date) {
+        sessionStartTime = date
     }
     #endif
 }

@@ -5,16 +5,19 @@ struct VoiceNoteView: View {
     private let url: URL
     private let isSending: Bool
     private let sendProgress: Double?
+    private let isLive: Bool
     private let onCancel: (() -> Void)?
 
     @Environment(\.colorScheme) private var colorScheme
+    @ThemedPalette private var palette
     @StateObject private var playback: VoiceNotePlaybackController
     @State private var waveform: [Float] = []
 
-    init(url: URL, isSending: Bool, sendProgress: Double?, onCancel: (() -> Void)?) {
+    init(url: URL, isSending: Bool, sendProgress: Double?, isLive: Bool = false, onCancel: (() -> Void)?) {
         self.url = url
         self.isSending = isSending
         self.sendProgress = sendProgress
+        self.isLive = isLive
         self.onCancel = onCancel
         _playback = StateObject(wrappedValue: VoiceNotePlaybackController(url: url))
     }
@@ -27,31 +30,19 @@ struct VoiceNoteView: View {
     }
 
     private var backgroundColor: Color {
-        colorScheme == .dark ? Color.black.opacity(0.6) : Color.white
+        // Palette-based and slightly translucent so the card doesn't sit as
+        // an opaque white/black box over the glass gradient.
+        palette.background.opacity(colorScheme == .dark ? 0.6 : 0.7)
     }
 
     private var borderColor: Color {
-        colorScheme == .dark ? Color.green.opacity(0.3) : Color.green.opacity(0.2)
-    }
-
-    private var durationText: String {
-        let duration = playback.duration
-        guard duration.isFinite, duration > 0 else { return "--:--" }
-        let minutes = Int(duration) / 60
-        let seconds = Int(duration) % 60
-        return String(format: "%02d:%02d", minutes, seconds)
-    }
-
-    private var currentText: String {
-        let current = playback.currentTime
-        guard current.isFinite, current > 0 else { return "00:00" }
-        let minutes = Int(current) / 60
-        let seconds = Int(current) % 60
-        return String(format: "%02d:%02d", minutes, seconds)
+        colorScheme == .dark ? palette.accent.opacity(0.3) : palette.accent.opacity(0.2)
     }
 
     private var playbackLabel: String {
-        playback.isPlaying ? currentText + "/" + durationText : durationText
+        guard playback.duration.isFinite else { return "--:--" }
+        let seconds = playback.isPlaying ? playback.remainingSeconds : playback.roundedDuration
+        return String(format: "%02d:%02d", seconds / 60, seconds % 60)
     }
 
     var body: some View {
@@ -60,9 +51,15 @@ struct VoiceNoteView: View {
                 Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill")
                     .foregroundColor(.white)
                     .frame(width: 36, height: 36)
-                    .background(Circle().fill(Color.green))
+                    .background(Circle().fill(palette.accent))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(
+                playback.isPlaying
+                ? String(localized: "media.voice.accessibility.pause", comment: "Accessibility label for pausing voice note playback")
+                : String(localized: "media.voice.accessibility.play", comment: "Accessibility label for playing a voice note")
+            )
+            .accessibilityValue(playbackLabel)
 
             WaveformView(
                 samples: samples,
@@ -74,9 +71,13 @@ struct VoiceNoteView: View {
                 isInteractive: playback.isPlaying
             )
 
-            Text(playbackLabel)
-                .font(.bitchatSystem(size: 13, design: .monospaced))
-                .foregroundColor(Color.secondary)
+            if isLive {
+                LiveVoiceBadge()
+            } else {
+                Text(playbackLabel)
+                    .bitchatFont(size: 13)
+                    .foregroundColor(palette.secondary)
+            }
 
             if let onCancel = onCancel, isSending {
                 Button(action: onCancel) {
@@ -87,6 +88,9 @@ struct VoiceNoteView: View {
                         .foregroundColor(.white)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(
+                    String(localized: "media.accessibility.cancel_send", comment: "Accessibility label for the cancel button on an in-flight media send")
+                )
             }
         }
         .padding(12)

@@ -8,6 +8,7 @@
 
 import Foundation
 import CryptoKit
+@testable import BitFoundation // to avoid unnecessary public's
 @testable import bitchat
 
 final class TestNetworkHelper {
@@ -30,14 +31,6 @@ final class TestNetworkHelper {
         let key = Curve25519.KeyAgreement.PrivateKey()
         noiseManagers[name] = NoiseSessionManager(localStaticKey: key, keychain: mockKeychain)
         return node
-    }
-    
-    func getNode(_ name: String) -> MockBLEService? {
-        nodes[name]
-    }
-    
-    func getManager(_ name: String) -> NoiseSessionManager? {
-        noiseManagers[name]
     }
     
     // MARK: - Topology
@@ -120,4 +113,3 @@ final class TestNetworkHelper {
         _ = try manager2.handleIncomingHandshake(from: peer1ID, message: msg3)
     }
 }
-

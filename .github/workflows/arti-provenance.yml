@@ -1,0 +1,85 @@
+name: Arti Binary Provenance
+
+# The Arti xcframework is a vendored binary; these checks turn the policy in
+# docs/ARTI-BINARY-PROVENANCE.md into an enforced gate:
+#  1. The checked-in binary must match the hash manifest in the provenance doc.
+#  2. A PR that changes the binary must also change at least one provenance
+#     input (Rust source, lockfile, build script, or the doc itself).
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "localPackages/Arti/**"
+      - "docs/ARTI-BINARY-PROVENANCE.md"
+  pull_request:
+    paths:
+      - "localPackages/Arti/**"
+      - "docs/ARTI-BINARY-PROVENANCE.md"
+
+jobs:
+  verify-hashes:
+    name: Verify xcframework hashes against provenance doc
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Compare artifact hashes with manifest
+        run: |
+          set -euo pipefail
+          doc="docs/ARTI-BINARY-PROVENANCE.md"
+
+          # Extract the manifest: lines of "<sha256>  <path>" from the doc.
+          grep -E '^[0-9a-f]{64}  localPackages/Arti/Frameworks/arti\.xcframework/' "$doc" \
+            | sort -k2 > expected.txt
+
+          if [ ! -s expected.txt ]; then
+            echo "::error::No hash manifest found in $doc"
+            exit 1
+          fi
+
+          # Hash the same file set the doc documents.
+          find localPackages/Arti/Frameworks/arti.xcframework -maxdepth 3 -type f -print0 \
+            | sort -z | xargs -0 sha256sum | sed 's/  \.\//  /' | sort -k2 > actual.txt
+
+          if ! diff -u expected.txt actual.txt; then
+            echo "::error::Checked-in arti.xcframework does not match the manifest in $doc. If the binary change is intentional, rebuild per the doc and update the manifest in the same PR."
+            exit 1
+          fi
+          echo "All $(wc -l < actual.txt) artifact hashes match the provenance manifest."
+
+  require-provenance-evidence:
+    name: Binary changes must ship with provenance inputs
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Check changed files
+        run: |
+          set -euo pipefail
+          base="origin/${{ github.base_ref }}"
+          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+          changed=$(git diff --name-only "$base"...HEAD)
+          echo "Changed files:"
+          echo "$changed"
+
+          if ! echo "$changed" | grep -q '^localPackages/Arti/Frameworks/arti\.xcframework/'; then
+            echo "No binary artifact changes; nothing to verify."
+            exit 0
+          fi
+
+          if echo "$changed" | grep -Eq '^(localPackages/Arti/(Cargo\.(toml|lock)|build-ios\.sh|arti-bitchat/)|docs/ARTI-BINARY-PROVENANCE\.md)'; then
+            echo "Binary change is accompanied by provenance inputs."
+            exit 0
+          fi
+
+          echo "::error::arti.xcframework changed without matching source, lockfile, build-script, or provenance-doc changes. See docs/ARTI-BINARY-PROVENANCE.md (\"Do not accept an xcframework-only update\")."
+          exit 1

@@ -7,7 +7,7 @@
 //
 
 import Foundation
-@testable import bitchat
+import BitFoundation
 
 final class MockBLEBus {
     private var registry: [PeerID: MockBLEService] = [:]

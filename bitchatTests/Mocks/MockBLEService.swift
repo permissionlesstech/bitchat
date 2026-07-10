@@ -8,6 +8,7 @@
 
 import Foundation
 import CoreBluetooth
+@testable import BitFoundation // to avoid unnecessary public's
 @testable import bitchat
 
 /// In-memory BLE test harness used by E2E/Integration tests.
@@ -33,9 +34,7 @@ final class MockBLEService: NSObject {
     weak var delegate: BitchatDelegate?
     var myPeerID = PeerID(str: "MOCK1234")
     var myNickname: String = "MockUser"
-    
-    private let mockKeychain = MockKeychain()
-    
+
     // Test-specific properties
     var sentMessages: [(message: BitchatMessage, packet: BitchatPacket)] = []
     var sentPackets: [BitchatPacket] = []
@@ -49,10 +48,6 @@ final class MockBLEService: NSObject {
         set { myNickname = newValue }
     }
     
-    var nickname: String {
-        return myNickname
-    }
-    
     var peerID: PeerID {
         return myPeerID
     }
@@ -61,12 +56,6 @@ final class MockBLEService: NSObject {
     
     init(bus: MockBLEBus) {
         self.bus = bus
-    }
-    
-    // MARK: - Methods matching BLEService
-    
-    func setNickname(_ nickname: String) {
-        self.myNickname = nickname
     }
     
     // MARK: - In-memory test bus (for E2E/Integration)
@@ -93,20 +82,12 @@ final class MockBLEService: NSObject {
         return connectedPeers.contains(peerID)
     }
 
-    func peerNickname(peerID: String) -> String? {
-        "MockPeer_\(peerID)"
-    }
-
     func getPeerNicknames() -> [PeerID: String] {
         var nicknames: [PeerID: String] = [:]
         for peer in connectedPeers {
             nicknames[peer] = "MockPeer_\(peer)"
         }
         return nicknames
-    }
-    
-    func getPeers() -> [PeerID: String] {
-        return getPeerNicknames()
     }
 
     /// Keep local echo synchronous so Swift Testing confirmations observe it deterministically.
@@ -156,14 +137,6 @@ final class MockBLEService: NSObject {
         }
     }
 
-    func sendFileBroadcast(_ packet: BitchatFilePacket, transferId: String) {
-        // Tests currently ignore file transfer flows; keep stub for protocol conformance.
-    }
-
-    func sendFilePrivate(_ packet: BitchatFilePacket, to peerID: PeerID, transferId: String) {
-        // Tests currently ignore file transfer flows; keep stub for protocol conformance.
-    }
-
     func sendPrivateMessage(_ content: String, to recipientPeerID: PeerID, recipientNickname: String, messageID: String) {
         let message = BitchatMessage(
             id: messageID,
@@ -208,43 +181,6 @@ final class MockBLEService: NSObject {
                 }
             }
         }
-    }
-    
-    func sendFavoriteNotification(to peerID: String, isFavorite: Bool) {
-        // Mock implementation
-    }
-    
-    func sendReadReceipt(_ receipt: ReadReceipt, to peerID: String) {
-        // Mock implementation
-    }
-    
-    func sendBroadcastAnnounce() {
-        // Mock implementation
-    }
-    
-    func getPeerFingerprint(_ peerID: String) -> String? {
-        return nil
-    }
-    
-    func getNoiseSessionState(for peerID: String) -> LazyHandshakeState {
-        return .none
-    }
-    
-    func triggerHandshake(with peerID: String) {
-        // Mock implementation
-    }
-    
-    func emergencyDisconnectAll() {
-        connectedPeers.removeAll()
-        delegate?.didUpdatePeerList([])
-    }
-    
-    func getNoiseService() -> NoiseEncryptionService {
-        return NoiseEncryptionService(keychain: mockKeychain)
-    }
-    
-    func getFingerprint(for peerID: String) -> String? {
-        return nil
     }
     
     // MARK: - Test Helper Methods
@@ -318,9 +254,6 @@ final class MockBLEService: NSObject {
         sendPrivateMessage(content, to: recipientPeerID, recipientNickname: recipientNickname, messageID: messageID ?? UUID().uuidString)
     }
 }
-
-// Backward compatibility for older tests
-typealias MockSimplifiedBluetoothService = MockBLEService
 
 // MARK: - Helpers
 

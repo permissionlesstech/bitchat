@@ -8,6 +8,7 @@
 import Testing
 import CryptoKit
 import Foundation
+import BitFoundation
 @testable import bitchat
 
 struct NostrProtocolTests {
@@ -119,6 +120,43 @@ struct NostrProtocolTests {
         }
     }
 
+    @Test func decryptRejectsInvalidSealSignature() throws {
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let giftWrap = try NostrProtocol.createPrivateMessageWithInvalidSealSignatureForTesting(
+            content: "forged signature",
+            recipientPubkey: recipient.publicKeyHex,
+            senderIdentity: sender
+        )
+
+        expectInvalidEvent {
+            _ = try NostrProtocol.decryptPrivateMessage(
+                giftWrap: giftWrap,
+                recipientIdentity: recipient
+            )
+        }
+    }
+
+    @Test func decryptRejectsSealRumorPubkeyMismatch() throws {
+        let claimedSender = try NostrIdentity.generate()
+        let sealSigner = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let giftWrap = try NostrProtocol.createPrivateMessageWithMismatchedSealRumorPubkeyForTesting(
+            content: "spoofed sender",
+            recipientPubkey: recipient.publicKeyHex,
+            rumorIdentity: claimedSender,
+            sealSignerIdentity: sealSigner
+        )
+
+        expectInvalidEvent {
+            _ = try NostrProtocol.decryptPrivateMessage(
+                giftWrap: giftWrap,
+                recipientIdentity: recipient
+            )
+        }
+    }
+
+    @Test
     func testAckRoundTripNIP44V2_Delivered() throws {
         // Identities
         let sender = try NostrIdentity.generate()
@@ -215,7 +253,7 @@ struct NostrProtocolTests {
 
     @Test func nostrEventSignatureVerification_roundTrip() throws {
         let identity = try NostrIdentity.generate()
-        var event = NostrEvent(
+        let event = NostrEvent(
             pubkey: identity.publicKeyHex,
             createdAt: Date(),
             kind: .ephemeralEvent,
@@ -228,7 +266,7 @@ struct NostrProtocolTests {
 
     @Test func nostrEventSignatureVerification_detectsTamper() throws {
         let identity = try NostrIdentity.generate()
-        var event = NostrEvent(
+        let event = NostrEvent(
             pubkey: identity.publicKeyHex,
             createdAt: Date(),
             kind: .ephemeralEvent,
@@ -240,11 +278,34 @@ struct NostrProtocolTests {
         #expect(!signed.isValidSignature())
     }
 
+    @Test func geohashNotesSingleFilter_encodesExpectedTagShape() throws {
+        let since = Date(timeIntervalSince1970: 1_234_567)
+        let filter = NostrFilter.geohashNotes("u4pruyd", since: since, limit: 42)
+        let data = try JSONEncoder().encode(filter)
+        let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        #expect(object["kinds"] as? [Int] == [1])
+        #expect(object["#g"] as? [String] == ["u4pruyd"])
+        #expect(object["since"] as? Int == 1_234_567)
+        #expect(object["limit"] as? Int == 42)
+    }
+
     // MARK: - Helpers
     private static func base64URLDecode(_ s: String) -> Data? {
         var str = s.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
         let rem = str.count % 4
         if rem > 0 { str.append(String(repeating: "=", count: 4 - rem)) }
         return Data(base64Encoded: str)
+    }
+
+    private func expectInvalidEvent(_ operation: () throws -> Void) {
+        do {
+            try operation()
+            Issue.record("Expected NostrError.invalidEvent")
+        } catch NostrError.invalidEvent {
+            return
+        } catch {
+            Issue.record("Expected NostrError.invalidEvent, got \(error)")
+        }
     }
 }

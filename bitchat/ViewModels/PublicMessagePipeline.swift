@@ -2,35 +2,40 @@
 // PublicMessagePipeline.swift
 // bitchat
 //
-// Handles batching and deduplication of public chat messages before surfacing them to the UI.
+// Batches visible-channel public messages before committing them to the
+// ConversationStore: the deliberate ~80 ms UI flush cadence survives the
+// store cutover, while ordering, dedup, and caps live in the store itself
+// (its timestamp-ordered insert replaced this pipeline's late-insert
+// threshold positioning; see docs/CONVERSATION-STORE-DESIGN.md).
 //
 
+import BitFoundation
 import Foundation
 
 @MainActor
 protocol PublicMessagePipelineDelegate: AnyObject {
-    func pipelineCurrentMessages(_ pipeline: PublicMessagePipeline) -> [BitchatMessage]
-    func pipeline(_ pipeline: PublicMessagePipeline, setMessages messages: [BitchatMessage])
-    func pipeline(_ pipeline: PublicMessagePipeline, normalizeContent content: String) -> String
-    func pipeline(_ pipeline: PublicMessagePipeline, contentTimestampForKey key: String) -> Date?
-    func pipeline(_ pipeline: PublicMessagePipeline, recordContentKey key: String, timestamp: Date)
-    func pipelineTrimMessages(_ pipeline: PublicMessagePipeline)
-    func pipelinePrewarmMessage(_ pipeline: PublicMessagePipeline, message: BitchatMessage)
-    func pipelineSetBatchingState(_ pipeline: PublicMessagePipeline, isBatching: Bool)
+    func pipeline(_: PublicMessagePipeline, normalizeContent content: String) -> String
+    func pipeline(_: PublicMessagePipeline, contentTimestampForKey key: String) -> Date?
+    func pipeline(_: PublicMessagePipeline, recordContentKey key: String, timestamp: Date)
+    /// Commits a batched message to its conversation in the store.
+    /// Returns `false` when the message was already present (ID dedup).
+    @discardableResult
+    func pipeline(_: PublicMessagePipeline, commit message: BitchatMessage, to conversationID: ConversationID) -> Bool
+    func pipelinePrewarmMessage(_: PublicMessagePipeline, message: BitchatMessage)
+    func pipelineSetBatchingState(_: PublicMessagePipeline, isBatching: Bool)
 }
 
 @MainActor
 final class PublicMessagePipeline {
     weak var delegate: PublicMessagePipelineDelegate?
 
-    private var buffer: [BitchatMessage] = []
+    private var buffer: [(message: BitchatMessage, conversationID: ConversationID)] = []
     private var timer: Timer?
     private let baseFlushInterval: TimeInterval
     private var dynamicFlushInterval: TimeInterval
     private var recentBatchSizes: [Int] = []
     private let maxRecentBatchSamples: Int
     private let dedupWindow: TimeInterval
-    private var activeChannel: ChannelID = .mesh
 
     init(
         baseFlushInterval: TimeInterval = TransportConfig.basePublicFlushInterval,
@@ -47,25 +52,32 @@ final class PublicMessagePipeline {
         timer?.invalidate()
     }
 
-    func updateActiveChannel(_ channel: ChannelID) {
-        activeChannel = channel
+    /// Buffers a message destined for `conversationID`; the next batched
+    /// flush commits it to the store. Each entry carries its destination so
+    /// a channel switch mid-batch can never misroute buffered messages.
+    func enqueue(_ message: BitchatMessage, to conversationID: ConversationID) {
+        buffer.append((message, conversationID))
+        scheduleFlush()
     }
 
-    func enqueue(_ message: BitchatMessage) {
-        buffer.append(message)
-        scheduleFlush()
+    /// Discards an uncommitted row by ID. Bridge-first/radio-second dedup uses
+    /// this before inserting the authenticated radio copy, so the ~80 ms UI
+    /// batch cannot resurrect the replaced bridge alias after store removal.
+    func removeMessage(withID messageID: String) {
+        buffer.removeAll { $0.message.id == messageID }
+        if buffer.isEmpty {
+            timer?.invalidate()
+            timer = nil
+        }
+    }
+
+    func containsMessage(withID messageID: String) -> Bool {
+        buffer.contains { $0.message.id == messageID }
     }
 
     func flushIfNeeded() {
         flushBuffer()
     }
-
-    func reset() {
-        timer?.invalidate()
-        timer = nil
-        buffer.removeAll(keepingCapacity: false)
-    }
-
 }
 
 private extension PublicMessagePipeline {
@@ -90,56 +102,37 @@ private extension PublicMessagePipeline {
 
         delegate.pipelineSetBatchingState(self, isBatching: true)
 
-        var existingIDs = Set(delegate.pipelineCurrentMessages(self).map { $0.id })
-        var pending: [(message: BitchatMessage, contentKey: String)] = []
+        // Content-window dedup against recorded keys and within the batch;
+        // ID dedup happens in the store at commit time.
+        var pending: [(message: BitchatMessage, conversationID: ConversationID, contentKey: String)] = []
         var batchContentLatest: [String: Date] = [:]
 
-        for message in buffer {
-            if existingIDs.contains(message.id) { continue }
-            let contentKey = delegate.pipeline(self, normalizeContent: message.content)
+        for item in buffer {
+            let contentKey = delegate.pipeline(self, normalizeContent: item.message.content)
             if let ts = delegate.pipeline(self, contentTimestampForKey: contentKey),
-               abs(ts.timeIntervalSince(message.timestamp)) < dedupWindow {
+               abs(ts.timeIntervalSince(item.message.timestamp)) < dedupWindow {
                 continue
             }
             if let ts = batchContentLatest[contentKey],
-               abs(ts.timeIntervalSince(message.timestamp)) < dedupWindow {
+               abs(ts.timeIntervalSince(item.message.timestamp)) < dedupWindow {
                 continue
             }
-            existingIDs.insert(message.id)
-            pending.append((message, contentKey))
-            batchContentLatest[contentKey] = message.timestamp
+            pending.append((item.message, item.conversationID, contentKey))
+            batchContentLatest[contentKey] = item.message.timestamp
         }
 
         buffer.removeAll(keepingCapacity: true)
         guard !pending.isEmpty else {
             delegate.pipelineSetBatchingState(self, isBatching: false)
-            if !buffer.isEmpty { scheduleFlush() }
             return
         }
 
         pending.sort { $0.message.timestamp < $1.message.timestamp }
 
-        var messages = delegate.pipelineCurrentMessages(self)
-        let threshold = lateInsertThreshold(for: activeChannel)
-        let lastTimestamp = messages.last?.timestamp ?? .distantPast
-
         for item in pending {
-            let message = item.message
-            if threshold == 0 || message.timestamp < lastTimestamp.addingTimeInterval(-threshold) {
-                let index = insertionIndex(for: message.timestamp, in: messages)
-                if index >= messages.count {
-                    messages.append(message)
-                } else {
-                    messages.insert(message, at: index)
-                }
-            } else {
-                messages.append(message)
-            }
-            delegate.pipeline(self, recordContentKey: item.contentKey, timestamp: message.timestamp)
+            guard delegate.pipeline(self, commit: item.message, to: item.conversationID) else { continue }
+            delegate.pipeline(self, recordContentKey: item.contentKey, timestamp: item.message.timestamp)
         }
-
-        delegate.pipeline(self, setMessages: messages)
-        delegate.pipelineTrimMessages(self)
 
         updateFlushInterval(withBatchSize: pending.count)
 
@@ -163,28 +156,5 @@ private extension PublicMessagePipeline {
             ? 0.0
             : Double(recentBatchSizes.reduce(0, +)) / Double(recentBatchSizes.count)
         dynamicFlushInterval = avg > 100.0 ? 0.12 : baseFlushInterval
-    }
-
-    func lateInsertThreshold(for channel: ChannelID) -> TimeInterval {
-        switch channel {
-        case .mesh:
-            return TransportConfig.uiLateInsertThreshold
-        case .location:
-            return TransportConfig.uiLateInsertThresholdGeo
-        }
-    }
-
-    func insertionIndex(for timestamp: Date, in messages: [BitchatMessage]) -> Int {
-        var low = 0
-        var high = messages.count
-        while low < high {
-            let mid = (low + high) / 2
-            if messages[mid].timestamp < timestamp {
-                low = mid + 1
-            } else {
-                high = mid
-            }
-        }
-        return low
     }
 }

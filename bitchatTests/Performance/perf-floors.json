@@ -1,0 +1,59 @@
+{
+  "_philosophy": [
+    "Floor throughputs for the PERF[...] lines printed by PerformanceBaselineTests.",
+    "Floors catch algorithmic regressions (O(n) -> O(n^2), accidental sync I/O,",
+    "quadratic re-scans), NOT tuning noise. Basis: ~50% of the SLOWEST observed",
+    "CI run (GitHub macos-latest), not local numbers - CI slowdown is",
+    "benchmark-dependent (sub-millisecond passes amplify runner overhead, e.g.",
+    "nostrInbound.duplicate runs at ~20% of local speed on CI while most",
+    "benchmarks run at ~40-60%). Every floor remains 10-200x above known",
+    "regression values (the pre-optimization duplicate path measured 2.2k/sec",
+    "against a 250k floor), so the gate still fails loudly on order-of-",
+    "magnitude regressions while never flaking on a slow runner.",
+    "Raise floors deliberately after intentional performance improvements;",
+    "lower them only with a written justification in the PR. If a benchmark is",
+    "renamed or removed, update this file in the same change - the gate fails",
+    "when a floored benchmark stops reporting.",
+    "Checked by scripts/check-perf-floors.sh against captured swift-test output."
+  ],
+  "_units": "operations per second, matching each benchmark's PERF line",
+  "_reference_local_numbers_2026_06": {
+    "nostrInbound.fresh": 2132,
+    "nostrInbound.duplicate": 2558907,
+    "bleInbound.roundTripAndDedup": 38063,
+    "gcs.buildAndDecode": 776,
+    "delivery.incrementalUpdate": 172615,
+    "delivery.storeUpdate": 158862,
+    "formatting.formatMessage": 12261,
+    "pipeline.privateIngest": 24848,
+    "pipeline.publicIngest": 13102,
+    "store.append": 213201,
+    "store.audit": 362
+  },
+  "floors": {
+    "nostrInbound.fresh": 450,
+    "nostrInbound.duplicate": 250000,
+    "bleInbound.roundTripAndDedup": 9500,
+    "gcs.buildAndDecode": 190,
+    "delivery.incrementalUpdate": 43000,
+    "delivery.storeUpdate": 39000,
+    "formatting.formatMessage": 2200,
+    "pipeline.privateIngest": 3000,
+    "pipeline.publicIngest": 2400,
+    "store.append": 48000,
+    "store.audit": 70
+  },
+  "_slowest_observed_ci_numbers_2026_06": {
+    "nostrInbound.fresh": 918,
+    "nostrInbound.duplicate": 524924,
+    "bleInbound.roundTripAndDedup": 20489,
+    "gcs.buildAndDecode": 504,
+    "delivery.incrementalUpdate": 110892,
+    "delivery.storeUpdate": 96531,
+    "formatting.formatMessage": 4575,
+    "pipeline.privateIngest": 6388,
+    "pipeline.publicIngest": 5006,
+    "store.append": 97423,
+    "store.audit": 140
+  }
+}

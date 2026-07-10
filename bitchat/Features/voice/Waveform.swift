@@ -56,12 +56,6 @@ final class WaveformCache {
         }
     }
 
-    func purgeAll() {
-        queue.async(flags: .barrier) { [weak self] in
-            self?.cache.removeAll()
-        }
-    }
-
     private func computeWaveform(url: URL, bins: Int) -> [Float]? {
         guard bins > 0 else { return nil }
         // Use autoreleasepool to manage memory from audio buffer allocations

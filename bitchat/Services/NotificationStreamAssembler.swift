@@ -7,6 +7,7 @@
 //
 
 import BitLogger
+import BitFoundation
 import Foundation
 
 struct NotificationStreamAssembler {
@@ -18,6 +19,19 @@ struct NotificationStreamAssembler {
         buffer.removeAll(keepingCapacity: false)
         pendingFrameStartedAt = nil
         pendingFrameExpectedLength = 0
+    }
+
+    private mutating func discardLeadingPaddingIfPresent() -> Bool {
+        guard let first = buffer.first else { return false }
+        guard first != 1 && first != 2 else { return false }
+        let paddingLength = Int(first)
+        guard paddingLength > 0, paddingLength <= buffer.count else { return false }
+        guard buffer.prefix(paddingLength).allSatisfy({ $0 == first }) else { return false }
+
+        buffer.removeFirst(paddingLength)
+        pendingFrameStartedAt = nil
+        pendingFrameExpectedLength = 0
+        return true
     }
 
     mutating func append(_ chunk: Data) -> (frames: [Data], droppedPrefixes: [UInt8], reset: Bool) {
@@ -41,6 +55,9 @@ struct NotificationStreamAssembler {
         while buffer.count >= minimumFramePrefix {
             guard let version = buffer.first else { break }
             guard version == 1 || version == 2 else {
+                if discardLeadingPaddingIfPresent() {
+                    continue
+                }
                 dropped.append(buffer.removeFirst())
                 pendingFrameStartedAt = nil
                 pendingFrameExpectedLength = 0
@@ -132,6 +149,11 @@ struct NotificationStreamAssembler {
             let frame = Data(buffer.prefix(frameLength))
             frames.append(frame)
             buffer.removeFirst(frameLength)
+            _ = discardLeadingPaddingIfPresent()
+        }
+
+        if discardLeadingPaddingIfPresent() {
+            return (frames, dropped, didReset)
         }
 
         if !buffer.isEmpty, buffer.allSatisfy({ $0 == 0 }) {

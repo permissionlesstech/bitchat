@@ -9,6 +9,7 @@
 import BitLogger
 import Foundation
 import CryptoKit
+import BitFoundation
 
 class NoiseSession {
     let peerID: PeerID

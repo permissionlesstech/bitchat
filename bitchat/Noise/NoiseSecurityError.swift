@@ -14,5 +14,4 @@ enum NoiseSecurityError: Error {
     case messageTooLarge
     case invalidPeerID
     case rateLimitExceeded
-    case handshakeTimeout
 }

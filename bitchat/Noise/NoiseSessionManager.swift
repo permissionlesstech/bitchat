@@ -9,11 +9,11 @@
 import BitLogger
 import CryptoKit
 import Foundation
+import BitFoundation
 
 final class NoiseSessionManager {
     private var sessions: [PeerID: NoiseSession] = [:]
-    private let localStaticKey: Curve25519.KeyAgreement.PrivateKey
-    private let keychain: KeychainManagerProtocol
+    private let sessionFactory: (PeerID, NoiseRole) -> NoiseSession
     private let managerQueue = DispatchQueue(label: "chat.bitchat.noise.manager", attributes: .concurrent)
     
     // Callbacks
@@ -21,9 +21,25 @@ final class NoiseSessionManager {
     var onSessionFailed: ((PeerID, Error) -> Void)?
     
     init(localStaticKey: Curve25519.KeyAgreement.PrivateKey, keychain: KeychainManagerProtocol) {
-        self.localStaticKey = localStaticKey
-        self.keychain = keychain
+        self.sessionFactory = { peerID, role in
+            SecureNoiseSession(
+                peerID: peerID,
+                role: role,
+                keychain: keychain,
+                localStaticKey: localStaticKey
+            )
+        }
     }
+
+    #if DEBUG
+    init(
+        localStaticKey _: Curve25519.KeyAgreement.PrivateKey,
+        keychain _: KeychainManagerProtocol,
+        sessionFactory: @escaping (PeerID, NoiseRole) -> NoiseSession
+    ) {
+        self.sessionFactory = sessionFactory
+    }
+    #endif
     
     // MARK: - Session Management
     
@@ -66,12 +82,7 @@ final class NoiseSessionManager {
             }
             
             // Create new initiator session
-            let session = SecureNoiseSession(
-                peerID: peerID,
-                role: .initiator,
-                keychain: keychain,
-                localStaticKey: localStaticKey
-            )
+            let session = sessionFactory(peerID, .initiator)
             sessions[peerID] = session
             
             do {
@@ -117,12 +128,7 @@ final class NoiseSessionManager {
             // Get or create session
             let session: NoiseSession
             if shouldCreateNew {
-                let newSession = SecureNoiseSession(
-                    peerID: peerID,
-                    role: .responder,
-                    keychain: keychain,
-                    localStaticKey: localStaticKey
-                )
+                let newSession = sessionFactory(peerID, .responder)
                 sessions[peerID] = newSession
                 session = newSession
             } else {

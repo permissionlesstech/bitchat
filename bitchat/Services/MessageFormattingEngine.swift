@@ -6,6 +6,7 @@
 // This is free and unencumbered software released into the public domain.
 //
 
+import BitFoundation
 import Foundation
 import SwiftUI
 
@@ -68,10 +69,6 @@ final class MessageFormattingEngine {
 
         static let quickCashuPresence: NSRegularExpression = {
             try! NSRegularExpression(pattern: "\\bcashu[AB][A-Za-z0-9._-]{40,}\\b", options: [])
-        }()
-
-        static let simplifyHTTPURL: NSRegularExpression = {
-            try! NSRegularExpression(pattern: "https?://[^\\s?#]+(?:[?#][^\\s]*)?", options: [.caseInsensitive])
         }()
     }
 
@@ -194,7 +191,7 @@ final class MessageFormattingEngine {
 
     // MARK: - Private Helpers
 
-    private static func formatSystemMessage(_ message: BitchatMessage, isDark: Bool) -> AttributedString {
+    private static func formatSystemMessage(_ message: BitchatMessage, isDark _: Bool) -> AttributedString {
         var result = AttributedString()
 
         let content = AttributedString("* \(message.content) *")
@@ -413,7 +410,7 @@ final class MessageFormattingEngine {
         return AttributedString(text).mergingAttributes(style)
     }
 
-    private static func formatMatch(_ text: String, type: MatchType, baseColor: Color, isSelf: Bool) -> AttributedString {
+    private static func formatMatch(_ text: String, type: MatchType, baseColor _: Color, isSelf _: Bool) -> AttributedString {
         var style = AttributeContainer()
 
         switch type {
