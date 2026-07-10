@@ -15,7 +15,9 @@ import BitFoundation
 
 /// Creates a ChatViewModel with mock dependencies for testing
 @MainActor
-private func makeTestableViewModel() -> (viewModel: ChatViewModel, transport: MockTransport) {
+private func makeTestableViewModel(
+    panicMediaWipe: (() throws -> Void)? = nil
+) -> (viewModel: ChatViewModel, transport: MockTransport) {
     let keychain = MockKeychain()
     let keychainHelper = MockKeychainHelper()
     let idBridge = NostrIdentityBridge(keychain: keychainHelper)
@@ -26,7 +28,8 @@ private func makeTestableViewModel() -> (viewModel: ChatViewModel, transport: Mo
         keychain: keychain,
         idBridge: idBridge,
         identityManager: identityManager,
-        transport: transport
+        transport: transport,
+        panicMediaWipe: panicMediaWipe
     )
 
     return (viewModel, transport)
@@ -1096,6 +1099,18 @@ struct ChatViewModelBluetoothTests {
 // MARK: - Panic Clear Tests
 
 struct ChatViewModelPanicTests {
+
+    @Test @MainActor
+    func panicClearAllData_finishesMediaWipeBeforeReturning() {
+        var wipeFinished = false
+        let (viewModel, _) = makeTestableViewModel {
+            wipeFinished = true
+        }
+
+        viewModel.panicClearAllData()
+
+        #expect(wipeFinished)
+    }
 
     @Test @MainActor
     func panicClearAllData_delegatesToTransport() async {

@@ -189,6 +189,21 @@ struct ChatMediaTransferCoordinatorContextTests {
     }
 
     @Test @MainActor
+    func resetForPanic_cancelsEveryTransportTransferAndClearsMappings() {
+        let context = MockChatMediaTransferContext()
+        let coordinator = ChatMediaTransferCoordinator(context: context)
+        coordinator.registerTransfer(transferId: "t1", messageID: "m1")
+        coordinator.registerTransfer(transferId: "t1", messageID: "m2")
+        coordinator.registerTransfer(transferId: "t2", messageID: "m3")
+
+        coordinator.resetForPanic()
+
+        #expect(Set(context.cancelledTransfers) == Set(["t1", "t2"]))
+        #expect(coordinator.transferIdToMessageIDs.isEmpty)
+        #expect(coordinator.messageIDToTransferId.isEmpty)
+    }
+
+    @Test @MainActor
     func sendVoiceNote_blockedContextRemovesFileAndExplains() async throws {
         let context = MockChatMediaTransferContext()
         let coordinator = ChatMediaTransferCoordinator(context: context)

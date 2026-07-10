@@ -370,6 +370,46 @@ struct BLEFileTransferHandlerTests {
         #expect(!FileManager.default.fileExists(atPath: evictable.path))
     }
 
+    @Test
+    func panicWipeDeletesEveryManagedMediaFileAndRecreatesEmptyDirectories() throws {
+        let base = FileManager.default.temporaryDirectory
+            .appendingPathComponent("panic-media-wipe-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: base) }
+        let store = BLEIncomingFileStore(baseDirectory: base)
+        let subdirectories = [
+            "voicenotes/incoming",
+            "voicenotes/outgoing",
+            "images/incoming",
+            "images/outgoing",
+            "files/incoming",
+            "files/outgoing"
+        ]
+
+        for subdirectory in subdirectories {
+            let directory = base
+                .appendingPathComponent("files", isDirectory: true)
+                .appendingPathComponent(subdirectory, isDirectory: true)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try Data("secret".utf8).write(to: directory.appendingPathComponent("artifact.bin"))
+        }
+        let unmanaged = base.appendingPathComponent("files/legacy/secret.bin")
+        try FileManager.default.createDirectory(at: unmanaged.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("legacy".utf8).write(to: unmanaged)
+
+        try store.panicWipe()
+
+        #expect(!FileManager.default.fileExists(atPath: unmanaged.path))
+        for subdirectory in subdirectories {
+            let directory = base
+                .appendingPathComponent("files", isDirectory: true)
+                .appendingPathComponent(subdirectory, isDirectory: true)
+            var isDirectory: ObjCBool = false
+            #expect(FileManager.default.fileExists(atPath: directory.path, isDirectory: &isDirectory))
+            #expect(isDirectory.boolValue)
+            #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty)
+        }
+    }
+
     private func expectNoSideEffects(_ recorder: Recorder) {
         #expect(recorder.signedNameQueries.isEmpty)
         #expect(recorder.trackedPackets.isEmpty)

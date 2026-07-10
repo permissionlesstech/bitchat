@@ -48,7 +48,7 @@ Residual risk: private-message metadata such as timing, radio adjacency, ciphert
 - Recent signed public mesh messages are archived in Application Support for up to 15 minutes so gossip sync survives a relaunch and can cross mesh partitions.
 - Signed public board posts and tombstones persist until author-selected expiry, at most seven days. Stores are bounded by global and per-author quotas.
 - Group metadata (name, roster, creator, epoch) persists as protected JSON; group keys live in the keychain until leave/removal/wipe.
-- Voice notes and images are stored in Application Support. Incoming media has a 100 MB oldest-first quota; outgoing media does not have an equivalent automatic lifetime and remains until cleanup, panic wipe, or app removal.
+- Voice notes and images are stored in Application Support. Incoming media has a 100 MB oldest-first quota; outgoing media does not have an equivalent automatic lifetime and remains until cleanup, panic wipe, or app removal. Panic wipe invalidates detached preparation work, cancels active transfers, closes live capture files, and removes the managed media tree before returning.
 
 Public archives contain content already intended for public mesh/board distribution, but a seized unlocked device can reveal it. Group metadata and media can reveal relationships or content even when the in-memory chat timeline has gone away.
 
@@ -88,7 +88,7 @@ Residual risk: Nostr relay retention and logging are outside project control. Pu
 
 ## Panic Wipe Coverage
 
-The panic action clears identity/session state, preferences, location state, groups, prekeys, outbox mail, courier mail, bridge dedup state, gossip archive, board data, managed media, and active subscriptions/transports. New persistent stores must add an explicit wipe hook and a regression test.
+The panic action clears identity/session state, preferences, location state, groups, prekeys, outbox mail, courier mail, bridge dedup state, gossip archive, board data, managed media, and active subscriptions/transports. Managed media deletion completes synchronously, after active media work has been invalidated. Keychain secrets use device-only accessibility, and an install marker detects and clears app keys that survive uninstall before a later reinstall can use them. New persistent stores must add an explicit wipe hook and a regression test.
 
 ## Release Review Checklist
 

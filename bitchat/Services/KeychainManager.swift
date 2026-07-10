@@ -11,6 +11,13 @@ import BitFoundation
 import Foundation
 import Security
 
+enum KeychainInstallLifecycleAction: Equatable {
+    case markerPresent
+    case bootstrapMarker
+    case clearStaleKeys
+    case retryLater
+}
+
 final class KeychainManager: KeychainManagerProtocol {
     /// Default keychain for components that construct their own rather than
     /// having one injected. Under test this is an in-memory keychain: the
@@ -41,27 +48,80 @@ final class KeychainManager: KeychainManagerProtocol {
     // Use consistent service name for all keychain items
     private let service = BitchatApp.bundleID
     private let appGroup = "group.\(BitchatApp.bundleID)"
+    private static let installMarkerAccount = "install_lifecycle_marker"
+    private static let installMarkerDefaultsKey = "keychain.installLifecycleMarker.present"
 
     // AfterFirstUnlock, not WhenUnlocked: the mesh keeps running with the
     // device locked (identity-cache saves failed with -25308 throughout
     // locked-phone testing), and a wake-on-proximity relaunch via BLE state
     // restoration must be able to read the noise keys before the user
-    // unlocks. Backup/sync semantics are unchanged (not ThisDeviceOnly).
-    private static let itemAccessibility = kSecAttrAccessibleAfterFirstUnlock
+    // unlocks. ThisDeviceOnly prevents private identities and group keys from
+    // migrating through device backups onto a second device.
+    private static let itemAccessibility = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
 
     init() {
         #if os(iOS)
+        reconcileInstallLifecycle()
         migrateAccessibilityIfNeeded()
         #endif
     }
 
+    static func installLifecycleAction(
+        containerKnowsMarker: Bool,
+        markerRead: KeychainReadResult
+    ) -> KeychainInstallLifecycleAction {
+        switch markerRead {
+        case .success:
+            return containerKnowsMarker ? .markerPresent : .clearStaleKeys
+        case .itemNotFound:
+            return .bootstrapMarker
+        case .accessDenied, .deviceLocked, .authenticationFailed, .otherError:
+            return .retryLater
+        }
+    }
+
     #if os(iOS)
+
+    /// Keychain items can survive app removal while the app container and its
+    /// UserDefaults do not. The first version carrying this marker bootstraps
+    /// without deleting existing users' identities. On a later reinstall, a
+    /// surviving keychain marker plus a missing defaults marker proves the app
+    /// container was replaced, so stale secrets are removed before use.
+    private func reconcileInstallLifecycle() {
+        let defaults = UserDefaults.standard
+        let containerKnowsMarker = defaults.bool(forKey: Self.installMarkerDefaultsKey)
+
+        let markerRead = retrieveDataWithResult(forKey: Self.installMarkerAccount)
+        switch Self.installLifecycleAction(
+            containerKnowsMarker: containerKnowsMarker,
+            markerRead: markerRead
+        ) {
+        case .markerPresent:
+            defaults.set(true, forKey: Self.installMarkerDefaultsKey)
+
+        case .bootstrapMarker:
+            if case .success = saveDataWithResult(Data([1]), forKey: Self.installMarkerAccount) {
+                defaults.set(true, forKey: Self.installMarkerDefaultsKey)
+            }
+
+        case .clearStaleKeys:
+            _ = deleteAllKeychainData()
+            defaults.set(true, forKey: Self.installMarkerDefaultsKey)
+
+        case .retryLater:
+            // Do not guess that a temporarily unreadable marker is absent.
+            // Leaving the defaults flag unchanged lets a later construction
+            // retry once protected keychain data is available.
+            break
+        }
+    }
+
     /// One-time upgrade of items created under WhenUnlocked. New saves get
     /// the right class on their own (saves are delete-then-add), but the
     /// long-lived identity keys are written once and would otherwise stay
     /// unreadable while the device is locked.
     private func migrateAccessibilityIfNeeded() {
-        let flag = "keychain.accessibility.afterFirstUnlock.migrated"
+        let flag = "keychain.accessibility.afterFirstUnlockThisDeviceOnly.migrated"
         guard !UserDefaults.standard.bool(forKey: flag) else { return }
 
         let query: [String: Any] = [
@@ -76,7 +136,7 @@ final class KeychainManager: KeychainManagerProtocol {
         case errSecSuccess, errSecItemNotFound:
             // Nothing to migrate on a fresh install; both are terminal.
             UserDefaults.standard.set(true, forKey: flag)
-            SecureLogger.info("Keychain accessibility migrated to AfterFirstUnlock (status \(status))", category: .keychain)
+            SecureLogger.info("Keychain accessibility migrated to AfterFirstUnlockThisDeviceOnly (status \(status))", category: .keychain)
         default:
             // Likely errSecInteractionNotAllowed (relaunched while locked) —
             // leave the flag unset so the next launch retries.
@@ -491,6 +551,15 @@ final class KeychainManager: KeychainManagerProtocol {
         }
         
         SecureLogger.warning("Panic mode cleanup completed. Total items deleted: \(totalDeleted)", category: .keychain)
+
+        #if os(iOS)
+        // The non-secret marker is intentionally recreated after a panic so a
+        // later uninstall/reinstall can still be distinguished from an in-place
+        // upgrade. It never restores any wiped identity or relationship data.
+        if case .success = saveDataWithResult(Data([1]), forKey: Self.installMarkerAccount) {
+            UserDefaults.standard.set(true, forKey: Self.installMarkerDefaultsKey)
+        }
+        #endif
         
         return totalDeleted > 0
     }
@@ -526,18 +595,39 @@ final class KeychainManager: KeychainManagerProtocol {
 
     /// Save data with a custom service name
     func save(key: String, data: Data, service customService: String, accessible: CFString?) {
-        var query: [String: Any] = [
+        let primaryKeyQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: customService,
-            kSecAttrAccount as String: key,
-            kSecValueData as String: data
+            kSecAttrAccount as String: key
         ]
-        if let accessible = accessible {
-            query[kSecAttrAccessible as String] = accessible
-        }
+        var addQuery = primaryKeyQuery
+        addQuery.merge([
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: accessible ?? Self.itemAccessibility,
+            kSecAttrSynchronizable as String: false
+        ]) { _, new in new }
 
-        SecItemDelete(query as CFDictionary)
-        SecItemAdd(query as CFDictionary, nil)
+        // Delete by the item's primary key only. Value/accessibility fields
+        // are add attributes, not valid selectors for replacing an existing
+        // item; including them can leave the old item in place and make the
+        // subsequent add fail as a duplicate.
+        let deleteStatus = SecItemDelete(primaryKeyQuery as CFDictionary)
+        guard deleteStatus == errSecSuccess || deleteStatus == errSecItemNotFound else {
+            SecureLogger.error(
+                NSError(domain: "Keychain", code: Int(deleteStatus)),
+                context: "Unable to replace custom-service keychain item",
+                category: .keychain
+            )
+            return
+        }
+        let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+        if addStatus != errSecSuccess {
+            SecureLogger.error(
+                NSError(domain: "Keychain", code: Int(addStatus)),
+                context: "Unable to save custom-service keychain item",
+                category: .keychain
+            )
+        }
     }
 
     /// Load data from a custom service

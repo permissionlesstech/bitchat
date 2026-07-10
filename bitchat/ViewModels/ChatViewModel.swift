@@ -177,7 +177,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     lazy var privateConversationCoordinator = ChatPrivateConversationCoordinator(context: self)
     lazy var nostrCoordinator = ChatNostrCoordinator(context: self)
     lazy var mediaTransferCoordinator = ChatMediaTransferCoordinator(context: self)
-    lazy var liveVoiceCoordinator = ChatLiveVoiceCoordinator(context: self)
+    lazy var liveVoiceCoordinator = ChatLiveVoiceCoordinator(
+        context: self,
+        sweepsOnInit: !TestEnvironment.isRunningTests
+    )
     lazy var verificationCoordinator = ChatVerificationCoordinator(context: self)
     lazy var groupCoordinator = ChatGroupCoordinator(context: self)
     lazy var vouchCoordinator = ChatVouchCoordinator(context: self)
@@ -292,6 +295,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     var nostrRelayManager: NostrRelayManager?
     private let userDefaults = UserDefaults.standard
     let keychain: KeychainManagerProtocol
+    private let panicMediaWipe: () throws -> Void
     /// Private group membership: keys in the keychain, metadata on disk.
     let groupStore: GroupStore
     private let nicknameKey = "bitchat.nickname"
@@ -799,7 +803,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         locationManager: LocationChannelManager = .shared,
         readReceiptsDefaults: UserDefaults? = nil,
         outboxStore: MessageOutboxStore? = nil,
-        sfMetrics: StoreAndForwardMetrics? = nil
+        sfMetrics: StoreAndForwardMetrics? = nil,
+        panicMediaWipe: (() throws -> Void)? = nil
     ) {
         let conversations = conversations ?? ConversationStore()
         let peerIdentityStore = peerIdentityStore ?? PeerIdentityStore()
@@ -814,6 +819,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         )
 
         self.keychain = keychain
+        self.panicMediaWipe = panicMediaWipe ?? {
+            // Unit tests share the developer's real Application Support
+            // directory. Production uses the managed store; tests that need
+            // to exercise the wipe inject a temporary-directory closure.
+            guard !TestEnvironment.isRunningTests else { return }
+            try BLEIncomingFileStore().panicWipe()
+        }
         self.groupStore = GroupStore(keychain: keychain)
         self.idBridge = idBridge
         self.identityManager = identityManager
@@ -1156,6 +1168,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     func panicClearAllData() {
         // Messages are processed immediately - nothing to flush
 
+        // Invalidate detached media preparation and close live capture file
+        // handles before clearing state or removing the media directory.
+        mediaTransferCoordinator.resetForPanic()
+        liveVoiceCoordinator.resetForPanic()
+
         // Clear all messages (public timelines and private chats live in the
         // single-writer ConversationStore; the derived `messages` view and
         // the legacy mirror empty with it)
@@ -1278,43 +1295,23 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
             }
         }
 
-        // Delete ALL media files (incoming and outgoing) in background
-        Task.detached(priority: .utility) {
-            // Skipped under tests: the test process shares the user's real
-            // ~/Library/Application Support/files tree, and this detached
-            // utility-priority wipe fires at a nondeterministic time —
-            // deleting media that concurrently running tests (e.g. the
-            // sendImage flow) just wrote there, and the developer's real
-            // app data with it.
-            guard !TestEnvironment.isRunningTests else { return }
-            do {
-                let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-                let filesDir = base.appendingPathComponent("files", isDirectory: true)
-
-                // Delete the entire files directory and recreate it
-                if FileManager.default.fileExists(atPath: filesDir.path) {
-                    try FileManager.default.removeItem(at: filesDir)
-                    SecureLogger.info("🗑️ Deleted all media files during panic clear", category: .session)
-                }
-
-                // Recreate empty directory structure
-                try FileManager.default.createDirectory(at: filesDir, withIntermediateDirectories: true, attributes: nil)
-                try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("voicenotes/incoming", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
-                try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("voicenotes/outgoing", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
-                try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("images/incoming", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
-                try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("images/outgoing", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
-                try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("files/incoming", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
-                try FileManager.default.createDirectory(at: filesDir.appendingPathComponent("files/outgoing", isDirectory: true), withIntermediateDirectories: true, attributes: nil)
-            } catch {
-                SecureLogger.error("Failed to clear media files during panic: \(error)", category: .session)
-            }
-
-            // BCH-01-013: Clear iOS app switcher snapshots
-            // These are stored in Library/Caches/Snapshots/<bundle_id>/
-            #if os(iOS)
-            Self.clearAppSwitcherSnapshots()
-            #endif
+        // The wipe must finish before this security action returns. A detached
+        // task could otherwise lose a race with a new capture or app exit and
+        // leave pre-panic media behind.
+        do {
+            try panicMediaWipe()
+            SecureLogger.info("🗑️ Deleted all media files during panic clear", category: .session)
+        } catch {
+            SecureLogger.error("Failed to clear media files during panic: \(error)", category: .session)
         }
+
+        // BCH-01-013: Clear iOS app switcher snapshots. Keep tests away from
+        // the host user's real cache tree just as the default media wipe does.
+        #if os(iOS)
+        if !TestEnvironment.isRunningTests {
+            Self.clearAppSwitcherSnapshots()
+        }
+        #endif
 
         // Force immediate UI update for panic mode
         // UI updates immediately - no flushing needed
