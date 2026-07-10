@@ -75,10 +75,6 @@ private struct ReferenceConversationTimeline {
         messages.contains { $0.id == id }
     }
 
-    func message(withID id: String) -> Message? {
-        messages.first { $0.id == id }
-    }
-
     mutating func append(_ message: BitchatMessage) -> AppendResult {
         guard !contains(message.id) else {
             return AppendResult(inserted: false, trimmedCount: 0)
