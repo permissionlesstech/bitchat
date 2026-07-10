@@ -17,15 +17,32 @@ import Foundation
 private final class RecordingAudioSession: SessionApplying, @unchecked Sendable {
     private let lock = NSLock()
     private var _activationCalls: [Bool] = []
+    private var _categoryCallCount = 0
+    private var _categoryError: Error?
 
     var activationCalls: [Bool] { lock.withLock { _activationCalls } }
+    var categoryCallCount: Int { lock.withLock { _categoryCallCount } }
+    var categoryError: Error? {
+        get { lock.withLock { _categoryError } }
+        set { lock.withLock { _categoryError = newValue } }
+    }
 
-    func setCategory(_ category: AudioSessionCoordinator.Category) throws {}
+    func setCategory(_ category: AudioSessionCoordinator.Category) throws {
+        try lock.withLock {
+            _categoryCallCount += 1
+            if let error = _categoryError {
+                _categoryError = nil
+                throw error
+            }
+        }
+    }
 
     func setActive(_ active: Bool, notifyOthersOnDeactivation: Bool) throws {
         lock.withLock { _activationCalls.append(active) }
     }
 }
+
+private struct PlaybackSessionError: Error {}
 
 @MainActor
 struct VoiceNotePlaybackControllerTests {
@@ -101,5 +118,28 @@ struct VoiceNotePlaybackControllerTests {
         controller = nil
 
         await waitUntil { session.activationCalls == [true, false] }
+    }
+
+    @Test func activationFailureDoesNotStartUnregisteredPlayback() async throws {
+        let session = RecordingAudioSession()
+        session.categoryError = PlaybackSessionError()
+        let coordinator = AudioSessionCoordinator(session: session)
+        let url = try makeTempVoiceNote(seconds: 30)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let controller = VoiceNotePlaybackController(
+            url: url,
+            sessionCoordinator: coordinator,
+            exclusivity: VoiceNotePlaybackCoordinator()
+        )
+        controller.play()
+
+        await waitUntil {
+            session.categoryCallCount == 1 && !controller.isPlaybackStartPending
+        }
+
+        #expect(session.activationCalls.isEmpty)
+        #expect(!controller.isPlaying)
+        #expect(controller.currentTime == 0)
     }
 }

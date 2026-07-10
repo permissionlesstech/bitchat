@@ -74,13 +74,41 @@ final class AudioSessionCoordinator: @unchecked Sendable {
     /// once when done (extra releases are ignored).
     ///
     /// `@unchecked` because the stored callbacks are `@MainActor`-isolated
-    /// closures (non-Sendable as stored types) that the coordinator only
-    /// ever invokes on the main actor; the token is otherwise immutable,
-    /// so handing it across executors (e.g. releasing from a `deinit` hop)
-    /// is safe.
+    /// closures (non-Sendable as stored types). Lifecycle state is protected
+    /// by `stateLock`, and callbacks are only ever invoked on the main actor.
     final class Token: @unchecked Sendable {
+        fileprivate enum CallbackKind: Sendable {
+            case interrupted
+            case categoryEscalated
+        }
+
+        /// A callback snapshot is only valid for the lifecycle epoch in which
+        /// it was captured. `release` advances the epoch synchronously before
+        /// its queue work, so a callback already headed to the main actor can't
+        /// reach a client that has since released this token and reacquired a
+        /// different one.
+        fileprivate struct CallbackTicket: Sendable {
+            let token: Token
+            let kind: CallbackKind
+            let lifecycleEpoch: UInt64
+        }
+
+        private enum Lifecycle {
+            /// Registered on the session queue, but `acquire` has not yet
+            /// returned into the client's main-actor call frame.
+            case acquiring
+            case ready
+            case released
+        }
+
         fileprivate let onInterrupted: @MainActor () -> Void
         fileprivate let onCategoryEscalated: (@MainActor () -> Void)?
+        private let stateLock = NSLock()
+        private var lifecycle = Lifecycle.acquiring
+        private var lifecycleEpoch: UInt64 = 0
+        /// A terminal event that lands while the token is registered but not
+        /// yet handed off invalidates the acquire before its caller can start.
+        private var terminalEventPendingHandoff = false
 
         fileprivate init(
             onInterrupted: @escaping @MainActor () -> Void,
@@ -89,11 +117,96 @@ final class AudioSessionCoordinator: @unchecked Sendable {
             self.onInterrupted = onInterrupted
             self.onCategoryEscalated = onCategoryEscalated
         }
+
+        /// Records an event at the same linearization point at which the
+        /// coordinator snapshots its holders. An acquiring token cannot safely
+        /// receive a callback yet: terminal events invalidate the acquire,
+        /// while category escalation needs no callback because its engine will
+        /// start against the already-escalated configuration.
+        fileprivate func record(_ kind: CallbackKind) -> CallbackTicket? {
+            stateLock.withLock {
+                switch lifecycle {
+                case .acquiring:
+                    switch kind {
+                    case .interrupted:
+                        terminalEventPendingHandoff = true
+                    case .categoryEscalated:
+                        break
+                    }
+                    return nil
+                case .ready:
+                    return CallbackTicket(token: self, kind: kind, lifecycleEpoch: lifecycleEpoch)
+                case .released:
+                    return nil
+                }
+            }
+        }
+
+        /// Completes the main-actor ownership handoff if no terminal event
+        /// invalidated it. Because `acquire` itself is main-actor isolated, a
+        /// successful handoff returns directly into the caller without another
+        /// actor hop; no callback can interleave before the caller stores the
+        /// returned token.
+        fileprivate func completeHandoff() -> Bool {
+            stateLock.withLock {
+                guard lifecycle == .acquiring,
+                      !terminalEventPendingHandoff
+                else { return false }
+                lifecycle = .ready
+                return true
+            }
+        }
+
+        /// Marks the token dead synchronously, before the asynchronous holder
+        /// removal. Returns false for an already-released token.
+        fileprivate func markReleased() -> Bool {
+            stateLock.withLock {
+                guard lifecycle != .released else { return false }
+                lifecycle = .released
+                lifecycleEpoch &+= 1
+                terminalEventPendingHandoff = false
+                return true
+            }
+        }
+
+        /// Revalidates a queue snapshot at the main-actor delivery boundary.
+        /// The lock is deliberately released before invoking client code: real
+        /// callbacks commonly call `release` on this same token.
+        @MainActor
+        fileprivate func deliver(_ ticket: CallbackTicket) {
+            let isLive = stateLock.withLock {
+                lifecycle == .ready && lifecycleEpoch == ticket.lifecycleEpoch
+            }
+            guard isLive else { return }
+            switch ticket.kind {
+            case .interrupted:
+                onInterrupted()
+            case .categoryEscalated:
+                (onCategoryEscalated ?? onInterrupted)()
+            }
+        }
+    }
+
+    /// Deterministic suspension points for lifecycle race tests. Production
+    /// instances use the nil defaults; the hooks never move session calls off
+    /// the coordinator queue or callback execution off the main actor.
+    struct TestingHooks: Sendable {
+        let beforeAcquireHandoff: (@Sendable () async -> Void)?
+        let beforeCallbackDelivery: (@Sendable () async -> Void)?
+
+        init(
+            beforeAcquireHandoff: (@Sendable () async -> Void)? = nil,
+            beforeCallbackDelivery: (@Sendable () async -> Void)? = nil
+        ) {
+            self.beforeAcquireHandoff = beforeAcquireHandoff
+            self.beforeCallbackDelivery = beforeCallbackDelivery
+        }
     }
 
     static let shared = AudioSessionCoordinator(session: SystemAudioSession())
 
     private let session: SessionApplying
+    private let testingHooks: TestingHooks
     /// Confines all mutable state, serializes whole acquire/release
     /// operations (two rapid presses can't interleave their category and
     /// activation calls), and hosts the blocking session IPC off main.
@@ -106,8 +219,9 @@ final class AudioSessionCoordinator: @unchecked Sendable {
     /// Written once in init, read in deinit — never touched concurrently.
     private var observers: [NSObjectProtocol] = []
 
-    init(session: SessionApplying) {
+    init(session: SessionApplying, testingHooks: TestingHooks = TestingHooks()) {
         self.session = session
+        self.testingHooks = testingHooks
         observeSystemNotifications()
     }
 
@@ -132,14 +246,19 @@ final class AudioSessionCoordinator: @unchecked Sendable {
     /// configuration should restart and keep going. Holders that pass `nil`
     /// get `onInterrupted` for escalation too. Escalation is delivered before
     /// `acquire` returns, so the new holder starts its engine strictly after
-    /// existing ones were told to rebuild.
+    /// existing ones were told to rebuild. Main-actor isolation is also the
+    /// ownership handoff boundary: if interruption or route loss lands after
+    /// queue registration but before that boundary, the provisional holder is
+    /// removed and `acquire` throws `CancellationError` instead of returning a
+    /// token whose callback already fired.
+    @MainActor
     func acquire(
         _ use: Use,
         onInterrupted: @escaping @MainActor () -> Void,
         onCategoryEscalated: (@MainActor () -> Void)? = nil
     ) async throws -> Token {
         let token = Token(onInterrupted: onInterrupted, onCategoryEscalated: onCategoryEscalated)
-        let reconfigured: [Token] = try await withCheckedThrowingContinuation { continuation in
+        let reconfigured: [Token.CallbackTicket] = try await withCheckedThrowingContinuation { continuation in
             queue.async {
                 do {
                     continuation.resume(returning: try self.activateOnQueue(use, registering: token))
@@ -153,11 +272,17 @@ final class AudioSessionCoordinator: @unchecked Sendable {
         // route; engines started against the old configuration must restart.
         if !reconfigured.isEmpty {
             SecureLogger.info("AudioSession: category escalated to playAndRecord with \(reconfigured.count) live holder(s)", category: .session)
-            await MainActor.run {
-                for holder in reconfigured {
-                    (holder.onCategoryEscalated ?? holder.onInterrupted)()
-                }
-            }
+            await deliver(reconfigured)
+        }
+        if let beforeAcquireHandoff = testingHooks.beforeAcquireHandoff {
+            await beforeAcquireHandoff()
+        }
+        guard token.completeHandoff() else {
+            // A call/Siri interruption or route loss landed after registration
+            // but before ownership handoff. Remove the provisional holder and
+            // fail instead of starting a client engine after the stop event.
+            release(token)
+            throw CancellationError()
         }
         return token
     }
@@ -168,6 +293,7 @@ final class AudioSessionCoordinator: @unchecked Sendable {
     /// the session queue, so the blocking deactivation IPC never runs on the
     /// caller.
     func release(_ token: Token) {
+        guard token.markReleased() else { return }
         queue.async {
             self.releaseOnQueue(token)
         }
@@ -175,9 +301,9 @@ final class AudioSessionCoordinator: @unchecked Sendable {
 
     // MARK: - Queue-confined core
 
-    /// Returns the pre-existing holders whose engines must restart because
-    /// this acquire escalated the category (empty otherwise).
-    private func activateOnQueue(_ use: Use, registering token: Token) throws -> [Token] {
+    /// Returns callback tickets for pre-existing live holders whose engines
+    /// must restart because this acquire escalated the category.
+    private func activateOnQueue(_ use: Use, registering token: Token) throws -> [Token.CallbackTicket] {
         let target: Category = (use == .capture || currentCategory == .playAndRecord) ? .playAndRecord : .playback
         let categoryChanged = target != currentCategory
         let previousCategory = currentCategory
@@ -202,9 +328,11 @@ final class AudioSessionCoordinator: @unchecked Sendable {
             sessionActive = true
         }
 
-        let existing = Array(holders.values)
+        let reconfigured = categoryChanged
+            ? holders.values.compactMap { $0.record(.categoryEscalated) }
+            : []
         holders[ObjectIdentifier(token)] = token
-        return categoryChanged ? existing : []
+        return reconfigured
     }
 
     private func releaseOnQueue(_ token: Token) {
@@ -228,32 +356,39 @@ final class AudioSessionCoordinator: @unchecked Sendable {
         }
     }
 
-    // MARK: - System events (internal so tests can drive them directly)
-
-    /// A system interruption began: the session is already deactivated by the
-    /// OS, so just mark it inactive and tell every holder (on the main actor)
-    /// to stop. No auto-resume — the next acquire re-activates.
-    func handleInterruptionBegan() async {
-        let holders = await onQueue { () -> [Token] in
-            self.sessionActive = false
-            return Array(self.holders.values)
+    @MainActor
+    private func deliver(_ tickets: [Token.CallbackTicket]) async {
+        guard !tickets.isEmpty else { return }
+        if let beforeCallbackDelivery = testingHooks.beforeCallbackDelivery {
+            await beforeCallbackDelivery()
         }
-        await MainActor.run {
-            for holder in holders {
-                holder.onInterrupted()
-            }
+        for ticket in tickets {
+            ticket.token.deliver(ticket)
         }
     }
 
-    /// The active route's input/output device disappeared (e.g. BT headset
-    /// off): holders' engines are wedged against a dead route — stop them.
-    func handleRouteDeviceUnavailable() async {
-        let holders = await onQueue { Array(self.holders.values) }
-        await MainActor.run {
-            for holder in holders {
-                holder.onInterrupted()
-            }
+    // MARK: - System events (internal so tests can drive them directly)
+
+    /// A system interruption began: the session is already deactivated by the
+    /// OS, so just mark it inactive and tell every ready holder (on the main
+    /// actor) to stop. A provisional acquiring holder is invalidated instead.
+    /// No auto-resume — the next acquire re-activates.
+    func handleInterruptionBegan() async {
+        let tickets = await onQueue { () -> [Token.CallbackTicket] in
+            self.sessionActive = false
+            return self.holders.values.compactMap { $0.record(.interrupted) }
         }
+        await deliver(tickets)
+    }
+
+    /// The active route's input/output device disappeared (e.g. BT headset
+    /// off): ready holders' engines are wedged against a dead route — stop
+    /// them; invalidate a holder whose acquire has not returned yet.
+    func handleRouteDeviceUnavailable() async {
+        let tickets = await onQueue {
+            self.holders.values.compactMap { $0.record(.interrupted) }
+        }
+        await deliver(tickets)
     }
 
     /// Test hook: suspends until every session operation enqueued before this

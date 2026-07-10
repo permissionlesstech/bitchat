@@ -9,6 +9,9 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
     @Published private(set) var duration: TimeInterval = 0
     @Published private(set) var progress: Double = 0
 
+    /// Internal lifecycle visibility for deterministic acquisition tests.
+    var isPlaybackStartPending: Bool { sessionAcquireInFlight }
+
     /// rounded so 4.9s shows "00:05"
     var roundedDuration: Int {
         guard duration.isFinite else { return 0 }
@@ -131,7 +134,7 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
             // audio pre-activation — the pending acquire's completion starts
             // playback (from the new position) once the session resolves.
             if isPlaying, !sessionAcquireInFlight {
-                player.play()
+                startPreparedPlayer()
             }
             updateProgress()
         }
@@ -154,11 +157,12 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
     // MARK: - Private Helpers
 
     private func preparePlayer(for url: URL) {
-        // Prepare player synchronously (only called when playback is requested)
+        // Load metadata synchronously, but do not call prepareToPlay here:
+        // paused scrubbing reaches this path and must not acquire playback
+        // hardware outside the AudioSessionCoordinator token lifetime.
         do {
             let player = try AVAudioPlayer(contentsOf: url)
             player.delegate = self
-            player.prepareToPlay()
             self.player = player
             duration = player.duration
             currentTime = player.currentTime
@@ -183,12 +187,12 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
     /// delegate's main-queue hop) run on the main thread; the acquire itself
     /// suspends while the blocking session IPC runs on the coordinator's
     /// queue, and the player starts when it resolves. An acquire failure
-    /// still plays (historical behavior — the failure is only logged); a
-    /// pause/stop landing mid-acquire hands the token straight back and
-    /// never starts the player.
+    /// leaves playback stopped: starting without a registered token would
+    /// bypass interruption fan-out and the coordinator's refcount. A
+    /// pause/stop landing mid-acquire hands the token straight back.
     private func startPlayerAfterAcquiringSession() {
         if sessionToken != nil {
-            player?.play()
+            startPreparedPlayer()
             return
         }
         guard !sessionAcquireInFlight else { return }
@@ -215,9 +219,35 @@ final class VoiceNotePlaybackController: NSObject, ObservableObject, AVAudioPlay
                 token.map(coordinator.release)
                 return
             }
+            guard let token else {
+                self.failPlaybackStart()
+                return
+            }
             self.sessionToken = token
-            self.player?.play()
+            self.startPreparedPlayer()
         }
+    }
+
+    @discardableResult
+    private func startPreparedPlayer() -> Bool {
+        guard let player,
+              player.prepareToPlay(),
+              player.play()
+        else {
+            SecureLogger.error("Voice note player refused to start " + url.lastPathComponent, category: .session)
+            failPlaybackStart()
+            return false
+        }
+        return true
+    }
+
+    private func failPlaybackStart() {
+        player?.pause()
+        stopTimer()
+        updateProgress()
+        isPlaying = false
+        releaseSession()
+        exclusivity.deactivate(self)
     }
 
     private func releaseSession() {

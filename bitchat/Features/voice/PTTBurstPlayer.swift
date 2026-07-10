@@ -59,6 +59,41 @@ private final class SystemPTTPlaybackEngine: PTTPlaybackEngine {
     }
 }
 
+/// Completion callbacks arrive off the main actor, while engine rebuilds are
+/// serialized on it. This small lock-backed latch lets a rebuild atomically
+/// claim only buffers whose completion has not already fired — even when the
+/// callback's hop back to the main actor is still queued.
+private final class PTTPlaybackCompletionState: @unchecked Sendable {
+    private enum State {
+        case scheduled
+        case completed
+        case retired
+    }
+
+    private let lock = NSLock()
+    private var state: State = .scheduled
+
+    /// Returns true exactly once when playback completion wins the race with
+    /// an engine rebuild or stop.
+    func complete() -> Bool {
+        lock.withLock {
+            guard case .scheduled = state else { return false }
+            state = .completed
+            return true
+        }
+    }
+
+    /// Returns true exactly once when a rebuild or stop claims this
+    /// still-pending schedule. Later callbacks from that engine are stale.
+    func retireIfPending() -> Bool {
+        lock.withLock {
+            guard case .scheduled = state else { return false }
+            state = .retired
+            return true
+        }
+    }
+}
+
 /// Plays one inbound live voice burst with a small jitter buffer.
 ///
 /// Frames are decoded and scheduled back-to-back on an `AVAudioPlayerNode`;
@@ -89,9 +124,18 @@ final class PTTBurstPlayer {
 
     private var queuedBuffers: [AVAudioPCMBuffer] = []
     private var queuedDuration: TimeInterval = 0
-    private var scheduledCount = 0
-    /// Bumped on every engine rebuild so schedule-completion callbacks from a
-    /// torn-down engine can't decrement the new engine's counter.
+    private struct ScheduledBuffer {
+        let id: UInt64
+        let buffer: AVAudioPCMBuffer
+        let completionState: PTTPlaybackCompletionState
+    }
+    /// Buffers handed to the current engine whose completion has not yet
+    /// been processed on the main actor. Keeping the buffers themselves lets
+    /// a category-escalation rebuild replay the unfinished tail in order.
+    private var scheduledBuffers: [ScheduledBuffer] = []
+    private var nextScheduledBufferID: UInt64 = 0
+    /// Bumped on every engine rebuild or stop so completion tasks from a
+    /// torn-down engine cannot mutate the current generation's pending list.
     private var engineGeneration = 0
     private var engineRestarts = 0
     private var engineStarted = false
@@ -182,6 +226,7 @@ final class PTTBurstPlayer {
         deadlineTask?.cancel()
         removeConfigObserver()
         queuedBuffers = []
+        retireScheduledBuffers()
         if engineStarted {
             engine.stop()
         }
@@ -274,9 +319,9 @@ final class PTTBurstPlayer {
     /// The audio session was reconfigured underneath the running engine
     /// (category escalation for talk-over, or an engine configuration
     /// change): rebuild a fresh engine against the new configuration and
-    /// keep streaming. Buffers already handed to the old engine are dropped
-    /// (an at-most-jitter-buffer blip); frames still arriving schedule onto
-    /// the new engine, and the file capture is unaffected.
+    /// keep streaming. Buffers already completed stay completed; the
+    /// unfinished scheduled tail is replayed in order on the fresh engine,
+    /// and frames still arriving continue scheduling after it.
     private func restartEngine() {
         guard engineStarted, !stopped else { return }
         engineRestarts += 1
@@ -287,9 +332,17 @@ final class PTTBurstPlayer {
         }
 
         removeConfigObserver()
-        engine.stop()
+        // Claim the unfinished tail before stopping the old engine. Stopping
+        // a player node may itself invoke its completion handlers; retiring
+        // the claimed entries first makes those callbacks unambiguously stale.
+        // A completion that fired just before this rebuild wins the latch and
+        // is excluded even if its MainActor task has not run yet.
+        let buffersToReplay = scheduledBuffers.compactMap { scheduled in
+            scheduled.completionState.retireIfPending() ? scheduled.buffer : nil
+        }
+        scheduledBuffers = []
         engineGeneration += 1
-        scheduledCount = 0
+        engine.stop()
         engine = makeEngine()
         registerConfigObserver()
         do {
@@ -300,9 +353,13 @@ final class PTTBurstPlayer {
             return
         }
         engine.play()
+        for buffer in buffersToReplay {
+            schedule(buffer)
+        }
         SecureLogger.info("PTT playback: engine restarted after session reconfigure", category: .session)
-        // A finished burst whose tail was on the old engine has nothing left
-        // to wait for.
+        // If every old buffer completed before the rebuild, a finished burst
+        // can stop now. Otherwise the replayed tail keeps it alive until its
+        // new-generation completions arrive.
         stopIfDrained()
     }
 
@@ -327,19 +384,38 @@ final class PTTBurstPlayer {
     }
 
     private func schedule(_ buffer: AVAudioPCMBuffer) {
-        scheduledCount += 1
+        let id = nextScheduledBufferID
+        nextScheduledBufferID &+= 1
+        let completionState = PTTPlaybackCompletionState()
+        scheduledBuffers.append(ScheduledBuffer(
+            id: id,
+            buffer: buffer,
+            completionState: completionState
+        ))
         let generation = engineGeneration
-        engine.schedule(buffer) { [weak self] in
+        engine.schedule(buffer) { [weak self, completionState] in
+            // Mark completion before hopping to MainActor. A rebuild can then
+            // distinguish already-completed audio from an unfinished tail
+            // even when this task has not run yet.
+            guard completionState.complete() else { return }
             Task { @MainActor [weak self] in
                 guard let self, self.engineGeneration == generation else { return }
-                self.scheduledCount -= 1
+                self.scheduledBuffers.removeAll { $0.id == id }
                 self.stopIfDrained()
             }
         }
     }
 
+    private func retireScheduledBuffers() {
+        engineGeneration += 1
+        for scheduled in scheduledBuffers {
+            _ = scheduled.completionState.retireIfPending()
+        }
+        scheduledBuffers = []
+    }
+
     private func stopIfDrained() {
-        guard finished, scheduledCount <= 0 else { return }
+        guard finished, scheduledBuffers.isEmpty else { return }
         // Started: everything scheduled has played out. Never started with
         // nothing queued or in flight (e.g. no decodable frames): nothing
         // will ever play. Otherwise the engine start is still pending (the

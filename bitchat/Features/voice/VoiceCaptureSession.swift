@@ -50,6 +50,19 @@ final class VoiceNoteCaptureSession: VoiceCaptureSession {
     }
 }
 
+/// Testable surface of the live capture engine. Production uses
+/// `PTTCaptureEngine`; tests can supply captured-frame counts without opening
+/// real audio hardware.
+@MainActor
+protocol PTTCapturing: AnyObject {
+    var onFrames: (([Data]) -> Void)? { get set }
+    func start(outputURL: URL) async throws
+    func stop() -> (url: URL?, encodedFrames: Int)
+    func cancel()
+}
+
+extension PTTCaptureEngine: PTTCapturing {}
+
 /// Live push-to-talk backend: streams `VoiceBurstPacket`s to one peer while
 /// recording, then finalizes the same audio as a standard voice note whose
 /// file name carries the burst ID (`voice_<burstID>.m4a`) so receivers that
@@ -60,7 +73,8 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
     let burstID: Data
 
     private let sendPacket: (Data) -> Void
-    private let capture = PTTCaptureEngine()
+    private let capture: any PTTCapturing
+    private let now: () -> Date
     /// Capture-queue-confined stream state: packetizes frames and lazily
     /// emits START so packet order is guaranteed by queue serialization.
     private final class StreamState {
@@ -79,10 +93,17 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
     /// - Parameter sendPacket: delivers one encoded `VoiceBurstPacket` to the
     ///   target peer; must be safe to call from any queue (BLEService hops to
     ///   its own message queue internally).
-    init(sendPacket: @escaping (Data) -> Void) {
-        self.burstID = VoiceBurstPacket.makeBurstID()
+    init(
+        sendPacket: @escaping (Data) -> Void,
+        capture: (any PTTCapturing)? = nil,
+        now: @escaping () -> Date = Date.init,
+        burstID: Data? = nil
+    ) {
+        self.burstID = burstID ?? VoiceBurstPacket.makeBurstID()
         self.sendPacket = sendPacket
-        self.stream = StreamState(burstID: burstID)
+        self.capture = capture ?? PTTCaptureEngine()
+        self.now = now
+        self.stream = StreamState(burstID: self.burstID)
     }
 
     func requestPermission() async -> Bool {
@@ -121,7 +142,10 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
         } catch is CancellationError {
             // The hold was released/canceled while the session acquire was
             // in flight: the engine never started and the capture already
-            // handed its token back — nothing to retry.
+            // handed its token back — nothing to retry. A coordinator-side
+            // interruption during handoff also cancels acquire, but that is
+            // not a successful start and must propagate to the view model.
+            guard completed else { throw CancellationError() }
             return
         } catch {
             // The HAL can briefly report a dead input right after the audio
@@ -138,7 +162,7 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
             }
             try await capture.start(outputURL: outputURL)
         }
-        startDate = Date()
+        startDate = now()
         SecureLogger.info("PTT: live burst \(burstID.hexEncodedString()) capture started", category: .session)
     }
 
@@ -146,11 +170,16 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
         guard !completed else { return nil }
         completed = true
 
-        let elapsed = startDate.map { Date().timeIntervalSince($0) } ?? 0
+        let elapsed = startDate.map { now().timeIntervalSince($0) } ?? 0
         let (url, encodedFrames) = capture.stop()
         // stop() drained the capture queue, so touching `stream` is safe now.
 
-        guard elapsed >= VoiceRecorder.minRecordingDuration, let url else {
+        let capturedDuration = Double(encodedFrames) * PTTAudioFormat.frameDuration
+
+        guard elapsed >= VoiceRecorder.minRecordingDuration,
+              capturedDuration >= VoiceRecorder.minRecordingDuration,
+              let url
+        else {
             sendControlPacket(.canceled)
             if let url {
                 try? FileManager.default.removeItem(at: url)
@@ -161,7 +190,7 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
         for packet in stream.packetizer.flush() {
             sendPacket(packet)
         }
-        let durationMs = UInt32((Double(encodedFrames) * PTTAudioFormat.frameDuration * 1000).rounded())
+        let durationMs = UInt32((capturedDuration * 1000).rounded())
         sendControlPacket(.end(totalDataPackets: stream.packetizer.dataPacketCount, durationMs: durationMs))
         SecureLogger.info("PTT: live burst \(burstID.hexEncodedString()) finished — \(stream.packetizer.dataPacketCount) data packets, \(encodedFrames) frames, \(durationMs) ms", category: .session)
         return url

@@ -98,6 +98,14 @@ private final class MockPlaybackEngine: PTTPlaybackEngine {
             completion()
         }
     }
+
+    /// Completes only the oldest scheduled buffer, leaving the rest as an
+    /// audible tail that an engine rebuild must preserve.
+    func fireNextScheduledCompletion() {
+        guard !heldCompletions.isEmpty else { return }
+        let completion = heldCompletions.removeFirst()
+        completion()
+    }
 }
 
 @MainActor
@@ -182,6 +190,49 @@ struct PTTBurstPlayerTests {
         coordinator.release(capture)
         player.stop()
         #expect(!player.isPlaying)
+    }
+
+    @Test func categoryEscalationReplaysOnlyUnfinishedTailAfterBurstEnd() async throws {
+        let coordinator = AudioSessionCoordinator(session: StubAudioSession())
+        let (player, engines) = try makePlayer(coordinator: coordinator)
+
+        let frames = try encodeSineFrames()
+        player.enqueue(frames)
+        await waitUntil { player.isPlaying }
+
+        let originalEngine = engines()[0]
+        let originallyScheduled = originalEngine.scheduledBuffers.count
+        try #require(originallyScheduled > 1)
+
+        // One buffer has played, but deliberately do not yield for its
+        // MainActor completion task. The completion latch itself must keep
+        // the rebuild from replaying this already-completed prefix.
+        originalEngine.fireNextScheduledCompletion()
+        player.finishAfterDrain()
+
+        // Capture joins after END while the remaining tail is still handed
+        // to the old engine. The fresh engine must replay that tail instead
+        // of looking empty and stopping immediately.
+        let capture = try await coordinator.acquire(.capture) {}
+        try #require(engines().count == 2)
+        let restartedEngine = engines()[1]
+        #expect(restartedEngine.scheduledBuffers.count == originallyScheduled - 1)
+        #expect(player.isPlaying)
+        #expect(!player.stopped)
+
+        // Callbacks flushed by stopping the retired node must not drain the
+        // replayed generation. Only the fresh engine's completions may stop
+        // this finished burst.
+        originalEngine.fireScheduledCompletions()
+        await Task.yield()
+        #expect(player.isPlaying)
+        #expect(!player.stopped)
+
+        restartedEngine.fireScheduledCompletions()
+        await waitUntil { player.stopped }
+        #expect(!player.isPlaying)
+
+        coordinator.release(capture)
     }
 
     @Test func realInterruptionStillStopsPlayback() async throws {

@@ -77,6 +77,45 @@ private final class MockAudioSession: SessionApplying, @unchecked Sendable {
 
 private struct MockSessionError: Error {}
 
+/// Async suspension gate used to force lifecycle races without sleeps. The
+/// production operation announces that it reached the gated boundary, then
+/// stays suspended until the test opens it.
+private actor AsyncGate {
+    private var isOpen = false
+    private var hasWaiter = false
+    private var arrivalWaiters: [CheckedContinuation<Void, Never>] = []
+    private var gateWaiters: [CheckedContinuation<Void, Never>] = []
+
+    func wait() async {
+        hasWaiter = true
+        let arrivals = arrivalWaiters
+        arrivalWaiters = []
+        for continuation in arrivals {
+            continuation.resume()
+        }
+        guard !isOpen else { return }
+        await withCheckedContinuation { continuation in
+            gateWaiters.append(continuation)
+        }
+    }
+
+    func waitUntilEntered() async {
+        guard !hasWaiter else { return }
+        await withCheckedContinuation { continuation in
+            arrivalWaiters.append(continuation)
+        }
+    }
+
+    func open() {
+        isOpen = true
+        let waiters = gateWaiters
+        gateWaiters = []
+        for continuation in waiters {
+            continuation.resume()
+        }
+    }
+}
+
 @MainActor
 struct AudioSessionCoordinatorTests {
     // MARK: - Reference-counted activation
@@ -297,6 +336,98 @@ struct AudioSessionCoordinatorTests {
     }
 
     // MARK: - Interruptions and route changes
+
+    @Test func interruptionDuringAcquireHandoffCancelsAcquire() async throws {
+        let session = MockAudioSession()
+        let handoffGate = AsyncGate()
+        let coordinator = AudioSessionCoordinator(
+            session: session,
+            testingHooks: .init(beforeAcquireHandoff: {
+                await handoffGate.wait()
+            })
+        )
+
+        var interruptionCount = 0
+        let acquireTask = Task { @MainActor in
+            try await coordinator.acquire(.capture) {
+                interruptionCount += 1
+            }
+        }
+
+        // The session-queue registration is complete, but the caller has not
+        // received its token. An interruption here used to invoke the callback
+        // immediately, when capture clients could not release the token yet.
+        await handoffGate.waitUntilEntered()
+        await coordinator.handleInterruptionBegan()
+        #expect(interruptionCount == 0)
+
+        await handoffGate.open()
+        await #expect(throws: CancellationError.self) {
+            try await acquireTask.value
+        }
+        await coordinator.drain()
+        #expect(interruptionCount == 0)
+        // The OS already deactivated the interrupted session; removing the
+        // provisional token must not issue a redundant setActive(false).
+        #expect(session.activationCalls == [true])
+
+        // The canceled acquire left no holder behind and the now-open test gate
+        // does not affect a subsequent ownership handoff.
+        let replacement = try await coordinator.acquire(.playback) {}
+        #expect(session.activationCalls == [true, true])
+        coordinator.release(replacement)
+        await coordinator.drain()
+        #expect(session.activationCalls == [true, true, false])
+    }
+
+    @Test func releasedSnapshotCannotInterruptReacquiredToken() async throws {
+        let session = MockAudioSession()
+        let deliveryGate = AsyncGate()
+        let coordinator = AudioSessionCoordinator(
+            session: session,
+            testingHooks: .init(beforeCallbackDelivery: {
+                await deliveryGate.wait()
+            })
+        )
+
+        // Model a single client whose callback acts on whichever token it owns
+        // now. If the old snapshot is delivered after reacquisition, it would
+        // incorrectly release the new session.
+        var activeToken: AudioSessionCoordinator.Token?
+        var interruptionCount = 0
+        let onInterrupted: @MainActor () -> Void = {
+            interruptionCount += 1
+            activeToken.map(coordinator.release)
+        }
+
+        let first = try await coordinator.acquire(.playback, onInterrupted: onInterrupted)
+        activeToken = first
+        let interruptionTask = Task {
+            await coordinator.handleInterruptionBegan()
+        }
+
+        // The queue snapshot contains `first`, but main-actor delivery is held.
+        await deliveryGate.waitUntilEntered()
+        coordinator.release(first)
+        activeToken = nil
+        await coordinator.drain()
+
+        let second = try await coordinator.acquire(.playback, onInterrupted: onInterrupted)
+        activeToken = second
+        #expect(session.activationCalls == [true, true])
+
+        await deliveryGate.open()
+        await interruptionTask.value
+        await coordinator.drain()
+        #expect(interruptionCount == 0)
+        // A stale callback would have released `second` and appended false.
+        #expect(session.activationCalls == [true, true])
+
+        coordinator.release(second)
+        activeToken = nil
+        await coordinator.drain()
+        #expect(session.activationCalls == [true, true, false])
+    }
 
     @Test func interruptionFansOutToAllHoldersAndResetsActiveState() async throws {
         let session = MockAudioSession()

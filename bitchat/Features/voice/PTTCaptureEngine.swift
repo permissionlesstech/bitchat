@@ -10,6 +10,74 @@ import AVFoundation
 import BitLogger
 import Foundation
 
+/// Owns one capture token and returns it even when the capture engine's owner
+/// disappears without reaching its normal stop/cancel path. The coordinator
+/// retains registered tokens strongly, so relying on `Token.deinit` cannot
+/// reclaim an abandoned hold.
+final class PTTCaptureSessionLease: @unchecked Sendable {
+    private let coordinator: AudioSessionCoordinator
+    private let lock = NSLock()
+    private var token: AudioSessionCoordinator.Token?
+
+    init(coordinator: AudioSessionCoordinator) {
+        self.coordinator = coordinator
+    }
+
+    func install(_ token: AudioSessionCoordinator.Token) {
+        let previous = lock.withLock {
+            let previous = self.token
+            self.token = token
+            return previous
+        }
+        previous.map(coordinator.release)
+    }
+
+    func release() {
+        let token = lock.withLock {
+            let token = self.token
+            self.token = nil
+            return token
+        }
+        token.map(coordinator.release)
+    }
+
+    deinit {
+        release()
+    }
+}
+
+/// Monotonic capture identity shared by main-actor lifecycle code and queued
+/// engine callbacks. Removing a notification observer does not cancel a block
+/// already enqueued on the main queue, so every callback must also prove it
+/// still belongs to the current hold before mutating capture state.
+final class PTTCaptureGeneration: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: UInt = 0
+
+    func begin() -> UInt {
+        lock.withLock {
+            value &+= 1
+            return value
+        }
+    }
+
+    func invalidate() {
+        lock.withLock { value &+= 1 }
+    }
+
+    func invalidate(ifCurrent generation: UInt) -> Bool {
+        lock.withLock {
+            guard value == generation else { return false }
+            value &+= 1
+            return true
+        }
+    }
+
+    func isCurrent(_ generation: UInt) -> Bool {
+        lock.withLock { value == generation }
+    }
+}
+
 /// Captures microphone audio for a live push-to-talk burst, producing both:
 /// - live AAC frames via `onFrames` (called on the capture queue), and
 /// - a finalized `.m4a` voice note on `stop()` — the same artifact
@@ -17,8 +85,7 @@ import Foundation
 ///   handles delivery to receivers that missed the live stream.
 /// `@unchecked Sendable`: every mutable property is confined to one executor —
 /// the capture `queue` (resampler/encoder/file/counters) or the main actor
-/// (`engine`, `engineStarted`, `sessionToken`, `configChangeObserver`,
-/// `holdGeneration`) — so
+/// (`engine`, `engineStarted`, `sessionLease`, `configChangeObserver`) — so
 /// weak references may cross the `@Sendable` tap/notification closures, which
 /// immediately hop back to the owning executor.
 final class PTTCaptureEngine: @unchecked Sendable {
@@ -32,6 +99,9 @@ final class PTTCaptureEngine: @unchecked Sendable {
     /// enable the mic (AURemoteIO -10851, observed on iPhone field tests).
     private var engine = AVAudioEngine()
     private let queue = DispatchQueue(label: "chat.bitchat.ptt.capture", qos: .userInitiated)
+    private let coordinator: AudioSessionCoordinator
+    private let sessionLease: PTTCaptureSessionLease
+    private let captureGeneration = PTTCaptureGeneration()
 
     // Capture-queue-confined state.
     private var resampler: PTTInputResampler?
@@ -44,13 +114,7 @@ final class PTTCaptureEngine: @unchecked Sendable {
     /// Whether `engine.start()` succeeded for the current capture
     /// (see `stopEngineIfStarted`).
     @MainActor private var engineStarted = false
-    @MainActor private var sessionToken: AudioSessionCoordinator.Token?
     @MainActor private var configChangeObserver: NSObjectProtocol?
-    /// Bumped by `stop()`/`cancel()`: a `start()` resuming from the (off-main)
-    /// session acquire to find its generation stale must not open the mic
-    /// after the hold already ended.
-    @MainActor private var holdGeneration = 0
-
     /// Called on the capture queue with each batch of encoded AAC frames.
     var onFrames: (([Data]) -> Void)?
 
@@ -59,25 +123,33 @@ final class PTTCaptureEngine: @unchecked Sendable {
         case audioSetupFailed
     }
 
+    init(coordinator: AudioSessionCoordinator = .shared) {
+        self.coordinator = coordinator
+        self.sessionLease = PTTCaptureSessionLease(coordinator: coordinator)
+    }
+
+    deinit {
+        sessionLease.release()
+    }
+
     /// Async because acquiring the session hops its blocking IPC off the main
     /// actor (a PTT press used to stall main >1 s in `setActive`); the engine
     /// itself still starts back on main once the session is configured.
     @MainActor
     func start(outputURL: URL) async throws {
-        holdGeneration &+= 1
-        let generation = holdGeneration
-        let token = try await AudioSessionCoordinator.shared.acquire(.capture) { [weak self] in
-            self?.handleInterruption()
+        let generation = captureGeneration.begin()
+        let token = try await coordinator.acquire(.capture) { [weak self] in
+            self?.handleInterruption(for: generation)
         }
         // The hold ended (stop/cancel) while the session was activating:
         // starting the engine now would leave a hot mic after release.
-        guard generation == holdGeneration else {
-            AudioSessionCoordinator.shared.release(token)
+        guard captureGeneration.isCurrent(generation) else {
+            coordinator.release(token)
             throw CancellationError()
         }
-        sessionToken = token
+        sessionLease.install(token)
         do {
-            try beginCapture(outputURL: outputURL)
+            try beginCapture(outputURL: outputURL, generation: generation)
         } catch {
             releaseSessionToken()
             throw error
@@ -85,7 +157,7 @@ final class PTTCaptureEngine: @unchecked Sendable {
     }
 
     @MainActor
-    private func beginCapture(outputURL: URL) throws {
+    private func beginCapture(outputURL: URL, generation: UInt) throws {
         // Fresh engine per capture so its input unit binds to the session
         // that is active *now* (see `engine` doc comment).
         engine = AVAudioEngine()
@@ -117,19 +189,19 @@ final class PTTCaptureEngine: @unchecked Sendable {
         }
 
         engine.inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, _ in
-            self?.queue.async { self?.process(buffer) }
+            self?.queue.async { self?.process(buffer, generation: generation) }
         }
         // Route/category changes reconfigure the engine underneath the tap;
         // stop and finalize cleanly — the .m4a captured so far still sends.
         // Registered before start() so no reconfigure lands unobserved
-        // (handleInterruption itself gates on engineStarted).
+        // (handleInterruption also validates this capture generation).
         configChangeObserver = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange,
             object: engine,
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.handleInterruption()
+                self?.handleInterruption(for: generation)
             }
         }
         engine.prepare()
@@ -153,7 +225,7 @@ final class PTTCaptureEngine: @unchecked Sendable {
     /// number of encoded AAC frames (each `PTTAudioFormat.frameDuration` long).
     @MainActor
     func stop() -> (url: URL?, encodedFrames: Int) {
-        holdGeneration &+= 1
+        captureGeneration.invalidate()
         stopEngineIfStarted()
         let result: (URL?, Int) = queue.sync {
             let url = fileURL
@@ -167,7 +239,7 @@ final class PTTCaptureEngine: @unchecked Sendable {
 
     @MainActor
     func cancel() {
-        holdGeneration &+= 1
+        captureGeneration.invalidate()
         stopEngineIfStarted()
         queue.sync { teardown(deleteFile: true) }
         releaseSessionToken()
@@ -178,8 +250,16 @@ final class PTTCaptureEngine: @unchecked Sendable {
     /// keep `fileURL`/`encodedFrameCount` so the caller's pending `stop()`
     /// still returns the note for delivery.
     @MainActor
-    private func handleInterruption() {
-        guard engineStarted else { return }
+    private func handleInterruption(for generation: UInt) {
+        // Also invalidate a start whose acquire has registered its token but
+        // has not returned to this actor yet. Without this bump the callback
+        // is lost while `engineStarted == false`, and the resumed start can
+        // open the mic after the stop signal.
+        guard captureGeneration.invalidate(ifCurrent: generation) else { return }
+        guard engineStarted else {
+            releaseSessionToken()
+            return
+        }
         stopEngineIfStarted()
         queue.sync {
             running = false
@@ -209,14 +289,14 @@ final class PTTCaptureEngine: @unchecked Sendable {
 
     @MainActor
     private func releaseSessionToken() {
-        sessionToken.map(AudioSessionCoordinator.shared.release)
-        sessionToken = nil
+        sessionLease.release()
     }
 
     // MARK: - Capture queue
 
-    private func process(_ buffer: AVAudioPCMBuffer) {
-        guard running,
+    private func process(_ buffer: AVAudioPCMBuffer, generation: UInt) {
+        guard captureGeneration.isCurrent(generation),
+              running,
               Date().timeIntervalSince(captureStart) < Self.maxCaptureDuration,
               let resampled = resampler?.resample(buffer)
         else { return }
