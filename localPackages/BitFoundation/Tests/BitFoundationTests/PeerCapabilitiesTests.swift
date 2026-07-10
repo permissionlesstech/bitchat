@@ -16,11 +16,12 @@ struct PeerCapabilitiesTests {
         #expect(PeerCapabilities([]).encoded() == Data([0x00]))
         #expect(PeerCapabilities.prekeys.encoded() == Data([0x01]))
         #expect(PeerCapabilities.meshDiagnostics.encoded() == Data([0x40]))
+        #expect(PeerCapabilities.privateMedia.encoded() == Data([0x00, 0x01]))
 
         let high = PeerCapabilities(rawValue: 1 << 9)
         #expect(high.encoded() == Data([0x00, 0x02]))
 
-        let all: PeerCapabilities = [.prekeys, .wifiBulk, .gateway, .groups, .board, .vouch, .meshDiagnostics]
+        let all: PeerCapabilities = [.prekeys, .wifiBulk, .gateway, .groups, .board, .vouch, .meshDiagnostics, .privateMedia]
         #expect(PeerCapabilities(encoded: all.encoded()) == all)
         #expect(PeerCapabilities(encoded: high.encoded()) == high)
         #expect(PeerCapabilities(encoded: PeerCapabilities([]).encoded()) == [])

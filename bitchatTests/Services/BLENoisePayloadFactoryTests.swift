@@ -31,4 +31,23 @@ struct BLENoisePayloadFactoryTests {
 
         #expect(payload == Data([NoisePayloadType.verifyChallenge.rawValue, 0xCA, 0xFE]))
     }
+
+    @Test
+    func privateFilePayloadPrefixesCanonicalFilePacket() throws {
+        let content = Data("%PDF-secret".utf8)
+        let file = BitchatFilePacket(
+            fileName: "secret.pdf",
+            fileSize: UInt64(content.count),
+            mimeType: "application/pdf",
+            content: content
+        )
+
+        let payload = try #require(BLENoisePayloadFactory.privateFile(file))
+
+        #expect(payload.first == NoisePayloadType.privateFile.rawValue)
+        let decoded = try #require(BitchatFilePacket.decode(Data(payload.dropFirst())))
+        #expect(decoded.fileName == "secret.pdf")
+        #expect(decoded.mimeType == "application/pdf")
+        #expect(decoded.content == content)
+    }
 }

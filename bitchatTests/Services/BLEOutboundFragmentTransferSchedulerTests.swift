@@ -21,6 +21,24 @@ struct BLEOutboundFragmentTransferSchedulerTests {
     }
 
     @Test
+    func explicitTransferIDReservesEncryptedPrivateFileFragments() {
+        var scheduler = BLEOutboundFragmentTransferScheduler()
+        let request = makeRequest(
+            type: MessageType.noiseEncrypted.rawValue,
+            transferId: "private-media"
+        )
+
+        let result = scheduler.submit(request, maxConcurrentTransfers: 1)
+
+        if case let .start(_, reservedTransferId) = result {
+            #expect(reservedTransferId == "private-media")
+            #expect(scheduler.activeCount == 1)
+        } else {
+            Issue.record("Expected encrypted private media to reserve its progress slot")
+        }
+    }
+
+    @Test
     func submitQueuesFileTransferWhenSlotsAreFull() {
         var scheduler = BLEOutboundFragmentTransferScheduler()
         let first = makeRequest(type: MessageType.fileTransfer.rawValue, transferId: "first")

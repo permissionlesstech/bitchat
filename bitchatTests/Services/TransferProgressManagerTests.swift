@@ -105,6 +105,30 @@ struct TransferProgressManagerTests {
         #expect(manager.snapshot(id: transferID) == nil)
         _ = cancellable
     }
+
+    @Test("Preflight rejection publishes cancellation without a started state")
+    @MainActor
+    func rejectBeforeStartPublishesCancellation() async {
+        let manager = TransferProgressManager()
+        let transferID = "transfer-preflight-reject"
+        var cancellable: AnyCancellable?
+        let recorder = EventRecorder()
+
+        cancellable = manager.publisher.sink { event in
+            if case .cancelled(let id, let sent, let total) = event {
+                recorder.append("cancelled:\(id):\(sent):\(total)")
+            }
+        }
+
+        manager.rejectBeforeStart(id: transferID)
+
+        let didReceive = await TestHelpers.waitUntil({
+            recorder.values == ["cancelled:\(transferID):0:0"]
+        }, timeout: 5.0)
+        #expect(didReceive)
+        #expect(manager.snapshot(id: transferID) == nil)
+        _ = cancellable
+    }
 }
 
 private final class EventRecorder: @unchecked Sendable {
