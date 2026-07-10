@@ -2,11 +2,6 @@ import BitFoundation
 import Combine
 import Foundation
 
-enum SharedContentKind: String, Sendable, Equatable {
-    case text
-    case url
-}
-
 enum RuntimeScenePhase: String, Sendable, Equatable {
     case active
     case inactive
@@ -25,7 +20,7 @@ enum AppEvent: Sendable, Equatable {
     case startupCompleted
     case scenePhaseChanged(RuntimeScenePhase)
     case openedURL(String)
-    case sharedContentAccepted(SharedContentKind)
+    case sharedContentReadyForReview(SharedContentKind)
     case notificationOpened(peerID: PeerID?)
     case deepLinkOpened(String)
     case torLifecycleChanged(TorLifecycleEvent)

@@ -197,7 +197,7 @@
       }
     },
     "share.status.failed_to_encode" : {
-      "extractionState" : "manual",
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -782,7 +782,7 @@
       }
     },
     "share.status.shared_link" : {
-      "extractionState" : "manual",
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -977,7 +977,7 @@
       }
     },
     "share.status.shared_text" : {
-      "extractionState" : "manual",
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -1169,6 +1169,76 @@
             "value" : "✓ 已將文字分享至 bitchat"
           }
         }
+      }
+    },
+    "share.status.failed_to_save" : {
+      "comment" : "Shown when content cannot be staged for the main app",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "needs_review", "value" : "تعذر الحفظ في bitchat" } },
+        "bn" : { "stringUnit" : { "state" : "needs_review", "value" : "bitchat-এ সংরক্ষণ করা যায়নি" } },
+        "de" : { "stringUnit" : { "state" : "needs_review", "value" : "Konnte nicht in bitchat gespeichert werden" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Could not save to bitchat" } },
+        "es" : { "stringUnit" : { "state" : "needs_review", "value" : "No se pudo guardar en bitchat" } },
+        "fil" : { "stringUnit" : { "state" : "needs_review", "value" : "Hindi ma-save sa bitchat" } },
+        "fr" : { "stringUnit" : { "state" : "needs_review", "value" : "Impossible d’enregistrer dans bitchat" } },
+        "he" : { "stringUnit" : { "state" : "needs_review", "value" : "לא ניתן לשמור ב-bitchat" } },
+        "hi" : { "stringUnit" : { "state" : "needs_review", "value" : "bitchat में सेव नहीं किया जा सका" } },
+        "id" : { "stringUnit" : { "state" : "needs_review", "value" : "Tidak dapat menyimpan ke bitchat" } },
+        "it" : { "stringUnit" : { "state" : "needs_review", "value" : "Impossibile salvare in bitchat" } },
+        "ja" : { "stringUnit" : { "state" : "needs_review", "value" : "bitchat に保存できませんでした" } },
+        "ko" : { "stringUnit" : { "state" : "needs_review", "value" : "bitchat에 저장할 수 없습니다" } },
+        "ms" : { "stringUnit" : { "state" : "needs_review", "value" : "Tidak dapat menyimpan ke bitchat" } },
+        "ne" : { "stringUnit" : { "state" : "needs_review", "value" : "bitchat मा सुरक्षित गर्न सकिएन" } },
+        "nl" : { "stringUnit" : { "state" : "needs_review", "value" : "Kon niet opslaan in bitchat" } },
+        "pl" : { "stringUnit" : { "state" : "needs_review", "value" : "Nie udało się zapisać w bitchat" } },
+        "pt" : { "stringUnit" : { "state" : "needs_review", "value" : "Não foi possível guardar no bitchat" } },
+        "pt-BR" : { "stringUnit" : { "state" : "needs_review", "value" : "Não foi possível salvar no bitchat" } },
+        "ru" : { "stringUnit" : { "state" : "needs_review", "value" : "Не удалось сохранить в bitchat" } },
+        "sv" : { "stringUnit" : { "state" : "needs_review", "value" : "Kunde inte spara i bitchat" } },
+        "ta" : { "stringUnit" : { "state" : "needs_review", "value" : "bitchat-இல் சேமிக்க முடியவில்லை" } },
+        "th" : { "stringUnit" : { "state" : "needs_review", "value" : "บันทึกไปยัง bitchat ไม่ได้" } },
+        "tr" : { "stringUnit" : { "state" : "needs_review", "value" : "bitchat’e kaydedilemedi" } },
+        "uk" : { "stringUnit" : { "state" : "needs_review", "value" : "Не вдалося зберегти в bitchat" } },
+        "ur" : { "stringUnit" : { "state" : "needs_review", "value" : "bitchat میں محفوظ نہیں ہو سکا" } },
+        "vi" : { "stringUnit" : { "state" : "needs_review", "value" : "Không thể lưu vào bitchat" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "needs_review", "value" : "无法保存到 bitchat" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "needs_review", "value" : "無法儲存到 bitchat" } }
+      }
+    },
+    "share.status.saved_for_review" : {
+      "comment" : "Shown after content is staged for review in the main app",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ حُفظ في bitchat — افتح التطبيق للمراجعة" } },
+        "bn" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ bitchat-এ সংরক্ষিত — পর্যালোচনার জন্য অ্যাপটি খুলুন" } },
+        "de" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ In bitchat gespeichert — App zum Prüfen öffnen" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "✓ Saved in bitchat — open the app to review" } },
+        "es" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Guardado en bitchat — abre la app para revisarlo" } },
+        "fil" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Na-save sa bitchat — buksan ang app para suriin" } },
+        "fr" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Enregistré dans bitchat — ouvrez l’app pour vérifier" } },
+        "he" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ נשמר ב-bitchat — יש לפתוח את האפליקציה לבדיקה" } },
+        "hi" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ bitchat में सेव किया गया — समीक्षा के लिए ऐप खोलें" } },
+        "id" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Disimpan di bitchat — buka aplikasi untuk meninjau" } },
+        "it" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Salvato in bitchat — apri l’app per controllare" } },
+        "ja" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ bitchat に保存しました — アプリを開いて確認してください" } },
+        "ko" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ bitchat에 저장됨 — 앱을 열어 검토하세요" } },
+        "ms" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Disimpan dalam bitchat — buka aplikasi untuk menyemak" } },
+        "ne" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ bitchat मा सुरक्षित गरियो — समीक्षा गर्न एप खोल्नुहोस्" } },
+        "nl" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Opgeslagen in bitchat — open de app om te bekijken" } },
+        "pl" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Zapisano w bitchat — otwórz aplikację, aby sprawdzić" } },
+        "pt" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Guardado no bitchat — abra a app para rever" } },
+        "pt-BR" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Salvo no bitchat — abra o app para revisar" } },
+        "ru" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Сохранено в bitchat — откройте приложение для проверки" } },
+        "sv" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Sparat i bitchat — öppna appen för att granska" } },
+        "ta" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ bitchat-இல் சேமிக்கப்பட்டது — மதிப்பாய்வு செய்ய செயலியைத் திறக்கவும்" } },
+        "th" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ บันทึกใน bitchat แล้ว — เปิดแอปเพื่อตรวจสอบ" } },
+        "tr" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ bitchat’e kaydedildi — incelemek için uygulamayı açın" } },
+        "uk" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Збережено в bitchat — відкрийте застосунок для перегляду" } },
+        "ur" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ bitchat میں محفوظ ہو گیا — جائزے کے لیے ایپ کھولیں" } },
+        "vi" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ Đã lưu trong bitchat — mở ứng dụng để xem lại" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ 已保存在 bitchat 中 — 打开应用查看" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "needs_review", "value" : "✓ 已儲存在 bitchat 中 — 開啟 App 查看" } }
       }
     }
   },
