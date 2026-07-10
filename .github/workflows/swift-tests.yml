@@ -174,7 +174,10 @@ jobs:
   # The SwiftPM matrix runs on macOS and cannot execute UIKit/CoreBluetooth
   # conditional tests. Build the shared iOS test target and run it on the first
   # available iPhone simulator from the runner image instead of hard-coding a
-  # model that changes when GitHub updates Xcode.
+  # model that changes when GitHub updates Xcode. The suite intentionally runs
+  # in one test runner: a number of integration tests exercise process-global
+  # stores and notification centers, so overlapping workers can corrupt each
+  # other's fixtures and turn sub-second tests into multi-minute timeouts.
   ios-tests:
     name: Run iOS simulator tests
     runs-on: macos-latest
@@ -210,7 +213,7 @@ jobs:
             -scheme "bitchat (iOS)" \
             -sdk iphonesimulator \
             -destination "platform=iOS Simulator,id=${{ steps.destination.outputs.id }}" \
-            -maximum-parallel-testing-workers 2 \
+            -parallel-testing-enabled NO \
             CODE_SIGNING_ALLOWED=NO \
             test
 
