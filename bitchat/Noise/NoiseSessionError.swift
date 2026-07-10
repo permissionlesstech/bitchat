@@ -11,4 +11,5 @@ enum NoiseSessionError: Error, Equatable {
     case notEstablished
     case sessionNotFound
     case alreadyEstablished
+    case peerIdentityMismatch
 }
