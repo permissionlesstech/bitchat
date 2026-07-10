@@ -1,9 +1,30 @@
 import Foundation
 import Testing
+import BitFoundation
 @testable import bitchat
 
 @Suite("PreviewKeychainManager Tests")
 struct PreviewKeychainManagerTests {
+
+    @Test("Install lifecycle distinguishes upgrade, reinstall, bootstrap, and unreadable keychain")
+    func installLifecycleDecision() {
+        #expect(KeychainManager.installLifecycleAction(
+            containerKnowsMarker: true,
+            markerRead: .success(Data([1]))
+        ) == .markerPresent)
+        #expect(KeychainManager.installLifecycleAction(
+            containerKnowsMarker: false,
+            markerRead: .success(Data([1]))
+        ) == .clearStaleKeys)
+        #expect(KeychainManager.installLifecycleAction(
+            containerKnowsMarker: false,
+            markerRead: .itemNotFound
+        ) == .bootstrapMarker)
+        #expect(KeychainManager.installLifecycleAction(
+            containerKnowsMarker: false,
+            markerRead: .deviceLocked
+        ) == .retryLater)
+    }
 
     @Test("Preview keychain manager stores identity and service-scoped data in memory")
     func previewKeychainManagerRoundTripsData() {

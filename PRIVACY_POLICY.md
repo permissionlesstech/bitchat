@@ -17,8 +17,8 @@ bitchat is designed for private, account-free communication. This policy describ
 
 1. **Identity and cryptographic keys**
    - Noise, signing, group, prekey, and optional Nostr identity material is generated locally.
-   - Secret keys are stored in the system keychain. Public keys are shared when required for messaging, verification, groups, or Nostr events.
-   - Keys remain until they are rotated, removed by the relevant feature, erased with panic wipe, or removed with the app.
+   - Secret keys are stored in the system keychain as device-only items. Public keys are shared when required for messaging, verification, groups, or Nostr events.
+   - Keys remain until they are rotated, removed by the relevant feature, or erased with panic wipe. Because operating-system keychains can outlive an uninstall, bitchat records a non-secret install marker and deletes surviving app keys before use after a later reinstall.
 
 2. **Nickname, preferences, and relationships**
    - Your nickname, settings, favorites, petnames, read-receipt identifiers, and bounded operational metadata are stored locally.
@@ -121,7 +121,7 @@ No cryptographic system can protect content after a recipient reads, copies, scr
 
 ## Your Controls
 
-- **Panic wipe:** Triple-tap the logo to clear local keys, sessions, preferences, groups, queues, carried mail, public archives, board data, and media managed by the app.
+- **Panic wipe:** Triple-tap the logo to synchronously cancel in-flight media work and clear local keys, sessions, preferences, groups, queues, carried mail, public archives, board data, and media managed by the app.
 - **Feature controls:** Location channels, mesh bridge, internet gateway, and related internet behaviors can be disabled in the app. Some already-published relay data cannot be recalled.
 - **System permissions:** Bluetooth, location, microphone, camera, and photo-library access can be revoked in system settings.
 - **No account:** The project operates no account record for you to request or export.
