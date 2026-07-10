@@ -334,7 +334,7 @@ struct ConversationStoreTests {
 
     @Test("logical index offset matches a reference model under adversarial mutations")
     @MainActor
-    func logicalIndexOffsetDifferentialStress() {
+    func logicalIndexOffsetDifferentialStress() async {
         let store = ConversationStore()
         let cap = store.conversation(for: .mesh).cap
         var reference = ReferenceConversationTimeline(cap: cap)
@@ -383,20 +383,23 @@ struct ConversationStoreTests {
             return expected
         }
 
-        func refill(extra: Int, checkpoint: String) {
+        func refill(extra: Int, checkpoint: String) async {
             let appendCount = max(0, cap - reference.messages.count) + extra
             for index in 0..<appendCount {
                 appendAndCompare(
                     issueMessage(tag: "refill"),
                     checkpoint: "\(checkpoint)-\(index)"
                 )
+                if index.isMultiple(of: 64) {
+                    await Task.yield()
+                }
             }
             expectStore(store, matches: reference, issuedIDs: issuedIDs, checkpoint: checkpoint)
         }
 
         // Start well into steady state so the offset is already non-zero
         // before any mixed operations begin.
-        refill(extra: 384, checkpoint: "initial steady-state fill")
+        await refill(extra: 384, checkpoint: "initial steady-state fill")
 
         for step in 0..<1_200 {
             if step == 300 || step == 900 {
@@ -535,14 +538,19 @@ struct ConversationStoreTests {
                 checkpoint: "mixed operation \(step)"
             )
 
+            // This intentionally expensive MainActor stress test runs beside
+            // async audio/UI tests in SwiftPM's parallel phase. Cooperatively
+            // release the actor so their bounded waits can make progress.
+            await Task.yield()
+
             if (step + 1).isMultiple(of: 100) {
-                refill(extra: 32, checkpoint: "periodic refill after step \(step)")
+                await refill(extra: 32, checkpoint: "periodic refill after step \(step)")
             }
         }
 
         // Guarantee another long run of one-row evictions after every other
         // mutation family has perturbed and rebuilt the offset/index state.
-        refill(extra: 512, checkpoint: "final steady-state trim run")
+        await refill(extra: 512, checkpoint: "final steady-state trim run")
 
         #expect(trimmedCount > 1_200)
         #expect(tailAppendCount > 300)
