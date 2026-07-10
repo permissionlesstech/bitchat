@@ -27,6 +27,7 @@ final class AppRuntime: ObservableObject {
     let peerListModel: PeerListModel
     let appChromeModel: AppChromeModel
     let boardAlertsModel: BoardAlertsModel
+    let sharedContentImportModel: SharedContentImportModel
 
     private let idBridge: NostrIdentityBridge
     private var cancellables = Set<AnyCancellable>()
@@ -41,7 +42,8 @@ final class AppRuntime: ObservableObject {
 
     init(
         keychain: KeychainManagerProtocol = KeychainManager.makeDefault(),
-        idBridge: NostrIdentityBridge = NostrIdentityBridge()
+        idBridge: NostrIdentityBridge = NostrIdentityBridge(),
+        sharedContentStore: SharedContentStore? = nil
     ) {
         self.idBridge = idBridge
         let conversations = ConversationStore()
@@ -84,9 +86,20 @@ final class AppRuntime: ObservableObject {
             peerIdentityStore: peerIdentityStore,
             locationPresenceStore: locationPresenceStore
         )
+        let resolvedSharedContentStore: SharedContentStore?
+        if let sharedContentStore {
+            resolvedSharedContentStore = sharedContentStore
+        } else if let sharedDefaults = UserDefaults(suiteName: BitchatApp.groupID) {
+            resolvedSharedContentStore = SharedContentStore(defaults: sharedDefaults)
+        } else {
+            resolvedSharedContentStore = nil
+        }
+        let sharedContentImportModel = SharedContentImportModel(store: resolvedSharedContentStore)
+        self.sharedContentImportModel = sharedContentImportModel
         self.appChromeModel = AppChromeModel(
             chatViewModel: self.chatViewModel,
-            privateInboxModel: self.privateInboxModel
+            privateInboxModel: self.privateInboxModel,
+            onPanicWipe: { sharedContentImportModel.discardAll() }
         )
         let chatViewModel = self.chatViewModel
         self.boardAlertsModel = BoardAlertsModel(
@@ -106,7 +119,6 @@ final class AppRuntime: ObservableObject {
                 }
             )
         )
-
         GeoRelayDirectory.shared.prefetchIfNeeded()
         bindRuntimeObservers()
         NotificationDelegate.shared.runtime = self
@@ -313,44 +325,22 @@ private extension AppRuntime {
     }
 
     func checkForSharedContent() {
-        guard let userDefaults = UserDefaults(suiteName: BitchatApp.groupID) else { return }
-        let clearSharedContent = {
-            userDefaults.removeObject(forKey: "sharedContent")
-            userDefaults.removeObject(forKey: "sharedContentType")
-            userDefaults.removeObject(forKey: "sharedContentDate")
+        let previousID = sharedContentImportModel.offer?.id
+        guard let payload = sharedContentImportModel.refresh(
+            destination: currentSharedContentDestination
+        ) else { return }
+
+        if previousID != payload.id {
+            record(.sharedContentReadyForReview(payload.kind))
         }
+    }
 
-        guard let sharedContent = userDefaults.string(forKey: "sharedContent"),
-              let sharedDate = userDefaults.object(forKey: "sharedContentDate") as? Date else {
-            // A partial or malformed handoff must not linger in the shared
-            // app-group container indefinitely.
-            clearSharedContent()
-            return
-        }
-
-        guard Date().timeIntervalSince(sharedDate) < TransportConfig.uiShareAcceptWindowSeconds else {
-            clearSharedContent()
-            return
-        }
-
-        let contentKind = SharedContentKind(rawValue: userDefaults.string(forKey: "sharedContentType") ?? "") ?? .text
-
-        clearSharedContent()
-
-        switch contentKind {
-        case .url:
-            if let data = sharedContent.data(using: .utf8),
-               let urlData = try? JSONSerialization.jsonObject(with: data) as? [String: String],
-               let url = urlData["url"] {
-                chatViewModel.sendMessage(url)
-            } else {
-                chatViewModel.sendMessage(sharedContent)
-            }
-        case .text:
-            chatViewModel.sendMessage(sharedContent)
-        }
-
-        record(.sharedContentAccepted(contentKind))
+    var currentSharedContentDestination: SharedContentDestination {
+        SharedContentDestination.resolve(
+            selectedPrivatePeerID: privateConversationModel.selectedPeerID,
+            privateDisplayName: privateConversationModel.selectedHeaderState?.displayName,
+            activeChannel: locationChannelsModel.selectedChannel
+        )
     }
 
     func handleNostrRelayConnectionChanged(_ isConnected: Bool) {

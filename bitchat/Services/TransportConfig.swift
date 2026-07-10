@@ -314,7 +314,6 @@ enum TransportConfig {
 
     // Share extension
     static let uiShareExtensionDismissDelaySeconds: TimeInterval = 2.0
-    static let uiShareAcceptWindowSeconds: TimeInterval = 30.0
     static let uiMigrationCutoffSeconds: TimeInterval = 24 * 60 * 60
 
     // Gossip Sync Configuration

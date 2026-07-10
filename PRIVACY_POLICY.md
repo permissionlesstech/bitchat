@@ -22,7 +22,7 @@ bitchat is designed for private, account-free communication. This policy describ
 
 2. **Nickname, preferences, and relationships**
    - Your nickname, settings, favorites, petnames, read-receipt identifiers, and bounded operational metadata are stored locally.
-   - The share extension briefly places content you choose to share in the app-group preferences so the main app can import it.
+   - The share extension can retain one item you choose to share in the app-group preferences for up to 24 hours. The app shows the destination and a preview for review; it does not send the item automatically. The item is cleared when you add it to the composer, cancel, panic-wipe, or it expires.
 
 3. **Private group state**
    - Group names, rosters, creator identity, and key epoch are stored as protected files in Application Support.

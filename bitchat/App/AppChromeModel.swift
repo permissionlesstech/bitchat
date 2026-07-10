@@ -20,13 +20,19 @@ final class AppChromeModel: ObservableObject {
     @Published var showScreenshotPrivacyWarning = false
 
     private let chatViewModel: ChatViewModel
+    private let onPanicWipe: () -> Void
     private var cancellables = Set<AnyCancellable>()
 
     /// Bulletin-board coordinator, created on first use of the board sheet.
     private(set) lazy var boardManager = BoardManager(transport: chatViewModel.meshService)
 
-    init(chatViewModel: ChatViewModel, privateInboxModel: PrivateInboxModel) {
+    init(
+        chatViewModel: ChatViewModel,
+        privateInboxModel: PrivateInboxModel,
+        onPanicWipe: @escaping () -> Void = {}
+    ) {
         self.chatViewModel = chatViewModel
+        self.onPanicWipe = onPanicWipe
         self.nickname = chatViewModel.nickname
 
         bind(privateInboxModel: privateInboxModel)
@@ -98,6 +104,7 @@ final class AppChromeModel: ObservableObject {
     }
 
     func panicClearAllData() {
+        onPanicWipe()
         chatViewModel.panicClearAllData()
     }
 

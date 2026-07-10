@@ -41,6 +41,7 @@ struct BitchatApp: App {
                 .environmentObject(runtime.peerListModel)
                 .environmentObject(runtime.appChromeModel)
                 .environmentObject(runtime.boardAlertsModel)
+                .environmentObject(runtime.sharedContentImportModel)
                 .onAppear {
                     appDelegate.runtime = runtime
                     runtime.start()

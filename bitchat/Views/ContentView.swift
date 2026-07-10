@@ -36,6 +36,7 @@ struct ContentView: View {
     @EnvironmentObject private var verificationModel: VerificationModel
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
+    @EnvironmentObject private var sharedContentImportModel: SharedContentImportModel
 
     @StateObject private var voiceRecordingVM = VoiceRecordingViewModel()
     @State private var messageText = ""
@@ -69,6 +70,14 @@ struct ContentView: View {
         privateConversationModel.selectedPeerID
     }
 
+    private var sharedContentDestination: SharedContentDestination {
+        SharedContentDestination.resolve(
+            selectedPrivatePeerID: selectedPrivatePeerID,
+            privateDisplayName: privateConversationModel.selectedHeaderState?.displayName,
+            activeChannel: locationChannelsModel.selectedChannel
+        )
+    }
+
     private var usesGlassLayout: Bool { appTheme.usesGlassChrome }
 
     var body: some View {
@@ -85,6 +94,7 @@ struct ContentView: View {
                     isTextFieldFocused = true
                 }
                 #endif
+                sharedContentImportModel.updateDestination(sharedContentDestination)
             }
             .onChange(of: colorScheme) { newValue in
                 conversationUIModel.setCurrentColorScheme(newValue)
@@ -101,6 +111,10 @@ struct ContentView: View {
             if newValue != nil {
                 showSidebar = true
             }
+            sharedContentImportModel.updateDestination(sharedContentDestination)
+        }
+        .onChange(of: locationChannelsModel.selectedChannel) { _ in
+            sharedContentImportModel.updateDestination(sharedContentDestination)
         }
         .sheet(
             isPresented: Binding(
@@ -226,6 +240,34 @@ struct ContentView: View {
             Button("common.ok", role: .cancel) {}
         } message: {
             Text(appChromeModel.bluetoothAlertMessage)
+        }
+        .alert(
+            String(localized: "share_import.review.title", comment: "Title for reviewing content received from the share extension"),
+            isPresented: Binding(
+                get: { sharedContentImportModel.offer != nil },
+                set: { _ in }
+            ),
+            presenting: sharedContentImportModel.offer
+        ) { _ in
+            Button("common.cancel", role: .cancel) {
+                sharedContentImportModel.cancel(destination: sharedContentDestination)
+            }
+            Button("share_import.review.use_in_composer") {
+                guard let importedText = sharedContentImportModel.confirm(
+                    destination: sharedContentDestination
+                ) else { return }
+                // Replacing is deliberate and called out in the prompt. It
+                // avoids combining a stale draft from another conversation
+                // with newly shared content.
+                messageText = importedText
+                isTextFieldFocused = true
+            }
+        } message: { offer in
+            let format = String(
+                localized: "share_import.review.message",
+                comment: "Explains that shared content will replace the named destination's composer and will not be sent automatically"
+            )
+            Text(String(format: format, offer.destination.displayName) + "\n\n" + offer.payload.preview)
         }
         .onDisappear {
             autocompleteDebounceTimer?.invalidate()
