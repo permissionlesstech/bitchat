@@ -11,6 +11,7 @@ final class TransferProgressManager {
         case updated(id: String, sentFragments: Int, totalFragments: Int)
         case completed(id: String, totalFragments: Int)
         case cancelled(id: String, sentFragments: Int, totalFragments: Int)
+        case rejected(id: String, reason: String)
     }
 
     private let subject = PassthroughSubject<Event, Never>()
@@ -49,15 +50,14 @@ final class TransferProgressManager {
         }
     }
 
-    /// Reject a transfer before fragment scheduling (for example, when the
-    /// remote build did not advertise the required wire capability). Unlike
-    /// `cancel`, this still emits an event when no progress state exists yet,
-    /// allowing the UI to remove its already-created sending placeholder.
-    func rejectBeforeStart(id: String) {
+    /// Fails a preflight check while keeping the outgoing placeholder visible
+    /// with an actionable reason instead of treating policy/size rejection as
+    /// a user cancellation.
+    func rejectBeforeStart(id: String, reason: String) {
         queue.async(flags: .barrier) { [weak self] in
             guard let self = self else { return }
-            let state = self.states.removeValue(forKey: id) ?? (sent: 0, total: 0)
-            self.subject.send(.cancelled(id: id, sentFragments: state.sent, totalFragments: state.total))
+            self.states.removeValue(forKey: id)
+            self.subject.send(.rejected(id: id, reason: reason))
         }
     }
 

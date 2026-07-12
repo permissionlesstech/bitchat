@@ -53,6 +53,12 @@ struct BLENoiseSessionQueues {
         return payloads
     }
 
+    func containsTypedPayload(transferId: String) -> Bool {
+        typedPayloadsByPeerID.values.contains { payloads in
+            payloads.contains { $0.transferId == transferId }
+        }
+    }
+
     @discardableResult
     mutating func removeTypedPayload(transferId: String) -> Bool {
         for peerID in Array(typedPayloadsByPeerID.keys) {

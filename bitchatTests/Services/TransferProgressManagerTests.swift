@@ -49,7 +49,7 @@ struct TransferProgressManagerTests {
                 recorder.append("updated:\(id):\(sent):\(total)")
             case .completed(let id, let total):
                 recorder.append("completed:\(id):\(total)")
-            case .cancelled:
+            case .cancelled, .rejected:
                 break
             }
         }
@@ -85,7 +85,7 @@ struct TransferProgressManagerTests {
                 recorder.append("started:\(id):\(total)")
             case .cancelled(let id, let sent, let total):
                 recorder.append("cancelled:\(id):\(sent):\(total)")
-            case .updated, .completed:
+            case .updated, .completed, .rejected:
                 break
             }
         }
@@ -106,24 +106,22 @@ struct TransferProgressManagerTests {
         _ = cancellable
     }
 
-    @Test("Preflight rejection publishes cancellation without a started state")
+    @Test("Preflight policy rejection publishes a visible failure reason")
     @MainActor
-    func rejectBeforeStartPublishesCancellation() async {
+    func rejectBeforeStartPublishesReason() async {
         let manager = TransferProgressManager()
-        let transferID = "transfer-preflight-reject"
-        var cancellable: AnyCancellable?
+        let transferID = "transfer-visible-reject"
         let recorder = EventRecorder()
-
-        cancellable = manager.publisher.sink { event in
-            if case .cancelled(let id, let sent, let total) = event {
-                recorder.append("cancelled:\(id):\(sent):\(total)")
+        let cancellable = manager.publisher.sink { event in
+            if case .rejected(let id, let reason) = event {
+                recorder.append("rejected:\(id):\(reason)")
             }
         }
 
-        manager.rejectBeforeStart(id: transferID)
+        manager.rejectBeforeStart(id: transferID, reason: "upgrade required")
 
         let didReceive = await TestHelpers.waitUntil({
-            recorder.values == ["cancelled:\(transferID):0:0"]
+            recorder.values == ["rejected:\(transferID):upgrade required"]
         }, timeout: 5.0)
         #expect(didReceive)
         #expect(manager.snapshot(id: transferID) == nil)

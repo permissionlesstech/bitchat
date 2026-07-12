@@ -12,6 +12,7 @@ final class ConversationUIModel: ObservableObject {
     @Published private(set) var currentNickname: String
     @Published private(set) var isBatchingPublic = false
     @Published private(set) var canSendMediaInCurrentContext = true
+    @Published private(set) var legacyPrivateMediaConsentRequest: LegacyPrivateMediaConsentRequest?
     /// Who is talking live in the public mesh channel right now (floor
     /// courtesy: the composer mic tints "busy" while someone holds the floor).
     @Published private(set) var activeLiveVoiceTalker: String?
@@ -153,6 +154,13 @@ final class ConversationUIModel: ObservableObject {
         chatViewModel.sendVoiceNote(at: url)
     }
 
+    func resolveLegacyPrivateMediaConsent(requestID: UUID, approved: Bool) {
+        chatViewModel.resolveLegacyPrivateMediaConsent(
+            requestID: requestID,
+            approved: approved
+        )
+    }
+
     /// Capture backend for the mic gesture: live PTT when the current DM
     /// peer can hear it now, classic voice note otherwise.
     func makeVoiceCaptureSession() -> VoiceCaptureSession {
@@ -192,6 +200,10 @@ final class ConversationUIModel: ObservableObject {
         chatViewModel.$activePublicVoiceTalker
             .receive(on: DispatchQueue.main)
             .assign(to: &$activeLiveVoiceTalker)
+
+        chatViewModel.$legacyPrivateMediaConsentRequest
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$legacyPrivateMediaConsentRequest)
 
         conversations.$activeChannel
             .receive(on: DispatchQueue.main)

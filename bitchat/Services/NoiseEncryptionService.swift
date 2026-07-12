@@ -731,7 +731,7 @@ final class NoiseEncryptionService {
     /// the bounded `BitchatFilePacket` envelope and refuses every other typed
     /// payload so the larger allocation budget cannot become a generic bypass.
     func encryptPrivateFilePayload(_ data: Data, for peerID: PeerID) throws -> Data {
-        guard data.first == NoisePayloadType.privateFile.rawValue,
+        guard NoisePayloadType.isPrivateFile(rawValue: data.first),
               NoiseSecurityValidator.validatePrivateFileMessageSize(data) else {
             throw NoiseSecurityError.messageTooLarge
         }
@@ -772,7 +772,7 @@ final class NoiseEncryptionService {
         
         let decrypted = try sessionManager.decrypt(data, from: peerID)
         if !isStandardCiphertext {
-            guard decrypted.first == NoisePayloadType.privateFile.rawValue,
+            guard NoisePayloadType.isPrivateFile(rawValue: decrypted.first),
                   NoiseSecurityValidator.validatePrivateFileMessageSize(decrypted) else {
                 throw NoiseSecurityError.messageTooLarge
             }

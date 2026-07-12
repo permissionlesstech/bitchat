@@ -189,6 +189,12 @@ struct IdentityCache: Codable {
     // Fingerprint -> when we verified it (orders outgoing vouch batches;
     // entries verified before this field exists sort as oldest)
     var verifiedAt: [String: Date]? = nil
+
+    // Stable Noise fingerprints that have advertised encrypted private media
+    // in a signature-verified announce. Optional for decoding caches written
+    // before this migration. Entries are monotonic until a panic wipe so an
+    // old/replayed announce cannot silently downgrade a peer to clear media.
+    var privateMediaCapableFingerprints: Set<String>? = nil
 }
 
 //

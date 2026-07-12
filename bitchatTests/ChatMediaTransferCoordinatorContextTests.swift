@@ -7,10 +7,9 @@
 // `ChatViewModel`, following the `ChatDeliveryCoordinatorContextTests` /
 // `ChatPrivateConversationCoordinatorContextTests` exemplars.
 //
-// Scope note: the async media-preparation pipelines (`ImageUtils`,
-// `ChatMediaPreparation`) run real file/codec work and remain covered by
-// `ChatMediaPreparationTests`; here we cover message enqueueing, transfer
-// bookkeeping, and the blocked-context guards.
+// Real file/codec work remains covered by `ChatMediaPreparationTests`. These
+// tests inject a paused voice-note preparer to exercise cancellation ownership
+// across the detached-preparation/MainActor boundary deterministically.
 //
 
 import Testing
@@ -86,11 +85,64 @@ private final class MockChatMediaTransferContext: ChatMediaTransferContext {
 
     // Mesh file transfer
     private(set) var privateFileSends: [(peerID: PeerID, transferId: String)] = []
+    private(set) var privateFileLegacyAllowances: [Bool] = []
     private(set) var broadcastFileSends: [String] = []
     private(set) var cancelledTransfers: [String] = []
+    var privateMediaPolicy: PrivateMediaSendPolicy = .encrypted
+    private(set) var legacyConsentRequests: [(
+        id: UUID,
+        peerID: PeerID,
+        transferId: String,
+        messageID: String
+    )] = []
+    private(set) var invalidatedLegacyConsents: [(transferId: String, messageID: String)] = []
+    private var pendingLegacyConsentIDs: [UUID] = []
+    private var legacyConsentCompletions: [UUID: @MainActor (Bool) -> Void] = [:]
 
-    func sendFilePrivate(_ packet: BitchatFilePacket, to peerID: PeerID, transferId: String) {
+    func privateMediaSendPolicy(to peerID: PeerID) -> PrivateMediaSendPolicy {
+        privateMediaPolicy
+    }
+
+    func requestLegacyPrivateMediaConsent(
+        for peerID: PeerID,
+        transferId: String,
+        messageID: String,
+        completion: @escaping @MainActor (Bool) -> Void
+    ) {
+        let id = UUID()
+        legacyConsentRequests.append((id, peerID, transferId, messageID))
+        pendingLegacyConsentIDs.append(id)
+        legacyConsentCompletions[id] = completion
+    }
+
+    func cancelLegacyPrivateMediaConsent(transferId: String, messageID: String) {
+        invalidatedLegacyConsents.append((transferId, messageID))
+        let matchingIDs = Set(legacyConsentRequests.compactMap { request in
+            request.transferId == transferId && request.messageID == messageID
+                ? request.id
+                : nil
+        })
+        pendingLegacyConsentIDs.removeAll { matchingIDs.contains($0) }
+    }
+
+    func resolveNextLegacyConsent(_ approved: Bool) {
+        guard !pendingLegacyConsentIDs.isEmpty else { return }
+        let id = pendingLegacyConsentIDs.removeFirst()
+        legacyConsentCompletions[id]?(approved)
+    }
+
+    func invokeLegacyConsentEvenIfInvalidated(id: UUID, approved: Bool) {
+        legacyConsentCompletions[id]?(approved)
+    }
+
+    func sendFilePrivate(
+        _ packet: BitchatFilePacket,
+        to peerID: PeerID,
+        transferId: String,
+        allowLegacyFallback: Bool
+    ) {
         privateFileSends.append((peerID, transferId))
+        privateFileLegacyAllowances.append(allowLegacyFallback)
     }
 
     func sendFileBroadcast(_ packet: BitchatFilePacket, transferId: String) {
@@ -99,6 +151,56 @@ private final class MockChatMediaTransferContext: ChatMediaTransferContext {
 
     func cancelTransfer(_ transferId: String) {
         cancelledTransfers.append(transferId)
+    }
+}
+
+private final class PausedVoiceNotePreparer: @unchecked Sendable {
+    private let condition = NSCondition()
+    private var started = false
+    private var released = false
+    private var finished = false
+    private let packet: BitchatFilePacket
+
+    init() {
+        let content = Data("voice".utf8)
+        packet = BitchatFilePacket(
+            fileName: "paused.m4a",
+            fileSize: UInt64(content.count),
+            mimeType: "audio/mp4",
+            content: content
+        )
+    }
+
+    func prepare(_: URL) throws -> BitchatFilePacket {
+        condition.lock()
+        started = true
+        condition.broadcast()
+        while !released {
+            condition.wait()
+        }
+        finished = true
+        condition.broadcast()
+        condition.unlock()
+        return packet
+    }
+
+    var hasStarted: Bool {
+        condition.lock()
+        defer { condition.unlock() }
+        return started
+    }
+
+    var hasFinished: Bool {
+        condition.lock()
+        defer { condition.unlock() }
+        return finished
+    }
+
+    func release() {
+        condition.lock()
+        released = true
+        condition.broadcast()
+        condition.unlock()
     }
 }
 
@@ -166,6 +268,14 @@ struct ChatMediaTransferCoordinatorContextTests {
         #expect(context.removedMessages.count == 1)
         #expect(context.removedMessages.first?.messageID == "m2")
         #expect(context.removedMessages.first?.cleanupFile == true)
+
+        // A pre-start rejection keeps the placeholder visible and failed,
+        // including queued post-handshake encryption failures.
+        coordinator.registerTransfer(transferId: "t3", messageID: "m3")
+        coordinator.handleTransferEvent(.rejected(id: "t3", reason: "encryption failed"))
+        #expect(context.deliveryStatusUpdates.last?.messageID == "m3")
+        #expect(context.deliveryStatusUpdates.last?.status == .failed(reason: "encryption failed"))
+        #expect(coordinator.messageIDToTransferId["m3"] == nil)
     }
 
     @Test @MainActor
@@ -189,6 +299,20 @@ struct ChatMediaTransferCoordinatorContextTests {
     }
 
     @Test @MainActor
+    func deleteMediaMessage_cancelsApprovedTransferBeforeRemovingMapping() {
+        let context = MockChatMediaTransferContext()
+        let coordinator = ChatMediaTransferCoordinator(context: context)
+        coordinator.registerTransfer(transferId: "approved-delete", messageID: "message-delete")
+
+        coordinator.deleteMediaMessage(messageID: "message-delete")
+
+        #expect(context.cancelledTransfers == ["approved-delete"])
+        #expect(coordinator.messageIDToTransferId["message-delete"] == nil)
+        #expect(context.removedMessages.map(\.messageID) == ["message-delete"])
+        #expect(context.removedMessages.first?.cleanupFile == true)
+    }
+
+    @Test @MainActor
     func sendVoiceNote_blockedContextRemovesFileAndExplains() async throws {
         let context = MockChatMediaTransferContext()
         let coordinator = ChatMediaTransferCoordinator(context: context)
@@ -205,5 +329,225 @@ struct ChatMediaTransferCoordinatorContextTests {
         #expect(context.privateChats.isEmpty)
         #expect(context.appendedPublicMessages.isEmpty)
         #expect(coordinator.transferIdToMessageIDs.isEmpty)
+    }
+
+    @Test @MainActor
+    func cancelVoiceNoteDuringDetachedPreparationCannotSendOrRestoreMapping() async throws {
+        let context = MockChatMediaTransferContext()
+        let peerID = PeerID(str: "5566778899aabbcc")
+        context.selectedPrivateChatPeer = peerID
+        let preparer = PausedVoiceNotePreparer()
+        let coordinator = ChatMediaTransferCoordinator(
+            context: context,
+            prepareVoiceNotePacket: { url in try preparer.prepare(url) }
+        )
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("paused-private-\(UUID().uuidString).m4a")
+        try Data("voice".utf8).write(to: url)
+        defer {
+            preparer.release()
+            try? FileManager.default.removeItem(at: url)
+        }
+
+        coordinator.sendVoiceNote(at: url)
+        #expect(await TestHelpers.waitUntil({ preparer.hasStarted }, timeout: TestConstants.longTimeout))
+        let messageID = try #require(context.privateChats[peerID]?.first?.id)
+        let transferId = try #require(coordinator.messageIDToTransferId[messageID])
+
+        coordinator.cancelMediaSend(messageID: messageID)
+        preparer.release()
+        #expect(await TestHelpers.waitUntil({ preparer.hasFinished }, timeout: TestConstants.longTimeout))
+        for _ in 0..<10 { await Task.yield() }
+
+        #expect(context.cancelledTransfers == [transferId])
+        #expect(context.privateFileSends.isEmpty)
+        #expect(context.broadcastFileSends.isEmpty)
+        #expect(coordinator.messageIDToTransferId[messageID] == nil)
+        #expect(coordinator.transferIdToMessageIDs[transferId] == nil)
+        #expect(context.removedMessages.map(\.messageID) == [messageID])
+    }
+
+    @Test @MainActor
+    func deletePublicVoiceNoteDuringDetachedPreparationCannotBroadcastOrRestoreMapping() async throws {
+        let context = MockChatMediaTransferContext()
+        let preparer = PausedVoiceNotePreparer()
+        let coordinator = ChatMediaTransferCoordinator(
+            context: context,
+            prepareVoiceNotePacket: { url in try preparer.prepare(url) }
+        )
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("paused-public-\(UUID().uuidString).m4a")
+        try Data("voice".utf8).write(to: url)
+        defer {
+            preparer.release()
+            try? FileManager.default.removeItem(at: url)
+        }
+
+        coordinator.sendVoiceNote(at: url)
+        #expect(await TestHelpers.waitUntil({ preparer.hasStarted }, timeout: TestConstants.longTimeout))
+        let messageID = try #require(context.appendedPublicMessages.first?.message.id)
+        let transferId = try #require(coordinator.messageIDToTransferId[messageID])
+
+        coordinator.deleteMediaMessage(messageID: messageID)
+        preparer.release()
+        #expect(await TestHelpers.waitUntil({ preparer.hasFinished }, timeout: TestConstants.longTimeout))
+        for _ in 0..<10 { await Task.yield() }
+
+        #expect(context.cancelledTransfers == [transferId])
+        #expect(context.broadcastFileSends.isEmpty)
+        #expect(context.privateFileSends.isEmpty)
+        #expect(coordinator.messageIDToTransferId[messageID] == nil)
+        #expect(coordinator.transferIdToMessageIDs[transferId] == nil)
+        #expect(context.removedMessages.map(\.messageID) == [messageID])
+    }
+
+    @Test @MainActor
+    func voicePreparationFailureMarksPlaceholderFailedAndClearsEarlyMapping() async throws {
+        let context = MockChatMediaTransferContext()
+        let peerID = PeerID(str: "66778899aabbccdd")
+        context.selectedPrivateChatPeer = peerID
+        let coordinator = ChatMediaTransferCoordinator(
+            context: context,
+            prepareVoiceNotePacket: { _ in
+                throw ChatMediaPreparationError.voiceNoteTooLarge(bytes: 999_999)
+            }
+        )
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("failing-private-\(UUID().uuidString).m4a")
+        try Data("voice".utf8).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        coordinator.sendVoiceNote(at: url)
+        #expect(await TestHelpers.waitUntil(
+            {
+                context.deliveryStatusUpdates.contains { update in
+                    if case .failed = update.status { return true }
+                    return false
+                }
+            },
+            timeout: TestConstants.longTimeout
+        ))
+        let messageID = try #require(context.privateChats[peerID]?.first?.id)
+
+        #expect(coordinator.messageIDToTransferId[messageID] == nil)
+        #expect(coordinator.transferIdToMessageIDs.isEmpty)
+        #expect(context.privateFileSends.isEmpty)
+        #expect(context.broadcastFileSends.isEmpty)
+    }
+
+    @Test @MainActor
+    func legacyPrivateVoiceNoteWaitsForPerSendConsent() async throws {
+        let context = MockChatMediaTransferContext()
+        let coordinator = ChatMediaTransferCoordinator(context: context)
+        let peerID = PeerID(str: "1122334455667788")
+        context.selectedPrivateChatPeer = peerID
+        context.privateMediaPolicy = .legacyRequiresConsent
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("legacy-consent-\(UUID().uuidString).m4a")
+        try (Data([0x00, 0x00, 0x00, 0x18]) + Data("ftypM4A voice".utf8)).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        coordinator.sendVoiceNote(at: url)
+
+        let prompted = await TestHelpers.waitUntil(
+            { context.legacyConsentRequests.count == 1 },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(prompted)
+        #expect(context.legacyConsentRequests.map { $0.peerID } == [peerID])
+        #expect(context.privateFileSends.isEmpty)
+
+        context.resolveNextLegacyConsent(true)
+
+        #expect(context.privateFileSends.count == 1)
+        #expect(context.privateFileLegacyAllowances == [true])
+    }
+
+    @Test @MainActor
+    func legacyConsentApprovalAfterCancelCannotSend() async throws {
+        let context = MockChatMediaTransferContext()
+        let coordinator = ChatMediaTransferCoordinator(context: context)
+        let peerID = PeerID(str: "2233445566778899")
+        context.selectedPrivateChatPeer = peerID
+        context.privateMediaPolicy = .legacyRequiresConsent
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("legacy-cancel-\(UUID().uuidString).m4a")
+        try Data("voice".utf8).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        coordinator.sendVoiceNote(at: url)
+        let prompted = await TestHelpers.waitUntil(
+            { context.legacyConsentRequests.count == 1 },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(prompted)
+        let request = try #require(context.legacyConsentRequests.first)
+
+        coordinator.cancelMediaSend(messageID: request.messageID)
+        #expect(context.invalidatedLegacyConsents.contains {
+            $0.transferId == request.transferId && $0.messageID == request.messageID
+        })
+
+        // Model a stale framework callback that escaped active invalidation.
+        // The coordinator's transfer/message binding check is the final gate.
+        context.invokeLegacyConsentEvenIfInvalidated(id: request.id, approved: true)
+        #expect(context.privateFileSends.isEmpty)
+        #expect(coordinator.messageIDToTransferId[request.messageID] == nil)
+    }
+
+    @Test @MainActor
+    func legacyConsentApprovalAfterDeleteCannotSend() async throws {
+        let context = MockChatMediaTransferContext()
+        let coordinator = ChatMediaTransferCoordinator(context: context)
+        let peerID = PeerID(str: "33445566778899aa")
+        context.selectedPrivateChatPeer = peerID
+        context.privateMediaPolicy = .legacyRequiresConsent
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("legacy-delete-\(UUID().uuidString).m4a")
+        try Data("voice".utf8).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        coordinator.sendVoiceNote(at: url)
+        let prompted = await TestHelpers.waitUntil(
+            { context.legacyConsentRequests.count == 1 },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(prompted)
+        let request = try #require(context.legacyConsentRequests.first)
+
+        coordinator.deleteMediaMessage(messageID: request.messageID)
+        context.invokeLegacyConsentEvenIfInvalidated(id: request.id, approved: true)
+
+        #expect(context.invalidatedLegacyConsents.contains {
+            $0.transferId == request.transferId && $0.messageID == request.messageID
+        })
+        #expect(context.privateFileSends.isEmpty)
+        #expect(coordinator.messageIDToTransferId[request.messageID] == nil)
+    }
+
+    @Test @MainActor
+    func pinnedPrivateMediaDowngradeNeverPromptsOrSends() async throws {
+        let context = MockChatMediaTransferContext()
+        let coordinator = ChatMediaTransferCoordinator(context: context)
+        let peerID = PeerID(str: "1122334455667788")
+        context.selectedPrivateChatPeer = peerID
+        context.privateMediaPolicy = .blockedDowngrade
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("blocked-downgrade-\(UUID().uuidString).m4a")
+        try Data("voice".utf8).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        coordinator.sendVoiceNote(at: url)
+
+        let failed = await TestHelpers.waitUntil(
+            { context.deliveryStatusUpdates.contains { update in
+                if case .failed = update.status { return true }
+                return false
+            } },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(failed)
+        #expect(context.legacyConsentRequests.isEmpty)
+        #expect(context.privateFileSends.isEmpty)
     }
 }

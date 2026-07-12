@@ -73,7 +73,7 @@ struct BLENoiseSessionQueuesTests {
         let peerID = PeerID(str: "aaaaaaaaaaaaaaaa")
         var queues = BLENoiseSessionQueues()
 
-        queues.appendTypedPayload(Data([0x09, 0xAA]), transferId: "media-1", for: peerID)
+        queues.appendTypedPayload(Data([0x20, 0xAA]), transferId: "media-1", for: peerID)
         queues.appendTypedPayload(Data([0x01, 0xBB]), for: peerID)
 
         let removed = queues.removeTypedPayload(transferId: "media-1")

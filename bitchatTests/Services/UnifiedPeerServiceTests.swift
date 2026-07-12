@@ -266,6 +266,9 @@ private final class TestIdentityManager: SecureIdentityStateManagerProtocol {
         verified.removeAll()
     }
 
+    func markPrivateMediaCapable(fingerprint: String) {}
+    func hasObservedPrivateMediaCapability(fingerprint: String) -> Bool { false }
+
     func removeEphemeralSession(peerID: PeerID) {}
 
     func setVerified(fingerprint: String, verified: Bool) {
