@@ -89,6 +89,7 @@ private final class MockChatMediaTransferContext: ChatMediaTransferContext {
     private(set) var broadcastFileSends: [String] = []
     private(set) var cancelledTransfers: [String] = []
     var privateMediaPolicy: PrivateMediaSendPolicy = .encrypted
+    var resolvedPrivateMediaPolicy: PrivateMediaSendPolicy?
     private(set) var legacyConsentRequests: [(
         id: UUID,
         peerID: PeerID,
@@ -101,6 +102,13 @@ private final class MockChatMediaTransferContext: ChatMediaTransferContext {
 
     func privateMediaSendPolicy(to peerID: PeerID) -> PrivateMediaSendPolicy {
         privateMediaPolicy
+    }
+
+    func resolvePrivateMediaSendPolicy(
+        to peerID: PeerID,
+        completion: @escaping @MainActor (PrivateMediaSendPolicy) -> Void
+    ) {
+        completion(resolvedPrivateMediaPolicy ?? privateMediaPolicy)
     }
 
     func requestLegacyPrivateMediaConsent(
@@ -461,6 +469,31 @@ struct ChatMediaTransferCoordinatorContextTests {
 
         #expect(context.privateFileSends.count == 1)
         #expect(context.privateFileLegacyAllowances == [true])
+    }
+
+    @Test @MainActor
+    func capabilityProofTimeoutTransitionsToConsentWithoutAutomaticRawSend() async throws {
+        let context = MockChatMediaTransferContext()
+        let coordinator = ChatMediaTransferCoordinator(context: context)
+        let peerID = PeerID(str: "1020304050607080")
+        context.selectedPrivateChatPeer = peerID
+        context.privateMediaPolicy = .awaitingCapabilityProof
+        context.resolvedPrivateMediaPolicy = .legacyRequiresConsent
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("proof-timeout-consent-\(UUID().uuidString).m4a")
+        try Data("voice".utf8).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        coordinator.sendVoiceNote(at: url)
+
+        let prompted = await TestHelpers.waitUntil(
+            { context.legacyConsentRequests.count == 1 },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(prompted)
+        #expect(context.privateFileSends.isEmpty)
+        context.resolveNextLegacyConsent(false)
+        #expect(context.privateFileSends.isEmpty)
     }
 
     @Test @MainActor

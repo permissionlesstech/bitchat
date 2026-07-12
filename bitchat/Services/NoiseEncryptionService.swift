@@ -184,6 +184,11 @@ final class NoiseEncryptionService {
     // Callbacks
     private var onPeerAuthenticatedHandlers: [((PeerID, String) -> Void)] = [] // Array of handlers for peer authentication
     var onHandshakeRequired: ((PeerID) -> Void)? // peerID needs handshake
+    /// Automatic rekey removed the old session and produced XX message 1.
+    /// The transport must clear session-scoped state and put these exact bytes
+    /// on the wire; merely reporting "handshake required" strands the partial
+    /// initiator session because a second initiate call sees it already exists.
+    var onRekeyHandshakeReady: ((_ peerID: PeerID, _ message: Data) -> Void)?
     
     // Add a handler for peer authentication
     func addOnPeerAuthenticatedHandler(_ handler: @escaping (PeerID, String) -> Void) {
@@ -849,19 +854,26 @@ final class NoiseEncryptionService {
         let sessionsNeedingRekey = sessionManager.getSessionsNeedingRekey()
         
         for (peerID, needsRekey) in sessionsNeedingRekey where needsRekey {
-            
-            // Attempt to rekey the session
             do {
-                try sessionManager.initiateRekey(for: peerID)
-                SecureLogger.debug("Key rotation initiated for peer: \(peerID)", category: .security)
-                
-                // Signal that handshake is needed
-                onHandshakeRequired?(peerID)
+                try initiateAutomaticRekey(for: peerID)
             } catch {
                 SecureLogger.error(error, context: "Failed to initiate rekey for peer: \(peerID)", category: .session)
             }
         }
     }
+
+    private func initiateAutomaticRekey(for peerID: PeerID) throws {
+        let handshakeMessage = try sessionManager.initiateRekey(for: peerID)
+        SecureLogger.debug("Key rotation initiated for peer: \(peerID)", category: .security)
+        onRekeyHandshakeReady?(peerID, handshakeMessage)
+        onHandshakeRequired?(peerID)
+    }
+
+    #if DEBUG
+    func _test_initiateAutomaticRekey(for peerID: PeerID) throws {
+        try initiateAutomaticRekey(for: peerID)
+    }
+    #endif
     
     deinit {
         stopRekeyTimer()

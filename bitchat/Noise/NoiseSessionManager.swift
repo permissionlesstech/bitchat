@@ -272,11 +272,11 @@ final class NoiseSessionManager {
         }
     }
     
-    func initiateRekey(for peerID: PeerID) throws {
+    func initiateRekey(for peerID: PeerID) throws -> Data {
         // Remove old session
         removeSession(for: peerID)
         
         // Initiate new handshake
-        _ = try initiateHandshake(with: peerID)
+        return try initiateHandshake(with: peerID)
     }
 }

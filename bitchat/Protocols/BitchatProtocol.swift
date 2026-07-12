@@ -83,6 +83,11 @@ enum NoisePayloadType: UInt8 {
     // Android client. The complete BitchatFilePacket is encrypted inside
     // Noise before the outer noiseEncrypted packet is fragmented.
     case privateFile = 0x20
+    // Versioned peer state authenticated by the surrounding Noise session.
+    // This is intentionally distinct from the public announce: announce
+    // capabilities are discovery hints, while this payload proves possession
+    // of the advertised Noise static key before downgrade state is pinned.
+    case authenticatedPeerState = 0x21
     // Verification (QR-based OOB binding)
     case verifyChallenge = 0x10     // Verification challenge
     case verifyResponse  = 0x11     // Verification response
@@ -112,6 +117,7 @@ enum NoisePayloadType: UInt8 {
         case .groupKeyUpdate: return "groupKeyUpdate"
         case .voiceFrame: return "voiceFrame"
         case .privateFile: return "privateFile"
+        case .authenticatedPeerState: return "authenticatedPeerState"
         case .verifyChallenge: return "verifyChallenge"
         case .verifyResponse: return "verifyResponse"
         case .vouch: return "vouch"

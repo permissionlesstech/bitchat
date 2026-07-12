@@ -88,6 +88,11 @@ enum TransportEvent: @unchecked Sendable {
 /// legacy consent.
 enum PrivateMediaSendPolicy: Equatable {
     case encrypted
+    /// A public announce hinted at encrypted media (or a prior authenticated
+    /// pin exists), but this exact Noise session has not yet supplied its
+    /// authenticated peer-state proof. Callers wait boundedly; they must not
+    /// pre-queue encrypted bytes or silently select the legacy path.
+    case awaitingCapabilityProof
     case legacyRequiresConsent
     case blockedDowngrade
 }
@@ -224,6 +229,10 @@ protocol Transport: AnyObject {
     /// empty for peers that predate the capabilities TLV.
     func peerCapabilities(_ peerID: PeerID) -> PeerCapabilities
     func privateMediaSendPolicy(to peerID: PeerID) -> PrivateMediaSendPolicy
+    func resolvePrivateMediaSendPolicy(
+        to peerID: PeerID,
+        completion: @escaping @MainActor (PrivateMediaSendPolicy) -> Void
+    )
     /// Sends an encoded vouch-attestation batch inside the Noise session.
     func sendVouchAttestations(_ payload: Data, to peerID: PeerID)
     /// Appends a peer-authenticated observer. Unlike
@@ -295,6 +304,15 @@ extension Transport {
     func broadcastGroupMessage(_ envelope: Data) {}
     func peerCapabilities(_ peerID: PeerID) -> PeerCapabilities { [] }
     func privateMediaSendPolicy(to peerID: PeerID) -> PrivateMediaSendPolicy { .blockedDowngrade }
+    func resolvePrivateMediaSendPolicy(
+        to peerID: PeerID,
+        completion: @escaping @MainActor (PrivateMediaSendPolicy) -> Void
+    ) {
+        let policy = privateMediaSendPolicy(to: peerID)
+        Task { @MainActor in
+            completion(policy == .awaitingCapabilityProof ? .blockedDowngrade : policy)
+        }
+    }
     func sendVouchAttestations(_ payload: Data, to peerID: PeerID) {}
     func addPeerAuthenticatedObserver(_ handler: @escaping (PeerID, String) -> Void) {}
     func sendCourierMessage(_ content: String, messageID: String, recipientNoiseKey: Data, via couriers: [PeerID]) -> Bool { false }

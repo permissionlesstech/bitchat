@@ -218,26 +218,40 @@ struct PrivateMediaEndToEndTests {
             capabilities: .privateMedia,
             noisePublicKey: bobKey
         )
-        #expect(alice.privateMediaSendPolicy(to: bob.myPeerID) == .encrypted)
+        #expect(alice.privateMediaSendPolicy(to: bob.myPeerID) == .awaitingCapabilityProof)
         let bobFingerprint = bobKey.sha256Fingerprint()
         #expect(!identity.hasObservedPrivateMediaCapability(fingerprint: bobFingerprint))
 
-        try establishSession(alice: alice, bob: bob)
+        try await establishSession(alice: alice, bob: bob)
         let capabilityPinned = await TestHelpers.waitUntil(
             { identity.hasObservedPrivateMediaCapability(fingerprint: bobFingerprint) },
             timeout: TestConstants.longTimeout
         )
         #expect(capabilityPinned)
 
-        // Model a later verified old/replayed announce for the same stable
-        // Noise identity. The current bit disappears, but the authenticated
-        // persistent pin wins.
+        #expect(alice.privateMediaSendPolicy(to: bob.myPeerID) == .encrypted)
+
+        // A public no-bit announce cannot override state authenticated by the
+        // current session. A later authenticated no-bit state is a real
+        // downgrade and must block despite a caller offering legacy consent.
         alice._test_seedConnectedPeer(
             bob.myPeerID,
             nickname: "Bob",
             capabilities: [],
             noisePublicKey: bobKey
         )
+        #expect(alice.privateMediaSendPolicy(to: bob.myPeerID) == .encrypted)
+        let authenticatedNoBit = try authenticatedPeerStatePacket(
+            from: bob,
+            to: alice,
+            capabilities: []
+        )
+        alice._test_handlePacket(authenticatedNoBit, fromPeerID: bob.myPeerID)
+        let downgradeObserved = await TestHelpers.waitUntil(
+            { alice.privateMediaSendPolicy(to: bob.myPeerID) == .blockedDowngrade },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(downgradeObserved)
         #expect(alice.privateMediaSendPolicy(to: bob.myPeerID) == .blockedDowngrade)
 
         let tap = PacketTap()
@@ -307,7 +321,7 @@ struct PrivateMediaEndToEndTests {
             preseedPeer: false
         )
         let advertised = await TestHelpers.waitUntil(
-            { alice.privateMediaSendPolicy(to: bob.myPeerID) == .encrypted },
+            { alice.privateMediaSendPolicy(to: bob.myPeerID) == .awaitingCapabilityProof },
             timeout: TestConstants.longTimeout
         )
         #expect(advertised)
@@ -332,6 +346,181 @@ struct PrivateMediaEndToEndTests {
     }
 
     @Test
+    func copiedNoiseKeyPreannounceCannotPinWhenRealOwnerAuthenticates() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("private-media-copied-static-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let identity = MockIdentityManager(MockKeychain())
+        let alice = makeService(
+            baseDirectory: root.appendingPathComponent("alice", isDirectory: true),
+            identityManager: identity
+        )
+        let bob = makeService(baseDirectory: root.appendingPathComponent("bob", isDirectory: true))
+        let attacker = makeService(baseDirectory: root.appendingPathComponent("attacker", isDirectory: true))
+        let bobKey = bob.noiseStaticPublicKeyData()
+        let bobFingerprint = bobKey.sha256Fingerprint()
+
+        // Mallory copies Bob's public Noise key, advertises bit 8, supplies
+        // Mallory's Ed25519 key, and self-signs. This is internally consistent
+        // but does not prove possession of Bob's Noise private key.
+        let forged = try copiedStaticAnnounce(
+            claimedOwner: bob,
+            signedBy: attacker,
+            capabilities: .privateMedia
+        )
+        alice._test_handlePacket(forged, fromPeerID: bob.myPeerID, preseedPeer: false)
+        let hintAccepted = await TestHelpers.waitUntil(
+            { alice.privateMediaSendPolicy(to: bob.myPeerID) == .awaitingCapabilityProof },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(hintAccepted)
+        #expect(!identity.hasObservedPrivateMediaCapability(fingerprint: bobFingerprint))
+
+        let proofs = try await establishSessionCapturingPeerState(alice: alice, bob: bob)
+        #expect(!identity.hasObservedPrivateMediaCapability(fingerprint: bobFingerprint))
+        #expect(alice.privateMediaSendPolicy(to: bob.myPeerID) == .awaitingCapabilityProof)
+
+        // Only Bob's encrypted state authorizes bit 8 and replaces the forged
+        // announcement signing key with Bob's Noise-authenticated Ed key.
+        alice._test_handlePacket(proofs.bob, fromPeerID: bob.myPeerID)
+        let pinned = await TestHelpers.waitUntil(
+            { identity.hasObservedPrivateMediaCapability(fingerprint: bobFingerprint) },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(pinned)
+        #expect(identity.authenticatedSigningPublicKey(forFingerprint: bobFingerprint)
+            == bob.noiseSigningPublicKeyData())
+        #expect(alice.privateMediaSendPolicy(to: bob.myPeerID) == .encrypted)
+
+        bob._test_handlePacket(proofs.alice, fromPeerID: alice.myPeerID)
+        alice._test_onOutboundPacket = nil
+        bob._test_onOutboundPacket = nil
+    }
+
+    @Test
+    func droppedInitiatorProofConvergesViaSingleAuthenticatedEcho() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("private-media-proof-echo-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let alice = makeService(baseDirectory: root.appendingPathComponent("alice", isDirectory: true))
+        let bob = makeService(baseDirectory: root.appendingPathComponent("bob", isDirectory: true))
+        alice._test_seedConnectedPeer(
+            bob.myPeerID,
+            nickname: "Bob",
+            capabilities: .privateMedia,
+            noisePublicKey: bob.noiseStaticPublicKeyData()
+        )
+        bob._test_seedConnectedPeer(
+            alice.myPeerID,
+            nickname: "Alice",
+            capabilities: .privateMedia,
+            noisePublicKey: alice.noiseStaticPublicKeyData()
+        )
+
+        let initial = try await establishSessionCapturingPeerState(alice: alice, bob: bob)
+        // Model Alice's first proof racing ahead of Bob's message-3 handling
+        // and being dropped. Bob's proof reaches Alice; Alice must emit one
+        // idempotent echo that lets Bob converge without a new handshake.
+        _ = initial.alice
+        let echoTap = PacketTap()
+        alice._test_onOutboundPacket = echoTap.record
+        alice._test_handlePacket(initial.bob, fromPeerID: bob.myPeerID)
+        let echoed = await TestHelpers.waitUntil(
+            { echoTap.snapshot().contains { $0.type == MessageType.noiseEncrypted.rawValue } },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(echoed)
+        let echo = try #require(
+            echoTap.snapshot().first { $0.type == MessageType.noiseEncrypted.rawValue }
+        )
+        bob._test_handlePacket(echo, fromPeerID: alice.myPeerID)
+        let converged = await TestHelpers.waitUntil(
+            {
+                alice.privateMediaSendPolicy(to: bob.myPeerID) == .encrypted
+                    && bob.privateMediaSendPolicy(to: alice.myPeerID) == .encrypted
+            },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(converged)
+        alice._test_onOutboundPacket = nil
+        bob._test_onOutboundPacket = nil
+    }
+
+    @Test
+    func noProofTimeoutResolvesToConsentWithoutSendingRawMedia() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("private-media-proof-timeout-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let alice = makeService(baseDirectory: root.appendingPathComponent("alice", isDirectory: true))
+        let bob = makeService(baseDirectory: root.appendingPathComponent("bob", isDirectory: true))
+        alice._test_seedConnectedPeer(
+            bob.myPeerID,
+            nickname: "Prerelease Bob",
+            capabilities: .privateMedia,
+            noisePublicKey: bob.noiseStaticPublicKeyData()
+        )
+
+        _ = try await establishSessionCapturingPeerState(alice: alice, bob: bob)
+        #expect(alice.privateMediaSendPolicy(to: bob.myPeerID) == .awaitingCapabilityProof)
+        let recorder = PrivateMediaPolicyRecorder()
+        alice.resolvePrivateMediaSendPolicy(to: bob.myPeerID) { recorder.record($0) }
+        let registered = await TestHelpers.waitUntil(
+            { alice._test_hasPendingPrivateMediaPolicyResolution(for: bob.myPeerID) },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(registered)
+        alice._test_forcePrivateMediaProofTimeout(for: bob.myPeerID)
+        let resolved = await TestHelpers.waitUntil(
+            { recorder.snapshot() == .legacyRequiresConsent },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(resolved)
+        #expect(alice.privateMediaSendPolicy(to: bob.myPeerID) == .legacyRequiresConsent)
+        #expect(recorder.snapshot() != .encrypted)
+        alice._test_onOutboundPacket = nil
+        bob._test_onOutboundPacket = nil
+    }
+
+    @Test
+    func queuedPrivatePayloadWaitsForProofNotHandshakeCompletion() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("private-media-proof-drain-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let alice = makeService(baseDirectory: root.appendingPathComponent("alice", isDirectory: true))
+        let bob = makeService(baseDirectory: root.appendingPathComponent("bob", isDirectory: true))
+        alice._test_seedConnectedPeer(
+            bob.myPeerID,
+            nickname: "Bob",
+            capabilities: .privateMedia,
+            noisePublicKey: bob.noiseStaticPublicKeyData()
+        )
+        let proofs = try await establishSessionCapturingPeerState(alice: alice, bob: bob)
+
+        let content = Data("proof-gated-private-file".utf8)
+        let file = BitchatFilePacket(
+            fileName: "proof.txt",
+            fileSize: UInt64(content.count),
+            mimeType: "text/plain",
+            content: content
+        )
+        let payload = try #require(BLENoisePayloadFactory.privateFile(file))
+        let transferID = "proof-gated-\(UUID().uuidString)"
+        alice._test_enqueuePendingNoisePayload(payload, transferId: transferID, for: bob.myPeerID)
+        alice._test_sendPendingNoisePayloadsAfterHandshake(for: bob.myPeerID)
+
+        #expect(alice._test_privateMediaTransferState(transferId: transferID).pendingNoise)
+        alice._test_handlePacket(proofs.bob, fromPeerID: bob.myPeerID)
+        let drained = await TestHelpers.waitUntil(
+            { !alice._test_privateMediaTransferState(transferId: transferID).pendingNoise },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(drained)
+        bob._test_handlePacket(proofs.alice, fromPeerID: alice.myPeerID)
+        alice._test_onOutboundPacket = nil
+        bob._test_onOutboundPacket = nil
+    }
+
+    @Test
     func authenticatedFingerprintMismatchCannotPoisonCapabilityPin() async throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("private-media-key-mismatch-\(UUID().uuidString)", isDirectory: true)
@@ -353,7 +542,7 @@ struct PrivateMediaEndToEndTests {
             capabilities: .privateMedia,
             noisePublicKey: impostorKey
         )
-        try establishSession(alice: alice, bob: bob)
+        try await establishSession(alice: alice, bob: bob)
 
         let sessionReconciled = await TestHelpers.waitUntil(
             { reconciliations.contains(bob.myPeerID) },
@@ -373,7 +562,7 @@ struct PrivateMediaEndToEndTests {
     }
 
     @Test
-    func capabilityAnnounceAfterNoiseSessionPinsMatchingFingerprint() async throws {
+    func capabilityAnnounceAfterNoiseSessionStillRequiresEncryptedProof() async throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("private-media-race-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -384,7 +573,7 @@ struct PrivateMediaEndToEndTests {
         )
         let bob = makeService(baseDirectory: root.appendingPathComponent("bob", isDirectory: true))
 
-        try establishSession(alice: alice, bob: bob)
+        let proofs = try await establishSessionCapturingPeerState(alice: alice, bob: bob)
         let bobKey = bob.noiseStaticPublicKeyData()
         let capableAnnounce = try signedAnnounce(
             from: bob,
@@ -396,6 +585,17 @@ struct PrivateMediaEndToEndTests {
             preseedPeer: false
         )
 
+        let announceDidNotPin = await TestHelpers.waitUntil(
+            { alice.privateMediaSendPolicy(to: bob.myPeerID) == .awaitingCapabilityProof },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(announceDidNotPin)
+        #expect(!identity.hasObservedPrivateMediaCapability(
+            fingerprint: bobKey.sha256Fingerprint()
+        ))
+
+        alice._test_handlePacket(proofs.bob, fromPeerID: bob.myPeerID)
+
         let pinned = await TestHelpers.waitUntil(
             {
                 identity.hasObservedPrivateMediaCapability(
@@ -405,6 +605,9 @@ struct PrivateMediaEndToEndTests {
             timeout: TestConstants.longTimeout
         )
         #expect(pinned)
+        bob._test_handlePacket(proofs.alice, fromPeerID: alice.myPeerID)
+        alice._test_onOutboundPacket = nil
+        bob._test_onOutboundPacket = nil
     }
 
     @Test
@@ -427,7 +630,7 @@ struct PrivateMediaEndToEndTests {
             nickname: "Old Carol",
             noisePublicKey: oldCarol.noiseStaticPublicKeyData()
         )
-        try establishSession(alice: alice, bob: bob)
+        try await establishSession(alice: alice, bob: bob)
 
         var state: UInt64 = 0x1234_5678_9ABC_DEF0
         let body = Data((0..<(130 * 1024)).map { _ in
@@ -475,7 +678,7 @@ struct PrivateMediaEndToEndTests {
         defer { try? FileManager.default.removeItem(at: root) }
         let alice = makeService(baseDirectory: root.appendingPathComponent("alice", isDirectory: true))
         let bob = makeService(baseDirectory: root.appendingPathComponent("bob", isDirectory: true))
-        try establishSession(alice: alice, bob: bob)
+        try await establishSession(alice: alice, bob: bob)
 
         let transferID = "queued-encryption-failure-\(UUID().uuidString)"
         let rejections = TransferCancellationRecorder()
@@ -615,7 +818,7 @@ struct PrivateMediaEndToEndTests {
         let bob = makeService(baseDirectory: bobRoot)
         let delegate = MessageCaptureDelegate()
         bob.delegate = delegate
-        try establishSession(alice: alice, bob: bob)
+        try await establishSession(alice: alice, bob: bob)
 
         let file = BitchatFilePacket(
             fileName: "\(directoryLabel).pdf",
@@ -736,7 +939,6 @@ struct PrivateMediaEndToEndTests {
         let bob = makeService(baseDirectory: bobRoot)
         let tap = PacketTap()
         let delegate = MessageCaptureDelegate()
-        alice._test_onOutboundPacket = tap.record
         bob.delegate = delegate
 
         alice._test_seedConnectedPeer(
@@ -751,7 +953,8 @@ struct PrivateMediaEndToEndTests {
             capabilities: .privateMedia,
             noisePublicKey: alice.noiseStaticPublicKeyData()
         )
-        try establishSession(alice: alice, bob: bob)
+        try await establishSession(alice: alice, bob: bob)
+        alice._test_onOutboundPacket = tap.record
 
         let file = BitchatFilePacket(
             fileName: fileName,
@@ -825,7 +1028,27 @@ struct PrivateMediaEndToEndTests {
         )
     }
 
-    private func establishSession(alice: BLEService, bob: BLEService) throws {
+    private func establishSession(alice: BLEService, bob: BLEService) async throws {
+        let proofs = try await establishSessionCapturingPeerState(alice: alice, bob: bob)
+        bob._test_handlePacket(proofs.alice, fromPeerID: alice.myPeerID)
+        alice._test_handlePacket(proofs.bob, fromPeerID: bob.myPeerID)
+        // Fence the message/identity mutations without assuming either test
+        // seeded a registry entry (inbound-only tests intentionally do not).
+        await alice._test_drainNoiseMessagePipeline()
+        await bob._test_drainNoiseMessagePipeline()
+        alice._test_onOutboundPacket = nil
+        bob._test_onOutboundPacket = nil
+    }
+
+    private func establishSessionCapturingPeerState(
+        alice: BLEService,
+        bob: BLEService
+    ) async throws -> (alice: BitchatPacket, bob: BitchatPacket) {
+        let aliceTap = PacketTap()
+        let bobTap = PacketTap()
+        alice._test_onOutboundPacket = aliceTap.record
+        bob._test_onOutboundPacket = bobTap.record
+
         let first = try alice._test_noiseInitiateHandshake(with: bob.myPeerID)
         let second = try #require(
             try bob._test_noiseProcessHandshakeMessage(from: alice.myPeerID, message: first)
@@ -836,6 +1059,35 @@ struct PrivateMediaEndToEndTests {
         _ = try bob._test_noiseProcessHandshakeMessage(from: alice.myPeerID, message: third)
         #expect(alice.canDeliverSecurely(to: bob.myPeerID))
         #expect(bob.canDeliverSecurely(to: alice.myPeerID))
+
+        let emitted = await TestHelpers.waitUntil(
+            {
+                aliceTap.snapshot().contains { $0.type == MessageType.noiseEncrypted.rawValue }
+                    && bobTap.snapshot().contains { $0.type == MessageType.noiseEncrypted.rawValue }
+            },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(emitted)
+        let aliceProof = try #require(
+            aliceTap.snapshot().first { $0.type == MessageType.noiseEncrypted.rawValue }
+        )
+        let bobProof = try #require(
+            bobTap.snapshot().first { $0.type == MessageType.noiseEncrypted.rawValue }
+        )
+        return (aliceProof, bobProof)
+    }
+
+    private func authenticatedPeerStatePacket(
+        from sender: BLEService,
+        to recipient: BLEService,
+        capabilities: PeerCapabilities
+    ) throws -> BitchatPacket {
+        let state = AuthenticatedPeerStatePacket(
+            capabilities: capabilities,
+            signingPublicKey: sender.noiseSigningPublicKeyData()
+        )
+        let typed = try #require(BLENoisePayloadFactory.authenticatedPeerState(state))
+        return try sender._test_makeEncryptedNoisePacket(typed, to: recipient.myPeerID)
     }
 
     private func signedAnnounce(
@@ -860,6 +1112,33 @@ struct PrivateMediaEndToEndTests {
             ttl: TransportConfig.messageTTLDefault
         )
         return service.signPacketForBroadcast(unsigned)
+    }
+
+    private func copiedStaticAnnounce(
+        claimedOwner: BLEService,
+        signedBy signer: BLEService,
+        capabilities: PeerCapabilities
+    ) throws -> BitchatPacket {
+        let announcement = AnnouncementPacket(
+            nickname: "Mallory-as-Bob",
+            noisePublicKey: claimedOwner.noiseStaticPublicKeyData(),
+            signingPublicKey: signer.noiseSigningPublicKeyData(),
+            directNeighbors: nil,
+            capabilities: capabilities
+        )
+        let payload = try #require(announcement.encode())
+        let unsigned = BitchatPacket(
+            type: MessageType.announce.rawValue,
+            senderID: Data(hexString: claimedOwner.myPeerID.id) ?? Data(),
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1_000),
+            payload: payload,
+            signature: nil,
+            // Relayed shape avoids the proactive direct-hint handshake in
+            // this deterministic test; it does not change signature validity.
+            ttl: TransportConfig.messageTTLDefault - 1
+        )
+        return signer.signPacketForBroadcast(unsigned)
     }
 
     private func recursivelyStoredFiles(under root: URL) -> [URL] {
@@ -950,6 +1229,23 @@ private final class PeerIDRecorder: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return peerIDs.contains(peerID)
+    }
+}
+
+private final class PrivateMediaPolicyRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var policy: PrivateMediaSendPolicy?
+
+    func record(_ policy: PrivateMediaSendPolicy) {
+        lock.lock()
+        self.policy = policy
+        lock.unlock()
+    }
+
+    func snapshot() -> PrivateMediaSendPolicy? {
+        lock.lock()
+        defer { lock.unlock() }
+        return policy
     }
 }
 

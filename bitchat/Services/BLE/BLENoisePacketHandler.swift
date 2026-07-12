@@ -30,6 +30,9 @@ struct BLENoisePacketHandlerEnvironment {
     let decrypt: (_ payload: Data, _ peerID: PeerID) throws -> Data
     /// Clears the peer's Noise session after an unrecoverable decrypt failure (crypto).
     let clearSession: (PeerID) -> Void
+    /// Consumes session-authenticated protocol state inside the transport. It
+    /// must never escape to UI or Nostr payload dispatch.
+    let handleAuthenticatedPeerState: (_ peerID: PeerID, _ payload: Data) -> Void
     /// Delivers `.noisePayloadReceived` to the UI as one main-actor hop.
     let deliverNoisePayload: (
         _ peerID: PeerID,
@@ -127,6 +130,11 @@ final class BLENoisePacketHandler {
             }
 
             SecureLogger.debug("🔐 Decrypted noise payload type \(noisePayloadType.description) from \(peerID.id.prefix(8))…", category: .session)
+
+            if noisePayloadType == .authenticatedPeerState {
+                env.handleAuthenticatedPeerState(peerID, Data(payloadData))
+                return
+            }
 
             let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
             env.deliverNoisePayload(peerID, noisePayloadType, Data(payloadData), ts)

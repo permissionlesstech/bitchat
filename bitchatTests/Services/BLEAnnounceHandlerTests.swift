@@ -6,6 +6,7 @@ import Testing
 struct BLEAnnounceHandlerTests {
     private final class Recorder {
         var existingNoisePublicKey: Data?
+        var authenticatedSigningPublicKey: Data?
         var signatureValid = true
         var linkState: (hasPeripheral: Bool, hasCentral: Bool) = (false, false)
         var linkBoundToOtherPeer = false
@@ -37,6 +38,7 @@ struct BLEAnnounceHandlerTests {
             messageTTL: TransportConfig.messageTTLDefault,
             now: { now },
             existingNoisePublicKey: { _ in recorder.existingNoisePublicKey },
+            authenticatedSigningPublicKey: { _ in recorder.authenticatedSigningPublicKey },
             verifySignature: { packet, signingPublicKey in
                 recorder.verifySignatureCalls.append((packet, signingPublicKey))
                 return recorder.signatureValid

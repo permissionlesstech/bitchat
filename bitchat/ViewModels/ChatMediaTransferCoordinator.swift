@@ -57,6 +57,10 @@ protocol ChatMediaTransferContext: AnyObject {
 
     // MARK: Mesh file transfer
     func privateMediaSendPolicy(to peerID: PeerID) -> PrivateMediaSendPolicy
+    func resolvePrivateMediaSendPolicy(
+        to peerID: PeerID,
+        completion: @escaping @MainActor (PrivateMediaSendPolicy) -> Void
+    )
     func requestLegacyPrivateMediaConsent(
         for peerID: PeerID,
         transferId: String,
@@ -87,6 +91,13 @@ extension ChatViewModel: ChatMediaTransferContext {
 
     func privateMediaSendPolicy(to peerID: PeerID) -> PrivateMediaSendPolicy {
         meshService.privateMediaSendPolicy(to: peerID)
+    }
+
+    func resolvePrivateMediaSendPolicy(
+        to peerID: PeerID,
+        completion: @escaping @MainActor (PrivateMediaSendPolicy) -> Void
+    ) {
+        meshService.resolvePrivateMediaSendPolicy(to: peerID, completion: completion)
     }
 
     func requestLegacyPrivateMediaConsent(
@@ -350,7 +361,23 @@ final class ChatMediaTransferCoordinator {
         transferId: String,
         messageID: String
     ) {
-        switch context.privateMediaSendPolicy(to: peerID) {
+        continuePrivateMediaSend(
+            packet,
+            to: peerID,
+            transferId: transferId,
+            messageID: messageID,
+            policy: context.privateMediaSendPolicy(to: peerID)
+        )
+    }
+
+    private func continuePrivateMediaSend(
+        _ packet: BitchatFilePacket,
+        to peerID: PeerID,
+        transferId: String,
+        messageID: String,
+        policy: PrivateMediaSendPolicy
+    ) {
+        switch policy {
         case .encrypted:
             context.sendFilePrivate(
                 packet,
@@ -358,6 +385,32 @@ final class ChatMediaTransferCoordinator {
                 transferId: transferId,
                 allowLegacyFallback: false
             )
+
+        case .awaitingCapabilityProof:
+            context.resolvePrivateMediaSendPolicy(to: peerID) { [weak self] resolvedPolicy in
+                guard let self,
+                      self.isRegisteredTransfer(transferId, messageID: messageID) else {
+                    return
+                }
+                guard resolvedPolicy != .awaitingCapabilityProof else {
+                    self.handleMediaSendFailure(
+                        messageID: messageID,
+                        reason: String(
+                            localized: "content.delivery.reason.private_media_capability_unresolved",
+                            defaultValue: "Could not confirm encrypted media support",
+                            comment: "Failure reason when private-media capability negotiation did not resolve"
+                        )
+                    )
+                    return
+                }
+                self.continuePrivateMediaSend(
+                    packet,
+                    to: peerID,
+                    transferId: transferId,
+                    messageID: messageID,
+                    policy: resolvedPolicy
+                )
+            }
 
         case .legacyRequiresConsent:
             context.requestLegacyPrivateMediaConsent(

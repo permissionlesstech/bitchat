@@ -141,6 +141,10 @@ protocol SecureIdentityStateManagerProtocol {
     func signingPublicKey(forFingerprint fingerprint: String) -> Data?
     func mostRecentlyVerifiedFingerprints(limit: Int, excluding fingerprint: String) -> [String]
 
+    // MARK: Noise-authenticated announcement identity
+    func bindAuthenticatedSigningPublicKey(_ signingPublicKey: Data, fingerprint: String)
+    func authenticatedSigningPublicKey(forFingerprint fingerprint: String) -> Data?
+
     // MARK: Private-media downgrade protection
     func markPrivateMediaCapable(fingerprint: String)
     func hasObservedPrivateMediaCapability(fingerprint: String) -> Bool
@@ -403,6 +407,37 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
         guard !fingerprint.isEmpty else { return false }
         return queue.sync {
             cache.privateMediaCapableFingerprints?.contains(fingerprint) == true
+        }
+    }
+
+    // MARK: - Noise-authenticated announcement identity
+
+    func bindAuthenticatedSigningPublicKey(_ signingPublicKey: Data, fingerprint: String) {
+        guard signingPublicKey.count == AuthenticatedPeerStatePacket.signingPublicKeyLength,
+              !fingerprint.isEmpty else { return }
+        let bindAndPersist = {
+            var bindings = self.cache.authenticatedSigningKeysByFingerprint ?? [:]
+            let bindingChanged = bindings[fingerprint] != signingPublicKey
+            bindings[fingerprint] = signingPublicKey
+            self.cache.authenticatedSigningKeysByFingerprint = bindings
+            if var cryptoIdentity = self.cryptographicIdentities[fingerprint] {
+                cryptoIdentity.signingPublicKey = signingPublicKey
+                self.cryptographicIdentities[fingerprint] = cryptoIdentity
+            }
+            guard bindingChanged else { return }
+            self.saveIdentityCache()
+        }
+        if DispatchQueue.getSpecific(key: queueSpecificKey) != nil {
+            bindAndPersist()
+        } else {
+            queue.sync(flags: .barrier, execute: bindAndPersist)
+        }
+    }
+
+    func authenticatedSigningPublicKey(forFingerprint fingerprint: String) -> Data? {
+        guard !fingerprint.isEmpty else { return nil }
+        return queue.sync {
+            cache.authenticatedSigningKeysByFingerprint?[fingerprint]
         }
     }
     

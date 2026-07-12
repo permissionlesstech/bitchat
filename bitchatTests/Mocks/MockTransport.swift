@@ -205,6 +205,14 @@ final class MockTransport: Transport {
         privateMediaPolicies[peerID] ?? .encrypted
     }
 
+    func resolvePrivateMediaSendPolicy(
+        to peerID: PeerID,
+        completion: @escaping @MainActor (PrivateMediaSendPolicy) -> Void
+    ) {
+        let policy = privateMediaPolicies[peerID] ?? .encrypted
+        Task { @MainActor in completion(policy) }
+    }
+
     func cancelTransfer(_ transferId: String) {
         cancelledTransfers.append(transferId)
     }

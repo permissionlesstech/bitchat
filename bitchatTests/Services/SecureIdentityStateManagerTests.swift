@@ -427,6 +427,31 @@ final class SecureIdentityStateManagerTests: XCTestCase {
         XCTAssertTrue(cleared)
     }
 
+    func test_noiseAuthenticatedSigningKeyBindingPersistsAndPanicClearRemovesIt() async {
+        let keychain = MockKeychain()
+        let fingerprint = Data(repeating: 0x31, count: 32).sha256Fingerprint()
+        let firstKey = Data(repeating: 0x41, count: 32)
+        let rotatedKey = Data(repeating: 0x42, count: 32)
+        let manager = SecureIdentityStateManager(keychain)
+
+        manager.bindAuthenticatedSigningPublicKey(firstKey, fingerprint: fingerprint)
+        XCTAssertEqual(manager.authenticatedSigningPublicKey(forFingerprint: fingerprint), firstKey)
+        // A later authenticated Noise session may legitimately rotate the
+        // announcement signing key.
+        manager.bindAuthenticatedSigningPublicKey(rotatedKey, fingerprint: fingerprint)
+        XCTAssertEqual(manager.authenticatedSigningPublicKey(forFingerprint: fingerprint), rotatedKey)
+
+        manager.forceSave()
+        let reloaded = SecureIdentityStateManager(keychain)
+        XCTAssertEqual(reloaded.authenticatedSigningPublicKey(forFingerprint: fingerprint), rotatedKey)
+
+        reloaded.clearAllIdentityData()
+        let cleared = await waitUntil {
+            reloaded.authenticatedSigningPublicKey(forFingerprint: fingerprint) == nil
+        }
+        XCTAssertTrue(cleared)
+    }
+
     func test_forceSave_withFailingCacheWriteDoesNotPersistCache() async {
         let keychain = FailingCacheSaveKeychain()
         let manager = SecureIdentityStateManager(keychain)

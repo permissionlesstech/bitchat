@@ -181,6 +181,14 @@ struct BLEPeerRegistry {
         peers[peerID] = peer
     }
 
+    /// Replaces the announcement signing key only after the surrounding Noise
+    /// session proved possession of this peer's static key.
+    mutating func bindAuthenticatedSigningPublicKey(_ key: Data, for peerID: PeerID) {
+        guard var peer = peers[peerID.toShort()] else { return }
+        peer.signingPublicKey = key
+        peers[peer.peerID] = peer
+    }
+
     mutating func upsertVerifiedAnnounce(
         peerID: PeerID,
         nickname: String,
