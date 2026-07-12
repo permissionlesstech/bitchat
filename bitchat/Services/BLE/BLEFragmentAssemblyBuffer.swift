@@ -201,8 +201,11 @@ struct BLEFragmentAssemblyBuffer {
     }
 
     private static func assemblyLimit(for originalType: UInt8) -> Int {
-        if originalType == MessageType.fileTransfer.rawValue {
+        if originalType == MessageType.fileTransfer.rawValue
+            || originalType == MessageType.noiseEncrypted.rawValue {
             // Allow headroom for TLV metadata and binary framing overhead.
+            // A large noiseEncrypted packet can be an E2E-encrypted private
+            // file; its authenticated plaintext is validated after decrypt.
             return FileTransferLimits.maxFramedFileBytes
         }
 

@@ -16,6 +16,8 @@ struct BLEFileTransferHandlerEnvironment {
     let peersSnapshot: () -> [PeerID: BLEPeerInfo]
     /// Verifies a packet's signature against a candidate signing key (registry path).
     let verifyPacketSignature: (_ packet: BitchatPacket, _ signingPublicKey: Data) -> Bool
+    /// Local signing key used to authenticate our own gossip-sync replays.
+    let localSigningPublicKey: () -> Data
     /// Resolves a display name from a verified packet signature for peers missing from the registry.
     let signedSenderDisplayName: (_ packet: BitchatPacket, _ peerID: PeerID) -> String?
     /// Tracks the broadcast file packet for gossip sync.
@@ -46,54 +48,105 @@ final class BLEFileTransferHandler {
         self.environment = environment
     }
 
-    /// Returns `false` when the packet fails sender authentication and must
-    /// not be relayed onward. Every other outcome returns `true`: files
-    /// directed to another peer are forwarded untouched, and local-only drops
-    /// (malformed payload, quota, save failure) don't affect multi-hop
-    /// delivery to nodes that may handle them fine.
+    /// Returns `false` when the raw packet fails sender authentication (or is
+    /// a live self-echo) and must not be relayed onward. Authentication runs
+    /// before the routing decision, so a forged directed packet cannot use a
+    /// node that is not its recipient as an unsigned forwarding hop.
     @discardableResult
     func handle(_ packet: BitchatPacket, from peerID: PeerID) -> Bool {
         let env = environment
-        if BLEFileTransferPolicy.isSelfEcho(packet: packet, from: peerID, localPeerID: env.localPeerID()) { return true }
-
-        guard let deliveryPlan = BLEFileTransferPolicy.deliveryPlan(packet: packet, localPeerID: env.localPeerID()) else {
-            return true
-        }
-
+        let localPeerID = env.localPeerID()
         let peersSnapshot = env.peersSnapshot()
-        guard let senderNickname = resolveSenderNickname(
+
+        guard let senderNickname = authenticatedRawSenderNickname(
             packet: packet,
             from: peerID,
-            isBroadcast: !deliveryPlan.isPrivateMessage,
             peers: peersSnapshot,
             env: env
         ) else {
-            SecureLogger.warning("🚫 Dropping file transfer from unverified or unknown peer \(peerID.id.prefix(8))…", category: .security)
+            SecureLogger.warning("🚫 Dropping raw file transfer with missing/invalid signature from \(peerID.id.prefix(8))…", category: .security)
             return false
+        }
+
+        if BLEFileTransferPolicy.isSelfEcho(packet: packet, from: peerID, localPeerID: localPeerID) {
+            return false
+        }
+
+        guard let deliveryPlan = BLEFileTransferPolicy.deliveryPlan(packet: packet, localPeerID: localPeerID) else {
+            return true
         }
 
         if deliveryPlan.shouldTrackForSync {
             env.trackPacketSeen(packet)
         }
 
+        _ = storeIncomingPayload(
+            packet.payload,
+            from: peerID,
+            senderNickname: senderNickname,
+            timestamp: Date(timeIntervalSince1970: Double(packet.timestamp) / 1000),
+            isPrivate: deliveryPlan.isPrivateMessage,
+            env: env
+        )
+        // Once authenticated, a local decode/quota/save failure is not proof
+        // that downstream nodes should be denied the valid signed packet.
+        return true
+    }
+
+    /// Accepts a file packet only after it has been authenticated and
+    /// decrypted by the peer's Noise session. The inner packet deliberately
+    /// has no redundant signature: Noise supplies sender authentication and
+    /// confidentiality, while this handler retains the same validation,
+    /// quota, persistence, and UI-delivery behavior as public files.
+    @discardableResult
+    func handlePrivatePayload(_ payload: Data, from peerID: PeerID, timestamp: Date) -> Bool {
+        let env = environment
+        let peers = env.peersSnapshot()
+        let senderNickname = BLEPeerSenderDisplayName.resolveKnownPeer(
+            peerID: peerID,
+            localPeerID: env.localPeerID(),
+            localNickname: env.localNickname(),
+            peers: peers,
+            allowConnectedUnverified: true
+        ) ?? BLEPeerSenderDisplayName.anonymousNickname(for: peerID)
+
+        return storeIncomingPayload(
+            payload,
+            from: peerID,
+            senderNickname: senderNickname,
+            timestamp: timestamp,
+            isPrivate: true,
+            env: env
+        )
+    }
+
+    private func storeIncomingPayload(
+        _ payload: Data,
+        from peerID: PeerID,
+        senderNickname: String,
+        timestamp: Date,
+        isPrivate: Bool,
+        env: BLEFileTransferHandlerEnvironment
+    ) -> Bool {
+
         let filePacket: BitchatFilePacket
         let mime: MimeType
-        switch BLEIncomingFileValidator.validate(payload: packet.payload) {
+        switch BLEIncomingFileValidator.validate(payload: payload) {
         case .success(let acceptance):
             filePacket = acceptance.filePacket
             mime = acceptance.mime
         case .failure(.malformedPayload):
             SecureLogger.error("❌ Failed to decode file transfer payload", category: .session)
-            return true
+            return false
         case .failure(.payloadTooLarge(let bytes)):
             SecureLogger.warning("🚫 Dropping file transfer exceeding size cap (\(bytes) bytes)", category: .security)
-            return true
+            return false
         case .failure(.unsupportedMime(let mimeType, let bytes)):
             SecureLogger.warning("🚫 MIME REJECT: '\(mimeType ?? "<empty>")' not supported. Size=\(bytes)b from \(peerID.id.prefix(8))...", category: .security)
-            return true
+            return false
         case .failure(.magicMismatch(let mime, let bytes, let prefixHex)):
             SecureLogger.warning("🚫 MAGIC REJECT: MIME='\(mime)' size=\(bytes)b prefix=[\(prefixHex)] from \(peerID.id.prefix(8))...", category: .security)
-            return true
+            return false
         }
 
         // BCH-01-002: Enforce storage quota before saving
@@ -106,28 +159,27 @@ final class BLEFileTransferHandler {
             mime.defaultExtension,
             mime.category.rawValue
         ) else {
-            return true
+            return false
         }
 
-        if deliveryPlan.isPrivateMessage {
+        if isPrivate {
             env.updatePeerLastSeen(peerID)
         }
 
-        let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
         let message = BitchatMessage(
             sender: senderNickname,
             content: "\(mime.category.messagePrefix)\(destination.lastPathComponent)",
-            timestamp: ts,
+            timestamp: timestamp,
             isRelay: false,
             originalSender: nil,
-            isPrivate: deliveryPlan.isPrivateMessage,
+            isPrivate: isPrivate,
             recipientNickname: nil,
             senderPeerID: peerID,
             // Received messages need an explicit status: BitchatMessage
             // defaults private messages to .sending, which the media views
             // render as an in-flight send (empty reveal mask, disabled tap).
-            deliveryStatus: deliveryPlan.isPrivateMessage
-                ? .delivered(to: env.localNickname(), at: ts)
+            deliveryStatus: isPrivate
+                ? .delivered(to: env.localNickname(), at: timestamp)
                 : nil
         )
 
@@ -137,51 +189,38 @@ final class BLEFileTransferHandler {
         return true
     }
 
-    /// Resolves the authenticated display name for a file transfer's sender.
-    ///
-    /// Directed (private) transfers are addressed to us specifically and keep
-    /// the lenient connected-peer path. Broadcast transfers carry an
-    /// attacker-controllable `senderID` exactly like public messages and public
-    /// voice frames — registry membership alone is NOT proof of identity, so a
-    /// valid packet signature from the claimed sender is required before we
-    /// trust it. Without this, a peer that observed a public voice burst could
-    /// spoof a broadcast `voice_<burstID>.m4a` note under the talker's ID and
-    /// overwrite the signature-verified live bubble with attacker audio.
-    private func resolveSenderNickname(
+    /// Every remaining raw file transfer is signed, regardless of whether it
+    /// is broadcast, addressed to us, or merely passing through. Registry
+    /// signing keys are preferred; persisted identities cover peers that have
+    /// rotated or are not currently present in the registry.
+    private func authenticatedRawSenderNickname(
         packet: BitchatPacket,
         from peerID: PeerID,
-        isBroadcast: Bool,
         peers: [PeerID: BLEPeerInfo],
         env: BLEFileTransferHandlerEnvironment
     ) -> String? {
-        guard isBroadcast else {
-            return BLEPeerSenderDisplayName.resolveKnownPeer(
-                peerID: peerID,
-                localPeerID: env.localPeerID(),
-                localNickname: env.localNickname(),
-                peers: peers,
-                allowConnectedUnverified: true
-            ) ?? env.signedSenderDisplayName(packet, peerID)
-        }
+        guard packet.signature != nil else { return nil }
 
-        // Our own broadcasts replayed back via gossip sync (ttl==0) are
-        // trivially authentic and cannot be verified against the peer registry
-        // or identity cache, so exempt self exactly as `BLEPublicMessageHandler`
-        // does. Verify against the signing key already in the
-        // (synchronously-updated) registry first, then fall back to the
-        // persisted-identity signature lookup for peers not yet cached there.
-        let isSelf = peerID == env.localPeerID()
-        let registrySigningKey = peers[peerID]?.signingPublicKey
-        let verifiedViaRegistry = !isSelf && (registrySigningKey.map { env.verifyPacketSignature(packet, $0) } ?? false)
-        let signedDisplayName = (isSelf || verifiedViaRegistry) ? nil : env.signedSenderDisplayName(packet, peerID)
-        guard isSelf || verifiedViaRegistry || signedDisplayName != nil else { return nil }
+        let localPeerID = env.localPeerID()
+        let candidateKey = peerID == localPeerID
+            ? env.localSigningPublicKey()
+            : peers[peerID]?.signingPublicKey
+        let verifiedWithKnownKey = candidateKey.map {
+            env.verifyPacketSignature(packet, $0)
+        } ?? false
+        let signedDisplayName = verifiedWithKnownKey
+            ? nil
+            : env.signedSenderDisplayName(packet, peerID)
+        guard verifiedWithKnownKey || signedDisplayName != nil else { return nil }
 
         return BLEPeerSenderDisplayName.resolveKnownPeer(
             peerID: peerID,
-            localPeerID: env.localPeerID(),
+            localPeerID: localPeerID,
             localNickname: env.localNickname(),
             peers: peers,
-            allowConnectedUnverified: false
-        ) ?? signedDisplayName
+            // The packet signature authenticates the announced peer; the old
+            // connected-but-unsigned leniency is not involved.
+            allowConnectedUnverified: true
+        ) ?? signedDisplayName ?? BLEPeerSenderDisplayName.anonymousNickname(for: peerID)
     }
 }

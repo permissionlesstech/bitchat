@@ -79,11 +79,29 @@ enum NoisePayloadType: UInt8 {
     case groupKeyUpdate = 0x07      // Creator-signed group state (key rotation / roster update)
     // Live voice (push-to-talk)
     case voiceFrame = 0x08          // One live voice-burst packet (see VoiceBurstPacket)
+    // Finalized private media. `0x20` is the value already deployed by the
+    // Android client. The complete BitchatFilePacket is encrypted inside
+    // Noise before the outer noiseEncrypted packet is fragmented.
+    case privateFile = 0x20
     // Verification (QR-based OOB binding)
     case verifyChallenge = 0x10     // Verification challenge
     case verifyResponse  = 0x11     // Verification response
     // Transitive verification (web of trust)
     case vouch = 0x12               // Batch of vouch attestations
+
+    /// #1434 briefly used 0x09 before release. Accept it while prerelease
+    /// builds age out, but never emit it. Decoders canonicalize both values to
+    /// `.privateFile` so the compatibility alias cannot leak into app logic.
+    static let prereleasePrivateFileRawValue: UInt8 = 0x09
+
+    static func decoded(rawValue: UInt8) -> NoisePayloadType? {
+        rawValue == prereleasePrivateFileRawValue ? .privateFile : Self(rawValue: rawValue)
+    }
+
+    static func isPrivateFile(rawValue: UInt8?) -> Bool {
+        guard let rawValue else { return false }
+        return rawValue == privateFile.rawValue || rawValue == prereleasePrivateFileRawValue
+    }
 
     var description: String {
         switch self {
@@ -93,6 +111,7 @@ enum NoisePayloadType: UInt8 {
         case .groupInvite: return "groupInvite"
         case .groupKeyUpdate: return "groupKeyUpdate"
         case .voiceFrame: return "voiceFrame"
+        case .privateFile: return "privateFile"
         case .verifyChallenge: return "verifyChallenge"
         case .verifyResponse: return "verifyResponse"
         case .vouch: return "vouch"

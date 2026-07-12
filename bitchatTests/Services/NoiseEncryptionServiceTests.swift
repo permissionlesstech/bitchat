@@ -237,6 +237,55 @@ struct NoiseEncryptionServiceTests {
         #expect(try receiver.decrypt(ciphertext, from: alicePeerID) == Data("new session".utf8))
     }
 
+    @Test("Large private-file payloads use the bounded Noise extension")
+    func largePrivateFileNoiseRoundTrip() throws {
+        let alice = NoiseEncryptionService(keychain: MockKeychain())
+        let bob = NoiseEncryptionService(keychain: MockKeychain())
+        let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
+        let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
+        try establishSessions(alice: alice, bob: bob)
+
+        let content = Data("%PDF-1.7\n".utf8) + Data(repeating: 0x51, count: 96 * 1024)
+        let file = BitchatFilePacket(
+            fileName: "large-private.pdf",
+            fileSize: UInt64(content.count),
+            mimeType: "application/pdf",
+            content: content
+        )
+        let typedPayload = try #require(BLENoisePayloadFactory.privateFile(file))
+        #expect(typedPayload.count > NoiseSecurityConstants.maxMessageSize)
+        #expect(typedPayload.first == NoisePayloadType.privateFile.rawValue)
+        #expect(
+            typedPayload.count <= NoiseSecurityConstants.maxPrivateFilePlaintextSize,
+            "typedBytes=\(typedPayload.count) limit=\(NoiseSecurityConstants.maxPrivateFilePlaintextSize)"
+        )
+
+        do {
+            _ = try alice.encrypt(typedPayload, for: bobPeerID)
+            Issue.record("Ordinary Noise payload path must retain its 64 KiB ceiling")
+        } catch NoiseSecurityError.messageTooLarge {
+            // Expected: only the purpose-specific private-file API may extend it.
+        }
+
+        let ciphertext: Data
+        do {
+            ciphertext = try alice.encryptPrivateFilePayload(typedPayload, for: bobPeerID)
+        } catch {
+            Issue.record("Private-file encryption failed: \(error)")
+            return
+        }
+        let decrypted: Data
+        do {
+            decrypted = try bob.decrypt(ciphertext, from: alicePeerID)
+        } catch {
+            Issue.record("Private-file decryption failed: \(error); ciphertextBytes=\(ciphertext.count)")
+            return
+        }
+
+        #expect(ciphertext.range(of: content) == nil)
+        #expect(decrypted == typedPayload)
+    }
+
     @Test("Encrypt without a session requests handshake and decrypt without session fails")
     func handshakeRequiredAndSessionNotEstablishedErrors() throws {
         let service = NoiseEncryptionService(keychain: MockKeychain())

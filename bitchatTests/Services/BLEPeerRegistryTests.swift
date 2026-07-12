@@ -42,6 +42,37 @@ struct BLEPeerRegistryTests {
         #expect(registry.info(for: peerID)?.nickname == "alice-renamed")
     }
 
+    @Test("registry preserves absent versus explicit empty capabilities")
+    func capabilitiesPresenceIsPreserved() {
+        var registry = BLEPeerRegistry()
+        let oldPeer = PeerID(str: "1122334455667788")
+        let modernPeer = PeerID(str: "8877665544332211")
+
+        _ = registry.upsertVerifiedAnnounce(
+            peerID: oldPeer,
+            nickname: "old",
+            noisePublicKey: Data(repeating: 0x11, count: 32),
+            signingPublicKey: Data(repeating: 0x12, count: 32),
+            isConnected: true,
+            now: Date(),
+            capabilities: nil
+        )
+        _ = registry.upsertVerifiedAnnounce(
+            peerID: modernPeer,
+            nickname: "modern",
+            noisePublicKey: Data(repeating: 0x21, count: 32),
+            signingPublicKey: Data(repeating: 0x22, count: 32),
+            isConnected: true,
+            now: Date(),
+            capabilities: []
+        )
+
+        #expect(registry.capabilities(for: oldPeer).isEmpty)
+        #expect(!registry.capabilitiesWereExplicitlyAdvertised(for: oldPeer))
+        #expect(registry.capabilities(for: modernPeer).isEmpty)
+        #expect(registry.capabilitiesWereExplicitlyAdvertised(for: modernPeer))
+    }
+
     @Test("reachability keeps recent verified offline peers only when mesh is attached")
     func reachabilityRequiresMeshAttachmentForOfflinePeers() {
         let offlinePeer = PeerID(str: "1122334455667788")

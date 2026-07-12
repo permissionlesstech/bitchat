@@ -121,7 +121,7 @@ final class BLENoisePacketHandler {
             let payloadType = decrypted[0]
             let payloadData = decrypted.dropFirst()
 
-            guard let noisePayloadType = NoisePayloadType(rawValue: payloadType) else {
+            guard let noisePayloadType = NoisePayloadType.decoded(rawValue: payloadType) else {
                 SecureLogger.warning("⚠️ Unknown noise payload type: \(payloadType)")
                 return
             }
