@@ -36,6 +36,7 @@ final class MockTransport: Transport {
     private(set) var sentFavoriteNotifications: [(peerID: PeerID, isFavorite: Bool)] = []
     private(set) var sentBroadcastFiles: [(packet: BitchatFilePacket, transferID: String)] = []
     private(set) var sentPrivateFiles: [(packet: BitchatFilePacket, peerID: PeerID, transferID: String)] = []
+    private(set) var sentPrivateFileLegacyAllowances: [Bool] = []
     private(set) var cancelledTransfers: [String] = []
     private(set) var sentVerifyChallenges: [(peerID: PeerID, noiseKeyHex: String, nonceA: Data)] = []
     private(set) var sentVerifyResponses: [(peerID: PeerID, noiseKeyHex: String, nonceA: Data)] = []
@@ -58,6 +59,7 @@ final class MockTransport: Transport {
     var peerNicknames: [PeerID: String] = [:]
     var peerFingerprints: [PeerID: String] = [:]
     var peerNoiseStates: [PeerID: LazyHandshakeState] = [:]
+    var privateMediaPolicies: [PeerID: PrivateMediaSendPolicy] = [:]
     private let mockKeychain = MockKeychain()
 
     // MARK: - Transport Protocol Implementation
@@ -186,6 +188,21 @@ final class MockTransport: Transport {
 
     func sendFilePrivate(_ packet: BitchatFilePacket, to peerID: PeerID, transferId: String) {
         sentPrivateFiles.append((packet, peerID, transferId))
+        sentPrivateFileLegacyAllowances.append(false)
+    }
+
+    func sendFilePrivate(
+        _ packet: BitchatFilePacket,
+        to peerID: PeerID,
+        transferId: String,
+        allowLegacyFallback: Bool
+    ) {
+        sentPrivateFiles.append((packet, peerID, transferId))
+        sentPrivateFileLegacyAllowances.append(allowLegacyFallback)
+    }
+
+    func privateMediaSendPolicy(to peerID: PeerID) -> PrivateMediaSendPolicy {
+        privateMediaPolicies[peerID] ?? .encrypted
     }
 
     func cancelTransfer(_ transferId: String) {

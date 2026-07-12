@@ -83,6 +83,15 @@ enum TransportEvent: @unchecked Sendable {
     case bluetoothStateUpdated(CBManagerState)
 }
 
+/// Downgrade-safe decision for a private-media recipient. Callers ask before
+/// prompting, and BLEService checks again when it consumes any one-shot
+/// legacy consent.
+enum PrivateMediaSendPolicy: Equatable {
+    case encrypted
+    case legacyRequiresConsent
+    case blockedDowngrade
+}
+
 protocol TransportEventDelegate: AnyObject {
     @MainActor func didReceiveTransportEvent(_ event: TransportEvent)
 }
@@ -163,6 +172,12 @@ protocol Transport: AnyObject {
     func sendDeliveryAck(for messageID: String, to peerID: PeerID)
     func sendFileBroadcast(_ packet: BitchatFilePacket, transferId: String)
     func sendFilePrivate(_ packet: BitchatFilePacket, to peerID: PeerID, transferId: String)
+    func sendFilePrivate(
+        _ packet: BitchatFilePacket,
+        to peerID: PeerID,
+        transferId: String,
+        allowLegacyFallback: Bool
+    )
     func cancelTransfer(_ transferId: String)
 
     // Live voice / push-to-talk (mesh transports only): one encoded
@@ -208,6 +223,7 @@ protocol Transport: AnyObject {
     /// Capabilities the peer advertised in its last verified announce;
     /// empty for peers that predate the capabilities TLV.
     func peerCapabilities(_ peerID: PeerID) -> PeerCapabilities
+    func privateMediaSendPolicy(to peerID: PeerID) -> PrivateMediaSendPolicy
     /// Sends an encoded vouch-attestation batch inside the Noise session.
     func sendVouchAttestations(_ payload: Data, to peerID: PeerID)
     /// Appends a peer-authenticated observer. Unlike
@@ -278,6 +294,7 @@ extension Transport {
     func sendGroupKeyUpdate(_ statePayload: Data, to peerID: PeerID) {}
     func broadcastGroupMessage(_ envelope: Data) {}
     func peerCapabilities(_ peerID: PeerID) -> PeerCapabilities { [] }
+    func privateMediaSendPolicy(to peerID: PeerID) -> PrivateMediaSendPolicy { .blockedDowngrade }
     func sendVouchAttestations(_ payload: Data, to peerID: PeerID) {}
     func addPeerAuthenticatedObserver(_ handler: @escaping (PeerID, String) -> Void) {}
     func sendCourierMessage(_ content: String, messageID: String, recipientNoiseKey: Data, via couriers: [PeerID]) -> Bool { false }
@@ -294,6 +311,15 @@ extension Transport {
     func currentMeshTopology() -> MeshTopologySnapshot? { nil }
     func sendFileBroadcast(_ packet: BitchatFilePacket, transferId: String) {}
     func sendFilePrivate(_ packet: BitchatFilePacket, to peerID: PeerID, transferId: String) {}
+    func sendFilePrivate(
+        _ packet: BitchatFilePacket,
+        to peerID: PeerID,
+        transferId: String,
+        allowLegacyFallback: Bool
+    ) {
+        guard !allowLegacyFallback else { return }
+        sendFilePrivate(packet, to: peerID, transferId: transferId)
+    }
     func cancelTransfer(_ transferId: String) {}
 
     func sendMessage(_ content: String, mentions: [String], messageID: String, timestamp: Date) {

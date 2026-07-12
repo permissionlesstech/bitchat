@@ -27,7 +27,7 @@ final class SecureNoiseSession: NoiseSession {
         // Ordinary Noise messages keep the protocol ceiling. Finalized media
         // is the sole typed-payload extension and remains under the framed-file
         // cap enforced again at the service and file-decoder layers.
-        let isPrivateFile = plaintext.first == NoisePayloadType.privateFile.rawValue
+        let isPrivateFile = NoisePayloadType.isPrivateFile(rawValue: plaintext.first)
             && NoiseSecurityValidator.validatePrivateFileMessageSize(plaintext)
         guard NoiseSecurityValidator.validateMessageSize(plaintext) || isPrivateFile else {
             throw NoiseSecurityError.messageTooLarge
