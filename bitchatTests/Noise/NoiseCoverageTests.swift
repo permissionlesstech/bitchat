@@ -703,30 +703,48 @@ struct NoiseCoverageTests {
         oldSession.pauseNextDecrypt()
 
         let decryptResult = ConcurrentTestResult<(plaintext: Data, sessionGeneration: UUID)>()
-        DispatchQueue.global().async {
+        var promotionResultForCleanup: ConcurrentTestResult<Data?>?
+        defer {
+            // A failed startup requirement must not strand a late thread in
+            // the blocking test double after the test has returned.
+            oldSession.resumeDecrypt()
+            _ = decryptResult.wait(timeout: 5)
+            if let promotionResultForCleanup {
+                _ = promotionResultForCleanup.wait(timeout: 5)
+            }
+        }
+
+        let decryptThread = Thread {
             decryptResult.capture {
                 try aliceManager.decryptWithSessionGeneration(ciphertext, from: self.alicePeerID)
             }
         }
-        #expect(oldSession.waitForDecryptStart(timeout: 2))
+        decryptThread.name = "NoiseCoverageTests.staleDecrypt.decrypt"
+        decryptThread.qualityOfService = .userInitiated
+        decryptThread.start()
+        try #require(oldSession.waitForDecryptStart(timeout: 5))
 
         let promotionStarted = DispatchSemaphore(value: 0)
         let promotionResult = ConcurrentTestResult<Data?>()
-        DispatchQueue.global().async {
+        promotionResultForCleanup = promotionResult
+        let promotionThread = Thread {
             promotionStarted.signal()
             promotionResult.capture {
                 try aliceManager.handleIncomingHandshake(from: self.alicePeerID, message: message3)
             }
         }
-        #expect(promotionStarted.wait(timeout: .now() + 2) == .success)
+        promotionThread.name = "NoiseCoverageTests.staleDecrypt.promote"
+        promotionThread.qualityOfService = .userInitiated
+        promotionThread.start()
+        try #require(promotionStarted.wait(timeout: .now() + 5) == .success)
         #expect(
             promotionResult.wait(timeout: 0.05) == nil,
             "Promotion must wait for the exact decrypting-session lease"
         )
 
         oldSession.resumeDecrypt()
-        let decrypted = try #require(decryptResult.wait(timeout: 2)).get()
-        _ = try #require(promotionResult.wait(timeout: 2)).get()
+        let decrypted = try #require(decryptResult.wait(timeout: 5)).get()
+        _ = try #require(promotionResult.wait(timeout: 5)).get()
 
         #expect(decrypted.plaintext == Data("old session".utf8))
         #expect(decrypted.sessionGeneration == oldGeneration)
@@ -1008,15 +1026,19 @@ private final class BlockingDecryptNoiseSession: NoiseSession, @unchecked Sendab
 
 private final class ConcurrentTestResult<Value>: @unchecked Sendable {
     private let lock = NSLock()
-    private let completed = DispatchSemaphore(value: 0)
+    private let completed = DispatchGroup()
     private var storedResult: Result<Value, Error>?
+
+    init() {
+        completed.enter()
+    }
 
     func capture(_ operation: () throws -> Value) {
         let result = Result(catching: operation)
         lock.lock()
         storedResult = result
         lock.unlock()
-        completed.signal()
+        completed.leave()
     }
 
     func wait(timeout: TimeInterval) -> Result<Value, Error>? {
