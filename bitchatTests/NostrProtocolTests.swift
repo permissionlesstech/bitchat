@@ -140,6 +140,124 @@ struct NostrProtocolTests {
         )
         #expect(layers.seal.kind == NostrProtocol.EventKind.legacyNIP59Seal.rawValue)
         #expect(layers.message.kind == NostrProtocol.EventKind.legacyNIP17DirectMessage.rawValue)
+        #expect(layers.message.tags.isEmpty)
+    }
+
+    @Test func decryptAcceptsCurrentAndroidLegacyInnerRecipientTag() throws {
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+
+        // Current Android's `createPrivateMessage` emits an unsigned kind-14
+        // inner event with exactly [["p", recipient]], while its outer/seal
+        // layers use the deployed BitChat legacy v2 crypto. This isolated
+        // generator reproduces that cross-platform wire shape without making
+        // the production encoder depend on Android's historical tag choice.
+        let envelope = try NostrProtocol.createLegacyPrivateEnvelopeForTesting(
+            content: "legacy message from Android",
+            recipientPubkey: recipient.publicKeyHex,
+            senderIdentity: sender,
+            innerMessageTags: [["p", recipient.publicKeyHex]]
+        )
+
+        let layers = try NostrProtocol.decodePrivateEnvelopeLayersForTesting(
+            envelope: envelope,
+            recipientIdentity: recipient
+        )
+        #expect(layers.message.tags == [["p", recipient.publicKeyHex]])
+
+        let result = try NostrProtocol.decryptPrivateEnvelope(
+            envelope: envelope,
+            recipientIdentity: recipient
+        )
+        #expect(result.content == "legacy message from Android")
+        #expect(result.senderPubkey == sender.publicKeyHex)
+    }
+
+    @Test func decryptsFrozenLegacyEnvelopeProducedByAndroidB7f0b33d() throws {
+        let eventData = try Data(contentsOf: fixtureURL(
+            name: "AndroidLegacyPrivateEnvelopeB7f0b33d"
+        ))
+        let metadataData = try Data(contentsOf: fixtureURL(
+            name: "AndroidLegacyPrivateEnvelopeB7f0b33dMetadata"
+        ))
+        let envelope = try JSONDecoder().decode(NostrEvent.self, from: eventData)
+        let metadata = try JSONDecoder().decode(AndroidLegacyEnvelopeFixture.self, from: metadataData)
+        let recipientKey = try #require(Data(hexString: metadata.recipientPrivateKey))
+        let recipient = try NostrIdentity(privateKeyData: recipientKey)
+
+        #expect(metadata.androidCommit == "b7f0b33d3a267c770d3d5a65ee2d8c7e755450db")
+        #expect(metadata.generator == "NostrProtocol.createPrivateMessage")
+        #expect(metadata.generatorPatch == "AndroidLegacyPrivateEnvelopeB7f0b33dGenerator.patch")
+        #expect(metadata.fixtureSHA256 == eventData.sha256Fingerprint())
+        #expect(metadata.gradleTest.contains("NostrProtocolTest.emitCrossPlatformFixtures"))
+        let generatorPatch = try String(contentsOf: fixtureURL(
+            name: "AndroidLegacyPrivateEnvelopeB7f0b33dGenerator",
+            extension: "patch"
+        ))
+        #expect(metadata.generatorPatchSHA256 == Data(generatorPatch.utf8).sha256Fingerprint())
+        #expect(generatorPatch.contains("fun emitCrossPlatformFixtures()"))
+        #expect(generatorPatch.contains(metadata.recipientPrivateKey))
+        #expect(envelope.isValidSignature())
+        #expect(envelope.kind == NostrProtocol.EventKind.legacyNIP59GiftWrap.rawValue)
+        #expect(envelope.tags == [["p", recipient.publicKeyHex]])
+
+        let layers = try NostrProtocol.decodePrivateEnvelopeLayersForTesting(
+            envelope: envelope,
+            recipientIdentity: recipient
+        )
+        #expect(layers.message.tags == [["p", recipient.publicKeyHex]])
+
+        let result = try NostrProtocol.decryptPrivateEnvelope(
+            envelope: envelope,
+            recipientIdentity: recipient
+        )
+        #expect(result.content == "legacy fixture from Android b7f0b33d")
+        #expect(result.senderPubkey == metadata.senderPublicKey)
+    }
+
+    @Test func decryptRejectsAlternateLegacyInnerTags() throws {
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let otherRecipient = try NostrIdentity.generate()
+        let invalidTagShapes = [
+            [["p", otherRecipient.publicKeyHex]],
+            [["p", recipient.publicKeyHex], ["p", recipient.publicKeyHex]],
+            [["p", recipient.publicKeyHex, "unexpected"]],
+            [["x", recipient.publicKeyHex]]
+        ]
+
+        for tags in invalidTagShapes {
+            let envelope = try NostrProtocol.createLegacyPrivateEnvelopeForTesting(
+                content: "invalid Android-shaped tags",
+                recipientPubkey: recipient.publicKeyHex,
+                senderIdentity: sender,
+                innerMessageTags: tags
+            )
+            expectInvalidEvent {
+                _ = try NostrProtocol.decryptPrivateEnvelope(
+                    envelope: envelope,
+                    recipientIdentity: recipient
+                )
+            }
+        }
+    }
+
+    @Test func newPrivateEnvelopeRejectsInnerRecipientTag() throws {
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let envelope = try NostrProtocol.createPrivateEnvelopeWithInnerTagsForTesting(
+            content: "new format stays strict",
+            recipientPubkey: recipient.publicKeyHex,
+            senderIdentity: sender,
+            innerMessageTags: [["p", recipient.publicKeyHex]]
+        )
+
+        expectInvalidEvent {
+            _ = try NostrProtocol.decryptPrivateEnvelope(
+                envelope: envelope,
+                recipientIdentity: recipient
+            )
+        }
     }
 
     @Test func decryptsFrozenLegacyEnvelopeProducedByRelease733098bb() throws {
@@ -163,17 +281,14 @@ struct NostrProtocolTests {
         #expect(result.senderPubkey == "2e3d79df7047204f02b726c574e256f8de1dd80510f7dcb8b0d12df13acb87e6")
     }
 
-    @Test func publicationBatchDualPublishesOnlyBeforeExplicitDeadline() throws {
+    @Test func publicationBatchAlwaysDualPublishesForCoordinatedMigration() throws {
         let sender = try NostrIdentity.generate()
         let recipient = try NostrIdentity.generate()
-        let beforeDeadline = NostrProtocol.legacyPrivateEnvelopePublicationDeadline
-            .addingTimeInterval(-1)
 
         let migrationBatch = try NostrProtocol.createPrivateEnvelopePublicationBatch(
             content: "mixed-version",
             recipientPubkey: recipient.publicKeyHex,
-            senderIdentity: sender,
-            now: beforeDeadline
+            senderIdentity: sender
         )
         #expect(migrationBatch.map(\.kind) == [
             NostrProtocol.EventKind.privateEnvelope.rawValue,
@@ -187,29 +302,38 @@ struct NostrProtocolTests {
             #expect(result.content == "mixed-version")
         }
 
-        let postMigrationBatch = try NostrProtocol.createPrivateEnvelopePublicationBatch(
-            content: "new-only",
-            recipientPubkey: recipient.publicKeyHex,
-            senderIdentity: sender,
-            now: NostrProtocol.legacyPrivateEnvelopePublicationDeadline
+        // The compatibility copy retains the exact released-iOS legacy shape,
+        // which current Android also accepts: kinds 1059/13/14, v2 prefix, and
+        // no inner tags. There is no wall-clock branch that can silently stop
+        // old-client delivery.
+        let compatibilityLayers = try NostrProtocol.decodePrivateEnvelopeLayersForTesting(
+            envelope: migrationBatch[1],
+            recipientIdentity: recipient
         )
-        #expect(postMigrationBatch.map(\.kind) == [
-            NostrProtocol.EventKind.privateEnvelope.rawValue
-        ])
+        #expect(migrationBatch[1].content.hasPrefix("v2:"))
+        #expect(compatibilityLayers.seal.kind == NostrProtocol.EventKind.legacyNIP59Seal.rawValue)
+        #expect(compatibilityLayers.message.kind == NostrProtocol.EventKind.legacyNIP17DirectMessage.rawValue)
+        #expect(compatibilityLayers.message.tags.isEmpty)
     }
 
-    @Test func mailboxLookbackCoversFullRetentionWindowAndTimestampFuzz() {
+    @Test func mailboxLookbackCoversDeliveryWindowAndroidFuzzAndClockSkew() {
         let sentAt = Date(timeIntervalSince1970: 1_800_000_000)
-        let earliestPublicTimestamp = sentAt.addingTimeInterval(
-            -TransportConfig.nostrPrivateEnvelopeTimestampFuzzSeconds
+        let earliestAndroidTimestamp = sentAt.addingTimeInterval(
+            -TransportConfig.nostrLegacyAndroidTimestampFuzzSeconds
         )
-        let reconnectAtRetentionBoundary = sentAt.addingTimeInterval(24 * 60 * 60)
-        let filterSince = reconnectAtRetentionBoundary.addingTimeInterval(
+        let subscribeAtDeliveryBoundary = sentAt.addingTimeInterval(
+            TransportConfig.nostrPrivateEnvelopeDeliveryWindowSeconds
+        )
+        let filterSince = subscribeAtDeliveryBoundary.addingTimeInterval(
             -TransportConfig.nostrDMSubscribeLookbackSeconds
         )
 
-        #expect(TransportConfig.nostrDMSubscribeLookbackSeconds == (24 * 60 * 60) + (15 * 60))
-        #expect(filterSince <= earliestPublicTimestamp)
+        #expect(TransportConfig.nostrPrivateEnvelopeDeliveryWindowSeconds == 24 * 60 * 60)
+        #expect(TransportConfig.nostrLegacyAndroidTimestampFuzzSeconds == 48 * 60 * 60)
+        #expect(TransportConfig.nostrDMSubscribeClockSkewSeconds == 15 * 60)
+        let expectedLookback: TimeInterval = 72 * 60 * 60 + 15 * 60
+        #expect(TransportConfig.nostrDMSubscribeLookbackSeconds == expectedLookback)
+        #expect(filterSince == earliestAndroidTimestamp.addingTimeInterval(-(15 * 60)))
     }
 
     @Test func largePrivateEnvelopeFitsLayerSpecificExpansionLimits() throws {
@@ -497,22 +621,31 @@ struct NostrProtocolTests {
         #expect(object["limit"] as? Int == 42)
     }
 
-    @Test func privateEnvelopeFilterIncludesPrimaryAndCompatibilityKinds() throws {
+    @Test func privateEnvelopeFiltersGiveEachMigrationKindAnIndependentRecoveryBudget() throws {
         let since = Date(timeIntervalSince1970: 1_234_567)
-        let filter = NostrFilter.privateEnvelopesFor(pubkey: "recipient", since: since)
-        let data = try JSONEncoder().encode(filter)
-        let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
-
-        #expect(object["kinds"] as? [Int] == [
-            NostrProtocol.EventKind.privateEnvelope.rawValue,
-            NostrProtocol.EventKind.legacyNIP59GiftWrap.rawValue
-        ])
-        #expect(object["#p"] as? [String] == ["recipient"])
-        #expect(object["since"] as? Int == 1_234_567)
-        #expect(object["limit"] as? Int ==
-            TransportConfig.nostrRelayDefaultFetchLimit
-                * NostrProtocol.acceptedPrivateEnvelopeKinds.count
+        let filters = NostrFilter.privateEnvelopeFiltersFor(
+            pubkey: "recipient",
+            since: since
         )
+
+        #expect(filters.count == 2)
+        let objects = try filters.map { filter in
+            let data = try JSONEncoder().encode(filter)
+            return try #require(
+                try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            )
+        }
+        #expect(objects.compactMap { $0["kinds"] as? [Int] } == [
+            [NostrProtocol.EventKind.privateEnvelope.rawValue],
+            [NostrProtocol.EventKind.legacyNIP59GiftWrap.rawValue]
+        ])
+        for object in objects {
+            #expect(object["#p"] as? [String] == ["recipient"])
+            #expect(object["since"] as? Int == 1_234_567)
+            #expect(object["limit"] as? Int ==
+                TransportConfig.nostrPrivateEnvelopeFetchLimitPerKind
+            )
+        }
     }
 
     // MARK: - Helpers
@@ -524,13 +657,35 @@ struct NostrProtocolTests {
         }
     }
 
-    private func fixtureURL(name: String) throws -> URL {
+    private struct AndroidLegacyEnvelopeFixture: Decodable {
+        let androidCommit: String
+        let generator: String
+        let generatorPatch: String
+        let generatorPatchSHA256: String
+        let gradleTest: String
+        let fixtureSHA256: String
+        let recipientPrivateKey: String
+        let senderPublicKey: String
+
+        enum CodingKeys: String, CodingKey {
+            case androidCommit = "android_commit"
+            case generator
+            case generatorPatch = "generator_patch"
+            case generatorPatchSHA256 = "generator_patch_sha256"
+            case gradleTest = "gradle_test"
+            case fixtureSHA256 = "fixture_sha256"
+            case recipientPrivateKey = "recipient_private_key"
+            case senderPublicKey = "sender_public_key"
+        }
+    }
+
+    private func fixtureURL(name: String, extension fileExtension: String = "json") throws -> URL {
         #if SWIFT_PACKAGE
         let bundle = Bundle.module
         #else
         let bundle = Bundle(for: MockKeychain.self)
         #endif
-        return try #require(bundle.url(forResource: name, withExtension: "json"))
+        return try #require(bundle.url(forResource: name, withExtension: fileExtension))
     }
 
     private static func base64URLDecode(_ s: String) -> Data? {

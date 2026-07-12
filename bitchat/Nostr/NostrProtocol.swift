@@ -17,9 +17,10 @@ struct NostrProtocol {
     enum EventKind: Int {
         case metadata = 0
         case textNote = 1
-        // Bounded compatibility for BitChat releases that incorrectly emitted
-        // the proprietary payload under standard NIP kinds. Only kind 1059 is
-        // temporarily published during migration; all three remain readable.
+        // Compatibility for BitChat releases that incorrectly emitted the
+        // proprietary payload under standard NIP kinds. Kind 1059 continues
+        // to be published and read until a coordinated cross-platform release
+        // explicitly removes it; all three legacy layers remain readable.
         case legacyNIP59Seal = 13
         case legacyNIP17DirectMessage = 14
         case legacyNIP59GiftWrap = 1059
@@ -57,16 +58,10 @@ struct NostrProtocol {
     /// the layer-specific cap below the public ciphertext ceiling.
     private static let maximumPrivateEnvelopeSealPlaintextBytes = 48 * 1024
 
-    /// Compatibility-only publication stops at this instant. New-format kind
-    /// 1402 remains first/primary throughout the window; the legacy kind-1059
-    /// copy exists solely so pre-migration BitChat clients can receive it.
-    static let legacyPrivateEnvelopePublicationDeadline = Date(
-        timeIntervalSince1970: 1_792_022_400 // 2026-10-15T00:00:00Z
-    )
-
     /// New clients subscribe to the provisional BitChat-specific kind and the
-    /// compatibility-only legacy kind so both sides of a rolling rollout can
-    /// recover stored messages.
+    /// compatibility legacy kind so both sides of a rolling rollout can
+    /// recover stored messages. Do not remove kind 1059 here until all
+    /// supported iOS and Android releases have migrated.
     static let acceptedPrivateEnvelopeKinds = [
         EventKind.privateEnvelope.rawValue,
         EventKind.legacyNIP59GiftWrap.rawValue
@@ -145,24 +140,22 @@ struct NostrProtocol {
     }
 
     /// Events to publish for one logical private payload. The primary
-    /// BitChat-specific format is always first. Until the explicit migration
-    /// deadline, a legacy copy follows for clients that still subscribe only
-    /// to kind 1059. Both encrypt the exact same embedded BitChat payload, so
-    /// receive-side logical-payload dedup collapses the pair.
+    /// BitChat-specific format is always first and a legacy copy follows for
+    /// clients that still subscribe only to kind 1059. There is deliberately
+    /// no date-based cutoff: removal requires a coordinated iOS/Android
+    /// release after supported old clients have migrated. Both encrypt the
+    /// exact same embedded BitChat payload, so receive-side logical-payload
+    /// dedup collapses the pair.
     static func createPrivateEnvelopePublicationBatch(
         content: String,
         recipientPubkey: String,
-        senderIdentity: NostrIdentity,
-        now: Date = Date()
+        senderIdentity: NostrIdentity
     ) throws -> [NostrEvent] {
         let primary = try createPrivateEnvelope(
             content: content,
             recipientPubkey: recipientPubkey,
             senderIdentity: senderIdentity
         )
-        guard now < legacyPrivateEnvelopePublicationDeadline else {
-            return [primary]
-        }
         let compatibilityCopy = try createPrivateEnvelope(
             content: content,
             recipientPubkey: recipientPubkey,
@@ -176,14 +169,15 @@ struct NostrProtocol {
         content: String,
         recipientPubkey: String,
         senderIdentity: NostrIdentity,
-        format: PrivateEnvelopeWireFormat
+        format: PrivateEnvelopeWireFormat,
+        messageTags: [[String]] = []
     ) throws -> NostrEvent {
         // 1. Create the unsigned inner BitChat message.
         let message = NostrEvent(
             pubkey: senderIdentity.publicKeyHex,
             createdAt: Date(),
             kind: format.messageKind,
-            tags: [],
+            tags: messageTags,
             content: content
         )
         
@@ -279,16 +273,37 @@ struct NostrProtocol {
         )
     }
 
-    static func createLegacyPrivateEnvelopeForTesting(
+    static func createPrivateEnvelopeWithInnerTagsForTesting(
         content: String,
         recipientPubkey: String,
-        senderIdentity: NostrIdentity
+        senderIdentity: NostrIdentity,
+        innerMessageTags: [[String]]
     ) throws -> NostrEvent {
         try createPrivateEnvelope(
             content: content,
             recipientPubkey: recipientPubkey,
             senderIdentity: senderIdentity,
-            format: .legacyMislabelledV2
+            format: .bitchatV1,
+            messageTags: innerMessageTags
+        )
+    }
+
+    static func createLegacyPrivateEnvelopeForTesting(
+        content: String,
+        recipientPubkey: String,
+        senderIdentity: NostrIdentity,
+        innerMessageTags: [[String]] = []
+    ) throws -> NostrEvent {
+        // Current Android legacy envelopes use exactly one recipient `p` tag
+        // on the unsigned inner kind-14 event; released iOS envelopes use no
+        // inner tags. Tests pass the Android shape explicitly so this helper
+        // cannot silently make the production encoder depend on that quirk.
+        try createPrivateEnvelope(
+            content: content,
+            recipientPubkey: recipientPubkey,
+            senderIdentity: senderIdentity,
+            format: .legacyMislabelledV2,
+            messageTags: innerMessageTags
         )
     }
 
@@ -637,13 +652,34 @@ struct NostrProtocol {
         // comes from the seal. Bind its claimed sender and custom kind to that
         // authenticated layer before exposing content.
         guard message.kind == format.messageKind.rawValue,
-              message.tags.isEmpty,
+              validInnerMessageTags(
+                message.tags,
+                format: format,
+                recipientPubkey: recipientIdentity.publicKeyHex
+              ),
               message.sig == nil,
               seal.pubkey == message.pubkey else {
             throw NostrError.invalidEvent
         }
 
         return (seal, message)
+    }
+
+    /// Released iOS legacy envelopes used no inner tags, while current
+    /// Android legacy envelopes use exactly the authenticated recipient tag.
+    /// Accept only those two historical shapes for kind 1059. The new kind
+    /// 1402 format remains strict and rejects every inner tag.
+    private static func validInnerMessageTags(
+        _ tags: [[String]],
+        format: PrivateEnvelopeWireFormat,
+        recipientPubkey: String
+    ) -> Bool {
+        switch format {
+        case .bitchatV1:
+            return tags.isEmpty
+        case .legacyMislabelledV2:
+            return tags.isEmpty || tags == [["p", recipientPubkey]]
+        }
     }
 
     private static func decodePrivateEnvelopeEventJSON(

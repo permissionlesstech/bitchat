@@ -91,8 +91,8 @@ final class NostrInboundPipeline {
     private weak var context: (any NostrInboundPipelineContext)?
     private let presence: GeoPresenceTracker
     private var geoEventLogCount = 0
-    // During the bounded wire-format migration, one logical private payload
-    // is published under both the primary and compatibility formats. Outer
+    // During the coordinated wire-format migration, one logical private
+    // payload is published under both primary and compatibility formats. Outer
     // event IDs differ, so collapse the authenticated embedded payload before
     // invoking message/ack side effects. Keep this bounded like the outer-ID
     // caches; the recipient and authenticated sender are part of the key.

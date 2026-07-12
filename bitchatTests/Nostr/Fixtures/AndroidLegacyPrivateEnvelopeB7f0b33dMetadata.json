@@ -1,0 +1,10 @@
+{
+  "android_commit": "b7f0b33d3a267c770d3d5a65ee2d8c7e755450db",
+  "generator": "NostrProtocol.createPrivateMessage",
+  "generator_patch": "AndroidLegacyPrivateEnvelopeB7f0b33dGenerator.patch",
+  "generator_patch_sha256": "e7ad29d6a247638cc16fb2ec06937266e6a03e7a115ae00913330a86a88fa56a",
+  "gradle_test": "ANDROID_HOME=/opt/homebrew/share/android-commandlinetools ANDROID_SDK_ROOT=/opt/homebrew/share/android-commandlinetools JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home ./gradlew testDebugUnitTest --tests com.bitchat.android.nostr.NostrProtocolTest.emitCrossPlatformFixtures --info",
+  "fixture_sha256": "d2df3d0b7ffd84c5cb25e0b3f4a89ad14f72a105bddadab77081f98c661b080e",
+  "recipient_private_key": "0000000000000000000000000000000000000000000000000000000000000002",
+  "sender_public_key": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+}

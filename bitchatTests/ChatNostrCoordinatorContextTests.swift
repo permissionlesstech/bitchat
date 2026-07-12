@@ -349,8 +349,7 @@ struct ChatNostrCoordinatorContextTests {
         let envelopes = try NostrProtocol.createPrivateEnvelopePublicationBatch(
             content: embedded,
             recipientPubkey: recipient.publicKeyHex,
-            senderIdentity: sender,
-            now: NostrProtocol.legacyPrivateEnvelopePublicationDeadline.addingTimeInterval(-1)
+            senderIdentity: sender
         )
 
         for envelope in envelopes {
@@ -385,9 +384,6 @@ struct ChatNostrCoordinatorContextTests {
         let coordinator = ChatNostrCoordinator(context: context)
         let recipient = try NostrIdentity.generate()
         let sender = try NostrIdentity.generate()
-        let beforeDeadline = NostrProtocol.legacyPrivateEnvelopePublicationDeadline
-            .addingTimeInterval(-1)
-
         let messageContent = try #require(NostrEmbeddedBitChat.encodePMForNostrNoRecipient(
             content: "migration message",
             messageID: "migration-message-id",
@@ -408,8 +404,7 @@ struct ChatNostrCoordinatorContextTests {
             let envelopes = try NostrProtocol.createPrivateEnvelopePublicationBatch(
                 content: content,
                 recipientPubkey: recipient.publicKeyHex,
-                senderIdentity: sender,
-                now: beforeDeadline
+                senderIdentity: sender
             )
             #expect(envelopes.count == 2)
             for envelope in envelopes {

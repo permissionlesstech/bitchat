@@ -1241,6 +1241,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         // Drop relay subscriptions, handlers, pending sends, and replay state.
         // Geohash DM handlers can capture pre-wipe Nostr identities, so a plain
         // disconnect is not enough here.
+        NostrTransport.resetControlRetriesForPanicWipe()
         NostrRelayManager.shared.resetForPanicWipe()
         nostrRelayManager = nil
 
