@@ -84,13 +84,21 @@ extension ChatViewModel: NostrInboundPipelineContext {
 /// Ordering is deliberate and performance-critical: cheap rejects (kind,
 /// dedup lookup) run BEFORE Schnorr signature verification because duplicates
 /// dominate real relay traffic; events are recorded only AFTER verification so
-/// a forged-signature copy can never poison the dedup set; gift-wrap
+/// a forged-signature copy can never poison the dedup set; private-envelope
 /// verification for the account mailbox runs off-main with an atomic
 /// main-actor check-and-record.
 final class NostrInboundPipeline {
     private weak var context: (any NostrInboundPipelineContext)?
     private let presence: GeoPresenceTracker
     private var geoEventLogCount = 0
+    // During the coordinated wire-format migration, one logical private
+    // payload is published under both primary and compatibility formats. Outer
+    // event IDs differ, so collapse the authenticated embedded payload before
+    // invoking message/ack side effects. Keep this bounded like the outer-ID
+    // caches; the recipient and authenticated sender are part of the key.
+    private var recentPrivatePayloadFormats: [String: UInt8] = [:]
+    private var recentPrivatePayloadKeyOrder: [String] = []
+    private static let privatePayloadDedupCapacity = 2_048
 
     init(context: any NostrInboundPipelineContext, presence: GeoPresenceTracker) {
         self.context = context
@@ -268,15 +276,16 @@ final class NostrInboundPipeline {
     }
 
     @MainActor
-    func subscribeGiftWrap(_ giftWrap: NostrEvent, id: NostrIdentity) {
+    func subscribePrivateEnvelope(_ envelope: NostrEvent, id: NostrIdentity) {
         guard let context else { return }
         // Dedup lookup before Schnorr verification; record only after it passes.
-        guard !context.hasProcessedNostrEvent(giftWrap.id) else { return }
-        guard giftWrap.isValidSignature() else { return }
-        context.recordProcessedNostrEvent(giftWrap.id)
+        guard !context.hasProcessedNostrEvent(envelope.id) else { return }
+        guard envelope.content.utf8.count <= NostrProtocol.maximumPrivateEnvelopeCiphertextBytes else { return }
+        guard envelope.isValidSignature() else { return }
+        context.recordProcessedNostrEvent(envelope.id)
 
-        guard let (content, senderPubkey, rumorTs) = try? NostrProtocol.decryptPrivateMessage(
-            giftWrap: giftWrap,
+        guard let (content, senderPubkey, messageTs) = try? NostrProtocol.decryptPrivateEnvelope(
+            envelope: envelope,
             recipientIdentity: id
         ),
         let packet = Self.decodeEmbeddedBitChatPacket(from: content),
@@ -285,8 +294,14 @@ final class NostrInboundPipeline {
         else {
             return
         }
+        guard shouldProcessPrivatePayload(
+            noisePayload,
+            senderPubkey: senderPubkey,
+            recipientPubkey: id.publicKeyHex,
+            envelopeKind: envelope.kind
+        ) else { return }
 
-        let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTs))
+        let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(messageTs))
         let convKey = PeerID(nostr_: senderPubkey)
         context.registerNostrKeyMapping(senderPubkey, for: convKey)
 
@@ -313,25 +328,26 @@ final class NostrInboundPipeline {
     }
 
     @MainActor
-    func handleGiftWrap(_ giftWrap: NostrEvent, id: NostrIdentity) {
+    func handlePrivateEnvelope(_ envelope: NostrEvent, id: NostrIdentity) {
         guard let context else { return }
         // Dedup lookup before Schnorr verification; record only after it passes.
-        if context.hasProcessedNostrEvent(giftWrap.id) {
+        if context.hasProcessedNostrEvent(envelope.id) {
             return
         }
-        guard giftWrap.isValidSignature() else { return }
-        context.recordProcessedNostrEvent(giftWrap.id)
+        guard envelope.content.utf8.count <= NostrProtocol.maximumPrivateEnvelopeCiphertextBytes else { return }
+        guard envelope.isValidSignature() else { return }
+        context.recordProcessedNostrEvent(envelope.id)
 
-        guard let (content, senderPubkey, rumorTs) = try? NostrProtocol.decryptPrivateMessage(
-            giftWrap: giftWrap,
+        guard let (content, senderPubkey, messageTs) = try? NostrProtocol.decryptPrivateEnvelope(
+            envelope: envelope,
             recipientIdentity: id
         ) else {
-            SecureLogger.warning("GeoDM: failed decrypt giftWrap id=\(giftWrap.id.prefix(8))…", category: .session)
+            SecureLogger.warning("GeoDM: failed decrypt private envelope id=\(envelope.id.prefix(8))…", category: .session)
             return
         }
 
         SecureLogger.debug(
-            "GeoDM: decrypted gift-wrap id=\(giftWrap.id.prefix(16))... from=\(senderPubkey.prefix(8))...",
+            "GeoDM: decrypted private envelope id=\(envelope.id.prefix(16))... from=\(senderPubkey.prefix(8))...",
             category: .session
         )
 
@@ -341,13 +357,19 @@ final class NostrInboundPipeline {
         else {
             return
         }
+        guard shouldProcessPrivatePayload(
+            payload,
+            senderPubkey: senderPubkey,
+            recipientPubkey: id.publicKeyHex,
+            envelopeKind: envelope.kind
+        ) else { return }
 
         let convKey = PeerID(nostr_: senderPubkey)
         context.registerNostrKeyMapping(senderPubkey, for: convKey)
 
         switch payload.type {
         case .privateMessage:
-            let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTs))
+            let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(messageTs))
             context.handlePrivateMessage(
                 payload,
                 senderPubkey: senderPubkey,
@@ -369,28 +391,29 @@ final class NostrInboundPipeline {
     }
 
     @MainActor
-    func handleNostrMessage(_ giftWrap: NostrEvent) {
+    func handleAccountPrivateEnvelope(_ envelope: NostrEvent) {
         guard let context else { return }
         // Cheap dedup pre-check only; Schnorr verification runs off-main in
-        // processNostrMessage, which then does the authoritative
+        // processAccountPrivateEnvelope, which then does the authoritative
         // check-and-record. Recording stays after verification so a
         // forged-signature copy can never poison the dedup set and suppress
         // the genuine event.
-        if context.hasProcessedNostrEvent(giftWrap.id) { return }
+        if context.hasProcessedNostrEvent(envelope.id) { return }
 
         Task.detached(priority: .userInitiated) { [weak self] in
-            await self?.processNostrMessage(giftWrap)
+            await self?.processAccountPrivateEnvelope(envelope)
         }
     }
 
-    func processNostrMessage(_ giftWrap: NostrEvent) async {
-        guard giftWrap.isValidSignature() else { return }
+    func processAccountPrivateEnvelope(_ envelope: NostrEvent) async {
+        guard envelope.content.utf8.count <= NostrProtocol.maximumPrivateEnvelopeCiphertextBytes else { return }
+        guard envelope.isValidSignature() else { return }
         guard let context else { return }
         // Authoritative check-and-record, atomic on the main actor so two
         // concurrent detached tasks can't both process the same event.
         let alreadyProcessed: Bool = await MainActor.run {
-            if context.hasProcessedNostrEvent(giftWrap.id) { return true }
-            context.recordProcessedNostrEvent(giftWrap.id)
+            if context.hasProcessedNostrEvent(envelope.id) { return true }
+            context.recordProcessedNostrEvent(envelope.id)
             return false
         }
         if alreadyProcessed { return }
@@ -400,8 +423,8 @@ final class NostrInboundPipeline {
         guard let currentIdentity else { return }
 
         do {
-            let (content, senderPubkey, rumorTimestamp) = try NostrProtocol.decryptPrivateMessage(
-                giftWrap: giftWrap,
+            let (content, senderPubkey, messageTimestampSeconds) = try NostrProtocol.decryptPrivateEnvelope(
+                envelope: envelope,
                 recipientIdentity: currentIdentity
             )
 
@@ -425,8 +448,14 @@ final class NostrInboundPipeline {
 
                 if packet.type == MessageType.noiseEncrypted.rawValue,
                    let payload = NoisePayload.decode(packet.payload) {
-                    let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(rumorTimestamp))
+                    let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(messageTimestampSeconds))
                     await MainActor.run {
+                        guard self.shouldProcessPrivatePayload(
+                            payload,
+                            senderPubkey: senderPubkey,
+                            recipientPubkey: currentIdentity.publicKeyHex,
+                            envelopeKind: envelope.kind
+                        ) else { return }
                         context.registerNostrKeyMapping(senderPubkey, for: targetPeerID)
 
                         switch payload.type {
@@ -500,6 +529,47 @@ final class NostrInboundPipeline {
 }
 
 private extension NostrInboundPipeline {
+    @MainActor
+    func shouldProcessPrivatePayload(
+        _ payload: NoisePayload,
+        senderPubkey: String,
+        recipientPubkey: String,
+        envelopeKind: Int
+    ) -> Bool {
+        let digest = payload.encode().sha256Fingerprint()
+        let key = "\(recipientPubkey.lowercased()):\(senderPubkey.lowercased()):\(digest)"
+        let formatBit: UInt8
+        switch envelopeKind {
+        case NostrProtocol.EventKind.privateEnvelope.rawValue:
+            formatBit = 1 << 0
+        case NostrProtocol.EventKind.legacyNIP59GiftWrap.rawValue:
+            formatBit = 1 << 1
+        default:
+            return true
+        }
+
+        if let observedFormats = recentPrivatePayloadFormats[key] {
+            if observedFormats & formatBit != 0 {
+                // A same-format re-envelope is a delivery retry. Let it reach
+                // the coordinator so a lost DELIVERED acknowledgement can be
+                // sent again; downstream message-ID dedup prevents rerendering.
+                return true
+            }
+            // The same authenticated payload under the other migration format
+            // is the compatibility twin, not a new message or acknowledgement.
+            recentPrivatePayloadFormats[key] = observedFormats | formatBit
+            return false
+        }
+
+        recentPrivatePayloadFormats[key] = formatBit
+        recentPrivatePayloadKeyOrder.append(key)
+        if recentPrivatePayloadKeyOrder.count > Self.privatePayloadDedupCapacity {
+            let evicted = recentPrivatePayloadKeyOrder.removeFirst()
+            recentPrivatePayloadFormats.removeValue(forKey: evicted)
+        }
+        return true
+    }
+
     @MainActor
     static func decodeEmbeddedBitChatPacket(from content: String) -> BitchatPacket? {
         guard content.hasPrefix("bitchat1:") else { return nil }

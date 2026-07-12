@@ -25,7 +25,7 @@ bitchat is a decentralized, peer-to-peer messaging application for secure, priva
 Two transports implement a common `Transport` interface and are coordinated by a `MessageRouter`:
 
 * **BLE mesh** — every device is simultaneously a GATT central and peripheral, relaying packets in a controlled flood. No infrastructure, pairing, or accounts.
-* **Nostr** — private messages to mutual favorites travel as NIP-17 gift-wrapped events over public relays (over Tor where enabled), bridging separate meshes through the internet.
+* **Nostr** — private messages to mutual favorites travel in BitChat's app-specific encrypted envelopes over public relays (over Tor where enabled), bridging separate meshes through the internet.
 
 The router prefers a live mesh link, falls back to Nostr, and engages the courier system when neither can deliver promptly.
 
@@ -78,7 +78,9 @@ Courier envelopes are sealed to the recipient's *static* key with the one-way No
 
 ### 5.3 Nostr Path
 
-Private messages to mutual favorites are wrapped per NIP-17/NIP-59: a rumor (kind 14) sealed (kind 13) and gift-wrapped (kind 1059) under a throwaway ephemeral key, so relays learn neither sender nor content.
+Private messages to mutual favorites use BitChat's proprietary private-envelope protocol. An unsigned inner message (kind 1404) is encrypted and placed in a sender-signed seal (kind 1403); that seal is encrypted again inside a public envelope (kind 1402) signed by a one-time key. Kind 1402 is a provisional BitChat-specific assignment, not a formally reserved Nostr kind. Each encrypted content field is `bitchat-pm-v1:` followed by base64url of a 24-byte nonce, XChaCha20-Poly1305 ciphertext, and its 16-byte tag. Keys come from secp256k1 ECDH and HKDF-SHA256 with a BitChat-specific domain separator.
+
+This format is **not NIP-17, NIP-44, or NIP-59 compatible** and interoperates only with BitChat clients. The outer `p` tag exposes the recipient's Nostr public key to relays; the stable sender identity and plaintext remain inside authenticated ciphertext. New-format seal and envelope timestamps are randomized up to 15 minutes into the past, while the actual message timestamp is encrypted. Legacy Android envelopes can carry public-layer timestamps randomized across the preceding 48 hours. The protocol does not provide forward secrecy: compromise of the recipient's static Nostr private key can expose stored envelopes.
 
 ## 6. Store and Forward
 
@@ -105,7 +107,11 @@ Public broadcast messages are cached (1000 packets) and reconciled between peers
 
 ### 6.4 Nostr Mailboxes
 
-Gift-wrapped messages rest on Nostr relays; clients re-subscribe with a 24-hour lookback on reconnect, covering the both-devices-offline case for mutual favorites whenever either side touches the internet.
+BitChat private envelopes rest on Nostr relays; clients re-subscribe across the 24-hour delivery window plus the full 48-hour timestamp randomization used by deployed Android clients and 15 minutes of clock skew (72 hours 15 minutes total). During the rolling format migration, clients subscribe to both the provisional BitChat-specific kind 1402 and historical kind 1059. Recovery places the kinds in separate filters within one REQ, each with an independent 500-event limit, so traffic in one format cannot starve the other. Each logical payload is published first in the primary kind-1402 format and then as a compatibility legacy copy for older iOS and current Android clients. There is no calendar cutoff: legacy publication and reception remain until a coordinated cross-platform release confirms supported clients have migrated. Bounded dedup of the authenticated embedded payload collapses the migration pair at receivers.
+
+The relay send queue treats those two events as one protected batch. Capacity pressure removes ephemeral events before regular traffic and never evicts only one private-envelope copy. A queue containing only protected batches rejects a new pair as a whole: user messages surface a failed delivery, while acknowledgements and favorite notifications retain the exact pair in one process-wide 256-entry bounded-backoff retry queue shared by account and short-lived geohash transports. Sustained control-payload overflow evicts the oldest whole pair with an explicit warning rather than growing memory or splitting formats. After either socket write fails, the same pair remains pending and both copies are replayed on the replacement connection. Terminal relay targets are pruned after bounded connection retries; a batch that succeeded elsewhere retires normally, while an all-target failure returns to the transport's failure/retry policy. Receive-side dedup suppresses the replay if one copy had already reached the relay.
+
+Released iOS legacy envelopes use an empty inner tag list. Current Android legacy envelopes use exactly one inner `p` tag naming the recipient. The kind-1059 decoder accepts only those two shapes after authenticating the outer recipient and sender-signed seal; alternate recipients, duplicate tags, and extra tags are rejected. Kind 1402 remains strict and permits no inner tags.
 
 ### 6.5 Delivery Metrics
 
@@ -127,7 +133,7 @@ Bare local counters (deposits, handovers, sprays, opens, outbox flushes and drop
 * **Flooding abuse** is bounded by TTL clamps, deduplication, per-depositor quotas, connect-rate limits, and announce-rate limiting.
 * **Replay** of public broadcasts is bounded by the 6-hour acceptance window plus deduplication; private payloads are protected by Noise nonces.
 * **Metadata.** BLE proximity is inherently observable; ephemeral IDs and daily-rotating courier tags limit long-term correlation. Nostr traffic can ride Tor.
-* **No forward secrecy for sealed mail** (§5.2) is the main cryptographic trade-off of the offline path.
+* **No forward secrecy for sealed mail or Nostr envelopes** (§5.2–5.3) means compromise of a recipient's static key can expose retained ciphertext addressed to that key.
 
 ## 9. Future Work
 

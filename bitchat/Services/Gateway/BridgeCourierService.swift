@@ -67,7 +67,7 @@ final class BridgeCourierService: ObservableObject {
     var relaysConnected: (@MainActor () -> Bool)?
     /// Publishes a signed drop event directly to connected default (DM)
     /// relays. Completion is true only after at least one relay explicitly
-    /// accepts the event via NIP-20 OK; this must never mean "queued in RAM"
+    /// accepts the event via NIP-01 `OK`; this must never mean "queued in RAM"
     /// or merely "written to a socket".
     var publishEvent: (@MainActor (NostrEvent, @escaping @MainActor (Bool) -> Void) -> Void)?
     /// (Re)opens the drop subscription for the given hex tags.
@@ -129,7 +129,7 @@ final class BridgeCourierService: ObservableObject {
     /// a newer attempt for the same message.
     private var activeDropOperations: [String: ActiveDropOperation] = [:]
     /// Held-envelope publishes have no sender message ID, but still need an
-    /// in-flight identity: repeated refreshes inside the NIP-20 wait window
+    /// in-flight identity: repeated refreshes inside the relay-OK wait window
     /// must not mint duplicate relay events for the same opaque envelope.
     private var heldDropOperations: [Data: UUID] = [:]
     /// Deterministically invalid envelopes are suppressed for this process,
@@ -275,7 +275,7 @@ final class BridgeCourierService: ObservableObject {
     /// Publishes a drop, or queues it when relays are down. `messageID` is the
     /// sender-side dedup key (nil for held/relayed envelopes we don't track);
     /// it rides the pending queue so an evicted or failed drop can release its
-    /// in-flight slot. Completion reports actual NIP-20 relay acceptance.
+    /// in-flight slot. Completion reports actual NIP-01 relay acceptance.
     private func publishDrop(
         _ envelope: CourierEnvelope,
         messageID: String? = nil,

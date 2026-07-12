@@ -1,0 +1,29 @@
+diff --git a/app/src/test/kotlin/com/bitchat/android/nostr/NostrProtocolTest.kt b/app/src/test/kotlin/com/bitchat/android/nostr/NostrProtocolTest.kt
+index a5bd956..544a29b 100644
+--- a/app/src/test/kotlin/com/bitchat/android/nostr/NostrProtocolTest.kt
++++ b/app/src/test/kotlin/com/bitchat/android/nostr/NostrProtocolTest.kt
+@@ -10,0 +11,21 @@ class NostrProtocolTest {
++    @Test
++    fun emitCrossPlatformFixtures() {
++        val sender = NostrIdentity.fromPrivateKey(
++            "0000000000000000000000000000000000000000000000000000000000000001"
++        )
++        val recipient = NostrIdentity.fromPrivateKey(
++            "0000000000000000000000000000000000000000000000000000000000000002"
++        )
++        val giftWrap = NostrProtocol.createPrivateMessage(
++            content = "legacy fixture from Android b7f0b33d",
++            recipientPubkey = recipient.publicKeyHex,
++            senderIdentity = sender
++        ).single()
++
++        assertEquals(NostrKind.GIFT_WRAP, giftWrap.kind)
++        assertEquals(listOf(listOf("p", recipient.publicKeyHex)), giftWrap.tags)
++        println("BITCHAT_FIXTURE_EVENT=${gson.toJson(giftWrap)}")
++        println("BITCHAT_FIXTURE_RECIPIENT_PRIVATE_KEY=${recipient.privateKeyHex}")
++        println("BITCHAT_FIXTURE_SENDER_PUBLIC_KEY=${sender.publicKeyHex}")
++    }
++
+     @Test
+     fun decryptPrivateMessage_acceptsAuthenticatedSeal() {
+         val sender = NostrIdentity.generate()

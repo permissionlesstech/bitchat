@@ -171,7 +171,22 @@ enum TransportConfig {
     static let nostrGeoRelayCount: Int = 5
     static let nostrGeohashSampleLookbackSeconds: TimeInterval = 300
     static let nostrGeohashSampleLimit: Int = 100
-    static let nostrDMSubscribeLookbackSeconds: TimeInterval = 86400
+    /// New iOS public-envelope timestamps are deliberately shifted into the
+    /// past for privacy and relay compatibility.
+    static let nostrPrivateEnvelopeTimestampFuzzSeconds: TimeInterval = 15 * 60
+    /// Deployed Android clients can shift legacy kind-1059 timestamps by the
+    /// full preceding 48 hours.
+    static let nostrLegacyAndroidTimestampFuzzSeconds: TimeInterval = 48 * 60 * 60
+    /// Private mail remains eligible for delivery for the same 24-hour window
+    /// as the persistent sender outbox. The relay query must add timestamp
+    /// randomization to that window rather than replacing it: an Android event
+    /// sent at t0 can legitimately be stamped t0-48h and fetched at t0+24h.
+    static let nostrPrivateEnvelopeDeliveryWindowSeconds: TimeInterval = 24 * 60 * 60
+    static let nostrDMSubscribeClockSkewSeconds: TimeInterval = 15 * 60
+    static let nostrDMSubscribeLookbackSeconds: TimeInterval =
+        nostrPrivateEnvelopeDeliveryWindowSeconds
+        + nostrLegacyAndroidTimestampFuzzSeconds
+        + nostrDMSubscribeClockSkewSeconds
     // A sampled chat message this recent means "a conversation is happening
     // there" for the empty-timeline nearby-activity hint.
     static let uiGeohashChatActivityWindowSeconds: TimeInterval = 900
@@ -199,11 +214,20 @@ enum TransportConfig {
     // Reconnect delays get ±20% random jitter so relays that dropped together
     // (e.g. a network blip) don't thundering-herd the same reconnect instant.
     static let nostrRelayBackoffJitterRatio: Double = 0.2
-    static let nostrRelayDefaultFetchLimit: Int = 100
+    /// Migration recovery uses one independent relay filter per wire kind so
+    /// primary traffic cannot consume the legacy result budget (or vice
+    /// versa). Five hundred per kind bounds startup work while preserving a
+    /// materially deeper offline mailbox than the generic feed default.
+    static let nostrPrivateEnvelopeFetchLimitPerKind: Int = 500
     // How many consecutive Tor-readiness waits (each bounded by TorManager's
     // bootstrap deadline) to attempt before unblocking pending EOSE callers.
     static let nostrTorReadyMaxWaitAttempts: Int = 3
     static let nostrPendingSendQueueCap: Int = 200
+    /// Control-payload pairs (delivery/read acknowledgements and favorite
+    /// notifications) that could not enter the relay queue. User messages do
+    /// not use this queue: they fail visibly, while direct messages also
+    /// remain in the router outbox.
+    static let nostrPrivateEnvelopeRetryQueueCap: Int = 256
     // Sample interval for the send-queue overflow warning (first + every Nth
     // dropped event). Drops are ephemeral presence/geo traffic — log-only.
     static let nostrPendingSendDropLogInterval: Int = 10
@@ -215,7 +239,7 @@ enum TransportConfig {
     // Fallback deadline for treating a subscription's initial fetch as complete
     // when a relay never sends EOSE (generous to cover Tor circuit setup).
     static let nostrSubscriptionEOSEFallbackSeconds: TimeInterval = 10.0
-    // A bridge drop is durable only after NIP-20 OK. Relays that omit OK must
+    // A bridge drop is durable only after NIP-01 `OK`. Relays that omit `OK` must
     // not pin the router's in-flight state indefinitely.
     static let nostrConfirmedSendAckTimeoutSeconds: TimeInterval = 10.0
     // After this long, a relay marked permanently failed gets another chance.

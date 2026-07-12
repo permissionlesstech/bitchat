@@ -267,6 +267,312 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertEqual(context.manager.debugPendingMessageQueueCount, TransportConfig.nostrPendingSendQueueCap)
     }
 
+    func test_privateEnvelopeBatchEvictsEphemeralTrafficAndRemainsAtomic() async throws {
+        let relayURL = "wss://private-batch-priority.example"
+        let context = makeContext(
+            permission: .denied,
+            userTorEnabled: true,
+            torEnforced: true,
+            torIsReady: false
+        )
+        var ephemeralIDs: [String] = []
+        for i in 0..<(TransportConfig.nostrPendingSendQueueCap - 1) {
+            let event = try makeSignedEvent(
+                content: "ephemeral-\(i)",
+                kind: .ephemeralEvent
+            )
+            ephemeralIDs.append(event.id)
+            context.manager.sendEvent(event, to: [relayURL])
+        }
+        let regular = try makeSignedEvent(content: "regular survives")
+        context.manager.sendEvent(regular, to: [relayURL])
+        XCTAssertEqual(
+            context.manager.debugPendingMessageQueueCount,
+            TransportConfig.nostrPendingSendQueueCap
+        )
+
+        let primary = try makeSignedEvent(content: "primary", kind: .privateEnvelope)
+        let legacy = try makeSignedEvent(content: "legacy", kind: .legacyNIP59GiftWrap)
+        XCTAssertTrue(context.manager.sendPrivateEnvelopeBatch([primary, legacy], to: [relayURL]))
+
+        let batches = context.manager.debugPendingMessageQueueEventIDsByBatch
+        let allIDs = Set(batches.flatMap { $0 })
+        XCTAssertEqual(
+            context.manager.debugPendingMessageQueueCount,
+            TransportConfig.nostrPendingSendQueueCap
+        )
+        XCTAssertTrue(batches.contains([primary.id, legacy.id]))
+        XCTAssertTrue(allIDs.contains(regular.id))
+        XCTAssertFalse(allIDs.contains(ephemeralIDs[0]))
+        XCTAssertFalse(allIDs.contains(ephemeralIDs[1]))
+
+        // Later low-priority traffic may evict another ephemeral event, but
+        // never one half (or both halves) of the protected private batch.
+        let lateEphemeral = try makeSignedEvent(content: "late", kind: .geohashPresence)
+        context.manager.sendEvent(lateEphemeral, to: [relayURL])
+        XCTAssertTrue(
+            context.manager.debugPendingMessageQueueEventIDsByBatch
+                .contains([primary.id, legacy.id])
+        )
+    }
+
+    func test_privateEnvelopeBatchDoesNotWriteStaleSocketUntilTorRecovers() async throws {
+        let relayURL = "wss://private-batch-tor-gate.example"
+        let context = makeContext(
+            permission: .denied,
+            userTorEnabled: true,
+            torEnforced: true,
+            torIsReady: true
+        )
+        context.manager.ensureConnections(to: [relayURL])
+        let connected = await waitUntil {
+            context.manager.relays.first(where: { $0.url == relayURL })?.isConnected == true
+        }
+        XCTAssertTrue(connected)
+        let connection = try XCTUnwrap(context.sessionFactory.latestConnection(for: relayURL))
+
+        context.torWaiter.isReady = false
+        let primary = try makeSignedEvent(content: "primary", kind: .privateEnvelope)
+        let legacy = try makeSignedEvent(content: "legacy", kind: .legacyNIP59GiftWrap)
+        XCTAssertTrue(context.manager.sendPrivateEnvelopeBatch([primary, legacy], to: [relayURL]))
+
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertTrue(connection.sentStrings.isEmpty)
+        XCTAssertEqual(context.manager.debugPendingMessageQueueCount, 2)
+        XCTAssertEqual(context.torWaiter.awaitCallCount, 1)
+
+        context.torWaiter.resolve(true)
+        let flushed = await waitUntil {
+            connection.sentStrings.count == 2 &&
+                context.manager.debugPendingMessageQueueCount == 0
+        }
+        XCTAssertTrue(flushed)
+    }
+
+    func test_privateEnvelopeBatchPrunesTerminalRelayAfterHealthyDelivery() async throws {
+        let healthyURL = "wss://private-batch-healthy.example"
+        let deadURL = "wss://private-batch-dead.example"
+        let context = makeContext(permission: .denied)
+        context.sessionFactory.pingErrorByURL[deadURL] = NSError(
+            domain: NSURLErrorDomain,
+            code: NSURLErrorCannotFindHost
+        )
+        let primary = try makeSignedEvent(content: "primary", kind: .privateEnvelope)
+        let legacy = try makeSignedEvent(content: "legacy", kind: .legacyNIP59GiftWrap)
+        var terminalFailureCount = 0
+
+        XCTAssertTrue(context.manager.sendPrivateEnvelopeBatch(
+            [primary, legacy],
+            to: [healthyURL, deadURL],
+            terminalFailure: { terminalFailureCount += 1 }
+        ))
+
+        let drained = await waitUntil {
+            context.sessionFactory.latestConnection(for: healthyURL)?.sentStrings.count == 2 &&
+                context.manager.debugPendingMessageQueueCount == 0
+        }
+        XCTAssertTrue(drained)
+        XCTAssertEqual(terminalFailureCount, 0)
+
+        // The terminal target is excluded during cooldown. More than one full
+        // protected-capacity worth of subsequent logical sends must continue
+        // to drain through the healthy relay instead of wedging globally.
+        for _ in 0...100 {
+            XCTAssertTrue(context.manager.sendPrivateEnvelopeBatch(
+                [primary, legacy],
+                to: [healthyURL, deadURL]
+            ))
+            let sent = await waitUntil {
+                context.manager.debugPendingMessageQueueCount == 0
+            }
+            XCTAssertTrue(sent)
+        }
+    }
+
+    func test_privateEnvelopeBatchAllTerminalTargetsReportsWholeBatchFailure() async throws {
+        let deadURL = "wss://private-batch-all-dead.example"
+        let context = makeContext(permission: .denied)
+        context.sessionFactory.pingErrorByURL[deadURL] = NSError(
+            domain: NSURLErrorDomain,
+            code: NSURLErrorCannotFindHost
+        )
+        let primary = try makeSignedEvent(content: "primary", kind: .privateEnvelope)
+        let legacy = try makeSignedEvent(content: "legacy", kind: .legacyNIP59GiftWrap)
+        var terminalFailureCount = 0
+
+        XCTAssertTrue(context.manager.sendPrivateEnvelopeBatch(
+            [primary, legacy],
+            to: [deadURL],
+            terminalFailure: { terminalFailureCount += 1 }
+        ))
+
+        let failed = await waitUntil {
+            terminalFailureCount == 1 &&
+                context.manager.debugPendingMessageQueueCount == 0
+        }
+        XCTAssertTrue(failed)
+    }
+
+    func test_privateEnvelopeBatchRejectsBeforeWritingWhenProtectedCapacityIsFull() async throws {
+        let stalledRelayURL = "wss://private-batch-full.example"
+        let connectedRelayURL = "wss://private-batch-connected.example"
+        let context = makeContext(
+            permission: .denied,
+            userTorEnabled: true,
+            torEnforced: true,
+            torIsReady: true,
+            torIsForeground: true
+        )
+        context.manager.ensureConnections(to: [connectedRelayURL])
+        let connected = await waitUntil {
+            context.manager.relays.first(where: { $0.url == connectedRelayURL })?.isConnected == true
+        }
+        XCTAssertTrue(connected)
+        context.torForeground.value = false
+
+        let primary = try makeSignedEvent(content: "primary", kind: .privateEnvelope)
+        let legacy = try makeSignedEvent(content: "legacy", kind: .legacyNIP59GiftWrap)
+        let pair = [primary, legacy]
+
+        for _ in 0..<(TransportConfig.nostrPendingSendQueueCap / pair.count) {
+            XCTAssertTrue(context.manager.sendPrivateEnvelopeBatch(pair, to: [stalledRelayURL]))
+        }
+        XCTAssertEqual(
+            context.manager.debugPendingMessageQueueCount,
+            TransportConfig.nostrPendingSendQueueCap
+        )
+
+        let rejectedPrimary = try makeSignedEvent(content: "rejected-primary", kind: .privateEnvelope)
+        let rejectedLegacy = try makeSignedEvent(content: "rejected-legacy", kind: .legacyNIP59GiftWrap)
+        XCTAssertFalse(
+            context.manager.sendPrivateEnvelopeBatch(
+                [rejectedPrimary, rejectedLegacy],
+                to: [connectedRelayURL]
+            )
+        )
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertTrue(
+            context.sessionFactory.latestConnection(for: connectedRelayURL)?.sentStrings.isEmpty == true
+        )
+        let queuedIDs = Set(
+            context.manager.debugPendingMessageQueueEventIDsByBatch.flatMap { $0 }
+        )
+        XCTAssertFalse(queuedIDs.contains(rejectedPrimary.id))
+        XCTAssertFalse(queuedIDs.contains(rejectedLegacy.id))
+    }
+
+    func test_privateEnvelopeBatchStaysQueuedAndRetriesAfterFirstWriteFails() async throws {
+        try await assertPrivateEnvelopeBatchWriteFailure(
+            failureSequence: [NSError(domain: "send", code: 1)],
+            expectedFirstConnectionWrites: 1
+        )
+    }
+
+    func test_privateEnvelopeBatchStaysQueuedAndRetriesAfterSecondWriteFails() async throws {
+        try await assertPrivateEnvelopeBatchWriteFailure(
+            failureSequence: [nil, NSError(domain: "send", code: 2)],
+            expectedFirstConnectionWrites: 2
+        )
+    }
+
+    func test_privateEnvelopeBatchRemainsPendingUntilBothWritesSucceed() async throws {
+        let relayURL = "wss://private-batch-two-write-commit.example"
+        let context = makeContext(permission: .denied)
+        let primary = try makeSignedEvent(content: "primary", kind: .privateEnvelope)
+        let legacy = try makeSignedEvent(content: "legacy", kind: .legacyNIP59GiftWrap)
+
+        XCTAssertTrue(context.manager.sendPrivateEnvelopeBatch([primary, legacy], to: [relayURL]))
+        let connection = try XCTUnwrap(context.sessionFactory.latestConnection(for: relayURL))
+        connection.deferSendCompletions = true
+
+        let firstWriteStarted = await waitUntil { connection.sentStrings.count == 1 }
+        XCTAssertTrue(firstWriteStarted)
+        XCTAssertEqual(context.manager.debugPendingMessageQueueCount, 2)
+
+        connection.flushDeferredSendCompletions()
+        let secondWriteStarted = await waitUntil { connection.sentStrings.count == 2 }
+        XCTAssertTrue(secondWriteStarted)
+        XCTAssertEqual(context.manager.debugPendingMessageQueueCount, 2)
+
+        connection.flushDeferredSendCompletions()
+        let committed = await waitUntil {
+            context.manager.debugPendingMessageQueueCount == 0
+        }
+        XCTAssertTrue(committed)
+    }
+
+    func test_privateEnvelopeBatchDisconnectDuringWriteReplaysOnReplacementConnection() async throws {
+        let relayURL = "wss://private-batch-background-reconnect.example"
+        let context = makeContext(permission: .denied)
+        let primary = try makeSignedEvent(content: "primary", kind: .privateEnvelope)
+        let legacy = try makeSignedEvent(content: "legacy", kind: .legacyNIP59GiftWrap)
+
+        XCTAssertTrue(context.manager.sendPrivateEnvelopeBatch([primary, legacy], to: [relayURL]))
+        let firstConnection = try XCTUnwrap(
+            context.sessionFactory.latestConnection(for: relayURL)
+        )
+        firstConnection.deferSendCompletions = true
+        let firstWriteStarted = await waitUntil { firstConnection.sentStrings.count == 1 }
+        XCTAssertTrue(firstWriteStarted)
+
+        // Backgrounding cancels the socket while its first write callback is
+        // still outstanding. The pair must remain replayable in the queue.
+        context.manager.disconnect()
+        XCTAssertEqual(context.manager.debugPendingMessageQueueCount, 2)
+        context.manager.connect()
+
+        let replayed = await waitUntil {
+            let connections = context.sessionFactory.connectionsByURL[relayURL] ?? []
+            guard connections.count == 2, let replacement = connections.last else {
+                return false
+            }
+            return replacement.sentStrings.count == 2 &&
+                context.manager.debugPendingMessageQueueCount == 0
+        }
+        XCTAssertTrue(replayed)
+
+        // A late success callback from the canceled socket must neither send
+        // the legacy half on that stale socket nor disturb the completed pair.
+        firstConnection.flushDeferredSendCompletions()
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertEqual(firstConnection.sentStrings.count, 1)
+        XCTAssertEqual(context.manager.debugPendingMessageQueueCount, 0)
+    }
+
+    private func assertPrivateEnvelopeBatchWriteFailure(
+        failureSequence: [Error?],
+        expectedFirstConnectionWrites: Int
+    ) async throws {
+        let relayURL = "wss://private-batch-write-failure.example"
+        let context = makeContext(permission: .denied)
+        let primary = try makeSignedEvent(content: "primary", kind: .privateEnvelope)
+        let legacy = try makeSignedEvent(content: "legacy", kind: .legacyNIP59GiftWrap)
+
+        XCTAssertTrue(context.manager.sendPrivateEnvelopeBatch([primary, legacy], to: [relayURL]))
+        let firstConnection = try XCTUnwrap(context.sessionFactory.latestConnection(for: relayURL))
+        firstConnection.sendErrorSequence = failureSequence
+
+        let stayedQueued = await waitUntil {
+            firstConnection.sentStrings.count == expectedFirstConnectionWrites &&
+            context.manager.debugPendingMessageQueueEventIDsByBatch.contains([primary.id, legacy.id])
+        }
+        XCTAssertTrue(stayedQueued)
+        XCTAssertEqual(context.manager.debugPendingMessageQueueCount, 2)
+
+        // The failed socket is disconnected with bounded backoff. Its queue
+        // item is reused—not re-admitted—and the replacement retries both
+        // copies before the pair is finally removed.
+        XCTAssertFalse(context.scheduler.scheduled.isEmpty)
+        context.scheduler.runNext()
+        let retried = await waitUntil {
+            guard let replacement = context.sessionFactory.latestConnection(for: relayURL),
+                  replacement !== firstConnection else { return false }
+            return replacement.sentStrings.count == 2 &&
+                context.manager.debugPendingMessageQueueCount == 0
+        }
+        XCTAssertTrue(retried)
+    }
+
     func test_sendEvent_waitsForTorReadinessBeforeSending() async throws {
         let relayURL = "wss://tor-ready.example"
         let context = makeContext(permission: .denied, userTorEnabled: true, torEnforced: true, torIsReady: false)
@@ -546,6 +852,52 @@ final class NostrRelayManagerTests: XCTestCase {
         context.manager.subscribe(filter: filter, id: "sub", relayUrls: [relayURL], handler: { _ in })
 
         XCTAssertEqual(context.sessionFactory.latestConnection(for: relayURL)?.sentStrings.count, 1)
+    }
+
+    func test_subscribe_multiplePrivateEnvelopeFiltersEncodesIndependentLimits() async throws {
+        let relayURL = "wss://private-recovery-filters.example"
+        let context = makeContext(permission: .denied)
+        let filters = NostrFilter.privateEnvelopeFiltersFor(
+            pubkey: "recipient",
+            since: Date(timeIntervalSince1970: 1_234_567)
+        )
+
+        context.manager.subscribe(
+            filters: filters,
+            id: "private-recovery",
+            relayUrls: [relayURL],
+            handler: { _ in }
+        )
+
+        let sent = await waitUntil {
+            context.sessionFactory.latestConnection(for: relayURL)?.sentStrings.count == 1
+        }
+        XCTAssertTrue(sent)
+        let request = try XCTUnwrap(
+            context.sessionFactory.latestConnection(for: relayURL)?.sentStrings.first
+        )
+        let data = try XCTUnwrap(request.data(using: .utf8))
+        let array = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: data) as? [Any]
+        )
+        XCTAssertEqual(array.count, 4)
+        XCTAssertEqual(array[0] as? String, "REQ")
+        XCTAssertEqual(array[1] as? String, "private-recovery")
+        let encodedFilters = try [array[2], array[3]].map {
+            try XCTUnwrap($0 as? [String: Any])
+        }
+        XCTAssertEqual(encodedFilters.compactMap { $0["kinds"] as? [Int] }, [
+            [NostrProtocol.EventKind.privateEnvelope.rawValue],
+            [NostrProtocol.EventKind.legacyNIP59GiftWrap.rawValue]
+        ])
+        for filter in encodedFilters {
+            XCTAssertEqual(
+                filter["limit"] as? Int,
+                TransportConfig.nostrPrivateEnvelopeFetchLimitPerKind
+            )
+            XCTAssertEqual(filter["#p"] as? [String], ["recipient"])
+            XCTAssertEqual(filter["since"] as? Int, 1_234_567)
+        }
     }
 
     func test_subscribe_coalescesDuplicateRequestsBeforeTorReadyAndDefersEOSE() async throws {
@@ -893,11 +1245,11 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertTrue(secondDelivered)
     }
 
-    func test_okMessages_clearPendingGiftWrapIDs() async throws {
+    func test_okMessages_clearPendingPrivateEnvelopeIDs() async throws {
         let relayURL = "wss://ok.example"
         let context = makeContext(permission: .denied)
-        let successID = "gift-wrap-success"
-        let failureID = "gift-wrap-failure"
+        let successID = "private-envelope-success"
+        let failureID = "private-envelope-failure"
 
         context.manager.ensureConnections(to: [relayURL])
         let connected = await waitUntil {
@@ -906,17 +1258,17 @@ final class NostrRelayManagerTests: XCTestCase {
         }
         XCTAssertTrue(connected)
 
-        NostrRelayManager.registerPendingGiftWrap(id: successID)
+        NostrRelayManager.registerPendingPrivateEnvelope(id: successID)
         try context.sessionFactory.latestConnection(for: relayURL)?.emitOK(eventID: successID, success: true, reason: "ok")
         let successCleared = await waitUntil {
-            !NostrRelayManager.pendingGiftWrapIDs.contains(successID)
+            !NostrRelayManager.pendingPrivateEnvelopeIDs.contains(successID)
         }
         XCTAssertTrue(successCleared)
 
-        NostrRelayManager.registerPendingGiftWrap(id: failureID)
+        NostrRelayManager.registerPendingPrivateEnvelope(id: failureID)
         try context.sessionFactory.latestConnection(for: relayURL)?.emitOK(eventID: failureID, success: false, reason: "rejected")
         let failureCleared = await waitUntil {
-            !NostrRelayManager.pendingGiftWrapIDs.contains(failureID)
+            !NostrRelayManager.pendingPrivateEnvelopeIDs.contains(failureID)
         }
         XCTAssertTrue(failureCleared)
     }
@@ -1646,12 +1998,15 @@ final class NostrRelayManagerTests: XCTestCase {
         return filter
     }
 
-    private func makeSignedEvent(content: String) throws -> NostrEvent {
+    private func makeSignedEvent(
+        content: String,
+        kind: NostrProtocol.EventKind = .textNote
+    ) throws -> NostrEvent {
         let identity = try NostrIdentity.generate()
         let event = NostrEvent(
             pubkey: identity.publicKeyHex,
             createdAt: Date(),
-            kind: .textNote,
+            kind: kind,
             tags: [],
             content: content
         )
@@ -1791,6 +2146,7 @@ private final class MockRelaySessionFactory: NostrRelaySessionProtocol {
 private final class MockRelayConnection: NostrRelayConnectionProtocol {
     private let pingError: Error?
     var sendError: Error?
+    var sendErrorSequence: [Error?] = []
     private var receiveHandler: ((Result<URLSessionWebSocketTask.Message, Error>) -> Void)?
     private(set) var resumeCallCount = 0
     private(set) var cancelCallCount = 0
@@ -1820,14 +2176,15 @@ private final class MockRelayConnection: NostrRelayConnectionProtocol {
     }
 
     var deferSendCompletions = false
-    private var deferredSendCompletions: [(Error?) -> Void] = []
+    private var deferredSendCompletions: [(error: Error?, completion: (Error?) -> Void)] = []
 
     func send(_ message: URLSessionWebSocketTask.Message, completionHandler: @escaping (Error?) -> Void) {
         sentMessages.append(message)
+        let error = sendErrorSequence.isEmpty ? sendError : sendErrorSequence.removeFirst()
         if deferSendCompletions {
-            deferredSendCompletions.append(completionHandler)
+            deferredSendCompletions.append((error, completionHandler))
         } else {
-            completionHandler(sendError)
+            completionHandler(error)
         }
     }
 
@@ -1835,7 +2192,7 @@ private final class MockRelayConnection: NostrRelayConnectionProtocol {
         let pending = deferredSendCompletions
         deferredSendCompletions = []
         pending.forEach {
-            $0(sendError)
+            $0.completion($0.error)
         }
     }
 

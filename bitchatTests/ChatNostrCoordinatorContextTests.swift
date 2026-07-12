@@ -243,7 +243,7 @@ private func drainMainQueue() async {
 
 /// Exercises `ChatNostrCoordinator` against `MockChatNostrContext` with no
 /// `ChatViewModel`. Scoped to the inbound event pipeline (dedup, presence,
-/// public-message ingest), gift-wrap DM ingest, key mapping, channel-switch
+/// public-message ingest), private-envelope ingest, key mapping, channel-switch
 /// teardown, embedded ack flows, and — now that favorites and notifications
 /// are injected through the context — the favorite-notification ingest and
 /// the sampled-geohash notification cooldown. Flows that hit live singletons
@@ -335,7 +335,7 @@ struct ChatNostrCoordinatorContextTests {
     }
 
     @Test @MainActor
-    func handleGiftWrap_routesEmbeddedPrivateMessageAndDeduplicates() async throws {
+    func handlePrivateEnvelope_routesEmbeddedPrivateMessageAndDeduplicates() async throws {
         let context = MockChatNostrContext()
         let coordinator = ChatNostrCoordinator(context: context)
 
@@ -346,17 +346,21 @@ struct ChatNostrCoordinatorContextTests {
             messageID: "gm-1",
             senderPeerID: PeerID(str: "aabbccddeeff0011")
         ))
-        let giftWrap = try NostrProtocol.createPrivateMessage(
+        let envelopes = try NostrProtocol.createPrivateEnvelopePublicationBatch(
             content: embedded,
             recipientPubkey: recipient.publicKeyHex,
             senderIdentity: sender
         )
 
-        coordinator.inbound.handleGiftWrap(giftWrap, id: recipient)
+        for envelope in envelopes {
+            coordinator.inbound.handlePrivateEnvelope(envelope, id: recipient)
+        }
 
         let convKey = PeerID(nostr_: sender.publicKeyHex)
-        #expect(context.recordedNostrEventIDs == [giftWrap.id])
+        #expect(context.recordedNostrEventIDs == envelopes.map(\.id))
         #expect(context.nostrKeyMapping[convKey] == sender.publicKeyHex)
+        // The primary and compatibility envelopes carry the same authenticated
+        // embedded payload and must invoke message side effects only once.
         #expect(context.handledPrivateMessages.count == 1)
         #expect(context.handledPrivateMessages.first?.senderPubkey == sender.publicKeyHex)
         #expect(context.handledPrivateMessages.first?.convKey == convKey)
@@ -368,34 +372,84 @@ struct ChatNostrCoordinatorContextTests {
         #expect(pm.messageID == "gm-1")
         #expect(pm.content == "psst")
 
-        // The same gift wrap is dropped on replay.
-        coordinator.inbound.handleGiftWrap(giftWrap, id: recipient)
-        #expect(context.recordedNostrEventIDs == [giftWrap.id])
+        // The same private envelope is dropped on replay.
+        coordinator.inbound.handlePrivateEnvelope(envelopes[0], id: recipient)
+        #expect(context.recordedNostrEventIDs == envelopes.map(\.id))
         #expect(context.handledPrivateMessages.count == 1)
     }
 
     @Test @MainActor
-    func processNostrMessage_invalidSignatureDoesNotPoisonDedup() async throws {
+    func migrationEnvelopePairs_processEachMessageAndAckOnlyOnce() throws {
+        let context = MockChatNostrContext()
+        let coordinator = ChatNostrCoordinator(context: context)
+        let recipient = try NostrIdentity.generate()
+        let sender = try NostrIdentity.generate()
+        let messageContent = try #require(NostrEmbeddedBitChat.encodePMForNostrNoRecipient(
+            content: "migration message",
+            messageID: "migration-message-id",
+            senderPeerID: PeerID(str: "aabbccddeeff0011")
+        ))
+        let deliveredContent = try #require(NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(
+            type: .delivered,
+            messageID: "migration-ack-id",
+            senderPeerID: PeerID(str: "aabbccddeeff0011")
+        ))
+        let readContent = try #require(NostrEmbeddedBitChat.encodeAckForNostrNoRecipient(
+            type: .readReceipt,
+            messageID: "migration-ack-id",
+            senderPeerID: PeerID(str: "aabbccddeeff0011")
+        ))
+
+        for content in [messageContent, deliveredContent, readContent] {
+            let envelopes = try NostrProtocol.createPrivateEnvelopePublicationBatch(
+                content: content,
+                recipientPubkey: recipient.publicKeyHex,
+                senderIdentity: sender
+            )
+            #expect(envelopes.count == 2)
+            for envelope in envelopes {
+                coordinator.inbound.handlePrivateEnvelope(envelope, id: recipient)
+            }
+        }
+
+        #expect(context.handledPrivateMessages.count == 1)
+        #expect(context.handledDelivered.count == 1)
+        #expect(context.handledReadReceipts.count == 1)
+
+        // A later same-format re-envelope is a delivery retry, not the
+        // migration twin, so it must still reach downstream message-ID dedup
+        // and acknowledgement resend logic.
+        let primaryRetry = try NostrProtocol.createPrivateEnvelope(
+            content: messageContent,
+            recipientPubkey: recipient.publicKeyHex,
+            senderIdentity: sender
+        )
+        coordinator.inbound.handlePrivateEnvelope(primaryRetry, id: recipient)
+        #expect(context.handledPrivateMessages.count == 2)
+    }
+
+    @Test @MainActor
+    func processAccountPrivateEnvelope_invalidSignatureDoesNotPoisonDedup() async throws {
         let context = MockChatNostrContext()
         let coordinator = ChatNostrCoordinator(context: context)
 
         let recipient = try NostrIdentity.generate()
         let sender = try NostrIdentity.generate()
-        let giftWrap = try NostrProtocol.createPrivateMessage(
+        let envelope = try NostrProtocol.createPrivateEnvelope(
             content: "verify:noop",
             recipientPubkey: recipient.publicKeyHex,
             senderIdentity: sender
         )
-        var invalidGiftWrap = giftWrap
-        invalidGiftWrap.sig = String(repeating: "0", count: 128)
+        var invalidEnvelope = envelope
+        invalidEnvelope.sig = String(repeating: "0", count: 128)
 
         // A forged-signature copy is rejected WITHOUT entering the dedup set...
-        await coordinator.inbound.processNostrMessage(invalidGiftWrap)
+        await coordinator.inbound.processAccountPrivateEnvelope(invalidEnvelope)
         #expect(context.recordedNostrEventIDs.isEmpty)
 
         // ...so the genuine event with the same ID still processes and records.
-        await coordinator.inbound.processNostrMessage(giftWrap)
-        #expect(context.recordedNostrEventIDs == [giftWrap.id])
+        await coordinator.inbound.processAccountPrivateEnvelope(envelope)
+        #expect(context.recordedNostrEventIDs == [envelope.id])
     }
 
     @Test @MainActor

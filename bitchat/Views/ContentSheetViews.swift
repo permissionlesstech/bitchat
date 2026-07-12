@@ -446,7 +446,8 @@ private struct ContentPrivateChatSheetView: View {
         if privateConversationModel.selectedPeerID?.isGroup == true {
             return String(localized: "content.private.caption_group", comment: "Caption above the group chat composer noting messages are encrypted to group members")
         }
-        // Geohash DMs are NIP-17 gift-wrapped — always end-to-end encrypted,
+        // Geohash DMs use BitChat's private-envelope transport over Nostr —
+        // always end-to-end encrypted,
         // even though they carry no Noise session status. Mesh DMs earn the
         // "encrypted" claim only once the Noise handshake has secured.
         let isGeoDM = privateConversationModel.selectedPeerID?.isGeoDM == true

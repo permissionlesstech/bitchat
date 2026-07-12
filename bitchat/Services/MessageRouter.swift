@@ -158,6 +158,16 @@ final class MessageRouter {
         }
     }
 
+    /// Wire one typed event sink to every route, including the queue-backed
+    /// Nostr transport. Keeping this at the router boundary prevents a relay
+    /// admission failure from disappearing merely because only the primary
+    /// mesh transport was assigned a UI delegate.
+    func setEventDelegate(_ delegate: TransportEventDelegate?) {
+        for transport in transports {
+            transport.eventDelegate = delegate
+        }
+    }
+
     // MARK: - Transport Selection
 
     private func reachableTransport(for peerID: PeerID) -> Transport? {

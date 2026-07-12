@@ -41,10 +41,11 @@ struct ChatViewModelServiceBundle {
         self.privateChatManager = privateChatManager
         self.unifiedPeerService = unifiedPeerService
         self.autocompleteService = AutocompleteService()
-        // Persist processed gift-wrap event IDs: NIP-59 randomizes their
-        // timestamps, so the 24h-lookback DM subscriptions redeliver the same
-        // events on every launch and only a cross-launch record stops the
-        // reprocessing (re-sent DELIVERED bursts, phantom-ack noise).
+        // Persist processed private-envelope event IDs: legacy Android can
+        // randomize timestamps across the full 72h15m mailbox lookback, so DM
+        // subscriptions redeliver the same events on every launch and only a
+        // cross-launch record stops the reprocessing (re-sent DELIVERED
+        // bursts, phantom-ack noise).
         self.deduplicationService = MessageDeduplicationService(nostrEventStore: NostrProcessedEventStore())
         self.publicMessagePipeline = PublicMessagePipeline()
     }
@@ -165,7 +166,7 @@ private extension ChatViewModelBootstrapper {
 
     func configureTransport() {
         viewModel.meshService.delegate = viewModel
-        viewModel.meshService.eventDelegate = viewModel
+        viewModel.messageRouter.setEventDelegate(viewModel)
 
         DispatchQueue.main.asyncAfter(deadline: .now() + TransportConfig.uiStartupInitialDelaySeconds) { [weak viewModel] in
             guard let viewModel else { return }
@@ -547,7 +548,7 @@ private extension ChatViewModelBootstrapper {
             // Default (DM) relays: drops need the standing global relay set,
             // not geo relays — sender and recipient share no cell.
             // This confirmed path never falls back to the volatile relay
-            // queue; bridge dedup is committed only after NIP-20 OK.
+            // queue; bridge dedup is committed only after NIP-01 `OK`.
             NostrRelayManager.shared.sendEventImmediately(event, completion: completion)
         }
         courier.openSubscription = { tagsHex in
