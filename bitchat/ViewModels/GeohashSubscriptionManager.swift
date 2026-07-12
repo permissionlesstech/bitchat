@@ -162,11 +162,11 @@ final class GeohashSubscriptionManager {
         if let identity = try? context.deriveNostrIdentity(forGeohash: channel.geohash) {
             let dmSub = "geo-dm-\(channel.geohash)"
             context.setGeoDmSubscriptionID(dmSub)
-            let dmFilter = NostrFilter.privateEnvelopesFor(
+            let dmFilters = NostrFilter.privateEnvelopeFiltersFor(
                 pubkey: identity.publicKeyHex,
                 since: Date().addingTimeInterval(-TransportConfig.nostrDMSubscribeLookbackSeconds)
             )
-            NostrRelayManager.shared.subscribe(filter: dmFilter, id: dmSub) { [weak self] envelope in
+            NostrRelayManager.shared.subscribe(filters: dmFilters, id: dmSub) { [weak self] envelope in
                 Task { @MainActor [weak self] in
                     self?.inbound.subscribePrivateEnvelope(envelope, id: identity)
                 }
@@ -260,11 +260,11 @@ final class GeohashSubscriptionManager {
         if TorManager.shared.isReady {
             SecureLogger.debug("GeoDM: subscribing DMs pub=\(identity.publicKeyHex.prefix(8))… sub=\(dmSub)", category: .session)
         }
-        let dmFilter = NostrFilter.privateEnvelopesFor(
+        let dmFilters = NostrFilter.privateEnvelopeFiltersFor(
             pubkey: identity.publicKeyHex,
             since: Date().addingTimeInterval(-TransportConfig.nostrDMSubscribeLookbackSeconds)
         )
-        NostrRelayManager.shared.subscribe(filter: dmFilter, id: dmSub) { [weak self] envelope in
+        NostrRelayManager.shared.subscribe(filters: dmFilters, id: dmSub) { [weak self] envelope in
             Task { @MainActor [weak self] in
                 self?.inbound.handlePrivateEnvelope(envelope, id: identity)
             }
@@ -388,12 +388,12 @@ final class GeohashSubscriptionManager {
             category: .session
         )
 
-        let filter = NostrFilter.privateEnvelopesFor(
+        let filters = NostrFilter.privateEnvelopeFiltersFor(
             pubkey: currentIdentity.publicKeyHex,
             since: Date().addingTimeInterval(-TransportConfig.nostrDMSubscribeLookbackSeconds)
         )
 
-        context.nostrRelayManager?.subscribe(filter: filter, id: "chat-messages") { [weak self] event in
+        context.nostrRelayManager?.subscribe(filters: filters, id: "chat-messages") { [weak self] event in
             Task { @MainActor [weak self] in
                 self?.inbound.handleAccountPrivateEnvelope(event)
             }

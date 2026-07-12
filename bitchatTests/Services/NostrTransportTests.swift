@@ -131,7 +131,7 @@ struct NostrTransportTests {
         #expect(undeliverable)
     }
 
-    @Test("Private message resolves short peer ID and emits decryptable packet")
+    @Test("Private message resolves short peer ID and emits both migration formats")
     @MainActor
     func sendPrivateMessageResolvesShortPeerID() async throws {
         let keychain = MockKeychain()
@@ -154,7 +154,7 @@ struct NostrTransportTests {
                 favoriteStatusForPeerID: { $0 == shortPeerID ? relationship : nil },
                 currentIdentity: { sender },
                 registerPendingPrivateEnvelope: probe.recordPendingPrivateEnvelope(id:),
-                sendEvent: probe.record(event:),
+                sendPrivateEnvelopeBatch: { events, _ in probe.record(batch: events) },
                 scheduleAfter: { delay, action in
                     probe.enqueueScheduledAction(delay: delay, action: action)
                 }
@@ -164,8 +164,12 @@ struct NostrTransportTests {
 
         transport.sendPrivateMessage("hello over nostr", to: shortPeerID, recipientNickname: "Carol", messageID: "pm-1")
 
-        let didSend = await TestHelpers.waitUntil({ probe.sentEvents.count == 1 }, timeout: 5.0)
+        let didSend = await TestHelpers.waitUntil({ probe.sentEvents.count == 2 }, timeout: 5.0)
         #expect(didSend)
+        #expect(probe.sentEvents.map(\.kind) == [
+            NostrProtocol.EventKind.privateEnvelope.rawValue,
+            NostrProtocol.EventKind.legacyNIP59GiftWrap.rawValue
+        ])
         let result = try decodeEmbeddedPayload(from: probe.sentEvents[0], recipient: recipient)
         let privateMessage = try decodePrivateMessage(from: result.payload)
 
@@ -176,9 +180,9 @@ struct NostrTransportTests {
         #expect(probe.pendingPrivateEnvelopeIDs.isEmpty)
     }
 
-    @Test("Migration window publishes primary and compatibility envelopes, then stops")
+    @Test("Coordinated migration always publishes primary and compatibility envelopes")
     @MainActor
-    func migrationWindowDualPublishesUntilDeadline() async throws {
+    func migrationAlwaysDualPublishes() async throws {
         let keychain = MockKeychain()
         let idBridge = NostrIdentityBridge(keychain: keychain)
         let sender = try NostrIdentity.generate()
@@ -198,11 +202,7 @@ struct NostrTransportTests {
             dependencies: makeDependencies(
                 favoriteStatusForNoiseKey: { $0 == noiseKey ? relationship : nil },
                 currentIdentity: { sender },
-                sendEvent: migrationProbe.record(event:),
-                now: {
-                    NostrProtocol.legacyPrivateEnvelopePublicationDeadline
-                        .addingTimeInterval(-1)
-                }
+                sendPrivateEnvelopeBatch: { events, _ in migrationProbe.record(batch: events) }
             )
         )
         migrationTransport.senderPeerID = PeerID(str: "0123456789abcdef")
@@ -228,32 +228,281 @@ struct NostrTransportTests {
             #expect(message.messageID == "migration-pm")
             #expect(message.content == "migration payload")
         }
+    }
 
-        let postMigrationProbe = NostrTransportProbe()
-        let postMigrationTransport = NostrTransport(
+    @Test("Rejected migration batch does not register half-delivery state")
+    @MainActor
+    func rejectedMigrationBatchRegistersNothing() async throws {
+        let keychain = MockKeychain()
+        let idBridge = NostrIdentityBridge(keychain: keychain)
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let probe = NostrTransportProbe()
+        var rejectedKinds: [Int] = []
+        let transport = NostrTransport(
+            keychain: keychain,
+            idBridge: idBridge,
+            dependencies: makeDependencies(
+                currentIdentity: { sender },
+                registerPendingPrivateEnvelope: probe.recordPendingPrivateEnvelope(id:),
+                sendPrivateEnvelopeBatch: { events, _ in
+                    rejectedKinds = events.map(\.kind)
+                    return false
+                }
+            )
+        )
+        transport.senderPeerID = PeerID(str: "0123456789abcdef")
+
+        transport.sendPrivateMessageGeohash(
+            content: "must stay atomic",
+            toRecipientHex: recipient.publicKeyHex,
+            from: sender,
+            messageID: "atomic-reject"
+        )
+
+        let attempted = await TestHelpers.waitUntil({ rejectedKinds.count == 2 }, timeout: 5.0)
+        #expect(attempted)
+        #expect(rejectedKinds == [
+            NostrProtocol.EventKind.privateEnvelope.rawValue,
+            NostrProtocol.EventKind.legacyNIP59GiftWrap.rawValue
+        ])
+        #expect(probe.pendingPrivateEnvelopeIDs.isEmpty)
+    }
+
+    @Test("Rejected user message emits a visible failed-delivery event")
+    @MainActor
+    func rejectedUserMessageEmitsFailureEvent() async throws {
+        let keychain = MockKeychain()
+        let idBridge = NostrIdentityBridge(keychain: keychain)
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let eventProbe = NostrTransportEventProbe()
+        let transport = NostrTransport(
+            keychain: keychain,
+            idBridge: idBridge,
+            dependencies: makeDependencies(
+                currentIdentity: { sender },
+                sendPrivateEnvelopeBatch: { _, _ in false }
+            )
+        )
+        transport.senderPeerID = PeerID(str: "0123456789abcdef")
+        transport.eventDelegate = eventProbe
+
+        transport.sendPrivateMessageGeohash(
+            content: "must fail visibly",
+            toRecipientHex: recipient.publicKeyHex,
+            from: sender,
+            messageID: "visible-reject"
+        )
+
+        let reported = await TestHelpers.waitUntil(
+            { eventProbe.failedMessageIDs == ["visible-reject"] },
+            timeout: 5.0
+        )
+        #expect(reported)
+    }
+
+    @Test("Rejected favorite notification retains and retries the exact pair")
+    @MainActor
+    func rejectedFavoriteNotificationRetriesExactPair() async throws {
+        let keychain = MockKeychain()
+        let idBridge = NostrIdentityBridge(keychain: keychain)
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let noiseKey = Data((96..<128).map(UInt8.init))
+        let fullPeerID = PeerID(hexData: noiseKey)
+        let relationship = makeRelationship(
+            peerNoisePublicKey: noiseKey,
+            peerNostrPublicKey: recipient.npub,
+            peerNickname: "Retry favorite"
+        )
+        let probe = NostrTransportProbe()
+        var attempts: [[String]] = []
+        weak var releasedTransport: NostrTransport?
+        do {
+            let transport = NostrTransport(
+                keychain: keychain,
+                idBridge: idBridge,
+                dependencies: makeDependencies(
+                    favoriteStatusForNoiseKey: { $0 == noiseKey ? relationship : nil },
+                    currentIdentity: { sender },
+                    sendPrivateEnvelopeBatch: { events, _ in
+                        attempts.append(events.map(\.id))
+                        return attempts.count > 1
+                    },
+                    scheduleAfter: { delay, action in
+                        probe.enqueueScheduledAction(delay: delay, action: action)
+                    }
+                )
+            )
+            transport.senderPeerID = PeerID(str: "0123456789abcdef")
+            releasedTransport = transport
+
+            transport.sendFavoriteNotification(to: fullPeerID, isFavorite: true)
+            let retryScheduled = await TestHelpers.waitUntil(
+                { attempts.count == 1 && probe.scheduledActionCount == 1 },
+                timeout: 5.0
+            )
+            #expect(retryScheduled)
+        }
+        #expect(releasedTransport == nil)
+        #expect(probe.runNextScheduledAction())
+
+        let retried = await TestHelpers.waitUntil({ attempts.count == 2 }, timeout: 5.0)
+        #expect(retried)
+        #expect(attempts[0] == attempts[1])
+    }
+
+    @Test("Rejected delivery acknowledgement remains queued for retry")
+    @MainActor
+    func rejectedDeliveryAckRetries() async throws {
+        let keychain = MockKeychain()
+        let idBridge = NostrIdentityBridge(keychain: keychain)
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let noiseKey = Data((128..<160).map(UInt8.init))
+        let fullPeerID = PeerID(hexData: noiseKey)
+        let relationship = makeRelationship(
+            peerNoisePublicKey: noiseKey,
+            peerNostrPublicKey: recipient.npub,
+            peerNickname: "Retry ack"
+        )
+        let probe = NostrTransportProbe()
+        var attempts: [[String]] = []
+        let transport = NostrTransport(
             keychain: keychain,
             idBridge: idBridge,
             dependencies: makeDependencies(
                 favoriteStatusForNoiseKey: { $0 == noiseKey ? relationship : nil },
                 currentIdentity: { sender },
-                sendEvent: postMigrationProbe.record(event:),
-                now: { NostrProtocol.legacyPrivateEnvelopePublicationDeadline }
+                sendPrivateEnvelopeBatch: { events, _ in
+                    attempts.append(events.map(\.id))
+                    return attempts.count > 1
+                },
+                scheduleAfter: { delay, action in
+                    probe.enqueueScheduledAction(delay: delay, action: action)
+                }
             )
         )
-        postMigrationTransport.senderPeerID = PeerID(str: "0123456789abcdef")
-        postMigrationTransport.sendPrivateMessage(
-            "post migration",
-            to: peerID,
-            recipientNickname: "Migration peer",
-            messageID: "post-migration-pm"
-        )
+        transport.senderPeerID = PeerID(str: "0123456789abcdef")
 
-        let sentPrimaryOnly = await TestHelpers.waitUntil(
-            { postMigrationProbe.sentEvents.count == 1 },
+        transport.sendDeliveryAck(for: "retry-ack", to: fullPeerID)
+        let firstAttempt = await TestHelpers.waitUntil(
+            { attempts.count == 1 && probe.scheduledActionCount >= 1 },
             timeout: 5.0
         )
-        #expect(sentPrimaryOnly)
-        #expect(postMigrationProbe.sentEvents.first?.kind == NostrProtocol.EventKind.privateEnvelope.rawValue)
+        #expect(firstAttempt)
+
+        for _ in 0..<3 where attempts.count < 2 {
+            _ = probe.runNextScheduledAction()
+            _ = await TestHelpers.waitUntil(
+                { attempts.count == 2 || probe.scheduledActionCount > 0 },
+                timeout: 1.0
+            )
+        }
+        #expect(attempts.count == 2)
+        #expect(attempts[0] == attempts[1])
+    }
+
+    @Test("Control retry queue is bounded and evicted callbacks are harmless")
+    @MainActor
+    func controlRetryQueueIsBounded() async throws {
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let events = try NostrProtocol.createPrivateEnvelopePublicationBatch(
+            content: "bounded retry fixture",
+            recipientPubkey: recipient.publicKeyHex,
+            senderIdentity: sender
+        )
+        let probe = NostrTransportProbe()
+        var retryAttempts = 0
+        let queue = NostrPrivateEnvelopeRetryQueue(
+            sendPrivateEnvelopeBatch: { _, _ in
+                retryAttempts += 1
+                return false
+            },
+            registerPendingPrivateEnvelope: { _ in },
+            scheduleAfter: { delay, action in
+                probe.enqueueScheduledAction(delay: delay, action: action)
+            }
+        )
+
+        for index in 0...TransportConfig.nostrPrivateEnvelopeRetryQueueCap {
+            queue.enqueue(
+                key: "control-\(index)",
+                events: events,
+                registerPending: false
+            )
+        }
+
+        #expect(queue.debugPendingCount == TransportConfig.nostrPrivateEnvelopeRetryQueueCap)
+        #expect(!queue.debugContains(key: "control-0"))
+        #expect(queue.debugContains(key: "control-1"))
+
+        // The oldest callback was scheduled before eviction. Running it must
+        // observe the missing key and return without touching dependencies.
+        #expect(probe.runNextScheduledAction())
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        #expect(retryAttempts == 0)
+
+        queue.removeAll()
+        #expect(queue.debugPendingCount == 0)
+        #expect(probe.runNextScheduledAction())
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        #expect(retryAttempts == 0)
+    }
+
+    @Test("Multiple transports share one globally bounded control retry owner")
+    @MainActor
+    func multipleTransportsShareControlRetryQueue() async throws {
+        let keychain = MockKeychain()
+        let idBridge = NostrIdentityBridge(keychain: keychain)
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let events = try NostrProtocol.createPrivateEnvelopePublicationBatch(
+            content: "shared retry fixture",
+            recipientPubkey: recipient.publicKeyHex,
+            senderIdentity: sender
+        )
+        let probe = NostrTransportProbe()
+        var retryAttempts = 0
+        let sharedQueue = NostrPrivateEnvelopeRetryQueue(
+            sendPrivateEnvelopeBatch: { _, _ in
+                retryAttempts += 1
+                return false
+            },
+            registerPendingPrivateEnvelope: { _ in },
+            scheduleAfter: { delay, action in
+                probe.enqueueScheduledAction(delay: delay, action: action)
+            }
+        )
+        let first = NostrTransport(
+            keychain: keychain,
+            idBridge: idBridge,
+            dependencies: makeDependencies(envelopeRetryQueue: sharedQueue)
+        )
+        let second = NostrTransport(
+            keychain: keychain,
+            idBridge: idBridge,
+            dependencies: makeDependencies(envelopeRetryQueue: sharedQueue)
+        )
+
+        first.debugEnqueueControlRetry(key: "shared", events: events)
+        second.debugEnqueueControlRetry(key: "shared", events: events)
+        #expect(first.debugControlRetryCount == 1)
+        #expect(second.debugControlRetryCount == 1)
+
+        for index in 0...TransportConfig.nostrPrivateEnvelopeRetryQueueCap {
+            let transport = index.isMultiple(of: 2) ? first : second
+            transport.debugEnqueueControlRetry(key: "global-\(index)", events: events)
+        }
+        #expect(first.debugControlRetryCount == TransportConfig.nostrPrivateEnvelopeRetryQueueCap)
+        #expect(second.debugControlRetryCount == TransportConfig.nostrPrivateEnvelopeRetryQueueCap)
+
+        // The first scheduled callback belongs to the now-evicted shared key.
+        #expect(probe.runNextScheduledAction())
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        #expect(retryAttempts == 0)
     }
 
     @Test("Favorite notification embeds current npub")
@@ -279,7 +528,7 @@ struct NostrTransportTests {
                 favoriteStatusForPeerID: { _ in nil },
                 currentIdentity: { sender },
                 registerPendingPrivateEnvelope: probe.recordPendingPrivateEnvelope(id:),
-                sendEvent: probe.record(event:),
+                sendPrivateEnvelopeBatch: { events, _ in probe.record(batch: events) },
                 scheduleAfter: { delay, action in
                     probe.enqueueScheduledAction(delay: delay, action: action)
                 }
@@ -289,7 +538,7 @@ struct NostrTransportTests {
 
         transport.sendFavoriteNotification(to: fullPeerID, isFavorite: true)
 
-        let didSend = await TestHelpers.waitUntil({ probe.sentEvents.count == 1 }, timeout: 5.0)
+        let didSend = await TestHelpers.waitUntil({ probe.sentEvents.count == 2 }, timeout: 5.0)
         #expect(didSend)
         let result = try decodeEmbeddedPayload(from: probe.sentEvents[0], recipient: recipient)
         let privateMessage = try decodePrivateMessage(from: result.payload)
@@ -320,7 +569,7 @@ struct NostrTransportTests {
                 favoriteStatusForPeerID: { _ in nil },
                 currentIdentity: { sender },
                 registerPendingPrivateEnvelope: probe.recordPendingPrivateEnvelope(id:),
-                sendEvent: probe.record(event:),
+                sendPrivateEnvelopeBatch: { events, _ in probe.record(batch: events) },
                 scheduleAfter: { delay, action in
                     probe.enqueueScheduledAction(delay: delay, action: action)
                 }
@@ -330,7 +579,7 @@ struct NostrTransportTests {
 
         transport.sendDeliveryAck(for: "ack-1", to: fullPeerID)
 
-        let didSend = await TestHelpers.waitUntil({ probe.sentEvents.count == 1 }, timeout: 5.0)
+        let didSend = await TestHelpers.waitUntil({ probe.sentEvents.count == 2 }, timeout: 5.0)
         #expect(didSend)
         let result = try decodeEmbeddedPayload(from: probe.sentEvents[0], recipient: recipient)
 
@@ -353,7 +602,7 @@ struct NostrTransportTests {
             dependencies: makeDependencies(
                 currentIdentity: { sender },
                 registerPendingPrivateEnvelope: probe.recordPendingPrivateEnvelope(id:),
-                sendEvent: probe.record(event:),
+                sendPrivateEnvelopeBatch: { events, _ in probe.record(batch: events) },
                 scheduleAfter: { delay, action in
                     probe.enqueueScheduledAction(delay: delay, action: action)
                 }
@@ -368,7 +617,7 @@ struct NostrTransportTests {
             messageID: "geo-1"
         )
 
-        let didSend = await TestHelpers.waitUntil({ probe.sentEvents.count == 1 }, timeout: 5.0)
+        let didSend = await TestHelpers.waitUntil({ probe.sentEvents.count == 2 }, timeout: 5.0)
         #expect(didSend)
         let event = probe.sentEvents[0]
         let result = try decodeEmbeddedPayload(from: event, recipient: recipient)
@@ -377,7 +626,7 @@ struct NostrTransportTests {
         #expect(privateMessage.messageID == "geo-1")
         #expect(privateMessage.content == "geo hello")
         #expect(result.packet.recipientID == nil)
-        #expect(probe.pendingPrivateEnvelopeIDs == [event.id])
+        #expect(probe.pendingPrivateEnvelopeIDs == probe.sentEvents.map(\.id))
     }
 
     @Test("Read receipt queue sends in order and waits for scheduler")
@@ -403,7 +652,7 @@ struct NostrTransportTests {
                 favoriteStatusForPeerID: { _ in nil },
                 currentIdentity: { sender },
                 registerPendingPrivateEnvelope: probe.recordPendingPrivateEnvelope(id:),
-                sendEvent: probe.record(event:),
+                sendPrivateEnvelopeBatch: { events, _ in probe.record(batch: events) },
                 scheduleAfter: { delay, action in
                     probe.enqueueScheduledAction(delay: delay, action: action)
                 }
@@ -418,20 +667,20 @@ struct NostrTransportTests {
         transport.sendReadReceipt(second, to: fullPeerID)
 
         let readReceiptTimeout: TimeInterval = 5.0
-        let sentFirst = await TestHelpers.waitUntil({ probe.sentEvents.count >= 1 }, timeout: readReceiptTimeout)
-        try #require(sentFirst, "Expected first queued read receipt event")
+        let sentFirst = await TestHelpers.waitUntil({ probe.sentEvents.count == 2 }, timeout: readReceiptTimeout)
+        try #require(sentFirst, "Expected first queued read receipt pair")
         let scheduledThrottle = await TestHelpers.waitUntil({ probe.scheduledActionCount == 1 }, timeout: readReceiptTimeout)
         try #require(scheduledThrottle, "Expected queued throttle action after first read receipt")
-        let firstEvent = try #require(probe.sentEvents.first, "Expected first queued read receipt event")
+        let firstEvent = try #require(probe.sentEvents.first, "Expected first queued read receipt pair")
         let firstPayload = try decodeEmbeddedPayload(from: firstEvent, recipient: recipient).payload
         #expect(firstPayload.type == .readReceipt)
         #expect(String(data: firstPayload.data, encoding: .utf8) == "read-1")
 
         try #require(probe.runNextScheduledAction(), "Expected queued throttle action after first read receipt")
 
-        let sentSecond = await TestHelpers.waitUntil({ probe.sentEvents.count >= 2 }, timeout: readReceiptTimeout)
-        try #require(sentSecond, "Expected second read receipt after running throttle action")
-        let secondEvent = try #require(probe.sentEvents.last, "Expected second queued read receipt event")
+        let sentSecond = await TestHelpers.waitUntil({ probe.sentEvents.count == 4 }, timeout: readReceiptTimeout)
+        try #require(sentSecond, "Expected second read receipt pair after running throttle action")
+        let secondEvent = probe.sentEvents[2]
         let secondPayload = try decodeEmbeddedPayload(from: secondEvent, recipient: recipient).payload
         #expect(secondPayload.type == .readReceipt)
         #expect(String(data: secondPayload.data, encoding: .utf8) == "read-2")
@@ -500,12 +749,13 @@ struct NostrTransportTests {
         favoriteStatusForPeerID: @escaping @MainActor (PeerID) -> FavoriteRelationship? = { _ in nil },
         currentIdentity: @escaping @MainActor () throws -> NostrIdentity? = { nil },
         registerPendingPrivateEnvelope: @escaping @MainActor (String) -> Void = { _ in },
-        sendEvent: @escaping @MainActor (NostrEvent) -> Void = { _ in },
+        sendPrivateEnvelopeBatch: @escaping @MainActor (
+            [NostrEvent],
+            @escaping @MainActor () -> Void
+        ) -> Bool = { _, _ in true },
         scheduleAfter: @escaping @Sendable (TimeInterval, @escaping @Sendable () -> Void) -> Void = { _, _ in },
         relayConnectivity: @escaping @MainActor () -> AnyPublisher<Bool, Never> = { Just(false).eraseToAnyPublisher() },
-        now: @escaping @MainActor () -> Date = {
-            NostrProtocol.legacyPrivateEnvelopePublicationDeadline.addingTimeInterval(1)
-        }
+        envelopeRetryQueue: NostrPrivateEnvelopeRetryQueue? = nil
     ) -> NostrTransport.Dependencies {
         NostrTransport.Dependencies(
             notificationCenter: notificationCenter,
@@ -514,10 +764,10 @@ struct NostrTransportTests {
             favoriteStatusForPeerID: favoriteStatusForPeerID,
             currentIdentity: currentIdentity,
             registerPendingPrivateEnvelope: registerPendingPrivateEnvelope,
-            sendEvent: sendEvent,
+            sendPrivateEnvelopeBatch: sendPrivateEnvelopeBatch,
             scheduleAfter: scheduleAfter,
             relayConnectivity: relayConnectivity,
-            now: now
+            envelopeRetryQueue: envelopeRetryQueue
         )
     }
 
@@ -572,6 +822,17 @@ private enum NostrTransportTestError: Error {
     case invalidPrivateMessage
 }
 
+@MainActor
+private final class NostrTransportEventProbe: TransportEventDelegate {
+    private(set) var failedMessageIDs: [String] = []
+
+    func didReceiveTransportEvent(_ event: TransportEvent) {
+        guard case .messageDeliveryStatusUpdated(let messageID, let status) = event,
+              case .failed = status else { return }
+        failedMessageIDs.append(messageID)
+    }
+}
+
 private func base64URLDecode(_ string: String) -> Data? {
     var candidate = string
     let padding = (4 - (candidate.count % 4)) % 4
@@ -608,10 +869,11 @@ private final class NostrTransportProbe: @unchecked Sendable {
         return scheduledActionsStorage.count
     }
 
-    func record(event: NostrEvent) {
+    func record(batch: [NostrEvent]) -> Bool {
         lock.lock()
-        sentEventsStorage.append(event)
+        sentEventsStorage.append(contentsOf: batch)
         lock.unlock()
+        return true
     }
 
     func recordPendingPrivateEnvelope(id: String) {
