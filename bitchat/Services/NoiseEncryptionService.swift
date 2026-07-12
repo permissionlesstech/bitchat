@@ -192,8 +192,8 @@ final class NoiseEncryptionService {
     
     // Add a handler for peer authentication
     func addOnPeerAuthenticatedHandler(_ handler: @escaping (PeerID, String) -> Void) {
-        serviceQueue.async(flags: .barrier) { [weak self] in
-            self?.onPeerAuthenticatedHandlers.append(handler)
+        serviceQueue.sync(flags: .barrier) {
+            onPeerAuthenticatedHandlers.append(handler)
         }
     }
     
@@ -213,8 +213,8 @@ final class NoiseEncryptionService {
         get { nil }
         set {
             guard let handler = newValue else { return }
-            serviceQueue.async(flags: .barrier) { [weak self] in
-                self?.onPeerAuthenticatedWithGenerationHandlers.append(handler)
+            serviceQueue.sync(flags: .barrier) {
+                onPeerAuthenticatedWithGenerationHandlers.append(handler)
             }
         }
     }
@@ -877,23 +877,28 @@ final class NoiseEncryptionService {
         // Calculate fingerprint
         let fingerprint = remoteStaticKey.rawRepresentation.sha256Fingerprint()
         
-        // Store fingerprint mapping
-        serviceQueue.sync(flags: .barrier) {
+        // Registering handlers is synchronous, and this barrier snapshots them
+        // with the fingerprint update. Invoke the snapshot outside the queue:
+        // parallel Swift Testing workers must not block behind queued callback
+        // registration or allow a handler to re-enter serviceQueue.
+        let handlers: (
+            generationAware: [(PeerID, String, UUID) -> Void],
+            legacy: [(PeerID, String) -> Void]
+        ) = serviceQueue.sync(flags: .barrier) {
             peerFingerprints[peerID] = fingerprint
             fingerprintToPeerID[fingerprint] = peerID
+            return (onPeerAuthenticatedWithGenerationHandlers, onPeerAuthenticatedHandlers)
         }
         
         // Log security event
         SecureLogger.info(.handshakeCompleted(peerID: peerID.id))
         
-        // Notify all handlers about authentication
-        serviceQueue.async { [weak self] in
-            self?.onPeerAuthenticatedWithGenerationHandlers.forEach { handler in
-                handler(peerID, fingerprint, sessionGeneration)
-            }
-            self?.onPeerAuthenticatedHandlers.forEach { handler in
-                handler(peerID, fingerprint)
-            }
+        // Notify all handlers about authentication.
+        handlers.generationAware.forEach { handler in
+            handler(peerID, fingerprint, sessionGeneration)
+        }
+        handlers.legacy.forEach { handler in
+            handler(peerID, fingerprint)
         }
     }
         
