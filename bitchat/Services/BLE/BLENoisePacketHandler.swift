@@ -2,6 +2,11 @@ import BitFoundation
 import BitLogger
 import Foundation
 
+struct BLENoiseDecryptionResult {
+    let plaintext: Data
+    let sessionGeneration: UUID
+}
+
 /// Narrow environment for `BLENoisePacketHandler`.
 ///
 /// All queue hops (collections barrier writes, main-actor UI notification)
@@ -27,12 +32,16 @@ struct BLENoisePacketHandlerEnvironment {
     /// Updates the registry last-seen timestamp for the peer (async barrier write).
     let updatePeerLastSeen: (PeerID) -> Void
     /// Decrypts an encrypted payload from the peer (crypto).
-    let decrypt: (_ payload: Data, _ peerID: PeerID) throws -> Data
+    let decrypt: (_ payload: Data, _ peerID: PeerID) throws -> BLENoiseDecryptionResult
     /// Clears the peer's Noise session after an unrecoverable decrypt failure (crypto).
     let clearSession: (PeerID) -> Void
     /// Consumes session-authenticated protocol state inside the transport. It
     /// must never escape to UI or Nostr payload dispatch.
-    let handleAuthenticatedPeerState: (_ peerID: PeerID, _ payload: Data) -> Void
+    let handleAuthenticatedPeerState: (
+        _ peerID: PeerID,
+        _ payload: Data,
+        _ sessionGeneration: UUID
+    ) -> Void
     /// Delivers `.noisePayloadReceived` to the UI as one main-actor hop.
     let deliverNoisePayload: (
         _ peerID: PeerID,
@@ -117,7 +126,8 @@ final class BLENoisePacketHandler {
         env.updatePeerLastSeen(peerID)
 
         do {
-            let decrypted = try env.decrypt(packet.payload, peerID)
+            let decryption = try env.decrypt(packet.payload, peerID)
+            let decrypted = decryption.plaintext
             guard decrypted.count > 0 else { return }
 
             // First byte indicates the payload type
@@ -132,7 +142,11 @@ final class BLENoisePacketHandler {
             SecureLogger.debug("🔐 Decrypted noise payload type \(noisePayloadType.description) from \(peerID.id.prefix(8))…", category: .session)
 
             if noisePayloadType == .authenticatedPeerState {
-                env.handleAuthenticatedPeerState(peerID, Data(payloadData))
+                env.handleAuthenticatedPeerState(
+                    peerID,
+                    Data(payloadData),
+                    decryption.sessionGeneration
+                )
                 return
             }
 

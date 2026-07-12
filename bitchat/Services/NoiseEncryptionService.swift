@@ -165,7 +165,6 @@ final class NoiseEncryptionService {
     // Peer fingerprints (SHA256 hash of static public key)
     private var peerFingerprints: [PeerID: String] = [:]
     private var fingerprintToPeerID: [String: PeerID] = [:]
-    
     // Thread safety
     private let serviceQueue = DispatchQueue(label: "chat.bitchat.noise.service", attributes: .concurrent)
     
@@ -183,6 +182,7 @@ final class NoiseEncryptionService {
     
     // Callbacks
     private var onPeerAuthenticatedHandlers: [((PeerID, String) -> Void)] = [] // Array of handlers for peer authentication
+    private var onPeerAuthenticatedWithGenerationHandlers: [((PeerID, String, UUID) -> Void)] = []
     var onHandshakeRequired: ((PeerID) -> Void)? // peerID needs handshake
     /// Automatic rekey removed the old session and produced XX message 1.
     /// The transport must clear session-scoped state and put these exact bytes
@@ -203,6 +203,18 @@ final class NoiseEncryptionService {
         set {
             if let handler = newValue {
                 addOnPeerAuthenticatedHandler(handler)
+            }
+        }
+    }
+
+    /// Generation-aware authentication notifications are used by protocols
+    /// whose state must be bound to one exact Noise transport session.
+    var onPeerAuthenticatedWithGeneration: ((PeerID, String, UUID) -> Void)? {
+        get { nil }
+        set {
+            guard let handler = newValue else { return }
+            serviceQueue.async(flags: .barrier) { [weak self] in
+                self?.onPeerAuthenticatedWithGenerationHandlers.append(handler)
             }
         }
     }
@@ -300,8 +312,12 @@ final class NoiseEncryptionService {
         self.sessionManager = NoiseSessionManager(localStaticKey: staticIdentityKey, keychain: keychain)
 
         // Set up session callbacks
-        sessionManager.onSessionEstablished = { [weak self] peerID, remoteStaticKey in
-            self?.handleSessionEstablished(peerID: peerID, remoteStaticKey: remoteStaticKey)
+        sessionManager.onSessionEstablished = { [weak self] peerID, remoteStaticKey, generation in
+            self?.handleSessionEstablished(
+                peerID: peerID,
+                remoteStaticKey: remoteStaticKey,
+                sessionGeneration: generation
+            )
         }
 
         // Start session maintenance timer
@@ -735,7 +751,11 @@ final class NoiseEncryptionService {
     /// messages retain the 64 KiB ceiling; this purpose-specific path permits
     /// the bounded `BitchatFilePacket` envelope and refuses every other typed
     /// payload so the larger allocation budget cannot become a generic bypass.
-    func encryptPrivateFilePayload(_ data: Data, for peerID: PeerID) throws -> Data {
+    func encryptPrivateFilePayload(
+        _ data: Data,
+        for peerID: PeerID,
+        sessionGeneration: UUID? = nil
+    ) throws -> Data {
         guard NoisePayloadType.isPrivateFile(rawValue: data.first),
               NoiseSecurityValidator.validatePrivateFileMessageSize(data) else {
             throw NoiseSecurityError.messageTooLarge
@@ -752,11 +772,25 @@ final class NoiseEncryptionService {
 
         // `maxPrivateFilePlaintextSize` already subtracts the cipher's fixed
         // nonce/tag overhead, so the result is bounded without a second copy.
+        if let sessionGeneration {
+            return try sessionManager.encrypt(
+                data,
+                for: peerID,
+                expectedSessionGeneration: sessionGeneration
+            )
+        }
         return try sessionManager.encrypt(data, for: peerID)
     }
     
     /// Decrypt data from a specific peer
     func decrypt(_ data: Data, from peerID: PeerID) throws -> Data {
+        try decryptWithSessionGeneration(data, from: peerID).plaintext
+    }
+
+    func decryptWithSessionGeneration(
+        _ data: Data,
+        from peerID: PeerID
+    ) throws -> (plaintext: Data, sessionGeneration: UUID) {
         // Standard transport ciphertext has 20 bytes of nonce/tag overhead.
         // A larger candidate is admitted only up to the framed-file ceiling;
         // after authenticated decryption it must prove it is `.privateFile`.
@@ -775,14 +809,14 @@ final class NoiseEncryptionService {
             throw NoiseEncryptionError.sessionNotEstablished
         }
         
-        let decrypted = try sessionManager.decrypt(data, from: peerID)
+        let result = try sessionManager.decryptWithSessionGeneration(data, from: peerID)
         if !isStandardCiphertext {
-            guard NoisePayloadType.isPrivateFile(rawValue: decrypted.first),
-                  NoiseSecurityValidator.validatePrivateFileMessageSize(decrypted) else {
+            guard NoisePayloadType.isPrivateFile(rawValue: result.plaintext.first),
+                  NoiseSecurityValidator.validatePrivateFileMessageSize(result.plaintext) else {
                 throw NoiseSecurityError.messageTooLarge
             }
         }
-        return decrypted
+        return result
     }
     
     // MARK: - Peer Management
@@ -792,6 +826,25 @@ final class NoiseEncryptionService {
         return serviceQueue.sync {
             return peerFingerprints[peerID]
         }
+    }
+
+    func sessionGeneration(for peerID: PeerID) -> UUID? {
+        sessionManager.sessionGeneration(for: peerID)
+    }
+
+    /// Runs `body` while holding a read lease on the exact session generation.
+    /// Session insertion, replacement, and removal use the same manager
+    /// barrier, so they cannot interleave with an authenticated-state commit.
+    func withCurrentSessionGeneration<Result>(
+        for peerID: PeerID,
+        expected: UUID,
+        _ body: () -> Result
+    ) -> Result? {
+        sessionManager.withCurrentSessionGeneration(
+            for: peerID,
+            expected: expected,
+            body
+        )
     }
 
     func clearEphemeralStateForPanic() {
@@ -816,7 +869,11 @@ final class NoiseEncryptionService {
     
     // MARK: - Private Helpers
     
-    private func handleSessionEstablished(peerID: PeerID, remoteStaticKey: Curve25519.KeyAgreement.PublicKey) {
+    private func handleSessionEstablished(
+        peerID: PeerID,
+        remoteStaticKey: Curve25519.KeyAgreement.PublicKey,
+        sessionGeneration: UUID
+    ) {
         // Calculate fingerprint
         let fingerprint = remoteStaticKey.rawRepresentation.sha256Fingerprint()
         
@@ -831,6 +888,9 @@ final class NoiseEncryptionService {
         
         // Notify all handlers about authentication
         serviceQueue.async { [weak self] in
+            self?.onPeerAuthenticatedWithGenerationHandlers.forEach { handler in
+                handler(peerID, fingerprint, sessionGeneration)
+            }
             self?.onPeerAuthenticatedHandlers.forEach { handler in
                 handler(peerID, fingerprint)
             }

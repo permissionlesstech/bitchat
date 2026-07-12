@@ -96,13 +96,22 @@ struct NoiseEncryptionServiceTests {
         let recorder = AuthenticationRecorder()
 
         #expect(alice.onPeerAuthenticated == nil)
+        #expect(bob.onPeerAuthenticatedWithGeneration == nil)
         alice.addOnPeerAuthenticatedHandler(recorder.record(peerID:fingerprint:))
         bob.onPeerAuthenticated = recorder.record(peerID:fingerprint:)
+        bob.onPeerAuthenticatedWithGeneration = recorder.record(
+            peerID:fingerprint:sessionGeneration:
+        )
 
         try establishSessions(alice: alice, bob: bob)
 
         let authenticated = await TestHelpers.waitUntil({ recorder.count >= 2 }, timeout: 5.0)
         #expect(authenticated)
+        let generationAuthenticated = await TestHelpers.waitUntil(
+            { recorder.generationCount >= 1 },
+            timeout: 5.0
+        )
+        #expect(generationAuthenticated)
         #expect(alice.hasEstablishedSession(with: bobPeerID))
         #expect(bob.hasEstablishedSession(with: alicePeerID))
         #expect(alice.hasSession(with: bobPeerID))
@@ -111,6 +120,7 @@ struct NoiseEncryptionServiceTests {
         #expect(bob.getPeerPublicKeyData(alicePeerID)?.count == 32)
         #expect(alice.getPeerFingerprint(bobPeerID) != nil)
         #expect(bob.getPeerFingerprint(alicePeerID) != nil)
+        #expect(recorder.generation(for: alicePeerID) == bob.sessionGeneration(for: alicePeerID))
 
         let plaintext = Data("secret payload".utf8)
         let ciphertext = try alice.encrypt(plaintext, for: bobPeerID)
@@ -244,6 +254,17 @@ struct NoiseEncryptionServiceTests {
         let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
         let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
         try establishSessions(alice: alice, bob: bob)
+        let originalGeneration = try #require(alice.sessionGeneration(for: bobPeerID))
+        var leaseRan = false
+        let leased = alice.withCurrentSessionGeneration(
+            for: bobPeerID,
+            expected: originalGeneration
+        ) {
+            leaseRan = true
+            return true
+        }
+        #expect(leased == true)
+        #expect(leaseRan)
 
         var emittedPeerID: PeerID?
         var emittedMessage: Data?
@@ -254,6 +275,17 @@ struct NoiseEncryptionServiceTests {
         try alice._test_initiateAutomaticRekey(for: bobPeerID)
 
         #expect(emittedPeerID == bobPeerID)
+        #expect(alice.sessionGeneration(for: bobPeerID) == nil)
+        leaseRan = false
+        let staleLease = alice.withCurrentSessionGeneration(
+            for: bobPeerID,
+            expected: originalGeneration
+        ) {
+            leaseRan = true
+            return true
+        }
+        #expect(staleLease == nil)
+        #expect(!leaseRan)
         let message1 = try #require(emittedMessage)
         #expect(!message1.isEmpty)
         #expect(alice.hasSession(with: bobPeerID))
@@ -269,6 +301,7 @@ struct NoiseEncryptionServiceTests {
 
         #expect(alice.hasEstablishedSession(with: bobPeerID))
         #expect(bob.hasEstablishedSession(with: alicePeerID))
+        #expect(alice.sessionGeneration(for: bobPeerID) != originalGeneration)
     }
 
     @Test("Large private-file payloads use the bounded Noise extension")
@@ -411,6 +444,7 @@ struct NoiseEncryptionServiceTests {
 private final class AuthenticationRecorder: @unchecked Sendable {
     private let lock = NSLock()
     private var entries: [(PeerID, String)] = []
+    private var generationEntries: [(PeerID, UUID)] = []
 
     var count: Int {
         lock.lock()
@@ -418,9 +452,27 @@ private final class AuthenticationRecorder: @unchecked Sendable {
         return entries.count
     }
 
+    var generationCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return generationEntries.count
+    }
+
     func record(peerID: PeerID, fingerprint: String) {
         lock.lock()
         entries.append((peerID, fingerprint))
         lock.unlock()
+    }
+
+    func record(peerID: PeerID, fingerprint _: String, sessionGeneration: UUID) {
+        lock.lock()
+        generationEntries.append((peerID, sessionGeneration))
+        lock.unlock()
+    }
+
+    func generation(for peerID: PeerID) -> UUID? {
+        lock.lock()
+        defer { lock.unlock() }
+        return generationEntries.last { $0.0 == peerID }?.1
     }
 }

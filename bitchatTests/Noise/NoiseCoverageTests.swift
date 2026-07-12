@@ -542,8 +542,12 @@ struct NoiseCoverageTests {
         let aliceManager = NoiseSessionManager(localStaticKey: aliceStaticKey, keychain: keychain)
         let bobManager = NoiseSessionManager(localStaticKey: bobStaticKey, keychain: keychain)
 
-        aliceManager.onSessionEstablished = establishedRecorder.recordEstablished(peerID:remoteKey:)
-        bobManager.onSessionEstablished = establishedRecorder.recordEstablished(peerID:remoteKey:)
+        aliceManager.onSessionEstablished = establishedRecorder.recordEstablished(
+            peerID:remoteKey:sessionGeneration:
+        )
+        bobManager.onSessionEstablished = establishedRecorder.recordEstablished(
+            peerID:remoteKey:sessionGeneration:
+        )
 
         try establishManagerSessions(aliceManager: aliceManager, bobManager: bobManager)
 
@@ -656,6 +660,95 @@ struct NoiseCoverageTests {
 
         #expect(rekeyedSession !== establishedSession)
         #expect(rekeyedSession.getState() == .handshaking)
+    }
+
+    @Test("A stale decrypt generation cannot commit across session promotion")
+    func staleDecryptGenerationCannotCommitAcrossPromotion() throws {
+        let aliceManager = NoiseSessionManager(
+            localStaticKey: aliceStaticKey,
+            keychain: keychain,
+            sessionFactory: { peerID, role in
+                BlockingDecryptNoiseSession(
+                    peerID: peerID,
+                    role: role,
+                    keychain: self.keychain,
+                    localStaticKey: self.aliceStaticKey
+                )
+            }
+        )
+        let bobManager = NoiseSessionManager(localStaticKey: bobStaticKey, keychain: keychain)
+        try establishManagerSessions(aliceManager: aliceManager, bobManager: bobManager)
+
+        let oldSession = try #require(
+            aliceManager.getSession(for: alicePeerID) as? BlockingDecryptNoiseSession
+        )
+        let oldGeneration = try #require(aliceManager.sessionGeneration(for: alicePeerID))
+
+        // Prepare a fully authenticated responder candidate without promoting
+        // it yet. Its final XX message is the exact operation that replaces
+        // the old `sessions[peerID]` entry.
+        let replacementInitiator = NoiseSession(
+            peerID: bobPeerID,
+            role: .initiator,
+            keychain: keychain,
+            localStaticKey: bobStaticKey
+        )
+        let message1 = try replacementInitiator.startHandshake()
+        let message2 = try #require(
+            try aliceManager.handleIncomingHandshake(from: alicePeerID, message: message1)
+        )
+        let message3 = try #require(try replacementInitiator.processHandshakeMessage(message2))
+
+        let ciphertext = try bobManager.encrypt(Data("old session".utf8), for: bobPeerID)
+        oldSession.pauseNextDecrypt()
+
+        let decryptResult = ConcurrentTestResult<(plaintext: Data, sessionGeneration: UUID)>()
+        DispatchQueue.global().async {
+            decryptResult.capture {
+                try aliceManager.decryptWithSessionGeneration(ciphertext, from: self.alicePeerID)
+            }
+        }
+        #expect(oldSession.waitForDecryptStart(timeout: 2))
+
+        let promotionStarted = DispatchSemaphore(value: 0)
+        let promotionResult = ConcurrentTestResult<Data?>()
+        DispatchQueue.global().async {
+            promotionStarted.signal()
+            promotionResult.capture {
+                try aliceManager.handleIncomingHandshake(from: self.alicePeerID, message: message3)
+            }
+        }
+        #expect(promotionStarted.wait(timeout: .now() + 2) == .success)
+        #expect(
+            promotionResult.wait(timeout: 0.05) == nil,
+            "Promotion must wait for the exact decrypting-session lease"
+        )
+
+        oldSession.resumeDecrypt()
+        let decrypted = try #require(decryptResult.wait(timeout: 2)).get()
+        _ = try #require(promotionResult.wait(timeout: 2)).get()
+
+        #expect(decrypted.plaintext == Data("old session".utf8))
+        #expect(decrypted.sessionGeneration == oldGeneration)
+        #expect(aliceManager.sessionGeneration(for: alicePeerID) != oldGeneration)
+        #expect(throws: NoiseEncryptionError.sessionNotEstablished) {
+            try aliceManager.encrypt(
+                Data("stale send".utf8),
+                for: alicePeerID,
+                expectedSessionGeneration: oldGeneration
+            )
+        }
+
+        var staleCommitRan = false
+        let staleCommit = aliceManager.withCurrentSessionGeneration(
+            for: alicePeerID,
+            expected: decrypted.sessionGeneration
+        ) {
+            staleCommitRan = true
+            return true
+        }
+        #expect(staleCommit == nil)
+        #expect(!staleCommitRan)
     }
 
     @Test("Secure noise sessions enforce limits and renegotiation thresholds")
@@ -852,7 +945,11 @@ private final class SessionCallbackRecorder: @unchecked Sendable {
         return establishedEntries.map(\.0)
     }
 
-    func recordEstablished(peerID: PeerID, remoteKey: Curve25519.KeyAgreement.PublicKey) {
+    func recordEstablished(
+        peerID: PeerID,
+        remoteKey: Curve25519.KeyAgreement.PublicKey,
+        sessionGeneration _: UUID
+    ) {
         lock.lock()
         establishedEntries.append((peerID, remoteKey.rawRepresentation))
         lock.unlock()
@@ -872,5 +969,60 @@ private final class FailingNoiseSession: NoiseSession {
 
     override func startHandshake() throws -> Data {
         throw Error.synthetic
+    }
+}
+
+private final class BlockingDecryptNoiseSession: NoiseSession, @unchecked Sendable {
+    private let controlLock = NSLock()
+    private var shouldPauseNextDecrypt = false
+    private let decryptStarted = DispatchSemaphore(value: 0)
+    private let resumeDecryptSemaphore = DispatchSemaphore(value: 0)
+
+    func pauseNextDecrypt() {
+        controlLock.lock()
+        shouldPauseNextDecrypt = true
+        controlLock.unlock()
+    }
+
+    func waitForDecryptStart(timeout: TimeInterval) -> Bool {
+        decryptStarted.wait(timeout: .now() + timeout) == .success
+    }
+
+    func resumeDecrypt() {
+        resumeDecryptSemaphore.signal()
+    }
+
+    override func decrypt(_ ciphertext: Data) throws -> Data {
+        controlLock.lock()
+        let shouldPause = shouldPauseNextDecrypt
+        shouldPauseNextDecrypt = false
+        controlLock.unlock()
+
+        if shouldPause {
+            decryptStarted.signal()
+            resumeDecryptSemaphore.wait()
+        }
+        return try super.decrypt(ciphertext)
+    }
+}
+
+private final class ConcurrentTestResult<Value>: @unchecked Sendable {
+    private let lock = NSLock()
+    private let completed = DispatchSemaphore(value: 0)
+    private var storedResult: Result<Value, Error>?
+
+    func capture(_ operation: () throws -> Value) {
+        let result = Result(catching: operation)
+        lock.lock()
+        storedResult = result
+        lock.unlock()
+        completed.signal()
+    }
+
+    func wait(timeout: TimeInterval) -> Result<Value, Error>? {
+        guard completed.wait(timeout: .now() + timeout) == .success else { return nil }
+        lock.lock()
+        defer { lock.unlock() }
+        return storedResult
     }
 }
