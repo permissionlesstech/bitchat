@@ -22,6 +22,9 @@ struct BLEAnnounceHandlerEnvironment {
     /// eviction; this fallback keeps the TOFU signing-key pin effective for
     /// returning peers.
     let persistedSigningPublicKey: (PeerID) -> Data?
+    /// Ed25519 key previously bound to this Noise identity by an authenticated
+    /// peer-state payload, if any (persistent identity-state read).
+    let authenticatedSigningPublicKey: (_ noisePublicKey: Data) -> Data?
     /// Verifies the packet signature against the announced signing key.
     let verifySignature: (_ packet: BitchatPacket, _ signingPublicKey: Data) -> Bool
     /// Direct link state for the peer (BLE-queue read).
@@ -149,6 +152,9 @@ final class BLEAnnounceHandler {
             existingNoisePublicKey: existingPeerKeys.noisePublicKey,
             announcedNoisePublicKey: announcement.noisePublicKey,
             existingSigningPublicKey: existingPeerKeys.signingPublicKey,
+            authenticatedSigningPublicKey: env.authenticatedSigningPublicKey(
+                announcement.noisePublicKey
+            ),
             announcedSigningPublicKey: announcement.signingPublicKey
         )
         if case .reject(.keyMismatch) = trustDecision {
@@ -156,6 +162,12 @@ final class BLEAnnounceHandler {
         }
         if case .reject(.signingKeyMismatch) = trustDecision {
             SecureLogger.warning("🚨 Announce signing-key mismatch for \(peerID.id.prefix(8))… — refusing to replace pinned signing key (possible impersonation attempt)", category: .security)
+        }
+        if case .reject(.authenticatedSigningKeyMismatch) = trustDecision {
+            SecureLogger.warning(
+                "⚠️ Announce signing-key replacement rejected for Noise-authenticated peer \(peerID.id.prefix(8))…",
+                category: .security
+            )
         }
         var verifiedAnnounce = trustDecision.isVerified
 

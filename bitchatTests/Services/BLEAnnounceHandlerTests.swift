@@ -9,6 +9,7 @@ struct BLEAnnounceHandlerTests {
         var existingSigningPublicKey: Data?
         var persistedSigningPublicKey: Data?
         var persistedSigningKeyQueries: [PeerID] = []
+        var authenticatedSigningPublicKey: Data?
         var signatureValid = true
         var linkState: (hasPeripheral: Bool, hasCentral: Bool) = (false, false)
         var linkBoundToOtherPeer = false
@@ -44,6 +45,7 @@ struct BLEAnnounceHandlerTests {
                 recorder.persistedSigningKeyQueries.append(peerID)
                 return recorder.persistedSigningPublicKey
             },
+            authenticatedSigningPublicKey: { _ in recorder.authenticatedSigningPublicKey },
             verifySignature: { packet, signingPublicKey in
                 recorder.verifySignatureCalls.append((packet, signingPublicKey))
                 return recorder.signatureValid
@@ -703,6 +705,7 @@ struct BLEAnnounceHandlerTests {
                 return (info?.noisePublicKey, info?.signingPublicKey)
             },
             persistedSigningPublicKey: { _ in nil },
+            authenticatedSigningPublicKey: { _ in nil },
             verifySignature: { packet, signingPublicKey in
                 victim.verifyPacketSignature(packet, publicKey: signingPublicKey)
             },
@@ -817,6 +820,7 @@ struct BLEAnnounceHandlerTests {
                         .compactMap { $0.signingPublicKey }
                         .first
                 },
+                authenticatedSigningPublicKey: { _ in nil },
                 verifySignature: { packet, signingPublicKey in
                     victim.verifyPacketSignature(packet, publicKey: signingPublicKey)
                 },

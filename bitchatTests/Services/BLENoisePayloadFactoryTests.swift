@@ -79,4 +79,16 @@ struct BLENoisePayloadFactoryTests {
         #expect(decoded.data == Data([0xCA, 0xFE]))
         #expect(decoded.encode().first == 0x20)
     }
+
+    @Test
+    func authenticatedPeerStateUsesPermanent0x21Type() throws {
+        let state = AuthenticatedPeerStatePacket(
+            capabilities: .privateMedia,
+            signingPublicKey: Data(repeating: 0x77, count: 32)
+        )
+        let encoded = try #require(BLENoisePayloadFactory.authenticatedPeerState(state))
+
+        #expect(encoded.first == 0x21)
+        #expect(AuthenticatedPeerStatePacket.decode(from: Data(encoded.dropFirst())) == state)
+    }
 }

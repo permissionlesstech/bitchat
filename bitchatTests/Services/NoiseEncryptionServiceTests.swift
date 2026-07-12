@@ -237,6 +237,40 @@ struct NoiseEncryptionServiceTests {
         #expect(try receiver.decrypt(ciphertext, from: alicePeerID) == Data("new session".utf8))
     }
 
+    @Test("Automatic rekey exposes and completes its exact handshake bytes")
+    func automaticRekeyHandshakeIsNotStranded() throws {
+        let alice = NoiseEncryptionService(keychain: MockKeychain())
+        let bob = NoiseEncryptionService(keychain: MockKeychain())
+        let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
+        let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
+        try establishSessions(alice: alice, bob: bob)
+
+        var emittedPeerID: PeerID?
+        var emittedMessage: Data?
+        alice.onRekeyHandshakeReady = { peerID, message in
+            emittedPeerID = peerID
+            emittedMessage = message
+        }
+        try alice._test_initiateAutomaticRekey(for: bobPeerID)
+
+        #expect(emittedPeerID == bobPeerID)
+        let message1 = try #require(emittedMessage)
+        #expect(!message1.isEmpty)
+        #expect(alice.hasSession(with: bobPeerID))
+        #expect(!alice.hasEstablishedSession(with: bobPeerID))
+
+        let message2 = try #require(
+            try bob.processHandshakeMessage(from: alicePeerID, message: message1)
+        )
+        let message3 = try #require(
+            try alice.processHandshakeMessage(from: bobPeerID, message: message2)
+        )
+        _ = try bob.processHandshakeMessage(from: alicePeerID, message: message3)
+
+        #expect(alice.hasEstablishedSession(with: bobPeerID))
+        #expect(bob.hasEstablishedSession(with: alicePeerID))
+    }
+
     @Test("Large private-file payloads use the bounded Noise extension")
     func largePrivateFileNoiseRoundTrip() throws {
         let alice = NoiseEncryptionService(keychain: MockKeychain())

@@ -397,7 +397,7 @@ final class NostrInboundPipeline {
             // claiming to be group traffic over Nostr is ignored.
             // Live voice is mesh-only: latency and relay cost make it
             // meaningless over Nostr.
-            case .verifyChallenge, .verifyResponse, .groupInvite, .groupKeyUpdate, .vouch, .voiceFrame, .privateFile:
+            case .verifyChallenge, .verifyResponse, .groupInvite, .groupKeyUpdate, .vouch, .voiceFrame, .privateFile, .authenticatedPeerState:
                 break
             }
         }
@@ -489,7 +489,7 @@ final class NostrInboundPipeline {
                         // in v1; group traffic over Nostr is ignored.
                         // Live voice is mesh-only: latency and relay cost make it
                         // meaningless over Nostr.
-                        case .verifyChallenge, .verifyResponse, .groupInvite, .groupKeyUpdate, .vouch, .voiceFrame, .privateFile:
+                        case .verifyChallenge, .verifyResponse, .groupInvite, .groupKeyUpdate, .vouch, .voiceFrame, .privateFile, .authenticatedPeerState:
                             break
                         }
                     }

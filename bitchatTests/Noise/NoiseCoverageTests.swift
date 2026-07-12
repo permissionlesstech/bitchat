@@ -650,7 +650,8 @@ struct NoiseCoverageTests {
             try aliceManager.initiateHandshake(with: alicePeerID)
         }
 
-        try aliceManager.initiateRekey(for: alicePeerID)
+        let rekeyHandshake = try aliceManager.initiateRekey(for: alicePeerID)
+        #expect(!rekeyHandshake.isEmpty)
         let rekeyedSession = try #require(aliceManager.getSession(for: alicePeerID))
 
         #expect(rekeyedSession !== establishedSession)

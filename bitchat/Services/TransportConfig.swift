@@ -9,6 +9,12 @@ enum TransportConfig {
     static let bleMaxInFlightAssemblies: Int = 128          // Cap concurrent fragment assemblies
     static let bleHighDegreeThreshold: Int = 6              // For adaptive TTL/probabilistic relays
     static let bleMaxConcurrentTransfers: Int = 2           // Limit simultaneous large media sends
+    // Bounded wait for the session-authenticated capability proof used by
+    // private-media migration. Expiry never auto-sends clear bytes; it only
+    // resolves to the existing one-shot consent or downgrade-blocked path.
+    static let privateMediaCapabilityProofTimeoutSeconds: TimeInterval = 5
+    static let privateMediaCapabilityProofPendingPeerCap: Int = 64
+    static let privateMediaCapabilityProofWaitersPerPeerCap: Int = 16
     static let bleFragmentRelayMinDelayMs: Int = 8          // Faster forwarding for media fragments
     static let bleFragmentRelayMaxDelayMs: Int = 25         // Upper jitter bound for fragment relays
     // Fragment relay TTL in sparse graphs; matches messageTTLDefault so media

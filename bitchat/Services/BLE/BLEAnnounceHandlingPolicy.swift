@@ -57,6 +57,7 @@ enum BLEAnnounceTrustRejection: Equatable {
     case invalidSignature
     case keyMismatch
     case signingKeyMismatch
+    case authenticatedSigningKeyMismatch
 }
 
 enum BLEAnnounceTrustDecision: Equatable {
@@ -74,11 +75,20 @@ enum BLEAnnounceTrustPolicy {
         signatureValid: Bool,
         existingNoisePublicKey: Data?,
         announcedNoisePublicKey: Data,
-        existingSigningPublicKey: Data?,
+        existingSigningPublicKey: Data? = nil,
+        authenticatedSigningPublicKey: Data? = nil,
         announcedSigningPublicKey: Data
     ) -> BLEAnnounceTrustDecision {
         if let existingNoisePublicKey, existingNoisePublicKey != announcedNoisePublicKey {
             return .reject(.keyMismatch)
+        }
+
+        // Strongest binding first: an Ed25519 key bound to this Noise identity
+        // inside an authenticated Noise session can never be replaced by a
+        // merely self-signed announce.
+        if let authenticatedSigningPublicKey,
+           announcedSigningPublicKey != authenticatedSigningPublicKey {
+            return .reject(.authenticatedSigningKeyMismatch)
         }
 
         // TOFU signing-key pinning. The packet signature only proves the

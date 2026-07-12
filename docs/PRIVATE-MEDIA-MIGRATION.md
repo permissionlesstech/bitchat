@@ -11,8 +11,23 @@ peer's Noise session before BLE fragmentation.
 - iOS temporarily accepts `0x09`, which appeared in prerelease builds of the
   private-media change. Decoders canonicalize it to `privateFile`; they never
   emit it.
-- A peer advertising `PeerCapabilities.privateMedia` receives one encrypted
-  `noiseEncrypted` transfer.
+- `NoisePayloadType.authenticatedPeerState` is permanently assigned `0x21`.
+  It is emitted after every completed/rekeyed Noise XX session and echoed at
+  most once when the remote state arrives, so message-3/proof reordering over
+  different mesh links converges. This type is part of the protocol security
+  boundary and is not removed when the media migration ends.
+- The `0x21` payload starts with version `0x01`, followed by one-byte
+  type/length/value fields. Version 1 requires canonical TLV `0x01` (the
+  minimal little-endian `PeerCapabilities` bitfield, 1-8 bytes) and TLV `0x02`
+  (the 32-byte Ed25519 announcement signing key). Duplicate required fields,
+  non-minimal capabilities, malformed lengths, missing fields, and unknown
+  versions are ignored without changing state. Unknown TLVs are skipped.
+- The public `PeerCapabilities.privateMedia` announce bit is a discovery hint:
+  it starts a Noise handshake, but never selects encrypted sending or creates
+  a pin. A private transfer waits boundedly for the exact session's encrypted
+  `0x21`. A valid bit-8 proof selects Noise `0x20`; a valid no-bit proof or a
+  no-proof timeout reaches the explicit legacy-consent path for an unpinned
+  peer. No timeout automatically sends raw bytes.
 - An unpinned peer with a stable Noise key but without that capability is
   eligible for one signed, directed
   `fileTransfer`, matching the pre-migration wire form used by older iOS and
@@ -20,22 +35,33 @@ peer's Noise session before BLE fragmentation.
   per-send warning that the file is not end-to-end encrypted and mesh relays
   can see it. The
   consent is consumed by that invocation and is never remembered.
-- A signed announce never creates a pin by itself. The fingerprint is pinned
-  in the encrypted identity cache only after a completed Noise session
-  authenticates the same static key as the capability-bearing registry entry.
-  This comparison is performed in either event order: session then announce,
-  or announce then session. A later announce missing the bit is then treated
-  as a downgrade, and raw fallback is blocked even if a caller presents
-  legacy consent.
+- A signed announce never creates a pin by itself: an attacker can copy a
+  victim's public Noise key, supply its own Ed25519 key and capability bits,
+  and self-sign an internally consistent announce. Only successfully
+  decrypted `0x21` state pins the authenticated Noise fingerprint and binds
+  the Ed25519 key used by later announces/public messages. A later valid
+  no-bit `0x21` is treated as a downgrade, and raw fallback is blocked even if
+  a caller presents legacy consent. Public no-bit announces cannot overwrite
+  current session-authenticated state.
 - During migration, both an absent capabilities TLV and an explicit TLV
   without `privateMedia` are legacy-eligible when that stable fingerprint is
   not pinned. This supports clients that added capability advertisement before
   encrypted media. Neither shape bypasses a previously authenticated pin.
 
-The `0x09` receive alias may be removed only after every TestFlight/internal
-build that emitted it has expired and the project's minimum-supported-client
-policy excludes those builds. Track that release criterion explicitly; do not
-remove the alias on an arbitrary calendar date.
+Older clients decrypt and ignore unknown inner type `0x21`; they do not need to
+understand it to continue using text or the warned legacy media path. They are
+never inferred capable merely because the handshake succeeded.
+
+Removal gates are independent and must not share an arbitrary calendar date:
+
+- Remove the `0x09` receive alias only after every TestFlight/internal build
+  that emitted it has expired and minimum-supported-client policy excludes it.
+- Remove the signed directed raw `0x22` fallback only after minimum-supported
+  iOS and Android clients emit authenticated bit-8 `0x21` state and the legacy
+  population has aged out.
+- Nostr kind `1059` compatibility is a separate envelope migration. Its dual
+  publish/removal gate is not evidence that either BLE compatibility shape can
+  be removed.
 
 ## Security boundary
 
@@ -61,9 +87,10 @@ Incoming clients accept all three migration-era shapes:
 Panic wipe clears the persistent capability pins together with the rest of
 the encrypted identity cache.
 
-This migration path is BLE-only. Nostr private-media transport is unchanged
-and remains a follow-up; do not infer the BLE consent fallback or capability
-pin semantics for Nostr delivery.
+This migration path is mesh-Noise-only (BLE and compatible direct mesh links).
+Nostr private-media transport is unchanged and remains a follow-up. Nostr
+inbound paths explicitly ignore `0x21`; do not infer the mesh consent fallback
+or capability-pin semantics for Nostr delivery.
 
 ## Size interoperability
 
