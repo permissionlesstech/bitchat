@@ -96,13 +96,22 @@ struct NoiseEncryptionServiceTests {
         let recorder = AuthenticationRecorder()
 
         #expect(alice.onPeerAuthenticated == nil)
+        #expect(bob.onPeerAuthenticatedWithGeneration == nil)
         alice.addOnPeerAuthenticatedHandler(recorder.record(peerID:fingerprint:))
         bob.onPeerAuthenticated = recorder.record(peerID:fingerprint:)
+        bob.onPeerAuthenticatedWithGeneration = recorder.record(
+            peerID:fingerprint:sessionGeneration:
+        )
 
         try establishSessions(alice: alice, bob: bob)
 
         let authenticated = await TestHelpers.waitUntil({ recorder.count >= 2 }, timeout: 5.0)
         #expect(authenticated)
+        let generationAuthenticated = await TestHelpers.waitUntil(
+            { recorder.generationCount >= 1 },
+            timeout: 5.0
+        )
+        #expect(generationAuthenticated)
         #expect(alice.hasEstablishedSession(with: bobPeerID))
         #expect(bob.hasEstablishedSession(with: alicePeerID))
         #expect(alice.hasSession(with: bobPeerID))
@@ -111,6 +120,7 @@ struct NoiseEncryptionServiceTests {
         #expect(bob.getPeerPublicKeyData(alicePeerID)?.count == 32)
         #expect(alice.getPeerFingerprint(bobPeerID) != nil)
         #expect(bob.getPeerFingerprint(alicePeerID) != nil)
+        #expect(recorder.generation(for: alicePeerID) == bob.sessionGeneration(for: alicePeerID))
 
         let plaintext = Data("secret payload".utf8)
         let ciphertext = try alice.encrypt(plaintext, for: bobPeerID)
@@ -237,6 +247,112 @@ struct NoiseEncryptionServiceTests {
         #expect(try receiver.decrypt(ciphertext, from: alicePeerID) == Data("new session".utf8))
     }
 
+    @Test("Automatic rekey exposes and completes its exact handshake bytes")
+    func automaticRekeyHandshakeIsNotStranded() throws {
+        let alice = NoiseEncryptionService(keychain: MockKeychain())
+        let bob = NoiseEncryptionService(keychain: MockKeychain())
+        let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
+        let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
+        try establishSessions(alice: alice, bob: bob)
+        let originalGeneration = try #require(alice.sessionGeneration(for: bobPeerID))
+        var leaseRan = false
+        let leased = alice.withCurrentSessionGeneration(
+            for: bobPeerID,
+            expected: originalGeneration
+        ) {
+            leaseRan = true
+            return true
+        }
+        #expect(leased == true)
+        #expect(leaseRan)
+
+        var emittedPeerID: PeerID?
+        var emittedMessage: Data?
+        alice.onRekeyHandshakeReady = { peerID, message in
+            emittedPeerID = peerID
+            emittedMessage = message
+        }
+        try alice._test_initiateAutomaticRekey(for: bobPeerID)
+
+        #expect(emittedPeerID == bobPeerID)
+        #expect(alice.sessionGeneration(for: bobPeerID) == nil)
+        leaseRan = false
+        let staleLease = alice.withCurrentSessionGeneration(
+            for: bobPeerID,
+            expected: originalGeneration
+        ) {
+            leaseRan = true
+            return true
+        }
+        #expect(staleLease == nil)
+        #expect(!leaseRan)
+        let message1 = try #require(emittedMessage)
+        #expect(!message1.isEmpty)
+        #expect(alice.hasSession(with: bobPeerID))
+        #expect(!alice.hasEstablishedSession(with: bobPeerID))
+
+        let message2 = try #require(
+            try bob.processHandshakeMessage(from: alicePeerID, message: message1)
+        )
+        let message3 = try #require(
+            try alice.processHandshakeMessage(from: bobPeerID, message: message2)
+        )
+        _ = try bob.processHandshakeMessage(from: alicePeerID, message: message3)
+
+        #expect(alice.hasEstablishedSession(with: bobPeerID))
+        #expect(bob.hasEstablishedSession(with: alicePeerID))
+        #expect(alice.sessionGeneration(for: bobPeerID) != originalGeneration)
+    }
+
+    @Test("Large private-file payloads use the bounded Noise extension")
+    func largePrivateFileNoiseRoundTrip() throws {
+        let alice = NoiseEncryptionService(keychain: MockKeychain())
+        let bob = NoiseEncryptionService(keychain: MockKeychain())
+        let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
+        let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
+        try establishSessions(alice: alice, bob: bob)
+
+        let content = Data("%PDF-1.7\n".utf8) + Data(repeating: 0x51, count: 96 * 1024)
+        let file = BitchatFilePacket(
+            fileName: "large-private.pdf",
+            fileSize: UInt64(content.count),
+            mimeType: "application/pdf",
+            content: content
+        )
+        let typedPayload = try #require(BLENoisePayloadFactory.privateFile(file))
+        #expect(typedPayload.count > NoiseSecurityConstants.maxMessageSize)
+        #expect(typedPayload.first == NoisePayloadType.privateFile.rawValue)
+        #expect(
+            typedPayload.count <= NoiseSecurityConstants.maxPrivateFilePlaintextSize,
+            "typedBytes=\(typedPayload.count) limit=\(NoiseSecurityConstants.maxPrivateFilePlaintextSize)"
+        )
+
+        do {
+            _ = try alice.encrypt(typedPayload, for: bobPeerID)
+            Issue.record("Ordinary Noise payload path must retain its 64 KiB ceiling")
+        } catch NoiseSecurityError.messageTooLarge {
+            // Expected: only the purpose-specific private-file API may extend it.
+        }
+
+        let ciphertext: Data
+        do {
+            ciphertext = try alice.encryptPrivateFilePayload(typedPayload, for: bobPeerID)
+        } catch {
+            Issue.record("Private-file encryption failed: \(error)")
+            return
+        }
+        let decrypted: Data
+        do {
+            decrypted = try bob.decrypt(ciphertext, from: alicePeerID)
+        } catch {
+            Issue.record("Private-file decryption failed: \(error); ciphertextBytes=\(ciphertext.count)")
+            return
+        }
+
+        #expect(ciphertext.range(of: content) == nil)
+        #expect(decrypted == typedPayload)
+    }
+
     @Test("Encrypt without a session requests handshake and decrypt without session fails")
     func handshakeRequiredAndSessionNotEstablishedErrors() throws {
         let service = NoiseEncryptionService(keychain: MockKeychain())
@@ -328,6 +444,7 @@ struct NoiseEncryptionServiceTests {
 private final class AuthenticationRecorder: @unchecked Sendable {
     private let lock = NSLock()
     private var entries: [(PeerID, String)] = []
+    private var generationEntries: [(PeerID, UUID)] = []
 
     var count: Int {
         lock.lock()
@@ -335,9 +452,27 @@ private final class AuthenticationRecorder: @unchecked Sendable {
         return entries.count
     }
 
+    var generationCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return generationEntries.count
+    }
+
     func record(peerID: PeerID, fingerprint: String) {
         lock.lock()
         entries.append((peerID, fingerprint))
         lock.unlock()
+    }
+
+    func record(peerID: PeerID, fingerprint _: String, sessionGeneration: UUID) {
+        lock.lock()
+        generationEntries.append((peerID, sessionGeneration))
+        lock.unlock()
+    }
+
+    func generation(for peerID: PeerID) -> UUID? {
+        lock.lock()
+        defer { lock.unlock() }
+        return generationEntries.last { $0.0 == peerID }?.1
     }
 }

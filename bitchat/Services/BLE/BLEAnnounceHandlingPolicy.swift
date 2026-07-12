@@ -56,6 +56,7 @@ enum BLEAnnounceTrustRejection: Equatable {
     case missingSignature
     case invalidSignature
     case keyMismatch
+    case authenticatedSigningKeyMismatch
 }
 
 enum BLEAnnounceTrustDecision: Equatable {
@@ -72,10 +73,17 @@ enum BLEAnnounceTrustPolicy {
         hasSignature: Bool,
         signatureValid: Bool,
         existingNoisePublicKey: Data?,
-        announcedNoisePublicKey: Data
+        announcedNoisePublicKey: Data,
+        authenticatedSigningPublicKey: Data? = nil,
+        announcedSigningPublicKey: Data? = nil
     ) -> BLEAnnounceTrustDecision {
         if let existingNoisePublicKey, existingNoisePublicKey != announcedNoisePublicKey {
             return .reject(.keyMismatch)
+        }
+
+        if let authenticatedSigningPublicKey,
+           announcedSigningPublicKey != authenticatedSigningPublicKey {
+            return .reject(.authenticatedSigningKeyMismatch)
         }
 
         guard hasSignature else {

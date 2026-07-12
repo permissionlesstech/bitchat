@@ -24,6 +24,10 @@ public struct PeerCapabilities: OptionSet, Equatable, Hashable, Sendable {
     /// (uplink/downlink carriers for mesh-only peers). Advertised alongside
     /// a `bridgeGeohash` TLV carrying the rendezvous cell.
     public static let bridge = PeerCapabilities(rawValue: 1 << 7)
+    /// Finalized direct-message media encrypted as Noise payload `0x20`
+    /// before outer BLE fragmentation. Peers that omit this bit require the
+    /// signed directed raw-file migration fallback.
+    public static let privateMedia = PeerCapabilities(rawValue: 1 << 8)
 
     /// Minimal little-endian byte encoding; always at least one byte so an
     /// empty set is distinguishable from an absent TLV.

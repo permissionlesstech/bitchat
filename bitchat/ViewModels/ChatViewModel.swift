@@ -347,6 +347,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     @Published var showBluetoothAlert = false
     @Published var bluetoothAlertMessage = ""
     @Published var bluetoothState: CBManagerState = .unknown
+    @Published private(set) var legacyPrivateMediaConsentRequest: LegacyPrivateMediaConsentRequest?
+    private var pendingLegacyPrivateMediaConsents: [PendingLegacyPrivateMediaConsent] = []
 
     private func performDeliveryUpdate(_ update: @escaping @MainActor (ChatDeliveryCoordinator) -> Void) {
         if Thread.isMainThread {
@@ -1156,6 +1158,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     func panicClearAllData() {
         // Messages are processed immediately - nothing to flush
 
+        // Deny and release any clear-media confirmations before identities,
+        // message state, and local files are wiped.
+        cancelAllLegacyPrivateMediaConsents()
+
         // Clear all messages (public timelines and private chats live in the
         // single-writer ConversationStore; the derived `messages` view and
         // the legacy mirror empty with it)
@@ -1802,6 +1808,93 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     /// Send haptic feedback for special messages (iOS only)
     func sendHapticFeedback(for message: BitchatMessage) {
         publicConversationCoordinator.sendHapticFeedback(for: message)
+    }
+}
+
+@MainActor
+extension ChatViewModel {
+    func enqueueLegacyPrivateMediaConsent(
+        for peerID: PeerID,
+        transferId: String,
+        messageID: String,
+        completion: @escaping @MainActor (Bool) -> Void
+    ) {
+        let request = LegacyPrivateMediaConsentRequest(
+            id: UUID(),
+            peerID: peerID,
+            peerName: nicknameForPeer(peerID),
+            transferId: transferId,
+            messageID: messageID
+        )
+        pendingLegacyPrivateMediaConsents.append(PendingLegacyPrivateMediaConsent(
+            request: request,
+            completion: completion
+        ))
+        if legacyPrivateMediaConsentRequest == nil {
+            legacyPrivateMediaConsentRequest = request
+        }
+    }
+
+    func resolveLegacyPrivateMediaConsent(requestID: UUID, approved: Bool) {
+        // SwiftUI may report both the selected button and the presentation
+        // binding's dismissal. Resolve only the exact request that was shown;
+        // a duplicate callback for it must not consume the next queued send.
+        guard legacyPrivateMediaConsentRequest?.id == requestID,
+              pendingLegacyPrivateMediaConsents.first?.request.id == requestID else {
+            return
+        }
+        let resolved = pendingLegacyPrivateMediaConsents.removeFirst()
+        // Drive the boolean presentation state through false before showing
+        // the next queued per-send warning. Otherwise SwiftUI sees true→true,
+        // closes the first dialog, and never presents the second.
+        legacyPrivateMediaConsentRequest = nil
+        resolved.completion(approved)
+        presentNextLegacyPrivateMediaConsentDeferred()
+    }
+
+    func invalidateLegacyPrivateMediaConsent(transferId: String, messageID: String) {
+        let invalidatedIDs = Set(
+            pendingLegacyPrivateMediaConsents.compactMap { pending -> UUID? in
+                let request = pending.request
+                return request.transferId == transferId && request.messageID == messageID
+                    ? request.id
+                    : nil
+            }
+        )
+        guard !invalidatedIDs.isEmpty else { return }
+
+        pendingLegacyPrivateMediaConsents.removeAll {
+            invalidatedIDs.contains($0.request.id)
+        }
+        if let currentID = legacyPrivateMediaConsentRequest?.id,
+           invalidatedIDs.contains(currentID) {
+            legacyPrivateMediaConsentRequest = nil
+            presentNextLegacyPrivateMediaConsentDeferred()
+        }
+    }
+
+    func cancelAllLegacyPrivateMediaConsents() {
+        let pending = pendingLegacyPrivateMediaConsents
+        pendingLegacyPrivateMediaConsents.removeAll()
+        legacyPrivateMediaConsentRequest = nil
+        for item in pending {
+            item.completion(false)
+        }
+    }
+
+    private func presentNextLegacyPrivateMediaConsentDeferred() {
+        guard legacyPrivateMediaConsentRequest == nil,
+              let nextRequestID = pendingLegacyPrivateMediaConsents.first?.request.id else {
+            return
+        }
+        DispatchQueue.main.async { [weak self] in
+            guard let self,
+                  self.legacyPrivateMediaConsentRequest == nil,
+                  self.pendingLegacyPrivateMediaConsents.first?.request.id == nextRequestID else {
+                return
+            }
+            self.legacyPrivateMediaConsentRequest = self.pendingLegacyPrivateMediaConsents[0].request
+        }
     }
 }
 // End of ChatViewModel class

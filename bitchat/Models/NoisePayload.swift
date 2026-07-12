@@ -30,7 +30,7 @@ struct NoisePayload {
         
         // Safely get the first byte
         let firstByte = data[data.startIndex]
-        guard let type = NoisePayloadType(rawValue: firstByte) else {
+        guard let type = NoisePayloadType.decoded(rawValue: firstByte) else {
             return nil
         }
         

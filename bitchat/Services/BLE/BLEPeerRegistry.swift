@@ -10,6 +10,9 @@ struct BLEPeerInfo: Equatable {
     var isVerifiedNickname: Bool
     var lastSeen: Date
     var capabilities: PeerCapabilities = []
+    /// Distinguishes an old client that omitted the capabilities TLV from a
+    /// modern client that explicitly advertised a set without a given bit.
+    var capabilitiesWereExplicitlyAdvertised: Bool = false
     /// Rendezvous cell from the peer's announce when it advertises `.bridge`.
     var bridgeGeohash: String?
 }
@@ -114,6 +117,10 @@ struct BLEPeerRegistry {
         peers[peerID.toShort()]?.capabilities ?? []
     }
 
+    func capabilitiesWereExplicitlyAdvertised(for peerID: PeerID) -> Bool {
+        peers[peerID.toShort()]?.capabilitiesWereExplicitlyAdvertised == true
+    }
+
     /// Peers whose last verified announce advertised the given capability.
     func peers(advertising capability: PeerCapabilities) -> [PeerID] {
         peers.values.filter { $0.capabilities.contains(capability) }.map(\.peerID)
@@ -174,6 +181,14 @@ struct BLEPeerRegistry {
         peers[peerID] = peer
     }
 
+    /// Replaces the announcement signing key only after the surrounding Noise
+    /// session proved possession of this peer's static key.
+    mutating func bindAuthenticatedSigningPublicKey(_ key: Data, for peerID: PeerID) {
+        guard var peer = peers[peerID.toShort()] else { return }
+        peer.signingPublicKey = key
+        peers[peer.peerID] = peer
+    }
+
     mutating func upsertVerifiedAnnounce(
         peerID: PeerID,
         nickname: String,
@@ -181,7 +196,7 @@ struct BLEPeerRegistry {
         signingPublicKey: Data?,
         isConnected: Bool,
         now: Date,
-        capabilities: PeerCapabilities = [],
+        capabilities: PeerCapabilities? = nil,
         bridgeGeohash: String? = nil
     ) -> BLEPeerAnnounceUpdate {
         let existing = peers[peerID]
@@ -199,7 +214,8 @@ struct BLEPeerRegistry {
             signingPublicKey: signingPublicKey,
             isVerifiedNickname: true,
             lastSeen: now,
-            capabilities: capabilities,
+            capabilities: capabilities ?? [],
+            capabilitiesWereExplicitlyAdvertised: capabilities != nil,
             bridgeGeohash: bridgeGeohash
         )
 

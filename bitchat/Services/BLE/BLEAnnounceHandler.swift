@@ -16,6 +16,9 @@ struct BLEAnnounceHandlerEnvironment {
     let now: () -> Date
     /// Noise public key already recorded for the peer, if any (registry read).
     let existingNoisePublicKey: (PeerID) -> Data?
+    /// Ed25519 key previously bound to this Noise identity by an authenticated
+    /// peer-state payload, if any (persistent identity-state read).
+    let authenticatedSigningPublicKey: (_ noisePublicKey: Data) -> Data?
     /// Verifies the packet signature against the announced signing key.
     let verifySignature: (_ packet: BitchatPacket, _ signingPublicKey: Data) -> Bool
     /// Direct link state for the peer (BLE-queue read).
@@ -130,10 +133,20 @@ final class BLEAnnounceHandler {
             hasSignature: hasSignature,
             signatureValid: signatureValid,
             existingNoisePublicKey: existingNoisePublicKey,
-            announcedNoisePublicKey: announcement.noisePublicKey
+            announcedNoisePublicKey: announcement.noisePublicKey,
+            authenticatedSigningPublicKey: env.authenticatedSigningPublicKey(
+                announcement.noisePublicKey
+            ),
+            announcedSigningPublicKey: announcement.signingPublicKey
         )
         if case .reject(.keyMismatch) = trustDecision {
             SecureLogger.warning("⚠️ Announce key mismatch for \(peerID.id.prefix(8))… — keeping unverified", category: .security)
+        }
+        if case .reject(.authenticatedSigningKeyMismatch) = trustDecision {
+            SecureLogger.warning(
+                "⚠️ Announce signing-key replacement rejected for Noise-authenticated peer \(peerID.id.prefix(8))…",
+                category: .security
+            )
         }
         let verifiedAnnounce = trustDecision.isVerified
 

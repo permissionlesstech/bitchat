@@ -170,6 +170,23 @@ struct BLEAnnounceHandlingPolicyTests {
     }
 
     @Test
+    func trustPolicyRejectsSigningKeyReplacementAfterNoiseBinding() {
+        let noiseKey = Data(repeating: 0xCC, count: 32)
+        let boundSigningKey = Data(repeating: 0x11, count: 32)
+
+        let decision = BLEAnnounceTrustPolicy.evaluate(
+            hasSignature: true,
+            signatureValid: true,
+            existingNoisePublicKey: noiseKey,
+            announcedNoisePublicKey: noiseKey,
+            authenticatedSigningPublicKey: boundSigningKey,
+            announcedSigningPublicKey: Data(repeating: 0x22, count: 32)
+        )
+
+        #expect(decision == .reject(.authenticatedSigningKeyMismatch))
+    }
+
+    @Test
     func responsePolicyConnectsOnlyForDirectNewOrReconnectedPeers() {
         let directNew = BLEAnnounceResponsePolicy.plan(
             isDirectAnnounce: true,

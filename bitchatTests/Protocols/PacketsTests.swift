@@ -146,6 +146,39 @@ struct PacketsTests {
     }
 
     @Test
+    func authenticatedPeerStateUsesVersionedCanonicalTLVs() throws {
+        let signingKey = Data(repeating: 0xA5, count: 32)
+        let packet = AuthenticatedPeerStatePacket(
+            capabilities: [.privateMedia, .vouch],
+            signingPublicKey: signingKey
+        )
+
+        var encoded = try #require(packet.encode())
+        #expect(encoded.prefix(5) == Data([0x01, 0x01, 0x02, 0x20, 0x01]))
+        // Unknown TLVs are forward-compatible and do not alter v1 state.
+        encoded.append(makeTLV(type: 0x7F, value: Data([0xCA, 0xFE])))
+
+        #expect(AuthenticatedPeerStatePacket.decode(from: encoded) == packet)
+    }
+
+    @Test
+    func authenticatedPeerStateRejectsMalformedAmbiguousOrUnknownVersion() {
+        let key = Data(repeating: 0x44, count: 32)
+        let capabilities = makeTLV(type: 0x01, value: Data([0x00, 0x01]))
+        let signing = makeTLV(type: 0x02, value: key)
+
+        #expect(AuthenticatedPeerStatePacket.decode(from: Data([0x02]) + capabilities + signing) == nil)
+        #expect(AuthenticatedPeerStatePacket.decode(from: Data([0x01]) + signing) == nil)
+        #expect(AuthenticatedPeerStatePacket.decode(from: Data([0x01]) + capabilities + capabilities + signing) == nil)
+        #expect(AuthenticatedPeerStatePacket.decode(from: Data([0x01, 0x01, 0x00]) + signing) == nil)
+        // 0x0001 is non-minimal little endian; the canonical form is [0x01].
+        #expect(AuthenticatedPeerStatePacket.decode(from: Data([0x01]) + makeTLV(type: 0x01, value: Data([0x01, 0x00])) + signing) == nil)
+        #expect(AuthenticatedPeerStatePacket.decode(from: Data([0x01]) + capabilities + makeTLV(type: 0x02, value: Data(key.dropLast()))) == nil)
+        #expect(AuthenticatedPeerStatePacket.decode(from: Data([0x01]) + capabilities + Data(signing.dropLast())) == nil)
+        #expect(AuthenticatedPeerStatePacket.decode(from: Data([0x01]) + makeTLV(type: 0x01, value: Data(repeating: 0x01, count: 9)) + signing) == nil)
+    }
+
+    @Test
     func privateMessagePacketRejectsUnknownTypeAndTruncation() {
         let unknownTLV = Data([0x7F, 0x01, 0x41])
         #expect(PrivateMessagePacket.decode(from: unknownTLV) == nil)

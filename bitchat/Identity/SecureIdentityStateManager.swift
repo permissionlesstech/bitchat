@@ -140,6 +140,14 @@ protocol SecureIdentityStateManagerProtocol {
     func markVouchBatchSent(to fingerprint: String, at date: Date)
     func signingPublicKey(forFingerprint fingerprint: String) -> Data?
     func mostRecentlyVerifiedFingerprints(limit: Int, excluding fingerprint: String) -> [String]
+
+    // MARK: Noise-authenticated announcement identity
+    func bindAuthenticatedSigningPublicKey(_ signingPublicKey: Data, fingerprint: String)
+    func authenticatedSigningPublicKey(forFingerprint fingerprint: String) -> Data?
+
+    // MARK: Private-media downgrade protection
+    func markPrivateMediaCapable(fingerprint: String)
+    func hasObservedPrivateMediaCapability(fingerprint: String) -> Bool
 }
 
 /// Singleton manager for secure identity state persistence and retrieval.
@@ -157,6 +165,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
     
     // Thread safety
     private let queue = DispatchQueue(label: "bitchat.identity.state", attributes: .concurrent)
+    private let queueSpecificKey = DispatchSpecificKey<UInt8>()
     
     // Pending-save coalescing flag. Reads/writes are serialized on `queue`.
     // Persistence is done with a fire-and-forget `queue.async(.barrier)` rather
@@ -214,6 +223,7 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
 
         self.encryptionKey = loadedKey
         self.encryptionKeyIsEphemeral = keyIsEphemeral
+        queue.setSpecific(key: queueSpecificKey, value: 1)
 
         // Only read the persisted cache when we hold the real key; with an
         // ephemeral key the decrypt would fail and discard the real cache.
@@ -368,6 +378,66 @@ final class SecureIdentityStateManager: SecureIdentityStateManagerProtocol {
             // Defensive: ensure hex and correct length
             guard peerID.isShort else { return [] }
             return cryptographicIdentities.values.filter { $0.fingerprint.hasPrefix(peerID.id) }
+        }
+    }
+
+    // MARK: - Private-media downgrade protection
+
+    func markPrivateMediaCapable(fingerprint: String) {
+        guard !fingerprint.isEmpty else { return }
+        let insertAndPersist = {
+            var pinned = self.cache.privateMediaCapableFingerprints ?? []
+            guard pinned.insert(fingerprint).inserted else { return }
+            self.cache.privateMediaCapableFingerprints = pinned
+            self.saveIdentityCache()
+        }
+        // Downgrade decisions can run immediately after an authenticated
+        // announce. Make the pin visible before returning; merely enqueueing a
+        // barrier leaves a cross-queue window where a replay can look legacy.
+        // The queue-specific fast path prevents self-deadlock if a future
+        // identity-state mutation records the capability from inside `queue`.
+        if DispatchQueue.getSpecific(key: queueSpecificKey) != nil {
+            insertAndPersist()
+        } else {
+            queue.sync(flags: .barrier, execute: insertAndPersist)
+        }
+    }
+
+    func hasObservedPrivateMediaCapability(fingerprint: String) -> Bool {
+        guard !fingerprint.isEmpty else { return false }
+        return queue.sync {
+            cache.privateMediaCapableFingerprints?.contains(fingerprint) == true
+        }
+    }
+
+    // MARK: - Noise-authenticated announcement identity
+
+    func bindAuthenticatedSigningPublicKey(_ signingPublicKey: Data, fingerprint: String) {
+        guard signingPublicKey.count == AuthenticatedPeerStatePacket.signingPublicKeyLength,
+              !fingerprint.isEmpty else { return }
+        let bindAndPersist = {
+            var bindings = self.cache.authenticatedSigningKeysByFingerprint ?? [:]
+            let bindingChanged = bindings[fingerprint] != signingPublicKey
+            bindings[fingerprint] = signingPublicKey
+            self.cache.authenticatedSigningKeysByFingerprint = bindings
+            if var cryptoIdentity = self.cryptographicIdentities[fingerprint] {
+                cryptoIdentity.signingPublicKey = signingPublicKey
+                self.cryptographicIdentities[fingerprint] = cryptoIdentity
+            }
+            guard bindingChanged else { return }
+            self.saveIdentityCache()
+        }
+        if DispatchQueue.getSpecific(key: queueSpecificKey) != nil {
+            bindAndPersist()
+        } else {
+            queue.sync(flags: .barrier, execute: bindAndPersist)
+        }
+    }
+
+    func authenticatedSigningPublicKey(forFingerprint fingerprint: String) -> Data? {
+        guard !fingerprint.isEmpty else { return nil }
+        return queue.sync {
+            cache.authenticatedSigningKeysByFingerprint?[fingerprint]
         }
     }
     

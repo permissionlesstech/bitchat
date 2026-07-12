@@ -1049,6 +1049,89 @@ struct ChatViewModelMediaTransferTests {
     }
 
     @Test @MainActor
+    func legacyPrivateMediaConsentRequestsArePerSendAndQueued() async throws {
+        let (viewModel, _) = makeTestableViewModel()
+        let firstPeer = PeerID(str: "1111111111111111")
+        let secondPeer = PeerID(str: "2222222222222222")
+        var decisions: [Bool] = []
+
+        viewModel.enqueueLegacyPrivateMediaConsent(
+            for: firstPeer,
+            transferId: "transfer-1",
+            messageID: "message-1"
+        ) { decisions.append($0) }
+        viewModel.enqueueLegacyPrivateMediaConsent(
+            for: secondPeer,
+            transferId: "transfer-2",
+            messageID: "message-2"
+        ) { decisions.append($0) }
+
+        #expect(viewModel.legacyPrivateMediaConsentRequest?.peerID == firstPeer)
+        let firstRequestID = try #require(viewModel.legacyPrivateMediaConsentRequest?.id)
+        viewModel.resolveLegacyPrivateMediaConsent(requestID: firstRequestID, approved: true)
+        let showedSecond = await TestHelpers.waitUntil(
+            { viewModel.legacyPrivateMediaConsentRequest?.peerID == secondPeer },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(showedSecond)
+        let secondRequestID = try #require(viewModel.legacyPrivateMediaConsentRequest?.id)
+
+        // A button action and the dialog binding may both resolve the first
+        // ID. The stale second callback must not consume the queued request.
+        viewModel.resolveLegacyPrivateMediaConsent(requestID: firstRequestID, approved: false)
+        #expect(decisions == [true])
+        #expect(viewModel.legacyPrivateMediaConsentRequest?.id == secondRequestID)
+
+        viewModel.resolveLegacyPrivateMediaConsent(requestID: secondRequestID, approved: false)
+
+        #expect(decisions == [true, false])
+        #expect(viewModel.legacyPrivateMediaConsentRequest == nil)
+    }
+
+    @Test @MainActor
+    func invalidatingPresentedLegacyConsentAdvancesQueueAndStaleResolutionNoops() async throws {
+        let (viewModel, _) = makeTestableViewModel()
+        let firstPeer = PeerID(str: "3333333333333333")
+        let secondPeer = PeerID(str: "4444444444444444")
+        var decisions: [String] = []
+
+        viewModel.enqueueLegacyPrivateMediaConsent(
+            for: firstPeer,
+            transferId: "transfer-cancelled",
+            messageID: "message-cancelled"
+        ) { decisions.append("first:\($0)") }
+        viewModel.enqueueLegacyPrivateMediaConsent(
+            for: secondPeer,
+            transferId: "transfer-kept",
+            messageID: "message-kept"
+        ) { decisions.append("second:\($0)") }
+
+        let cancelledRequestID = try #require(viewModel.legacyPrivateMediaConsentRequest?.id)
+        viewModel.invalidateLegacyPrivateMediaConsent(
+            transferId: "transfer-cancelled",
+            messageID: "message-cancelled"
+        )
+        let advanced = await TestHelpers.waitUntil(
+            { viewModel.legacyPrivateMediaConsentRequest?.peerID == secondPeer },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(advanced)
+        #expect(decisions.isEmpty, "Invalidation drops the request rather than resolving its send")
+
+        viewModel.resolveLegacyPrivateMediaConsent(
+            requestID: cancelledRequestID,
+            approved: true
+        )
+        #expect(viewModel.legacyPrivateMediaConsentRequest?.peerID == secondPeer)
+        #expect(decisions.isEmpty)
+
+        let keptRequestID = try #require(viewModel.legacyPrivateMediaConsentRequest?.id)
+        viewModel.resolveLegacyPrivateMediaConsent(requestID: keptRequestID, approved: true)
+        #expect(decisions == ["second:true"])
+        #expect(viewModel.legacyPrivateMediaConsentRequest == nil)
+    }
+
+    @Test @MainActor
     func sendVoiceNote_oversizedFileFailsAndDeletesTempFile() async throws {
         let (viewModel, transport) = makeTestableViewModel()
         let peerID = PeerID(str: "3333333333333333333333333333333333333333333333333333333333333333")

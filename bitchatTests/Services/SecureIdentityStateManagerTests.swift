@@ -399,6 +399,59 @@ final class SecureIdentityStateManagerTests: XCTestCase {
         XCTAssertTrue(cleared)
     }
 
+    func test_privateMediaCapabilityPinPersistsMonotonicallyAndPanicClearRemovesIt() async {
+        let keychain = MockKeychain()
+        let fingerprint = Data(repeating: 0x42, count: 32).sha256Fingerprint()
+        let manager = SecureIdentityStateManager(keychain)
+
+        XCTAssertFalse(manager.hasObservedPrivateMediaCapability(fingerprint: fingerprint))
+        manager.markPrivateMediaCapable(fingerprint: fingerprint)
+        XCTAssertTrue(
+            manager.hasObservedPrivateMediaCapability(fingerprint: fingerprint),
+            "pin insertion must be synchronously visible to the next downgrade decision"
+        )
+
+        // Re-marking is idempotent, and the encrypted cache carries the pin
+        // across launches.
+        manager.markPrivateMediaCapable(fingerprint: fingerprint)
+        manager.forceSave()
+        let reloaded = SecureIdentityStateManager(keychain)
+        XCTAssertTrue(reloaded.hasObservedPrivateMediaCapability(fingerprint: fingerprint))
+
+        // ChatViewModel's panic path calls this same wipe after deleting
+        // keychain data; the in-memory pin must disappear immediately too.
+        reloaded.clearAllIdentityData()
+        let cleared = await waitUntil {
+            !reloaded.hasObservedPrivateMediaCapability(fingerprint: fingerprint)
+        }
+        XCTAssertTrue(cleared)
+    }
+
+    func test_noiseAuthenticatedSigningKeyBindingPersistsAndPanicClearRemovesIt() async {
+        let keychain = MockKeychain()
+        let fingerprint = Data(repeating: 0x31, count: 32).sha256Fingerprint()
+        let firstKey = Data(repeating: 0x41, count: 32)
+        let rotatedKey = Data(repeating: 0x42, count: 32)
+        let manager = SecureIdentityStateManager(keychain)
+
+        manager.bindAuthenticatedSigningPublicKey(firstKey, fingerprint: fingerprint)
+        XCTAssertEqual(manager.authenticatedSigningPublicKey(forFingerprint: fingerprint), firstKey)
+        // A later authenticated Noise session may legitimately rotate the
+        // announcement signing key.
+        manager.bindAuthenticatedSigningPublicKey(rotatedKey, fingerprint: fingerprint)
+        XCTAssertEqual(manager.authenticatedSigningPublicKey(forFingerprint: fingerprint), rotatedKey)
+
+        manager.forceSave()
+        let reloaded = SecureIdentityStateManager(keychain)
+        XCTAssertEqual(reloaded.authenticatedSigningPublicKey(forFingerprint: fingerprint), rotatedKey)
+
+        reloaded.clearAllIdentityData()
+        let cleared = await waitUntil {
+            reloaded.authenticatedSigningPublicKey(forFingerprint: fingerprint) == nil
+        }
+        XCTAssertTrue(cleared)
+    }
+
     func test_forceSave_withFailingCacheWriteDoesNotPersistCache() async {
         let keychain = FailingCacheSaveKeychain()
         let manager = SecureIdentityStateManager(keychain)

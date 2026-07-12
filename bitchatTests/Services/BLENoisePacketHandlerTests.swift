@@ -9,6 +9,7 @@ struct BLENoisePacketHandlerTests {
     private final class Recorder {
         var handshakeResult: Result<Data?, Error> = .success(nil)
         var hasSession = false
+        let sessionGeneration = UUID()
         var decryptResult: Result<Data, Error> = .success(Data())
 
         var processedHandshakes: [(peerID: PeerID, message: Data)] = []
@@ -18,6 +19,7 @@ struct BLENoisePacketHandlerTests {
         var lastSeenUpdates: [PeerID] = []
         var decryptCalls: [(payload: Data, peerID: PeerID)] = []
         var clearedSessions: [PeerID] = []
+        var authenticatedPeerStates: [(peerID: PeerID, payload: Data, generation: UUID)] = []
         var deliveries: [(peerID: PeerID, type: NoisePayloadType, payload: Data, timestamp: Date)] = []
         /// Ordered side-effect log to assert recovery sequencing.
         var events: [String] = []
@@ -56,11 +58,17 @@ struct BLENoisePacketHandlerTests {
             },
             decrypt: { payload, peerID in
                 recorder.decryptCalls.append((payload, peerID))
-                return try recorder.decryptResult.get()
+                return BLENoiseDecryptionResult(
+                    plaintext: try recorder.decryptResult.get(),
+                    sessionGeneration: recorder.sessionGeneration
+                )
             },
             clearSession: { peerID in
                 recorder.clearedSessions.append(peerID)
                 recorder.events.append("clearSession")
+            },
+            handleAuthenticatedPeerState: { peerID, payload, generation in
+                recorder.authenticatedPeerStates.append((peerID, payload, generation))
             },
             deliverNoisePayload: { peerID, type, payload, timestamp in
                 recorder.deliveries.append((peerID, type, payload, timestamp))
@@ -219,6 +227,25 @@ struct BLENoisePacketHandlerTests {
         #expect(recorder.deliveries.first?.timestamp == sentAt)
         #expect(recorder.clearedSessions.isEmpty)
         #expect(recorder.initiatedHandshakes.isEmpty)
+    }
+
+    @Test
+    func authenticatedPeerStateIsConsumedByTransportNotDeliveredToUI() {
+        let recorder = Recorder()
+        recorder.decryptResult = .success(Data([
+            NoisePayloadType.authenticatedPeerState.rawValue,
+            0x01, 0x02, 0x03
+        ]))
+        let handler = makeHandler(recorder: recorder)
+        let packet = makeEncryptedPacket(recipientID: Data(hexString: localPeerID.id))
+
+        handler.handleEncrypted(packet, from: remotePeerID)
+
+        #expect(recorder.authenticatedPeerStates.count == 1)
+        #expect(recorder.authenticatedPeerStates.first?.peerID == remotePeerID)
+        #expect(recorder.authenticatedPeerStates.first?.payload == Data([0x01, 0x02, 0x03]))
+        #expect(recorder.authenticatedPeerStates.first?.generation == recorder.sessionGeneration)
+        #expect(recorder.deliveries.isEmpty)
     }
 
     @Test
