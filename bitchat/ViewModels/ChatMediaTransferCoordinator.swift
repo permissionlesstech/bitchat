@@ -263,17 +263,18 @@ final class ChatMediaTransferCoordinator {
         // is still running off the main actor.
         registerTransfer(transferId: transferId, messageID: messageID)
         let prepareVoiceNotePacket = self.prepareVoiceNotePacket
-        let generation = imagePreparationBarrier.currentGeneration
+        let barrier = imagePreparationBarrier
+        let generation = barrier.currentGeneration
 
-        Task.detached(priority: .userInitiated) { [weak self] in
+        Task.detached(priority: .userInitiated) { [weak self, barrier] in
             do {
                 let packet = try await runBlockingMediaPreparation {
                     try prepareVoiceNotePacket(url)
                 }
 
-                await MainActor.run { [weak self] in
+                await MainActor.run { [weak self, barrier] in
                     guard let self,
-                          self.imagePreparationBarrier.isCurrent(generation),
+                          barrier.isCurrent(generation),
                           self.isRegisteredTransfer(transferId, messageID: messageID) else {
                         return
                     }
@@ -291,9 +292,9 @@ final class ChatMediaTransferCoordinator {
             } catch ChatMediaPreparationError.voiceNoteTooLarge(let size) {
                 SecureLogger.warning("Voice note exceeds size limit (\(size) bytes)", category: .session)
                 try? FileManager.default.removeItem(at: url)
-                await MainActor.run { [weak self] in
+                await MainActor.run { [weak self, barrier] in
                     guard let self,
-                          self.imagePreparationBarrier.isCurrent(generation),
+                          barrier.isCurrent(generation),
                           self.isRegisteredTransfer(transferId, messageID: messageID) else {
                         return
                     }
@@ -301,9 +302,9 @@ final class ChatMediaTransferCoordinator {
                 }
             } catch {
                 SecureLogger.error("Voice note send failed: \(error)", category: .session)
-                await MainActor.run { [weak self] in
+                await MainActor.run { [weak self, barrier] in
                     guard let self,
-                          self.imagePreparationBarrier.isCurrent(generation),
+                          barrier.isCurrent(generation),
                           self.isRegisteredTransfer(transferId, messageID: messageID) else {
                         return
                     }

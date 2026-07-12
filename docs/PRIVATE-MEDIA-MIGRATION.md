@@ -70,10 +70,10 @@ The fallback is signed and its signature is required on receive, so relays
 cannot forge its sender or contents. It is not confidential: relays can see
 the raw file TLV. The UI says this explicitly and asks on every send. A peer
 without a stable Noise key from a verified registry entry cannot use the
-fallback. Keep
-the fallback only for the mixed-version migration and remove it after
-supported Android and iOS releases advertise `privateMedia`. Never replace it
-with an unsigned fallback, persist blanket consent, or send both forms.
+fallback. Keep it only for the mixed-version migration, and remove it only
+after minimum-supported Android and iOS releases emit authenticated bit-8
+`0x21` state and the legacy population has aged out. Never replace it with an
+unsigned fallback, persist blanket consent, or send both forms.
 
 Incoming clients accept all three migration-era shapes:
 
