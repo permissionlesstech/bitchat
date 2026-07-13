@@ -40,6 +40,12 @@ public enum MessageType: UInt8 {
     // never gossip-synced). Private bursts ride noiseEncrypted instead.
     case voiceFrame = 0x29
 
+    // Courier spray receipts (signed, capability-gated by `.courierAck`). A
+    // courier acknowledges a stored spray copy (ack) or reports a deterministic
+    // refusal (decline) so the giver can restore that copy's budget.
+    case courierSprayAck = 0x2A
+    case courierSprayDecline = 0x2B
+
     public var description: String {
         switch self {
         case .announce: return "announce"
@@ -58,6 +64,8 @@ public enum MessageType: UInt8 {
         case .pong: return "pong"
         case .nostrCarrier: return "nostrCarrier"
         case .voiceFrame: return "voiceFrame"
+        case .courierSprayAck: return "courierSprayAck"
+        case .courierSprayDecline: return "courierSprayDecline"
         }
     }
 }
