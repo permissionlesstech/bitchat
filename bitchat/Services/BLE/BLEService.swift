@@ -3737,7 +3737,15 @@ extension BLEService {
                 to: peerID,
                 type: type
             )
-            self.sendPacketDirected(receiptPacket, to: peerID)
+            // Direct-only: the giver verifies receipts as direct (ingress peer
+            // == signer), so relaying one would only produce a mesh flood the
+            // giver is guaranteed to reject. If the taker has no direct link
+            // back, the decline is dropped and the giver's offer degrades to
+            // timeout-commit (the spend stands) rather than restoring — never
+            // worse than today's optimistic decrement. Restoring on a genuinely
+            // relayed decline needs a per-offer nonce echoed giver->taker->giver
+            // (a CourierEnvelope wire change), left as follow-up work.
+            self.sendPacketDirected(receiptPacket, to: peerID, requireDirectPeerLink: true)
         }
         // Ack when we hold the copy (fresh store *or* idempotent dedup-hit,
         // both `deposit == true`); decline only on a deterministic non-store
@@ -3876,10 +3884,12 @@ extension BLEService {
     /// only labels the security log line.
     private func verifiedSprayReceiptTakerKey(_ packet: BitchatPacket, from peerID: PeerID, kind: String) -> Data? {
         // Bind the receipt to *our* offer, exactly like `handleMeshPing`/
-        // `handleMeshPong` gate on `recipientID`. Receipts are directed packets
-        // relayed across the mesh; a valid signature only proves the courier
-        // signed *a* receipt, not that it was addressed to this giver. Without
-        // this a signed ack/decline meant for a different depositor of the same
+        // `handleMeshPong` gate on `recipientID`. Receipts are sent and
+        // verified direct-only, but a taker directly linked to two givers can
+        // still sign a receipt for the *other* giver's deposit of the same
+        // envelope; a valid signature only proves the courier signed *a*
+        // receipt, not that it was addressed to this giver. Without this bind a
+        // signed ack/decline meant for a different depositor of the same
         // envelope could resolve our pending offer for the same (hash, courier)
         // — a cross-recipient decline would restore budget we already spent
         // (inflation), a cross-recipient ack would clear a restore window we
