@@ -123,6 +123,19 @@ final class BLEService: NSObject {
         let timeout: DispatchWorkItem
     }
     private var pendingMeshPings: [Data: PendingMeshPing] = [:]
+    // Per-offer assume-delivered timeouts for spray copies handed to a
+    // `.courierAck`-capable taker, keyed by `(ciphertextHash, courierNoiseKey)`
+    // to match CourierStore's own pending-offer map so an ack/decline (or the
+    // timeout) resolves the right entry. This dictionary only holds the
+    // `DispatchWorkItem`s for cancellation — the offer/budget state lives in
+    // `CourierStore` behind its own serial queue; this side just calls
+    // `offerSprayCopies`/`confirmSpray`/`cancelSpray` (mirrors the ping/pong
+    // queue split).
+    private struct PendingSprayTimeoutKey: Hashable {
+        let ciphertextHash: Data
+        let courierNoiseKey: Data
+    }
+    private var pendingSprayTimeouts: [PendingSprayTimeoutKey: DispatchWorkItem] = [:]
     private var meshPingResponseLimiter = SyncResponseRateLimiter(
         maxResponses: TransportConfig.meshPingInboundMaxPerLink,
         window: TransportConfig.meshPingInboundWindowSeconds
@@ -3578,9 +3591,9 @@ extension BLEService {
         return prekeyBundleStore.assignPrekey(messageID: messageID, recipientNoiseKey: recipientNoiseKey)
     }
 
-    private func makeCourierPacket(_ payload: Data, to peerID: PeerID) -> BitchatPacket {
+    private func makeCourierPacket(_ payload: Data, to peerID: PeerID, type: UInt8 = MessageType.courierEnvelope.rawValue) -> BitchatPacket {
         let packet = BitchatPacket(
-            type: MessageType.courierEnvelope.rawValue,
+            type: type,
             senderID: myPeerIDData,
             recipientID: Data(hexString: peerID.id),
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
@@ -3710,17 +3723,41 @@ extension BLEService {
             return
         }
         let isVerifiedPeer = depositorInfo?.isVerifiedNickname ?? false
+        // Point-in-time check: only send receipts to a depositor that can use
+        // them, so we don't emit spray-ack/decline packets to peers that would
+        // just ignore them.
+        let depositorWantsAck = peerCapabilities(peerID).contains(.courierAck)
         let store = courierStore
         let policy = courierDepositPolicy
         let metrics = sfMetrics
+        let sendReceipt: (Data, UInt8) -> Void = { [weak self] ciphertext, type in
+            guard let self else { return }
+            let receiptPacket = self.makeCourierPacket(
+                CourierStore.ciphertextHash(ciphertext),
+                to: peerID,
+                type: type
+            )
+            self.sendPacketDirected(receiptPacket, to: peerID)
+        }
+        // Ack when we hold the copy (fresh store *or* idempotent dedup-hit,
+        // both `deposit == true`); decline only on a deterministic non-store
+        // (policy reject / quota / invalid), so the giver never restores budget
+        // for a copy we actually carry — that would inflate copies.
+        let sendAck: (Data) -> Void = { sendReceipt($0, MessageType.courierSprayAck.rawValue) }
+        let sendDecline: (Data) -> Void = { sendReceipt($0, MessageType.courierSprayDecline.rawValue) }
         Task { @MainActor in
             guard let tier = policy(depositorKey, isVerifiedPeer) else {
                 SecureLogger.debug("📦 Courier deposit from \(peerID.id.prefix(8))… rejected (neither favorite nor verified)", category: .session)
+                if depositorWantsAck { sendDecline(envelope.ciphertext) }
                 return
             }
             if store.deposit(envelope, from: depositorKey, tier: tier) {
                 SecureLogger.debug("📦 Carrying courier envelope deposited by \(peerID.id.prefix(8))… (\(tier.rawValue))", category: .session)
                 metrics?.record(.courierAccepted)
+                if depositorWantsAck { sendAck(envelope.ciphertext) }
+            } else if depositorWantsAck {
+                SecureLogger.debug("📦 Declining courier envelope from \(peerID.id.prefix(8))… (quota/validity)", category: .session)
+                sendDecline(envelope.ciphertext)
             }
         }
     }
@@ -3773,32 +3810,178 @@ extension BLEService {
     private func sprayCourierMail(to peerID: PeerID, noiseKey: Data, isVerifiedPeer: Bool) {
         let store = courierStore
         let metrics = sfMetrics
-        let sendSpray: () -> Void = { [weak self] in
-            guard let self else { return }
-            let accepted = store.transferSprayCopies(to: noiseKey) { envelope in
-                guard let payload = envelope.encode(),
-                      self.sendPacketDirected(
-                          self.makeCourierPacket(payload, to: peerID),
-                          to: peerID,
-                          requireDirectPeerLink: true,
-                          requireNoiseAuthenticatedPeerLink: true
-                      ) else {
-                    return false
-                }
-                metrics?.record(.courierSprayed)
-                return true
+        let ackCapable = peerCapabilities(peerID).contains(.courierAck)
+        // Send one spray copy over the authenticated direct link. The Bool is
+        // whether the BLE stack accepted it onto the peer's physical link, so
+        // both spray paths commit budget send-gated (a refused send is never
+        // charged).
+        let sendCopy: (CourierEnvelope) -> Bool = { [weak self] envelope in
+            guard let self,
+                  let payload = envelope.encode(),
+                  self.sendPacketDirected(
+                      self.makeCourierPacket(payload, to: peerID),
+                      to: peerID,
+                      requireDirectPeerLink: true,
+                      requireNoiseAuthenticatedPeerLink: true
+                  ) else {
+                return false
             }
-            if accepted > 0 {
-                SecureLogger.debug("📦 Sprayed \(accepted) envelope copy(ies) to courier \(peerID.id.prefix(8))…", category: .session)
-            }
+            metrics?.record(.courierSprayed)
+            return true
         }
         let policy = courierDepositPolicy
-        Task { @MainActor in
+        Task { @MainActor [weak self] in
+            guard let self else { return }
             // Same trust gate as deposits: don't hand mail to a peer who
             // would reject it from us.
             guard policy(noiseKey, isVerifiedPeer) != nil else { return }
-            sendSpray()
+            if ackCapable {
+                // Deferred-spend path: `offerSprayCopies` commits the budget
+                // send-gated like `transferSprayCopies`, and additionally
+                // records a restore window so a later signed decline can undo
+                // the spend. Start the assume-delivered timeout for each copy
+                // whose send is accepted, so a lost ack/decline still resolves
+                // the pending offer.
+                let accepted = store.offerSprayCopies(to: noiseKey) { envelope in
+                    guard sendCopy(envelope) else { return false }
+                    self.scheduleSprayOfferTimeout(
+                        ciphertextHash: CourierStore.ciphertextHash(envelope.ciphertext),
+                        courierNoiseKey: noiseKey
+                    )
+                    return true
+                }
+                if accepted > 0 {
+                    SecureLogger.debug("📦 Offered \(accepted) envelope copy(ies) to courier \(peerID.id.prefix(8))… (awaiting spray-ack)", category: .session)
+                }
+            } else {
+                // Old taker (no `.courierAck`): unchanged optimistic path.
+                let accepted = store.transferSprayCopies(to: noiseKey, accepting: sendCopy)
+                if accepted > 0 {
+                    SecureLogger.debug("📦 Sprayed \(accepted) envelope copy(ies) to courier \(peerID.id.prefix(8))…", category: .session)
+                }
+            }
         }
+    }
+
+    /// Authenticates a taker's spray receipt (ack *or* decline) and returns the
+    /// taker's noise key — the key for the pending-offer tuple. Both receipt
+    /// kinds are authenticated exactly like a deposit: the claimed sender must
+    /// be the direct ingress peer, and the packet signature must verify against
+    /// that peer's registry-bound signing key — link-binding alone is not
+    /// enough, since `senderID` is otherwise attacker-controlled. A forgeable
+    /// ack could trigger a premature spend and a forgeable decline could
+    /// restore budget already spent, so both go through the same signature
+    /// gate. `.courierAck` is not re-checked here; the pending-offer tuple
+    /// match (inside `confirmSpray`/`cancelSpray`) is the real gate. `kind`
+    /// only labels the security log line.
+    private func verifiedSprayReceiptTakerKey(_ packet: BitchatPacket, from peerID: PeerID, kind: String) -> Data? {
+        // Bind the receipt to *our* offer, exactly like `handleMeshPing`/
+        // `handleMeshPong` gate on `recipientID`. Receipts are directed packets
+        // relayed across the mesh; a valid signature only proves the courier
+        // signed *a* receipt, not that it was addressed to this giver. Without
+        // this a signed ack/decline meant for a different depositor of the same
+        // envelope could resolve our pending offer for the same (hash, courier)
+        // — a cross-recipient decline would restore budget we already spent
+        // (inflation), a cross-recipient ack would clear a restore window we
+        // still need (loss).
+        guard packet.recipientID == myPeerIDData else {
+            SecureLogger.debug("📦 Spray-\(kind) rejected: addressed to another peer, not us", category: .security)
+            return nil
+        }
+        guard PeerID(hexData: packet.senderID) == peerID else {
+            SecureLogger.debug("📦 Spray-\(kind) rejected: relayed \(kind) claims sender \(PeerID(hexData: packet.senderID).id.prefix(8))… but arrived from \(peerID.id.prefix(8))…", category: .security)
+            return nil
+        }
+        let takerInfo = collectionsQueue.sync { peerRegistry.info(for: peerID) }
+        guard let takerKey = takerInfo?.noisePublicKey else {
+            SecureLogger.debug("📦 Spray-\(kind) from unknown peer \(peerID.id.prefix(8))… rejected", category: .session)
+            return nil
+        }
+        guard let signingKey = takerInfo?.signingPublicKey,
+              noiseService.verifyPacketSignature(packet, publicKey: signingKey) else {
+            SecureLogger.debug("📦 Spray-\(kind) from \(peerID.id.prefix(8))… rejected (missing/invalid signature)", category: .security)
+            return nil
+        }
+        return takerKey
+    }
+
+    /// Applies a taker's confirmation that it stored a sprayed copy, letting the
+    /// giver clear the deferred restore window. Idempotent: a duplicate or
+    /// post-timeout ack finds no pending offer and is a harmless no-op.
+    ///
+    /// Resolves the store entry *before* touching the timeout: if the ack raced
+    /// ahead of the send-gated commit (no pending offer yet, `confirmSpray`
+    /// returns false), we leave the armed timeout in place so it still clears
+    /// the entry the commit is about to insert — never orphaning a pending
+    /// offer.
+    private func handleCourierSprayAck(_ packet: BitchatPacket, from peerID: PeerID) {
+        guard let takerKey = verifiedSprayReceiptTakerKey(packet, from: peerID, kind: "ack") else { return }
+        let ciphertextHash = packet.payload
+        guard courierStore.confirmSpray(courierNoiseKey: takerKey, ciphertextHash: ciphertextHash) else { return }
+        let key = PendingSprayTimeoutKey(ciphertextHash: ciphertextHash, courierNoiseKey: takerKey)
+        collectionsQueue.sync(flags: .barrier) {
+            pendingSprayTimeouts.removeValue(forKey: key)?.cancel()
+        }
+    }
+
+    /// Applies a taker's signed refusal of an offered copy, restoring the
+    /// giver's deferred budget instead of leaving it spent on the timeout.
+    ///
+    /// Restores *before* touching the timeout, and only cancels the timeout when
+    /// a pending offer was actually consumed. This keeps every ordering safe:
+    ///  - decline vs assume-delivered timeout: if the timeout already cleared
+    ///    the offer, `cancelSpray` returns false and we keep the spend (no worse
+    ///    than the send-gated baseline); if the decline wins, it restores and
+    ///    cancels the now-unneeded timeout.
+    ///  - decline vs the send-gated commit: over `.withoutResponse` the copy is
+    ///    put on the wire *before* `offerSprayCopies` commits the pending entry,
+    ///    so a fast decline can be handled first. `cancelSpray` then returns
+    ///    false; because we do NOT cancel the timeout, the armed timeout still
+    ///    reaps the entry the commit inserts — the spend stands (baseline)
+    ///    rather than leaving an orphaned pending offer. Restoring in that window
+    ///    is impossible without committing before the send, which would trade
+    ///    this benign degrade-to-baseline for a crash-before-send loss *below*
+    ///    the baseline — the strictly worse failure, so we accept the floor.
+    private func handleCourierSprayDecline(_ packet: BitchatPacket, from peerID: PeerID) {
+        guard let takerKey = verifiedSprayReceiptTakerKey(packet, from: peerID, kind: "decline") else { return }
+        let ciphertextHash = packet.payload
+        guard courierStore.cancelSpray(ciphertextHash: ciphertextHash, courierNoiseKey: takerKey) else { return }
+        let key = PendingSprayTimeoutKey(ciphertextHash: ciphertextHash, courierNoiseKey: takerKey)
+        collectionsQueue.sync(flags: .barrier) {
+            pendingSprayTimeouts.removeValue(forKey: key)?.cancel()
+        }
+    }
+
+    /// Starts (or replaces) the timeout for one outstanding spray offer. When
+    /// neither a signed `courierSprayAck` nor a signed `courierSprayDecline`
+    /// arrives in time, the delivery state is unknown, so the timeout *commits*
+    /// the spend (`confirmSpray` clears the restore window) rather than
+    /// restoring the budget: over a one-way lossy link a lost ack after a
+    /// successful deposit must not let the giver re-spray a copy the taker
+    /// already carries (copy inflation). Assume-delivered is at worst as bad as
+    /// today's optimistic decrement and never worse; a taker that genuinely
+    /// refused sends an explicit decline, which restores the budget before this
+    /// fires.
+    private func scheduleSprayOfferTimeout(ciphertextHash: Data, courierNoiseKey: Data) {
+        let key = PendingSprayTimeoutKey(ciphertextHash: ciphertextHash, courierNoiseKey: courierNoiseKey)
+        let store = courierStore
+        let timeout = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            let stillPending = self.collectionsQueue.sync(flags: .barrier) {
+                self.pendingSprayTimeouts.removeValue(forKey: key) != nil
+            }
+            guard stillPending else { return }
+            store.confirmSpray(courierNoiseKey: courierNoiseKey, ciphertextHash: ciphertextHash)
+        }
+        collectionsQueue.sync(flags: .barrier) {
+            // Commit-time revalidation in `offerSprayCopies` means at most one
+            // copy per courier is committed for this envelope, but a re-announce
+            // can schedule a timeout before the losing commit no-ops — cancel
+            // any prior timeout for this key and keep the latest.
+            pendingSprayTimeouts.removeValue(forKey: key)?.cancel()
+            pendingSprayTimeouts[key] = timeout
+        }
+        messageQueue.asyncAfter(deadline: .now() + TransportConfig.courierSprayAckTimeoutSeconds, execute: timeout)
     }
 
     // MARK: One-Time Prekey Bundles
@@ -4757,6 +4940,12 @@ extension BLEService {
 
         case .courierEnvelope:
             handleCourierEnvelope(packet, from: peerID)
+
+        case .courierSprayAck:
+            handleCourierSprayAck(packet, from: peerID)
+
+        case .courierSprayDecline:
+            handleCourierSprayDecline(packet, from: peerID)
 
         case .groupMessage:
             handleGroupMessage(packet, from: senderID)

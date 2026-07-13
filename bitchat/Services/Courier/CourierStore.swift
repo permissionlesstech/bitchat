@@ -120,6 +120,35 @@ final class CourierStore {
     }
 
     private var envelopes: [StoredEnvelope] = []
+
+    /// Records how many copies were handed to a `.courierAck`-capable taker in
+    /// an outstanding offer, so a signed decline can restore *exactly* that
+    /// many. The spend is committed send-gated in `offerSprayCopies` (budget
+    /// decremented and `sprayedTo` inserted only after the directed send is
+    /// accepted, identical to `transferSprayCopies`), so a copy whose send is
+    /// refused is never charged and there is never a committed window where the
+    /// taker holds the copy while the giver's budget is undiminished. In-memory
+    /// only — never persisted — so a restart before the offer resolves simply
+    /// forgets how to restore it and keeps the (durable) spend, degrading to the
+    /// optimistic path rather than inflating copies. Cleared by `wipe()`.
+    private struct PendingSprayOffer {
+        let given: UInt8
+    }
+
+    private struct PendingSprayOfferKey: Hashable {
+        let ciphertextHash: Data
+        let courierNoiseKey: Data
+    }
+
+    /// Outstanding offers keyed by `(ciphertextHash, courierNoiseKey)`. Because
+    /// `cancelSpray` leaves the courier in `sprayedTo`, a single carried record is
+    /// offered to a given courier at most once in its lifetime, so any receipt —
+    /// real, late, duplicate, or replayed — resolves that entry idempotently.
+    /// Across a remove+redeposit of the same ciphertext the hash is reused by a
+    /// fresh record, so `cancelSpray` additionally requires the courier to still
+    /// be in the matched record's `sprayedTo` before restoring — a stale decline
+    /// from a deleted generation can never inflate a new deposit's budget.
+    private var pendingSprayOffers: [PendingSprayOfferKey: PendingSprayOffer] = [:]
     private let queue = DispatchQueue(label: "chat.bitchat.courier.store")
     private let fileURL: URL?
     private let now: () -> Date
@@ -413,12 +442,166 @@ final class CourierStore {
         return acceptedCount
     }
 
+    /// Offers binary-spray copies to a `.courierAck`-capable courier, committing
+    /// the reduced budget and `sprayedTo` marker only after the directed
+    /// transport accepts each copy — identical send-gating to
+    /// `transferSprayCopies`, so an ack-capable taker gets the same link-drop
+    /// protection (a copy whose send is refused is never charged). The one
+    /// addition is that each committed offer records the `given` amount in
+    /// `pendingSprayOffers`, so a later *signed decline* (`cancelSpray`) can
+    /// restore exactly those copies when the taker deterministically refused the
+    /// deposit (policy reject / quota full). An ack — or the assume-delivered
+    /// timeout — instead clears the pending entry (`confirmSpray`); the spend is
+    /// already durable, so a lost ack degrades to the optimistic path, never
+    /// inflates.
+    ///
+    /// Inserting `courierNoiseKey` into `sprayedTo` in the commit block (append-
+    /// only, exactly like `transferSprayCopies`) both closes the announce-repeat
+    /// race — a re-announce before the commit revalidates and no-ops — and,
+    /// because `cancelSpray` never removes it, bounds each (envelope, courier)
+    /// pair to at most one lifetime pending offer, so a stale/replayed receipt
+    /// can never cross-attribute to a different offer.
+    @discardableResult
+    func offerSprayCopies(
+        to courierNoiseKey: Data,
+        accepting: (CourierEnvelope) -> Bool
+    ) -> Int {
+        let date = now()
+        let courierTags = CourierEnvelope.candidateTags(noiseStaticKey: courierNoiseKey, around: date)
+        let offered = queue.sync {
+            pruneExpiredLocked(at: date)
+            return envelopes.compactMap { stored -> CourierEnvelope? in
+                guard stored.copies > 1,
+                      stored.depositorNoiseKey != courierNoiseKey,
+                      !stored.sprayedTo.contains(courierNoiseKey),
+                      // Do not re-offer a courier while a pending offer for this
+                      // ciphertext+courier is still live. A pending entry outlives
+                      // its record (it is memory-only, cleared only by
+                      // ack/decline/timeout), so a delivered-then-redeposited
+                      // ciphertext cannot re-offer the same courier from the fresh
+                      // generation — which is what let a stale decline from the
+                      // deleted generation cross-attribute onto the fresh record's
+                      // sprayed copy the courier already holds.
+                      pendingSprayOffers[PendingSprayOfferKey(
+                          ciphertextHash: Self.ciphertextHash(stored.ciphertext),
+                          courierNoiseKey: courierNoiseKey)] == nil,
+                      !courierTags.contains(stored.recipientTag) else { return nil }
+                return stored.envelope.withCopies(stored.copies / 2)
+            }
+        }
+
+        var acceptedCount = 0
+        for copy in offered where accepting(copy) {
+            // As with `transferSprayCopies`, BLE acceptance runs outside the
+            // store queue. Revalidate and commit the exact budget that left this
+            // device, and record the restore amount in the same critical
+            // section; a competing successful transfer makes this a no-op.
+            let committed = queue.sync {
+                guard let index = envelopes.firstIndex(where: { $0.ciphertext == copy.ciphertext }) else {
+                    return false
+                }
+                let stored = envelopes[index]
+                guard stored.copies > copy.copies,
+                      stored.depositorNoiseKey != courierNoiseKey,
+                      !stored.sprayedTo.contains(courierNoiseKey),
+                      !courierTags.contains(stored.recipientTag) else {
+                    return false
+                }
+                envelopes[index].copies = stored.copies - copy.copies
+                envelopes[index].sprayedTo.insert(courierNoiseKey)
+                let key = PendingSprayOfferKey(ciphertextHash: Self.ciphertextHash(copy.ciphertext),
+                                               courierNoiseKey: courierNoiseKey)
+                pendingSprayOffers[key] = PendingSprayOffer(given: copy.copies)
+                persistLocked()
+                return true
+            }
+            if committed { acceptedCount += 1 }
+        }
+        return acceptedCount
+    }
+
+    /// Clears an outstanding offer once the taker confirms receipt (signed ack)
+    /// or the assume-delivered timeout fires. No budget change: the spend was
+    /// already committed by `offerSprayCopies`, so this just drops the ability
+    /// to restore it. Returns whether a pending offer was actually cleared, so
+    /// the caller can tell a real resolution from a no-op: a duplicate/late ack,
+    /// or an ack that races *ahead* of the send-gated commit, finds no pending
+    /// offer and returns `false` — the caller then leaves the armed timeout in
+    /// place to reap the entry once the commit inserts it (no orphaned offer).
+    @discardableResult
+    func confirmSpray(courierNoiseKey: Data, ciphertextHash: Data) -> Bool {
+        queue.sync {
+            pendingSprayOffers.removeValue(
+                forKey: PendingSprayOfferKey(ciphertextHash: ciphertextHash, courierNoiseKey: courierNoiseKey)
+            ) != nil
+        }
+    }
+
+    /// Restores an offer's budget on a signed decline: re-adds the `given`
+    /// copies (clamped to `maxCopies`) and persists, so a deterministically
+    /// refused spray costs the giver nothing. Returns whether a pending offer
+    /// was actually consumed. `false` means the offer isn't outstanding — a
+    /// decline that races a timeout/ack, arrives after a restart cleared the
+    /// pending map, or (over `.withoutResponse`) is processed *before* the
+    /// send-gated commit inserts the entry. In every `false` case the durable
+    /// spend is simply left in place (degrading to the send-gated baseline,
+    /// never inflating); the caller keeps the armed timeout so a decline that
+    /// merely lost the race to the commit is still reaped by `confirmSpray`
+    /// rather than orphaning the pending offer.
+    ///
+    /// The courier is deliberately *left* in `sprayedTo` (append-only, exactly
+    /// like `transferSprayCopies`): the budget is restored for *other* couriers,
+    /// but this envelope is never re-offered to the courier that just declined.
+    /// That closes a receipt-replay hole — a stale decline from an earlier offer
+    /// could otherwise resolve a later offer's pending entry and restore copies
+    /// the courier now actually holds. At most one lifetime pending offer per
+    /// (envelope, courier) means every receipt resolves that one entry
+    /// idempotently.
+    ///
+    /// The restore is gated on the matched record *still listing this courier in
+    /// `sprayedTo`*, not on the ciphertext hash alone. A hash match is not proof
+    /// of identity across a remove+redeposit: handover/eviction/prune can drop
+    /// the sprayed record while its pending offer is still outstanding, and a
+    /// re-deposit of the same ciphertext (`deposit` dedups only against carried
+    /// envelopes) then appends a *fresh* record with an empty `sprayedTo`.
+    /// Restoring onto that new record by hash would let a stale decline from the
+    /// deleted generation inflate a brand-new deposit's budget. Requiring the
+    /// courier to be in the matched record's `sprayedTo` means a restore can only
+    /// land on the exact generation this courier was sprayed from; a stale
+    /// decline onto any other generation drops its (consumed) pending entry
+    /// without touching copies.
+    @discardableResult
+    func cancelSpray(ciphertextHash: Data, courierNoiseKey: Data) -> Bool {
+        queue.sync {
+            let key = PendingSprayOfferKey(ciphertextHash: ciphertextHash, courierNoiseKey: courierNoiseKey)
+            guard let offer = pendingSprayOffers.removeValue(forKey: key) else { return false }
+            guard let index = envelopes.firstIndex(where: {
+                Self.ciphertextHash($0.ciphertext) == ciphertextHash && $0.sprayedTo.contains(courierNoiseKey)
+            }) else { return true }
+            let restored = Int(envelopes[index].copies) + Int(offer.given)
+            envelopes[index].copies = UInt8(min(restored, Int(CourierEnvelope.maxCopies)))
+            persistLocked()
+            return true
+        }
+    }
+
+    /// Compact identifier for an envelope's ciphertext, carried in spray-ack and
+    /// spray-decline packets so the receipt doesn't have to echo the ciphertext
+    /// itself (up to 16 KB). Truncated SHA-256 (same primitive as
+    /// `Data.sha256Hash()`, truncated to `CourierEnvelope.tagLength` like the
+    /// recipient tag); a collision here could only misdirect a confirm/cancel to
+    /// the wrong pending offer, never affect decryption.
+    static func ciphertextHash(_ ciphertext: Data) -> Data {
+        Data(ciphertext.sha256Hash().prefix(CourierEnvelope.tagLength))
+    }
+
     // MARK: - Maintenance
 
     /// Panic wipe: drop all carried mail from memory and disk.
     func wipe() {
         queue.sync {
             envelopes.removeAll()
+            pendingSprayOffers.removeAll()
             diskLoadDeferred = false
             if let fileURL {
                 try? FileManager.default.removeItem(at: fileURL)

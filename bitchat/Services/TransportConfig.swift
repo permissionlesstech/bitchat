@@ -351,6 +351,11 @@ enum TransportConfig {
     // Recently opened courier inner message IDs kept for receiver-side dedup
     // (redundant copies ride distinct seals, so only the inner ID matches).
     static let courierOpenedMessageIDCap: Int = 512
+    // How long a giver waits for a signed spray receipt (ack/decline) from a
+    // `.courierAck`-capable taker before assuming the copy was delivered and
+    // committing the spend. Bounds the offer's restore window; a late receipt
+    // after this is a harmless no-op.
+    static let courierSprayAckTimeoutSeconds: TimeInterval = 10
 
     // One-time prekey bundles (forward-secret courier sealing)
     // Own gossip-sync round for bundles: modest cadence, bounded peer count,

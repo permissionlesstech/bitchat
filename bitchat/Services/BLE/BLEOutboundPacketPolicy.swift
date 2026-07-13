@@ -15,7 +15,7 @@ enum BLEOutboundPacketPolicy {
         // voiceFrame is deliberately unpadded: padding to the 512 block would
         // push every ~490-byte signed voice packet over the MTU into the
         // fragment path.
-        case .none, .announce, .message, .leave, .requestSync, .fragment, .fileTransfer, .courierEnvelope, .boardPost, .ping, .pong, .nostrCarrier, .prekeyBundle, .groupMessage, .voiceFrame:
+        case .none, .announce, .message, .leave, .requestSync, .fragment, .fileTransfer, .courierEnvelope, .boardPost, .ping, .pong, .nostrCarrier, .prekeyBundle, .groupMessage, .voiceFrame, .courierSprayAck, .courierSprayDecline:
             return false
         }
     }
