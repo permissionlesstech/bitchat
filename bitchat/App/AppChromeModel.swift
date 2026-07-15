@@ -18,6 +18,15 @@ final class AppChromeModel: ObservableObject {
     @Published var bluetoothAlertMessage = ""
     @Published var bluetoothState: CBManagerState = .unknown
     @Published var showScreenshotPrivacyWarning = false
+    /// Latch for the people / conversation-list sheet. Owned here (rather than as
+    /// `ContentView` local `@State`) so non-view launch code can raise it: on launch
+    /// `AppRuntime` sets this to `true` when the last-active conversation resolves to
+    /// "present the conversation list" (first-ever launch or a stale/unrestorable DM
+    /// peer). `ContentView` binds the people sheet directly to this, and every
+    /// competing sheet/cover already gates on `!showSidebar`, so a single latch keeps
+    /// the launch presentation from colliding with the fingerprint / image-picker
+    /// sheets (#1064).
+    @Published var showSidebar = false
 
     private let chatViewModel: ChatViewModel
     private var cancellables = Set<AnyCancellable>()

@@ -1098,10 +1098,25 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
 
     /// Initiates a private chat session with a peer.
     /// - Parameter peerID: The peer's ID to start chatting with
-    /// - Note: Switches the UI to private chat mode and loads message history
+    /// - Note: Switches the UI to private chat mode and loads message history.
+    ///   This zero-extra-argument signature is the witness for the
+    ///   `CommandProcessor` / `ChatNostrCoordinator` context protocols, so it is
+    ///   kept intact; the launch-restore variant is a separate overload below.
     @MainActor
     func startPrivateChat(with peerID: PeerID) {
         peerIdentityCoordinator.startPrivateChat(with: peerID)
+    }
+
+    /// #1064 launch-restore variant of `startPrivateChat`. When
+    /// `suppressSystemMessages` is `true`, a gate rejection (blocked /
+    /// non-mutual favorite) no-ops silently instead of emitting a system message
+    /// into the current (public mesh) timeline, so a rejected DM restore falls
+    /// back to the conversation list cleanly. Kept as a distinct non-defaulted
+    /// overload — a defaulted extra parameter would not satisfy the context
+    /// protocols above and a default would make the plain call ambiguous.
+    @MainActor
+    func startPrivateChat(with peerID: PeerID, suppressSystemMessages: Bool) {
+        peerIdentityCoordinator.startPrivateChat(with: peerID, suppressSystemMessages: suppressSystemMessages)
     }
 
     @MainActor
@@ -1160,6 +1175,11 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         // single-writer ConversationStore; the derived `messages` view and
         // the legacy mirror empty with it)
         conversations.clearAll()
+        // Begin suppressing last-active persistence (#1064). The selection and
+        // channel resets below route through the store's setters, which would
+        // otherwise re-persist a `.mesh` pointer; the wipe is finished (and the
+        // pointer removed once) at the very end of this method.
+        conversations.beginPanicWipe()
         pendingGeohashSystemMessages.removeAll()
 
         // Delete all keychain data (including Noise and Nostr keys)
@@ -1315,6 +1335,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
             Self.clearAppSwitcherSnapshots()
             #endif
         }
+
+        // Finish the panic wipe (#1064): must run AFTER `selectedPrivateChatPeer
+        // = nil` / `activeChannel = .mesh` above so no setter re-persists the
+        // pointer. Removes the last-active key once and re-enables persistence,
+        // leaving the key ABSENT so next launch hits the conversation-list
+        // first-launch fallback.
+        conversations.finishPanicWipe()
 
         // Force immediate UI update for panic mode
         // UI updates immediately - no flushing needed
