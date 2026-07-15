@@ -24,6 +24,10 @@ public struct PeerCapabilities: OptionSet, Equatable, Hashable, Sendable {
     /// (uplink/downlink carriers for mesh-only peers). Advertised alongside
     /// a `bridgeGeohash` TLV carrying the rendezvous cell.
     public static let bridge = PeerCapabilities(rawValue: 1 << 7)
+    /// Sends and understands signed courier spray receipts (ack / decline), so
+    /// a giver can defer spending a spray copy's budget until the taker either
+    /// confirms it stored the copy or reports a deterministic refusal.
+    public static let courierAck = PeerCapabilities(rawValue: 1 << 8)
 
     /// Minimal little-endian byte encoding; always at least one byte so an
     /// empty set is distinguishable from an absent TLV.
