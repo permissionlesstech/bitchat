@@ -7,6 +7,7 @@ struct ContentComposerView: View {
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
+    @ObservedObject private var bridgeService = BridgeService.shared
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
 
@@ -89,6 +90,10 @@ struct ContentComposerView: View {
                 }
 
                 HStack(alignment: .center, spacing: 4) {
+                    if showsNearbyOnlyToggle {
+                        nearbyOnlyToggle
+                    }
+
                     if conversationUIModel.canSendMediaInCurrentContext {
                         attachmentButton
                     }
@@ -108,6 +113,41 @@ struct ContentComposerView: View {
 }
 
 private extension ContentComposerView {
+    /// The nearby-only scope toggle appears only where it means something:
+    /// the public mesh channel with the bridge on.
+    var showsNearbyOnlyToggle: Bool {
+        guard bridgeService.isEnabled,
+              privateConversationModel.selectedHeaderState == nil,
+              case .mesh = locationChannelsModel.selectedChannel else {
+            return false
+        }
+        return true
+    }
+
+    /// Scope control for outgoing messages: bridged (default, crosses to
+    /// other islands in this area) vs nearby-only (radio range, no internet
+    /// copy exists for any gateway to carry).
+    var nearbyOnlyToggle: some View {
+        Button(action: { bridgeService.nearbyOnly.toggle() }) {
+            Image(systemName: bridgeService.nearbyOnly ? "antenna.radiowaves.left.and.right" : "network")
+                .font(.bitchatSystem(size: 16))
+                .foregroundColor(bridgeService.nearbyOnly ? palette.secondary : Color.cyan.opacity(0.9))
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(
+            bridgeService.nearbyOnly
+            ? String(localized: "content.accessibility.nearby_only_on", defaultValue: "Nearby only: messages stay within radio range", comment: "Accessibility label for the compose scope toggle when messages stay local")
+            : String(localized: "content.accessibility.nearby_only_off", defaultValue: "Bridged: messages also reach people across the bridge", comment: "Accessibility label for the compose scope toggle when messages cross the mesh bridge")
+        )
+        .help(
+            bridgeService.nearbyOnly
+            ? String(localized: "content.composer.nearby_only_on", defaultValue: "Nearby only — this message won't cross the bridge", comment: "Tooltip for the compose scope toggle when messages stay local")
+            : String(localized: "content.composer.nearby_only_off", defaultValue: "Bridged — reaches people beyond radio range in this area", comment: "Tooltip for the compose scope toggle when messages cross the mesh bridge")
+        )
+    }
+
     /// States where a message will land: the DM partner's name for private
     /// chats, the channel (and its public nature) otherwise — so a stressed
     /// user never has to guess who can read what they're typing.
@@ -137,16 +177,28 @@ private extension ContentComposerView {
 
     var recordingIndicator: some View {
         HStack(spacing: 12) {
-            Image(systemName: "waveform.circle.fill")
+            Image(systemName: voiceRecordingVM.isLiveStreaming ? "dot.radiowaves.left.and.right" : "waveform.circle.fill")
                 .foregroundColor(.red)
                 .font(.bitchatSystem(size: 20))
+                .modifier(PulsingOpacityModifier(active: voiceRecordingVM.isLiveStreaming))
             TimelineView(.periodic(from: .now, by: 0.05)) { context in
-                Text(
-                    "recording \(voiceRecordingVM.formattedDuration(for: context.date))",
-                    comment: "Voice note recording duration indicator"
-                )
-                .bitchatFont(size: 13)
-                .foregroundColor(.red)
+                // Live streaming means audio is heard as you speak — the HUD
+                // must make that unmistakable, not just show a timer.
+                if voiceRecordingVM.isLiveStreaming {
+                    Text(
+                        "live \(voiceRecordingVM.formattedDuration(for: context.date))",
+                        comment: "Recording HUD label while a voice message streams live to the recipient"
+                    )
+                    .bitchatFont(size: 13, weight: .bold)
+                    .foregroundColor(.red)
+                } else {
+                    Text(
+                        "recording \(voiceRecordingVM.formattedDuration(for: context.date))",
+                        comment: "Voice note recording duration indicator"
+                    )
+                    .bitchatFont(size: 13)
+                    .foregroundColor(.red)
+                }
             }
             Spacer()
             Button(action: voiceRecordingVM.cancel) {
@@ -229,10 +281,28 @@ private extension ContentComposerView {
         }
     }
 
+    /// Floor courtesy: someone else is talking live in the public channel.
+    /// Only advisory — a decentralized mesh has no floor arbiter, so holding
+    /// the mic still works; the tint just discourages talk-over.
+    var busyTalker: String? {
+        guard privateConversationModel.selectedPeerID == nil else { return nil }
+        return conversationUIModel.activeLiveVoiceTalker
+    }
+
+    /// Recording > floor-busy > default accent. Whether the hold streams
+    /// live or records a classic note is signaled by the recording HUD's
+    /// LIVE treatment, not the idle button color.
+    var micColor: Color {
+        if voiceRecordingVM.state.isActive { return .red }
+        if busyTalker != nil { return Color.red.opacity(0.6) }
+        return composerAccentColor
+    }
+
     var micButtonView: some View {
         Image(systemName: "mic.circle.fill")
             .font(.bitchatSystem(size: 24))
-            .foregroundColor(voiceRecordingVM.state.isActive ? Color.red : composerAccentColor)
+            .foregroundColor(micColor)
+            .modifier(PulsingOpacityModifier(active: busyTalker != nil && !voiceRecordingVM.state.isActive))
             .frame(width: 36, height: 36)
             .contentShape(Circle())
             .overlay(
@@ -254,7 +324,13 @@ private extension ContentComposerView {
             .accessibilityValue(
                 voiceRecordingVM.state.isActive
                 ? String(localized: "content.accessibility.recording", comment: "Accessibility value announced while a voice note is recording")
-                : ""
+                : busyTalker.map {
+                    String(
+                        format: String(localized: "content.accessibility.someone_speaking", comment: "Accessibility value on the mic button naming who is talking live in the public channel"),
+                        locale: .current,
+                        $0
+                    )
+                } ?? ""
             )
             .accessibilityHint(
                 String(localized: "content.accessibility.record_voice_hint", comment: "Accessibility hint explaining double-tap toggles voice recording")

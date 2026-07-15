@@ -18,9 +18,7 @@ struct PublicChatE2ETests {
     private let charlie: MockBLEService
     private let david: MockBLEService
     private let bus = MockBLEBus()
-    
-    private var receivedMessages: [String: [BitchatMessage]] = [:]
-    
+
     init() {
         // Create mock services with unique peer IDs to avoid any collision
         alice = MockBLEService(peerID: PeerID(str: UUID().uuidString), nickname: TestConstants.testNickname1, bus: bus)

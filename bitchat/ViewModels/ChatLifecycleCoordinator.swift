@@ -53,7 +53,8 @@ protocol ChatLifecycleContext: AnyObject {
 
     // MARK: Routing & receipts
     func routePrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String)
-    func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID)
+    @discardableResult
+    func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) -> Bool
     func sendMeshMessage(_ content: String, mentions: [String], messageID: String, timestamp: Date)
     func sendGeohashReadReceipt(_ messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity)
 
@@ -215,23 +216,22 @@ final class ChatLifecycleCoordinator {
         }
 
         var noiseKeyHex: PeerID?
-        var peerNostrPubkey: String?
 
         if let noiseKey = Data(hexString: peerID.id),
-           let favoriteStatus = context.favoriteRelationship(forNoiseKey: noiseKey) {
+           context.favoriteRelationship(forNoiseKey: noiseKey) != nil {
             noiseKeyHex = peerID
-            peerNostrPubkey = favoriteStatus.peerNostrPublicKey
         } else if let peer = context.unifiedPeer(for: peerID) {
             noiseKeyHex = PeerID(hexData: peer.noisePublicKey)
-            let favoriteStatus = context.favoriteRelationship(forNoiseKey: peer.noisePublicKey)
-            peerNostrPubkey = favoriteStatus?.peerNostrPublicKey
 
             if let noiseKeyHex, context.unreadPrivateMessages.contains(noiseKeyHex) {
                 context.markPrivateChatRead(noiseKeyHex)
             }
         }
 
-        guard peerNostrPubkey != nil else { return }
+        // No Nostr-key gate here: the router picks whatever transport can
+        // reach the peer (mesh included), so read receipts must flow for
+        // non-favorite mesh peers too. `sentReadReceipts` dedups against the
+        // PrivateChatManager path; the router drops receipts it can't route.
 
         for message in getPrivateChatMessages(for: peerID) {
             guard (message.senderPeerID == peerID || message.senderPeerID == noiseKeyHex) && !message.isRelay else {
@@ -249,8 +249,12 @@ final class ChatLifecycleCoordinator {
                 ? peerID
                 : (context.unifiedPeer(for: peerID)?.peerID ?? peerID)
 
-            context.routeReadReceipt(receipt, to: recipientPeerID)
-            context.markReadReceiptSent(message.id)
+            // Only record the receipt as sent when it actually left via a
+            // reachable transport; a dropped receipt stays unmarked so the
+            // next read scan retries it instead of burning it forever.
+            if context.routeReadReceipt(receipt, to: recipientPeerID) {
+                context.markReadReceiptSent(message.id)
+            }
         }
     }
 

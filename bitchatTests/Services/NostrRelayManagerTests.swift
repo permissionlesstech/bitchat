@@ -345,6 +345,121 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertEqual(context.manager.relays.first(where: { $0.url == relayURL })?.messagesSent, 0)
     }
 
+    func test_sendEventImmediately_allRejectsFailThenOKRetrySucceeds() async throws {
+        let relays = [
+            "wss://confirmed-reject-one.example",
+            "wss://confirmed-reject-two.example"
+        ]
+        let context = makeContext(permission: .denied)
+        context.manager.ensureConnections(to: relays)
+        let connected = await waitUntil {
+            relays.allSatisfy { relay in
+                context.manager.relays.first(where: { $0.url == relay })?.isConnected == true
+            }
+        }
+        XCTAssertTrue(connected)
+
+        let event = try makeSignedEvent(content: "confirmed reject then retry")
+        var results: [Bool] = []
+        var completionsWereOnMain: [Bool] = []
+        context.manager.sendEventImmediately(event, to: relays) {
+            results.append($0)
+            completionsWereOnMain.append(Thread.isMainThread)
+        }
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertTrue(results.isEmpty, "socket writes alone must not confirm durability")
+        for relay in relays {
+            try context.sessionFactory.latestConnection(for: relay)?.emitOK(
+                eventID: event.id,
+                success: false,
+                reason: "rejected"
+            )
+        }
+        let failedCompleted = await waitUntil { results.count == 1 }
+        XCTAssertTrue(failedCompleted)
+        XCTAssertEqual(results, [false])
+        XCTAssertEqual(completionsWereOnMain, [true])
+        XCTAssertEqual(context.manager.debugPendingMessageQueueCount, 0)
+
+        // The explicit rejection leaves the same event retryable.
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        context.manager.sendEventImmediately(event, to: relays) {
+            results.append($0)
+            completionsWereOnMain.append(Thread.isMainThread)
+        }
+        try context.sessionFactory.latestConnection(for: relays[0])?.emitOK(
+            eventID: event.id,
+            success: true,
+            reason: "accepted"
+        )
+        let successfulCompleted = await waitUntil { results.count == 2 }
+        XCTAssertTrue(successfulCompleted)
+        XCTAssertEqual(results, [false, true])
+        XCTAssertEqual(completionsWereOnMain, [true, true])
+        XCTAssertEqual(context.manager.debugPendingMessageQueueCount, 0)
+    }
+
+    func test_sendEventImmediately_mixedRelayOKUsesAcceptedResultOnce() async throws {
+        let relays = ["wss://confirmed-mixed-one.example", "wss://confirmed-mixed-two.example"]
+        let context = makeContext(permission: .denied)
+        context.manager.ensureConnections(to: relays)
+        let connected = await waitUntil {
+            relays.allSatisfy { relay in
+                context.manager.relays.first(where: { $0.url == relay })?.isConnected == true
+            }
+        }
+        XCTAssertTrue(connected)
+
+        let event = try makeSignedEvent(content: "mixed confirmation")
+        var results: [Bool] = []
+        context.manager.sendEventImmediately(event, to: relays) { results.append($0) }
+        try context.sessionFactory.latestConnection(for: relays[0])?.emitOK(
+            eventID: event.id,
+            success: false,
+            reason: "policy"
+        )
+        try context.sessionFactory.latestConnection(for: relays[1])?.emitOK(
+            eventID: event.id,
+            success: true,
+            reason: "accepted"
+        )
+
+        let completed = await waitUntil { results.count == 1 }
+        XCTAssertTrue(completed)
+        XCTAssertEqual(results, [true])
+    }
+
+    func test_sendEventImmediately_timeoutFailsAndIgnoresLateWriteAndOK() async throws {
+        let relay = "wss://confirmed-timeout.example"
+        let context = makeContext(permission: .denied)
+        context.manager.ensureConnections(to: [relay])
+        let connected = await waitUntil {
+            context.manager.relays.first(where: { $0.url == relay })?.isConnected == true
+        }
+        XCTAssertTrue(connected)
+        let connection = try XCTUnwrap(context.sessionFactory.latestConnection(for: relay))
+        connection.deferSendCompletions = true
+
+        let event = try makeSignedEvent(content: "confirmation timeout")
+        var results: [Bool] = []
+        context.manager.sendEventImmediately(event, to: [relay]) { results.append($0) }
+        XCTAssertTrue(results.isEmpty)
+        XCTAssertEqual(
+            context.scheduler.scheduled.first?.delay,
+            TransportConfig.nostrConfirmedSendAckTimeoutSeconds
+        )
+
+        context.scheduler.runNext()
+        let timedOut = await waitUntil { results.count == 1 }
+        XCTAssertTrue(timedOut)
+        XCTAssertEqual(results, [false])
+
+        connection.flushDeferredSendCompletions()
+        try connection.emitOK(eventID: event.id, success: true, reason: "late")
+        try? await Task.sleep(nanoseconds: 30_000_000)
+        XCTAssertEqual(results, [false])
+    }
+
     func test_sendEvent_queueIsPrunedWhenDefaultRelaysAreRevoked() async throws {
         let context = makeContext(
             permission: .authorized,
@@ -1158,6 +1273,38 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertEqual(firstConnection.cancelCallCount, 1)
     }
 
+    func test_staleSocketFailureCannotFailConfirmedSendOnReplacementConnection() async throws {
+        let relayURL = "wss://retry-stale-confirmation.example"
+        let context = makeContext(permission: .denied)
+        context.manager.ensureConnections(to: [relayURL])
+        let initiallyConnected = await waitUntil {
+            context.manager.relays.first(where: { $0.url == relayURL })?.isConnected == true
+        }
+        XCTAssertTrue(initiallyConnected)
+        let oldConnection = try XCTUnwrap(context.sessionFactory.latestConnection(for: relayURL))
+
+        context.manager.retryConnection(to: relayURL)
+        let replaced = await waitUntil {
+            guard let current = context.sessionFactory.latestConnection(for: relayURL) else { return false }
+            return current !== oldConnection &&
+                context.manager.relays.first(where: { $0.url == relayURL })?.isConnected == true
+        }
+        XCTAssertTrue(replaced)
+        let currentConnection = try XCTUnwrap(context.sessionFactory.latestConnection(for: relayURL))
+
+        let event = try makeSignedEvent(content: "replacement confirmation")
+        var results: [Bool] = []
+        context.manager.sendEventImmediately(event, to: [relayURL]) { results.append($0) }
+        oldConnection.fail(error: NSError(domain: NSURLErrorDomain, code: NSURLErrorTimedOut))
+        try? await Task.sleep(nanoseconds: 30_000_000)
+        XCTAssertTrue(results.isEmpty)
+        XCTAssertTrue(context.manager.relays.first(where: { $0.url == relayURL })?.isConnected == true)
+
+        try currentConnection.emitOK(eventID: event.id, success: true, reason: "accepted")
+        let confirmed = await waitUntil { results == [true] }
+        XCTAssertTrue(confirmed)
+    }
+
     func test_retryConnection_whenTorReadinessFailsDoesNotReconnect() async {
         let relayURL = "wss://retry-tor.example"
         let context = makeContext(permission: .denied, userTorEnabled: true, torEnforced: true, torIsReady: true)
@@ -1483,7 +1630,6 @@ final class NostrRelayManagerTests: XCTestCase {
         return RelayManagerTestContext(
             manager: manager,
             permissionSubject: permissionSubject,
-            favoritesSubject: favoritesSubject,
             sessionFactory: sessionFactory,
             scheduler: scheduler,
             clock: clock,
@@ -1537,7 +1683,6 @@ final class NostrRelayManagerTests: XCTestCase {
 private struct RelayManagerTestContext {
     let manager: NostrRelayManager
     let permissionSubject: CurrentValueSubject<LocationChannelManager.PermissionState, Never>
-    let favoritesSubject: CurrentValueSubject<Set<Data>, Never>
     let sessionFactory: MockRelaySessionFactory
     let scheduler: MockRelayScheduler
     let clock: MutableClock
@@ -1644,9 +1789,8 @@ private final class MockRelaySessionFactory: NostrRelaySessionProtocol {
 }
 
 private final class MockRelayConnection: NostrRelayConnectionProtocol {
-    private let url: String
     private let pingError: Error?
-    private let sendError: Error?
+    var sendError: Error?
     private var receiveHandler: ((Result<URLSessionWebSocketTask.Message, Error>) -> Void)?
     private(set) var resumeCallCount = 0
     private(set) var cancelCallCount = 0
@@ -1662,8 +1806,7 @@ private final class MockRelayConnection: NostrRelayConnectionProtocol {
         }
     }
 
-    init(url: String, pingError: Error? = nil, sendError: Error? = nil) {
-        self.url = url
+    init(url _: String, pingError: Error? = nil, sendError: Error? = nil) {
         self.pingError = pingError
         self.sendError = sendError
     }
@@ -1691,7 +1834,9 @@ private final class MockRelayConnection: NostrRelayConnectionProtocol {
     func flushDeferredSendCompletions() {
         let pending = deferredSendCompletions
         deferredSendCompletions = []
-        pending.forEach { $0(sendError) }
+        pending.forEach {
+            $0(sendError)
+        }
     }
 
     func receive(completionHandler: @escaping (Result<URLSessionWebSocketTask.Message, Error>) -> Void) {

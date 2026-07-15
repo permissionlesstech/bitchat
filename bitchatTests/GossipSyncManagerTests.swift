@@ -91,6 +91,47 @@ struct GossipSyncManagerTests {
         #expect(manager._messageCount(for: PeerID(str: peerHex)) == 0)
     }
 
+    @Test func removePublicMessagesPurgesOnlyThatSender() throws {
+        // Block-time archive hygiene: purging a blocked sender's carried
+        // public messages must not touch other senders' messages or the
+        // blocked sender's announcement.
+        let requestSyncManager = RequestSyncManager()
+        let manager = GossipSyncManager(myPeerID: myPeerID, requestSyncManager: requestSyncManager)
+        let blockedHex = "00112233445566aa"
+        let otherHex = "00112233445566bb"
+        let blockedData = try #require(Data(hexString: blockedHex))
+        let otherData = try #require(Data(hexString: otherHex))
+        let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
+
+        manager.onPublicPacketSeen(BitchatPacket(
+            type: MessageType.announce.rawValue,
+            senderID: blockedData,
+            recipientID: nil,
+            timestamp: nowMs,
+            payload: Data(),
+            signature: nil,
+            ttl: 1
+        ))
+        for (index, sender) in [blockedData, blockedData, otherData].enumerated() {
+            manager.onPublicPacketSeen(BitchatPacket(
+                type: MessageType.message.rawValue,
+                senderID: sender,
+                recipientID: nil,
+                timestamp: nowMs + UInt64(index),
+                payload: Data([UInt8(index)]),
+                signature: nil,
+                ttl: 1
+            ))
+        }
+        #expect(manager._messageCount(for: PeerID(str: blockedHex)) == 2)
+
+        manager.removePublicMessages(from: PeerID(str: blockedHex))
+
+        #expect(manager._messageCount(for: PeerID(str: blockedHex)) == 0)
+        #expect(manager._messageCount(for: PeerID(str: otherHex)) == 1)
+        #expect(manager._hasAnnouncement(for: PeerID(str: blockedHex)))
+    }
+
     @Test func ignoresAnnounceOlderThanStaleTimeout() throws {
         var config = GossipSyncManager.Config()
         config.stalePeerTimeoutSeconds = 5

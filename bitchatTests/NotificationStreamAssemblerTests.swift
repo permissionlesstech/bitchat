@@ -118,6 +118,7 @@ struct NotificationStreamAssemblerTests {
         #expect(decoded.timestamp == packet2.timestamp)
     }
 
+    @Test
     func testAssemblesCompressedLargeFrame() throws {
         var assembler = NotificationStreamAssembler()
 

@@ -146,14 +146,6 @@ final class BoardStore {
 
     // MARK: - Maintenance
 
-    func pruneExpired() {
-        let nowMs = currentMs()
-        queue.sync {
-            pruneExpiredLocked(nowMs: nowMs)
-            persistLocked()
-        }
-    }
-
     /// Panic wipe: drop all board data from memory and disk.
     func wipe() {
         queue.sync {

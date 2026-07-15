@@ -9,7 +9,7 @@
 import Foundation
 import BitFoundation
 
-// TODO: Create a module for test helpers
+// Kept local until the test-helper module is split out.
 final class MockKeychain: KeychainManagerProtocol {
     private var storage: [String: Data] = [:]
     private var serviceStorage: [String: [String: Data]] = [:]
@@ -84,6 +84,10 @@ final class MockKeychain: KeychainManagerProtocol {
 
     func delete(key: String, service: String) {
         serviceStorage[service]?.removeValue(forKey: key)
+    }
+
+    func deleteAll(service: String) {
+        serviceStorage.removeValue(forKey: service)
     }
 }
 
@@ -197,5 +201,9 @@ final class TrackingMockKeychain: KeychainManagerProtocol {
 
     func delete(key: String, service: String) {
         serviceStorage[service]?.removeValue(forKey: key)
+    }
+
+    func deleteAll(service: String) {
+        serviceStorage.removeValue(forKey: service)
     }
 }

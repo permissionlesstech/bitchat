@@ -313,7 +313,7 @@ final class GossipSyncManager {
     private func sendPeriodicSync(for types: SyncTypeFlags) {
         // Unicast sync to connected peers to allow RSR attribution
         if let connectedPeers = delegate?.getConnectedPeers(), !connectedPeers.isEmpty {
-            SecureLogger.debug("Sending periodic sync to \(connectedPeers.count) connected peers", category: .sync)
+            SecureLogger.debug("Sending periodic sync (\(types.logDescription)) to \(connectedPeers.count) connected peers", category: .sync)
             for peerID in connectedPeers {
                 sendRequestSync(to: peerID, types: types)
             }
@@ -652,6 +652,19 @@ final class GossipSyncManager {
         }
     }
 
+    /// Snapshot of the carried public-message packets (fresh window only),
+    /// for the "heard here earlier" timeline echoes. Completion runs on the
+    /// sync queue.
+    func collectPublicMessagePackets(completion: @escaping ([BitchatPacket]) -> Void) {
+        queue.async { [weak self] in
+            guard let self else {
+                completion([])
+                return
+            }
+            completion(self.messages.allPackets(isFresh: self.isPacketFresh))
+        }
+    }
+
     private func performPeriodicMaintenance(now: Date = Date()) {
         cleanupExpiredMessages()
         cleanupStaleAnnouncementsIfNeeded(now: now)
@@ -700,6 +713,23 @@ final class GossipSyncManager {
     func removeAnnouncementForPeer(_ peerID: PeerID) {
         queue.async { [weak self] in
             self?.removeState(for: peerID)
+        }
+    }
+
+    /// Block-time hygiene: drop the carried public messages from a blocked
+    /// sender and persist immediately, so nothing of theirs can resurface as
+    /// an archived echo on the next launch. Narrower than `removeState(for:)`
+    /// — the peer's announcement and in-flight fragments are untouched.
+    func removePublicMessages(from peerID: PeerID) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            let countBefore = self.messages.packets.count
+            self.messages.remove { PeerID(hexData: $0.senderID) == peerID }
+            guard self.messages.packets.count != countBefore else { return }
+            self.archiveDirty = true
+            // Persist now rather than waiting for maintenance: a relaunch in
+            // the gap would restore the purged messages from disk.
+            self.persistArchiveIfDirty()
         }
     }
 

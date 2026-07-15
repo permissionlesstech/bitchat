@@ -723,7 +723,7 @@ final class NoiseHandshakeState {
         return messageBuffer
     }
     
-    func readMessage(_ message: Data, expectedPayloadLength: Int = 0) throws -> Data {
+    func readMessage(_ message: Data, expectedPayloadLength _: Int = 0) throws -> Data {
         
         guard currentPattern < messagePatterns.count else {
             throw NoiseError.handshakeComplete

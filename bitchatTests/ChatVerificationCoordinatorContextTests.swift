@@ -268,7 +268,7 @@ struct ChatVerificationCoordinatorContextTests {
         context.verifiedFingerprints = ["fp-verified"]
 
         coordinator.setupNoiseCallbacks()
-        let callbacks = try? #require(context.installedCallbacks)
+        let callbacks = context.installedCallbacks
 
         // Authenticated with a verified fingerprint -> verified status and a
         // cached stable peer ID derived from the session key.

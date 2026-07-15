@@ -19,11 +19,10 @@ final class BoardManager: ObservableObject {
     @Published private(set) var posts: [BoardPostPacket] = []
 
     private let transport: Transport
-    private let store: BoardStore
     /// Publishes a bridged kind-1 note (expiring with the board post via
     /// NIP-40) and returns its Nostr event id, or nil when bridging failed or
     /// was skipped.
-    private let publishToNostr: (_ content: String, _ geohash: String, _ nickname: String, _ expiresAtMs: UInt64) -> String?
+    private let publishToNostr: (_ content: String, _ geohash: String, _ nickname: String, _ expiresAtMs: UInt64, _ urgent: Bool) -> String?
     /// Requests NIP-09 deletion of a previously bridged note.
     private let deleteFromNostr: (_ eventID: String, _ geohash: String) -> Void
     /// Bridged Nostr event ids by postID, for merged deletes. In-memory only:
@@ -35,11 +34,10 @@ final class BoardManager: ObservableObject {
     init(
         transport: Transport,
         store: BoardStore = .shared,
-        publishToNostr: ((String, String, String, UInt64) -> String?)? = nil,
+        publishToNostr: ((String, String, String, UInt64, Bool) -> String?)? = nil,
         deleteFromNostr: ((String, String) -> Void)? = nil
     ) {
         self.transport = transport
-        self.store = store
         self.publishToNostr = publishToNostr ?? Self.livePublishToNostr
         self.deleteFromNostr = deleteFromNostr ?? Self.liveDeleteFromNostr
         cancellable = store.$postsSnapshot
@@ -128,7 +126,7 @@ final class BoardManager: ObservableObject {
 
         // Nostr bridge: geohash posts also go out as kind-1 location notes so
         // online users see them. Remember the event id for merged deletes.
-        if !geohash.isEmpty, let eventID = publishToNostr(trimmed, geohash, cleanNickname, expiresAt) {
+        if !geohash.isEmpty, let eventID = publishToNostr(trimmed, geohash, cleanNickname, expiresAt, urgent) {
             bridgedEventIDs[postID] = eventID
         }
         return true
@@ -160,7 +158,7 @@ final class BoardManager: ObservableObject {
         return true
     }
 
-    private static func livePublishToNostr(content: String, geohash: String, nickname: String, expiresAtMs: UInt64) -> String? {
+    private static func livePublishToNostr(content: String, geohash: String, nickname: String, expiresAtMs: UInt64, urgent: Bool) -> String? {
         let relays = GeoRelayDirectory.shared.closestRelays(toGeohash: geohash, count: TransportConfig.nostrGeoRelayCount)
         guard !relays.isEmpty else {
             SecureLogger.debug("Board: no geo relays for \(geohash); skipping Nostr bridge", category: .session)
@@ -173,7 +171,8 @@ final class BoardManager: ObservableObject {
                 geohash: geohash,
                 senderIdentity: identity,
                 nickname: nickname,
-                expiresAt: Date(timeIntervalSince1970: TimeInterval(expiresAtMs) / 1000)
+                expiresAt: Date(timeIntervalSince1970: TimeInterval(expiresAtMs) / 1000),
+                urgent: urgent
             )
             NostrRelayManager.shared.sendEvent(event, to: relays)
             return event.id

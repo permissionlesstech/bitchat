@@ -675,10 +675,6 @@ private final class MockCommandContextProvider: CommandContextProvider {
         toggledFavorites.append(peerID)
     }
 
-    func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {
-        favoriteNotifications.append((peerID, isFavorite))
-    }
-
     // Groups: record the parsed subcommand + argument the processor forwarded.
     private(set) var groupCommands: [(subcommand: String, argument: String)] = []
 

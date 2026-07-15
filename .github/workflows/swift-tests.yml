@@ -131,10 +131,10 @@ jobs:
             echo "No coverage data found; skipping summary."
           fi
 
-  # SPM tests above only compile the macOS slice; this job covers the
-  # iOS-conditional code paths (UIKit, CoreBluetooth restoration, etc.).
+  # SPM tests do not link the shipping app targets. This job covers the
+  # iOS-conditional paths and both universal Release link configurations.
   ios-build:
-    name: Build iOS app (simulator)
+    name: Build Release apps (universal)
     runs-on: macos-latest
     timeout-minutes: 15
 
@@ -143,14 +143,29 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Build iOS (simulator, no signing)
-        # arm64 only: the vendored arti.xcframework has no x86_64 simulator slice.
+        # Build both simulator architectures so CI validates every vendored
+        # Arti simulator slice and the configuration that ships.
         run: |
           set -o pipefail
           xcodebuild -project bitchat.xcodeproj \
             -scheme "bitchat (iOS)" \
+            -configuration Release \
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
-            ARCHS=arm64 \
+            ARCHS='arm64 x86_64' \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Build macOS (universal, no signing)
+        run: |
+          set -o pipefail
+          xcodebuild -project bitchat.xcodeproj \
+            -scheme "bitchat (macOS)" \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            ARCHS='arm64 x86_64' \
+            ONLY_ACTIVE_ARCH=NO \
             CODE_SIGNING_ALLOWED=NO \
             build
 

@@ -44,13 +44,14 @@ struct MeshPeerList: View {
         }
 
         if peerListModel.meshRows.isEmpty {
-            VStack(alignment: .leading, spacing: 0) {
-                Text(Strings.noneNearby)
-                    .bitchatFont(size: 14)
-                    .foregroundColor(palette.secondary)
-                    .padding(.horizontal)
-                    .padding(.top, 12)
-            }
+            // Match the section's row rhythm (same size, indent, and vertical
+            // padding as a peer row) so the empty state reads as the list's
+            // only line, not a floating caption.
+            Text(Strings.noneNearby)
+                .bitchatFont(size: 14)
+                .foregroundColor(palette.secondary)
+                .padding(.horizontal)
+                .padding(.vertical, 4)
         } else {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(0..<peers.count, id: \.self) { idx in
@@ -59,6 +60,9 @@ struct MeshPeerList: View {
                     HStack(spacing: 4) {
                         let assigned = peerListModel.colorForMeshPeer(id: peer.peerID, isDark: colorScheme == .dark)
                         let baseColor = isMe ? Color.orange : assigned
+                        // Mesh rows keep their leading glyph: unlike the
+                        // homogeneous bridge/groups sections, it encodes HOW
+                        // the peer is reachable (radio, relayed, nostr-only).
                         if isMe {
                             Image(systemName: "person.fill")
                                 .font(.bitchatSystem(size: 10))
@@ -82,8 +86,9 @@ struct MeshPeerList: View {
                                 .foregroundColor(.purple)
                                 .help(Strings.nostr)
                         } else {
-                            // Fallback icon for others (dimmed)
-                            Image(systemName: "person")
+                            // Offline: slashed variant of the connected glyph
+                            // (dimmed) — clearer than a generic person icon.
+                            Image(systemName: "antenna.radiowaves.left.and.right.slash")
                                 .font(.bitchatSystem(size: 10))
                                 .foregroundColor(palette.secondary)
                                 .help(Strings.offline)
@@ -174,7 +179,6 @@ struct MeshPeerList: View {
                     }
                     .padding(.horizontal)
                     .padding(.vertical, 4)
-                    .padding(.top, idx == 0 ? 10 : 0)
                     .contentShape(Rectangle())
                     // count:2 must attach before count:1 or the single tap
                     // shadows it (same ordering the header logo relies on).

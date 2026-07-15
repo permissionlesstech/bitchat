@@ -496,4 +496,8 @@ private final class FailingCacheSaveKeychain: KeychainManagerProtocol {
     func delete(key: String, service: String) {
         serviceStorage[service]?.removeValue(forKey: key)
     }
+
+    func deleteAll(service: String) {
+        serviceStorage.removeValue(forKey: service)
+    }
 }

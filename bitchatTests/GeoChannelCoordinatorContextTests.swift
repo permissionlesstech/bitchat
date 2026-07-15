@@ -14,6 +14,7 @@
 //
 
 import Testing
+import Combine
 import Foundation
 import CoreLocation
 import Tor
@@ -40,12 +41,17 @@ private final class StubLocationManaging: LocationStateManaging {
     weak var delegate: CLLocationManagerDelegate?
     var desiredAccuracy: CLLocationAccuracy = 0
     var distanceFilter: CLLocationDistance = 0
-    var authorizationStatus: CLAuthorizationStatus = .denied
+    var authorizationStatus: CLAuthorizationStatus
+    private(set) var stopUpdatingLocationCallCount = 0
+
+    init(authorizationStatus: CLAuthorizationStatus = .denied) {
+        self.authorizationStatus = authorizationStatus
+    }
 
     func requestWhenInUseAuthorization() {}
     func requestLocation() {}
     func startUpdatingLocation() {}
-    func stopUpdatingLocation() {}
+    func stopUpdatingLocation() { stopUpdatingLocationCallCount += 1 }
 }
 
 private final class StubLocationGeocoder: LocationStateGeocoding {
@@ -61,7 +67,11 @@ private final class StubLocationGeocoder: LocationStateGeocoding {
 // MARK: - Helpers
 
 @MainActor
-private func makeLocationManager(storage: UserDefaults? = nil) -> LocationStateManager {
+private func makeLocationManager(
+    storage: UserDefaults? = nil,
+    authorizationStatus: CLAuthorizationStatus = .denied,
+    shouldInitializeCoreLocation: Bool = false
+) -> LocationStateManager {
     let suiteName = "GeoChannelCoordinatorContextTests-\(UUID().uuidString)"
     let defaults = storage ?? UserDefaults(suiteName: suiteName)!
     if storage == nil {
@@ -69,9 +79,9 @@ private func makeLocationManager(storage: UserDefaults? = nil) -> LocationStateM
     }
     return LocationStateManager(
         storage: defaults,
-        locationManager: StubLocationManaging(),
+        locationManager: StubLocationManaging(authorizationStatus: authorizationStatus),
         geocoder: StubLocationGeocoder(),
-        shouldInitializeCoreLocation: false
+        shouldInitializeCoreLocation: shouldInitializeCoreLocation
     )
 }
 
@@ -169,10 +179,108 @@ struct GeoChannelCoordinatorContextTests {
     }
 
     @Test @MainActor
+    func buildingCellJoinsSamplingOnlyAfterNotesReveal() async {
+        TorManager.shared.setAppForeground(true)
+        let locationManager = makeLocationManager(
+            authorizationStatus: .authorizedAlways,
+            shouldInitializeCoreLocation: true
+        )
+        #expect(await waitUntil { locationManager.permissionState == .authorized })
+        let context = MockGeoChannelContext()
+        let revealed = CurrentValueSubject<Bool, Never>(false)
+        let notesEnabled = CurrentValueSubject<Bool, Never>(true)
+        let coordinator = GeoChannelCoordinator(
+            locationManager: locationManager,
+            bookmarksStore: locationManager,
+            torManager: TorManager.shared,
+            notesRevealed: revealed.eraseToAnyPublisher(),
+            locationNotesEnabled: true,
+            locationNotesSettings: notesEnabled.eraseToAnyPublisher(),
+            context: context
+        )
+        defer { withExtendedLifetime(coordinator) {} }
+
+        // A location fix yields all six channel levels…
+        locationManager.locationManager(
+            CLLocationManager(),
+            didUpdateLocations: [CLLocation(latitude: 21.2850, longitude: -157.8357)]
+        )
+        #expect(await waitUntil {
+            locationManager.availableChannels.contains { $0.level == .building }
+        })
+        let building = locationManager.availableChannels.first { $0.level == .building }!.geohash
+
+        // …but pre-reveal sampling must exclude the building-precision cell:
+        // a passive precision-8 REQ identifies a single address.
+        #expect(await waitUntil {
+            (context.beginSamplingCalls.last?.count ?? 0) == GeohashChannelLevel.allCases.count - 1
+        })
+        #expect(context.beginSamplingCalls.allSatisfy { !$0.contains(building) })
+
+        // The explicit notes act widens sampling to include it.
+        revealed.send(true)
+        #expect(await waitUntil { context.beginSamplingCalls.last?.contains(building) == true })
+        #expect(context.beginSamplingCalls.last?.count == GeohashChannelLevel.allCases.count)
+
+        // The app-info kill switch must narrow the already-live sampling set
+        // immediately, without waiting for another location update.
+        notesEnabled.send(false)
+        #expect(await waitUntil {
+            context.beginSamplingCalls.last?.contains(building) == false &&
+            context.beginSamplingCalls.last?.count == GeohashChannelLevel.allCases.count - 1
+        })
+    }
+
+    @Test @MainActor
+    func permissionRevocationEndsCachedRegionalSampling_butBookmarksRemainEligible() async {
+        TorManager.shared.setAppForeground(true)
+        let locationManager = makeLocationManager(
+            authorizationStatus: .authorizedAlways,
+            shouldInitializeCoreLocation: true
+        )
+        #expect(await waitUntil { locationManager.permissionState == .authorized })
+        let context = MockGeoChannelContext()
+        let revealed = CurrentValueSubject<Bool, Never>(true)
+        let coordinator = GeoChannelCoordinator(
+            locationManager: locationManager,
+            bookmarksStore: locationManager,
+            torManager: TorManager.shared,
+            notesRevealed: revealed.eraseToAnyPublisher(),
+            locationNotesEnabled: true,
+            locationNotesSettings: Empty().eraseToAnyPublisher(),
+            context: context
+        )
+        defer { withExtendedLifetime(coordinator) {} }
+
+        locationManager.locationManager(
+            CLLocationManager(),
+            didUpdateLocations: [CLLocation(latitude: 21.2850, longitude: -157.8357)]
+        )
+        #expect(await waitUntil {
+            context.beginSamplingCalls.last?.count == GeohashChannelLevel.allCases.count
+        })
+        let cachedChannels = locationManager.availableChannels
+        let endCountBeforeRevocation = context.endSamplingCount
+
+        locationManager.locationManager(CLLocationManager(), didChangeAuthorization: .denied)
+
+        #expect(await waitUntil {
+            locationManager.permissionState == .denied &&
+            context.endSamplingCount > endCountBeforeRevocation
+        })
+        #expect(locationManager.availableChannels == cachedChannels)
+
+        // A bookmark is an explicit remote scope and does not derive from
+        // the now-revoked device location.
+        locationManager.addBookmark("u4pru")
+        #expect(await waitUntil { context.beginSamplingCalls.last == ["u4pru"] })
+    }
+
+    @Test @MainActor
     func releasedContext_isHeldWeaklyAndSafelyIgnored() async {
         let locationManager = makeLocationManager()
         var context: MockGeoChannelContext? = MockGeoChannelContext()
-        weak var weakContext = context
+        let weakContext = { [weak context] in context }
         let coordinator = GeoChannelCoordinator(
             locationManager: locationManager,
             bookmarksStore: locationManager,
@@ -184,7 +292,7 @@ struct GeoChannelCoordinatorContextTests {
 
         // The coordinator must not keep the owner alive (it is owned by it).
         context = nil
-        #expect(weakContext == nil)
+        #expect(weakContext() == nil)
 
         // Events after the owner is gone are safely dropped.
         locationManager.select(.location(GeohashChannel(level: .city, geohash: "u4pru")))

@@ -96,6 +96,20 @@ struct CourierEndToEndTests {
         service._test_handlePacket(packet, fromPeerID: peer.myPeerID)
     }
 
+    /// Establishes the Noise session that proves the direct link's peer owns
+    /// its announced static identity. CoreBluetooth is disabled in this suite,
+    /// so the handshake is ferried in-process just like courier packets.
+    private func establishNoiseSession(between initiator: BLEService, and responder: BLEService) throws {
+        let message1 = try initiator._test_noiseInitiateHandshake(with: responder.myPeerID)
+        let message2 = try #require(
+            try responder._test_noiseProcessHandshakeMessage(from: initiator.myPeerID, message: message1)
+        )
+        let message3 = try #require(
+            try initiator._test_noiseProcessHandshakeMessage(from: responder.myPeerID, message: message2)
+        )
+        _ = try responder._test_noiseProcessHandshakeMessage(from: initiator.myPeerID, message: message3)
+    }
+
     // MARK: - Tests
 
     @Test func courierCarriesMessageAcrossDisjointConnectivity() async throws {
@@ -141,7 +155,9 @@ struct CourierEndToEndTests {
         )
         #expect(carried)
 
-        // 3. Later, Bob announces near Carol → handover fires.
+        // 3. Later, Bob proves link ownership and announces near Carol →
+        // handover fires.
+        try establishNoiseSession(between: carol, and: bob)
         bob.sendBroadcastAnnounce()
         let announced = await TestHelpers.waitUntil(
             { bobOut.first(ofType: .announce) != nil },
@@ -156,7 +172,10 @@ struct CourierEndToEndTests {
             timeout: TestConstants.defaultTimeout
         )
         #expect(handedOver)
-        #expect(carol.courierStore.isEmpty)
+        // With CoreBluetooth disabled there is no physical link for the send
+        // planner to accept, so Carol truthfully retains the durable copy even
+        // though the packet tap lets us ferry the attempted handover below.
+        #expect(!carol.courierStore.isEmpty)
         let handoverPacket = try #require(carolOut.first(ofType: .courierEnvelope))
         #expect(PeerID(hexData: handoverPacket.recipientID) == bob.myPeerID)
 
@@ -222,6 +241,7 @@ struct CourierEndToEndTests {
         )
         #expect(carried)
 
+        try establishNoiseSession(between: carol, and: bob)
         bob.sendBroadcastAnnounce()
         let announced = await TestHelpers.waitUntil(
             { bobOut.first(ofType: .announce) != nil },
@@ -309,7 +329,7 @@ struct CourierEndToEndTests {
             timeout: TestConstants.defaultTimeout
         )
         #expect(handedOver)
-        #expect(carol.courierStore.isEmpty)
+        #expect(!carol.courierStore.isEmpty)
     }
 
     @Test func relayedAnnounceTriggersNonDestructiveRemoteHandover() async throws {
@@ -395,7 +415,11 @@ struct CourierEndToEndTests {
         #expect(!refloodedInCooldown)
         #expect(!carol.courierStore.isEmpty)
 
-        // A later *direct* announce still performs the destructive handover.
+        // A peer-level Noise session is still insufficient without a physical
+        // ingress link that completed that handshake. This CoreBluetooth-free
+        // harness deliberately has no such link proof, so restoring the
+        // unsigned direct TTL cannot authorize destructive handover.
+        try establishNoiseSession(between: carol, and: bob)
         try await Task.sleep(nanoseconds: 1_100_000_000)
         bob.sendBroadcastAnnounce()
         let announcedAgain = await TestHelpers.waitUntil(
@@ -408,12 +432,12 @@ struct CourierEndToEndTests {
         )
         carol._test_handlePacket(directAgain, fromPeerID: bob.myPeerID, preseedPeer: false)
 
-        let handedOver = await TestHelpers.waitUntil(
-            { carolOut.count(ofType: .courierEnvelope) == 2 },
-            timeout: TestConstants.defaultTimeout
+        let handedOverWithoutLinkProof = await TestHelpers.waitUntil(
+            { carolOut.count(ofType: .courierEnvelope) > 1 },
+            timeout: TestConstants.shortTimeout
         )
-        #expect(handedOver)
-        #expect(carol.courierStore.isEmpty)
+        #expect(!handedOverWithoutLinkProof)
+        #expect(!carol.courierStore.isEmpty)
     }
 
     @Test func sendCourierMessageRejectsInvalidRecipientKeyBeforeQueueing() async throws {
@@ -556,6 +580,70 @@ struct CourierEndToEndTests {
         #expect(!stored)
     }
 
+    /// Regression for the relaunch amplification storm: redundant copies of
+    /// one message arrive as *distinct* envelopes (every seal uses a fresh
+    /// ephemeral key), so only the inner message ID can dedup them. The first
+    /// copy delivers; duplicates must stop right after the decrypt — no
+    /// second delivery, no second ack/handshake trigger downstream.
+    @Test func duplicateCourierCopiesDeliverInnerMessageOnce() async throws {
+        let alice = makeService()
+        let bob = makeService()
+        let bobDelegate = NoiseCaptureDelegate()
+        bob.delegate = bobDelegate
+
+        let bobKey = bob.noiseStaticPublicKeyData()
+        let first = try #require(alice.sealBridgeCourierEnvelope("once", messageID: "dup-1", recipientNoiseKey: bobKey))
+        let second = try #require(alice.sealBridgeCourierEnvelope("once", messageID: "dup-1", recipientNoiseKey: bobKey))
+        // Distinct seals: envelope-level dedup can never catch this pair.
+        #expect(first.ciphertext != second.ciphertext)
+
+        #expect(bob.openBridgedCourierEnvelope(first))
+        #expect(bob.openBridgedCourierEnvelope(second))
+
+        let delivered = await TestHelpers.waitUntil(
+            { !bobDelegate.snapshot().isEmpty },
+            timeout: TestConstants.defaultTimeout
+        )
+        #expect(delivered)
+        // Give a duplicate delivery a chance to surface, then confirm the
+        // second copy never reached the delegate.
+        let duplicated = await TestHelpers.waitUntil(
+            { bobDelegate.snapshot().count > 1 },
+            timeout: TestConstants.shortTimeout
+        )
+        #expect(!duplicated)
+        #expect(bobDelegate.snapshot().count == 1)
+    }
+
+    /// Acks for mail from absent senders (the usual couriered/bridged case)
+    /// queue for a future session instead of initiating a handshake
+    /// broadcast — otherwise every duplicate copy of every drop turns into a
+    /// mesh-wide handshake flood at an identity that cannot answer.
+    @Test func deliveryAckForAbsentPeerQueuesWithoutHandshake() async throws {
+        let ble = makeService()
+        let outbound = PacketTap()
+        ble._test_onOutboundPacket = outbound.record
+
+        // Nobody by this ID on the mesh (not connected, not reachable).
+        ble.sendDeliveryAck(for: "msg-1", to: PeerID(str: "00000000000000ee"))
+
+        let initiated = await TestHelpers.waitUntil(
+            { outbound.count(ofType: .noiseHandshake) > 0 },
+            timeout: TestConstants.shortTimeout
+        )
+        #expect(!initiated)
+
+        // Control: a peer that is actually around still gets the handshake.
+        let present = PeerID(str: "00000000000000ef")
+        ble._test_seedConnectedPeer(present, nickname: "present")
+        ble.sendDeliveryAck(for: "msg-2", to: present)
+        let initiatedForPresent = await TestHelpers.waitUntil(
+            { outbound.count(ofType: .noiseHandshake) > 0 },
+            timeout: TestConstants.defaultTimeout
+        )
+        #expect(initiatedForPresent)
+    }
+
     private func makeUnsignedAnnounce(from service: BLEService) throws -> BitchatPacket {
         let announcement = AnnouncementPacket(
             nickname: "Unsigned",
@@ -590,9 +678,6 @@ private final class CourierCaptureTransport: Transport {
     private(set) var courierSends: [(messageID: String, recipientKey: Data, couriers: [PeerID])] = []
     private(set) var directSends: [String] = []
 
-    var peerSnapshotPublisher: AnyPublisher<[TransportPeerSnapshot], Never> {
-        Just(snapshots).eraseToAnyPublisher()
-    }
     func currentPeerSnapshots() -> [TransportPeerSnapshot] { snapshots }
 
     var myPeerID = PeerID(str: "00000000000000aa")
@@ -673,6 +758,50 @@ struct MessageRouterCourierTests {
         #expect(transport.courierSends.first?.recipientKey == bobKey)
         #expect(transport.courierSends.first?.couriers == [carolID])
         #expect(carried == ["m1"])
+    }
+
+    /// Field-found: a DM sent while the recipient sits in the BLE
+    /// reachability retention window (radio gone, still "reachable" for a
+    /// minute) trusts the mesh and skips every deposit — and nothing
+    /// retried. The periodic sweep must publish the bridge drop once the
+    /// window lapses.
+    @Test @MainActor
+    func sweepDropsQueuedMessageOnceReachabilityLapses() {
+        let bobKey = Data(repeating: 0xB0, count: 32)
+        let bobID = PeerID(publicKey: bobKey)
+        let transport = CourierCaptureTransport()
+        transport.reachablePeers = [bobID] // retention window: stale but "reachable"
+        transport.promptDelivery = true
+
+        let directory = CourierDirectory(
+            noiseKey: { peerID in peerID == bobID ? bobKey : nil },
+            isTrustedCourier: { _ in false }
+        )
+        let router = MessageRouter(transports: [transport], courierDirectory: directory)
+        var drops: [(content: String, messageID: String, key: Data)] = []
+        router.bridgeCourierDeposit = { content, messageID, key, completion in
+            drops.append((content, messageID, key))
+            completion(true)
+        }
+        var carried: [String] = []
+        router.onMessageCarried = { messageID, _ in carried.append(messageID) }
+
+        router.sendPrivate("hi bob", to: bobID, recipientNickname: "bob", messageID: "m9")
+        #expect(drops.isEmpty) // send trusted the (stale) mesh reachability
+
+        // Still inside the window: the sweep must not spam relays.
+        router.retryBridgeCourierDeposits()
+        #expect(drops.isEmpty)
+
+        // Window lapses; the sweep publishes the retained copy as a drop and
+        // the sender's message shows "carried" (its ack has no radio route).
+        transport.reachablePeers = []
+        router.retryBridgeCourierDeposits()
+        #expect(drops.count == 1)
+        #expect(drops.first?.messageID == "m9")
+        #expect(drops.first?.content == "hi bob")
+        #expect(drops.first?.key == bobKey)
+        #expect(carried == ["m9"])
     }
 
     @Test @MainActor

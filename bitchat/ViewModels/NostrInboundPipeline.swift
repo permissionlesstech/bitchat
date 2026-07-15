@@ -305,7 +305,9 @@ final class NostrInboundPipeline {
             context.handleReadReceipt(noisePayload, senderPubkey: senderPubkey, convKey: convKey)
         // Group state travels only over mesh Noise sessions in v1; anything
         // claiming to be group traffic over Nostr is ignored.
-        case .verifyChallenge, .verifyResponse, .groupInvite, .groupKeyUpdate, .vouch:
+        // Live voice is mesh-only: latency and relay cost make it
+        // meaningless over Nostr.
+        case .verifyChallenge, .verifyResponse, .groupInvite, .groupKeyUpdate, .vouch, .voiceFrame:
             break
         }
     }
@@ -359,7 +361,9 @@ final class NostrInboundPipeline {
             context.handleReadReceipt(payload, senderPubkey: senderPubkey, convKey: convKey)
         // Group state travels only over mesh Noise sessions in v1; anything
         // claiming to be group traffic over Nostr is ignored.
-        case .verifyChallenge, .verifyResponse, .groupInvite, .groupKeyUpdate, .vouch:
+        // Live voice is mesh-only: latency and relay cost make it
+        // meaningless over Nostr.
+        case .verifyChallenge, .verifyResponse, .groupInvite, .groupKeyUpdate, .vouch, .voiceFrame:
             break
         }
     }
@@ -440,7 +444,9 @@ final class NostrInboundPipeline {
                             context.handleReadReceipt(payload, senderPubkey: senderPubkey, convKey: targetPeerID)
                         // Group state travels only over mesh Noise sessions
                         // in v1; group traffic over Nostr is ignored.
-                        case .verifyChallenge, .verifyResponse, .groupInvite, .groupKeyUpdate, .vouch:
+                        // Live voice is mesh-only: latency and relay cost make it
+                        // meaningless over Nostr.
+                        case .verifyChallenge, .verifyResponse, .groupInvite, .groupKeyUpdate, .vouch, .voiceFrame:
                             break
                         }
                     }

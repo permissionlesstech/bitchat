@@ -135,7 +135,6 @@ final class ChatVerificationCoordinator {
         let noiseKeyHex: String
         let signKeyHex: String
         let nonceA: Data
-        let startedAt: Date
         var sent: Bool
     }
 
@@ -258,7 +257,6 @@ final class ChatVerificationCoordinator {
             noiseKeyHex: qr.noiseKeyHex,
             signKeyHex: qr.signKeyHex,
             nonceA: nonce,
-            startedAt: Date(),
             sent: false
         )
         pendingQRVerifications[peerID] = pending

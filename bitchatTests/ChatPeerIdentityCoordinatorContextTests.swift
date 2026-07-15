@@ -29,7 +29,6 @@ private final class MockChatPeerIdentityContext: ChatPeerIdentityContext {
     var unreadPrivateMessages: Set<PeerID> = []
     var selectedPrivateChatPeer: PeerID?
     var selectedPrivateChatFingerprint: String?
-    var nickname = "me"
     var myPeerID = PeerID(str: "0011223344556677")
     var activeChannel: ChannelID = .mesh
     private(set) var notifyUIChangedCount = 0
@@ -323,10 +322,10 @@ struct ChatPeerIdentityCoordinatorContextTests {
     }
 
     @Test @MainActor
-    func startPrivateChat_suppressed_oneWayFavoriteEmitsNoSystemMessage() async {
-        // #1064: a one-way favorite (we favorite them, they don't favorite us,
-        // not connected) trips the mutual-favorite gate. Under suppression the
-        // reject must emit no "requires favorite" system message and open no chat.
+    func startPrivateChat_suppressed_oneWayFavoriteOpensChatSilently() async {
+        // #1064 × #1415: the mutual-favorite gate is gone (store-and-forward
+        // handles offline non-mutual favorites), so a one-way favorite now
+        // opens the chat — and under suppression still emits no system message.
         let context = MockChatPeerIdentityContext()
         let coordinator = ChatPeerIdentityCoordinator(context: context)
         let peerID = PeerID(str: "1122334455667788")
@@ -342,8 +341,8 @@ struct ChatPeerIdentityCoordinatorContextTests {
         coordinator.startPrivateChat(with: peerID, suppressSystemMessages: true)
 
         #expect(context.systemMessages.isEmpty)
-        #expect(context.begunChatSessions.isEmpty)
-        #expect(context.consolidatedPeers.isEmpty)
+        #expect(context.begunChatSessions == [peerID])
+        #expect(context.consolidatedPeers.map(\.peerID) == [peerID])
     }
 
     @Test @MainActor

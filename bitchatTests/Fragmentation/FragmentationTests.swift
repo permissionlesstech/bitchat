@@ -35,19 +35,15 @@ struct FragmentationTests {
         // Use a small fragment size to ensure multiple pieces
         let fragments = fragmentPacket(original, fragmentSize: 400)
 
-        // Shuffle fragments to simulate out-of-order arrival
-        let shuffled = fragments.shuffled()
+        // Reverse deterministically to simulate out-of-order arrival without
+        // making a failure depend on a random permutation.
+        let outOfOrder = fragments.reversed()
 
-        // Send fragments sequentially with small delays (no fire-and-forget Tasks)
-        for (i, fragment) in shuffled.enumerated() {
-            if i > 0 {
-                try await Task.sleep(for: .milliseconds(5))
-            }
+        for fragment in outOfOrder {
             ble._test_handlePacket(fragment, fromPeerID: remoteShortID, signingPublicKey: signingKey)
         }
 
-        // Wait for delegate callback with proper timeout
-        try await capture.waitForPublicMessages(count: 1, timeout: .seconds(5))
+        await ble._test_drainFragmentPipeline()
 
         #expect(capture.publicMessages.count == 1)
         #expect(capture.publicMessages.first?.content.count == 3_000)
@@ -73,16 +69,11 @@ struct FragmentationTests {
             frags.insert(dup, at: 1)
         }
 
-        // Send fragments sequentially with small delays (no fire-and-forget Tasks)
-        for (i, fragment) in frags.enumerated() {
-            if i > 0 {
-                try await Task.sleep(for: .milliseconds(5))
-            }
+        for fragment in frags {
             ble._test_handlePacket(fragment, fromPeerID: remoteShortID, signingPublicKey: signingKey)
         }
 
-        // Wait for delegate callback with proper timeout
-        try await capture.waitForPublicMessages(count: 1, timeout: .seconds(5))
+        await ble._test_drainFragmentPipeline()
 
         #expect(capture.publicMessages.count == 1)
         #expect(capture.publicMessages.first?.content.count == 2048)
@@ -94,6 +85,11 @@ struct FragmentationTests {
         let capture = CaptureDelegate()
         ble.delegate = capture
 
+        // Broadcast file transfers must carry a valid sender signature (same
+        // gate as public messages), so sign the packet and preseed the
+        // sender's signing key into the registry.
+        let signer = NoiseEncryptionService(keychain: MockKeychain())
+        let signingKey = signer.getSigningPublicKeyData()
         let remoteID = PeerID(str: "CAFEBABECAFEBABE")
         let fileContent = Data(repeating: 0x42, count: FileTransferLimits.maxPayloadBytes)
         let filePacket = BitchatFilePacket(
@@ -104,28 +100,28 @@ struct FragmentationTests {
         )
         let encoded = try #require(filePacket.encode(), "File packet encoding failed")
 
-        let packet = BitchatPacket(
-            type: MessageType.fileTransfer.rawValue,
-            senderID: Data(hexString: remoteID.id) ?? Data(),
-            recipientID: nil,
-            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-            payload: encoded,
-            signature: nil,
-            ttl: 7,
-            version: 2
+        let packet = try #require(
+            signer.signPacket(BitchatPacket(
+                type: MessageType.fileTransfer.rawValue,
+                senderID: Data(hexString: remoteID.id) ?? Data(),
+                recipientID: nil,
+                timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                payload: encoded,
+                signature: nil,
+                ttl: 7,
+                version: 2
+            )),
+            "Failed to sign file transfer packet"
         )
 
         let fragments = fragmentPacket(packet, fragmentSize: 4096, pad: false)
         #expect(!fragments.isEmpty)
 
-        for (i, fragment) in fragments.enumerated() {
-            if i > 0 {
-                try await Task.sleep(for: .milliseconds(5))
-            }
-            ble._test_handlePacket(fragment, fromPeerID: remoteID)
+        for fragment in fragments {
+            ble._test_handlePacket(fragment, fromPeerID: remoteID, signingPublicKey: signingKey)
         }
 
-        try await capture.waitForReceivedMessages(count: 1, timeout: .seconds(5))
+        await ble._test_drainFragmentPipeline()
 
         let message = try #require(capture.receivedMessages.first, "Expected file transfer message")
         #expect(message.content.hasPrefix("[file]"))
@@ -165,15 +161,11 @@ struct FragmentationTests {
             corrupted[0] = p
         }
         
-        for (i, fragment) in corrupted.enumerated() {
-            if i > 0 {
-                try await Task.sleep(for: .milliseconds(5))
-            }
+        for fragment in corrupted {
             ble._test_handlePacket(fragment, fromPeerID: remoteShortID)
         }
-        
-        // Allow async processing
-        try await sleep(0.5)
+
+        await ble._test_drainFragmentPipeline()
 
         // Should not deliver since one fragment is invalid and reassembly can't complete
         #expect(capture.publicMessages.isEmpty)
@@ -199,10 +191,6 @@ extension FragmentationTests {
         private let lock = NSLock()
         private var _publicMessages: [(peerID: PeerID, nickname: String, content: String)] = []
         private var _receivedMessages: [BitchatMessage] = []
-        private var publicMessageContinuation: CheckedContinuation<Void, Never>?
-        private var receivedMessageContinuation: CheckedContinuation<Void, Never>?
-        private var expectedPublicMessageCount: Int = 0
-        private var expectedReceivedMessageCount: Int = 0
 
         private func withLock<T>(_ body: () -> T) -> T {
             lock.lock()
@@ -219,113 +207,11 @@ extension FragmentationTests {
         }
 
         func didReceiveMessage(_ message: BitchatMessage) {
-            lock.lock()
-            _receivedMessages.append(message)
-            let count = _receivedMessages.count
-            let expected = expectedReceivedMessageCount
-            let continuation = receivedMessageContinuation
-            lock.unlock()
-
-            if count >= expected, let cont = continuation {
-                lock.lock()
-                receivedMessageContinuation = nil
-                lock.unlock()
-                cont.resume()
-            }
+            withLock { _receivedMessages.append(message) }
         }
 
         func didReceivePublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date, messageID: String?) {
-            lock.lock()
-            _publicMessages.append((peerID, nickname, content))
-            let count = _publicMessages.count
-            let expected = expectedPublicMessageCount
-            let continuation = publicMessageContinuation
-            lock.unlock()
-
-            if count >= expected, let cont = continuation {
-                lock.lock()
-                publicMessageContinuation = nil
-                lock.unlock()
-                cont.resume()
-            }
-        }
-
-        /// Waits for the specified number of public messages to be received
-        func waitForPublicMessages(count: Int, timeout: Duration = .seconds(2)) async throws {
-            let isAlreadySatisfied = withLock { () -> Bool in
-                if _publicMessages.count >= count {
-                    return true
-                }
-                expectedPublicMessageCount = count
-                return false
-            }
-            if isAlreadySatisfied {
-                return
-            }
-
-            try await withThrowingTaskGroup(of: Void.self) { group in
-                group.addTask {
-                    await withCheckedContinuation { continuation in
-                        let shouldResumeImmediately = self.withLock {
-                            // Recheck count after acquiring lock to avoid race condition
-                            // where message arrives between initial check and continuation install
-                            if self._publicMessages.count >= count {
-                                return true
-                            }
-                            self.publicMessageContinuation = continuation
-                            return false
-                        }
-                        if shouldResumeImmediately {
-                            continuation.resume()
-                        }
-                    }
-                }
-                group.addTask {
-                    try await Task.sleep(for: timeout)
-                    throw CancellationError()
-                }
-                try await group.next()
-                group.cancelAll()
-            }
-        }
-
-        /// Waits for the specified number of received messages
-        func waitForReceivedMessages(count: Int, timeout: Duration = .seconds(2)) async throws {
-            let isAlreadySatisfied = withLock { () -> Bool in
-                if _receivedMessages.count >= count {
-                    return true
-                }
-                expectedReceivedMessageCount = count
-                return false
-            }
-            if isAlreadySatisfied {
-                return
-            }
-
-            try await withThrowingTaskGroup(of: Void.self) { group in
-                group.addTask {
-                    await withCheckedContinuation { continuation in
-                        let shouldResumeImmediately = self.withLock {
-                            // Recheck count after acquiring lock to avoid race condition
-                            // where message arrives between initial check and continuation install
-                            if self._receivedMessages.count >= count {
-                                return true
-                            }
-                            self.receivedMessageContinuation = continuation
-                            return false
-                        }
-                        if shouldResumeImmediately {
-                            continuation.resume()
-                        }
-                    }
-                }
-                group.addTask {
-                    try await Task.sleep(for: timeout)
-                    throw CancellationError()
-                }
-                try await group.next()
-                group.cancelAll()
-            }
+            withLock { _publicMessages.append((peerID, nickname, content)) }
         }
 
         func didConnectToPeer(_ peerID: PeerID) {}
@@ -335,7 +221,6 @@ extension FragmentationTests {
         func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {}
         func didReceiveNoisePayload(from peerID: PeerID, type: NoisePayloadType, payload: Data, timestamp: Date) {}
         func didUpdateBluetoothState(_ state: CBManagerState) {}
-        func didReceiveRegionalPublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date) {}
     }
 
     // Helper: build a large message packet (unencrypted public message)

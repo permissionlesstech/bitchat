@@ -1,0 +1,21 @@
+# Periphery dead-code scan configuration (https://github.com/peripheryapp/periphery)
+#
+# CI runs the macOS scheme only (an iOS scan needs a device destination and
+# doubles the build time). macOS-only scans falsely flag iOS-only code —
+# state restoration, screenshot handlers, background BLE sampling — so those
+# findings live in .periphery.baseline.json rather than being "fixed".
+# When auditing by hand, scan BOTH schemes and intersect:
+#   periphery scan --schemes "bitchat (iOS)" -- -destination 'generic/platform=iOS' ARCHS=arm64
+project: bitchat.xcodeproj
+schemes:
+  - bitchat (macOS)
+retain_swift_ui_previews: true
+# Codable properties are (de)serialized via synthesized conformances the
+# indexer doesn't always attribute reads to: PrekeyBundleStore.StoredBundle
+# .noiseKey flaked CI as "assign-only" even while read in loadFromDisk —
+# and slipped past its baselined USR. Retaining Codable properties outright
+# is deterministic; a truly-dead Codable field is a persisted-format change
+# anyway, never a safe mechanical delete.
+retain_codable_properties: true
+relative_results: true
+baseline: .periphery.baseline.json

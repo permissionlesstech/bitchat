@@ -18,8 +18,6 @@ final class AppRuntime: ObservableObject {
     /// (docs/CONVERSATION-STORE-DESIGN.md). Owned here; the feature models
     /// and `ChatViewModel` observe and mutate it through its intent API.
     let conversations: ConversationStore
-    let peerIdentityStore: PeerIdentityStore
-    let locationPresenceStore: LocationPresenceStore
     let publicChatModel: PublicChatModel
     let privateInboxModel: PrivateInboxModel
     let privateConversationModel: PrivateConversationModel
@@ -42,7 +40,7 @@ final class AppRuntime: ObservableObject {
     #endif
 
     init(
-        keychain: KeychainManagerProtocol = KeychainManager(),
+        keychain: KeychainManagerProtocol = KeychainManager.makeDefault(),
         idBridge: NostrIdentityBridge = NostrIdentityBridge()
     ) {
         self.idBridge = idBridge
@@ -51,8 +49,6 @@ final class AppRuntime: ObservableObject {
         let locationPresenceStore = LocationPresenceStore()
         let locationManager = LocationChannelManager.shared
         self.conversations = conversations
-        self.peerIdentityStore = peerIdentityStore
-        self.locationPresenceStore = locationPresenceStore
         self.chatViewModel = ChatViewModel(
             keychain: keychain,
             idBridge: idBridge,
@@ -330,7 +326,16 @@ final class AppRuntime: ObservableObject {
         chatViewModel.applicationWillTerminate()
     }
 
-    func handleNotificationResponse(identifier: String, userInfo: [AnyHashable: Any]) {
+    func handleNotificationResponse(
+        identifier: String,
+        actionIdentifier: String = UNNotificationDefaultActionIdentifier,
+        userInfo: [AnyHashable: Any]
+    ) {
+        if actionIdentifier == NotificationService.waveActionID {
+            chatViewModel.sendMeshWave()
+            return
+        }
+
         if identifier.hasPrefix("private-"), let peerID = PeerID(str: userInfo["peerID"] as? String) {
             record(.notificationOpened(peerID: peerID))
             chatViewModel.startPrivateChat(with: peerID)
@@ -417,21 +422,29 @@ private extension AppRuntime {
     }
 
     func checkForSharedContent() {
-        guard let userDefaults = UserDefaults(suiteName: BitchatApp.groupID),
-              let sharedContent = userDefaults.string(forKey: "sharedContent"),
+        guard let userDefaults = UserDefaults(suiteName: BitchatApp.groupID) else { return }
+        let clearSharedContent = {
+            userDefaults.removeObject(forKey: "sharedContent")
+            userDefaults.removeObject(forKey: "sharedContentType")
+            userDefaults.removeObject(forKey: "sharedContentDate")
+        }
+
+        guard let sharedContent = userDefaults.string(forKey: "sharedContent"),
               let sharedDate = userDefaults.object(forKey: "sharedContentDate") as? Date else {
+            // A partial or malformed handoff must not linger in the shared
+            // app-group container indefinitely.
+            clearSharedContent()
             return
         }
 
         guard Date().timeIntervalSince(sharedDate) < TransportConfig.uiShareAcceptWindowSeconds else {
+            clearSharedContent()
             return
         }
 
         let contentKind = SharedContentKind(rawValue: userDefaults.string(forKey: "sharedContentType") ?? "") ?? .text
 
-        userDefaults.removeObject(forKey: "sharedContent")
-        userDefaults.removeObject(forKey: "sharedContentType")
-        userDefaults.removeObject(forKey: "sharedContentDate")
+        clearSharedContent()
 
         switch contentKind {
         case .url:

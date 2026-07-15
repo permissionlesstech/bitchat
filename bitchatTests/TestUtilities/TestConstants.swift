@@ -25,9 +25,5 @@ struct TestConstants {
     static let testNickname4 = "David"
     
     static let testMessage1 = "Hello, World!"
-    static let testMessage2 = "How are you?"
-    static let testMessage3 = "This is a test message"
     static let testLongMessage = String(repeating: "This is a long message. ", count: 100)
-    
-    static let testSignature = Data(repeating: 0xAB, count: 64)
 }

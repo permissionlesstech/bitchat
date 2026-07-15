@@ -31,10 +31,27 @@ struct NoticesView: View {
     @State private var tab: Tab
     @State private var draft: String = ""
     @State private var urgent = false
-    @State private var expiryDays = 7
+    /// Days until the notice fades; `permanentExpiry` (geo default) means no
+    /// NIP-40 tag — the note stays until its relay drops it.
+    @State private var expiryDays: Int
+    /// Mirrors the app-info kill switch so its notification produces an
+    /// immediate presentation update as well as tearing down subscriptions.
+    @State private var locationNotesEnabled = LocationNotesSettings.enabled
+
+    /// Sentinel picker tag for the ∞ option (geo tab only).
+    private static let permanentExpiry = 0
 
     /// Injected notes manager for tests; live use derives one per geohash.
     private let notesManager: LocationNotesManager?
+    /// Pooled manager held by the sheet so the composer can post pure Nostr
+    /// notes (∞ expiry has no mesh-board copy) and the list can render them.
+    /// Acquired from `LocationNotesPool` (shared with the nearby-notes
+    /// counter, one REQ per geohash) and released on dismissal.
+    @State private var liveGeoManager: LocationNotesManager?
+    /// Tracks only this sheet's high-accuracy refresh ownership, so repeated
+    /// Combine/SwiftUI invalidations do not restart CoreLocation and a
+    /// revocation or kill-switch transition balances the begin call once.
+    @State private var ownsLiveGeoRefresh = false
 
     init(
         senderNickname: String,
@@ -46,6 +63,144 @@ struct NoticesView: View {
         self.board = board
         self.notesManager = notesManager
         _tab = State(initialValue: initialTab)
+        _expiryDays = State(initialValue: initialTab == .geo ? Self.permanentExpiry : 7)
+    }
+
+    private var activeNotesManager: LocationNotesManager? {
+        notesManager ?? liveGeoManager
+    }
+
+    /// The one explicit act inside the sheet that unlocks the passive
+    /// nearby-notes counter: the person actively picking the geo segment
+    /// while the sheet has a geo scope. Landing on the geo tab via the
+    /// sheet's initial selection (auto-derived from the current channel —
+    /// e.g. browsing a remote geohash) is not an act toward the LOCAL
+    /// building cell and must not reveal it.
+    static func revealsNearbyNotes(onSwitchingTo tab: Tab, geoGeohash: String?) -> Bool {
+        tab == .geo && geoGeohash != nil
+    }
+
+    struct GeoSessionState {
+        let manager: LocationNotesManager?
+        let ownsLiveRefresh: Bool
+    }
+
+    enum GeoPresentationState: Equatable {
+        case disabled
+        case locationUnavailable
+        case available(String)
+    }
+
+    static func geoPresentationState(notesEnabled: Bool, geohash: String?) -> GeoPresentationState {
+        guard notesEnabled else { return .disabled }
+        guard let geohash else { return .locationUnavailable }
+        return .available(geohash)
+    }
+
+    static func composerGeohash(tab: Tab, notesEnabled: Bool, geoGeohash: String?) -> String? {
+        switch tab {
+        case .geo:
+            guard case .available(let geohash) = geoPresentationState(
+                notesEnabled: notesEnabled,
+                geohash: geoGeohash
+            ) else {
+                return nil
+            }
+            return geohash
+        case .mesh:
+            return ""
+        }
+    }
+
+    /// Reconciles both privacy-sensitive resources owned by the sheet: the
+    /// high-accuracy CoreLocation refresh and the precise notes REQ. Kept as
+    /// a callback-driven function so permission and kill-switch transitions
+    /// can be regression tested without presenting SwiftUI.
+    @MainActor
+    static func reconcileGeoSession(
+        tab: Tab,
+        needsDeviceLocation: Bool,
+        permissionState: LocationChannelManager.PermissionState,
+        notesEnabled: Bool,
+        geohash: String?,
+        manager: LocationNotesManager?,
+        ownsLiveRefresh: Bool,
+        beginLiveRefresh: () -> Void,
+        endLiveRefresh: () -> Void,
+        acquire: (String) -> LocationNotesManager,
+        release: (LocationNotesManager?) -> Void
+    ) -> GeoSessionState {
+        let geoTabActive = tab == .geo && notesEnabled
+        let wantsLiveRefresh = geoTabActive && needsDeviceLocation && permissionState == .authorized
+
+        if wantsLiveRefresh != ownsLiveRefresh {
+            if wantsLiveRefresh {
+                beginLiveRefresh()
+            } else {
+                endLiveRefresh()
+            }
+        }
+
+        // A selected location channel is an explicit remote/teleported scope
+        // and remains usable without device permission. Only device-derived
+        // scope requires current authorization.
+        let mayUseNotes = geoTabActive &&
+            (!needsDeviceLocation || permissionState == .authorized)
+        guard mayUseNotes, let geohash else {
+            if manager != nil {
+                release(manager)
+            }
+            return GeoSessionState(manager: nil, ownsLiveRefresh: wantsLiveRefresh)
+        }
+
+        if let manager {
+            if manager.geohash != geohash.lowercased() {
+                // Pooled managers are shared; never retarget one in place.
+                release(manager)
+                return GeoSessionState(
+                    manager: acquire(geohash),
+                    ownsLiveRefresh: wantsLiveRefresh
+                )
+            }
+            if manager.state == .idle {
+                manager.refresh()
+            }
+            return GeoSessionState(manager: manager, ownsLiveRefresh: wantsLiveRefresh)
+        }
+
+        return GeoSessionState(
+            manager: acquire(geohash),
+            ownsLiveRefresh: wantsLiveRefresh
+        )
+    }
+
+    private func reconcileGeoSession(notesEnabled: Bool? = nil) {
+        let notesEnabled = notesEnabled ?? locationNotesEnabled
+        let next = Self.reconcileGeoSession(
+            tab: tab,
+            needsDeviceLocation: geoTabNeedsDeviceLocation,
+            permissionState: locationChannelsModel.permissionState,
+            notesEnabled: notesEnabled,
+            geohash: geoGeohash,
+            manager: liveGeoManager,
+            ownsLiveRefresh: ownsLiveGeoRefresh,
+            beginLiveRefresh: {
+                locationChannelsModel.enableLocationChannels()
+                locationChannelsModel.beginLiveRefresh()
+            },
+            endLiveRefresh: { locationChannelsModel.endLiveRefresh() },
+            acquire: { geohash in
+                notesManager ?? LocationNotesPool.shared.acquire(geohash)
+            },
+            release: { manager in
+                guard notesManager == nil else { return }
+                LocationNotesPool.shared.release(manager)
+            }
+        )
+        // A test-injected manager is owned by the caller, not by the pool or
+        // this view's lifecycle state.
+        liveGeoManager = notesManager == nil ? next.manager : nil
+        ownsLiveGeoRefresh = next.ownsLiveRefresh
     }
 
     private var maxDraftLines: Int { dynamicTypeSize.isAccessibilitySize ? 5 : 3 }
@@ -55,6 +210,9 @@ struct NoticesView: View {
     private var geoGeohash: String? {
         if case .location(let channel) = locationChannelsModel.selectedChannel {
             return channel.geohash
+        }
+        guard locationChannelsModel.permissionState == .authorized else {
+            return nil
         }
         return locationChannelsModel.currentBuildingGeohash
     }
@@ -67,10 +225,11 @@ struct NoticesView: View {
     }
 
     private var activeGeohash: String? {
-        switch tab {
-        case .geo: return geoGeohash
-        case .mesh: return ""
-        }
+        Self.composerGeohash(
+            tab: tab,
+            notesEnabled: locationNotesEnabled,
+            geoGeohash: geoGeohash
+        )
     }
 
     enum Strings {
@@ -90,12 +249,16 @@ struct NoticesView: View {
         static let send = String(localized: "board.accessibility.post", defaultValue: "Post notice", comment: "Accessibility label for the board post button")
         static let deleteAction = String(localized: "board.action.delete", defaultValue: "delete", comment: "Delete action for own board posts")
         static let expiryLabel = String(localized: "board.compose.expiry", defaultValue: "expires in", comment: "Label for the board post expiry picker")
+        static let permanentOption = String(localized: "notices.expiry.permanent", defaultValue: "permanent", comment: "Accessibility label for the ∞ (never expires) option in the geo notes expiry picker")
         static let closeHint = String(localized: "notices.accessibility.close", defaultValue: "Close notices", comment: "Accessibility label for the notices close button")
         static let meshSource = String(localized: "notices.source.mesh", defaultValue: "mesh", comment: "Source badge for notices carried by the mesh")
         static let nostrSource = String(localized: "notices.source.nostr", defaultValue: "net", comment: "Source badge for notices seen on internet relays")
         static let locationUnavailable = String(localized: "content.notes.location_unavailable", comment: "Shown when the device location is unavailable for geo notices")
         static let enableLocation = String(localized: "content.location.enable", comment: "Button enabling location for geo notices")
+        static let locationNotesTitle: LocalizedStringKey = "app_info.location.notes.title"
+        static let locationNotesDescription: LocalizedStringKey = "app_info.location.notes.description"
         static let loadingNotes: LocalizedStringKey = "location_notes.loading_notes"
+        static let connectingRelays: LocalizedStringKey = "location_notes.connecting_relays"
         static let noRelaysNearby: LocalizedStringKey = "location_notes.no_relays_nearby"
         static let relaysRetryHint: LocalizedStringKey = "location_notes.relays_retry_hint"
         static let retry: LocalizedStringKey = "location_notes.action.retry"
@@ -106,6 +269,16 @@ struct NoticesView: View {
                 format: String(localized: "board.compose.expiry_days", defaultValue: "%lldd", comment: "Expiry picker option, number of days abbreviated"),
                 locale: .current,
                 days
+            )
+        }
+
+        static func fades(_ expiresAt: Date) -> String {
+            let formatter = RelativeDateTimeFormatter()
+            formatter.unitsStyle = .abbreviated
+            return String(
+                format: String(localized: "notices.fades", defaultValue: "fades %@", comment: "Shown on notices with an expiry; placeholder is a localized relative time like 'in 23h'"),
+                locale: .current,
+                formatter.localizedString(for: expiresAt, relativeTo: Date())
             )
         }
 
@@ -132,29 +305,47 @@ struct NoticesView: View {
         .frame(minWidth: 420, idealWidth: 440, minHeight: 620, idealHeight: 680)
         #endif
         .themedSheetBackground()
-        .onAppear { beginGeoLocationIfNeeded() }
+        .onAppear {
+            reconcileGeoSession()
+        }
         .onChange(of: tab) { newTab in
             if newTab == .geo {
-                beginGeoLocationIfNeeded()
-            } else {
-                locationChannelsModel.endLiveRefresh()
+                if Self.revealsNearbyNotes(onSwitchingTo: newTab, geoGeohash: geoGeohash) {
+                    NearbyNotesCounter.shared.reveal()
+                }
             }
+            reconcileGeoSession()
+            // Each tab keeps its natural default: geo notes stay until
+            // deleted (∞), mesh board posts fade within a week.
+            expiryDays = newTab == .geo ? Self.permanentExpiry : 7
+            urgent = false
         }
-        // Catches permission granted from the geo tab's enable button.
+        // Catches both grant and revocation. Revocation must balance the live
+        // refresh and release a device-derived building REQ immediately.
         .onChange(of: locationChannelsModel.permissionState) { _ in
-            beginGeoLocationIfNeeded()
+            reconcileGeoSession()
         }
-        .onDisappear { locationChannelsModel.endLiveRefresh() }
-    }
-
-    /// The geo tab tracks the device's building geohash while on mesh; keep
-    /// location fresh only in that case (a selected location channel already
-    /// fixes the scope).
-    private func beginGeoLocationIfNeeded() {
-        guard tab == .geo, geoTabNeedsDeviceLocation,
-              locationChannelsModel.permissionState == .authorized else { return }
-        locationChannelsModel.enableLocationChannels()
-        locationChannelsModel.beginLiveRefresh()
+        .onChange(of: geoGeohash) { _ in
+            reconcileGeoSession()
+        }
+        .onChange(of: geoTabNeedsDeviceLocation) { _ in
+            reconcileGeoSession()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: LocationNotesSettings.didChangeNotification)) { _ in
+            let enabled = LocationNotesSettings.enabled
+            locationNotesEnabled = enabled
+            reconcileGeoSession(notesEnabled: enabled)
+        }
+        .onDisappear {
+            if ownsLiveGeoRefresh {
+                locationChannelsModel.endLiveRefresh()
+                ownsLiveGeoRefresh = false
+            }
+            if notesManager == nil {
+                LocationNotesPool.shared.release(liveGeoManager)
+            }
+            liveGeoManager = nil
+        }
     }
 
     private var headerSection: some View {
@@ -206,12 +397,54 @@ struct NoticesView: View {
                 notesManager: nil
             )
         case .geo:
-            if let geohash = geoGeohash {
-                GeoNoticesList(geohash: geohash, board: board, manager: notesManager)
-            } else {
+            switch Self.geoPresentationState(
+                notesEnabled: locationNotesEnabled,
+                geohash: geoGeohash
+            ) {
+            case .disabled:
+                locationNotesDisabledSection
+            case .available(let geohash):
+                if let manager = activeNotesManager {
+                    GeoNoticesList(geohash: geohash, board: board, manager: manager)
+                } else {
+                    // Manager is created on appear; visible for one frame.
+                    Color.clear
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .onAppear { reconcileGeoSession() }
+                }
+            case .locationUnavailable:
                 locationUnavailableSection
             }
         }
+    }
+
+    private var locationNotesDisabledSection: some View {
+        ScrollView {
+            Toggle(
+                isOn: Binding(
+                    get: { locationNotesEnabled },
+                    set: { enabled in
+                        locationNotesEnabled = enabled
+                        LocationNotesSettings.enabled = enabled
+                    }
+                )
+            ) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(Strings.locationNotesTitle)
+                        .bitchatFont(size: 14)
+                    Text(Strings.locationNotesDescription)
+                        .bitchatFont(size: 12)
+                        .foregroundColor(palette.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .toggleStyle(.switch)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .themedSurface()
     }
 
     private var locationUnavailableSection: some View {
@@ -252,11 +485,10 @@ struct NoticesView: View {
                 .disabled(!sendEnabled)
                 .accessibilityLabel(Strings.send)
             }
-            // Urgency and expiry only travel with the mesh copy — the bridged
-            // Nostr note carries neither, so relay-side readers would never
-            // see them. Offer the controls only where they fully apply.
-            if tab == .mesh {
-                HStack(spacing: 12) {
+            // Both tabs pick an expiry (geo notes may be ∞); urgency is a
+            // mesh-board concept — notes are ambient by nature.
+            HStack(spacing: 12) {
+                if tab == .mesh {
                     Toggle(isOn: $urgent) {
                         Text(Strings.urgentToggle)
                             .bitchatFont(size: 12)
@@ -265,19 +497,30 @@ struct NoticesView: View {
                     .toggleStyle(.switch)
                     .fixedSize()
                     .accessibilityLabel(Strings.urgentToggle)
-                    Spacer()
-                    Text(Strings.expiryLabel)
-                        .bitchatFont(size: 12)
-                        .foregroundColor(palette.secondary)
-                    Picker(Strings.expiryLabel, selection: $expiryDays) {
-                        ForEach([1, 3, 7], id: \.self) { days in
-                            Text(Strings.expiryDaysOption(days)).tag(days)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .fixedSize()
-                    .accessibilityLabel(Strings.expiryLabel)
                 }
+                Spacer()
+                Text(Strings.expiryLabel)
+                    .bitchatFont(size: 12)
+                    .foregroundColor(palette.secondary)
+                Picker(Strings.expiryLabel, selection: $expiryDays) {
+                    // Mesh board posts must fade (the wire caps their
+                    // lifetime); only relay-backed geo notes can be ∞.
+                    if tab == .geo {
+                        Text(verbatim: "∞")
+                            .accessibilityLabel(Strings.permanentOption)
+                            .tag(Self.permanentExpiry)
+                    }
+                    ForEach([1, 3, 7], id: \.self) { days in
+                        Text(Strings.expiryDaysOption(days)).tag(days)
+                    }
+                }
+                .pickerStyle(.segmented)
+                // macOS segmented pickers render their own label; the themed
+                // Text alongside already carries it (and accessibility keeps
+                // the explicit label below).
+                .labelsHidden()
+                .fixedSize()
+                .accessibilityLabel(Strings.expiryLabel)
             }
         }
         .padding(.horizontal, 16)
@@ -293,14 +536,27 @@ struct NoticesView: View {
 
     private func send() {
         guard let geohash = activeGeohash, let content = draft.trimmedOrNilIfEmpty else { return }
-        // Geo posts go to the board and are bridged to Nostr by BoardManager,
-        // so mesh and internet see the same notice. They always use the
-        // defaults: non-urgent, 7-day expiry (NIP-40 on the bridged copy).
+
+        // ∞ (geo default): a pure relay note with no NIP-40 tag. It skips
+        // the mesh board deliberately — a board copy must fade within days,
+        // which would contradict the permanence the user just picked.
+        if tab == .geo, expiryDays == Self.permanentExpiry {
+            guard let manager = activeNotesManager else { return }
+            manager.send(content: content, nickname: senderNickname, expiresAt: nil)
+            draft = ""
+            urgent = false
+            return
+        }
+
+        // Expiring posts go to the board and are bridged to Nostr by
+        // BoardManager, so mesh and internet see the same notice with the
+        // chosen expiry (expiresAt on mesh, NIP-40 on the bridged note).
+        // Urgency is mesh-only.
         let sent = board.createPost(
             content: content,
             geohash: geohash,
             urgent: tab == .mesh && urgent,
-            expiryDays: tab == .mesh ? expiryDays : 7,
+            expiryDays: expiryDays,
             nickname: senderNickname
         )
         if sent {
@@ -310,18 +566,19 @@ struct NoticesView: View {
     }
 }
 
-/// The geo tab's list: owns the Nostr notes subscription for the scope
-/// geohash and merges it with the board posts for the same geohash.
+/// The geo tab's list: renders the sheet-owned Nostr notes subscription
+/// merged with the board posts for the same geohash. The manager lives on
+/// `NoticesView` so the composer can post through the same instance (∞
+/// notes local-echo into this list).
 private struct GeoNoticesList: View {
     let geohash: String
     @ObservedObject var board: BoardManager
-    @StateObject private var notesManager: LocationNotesManager
+    @ObservedObject var notesManager: LocationNotesManager
 
-    init(geohash: String, board: BoardManager, manager: LocationNotesManager? = nil) {
-        let gh = geohash.lowercased()
-        self.geohash = gh
+    init(geohash: String, board: BoardManager, manager: LocationNotesManager) {
+        self.geohash = geohash.lowercased()
         self.board = board
-        _notesManager = StateObject(wrappedValue: manager ?? LocationNotesManager(geohash: gh))
+        self.notesManager = manager
     }
 
     var body: some View {
@@ -334,10 +591,6 @@ private struct GeoNoticesList: View {
             board: board,
             notesManager: notesManager
         )
-        .onChange(of: geohash) { newValue in
-            notesManager.setGeohash(newValue)
-        }
-        .onDisappear { notesManager.cancel() }
     }
 }
 
@@ -394,7 +647,9 @@ private struct NoticesList: View {
     /// once the sources settled.
     private var showEmptyState: Bool {
         guard let notesManager else { return true }
-        return notesManager.initialLoadComplete && notesManager.state != .loading
+        return notesManager.initialLoadComplete
+            && notesManager.state != .loading
+            && notesManager.state != .connecting
     }
 
     @ViewBuilder
@@ -404,6 +659,15 @@ private struct NoticesList: View {
                 HStack(spacing: 10) {
                     ProgressView()
                     Text(Strings.loadingNotes)
+                        .bitchatFont(size: 12)
+                        .foregroundColor(palette.secondary)
+                    Spacer()
+                }
+                .padding(.vertical, 8)
+            } else if notesManager.state == .connecting {
+                HStack(spacing: 10) {
+                    ProgressView()
+                    Text(Strings.connectingRelays)
                         .bitchatFont(size: 12)
                         .foregroundColor(palette.secondary)
                     Spacer()
@@ -475,6 +739,11 @@ private struct NoticesList: View {
                 Text(Self.timestampText(for: item.createdAt))
                     .bitchatFont(size: 11)
                     .foregroundColor(palette.secondary)
+                if let expiresAt = item.expiresAt, expiresAt > Date() {
+                    Text(Strings.fades(expiresAt))
+                        .bitchatFont(size: 11)
+                        .foregroundColor(palette.secondary.opacity(0.8))
+                }
                 Spacer()
                 if showsSource {
                     sourceBadge(item)
@@ -530,19 +799,18 @@ private struct NoticesList: View {
     private static func timestampText(for date: Date) -> String {
         let now = Date()
         if let days = Calendar.current.dateComponents([.day], from: date, to: now).day, days < 7 {
-            let rel = relativeFormatter.string(from: date, to: now) ?? ""
-            return rel.isEmpty ? "" : "\(rel) ago"
+            // The whole "3 hr ago" phrase must come from the formatter —
+            // gluing an English "ago" onto a localized duration ships the
+            // wrong word order to most locales ("hace 3 h", "vor 3 Std").
+            return relativeFormatter.localizedString(for: date, relativeTo: now)
         }
         let sameYear = Calendar.current.isDate(date, equalTo: now, toGranularity: .year)
         return (sameYear ? absDateFormatter : absDateYearFormatter).string(from: date)
     }
 
-    private static let relativeFormatter: DateComponentsFormatter = {
-        let f = DateComponentsFormatter()
-        f.allowedUnits = [.day, .hour, .minute]
-        f.maximumUnitCount = 1
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
         f.unitsStyle = .abbreviated
-        f.collapsesLargestUnit = true
         return f
     }()
 

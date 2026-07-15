@@ -230,8 +230,4 @@ private final class MockGeohashPresenceTimer: GeohashPresenceTimerProtocol {
         invalidateCallCount += 1
         isValid = false
     }
-
-    func fire() {
-        handler()
-    }
 }

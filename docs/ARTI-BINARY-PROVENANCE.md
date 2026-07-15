@@ -18,7 +18,9 @@ The crate declares `rust-version = "1.90"` and uses `arti-client` / `tor-rtcompa
 
 - `aarch64-apple-ios`
 - `aarch64-apple-ios-sim`
+- `x86_64-apple-ios`
 - `aarch64-apple-darwin`
+- `x86_64-apple-darwin`
 
 It builds release static libraries with size-oriented flags (`opt-level=z`, fat LTO, one codegen unit, `panic=abort`, stripped symbols), normalizes static-archive metadata with `xcrun libtool -static -D`, then packages them with `xcodebuild -create-xcframework`.
 
@@ -29,30 +31,34 @@ From the repo root:
 ```sh
 cd localPackages/Arti
 rustup toolchain install 1.96.0
-rustup default 1.96.0
-rustup target add aarch64-apple-ios aarch64-apple-ios-sim aarch64-apple-darwin
-cargo install cbindgen
+rustup target add --toolchain 1.96.0 aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios aarch64-apple-darwin x86_64-apple-darwin
+rustup run 1.96.0 cargo install cbindgen --version 0.29.4 --locked
 ./build-ios.sh
 ```
+
+`build-ios.sh` defaults to the audited `1.96.0` toolchain and refuses a rustc
+version other than `1.96.0`; it likewise requires cbindgen `0.29.4`. Set
+`RUST_TOOLCHAIN`, `RUSTC_VERSION`, or `CBINDGEN_VERSION` explicitly only when
+intentionally updating the binary provenance and hashes below.
 
 After rebuilding, verify that:
 
 - `Cargo.lock` changes are intentional and reviewed.
 - `Frameworks/include/arti.h` still matches the exported FFI functions used by `TorManager`.
-- `Frameworks/arti.xcframework` contains iOS device, iOS simulator, and macOS arm64 slices.
+- `Frameworks/arti.xcframework` contains iOS device arm64, universal iOS simulator arm64+x86_64, and universal macOS arm64+x86_64 slices.
 - The main app still passes iOS tests and the macOS build.
 
 ## Audited Rebuild
 
-The June 2026 artifact below was rebuilt from source on this host with:
+The July 2026 artifact below was rebuilt from source on this host with:
 
 ```text
 rustc 1.96.0 (ac68faa20 2026-05-25)
 cargo 1.96.0 (30a34c682 2026-05-25)
 rustup 1.29.0 (28d1352db 2026-03-05)
-cbindgen 0.29.3
-Xcode 26.5
-Build version 17F42
+cbindgen 0.29.4
+Xcode 26.6
+Build version 17F113
 ```
 
 Rust 1.86.0 was also checked during the audit and no longer builds this lockfile because `typed-index-collections@3.4.0` requires Rust 1.90.0 or newer.
@@ -70,13 +76,13 @@ find localPackages/Arti/Frameworks/arti.xcframework -maxdepth 3 -type f -print0 
 Current hashes:
 
 ```text
-2083d44eafc765db1ffa2691a5c5fabe60b4edbb82b574169ca0c6b98e245e3a  localPackages/Arti/Frameworks/arti.xcframework/Info.plist
-551655904834748c9dc36034fdbc9465e7533aef1e4a6514b4fcc75875b93058  localPackages/Arti/Frameworks/arti.xcframework/ios-arm64-simulator/Headers/arti.h
-85febff37b751df667a3cab8222de2e1450cefe44b5b62c419adcbce48b9663f  localPackages/Arti/Frameworks/arti.xcframework/ios-arm64-simulator/libarti_bitchat.a
+cac99db408280bbef15cae8ce64c8ccdbf2e8863c205168d59f83fe8ab680f94  localPackages/Arti/Frameworks/arti.xcframework/Info.plist
 551655904834748c9dc36034fdbc9465e7533aef1e4a6514b4fcc75875b93058  localPackages/Arti/Frameworks/arti.xcframework/ios-arm64/Headers/arti.h
-fd25ee379d709a794733fc3c052746d1e6f7b25fec23e5f5234008a3434ce879  localPackages/Arti/Frameworks/arti.xcframework/ios-arm64/libarti_bitchat.a
-551655904834748c9dc36034fdbc9465e7533aef1e4a6514b4fcc75875b93058  localPackages/Arti/Frameworks/arti.xcframework/macos-arm64/Headers/arti.h
-8c426a41dc3eb76cc3e3e22e3356b9d11dbebdf0a0f248c5ac892e1839352c75  localPackages/Arti/Frameworks/arti.xcframework/macos-arm64/libarti_bitchat.a
+5461a231a786812e91e7965290031ea3479fdc5c6459553e46988ecafbbc2a3d  localPackages/Arti/Frameworks/arti.xcframework/ios-arm64/libarti_bitchat.a
+551655904834748c9dc36034fdbc9465e7533aef1e4a6514b4fcc75875b93058  localPackages/Arti/Frameworks/arti.xcframework/ios-arm64_x86_64-simulator/Headers/arti.h
+af8f5f636eb6affb309b3e44f13e48498eb2540c77af44ddcd7fdf9241b1e317  localPackages/Arti/Frameworks/arti.xcframework/ios-arm64_x86_64-simulator/libarti_bitchat.a
+551655904834748c9dc36034fdbc9465e7533aef1e4a6514b4fcc75875b93058  localPackages/Arti/Frameworks/arti.xcframework/macos-arm64_x86_64/Headers/arti.h
+7c9afe98227f1767567ddcd4e35d9dfffe70309c302c4dbc9a6c9d6aeefab007  localPackages/Arti/Frameworks/arti.xcframework/macos-arm64_x86_64/libarti_bitchat.a
 ```
 
 ## Review Checklist

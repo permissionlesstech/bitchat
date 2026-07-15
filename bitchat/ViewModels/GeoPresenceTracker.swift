@@ -115,6 +115,16 @@ final class GeoPresenceTracker {
            my.publicKeyHex.lowercased() == event.pubkey.lowercased() {
             return
         }
+
+        // Non-empty content on a sampled event means an actual chat message
+        // (presence events are empty) — feed the nearby-conversation hint.
+        GeohashChatActivityTracker.shared.recordChatMessage(
+            geohash: gh,
+            senderName: Self.sampledSenderName(for: event, context: context),
+            content: content,
+            timestamp: Date(timeIntervalSince1970: TimeInterval(event.created_at))
+        )
+
         guard existingCount == 0 else { return }
 
         let eventTime = Date(timeIntervalSince1970: TimeInterval(event.created_at))
@@ -129,6 +139,19 @@ final class GeoPresenceTracker {
         #endif
 
         cooldownPerGeohash(gh, content: content, event: event)
+    }
+
+    /// Attribution for a sampled event: the event's own `n` tag wins (the
+    /// active-channel nickname table only covers the selected geohash),
+    /// falling back to the table, then "anon", always suffixed with the
+    /// pubkey tail like every other geohash display name.
+    @MainActor
+    static func sampledSenderName(for event: NostrEvent, context: any GeoPresenceContext) -> String {
+        let suffix = String(event.pubkey.suffix(4))
+        let tagNick = event.tags.first { $0.count >= 2 && $0[0].lowercased() == "n" }?[1]
+        let nick = tagNick?.trimmedOrNilIfEmpty
+            ?? context.geoNicknames[event.pubkey.lowercased()]?.trimmedOrNilIfEmpty
+        return (nick ?? "anon") + "#" + suffix
     }
 
     @MainActor

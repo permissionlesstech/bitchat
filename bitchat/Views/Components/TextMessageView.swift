@@ -50,6 +50,15 @@ struct TextMessageView: View {
                         .padding(.trailing, 4)
                         .accessibilityHidden(true)
                 }
+                if message.isBridged {
+                    Image(systemName: "network")
+                        .font(.bitchatSystem(size: 8))
+                        .foregroundColor(Color.cyan.opacity(0.75))
+                        .padding(.trailing, 4)
+                        .accessibilityLabel(
+                            String(localized: "content.accessibility.bridged_message", defaultValue: "Arrived across a mesh bridge", comment: "Accessibility label for the glyph marking a message that arrived across a mesh bridge")
+                        )
+                }
                 Text(conversationUIModel.formatMessage(message, colorScheme: colorScheme, theme: theme))
                     .fixedSize(horizontal: false, vertical: true)
                     .lineLimit(isLong && !isExpanded ? TransportConfig.uiLongMessageLineLimit : nil)
@@ -122,9 +131,14 @@ struct TextMessageView: View {
         }
         // Collapse the revealed caption when the status advances (e.g.
         // sending → sent → delivered) so a detail opened for one state
-        // doesn't linger and silently morph into another.
+        // doesn't linger and silently morph into another. Guarded write:
+        // under a message storm many rows change status within one frame,
+        // and an unconditional state write per change trips SwiftUI's
+        // "tried to update multiple times per frame" re-entrancy warning.
         .onChange(of: deliveryStatus) { _ in
-            showDeliveryDetail = false
+            if showDeliveryDetail {
+                showDeliveryDetail = false
+            }
         }
     }
 }

@@ -36,6 +36,10 @@ public enum MessageType: UInt8 {
     // an internet gateway peer.
     case nostrCarrier = 0x28
 
+    // Live voice: one signed push-to-talk burst packet (ephemeral broadcast,
+    // never gossip-synced). Private bursts ride noiseEncrypted instead.
+    case voiceFrame = 0x29
+
     public var description: String {
         switch self {
         case .announce: return "announce"
@@ -53,6 +57,7 @@ public enum MessageType: UInt8 {
         case .ping: return "ping"
         case .pong: return "pong"
         case .nostrCarrier: return "nostrCarrier"
+        case .voiceFrame: return "voiceFrame"
         }
     }
 }

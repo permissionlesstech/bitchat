@@ -20,6 +20,12 @@ struct BLEAnnounceHandlerEnvironment {
     let verifySignature: (_ packet: BitchatPacket, _ signingPublicKey: Data) -> Bool
     /// Direct link state for the peer (BLE-queue read).
     let linkState: (PeerID) -> (hasPeripheral: Bool, hasCentral: Bool)
+    /// Whether the link this packet arrived on is already bound to a
+    /// different peer ID (ingress-registry + BLE-queue read). Directness
+    /// rides on the unsigned TTL, so a replayed announce can look "direct"
+    /// on the replayer's link; that link must not shortcut an absent peer
+    /// into "connected".
+    let linkBoundToOtherPeer: (_ packet: BitchatPacket, _ peerID: PeerID) -> Bool
     /// Runs the registry mutation phase under the collections barrier.
     let withRegistryBarrier: (() -> Void) -> Void
     /// Upserts the verified announce into the peer registry.
@@ -135,6 +141,23 @@ final class BLEAnnounceHandler {
         var isReconnectedPeer = false
         let directLinkState = env.linkState(peerID)
         let isDirectAnnounce = packet.ttl == env.messageTTL
+        // A "direct" announce arriving on a link that another peer already
+        // owns is either a rotation heal or a replay with its TTL restored;
+        // both are ambiguous, so only the rebind (which containment-checks
+        // the claimed identity) may promote it — never this shortcut.
+        //
+        // Known limitation: denying the shortcut cannot prevent forged
+        // presence outright. A rebind that passes the containment checks
+        // promotes the claimed peer to connected — it must, or a legitimate
+        // rotation on an open link would read as disconnected — so a replay
+        // that wins the rebind (absent victim, cooldown clear) still forges
+        // presence. That residue is presence display only: DMs stay gated on
+        // canDeliverSecurely (no Noise session means retain + courier, see
+        // MessageRouter.sendPrivate). What this check buys: the ambiguous
+        // announce alone never flips presence — forging requires winning the
+        // containment-checked rebind (never steals an identity that owns a
+        // live link; at most one rebind per link per cooldown window).
+        let linkBoundToOtherPeer = isDirectAnnounce && env.linkBoundToOtherPeer(packet, peerID)
 
         env.withRegistryBarrier {
             let hasPeripheralConnection = directLinkState.hasPeripheral
@@ -152,7 +175,7 @@ final class BLEAnnounceHandler {
             let update = env.upsertVerifiedAnnounce(
                 peerID,
                 announcement,
-                isDirectAnnounce || hasPeripheralConnection || hasCentralSubscription,
+                hasPeripheralConnection || hasCentralSubscription || (isDirectAnnounce && !linkBoundToOtherPeer),
                 now
             )
             isNewPeer = update.isNewPeer

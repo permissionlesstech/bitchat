@@ -70,7 +70,6 @@ private final class MockChatNostrContext: ChatNostrContext {
     private(set) var mentionCheckedMessageIDs: [String] = []
     private(set) var hapticMessageIDs: [String] = []
 
-    func handlePublicMessage(_ message: BitchatMessage) { handledPublicMessages.append(message) }
     func handlePublicMessage(_ message: BitchatMessage, powBits: Int) { handledPublicMessages.append(message) }
     func checkForMentions(_ message: BitchatMessage) { mentionCheckedMessageIDs.append(message.id) }
     func sendHapticFeedback(for message: BitchatMessage) { hapticMessageIDs.append(message.id) }
@@ -214,8 +213,6 @@ private final class MockChatNostrContext: ChatNostrContext {
 
     // Favorites & notifications
     var favoriteRelationshipsByNoiseKey: [Data: FavoritesPersistenceService.FavoriteRelationship] = [:]
-    private(set) var addedFavorites: [(noiseKey: Data, nostrPublicKey: String?, nickname: String)] = []
-    private(set) var postedLocalNotifications: [(title: String, body: String, identifier: String)] = []
     private(set) var geohashActivityNotifications: [(geohash: String, bodyPreview: String)] = []
 
     func favoriteRelationship(forNoiseKey noiseKey: Data) -> FavoritesPersistenceService.FavoriteRelationship? {
@@ -224,14 +221,6 @@ private final class MockChatNostrContext: ChatNostrContext {
 
     func allFavoriteRelationships() -> [FavoritesPersistenceService.FavoriteRelationship] {
         Array(favoriteRelationshipsByNoiseKey.values)
-    }
-
-    func addFavorite(noiseKey: Data, nostrPublicKey: String?, nickname: String) {
-        addedFavorites.append((noiseKey, nostrPublicKey, nickname))
-    }
-
-    func postLocalNotification(title: String, body: String, identifier: String) {
-        postedLocalNotifications.append((title, body, identifier))
     }
 
     func notifyGeohashActivity(geohash: String, bodyPreview: String) {
@@ -248,24 +237,6 @@ private func drainMainQueue() async {
     for _ in 0..<5 {
         await Task.yield()
     }
-}
-
-private func makeFavoriteRelationship(
-    noiseKey: Data,
-    nostrPublicKey: String? = nil,
-    nickname: String = "alice",
-    isFavorite: Bool = false,
-    theyFavoritedUs: Bool = false
-) -> FavoritesPersistenceService.FavoriteRelationship {
-    FavoritesPersistenceService.FavoriteRelationship(
-        peerNoisePublicKey: noiseKey,
-        peerNostrPublicKey: nostrPublicKey,
-        peerNickname: nickname,
-        isFavorite: isFavorite,
-        theyFavoritedUs: theyFavoritedUs,
-        favoritedAt: Date(timeIntervalSince1970: 0),
-        lastUpdated: Date(timeIntervalSince1970: 0)
-    )
 }
 
 // MARK: - Coordinator Tests Against Mock Context

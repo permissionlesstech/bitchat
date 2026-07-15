@@ -33,8 +33,8 @@ struct MediaMessageView: View {
     }
 
     var body: some View {
-        let state = mediaSendState(for: deliveryStatus)
         let isFromMe = conversationUIModel.isMediaMessageFromCurrentUser(message)
+        let state = mediaSendState(for: deliveryStatus, isFromMe: isFromMe)
         let cancelAction: (() -> Void)? = state.canCancel ? { conversationUIModel.cancelMediaSend(messageID: message.id) } : nil
 
         // Baseline alignment (via the header text inside the VStack) keeps the
@@ -96,6 +96,7 @@ struct MediaMessageView: View {
                             url: url,
                             isSending: state.isSending,
                             sendProgress: state.progress,
+                            isLive: conversationUIModel.isLiveVoiceMessage(message),
                             onCancel: cancelAction
                         )
                     case .image(let url):
@@ -120,13 +121,22 @@ struct MediaMessageView: View {
         .padding(.vertical, 4)
         // Collapse the revealed caption when the status advances (e.g.
         // sending → sent → delivered) so a detail opened for one state
-        // doesn't linger and silently morph into another.
+        // doesn't linger and silently morph into another. Guarded write:
+        // under a message storm many rows change status within one frame,
+        // and an unconditional state write per change trips SwiftUI's
+        // "tried to update multiple times per frame" re-entrancy warning.
         .onChange(of: deliveryStatus) { _ in
-            showDeliveryDetail = false
+            if showDeliveryDetail {
+                showDeliveryDetail = false
+            }
         }
     }
 
-    private func mediaSendState(for deliveryStatus: DeliveryStatus?) -> (isSending: Bool, progress: Double?, canCancel: Bool) {
+    private func mediaSendState(for deliveryStatus: DeliveryStatus?, isFromMe: Bool) -> (isSending: Bool, progress: Double?, canCancel: Bool) {
+        // A received message is never in a send state: BitchatMessage defaults
+        // private messages to .sending, so an incoming message's status must
+        // not drive the reveal mask or disable the reveal tap.
+        guard isFromMe else { return (false, nil, false) }
         var isSending = false
         var progress: Double?
         if let status = deliveryStatus {

@@ -77,6 +77,8 @@ enum NoisePayloadType: UInt8 {
     // Private groups (0x04/0x05 reserved by other features)
     case groupInvite = 0x06         // Creator-signed group state (invite)
     case groupKeyUpdate = 0x07      // Creator-signed group state (key rotation / roster update)
+    // Live voice (push-to-talk)
+    case voiceFrame = 0x08          // One live voice-burst packet (see VoiceBurstPacket)
     // Verification (QR-based OOB binding)
     case verifyChallenge = 0x10     // Verification challenge
     case verifyResponse  = 0x11     // Verification response
@@ -90,6 +92,7 @@ enum NoisePayloadType: UInt8 {
         case .delivered: return "delivered"
         case .groupInvite: return "groupInvite"
         case .groupKeyUpdate: return "groupKeyUpdate"
+        case .voiceFrame: return "voiceFrame"
         case .verifyChallenge: return "verifyChallenge"
         case .verifyResponse: return "verifyResponse"
         case .vouch: return "vouch"
@@ -127,6 +130,9 @@ protocol BitchatDelegate: AnyObject {
     // Encrypted group broadcast (opaque envelope; decrypted by the group coordinator)
     func didReceiveGroupMessage(payload: Data, timestamp: Date)
 
+    // Public live-voice burst packet (signature-verified by the transport)
+    func didReceivePublicVoiceFrame(from peerID: PeerID, nickname: String, payload: Data, timestamp: Date)
+
     // Bluetooth state updates for user notifications
     func didUpdateBluetoothState(_ state: CBManagerState)
     func didReceivePublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date, messageID: String?)
@@ -147,6 +153,10 @@ extension BitchatDelegate {
     }
 
     func didReceiveGroupMessage(payload: Data, timestamp: Date) {
+        // Default empty implementation
+    }
+
+    func didReceivePublicVoiceFrame(from peerID: PeerID, nickname: String, payload: Data, timestamp: Date) {
         // Default empty implementation
     }
 

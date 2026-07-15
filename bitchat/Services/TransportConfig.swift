@@ -16,6 +16,27 @@ enum TransportConfig {
     static let bleFragmentRelayTtlCap: UInt8 = 7
     static let bleFragmentRelayTtlCapDense: UInt8 = 5       // Contain fragment floods in dense graphs
 
+    // Live voice (push-to-talk)
+    // Burst-content budget per voice packet. Sized so the Noise ciphertext
+    // (content + 1 type byte + 16 tag bytes) stays within MessagePadding's
+    // 256-byte bucket and the whole directed packet (16 header + 8 sender +
+    // 8 recipient + 256 payload = 288 bytes) rides one BLE frame — live audio
+    // must never enter the fragment scheduler, which caps concurrent
+    // transfers at 2 and would let voice starve file sends.
+    static let pttMaxBurstContentBytes: Int = 210
+    static let pttJitterBufferSeconds: TimeInterval = 0.35  // buffered audio before live playback starts
+    static let pttJitterDeadlineSeconds: TimeInterval = 0.5 // start anyway after this wall-clock wait
+    static let pttBurstEndTimeoutSeconds: TimeInterval = 3.0 // no frames -> burst considered ended
+    static let pttMaxConcurrentAssemblies: Int = 8          // concurrent inbound bursts cap
+    static let pttMaxBurstBytes: Int = 384 * 1024           // 120s at ~2KB/s + generous slack
+    static let pttFinishedBurstRegistrySeconds: TimeInterval = 600 // window to absorb the finalized note
+    // Inbound flood guard: a real burst arrives at ~2KB/s; allow 3x plus a
+    // small settling allowance before dropping a sender's frames.
+    static let pttInboundMaxBytesPerSecond: Int = 6_000
+    // Public bursts are live-only traffic: frames older than this are relay
+    // stragglers or replays, not audio anyone should start hearing.
+    static let pttPublicFrameMaxAgeSeconds: TimeInterval = 30
+
     // Mesh diagnostics (/ping)
     static let meshPingTimeoutSeconds: TimeInterval = 10    // Give up on a probe after this window
     static let meshPingInboundMaxPerLink: Int = 5           // Inbound ping budget per ingress link (claimed sender is spoofable)...
@@ -71,8 +92,7 @@ enum TransportConfig {
 
     // UI thresholds
     static let uiProcessedNostrEventsCap: Int = 2000
-    static let uiChannelInactivityThresholdSeconds: TimeInterval = 9 * 60
-    
+
     // UI rate limiters (token buckets)
     static let uiSenderRateBucketCapacity: Double = 5
     static let uiSenderRateBucketRefillPerSec: Double = 1.0
@@ -81,17 +101,13 @@ enum TransportConfig {
 
     // UI sleeps/delays
     static let uiStartupInitialDelaySeconds: TimeInterval = 1.0
-    static let uiStartupShortSleepNs: UInt64 = 200_000_000
     static let uiStartupPhaseDurationSeconds: TimeInterval = 2.0
     static let uiAsyncShortSleepNs: UInt64 = 100_000_000
-    static let uiAsyncMediumSleepNs: UInt64 = 500_000_000
     static let uiReadReceiptRetryShortSeconds: TimeInterval = 0.1
     static let uiReadReceiptRetryLongSeconds: TimeInterval = 0.5
     static let uiBatchDispatchStaggerSeconds: TimeInterval = 0.15
     static let uiScrollThrottleSeconds: TimeInterval = 0.5
-    static let uiAnimationShortSeconds: TimeInterval = 0.15
     static let uiAnimationMediumSeconds: TimeInterval = 0.2
-    static let uiAnimationSidebarSeconds: TimeInterval = 0.25
     static let uiRecentCutoffFiveMinutesSeconds: TimeInterval = 5 * 60
     static let uiMeshEmptyConfirmationSeconds: TimeInterval = 30.0
 
@@ -115,6 +131,10 @@ enum TransportConfig {
     static let bleReachabilityRetentionUnverifiedSeconds: TimeInterval = 45.0  // unknown/unverified
     static let bleFragmentLifetimeSeconds: TimeInterval = 30.0
     static let bleIngressRecordLifetimeSeconds: TimeInterval = 3.0
+    // At most one rotation rebind per link per window: TTL is not signed, so
+    // a replayed announce can forge "direct", and without a cooldown two
+    // identities could fight over a link in a rebind flip-flop.
+    static let bleLinkRebindCooldownSeconds: TimeInterval = 60.0
     static let bleConnectTimeoutBackoffWindowSeconds: TimeInterval = 120.0
     static let bleRecentPacketWindowSeconds: TimeInterval = 30.0
     static let bleRecentPacketWindowMaxCount: Int = 100
@@ -152,10 +172,17 @@ enum TransportConfig {
     static let nostrGeohashSampleLookbackSeconds: TimeInterval = 300
     static let nostrGeohashSampleLimit: Int = 100
     static let nostrDMSubscribeLookbackSeconds: TimeInterval = 86400
-
-    // Nostr helpers
-    static let nostrShortKeyDisplayLength: Int = 8
-    static let nostrConvKeyPrefixLength: Int = 16
+    // A sampled chat message this recent means "a conversation is happening
+    // there" for the empty-timeline nearby-activity hint.
+    static let uiGeohashChatActivityWindowSeconds: TimeInterval = 900
+    // Startup delay before reading the gossip archive for "heard here
+    // earlier" echoes; covers the archive's async disk restore.
+    static let uiArchivedEchoLoadDelaySeconds: TimeInterval = 1.5
+    // Dead drops: location notes left via /drop expire after this long.
+    static let locationDropExpirySeconds: TimeInterval = 24 * 60 * 60
+    // Poll cadence while geo notes wait for a relay connection (Tor warming
+    // up); re-subscribes as soon as one comes up.
+    static let uiGeoNotesConnectivityRetrySeconds: TimeInterval = 3.0
 
     // Message deduplication
     static let messageDedupMaxAgeSeconds: TimeInterval = 300
@@ -188,6 +215,9 @@ enum TransportConfig {
     // Fallback deadline for treating a subscription's initial fetch as complete
     // when a relay never sends EOSE (generous to cover Tor circuit setup).
     static let nostrSubscriptionEOSEFallbackSeconds: TimeInterval = 10.0
+    // A bridge drop is durable only after NIP-20 OK. Relays that omit OK must
+    // not pin the router's in-flight state indefinitely.
+    static let nostrConfirmedSendAckTimeoutSeconds: TimeInterval = 10.0
     // After this long, a relay marked permanently failed gets another chance.
     static let nostrRelayFailureCooldownSeconds: TimeInterval = 600.0
 
@@ -242,6 +272,16 @@ enum TransportConfig {
     static let bleDisconnectNotifyDebounceSeconds: TimeInterval = 0.9
     static let bleReconnectLogDebounceSeconds: TimeInterval = 2.0
 
+    // Background wake-on-proximity (iOS). Pending connects issued on
+    // backgrounding never expire at the OS level: the Bluetooth controller
+    // completes them whenever the peer reappears in range and relaunches the
+    // app via state restoration. Entries older than the BLE address-rotation
+    // window no longer map to a reachable address, so the cache prunes them.
+    static let bleRecentPeripheralCacheCap: Int = 16
+    static let bleRecentPeripheralMaxAgeSeconds: TimeInterval = 15 * 60
+    // Central slots kept free for connects driven by live background discovery
+    static let bleBackgroundPendingConnectSlotReserve: Int = 2
+
     // Weak-link cooldown after connection timeouts
     static let bleWeakLinkCooldownSeconds: TimeInterval = 30.0
     static let bleWeakLinkRSSICutoff: Int = -90
@@ -258,12 +298,7 @@ enum TransportConfig {
     static let uiVeryLongTokenThreshold: Int = 512
     static let uiLongMessageLineLimit: Int = 30
     static let uiFingerprintSampleCount: Int = 3
-    
-    // UI swipe/gesture thresholds
-    static let uiBackSwipeTranslationLarge: CGFloat = 50
-    static let uiBackSwipeTranslationSmall: CGFloat = 30
-    static let uiBackSwipeVelocityThreshold: CGFloat = 300
-    
+
     // UI color tuning
     static let uiColorHueAvoidanceDelta: Double = 0.05
     static let uiColorHueOffset: Double = 0.12
@@ -313,6 +348,9 @@ enum TransportConfig {
     // Cooldown between speculative multi-hop handovers of the same envelope
     // toward a recipient heard only via relayed announces.
     static let courierRemoteHandoverCooldownSeconds: TimeInterval = 10 * 60
+    // Recently opened courier inner message IDs kept for receiver-side dedup
+    // (redundant copies ride distinct seals, so only the inner ID matches).
+    static let courierOpenedMessageIDCap: Int = 512
 
     // One-time prekey bundles (forward-secret courier sealing)
     // Own gossip-sync round for bundles: modest cadence, bounded peer count,

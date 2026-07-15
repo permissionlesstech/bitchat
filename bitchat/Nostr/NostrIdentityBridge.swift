@@ -15,7 +15,7 @@ final class NostrIdentityBridge {
 
     private let keychain: KeychainManagerProtocol
 
-    init(keychain: KeychainManagerProtocol = KeychainManager()) {
+    init(keychain: KeychainManagerProtocol = KeychainManager.makeDefault()) {
         self.keychain = keychain
     }
     
@@ -37,14 +37,6 @@ final class NostrIdentityBridge {
         return nostrIdentity
     }
     
-    /// Associate a Nostr identity with a Noise public key (for favorites)
-    func associateNostrIdentity(_ nostrPubkey: String, with noisePublicKey: Data) {
-        let key = "nostr-noise-\(noisePublicKey.base64EncodedString())"
-        if let data = nostrPubkey.data(using: .utf8) {
-            keychain.save(key: key, data: data, service: keychainService, accessible: nil)
-        }
-    }
-    
     /// Get Nostr public key associated with a Noise public key
     func getNostrPublicKey(for noisePublicKey: Data) -> String? {
         let key = "nostr-noise-\(noisePublicKey.base64EncodedString())"
@@ -57,29 +49,10 @@ final class NostrIdentityBridge {
     
     /// Clear all Nostr identity associations and current identity
     func clearAllAssociations() {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: keychainService,
-            kSecMatchLimit as String: kSecMatchLimitAll,
-            kSecReturnAttributes as String: true
-        ]
-
-        var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        if status == errSecSuccess, let items = result as? [[String: Any]] {
-            for item in items {
-                var deleteQuery: [String: Any] = [
-                    kSecClass as String: kSecClassGenericPassword,
-                    kSecAttrService as String: keychainService
-                ]
-                if let account = item[kSecAttrAccount as String] as? String {
-                    deleteQuery[kSecAttrAccount as String] = account
-                }
-                SecItemDelete(deleteQuery as CFDictionary)
-            }
-        } else if status == errSecItemNotFound {
-            // nothing persisted; no action needed
-        }
+        // Must go through the injected keychain, not raw SecItem calls:
+        // under test that keychain is in-memory, and a direct delete here
+        // would wipe the developer's real Nostr identity on every test run.
+        keychain.deleteAll(service: keychainService)
 
         deviceSeedCache = nil
         // Also drop the in-memory derived per-geohash identities. These hold the
@@ -111,6 +84,13 @@ final class NostrIdentityBridge {
         keychain.save(key: deviceSeedKey, data: seed, service: keychainService, accessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
         deviceSeedCache = seed
         return seed
+    }
+
+    /// Derive a deterministic, unlinkable Nostr identity for a mesh-bridge
+    /// rendezvous cell. Distinct HMAC label keeps it unlinkable from the
+    /// geohash-chat identity for the same cell string.
+    func deriveIdentity(forBridgeRendezvous cell: String) throws -> NostrIdentity {
+        try deriveIdentity(forGeohash: "bridge|" + cell)
     }
 
     /// Derive a deterministic, unlinkable Nostr identity for a given geohash.

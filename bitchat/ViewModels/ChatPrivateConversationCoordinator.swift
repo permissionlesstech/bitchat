@@ -19,7 +19,6 @@ protocol ChatPrivateConversationContext: AnyObject {
     /// lookup on `ChatViewModel` (no `privateChats` dictionary build).
     func privateMessages(for peerID: PeerID) -> [BitchatMessage]
     var sentReadReceipts: Set<String> { get }
-    var unreadPrivateMessages: Set<PeerID> { get }
     var selectedPrivateChatPeer: PeerID? { get }
     var nickname: String { get }
     var activeChannel: ChannelID { get }
@@ -40,8 +39,6 @@ protocol ChatPrivateConversationContext: AnyObject {
     func setPrivateDeliveryStatus(_ status: DeliveryStatus, forMessageID messageID: String, peerID: PeerID) -> Bool
     func markPrivateChatUnread(_ peerID: PeerID)
     func markPrivateChatRead(_ peerID: PeerID)
-    /// Removes the peer's chat entirely, including unread state.
-    func removePrivateChat(_ peerID: PeerID)
     /// Moves all messages from `oldPeerID`'s chat into `newPeerID`'s chat
     /// (dedup by ID, order preserved, unread carried, old chat removed).
     func migratePrivateChat(from oldPeerID: PeerID, to newPeerID: PeerID)
@@ -86,16 +83,18 @@ protocol ChatPrivateConversationContext: AnyObject {
 
     // MARK: Routing & acknowledgements
     func routePrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String)
-    func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID)
-    func routeFavoriteNotification(to peerID: PeerID, isFavorite: Bool)
+    @discardableResult
+    func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) -> Bool
     func sendMeshReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID)
     func sendGeohashPrivateMessage(_ content: String, toRecipientHex recipientHex: String, from identity: NostrIdentity, messageID: String)
     func sendGeohashDeliveryAck(for messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity)
     func sendGeohashReadReceipt(_ messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity)
 
     // MARK: System messages
-    func addSystemMessage(_ content: String)
     func addMeshOnlySystemMessage(_ content: String)
+    /// Appends a local-only system line into a specific private thread —
+    /// errors about a DM belong in that DM, not on the active timeline.
+    func addLocalPrivateSystemMessage(_ content: String, to peerID: PeerID)
 
     // MARK: Favorites & notifications
     /// The persisted favorite relationship for the peer's Noise static key, if any.
@@ -162,7 +161,8 @@ extension ChatViewModel: ChatPrivateConversationContext {
         messageRouter.sendPrivate(content, to: peerID, recipientNickname: recipientNickname, messageID: messageID)
     }
 
-    func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {
+    @discardableResult
+    func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) -> Bool {
         messageRouter.sendReadReceipt(receipt, to: peerID)
     }
 
@@ -227,21 +227,41 @@ extension ChatViewModel: ChatPrivateConversationContext {
 final class ChatPrivateConversationCoordinator {
     private unowned let context: any ChatPrivateConversationContext
 
+    // Outbox retries re-wrap the same message in fresh gift-wrap events, so
+    // relay-level event-ID dedup can't catch them; track inbound GeoDM
+    // message IDs so each copy past the first costs one (already-deduped)
+    // ack check and nothing else.
+    private var seenInboundGeoDMIDs: Set<String> = []
+    private var seenInboundGeoDMOrder: [String] = []
+    private static let seenInboundGeoDMCap = 512
+
     init(context: any ChatPrivateConversationContext) {
         self.context = context
+    }
+
+    /// Returns `false` if this GeoDM message ID was already handled.
+    private func markInboundGeoDMSeen(_ messageId: String) -> Bool {
+        guard !seenInboundGeoDMIDs.contains(messageId) else { return false }
+        seenInboundGeoDMIDs.insert(messageId)
+        seenInboundGeoDMOrder.append(messageId)
+        if seenInboundGeoDMOrder.count > Self.seenInboundGeoDMCap {
+            seenInboundGeoDMIDs.remove(seenInboundGeoDMOrder.removeFirst())
+        }
+        return true
     }
 
     func sendPrivateMessage(_ content: String, to peerID: PeerID) {
         guard !content.isEmpty else { return }
 
         if context.isPeerBlocked(peerID) {
-            let nickname = context.peerNickname(for: peerID) ?? "user"
-            context.addSystemMessage(
+            let nickname = context.peerNickname(for: peerID) ?? "anon"
+            context.addLocalPrivateSystemMessage(
                 String(
-                    format: String(localized: "system.dm.blocked_recipient", comment: "System message when attempting to message a blocked user"),
+                    format: String(localized: "system.dm.blocked_recipient", comment: "System message when attempting to message a blocked person"),
                     locale: .current,
                     nickname
-                )
+                ),
+                to: peerID
             )
             return
         }
@@ -263,11 +283,11 @@ final class ChatPrivateConversationCoordinator {
         let isMutualFavorite = favoriteStatus?.isMutual ?? false
         let hasNostrKey = favoriteStatus?.peerNostrPublicKey != nil
 
-        var recipientNickname = context.peerNickname(for: peerID)
-        if recipientNickname == nil && favoriteStatus != nil {
-            recipientNickname = favoriteStatus?.peerNickname
-        }
-        recipientNickname = recipientNickname ?? "user"
+        // "anon" matches the app's default-nickname convention; "user" is
+        // banned copy.
+        let recipientNickname = context.peerNickname(for: peerID)
+            ?? favoriteStatus?.peerNickname
+            ?? "anon"
 
         let messageID = UUID().uuidString
         let message = BitchatMessage(
@@ -287,37 +307,35 @@ final class ChatPrivateConversationCoordinator {
         context.appendPrivateMessage(message, to: peerID)
         context.notifyUIChanged()
 
+        // Always hand the message to the router — it owns delivery. A live
+        // link sends now; an unreachable peer gets the retained-outbox path
+        // (resend on reconnect, courier deposits, bridge drops). Pre-judging
+        // reachability here used to mark the message failed without ever
+        // routing it, silently bypassing all of that (field-found: DMs
+        // composed after a peer's reachability window lapsed were dead on
+        // arrival while identical DMs sent a minute earlier delivered).
+        context.routePrivateMessage(
+            content,
+            to: peerID,
+            recipientNickname: recipientNickname,
+            messageID: messageID
+        )
         if isConnected || isReachable || (isMutualFavorite && hasNostrKey) {
-            context.routePrivateMessage(
-                content,
-                to: peerID,
-                recipientNickname: recipientNickname ?? "user",
-                messageID: messageID
-            )
             context.setPrivateDeliveryStatus(.sent, forMessageID: messageID, peerID: peerID)
-        } else {
-            context.setPrivateDeliveryStatus(
-                .failed(
-                    reason: String(localized: "content.delivery.reason.unreachable", comment: "Failure reason when a peer is unreachable")
-                ),
-                forMessageID: messageID,
-                peerID: peerID
-            )
-            let name = recipientNickname ?? "user"
-            context.addSystemMessage(
-                String(
-                    format: String(localized: "system.dm.unreachable", comment: "System message when a recipient is unreachable"),
-                    locale: .current,
-                    name
-                )
-            )
         }
+        // Otherwise the message stays "sending"; router callbacks move it to
+        // carried (📦) when a courier/bridge copy ships, delivered/read on
+        // acks, or failed when the outbox TTL expires.
     }
 
     func sendGeohashDM(_ content: String, to peerID: PeerID) {
         guard case .location(let channel) = context.activeChannel else {
-            context.addSystemMessage(
-                String(localized: "system.location.not_in_channel", comment: "System message when attempting to send without being in a location channel")
+            // The failure happened inside a geoDM thread — surface it there,
+            // not on the public timeline (matches the sibling blocked/unknown
+            // errors routed into the thread by #1415).
+            context.addLocalPrivateSystemMessage(
+                String(localized: "system.location.not_in_channel", comment: "System message when attempting to send without being in a location channel"),
+                to: peerID
             )
             return
         }
@@ -357,8 +375,9 @@ final class ChatPrivateConversationCoordinator {
                 forMessageID: messageID,
                 peerID: peerID
             )
-            context.addSystemMessage(
-                String(localized: "system.dm.blocked_generic", comment: "System message when sending fails because user is blocked")
+            context.addLocalPrivateSystemMessage(
+                String(localized: "system.dm.blocked_generic", comment: "System message when sending fails because the person is blocked"),
+                to: peerID
             )
             return
         }
@@ -408,9 +427,14 @@ final class ChatPrivateConversationCoordinator {
         guard let pm = PrivateMessagePacket.decode(from: payload.data) else { return }
         let messageId = pm.messageID
 
-        SecureLogger.info("GeoDM: recv PM <- sender=\(senderPubkey.prefix(8))… mid=\(messageId.prefix(8))…", category: .session)
-
+        // Ack before the dedup guard: a re-sent copy means the sender may not
+        // have our DELIVERED yet, and markGeoDeliveryAckSent dedups the
+        // actual sends.
         sendDeliveryAckIfNeeded(to: messageId, senderPubKey: senderPubkey, from: id)
+
+        guard markInboundGeoDMSeen(messageId) else { return }
+
+        SecureLogger.info("GeoDM: recv PM <- sender=\(senderPubkey.prefix(8))… mid=\(messageId.prefix(8))…", category: .session)
 
         if context.isNostrBlocked(pubkeyHexLowercased: senderPubkey) {
             return
@@ -490,7 +514,10 @@ final class ChatPrivateConversationCoordinator {
                 category: .session
             )
         } else {
-            SecureLogger.warning("GeoDM: delivered ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)", category: .session)
+            // A stale ack for a message this device no longer tracks (dropped
+            // outbox entry, cleared chat, or a peer re-acking after losing our
+            // receipt) — expected occasionally, not actionable.
+            SecureLogger.debug("GeoDM: delivered ack for unknown mid=\(messageID.prefix(8))… conv=\(convKey)", category: .session)
         }
     }
 
@@ -579,7 +606,7 @@ final class ChatPrivateConversationCoordinator {
 
     /// O(1)-per-conversation dedup via the store's message-ID indexes
     /// (replaces the full scan over every private chat).
-    func isDuplicateMessage(_ messageId: String, targetPeerID: PeerID) -> Bool {
+    func isDuplicateMessage(_ messageId: String, targetPeerID _: PeerID) -> Bool {
         context.privateChatsContainMessage(withID: messageId)
     }
 
@@ -795,25 +822,6 @@ final class ChatPrivateConversationCoordinator {
             if didMigrate {
                 context.notifyUIChanged()
             }
-        }
-    }
-
-    func sendFavoriteNotification(to peerID: PeerID, isFavorite: Bool) {
-        var noiseKey: Data?
-
-        if let hexKey = Data(hexString: peerID.id) {
-            noiseKey = hexKey
-        } else if let peerNoiseKey = context.noisePublicKey(for: peerID) {
-            noiseKey = peerNoiseKey
-        }
-
-        if context.isPeerConnected(peerID) {
-            context.routeFavoriteNotification(to: peerID, isFavorite: isFavorite)
-            SecureLogger.debug("📤 Sent favorite notification via BLE to \(peerID)", category: .session)
-        } else if let key = noiseKey {
-            context.routeFavoriteNotification(to: PeerID(hexData: key), isFavorite: isFavorite)
-        } else {
-            SecureLogger.warning("⚠️ Cannot send favorite notification - peer not connected and no Nostr pubkey", category: .session)
         }
     }
 

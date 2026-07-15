@@ -70,7 +70,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     }
 
     // TransportPeerEventsDelegate
-    func didUpdatePeerSnapshots(_ peers: [TransportPeerSnapshot]) {
+    func didUpdatePeerSnapshots(_: [TransportPeerSnapshot]) {
         updatePeers()
     }
     
@@ -275,6 +275,12 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
             return nil
         }
         identityManager.setBlocked(fingerprint, isBlocked: blocked)
+        if blocked {
+            // Purge while the fingerprint↔peerID mapping is still known: the
+            // archived-echo seed filter can't resolve offline strangers, so
+            // scrub their carried messages now rather than at relaunch.
+            meshService.purgeArchivedPublicMessages(from: peerID)
+        }
         updatePeers()
         return fingerprint
     }
@@ -367,12 +373,7 @@ final class UnifiedPeerService: ObservableObject, TransportPeerEventsDelegate {
     }
     
     // MARK: - Compatibility Methods (for easy migration)
-    
-    var allPeers: [BitchatPeer] { peers }
-    var connectedPeers: Set<PeerID> { connectedPeerIDs }
-    var favoritePeers: Set<String> {
-        Set(favorites.compactMap { getFingerprint(for: $0.peerID) })
-    }
+
     var blockedUsers: Set<String> {
         Set(peers.compactMap { peer in
             isBlocked(peer.peerID) ? getFingerprint(for: peer.peerID) : nil

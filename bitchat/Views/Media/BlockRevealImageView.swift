@@ -65,58 +65,19 @@ struct BlockRevealImageView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            if let image = platformImage {
-                Image(platformImage: image)
-                    .resizable()
-                    .aspectRatio(aspectRatio, contentMode: .fit)
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                    )
-                    .mask(
-                        BlockRevealMask(
-                            fraction: fraction,
-                            columns: 24,
-                            rows: 16
-                        )
-                        .animation(.easeOut(duration: 0.2), value: fraction)
-                    )
-                    .blur(radius: isBlurred ? 20 : 0)
-                    .overlay {
-                        if isBlurred {
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(Color.black.opacity(0.35))
-                                .overlay(
-                                    VStack(spacing: 6) {
-                                        Image(systemName: "eye.slash.fill")
-                                            .font(.bitchatSystem(size: 24, weight: .semibold))
-                                        Text(verbatim: Strings.tapToReveal)
-                                            // Themed: monospaced under matrix,
-                                            // system under liquid glass.
-                                            .bitchatFont(size: 12, weight: .medium)
-                                    }
-                                    .foregroundColor(.white.opacity(0.85))
-                                )
-                        }
-                    }
-            } else {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(palette.secondary.opacity(0.2))
-                    .frame(height: 200)
-                    .overlay {
-                        if loadFailed {
-                            Image(systemName: "photo")
-                                .font(.bitchatSystem(size: 24, weight: .semibold))
-                                .foregroundColor(palette.secondary)
-                        } else {
-                            ProgressView()
-                                .progressViewStyle(.circular)
-                        }
-                    }
-            }
-
+        // The DM sheet wraps the conversation in a high-priority
+        // swipe-to-close DragGesture (ContentSheetViews). An ancestor
+        // high-priority gesture starves descendant TapGestures, but Button
+        // actions still fire — the reveal/open tap must stay a Button or
+        // received DM images become untappable.
+        Button(action: handleTap) {
+            imageContent
+        }
+        .buttonStyle(.plain)
+        // The cancel control must sit outside the Button label: nested
+        // buttons don't get reliable independent hit testing, and the outer
+        // tap is a no-op while sending — the x could become untappable.
+        .overlay(alignment: .topTrailing) {
             if let onCancel = onCancel, isSending {
                 Button(action: onCancel) {
                     Image(systemName: "xmark")
@@ -130,6 +91,7 @@ struct BlockRevealImageView: View {
                 .accessibilityLabel(Strings.cancelSend)
             }
         }
+        .simultaneousGesture(hideSwipe)
         .onAppear {
             isBlurred = initiallyBlurred
             loadImage()
@@ -138,7 +100,6 @@ struct BlockRevealImageView: View {
             isBlurred = initiallyBlurred
             loadImage()
         }
-        .gesture(mainGesture)
         .contextMenu {
             if isSending {
                 cancelSendAction
@@ -170,6 +131,60 @@ struct BlockRevealImageView: View {
             } else {
                 imageActions
             }
+        }
+    }
+
+    @ViewBuilder
+    private var imageContent: some View {
+        if let image = platformImage {
+            Image(platformImage: image)
+                .resizable()
+                .aspectRatio(aspectRatio, contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                )
+                .mask(
+                    BlockRevealMask(
+                        fraction: fraction,
+                        columns: 24,
+                        rows: 16
+                    )
+                    .animation(.easeOut(duration: 0.2), value: fraction)
+                )
+                .blur(radius: isBlurred ? 20 : 0)
+                .overlay {
+                    if isBlurred {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(Color.black.opacity(0.35))
+                            .overlay(
+                                VStack(spacing: 6) {
+                                    Image(systemName: "eye.slash.fill")
+                                        .font(.bitchatSystem(size: 24, weight: .semibold))
+                                    Text(verbatim: Strings.tapToReveal)
+                                        // Themed: monospaced under matrix,
+                                        // system under liquid glass.
+                                        .bitchatFont(size: 12, weight: .medium)
+                                }
+                                .foregroundColor(.white.opacity(0.85))
+                            )
+                    }
+                }
+        } else {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(palette.secondary.opacity(0.2))
+                .frame(height: 200)
+                .overlay {
+                    if loadFailed {
+                        Image(systemName: "photo")
+                            .font(.bitchatSystem(size: 24, weight: .semibold))
+                            .foregroundColor(palette.secondary)
+                    } else {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                    }
+                }
         }
     }
 
@@ -235,18 +250,19 @@ struct BlockRevealImageView: View {
     // photo gesture on mobile, racing the reveal tap, with no confirmation
     // and no way to get the file back. Delete now lives in the context menu
     // behind a confirmation; taps only reveal and open.
-    private var mainGesture: some Gesture {
-        let singleTap = TapGesture().onEnded {
-            guard !isSending, !loadFailed else { return }
-            if isBlurred {
-                withAnimation(.easeOut(duration: 0.2)) {
-                    isBlurred = false
-                }
-            } else {
-                onOpen?()
+    private func handleTap() {
+        guard !isSending, !loadFailed else { return }
+        if isBlurred {
+            withAnimation(.easeOut(duration: 0.2)) {
+                isBlurred = false
             }
+        } else {
+            onOpen?()
         }
-        let swipe = DragGesture(minimumDistance: 20, coordinateSpace: .local).onEnded { value in
+    }
+
+    private var hideSwipe: some Gesture {
+        DragGesture(minimumDistance: 20, coordinateSpace: .local).onEnded { value in
             guard !isSending, !loadFailed else { return }
             let horizontal = value.translation.width
             let vertical = value.translation.height
@@ -257,7 +273,6 @@ struct BlockRevealImageView: View {
                 }
             }
         }
-        return singleTap.simultaneously(with: swipe)
     }
 }
 

@@ -14,7 +14,7 @@ import Testing
 @Suite("Gateway mode policy")
 @MainActor
 struct GatewayServiceTests {
-    private static let geohash = "u4pruy"
+    nonisolated private static let geohash = "u4pruy"
 
     /// Closure-injected harness around `GatewayService` recording every
     /// side effect, with a controllable clock and relay connectivity.

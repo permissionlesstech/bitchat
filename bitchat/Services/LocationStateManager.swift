@@ -101,9 +101,7 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
 
     private let cl: LocationStateManaging
     private let geocoder: LocationStateGeocoding
-    private var lastLocation: CLLocation?
     private var refreshTimer: Timer?
-    private var isGeocoding: Bool = false
 
     // MARK: - Persistence Keys
 
@@ -111,6 +109,8 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
     private let teleportedStoreKey = "locationChannel.teleportedSet"
     private let bookmarksKey = "locationChannel.bookmarks"
     private let bookmarkNamesKey = "locationChannel.bookmarkNames"
+    private let bookmarkNamesSchemaVersionKey = "locationChannel.bookmarkNamesSchemaVersion"
+    private let bookmarkNamesCurrentSchemaVersion = 1
 
     // MARK: - Published State (Channel)
 
@@ -224,6 +224,26 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
            let dict = try? JSONDecoder().decode([String: String].self, from: data) {
             bookmarkNames = dict
         }
+
+        migrateBookmarkNamesIfNeeded()
+    }
+
+    /// Drops names cached before low-precision geohashes became country-first.
+    /// Correctly resolved names written after this migration must survive
+    /// subsequent launches, so the migration is explicitly versioned.
+    private func migrateBookmarkNamesIfNeeded() {
+        guard storage.integer(forKey: bookmarkNamesSchemaVersionKey) < bookmarkNamesCurrentSchemaVersion else {
+            return
+        }
+
+        let retainedNames = bookmarkNames.filter {
+            Self.normalizeGeohash($0.key).count > 2
+        }
+        if retainedNames.count != bookmarkNames.count {
+            bookmarkNames = retainedNames
+            persistBookmarkNames()
+        }
+        storage.set(bookmarkNamesCurrentSchemaVersion, forKey: bookmarkNamesSchemaVersionKey)
     }
 
     private func initializePermissionState() {
@@ -268,7 +288,7 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
         }
     }
 
-    func beginLiveRefresh(interval: TimeInterval = TransportConfig.locationLiveRefreshInterval) {
+    func beginLiveRefresh(interval _: TimeInterval = TransportConfig.locationLiveRefreshInterval) {
         guard permissionState == .authorized else { return }
         refreshTimer?.invalidate()
         refreshTimer = nil
@@ -369,23 +389,22 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
     }
 
     func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
-        updatePermissionState(from: status)
-        if case .authorized = permissionState {
+        let newState = updatePermissionState(from: status)
+        if newState == .authorized {
             requestOneShotLocation()
         }
     }
 
     @available(iOS 14.0, macOS 11.0, *)
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        updatePermissionState(from: manager.authorizationStatus)
-        if case .authorized = permissionState {
+        let newState = updatePermissionState(from: manager.authorizationStatus)
+        if newState == .authorized {
             requestOneShotLocation()
         }
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let loc = locations.last else { return }
-        lastLocation = loc
         computeChannels(from: loc.coordinate)
         reverseGeocodeLocation(loc)
     }
@@ -396,7 +415,8 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
 
     // MARK: - Private Helpers (Permission)
 
-    private func updatePermissionState(from status: CLAuthorizationStatus) {
+    @discardableResult
+    private func updatePermissionState(from status: CLAuthorizationStatus) -> PermissionState {
         let newState: PermissionState
         switch status {
         case .notDetermined: newState = .notDetermined
@@ -405,7 +425,15 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
         case .authorizedAlways, .authorizedWhenInUse, .authorized: newState = .authorized
         @unknown default: newState = .restricted
         }
+        // Do not rely on a mounted SwiftUI consumer to stop high-accuracy
+        // updates. Authorization can change while the app is backgrounded,
+        // and stopping here also closes the gap before the published state is
+        // delivered on the main actor.
+        if newState != .authorized {
+            endLiveRefresh()
+        }
         Task { @MainActor in self.permissionState = newState }
+        return newState
     }
 
     // MARK: - Private Helpers (Channel Computation)
@@ -441,10 +469,8 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
 
     private func reverseGeocodeLocation(_ location: CLLocation) {
         geocoder.cancelGeocode()
-        isGeocoding = true
         geocoder.reverseGeocodeLocation(location) { [weak self] placemarks, _ in
             guard let self = self else { return }
-            self.isGeocoding = false
             if let pm = placemarks?.first {
                 let names = self.locationNamesByLevel(from: pm)
                 Task { @MainActor in self.locationNames = names }
@@ -521,15 +547,15 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
     }
 
     private func resolveCompositeAdminName(geohash gh: String, points: [CLLocation]) {
-        var uniqueAdmins: [String] = []
-        var seenAdmins = Set<String>()
+        var uniqueRegions: [String] = []
+        var seenRegions = Set<String>()
         var idx = 0
 
         func step() {
             if idx >= points.count {
                 let finalName: String? = {
-                    if uniqueAdmins.count >= 2 { return uniqueAdmins[0] + " and " + uniqueAdmins[1] }
-                    return uniqueAdmins.first
+                    if uniqueRegions.count >= 2 { return uniqueRegions[0] + " and " + uniqueRegions[1] }
+                    return uniqueRegions.first
                 }()
                 if let finalName = finalName, !finalName.isEmpty {
                     DispatchQueue.main.async {
@@ -545,12 +571,16 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
             geocoder.reverseGeocodeLocation(loc) { [weak self] placemarks, _ in
                 guard self != nil else { return }
                 if let pm = placemarks?.first {
-                    if let admin = pm.administrativeArea, !admin.isEmpty, !seenAdmins.contains(admin) {
-                        seenAdmins.insert(admin)
-                        uniqueAdmins.append(admin)
-                    } else if let country = pm.country, !country.isEmpty, !seenAdmins.contains(country) {
-                        seenAdmins.insert(country)
-                        uniqueAdmins.append(country)
+                    if let country = pm.country, !country.isEmpty {
+                        if !seenRegions.contains(country) {
+                            seenRegions.insert(country)
+                            uniqueRegions.append(country)
+                        }
+                    } else if let admin = pm.administrativeArea,
+                              !admin.isEmpty,
+                              !seenRegions.contains(admin) {
+                        seenRegions.insert(admin)
+                        uniqueRegions.append(admin)
                     }
                 }
                 step()
@@ -562,7 +592,7 @@ final class LocationStateManager: NSObject, CLLocationManagerDelegate, Observabl
     private static func nameForGeohashLength(_ len: Int, from pm: CLPlacemark) -> String? {
         switch len {
         case 0...2:
-            return pm.administrativeArea ?? pm.country
+            return pm.country ?? pm.administrativeArea
         case 3...4:
             return pm.administrativeArea ?? pm.subAdministrativeArea ?? pm.country
         case 5:
@@ -631,16 +661,6 @@ extension LocationStateManager {
     /// Backward compatibility: toggle bookmark (was GeohashBookmarksStore.toggle)
     func toggle(_ geohash: String) {
         toggleBookmark(geohash)
-    }
-
-    /// Backward compatibility: add bookmark (was GeohashBookmarksStore.add)
-    func add(_ geohash: String) {
-        addBookmark(geohash)
-    }
-
-    /// Backward compatibility: remove bookmark (was GeohashBookmarksStore.remove)
-    func remove(_ geohash: String) {
-        removeBookmark(geohash)
     }
 }
 #endif

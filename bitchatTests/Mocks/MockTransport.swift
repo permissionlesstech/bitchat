@@ -26,9 +26,6 @@ final class MockTransport: Transport {
     var myNickname: String = "TestUser"
 
     private let peerSnapshotSubject = CurrentValueSubject<[TransportPeerSnapshot], Never>([])
-    var peerSnapshotPublisher: AnyPublisher<[TransportPeerSnapshot], Never> {
-        peerSnapshotSubject.eraseToAnyPublisher()
-    }
 
     // MARK: - Recording Properties (for test assertions)
 
@@ -48,11 +45,16 @@ final class MockTransport: Transport {
     private(set) var emergencyDisconnectCallCount = 0
     private(set) var broadcastAnnounceCallCount = 0
     private(set) var triggeredHandshakes: [PeerID] = []
+    private(set) var purgedArchivePeers: [PeerID] = []
 
     // MARK: - Configurable Mock State
 
     var connectedPeers: Set<PeerID> = []
     var reachablePeers: Set<PeerID> = []
+    /// Peers with an established secure session. `nil` mirrors the protocol
+    /// default (prompt delivery), so connected peers stay "secure" for tests
+    /// that never care about the distinction.
+    var securePeers: Set<PeerID>?
     var peerNicknames: [PeerID: String] = [:]
     var peerFingerprints: [PeerID: String] = [:]
     var peerNoiseStates: [PeerID: LazyHandshakeState] = [:]
@@ -90,6 +92,10 @@ final class MockTransport: Transport {
         reachablePeers.contains(peerID) || connectedPeers.contains(peerID)
     }
 
+    func canDeliverSecurely(to peerID: PeerID) -> Bool {
+        securePeers?.contains(peerID) ?? canDeliverPromptly(to: peerID)
+    }
+
     func peerNickname(peerID: PeerID) -> String? {
         peerNicknames[peerID]
     }
@@ -108,6 +114,10 @@ final class MockTransport: Transport {
 
     func triggerHandshake(with peerID: PeerID) {
         triggeredHandshakes.append(peerID)
+    }
+
+    func purgeArchivedPublicMessages(from peerID: PeerID) {
+        purgedArchivePeers.append(peerID)
     }
 
     // Noise identity wrappers backed by a mock-keychain encryption service

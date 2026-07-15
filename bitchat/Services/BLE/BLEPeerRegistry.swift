@@ -10,6 +10,8 @@ struct BLEPeerInfo: Equatable {
     var isVerifiedNickname: Bool
     var lastSeen: Date
     var capabilities: PeerCapabilities = []
+    /// Rendezvous cell from the peer's announce when it advertises `.bridge`.
+    var bridgeGeohash: String?
 }
 
 struct BLEPeerAnnounceUpdate: Equatable {
@@ -117,6 +119,15 @@ struct BLEPeerRegistry {
         peers.values.filter { $0.capabilities.contains(capability) }.map(\.peerID)
     }
 
+    /// A rendezvous cell advertised by any bridge-capable peer, if one is
+    /// known — lets location-less devices join the island's rendezvous.
+    func advertisedBridgeGeohash() -> String? {
+        peers.values
+            .filter { $0.capabilities.contains(.bridge) }
+            .compactMap(\.bridgeGeohash)
+            .first
+    }
+
     func displayNicknames(selfNickname: String) -> [PeerID: String] {
         let connected = peers.filter { $0.value.isConnected }
         let tuples = connected.map { ($0.key, $0.value.nickname, true) }
@@ -141,18 +152,20 @@ struct BLEPeerRegistry {
         }
     }
 
-    func collisionResolvedNickname(for peerID: PeerID, selfNickname: String) -> String? {
-        guard let info = peers[peerID], info.isVerifiedNickname else { return nil }
-        let hasCollision = peers.values.contains {
-            $0.isConnected && $0.nickname == info.nickname && $0.peerID != peerID
-        } || selfNickname == info.nickname
-        return hasCollision ? info.nickname + "#" + String(peerID.id.prefix(4)) : info.nickname
-    }
-
     mutating func markDisconnected(_ peerID: PeerID) {
         guard var info = peers[peerID] else { return }
         info.isConnected = false
         peers[peerID] = info
+    }
+
+    /// Flips an already-known peer to connected. Returns false when the peer
+    /// is unknown or already connected (nothing changed).
+    @discardableResult
+    mutating func markConnected(_ peerID: PeerID) -> Bool {
+        guard var info = peers[peerID], !info.isConnected else { return false }
+        info.isConnected = true
+        peers[peerID] = info
+        return true
     }
 
     mutating func updateLastSeen(_ peerID: PeerID, at date: Date) {
@@ -168,7 +181,8 @@ struct BLEPeerRegistry {
         signingPublicKey: Data?,
         isConnected: Bool,
         now: Date,
-        capabilities: PeerCapabilities = []
+        capabilities: PeerCapabilities = [],
+        bridgeGeohash: String? = nil
     ) -> BLEPeerAnnounceUpdate {
         let existing = peers[peerID]
         let update = BLEPeerAnnounceUpdate(
@@ -185,7 +199,8 @@ struct BLEPeerRegistry {
             signingPublicKey: signingPublicKey,
             isVerifiedNickname: true,
             lastSeen: now,
-            capabilities: capabilities
+            capabilities: capabilities,
+            bridgeGeohash: bridgeGeohash
         )
 
         return update

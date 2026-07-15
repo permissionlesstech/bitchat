@@ -415,7 +415,7 @@ struct ViewSmokeTests {
         let board = BoardManager(
             transport: transport,
             store: BoardStore(persistsToDisk: false, fileURL: nil, now: { Date() }),
-            publishToNostr: { _, _, _, _ in nil },
+            publishToNostr: { _, _, _, _, _ in nil },
             deleteFromNostr: { _, _ in }
         )
 
@@ -498,13 +498,15 @@ struct ViewSmokeTests {
             description: "app_info.features.encryption.description"
         )
 
+        // AppInfoView's settings pane reads LocationChannelsModel from the
+        // environment, so it can only render mounted with one installed.
         let appInfo = AppInfoView()
+            .environmentObject(LocationChannelsModel(manager: makeSmokeLocationManager()))
         let header = SectionHeader("app_info.features.title")
         let featureRow = FeatureRow(info: feature)
         let paymentCashu = PaymentChipView(paymentType: .cashu("cashuA_test-token"))
         let paymentLightning = PaymentChipView(paymentType: .lightning("lightning:lnbc1test"))
 
-        _ = appInfo.body
         _ = header.body
         _ = featureRow.body
         _ = paymentCashu.body
@@ -644,7 +646,7 @@ struct ViewSmokeTests {
         playback.stop()
         VoiceNotePlaybackCoordinator.shared.activate(playback)
         VoiceNotePlaybackCoordinator.shared.deactivate(playback)
-        await VoiceRecorder.shared.cancelRecording()
+        await VoiceRecorder.shared.cancelRecording(owner: VoiceRecorder.RecordingOwner())
 
         #expect(bins.count == 16)
         #expect(WaveformCache.shared.cachedWaveform(for: waveformProbeURL)?.count == 16)

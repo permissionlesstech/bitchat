@@ -30,6 +30,9 @@ public final class BitchatMessage: Codable {
     public let senderPeerID: PeerID?
     public let mentions: [String]?  // Array of mentioned nicknames
     public var deliveryStatus: DeliveryStatus? // Delivery tracking
+    /// True when this message reached us across a mesh bridge (signed by its
+    /// author for an internet rendezvous) rather than over local radio.
+    public let isBridged: Bool
 
     // Cached formatted text (not included in Codable)
     private var _cachedFormattedText: [String: AttributedString] = [:]
@@ -46,8 +49,26 @@ public final class BitchatMessage: Codable {
     enum CodingKeys: String, CodingKey {
         case id, sender, content, timestamp, isRelay, originalSender
         case isPrivate, recipientNickname, senderPeerID, mentions, deliveryStatus
+        case isBridged
     }
-    
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        sender = try container.decode(String.self, forKey: .sender)
+        content = try container.decode(String.self, forKey: .content)
+        timestamp = try container.decode(Date.self, forKey: .timestamp)
+        isRelay = try container.decode(Bool.self, forKey: .isRelay)
+        originalSender = try container.decodeIfPresent(String.self, forKey: .originalSender)
+        isPrivate = try container.decode(Bool.self, forKey: .isPrivate)
+        recipientNickname = try container.decodeIfPresent(String.self, forKey: .recipientNickname)
+        senderPeerID = try container.decodeIfPresent(PeerID.self, forKey: .senderPeerID)
+        mentions = try container.decodeIfPresent([String].self, forKey: .mentions)
+        deliveryStatus = try container.decodeIfPresent(DeliveryStatus.self, forKey: .deliveryStatus)
+        // Absent in archives written before bridging existed.
+        isBridged = try container.decodeIfPresent(Bool.self, forKey: .isBridged) ?? false
+    }
+
     public init(
         id: String? = nil,
         sender: String,
@@ -59,7 +80,8 @@ public final class BitchatMessage: Codable {
         recipientNickname: String? = nil,
         senderPeerID: PeerID? = nil,
         mentions: [String]? = nil,
-        deliveryStatus: DeliveryStatus? = nil
+        deliveryStatus: DeliveryStatus? = nil,
+        isBridged: Bool = false
     ) {
         self.id = id ?? UUID().uuidString
         self.sender = sender
@@ -72,6 +94,7 @@ public final class BitchatMessage: Codable {
         self.senderPeerID = senderPeerID
         self.mentions = mentions
         self.deliveryStatus = deliveryStatus ?? (isPrivate ? .sending : nil)
+        self.isBridged = isBridged
     }
 }
 
@@ -89,7 +112,8 @@ extension BitchatMessage: Equatable {
                lhs.recipientNickname == rhs.recipientNickname &&
                lhs.senderPeerID == rhs.senderPeerID &&
                lhs.mentions == rhs.mentions &&
-               lhs.deliveryStatus == rhs.deliveryStatus
+               lhs.deliveryStatus == rhs.deliveryStatus &&
+               lhs.isBridged == rhs.isBridged
     }
 }
 
@@ -121,6 +145,7 @@ extension BitchatMessage {
         if recipientNickname != nil { flags |= 0x08 }
         if senderPeerID != nil { flags |= 0x10 }
         if mentions != nil && !mentions!.isEmpty { flags |= 0x20 }
+        if isBridged { flags |= 0x40 }
         
         data.append(flags)
         
@@ -213,6 +238,7 @@ extension BitchatMessage {
         let hasRecipientNickname = (flags & 0x08) != 0
         let hasSenderPeerID = (flags & 0x10) != 0
         let hasMentions = (flags & 0x20) != 0
+        let isBridged = (flags & 0x40) != 0
         
         // Timestamp
         guard offset + 8 <= dataCopy.count else {
@@ -321,7 +347,8 @@ extension BitchatMessage {
             isPrivate: isPrivate,
             recipientNickname: recipientNickname,
             senderPeerID: senderPeerID,
-            mentions: mentions
+            mentions: mentions,
+            isBridged: isBridged
         )
     }
 }
@@ -338,24 +365,5 @@ extension BitchatMessage {
     
     public var formattedTimestamp: String {
         Self.timestampFormatter.string(from: timestamp)
-    }
-}
-
-extension Array where Element == BitchatMessage {
-    /// Filters out empty ones and deduplicate by ID while preserving order (from oldest to newest)
-    public func cleanedAndDeduped() -> [Element] {
-        let arr = filter { $0.content.trimmed.isEmpty == false }
-        guard arr.count > 1 else {
-            return arr
-        }
-        var seen = Set<String>()
-        var dedup: [BitchatMessage] = []
-        for m in arr.sorted(by: { $0.timestamp < $1.timestamp }) {
-            if !seen.contains(m.id) {
-                dedup.append(m)
-                seen.insert(m.id)
-            }
-        }
-        return dedup
     }
 }

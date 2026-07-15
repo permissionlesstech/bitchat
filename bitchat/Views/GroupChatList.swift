@@ -21,20 +21,15 @@ struct GroupChatList: View {
     var body: some View {
         if !groups.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
-                Text(Strings.header)
-                    .bitchatFont(size: 11, weight: .medium)
-                    .foregroundColor(palette.secondary)
-                    .padding(.horizontal)
-                    .padding(.top, 10)
-                    .padding(.bottom, 2)
-                    .accessibilityAddTraits(.isHeader)
+                // Same glyph+label header shape as #mesh / across the bridge.
+                PeopleSectionHeader(
+                    icon: "person.3.fill",
+                    iconColor: palette.primary,
+                    title: Strings.header
+                )
 
                 ForEach(groups) { group in
                     HStack(spacing: 4) {
-                        Image(systemName: "person.3.fill")
-                            .font(.bitchatSystem(size: 10))
-                            .foregroundColor(palette.primary)
-
                         Text("#\(group.name)")
                             .bitchatFont(size: 14)
                             .foregroundColor(palette.primary)

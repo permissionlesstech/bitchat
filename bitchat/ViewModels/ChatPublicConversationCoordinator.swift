@@ -36,9 +36,6 @@ protocol ChatPublicConversationContext: AnyObject {
     /// message with the same ID is already in that conversation.
     @discardableResult
     func appendPublicMessage(_ message: BitchatMessage, to conversationID: ConversationID) -> Bool
-    /// Appends a geohash message if absent. Returns `true` when stored.
-    @discardableResult
-    func appendGeohashMessageIfAbsent(_ message: BitchatMessage, toGeohash geohash: String) -> Bool
     func publicConversationContainsMessage(withID messageID: String, in conversationID: ConversationID) -> Bool
     /// Removes a message by ID from whichever public conversation contains it.
     @discardableResult
@@ -109,7 +106,6 @@ extension ChatViewModel: ChatPublicConversationContext {
     // `geoParticipantCount(for:)`, `isNostrBlocked(pubkeyHexLowercased:)`,
     // `deriveNostrIdentity(forGeohash:)`, the public conversation store
     // intents (`appendPublicMessage(_:to:)`,
-    // `appendGeohashMessageIfAbsent(_:toGeohash:)`,
     // `publicConversationContainsMessage(withID:in:)`,
     // `removePublicMessage(withID:)`,
     // `removePublicMessages(fromGeohash:where:)`,
@@ -292,6 +288,15 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
     func clearCurrentPublicTimeline() {
         context.clearPublicConversation(ConversationID(channelID: context.activeChannel))
 
+        // Clearing the mesh timeline also dismisses its archived echoes for
+        // good: the watermark stops the next launch from re-seeding them
+        // (the archive itself keeps carrying the messages for peers), and
+        // the dedup keys go so a cleared message arriving live shows again.
+        if case .mesh = context.activeChannel {
+            MeshEchoSettings.clearedThrough = Date()
+            archivedEchoKeys.removeAll()
+        }
+
         // The SPM test process shares the real Application Support tree, so this
         // detached deletion can land mid-test under parallel scheduling and flake
         // a file-dependent test. Tests never need the on-disk media cleared.
@@ -411,6 +416,24 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
     ///   event (0 for mesh messages). Sufficient PoW relaxes the per-sender
     ///   rate limit; low/no-PoW events keep the strict limits so old clients
     ///   still get through at normal rates.
+    /// Identity keys of the archived echoes seeded into the mesh timeline at
+    /// launch. Re-synced copies of others' messages now arrive with the same
+    /// derived stable ID (`MeshMessageIdentity`), so the store's insert-by-ID
+    /// catches those — but the archive-restored rows themselves carry
+    /// `echo-`-prefixed IDs, and self echoes get fresh UUIDs, so this content
+    /// identity remains the way to recognize a live copy of an
+    /// already-rendered echo.
+    private var archivedEchoKeys = Set<String>()
+
+    func registerArchivedEcho(senderPeerID: PeerID?, timestamp: Date, content: String) {
+        archivedEchoKeys.insert(Self.archivedEchoKey(senderPeerID: senderPeerID, timestamp: timestamp, content: content))
+    }
+
+    static func archivedEchoKey(senderPeerID: PeerID?, timestamp: Date, content: String) -> String {
+        let ms = UInt64((timestamp.timeIntervalSince1970 * 1000).rounded())
+        return "\(senderPeerID?.id ?? "")|\(ms)|\(content)"
+    }
+
     func handlePublicMessage(_ message: BitchatMessage, powBits: Int = 0) {
         let finalMessage = context.processActionMessage(message)
         if context.isMessageBlocked(finalMessage) { return }
@@ -445,6 +468,17 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
             destination = .mesh
         }
         guard let destination else { return }
+
+        // A live copy of a message already rendered as an archived echo
+        // (e.g. re-served by a peer's gossip sync) would duplicate the row.
+        if destination == .mesh, !isSystem {
+            let key = Self.archivedEchoKey(
+                senderPeerID: finalMessage.senderPeerID,
+                timestamp: finalMessage.timestamp,
+                content: finalMessage.content
+            )
+            if archivedEchoKeys.contains(key) { return }
+        }
 
         let channelMatches: Bool = {
             switch context.activeChannel {
@@ -520,27 +554,27 @@ final class ChatPublicConversationCoordinator: PublicMessagePipelineDelegate {
         #endif
     }
 
-    func pipeline(_ pipeline: PublicMessagePipeline, normalizeContent content: String) -> String {
+    func pipeline(_: PublicMessagePipeline, normalizeContent content: String) -> String {
         context.normalizedContentKey(content)
     }
 
-    func pipeline(_ pipeline: PublicMessagePipeline, contentTimestampForKey key: String) -> Date? {
+    func pipeline(_: PublicMessagePipeline, contentTimestampForKey key: String) -> Date? {
         context.contentTimestamp(forKey: key)
     }
 
-    func pipeline(_ pipeline: PublicMessagePipeline, recordContentKey key: String, timestamp: Date) {
+    func pipeline(_: PublicMessagePipeline, recordContentKey key: String, timestamp: Date) {
         context.recordContentKey(key, timestamp: timestamp)
     }
 
-    func pipeline(_ pipeline: PublicMessagePipeline, commit message: BitchatMessage, to conversationID: ConversationID) -> Bool {
+    func pipeline(_: PublicMessagePipeline, commit message: BitchatMessage, to conversationID: ConversationID) -> Bool {
         context.appendPublicMessage(message, to: conversationID)
     }
 
-    func pipelinePrewarmMessage(_ pipeline: PublicMessagePipeline, message: BitchatMessage) {
+    func pipelinePrewarmMessage(_: PublicMessagePipeline, message: BitchatMessage) {
         context.prewarmMessageFormatting(message)
     }
 
-    func pipelineSetBatchingState(_ pipeline: PublicMessagePipeline, isBatching: Bool) {
+    func pipelineSetBatchingState(_: PublicMessagePipeline, isBatching: Bool) {
         context.setPublicBatching(isBatching)
     }
 }

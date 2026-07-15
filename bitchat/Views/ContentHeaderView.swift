@@ -6,6 +6,7 @@ struct ContentHeaderView: View {
     @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
     @EnvironmentObject private var peerListModel: PeerListModel
     @EnvironmentObject private var boardAlertsModel: BoardAlertsModel
+    @ObservedObject private var bridgeService = BridgeService.shared
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.appTheme) private var theme
     @ThemedPalette private var palette
@@ -21,19 +22,30 @@ struct ContentHeaderView: View {
     /// Courier envelopes this device is carrying for offline third parties.
     @State private var carriedMailCount = 0
 
-    /// Unified notices sheet (board posts + location notes) for the current
-    /// channel context.
-    @State private var showNotices = false
-
     /// Board posts mirrored from the store so the pin icon can show when the
     /// current scope has notices.
     @State private var boardPosts: [BoardPostPacket] = []
+
+    /// Nostr-only location notes at this place (live while the empty mesh
+    /// timeline is showing) — they should light the pin too.
+    @ObservedObject private var nearbyNotes = NearbyNotesCounter.shared
+
+    /// The bridged-people count belongs to the mesh channel only.
+    private var showBridgedPeerCount: Bool {
+        if case .location = locationChannelsModel.selectedChannel { return false }
+        return bridgeService.bridgedPeerCount > 0
+    }
 
     var body: some View {
         HStack(spacing: 0) {
             Text(verbatim: "bitchat/")
                 .bitchatFont(size: 18, weight: .medium)
+                .lineLimit(1)
                 .foregroundColor(palette.primary)
+                // When icons crowd the header, squeeze the nickname first
+                // (priority 0) and the logo only as a last resort; the icon
+                // cluster at priority 3 never gives up width.
+                .layoutPriority(2)
                 .onTapGesture(count: 3) {
                     appChromeModel.panicClearAllData()
                 }
@@ -55,6 +67,8 @@ struct ContentHeaderView: View {
                 Text(verbatim: "@")
                     .bitchatFont(size: 14)
                     .foregroundColor(palette.secondary)
+                    // Keep the sigil whole while the field beside it shrinks.
+                    .fixedSize()
 
                 TextField(
                     "content.input.nickname_placeholder",
@@ -91,21 +105,32 @@ struct ContentHeaderView: View {
                 if case .location = locationChannelsModel.selectedChannel {
                     return peerListModel.visibleGeohashPeerCount
                 }
-                return countAndColor.0
+                // One number for the whole room: radio-reachable peers plus
+                // people across the bridge (visible via carriers even while
+                // this device's own bridge is off). The sheet breaks it down.
+                return countAndColor.0 + bridgeService.bridgedPeerCount
             }()
 
             HStack(spacing: 2) {
                 if locationChannelsModel.gatewayEnabled {
-                    Image(systemName: "globe")
-                        .font(.bitchatSystem(size: 12))
-                        .foregroundColor(palette.secondary.opacity(0.8))
-                        .headerTapTarget()
-                        .accessibilityLabel(
-                            String(localized: "content.accessibility.gateway_active", defaultValue: "Internet gateway active, sharing your connection with the mesh", comment: "Accessibility label for the internet gateway indicator")
-                        )
-                        .help(
-                            String(localized: "content.header.gateway_active", defaultValue: "Sharing your internet connection with nearby mesh peers", comment: "Tooltip for the internet gateway indicator")
-                        )
+                    // The gateway toggle lives in the App Info settings pane
+                    // now, so the indicator deep-links there.
+                    Button(action: { appChromeModel.presentAppInfo() }) {
+                        Image(systemName: "globe")
+                            .font(.bitchatSystem(size: 12))
+                            .foregroundColor(palette.secondary.opacity(0.8))
+                            .headerTapTarget()
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(
+                        String(localized: "content.accessibility.gateway_active", defaultValue: "Internet gateway active, sharing your connection with the mesh", comment: "Accessibility label for the internet gateway indicator")
+                    )
+                    .accessibilityHint(
+                        String(localized: "content.accessibility.gateway_settings_hint", defaultValue: "Opens settings to turn the gateway on or off", comment: "Accessibility hint for the internet gateway indicator explaining a tap opens the settings sheet")
+                    )
+                    .help(
+                        String(localized: "content.header.gateway_active", defaultValue: "Sharing your internet connection with nearby mesh peers", comment: "Tooltip for the internet gateway indicator")
+                    )
                 }
 
                 if carriedMailCount > 0 {
@@ -144,11 +169,11 @@ struct ContentHeaderView: View {
                         scopes.insert(geoScope)
                     }
                     boardAlertsModel.markSeen(forScopes: scopes)
-                    showNotices = true
+                    appChromeModel.presentNotices()
                 }) {
-                    // Fill marks unseen new pins; the tint says the current
-                    // scope has notices at all.
-                    Image(systemName: unseenNoticesCount > 0 ? "pin.fill" : "pin")
+                    // Filled whenever the current scope has notices at all
+                    // (matching the orange tint); hollow means nothing here.
+                    Image(systemName: scopeHasNotices || unseenNoticesCount > 0 ? "pin.fill" : "pin")
                         .font(.bitchatSystem(size: 12))
                         .foregroundColor(
                             scopeHasNotices || unseenNoticesCount > 0
@@ -249,11 +274,17 @@ struct ContentHeaderView: View {
                     )
                 )
                 // Connected-vs-nobody is otherwise encoded only in the icon's
-                // color; say it.
+                // color; say it. With a live bridge, also say who's across it.
                 .accessibilityValue(
-                    headerPeersReachable
-                    ? String(localized: "content.accessibility.peers_connected", comment: "Accessibility value when peers are reachable")
-                    : String(localized: "content.accessibility.peers_none", comment: "Accessibility value when no peers are reachable")
+                    showBridgedPeerCount
+                    ? String(
+                        format: String(localized: "content.accessibility.bridged_count", defaultValue: "%lld more people across the bridge", comment: "Accessibility value announcing the number of people reachable via the mesh bridge"),
+                        locale: .current,
+                        bridgeService.bridgedPeerCount
+                    )
+                    : (headerPeersReachable
+                        ? String(localized: "content.accessibility.peers_connected", comment: "Accessibility value when peers are reachable")
+                        : String(localized: "content.accessibility.peers_none", comment: "Accessibility value when no peers are reachable"))
                 )
             }
             .layoutPriority(3)
@@ -280,7 +311,10 @@ struct ContentHeaderView: View {
                 .environmentObject(locationChannelsModel)
                 .environmentObject(peerListModel)
         }
-        .sheet(isPresented: $showNotices) {
+        .sheet(
+            isPresented: $appChromeModel.isNoticesSheetPresented,
+            onDismiss: { appChromeModel.noticesSheetPrefersGeoTab = false }
+        ) {
             NoticesView(
                 senderNickname: appChromeModel.nickname,
                 board: appChromeModel.boardManager,
@@ -321,8 +355,12 @@ private extension ContentHeaderView {
     }
 
     /// Open the notices sheet on the tab matching the current channel: the
-    /// geohash channel's notices, or the mesh-local board in mesh chat.
+    /// geohash channel's notices, or the mesh-local board in mesh chat. An
+    /// explicit geo-tab request (the "notes left here" hint) wins.
     var initialNoticesTab: NoticesView.Tab {
+        if appChromeModel.noticesSheetPrefersGeoTab {
+            return .geo
+        }
         if case .location = locationChannelsModel.selectedChannel {
             return .geo
         }
@@ -338,9 +376,12 @@ private extension ContentHeaderView {
         return locationChannelsModel.currentBuildingGeohash
     }
 
-    /// Whether either tab of the notices sheet currently has content.
+    /// Whether either tab of the notices sheet currently has content: board
+    /// posts in scope, plus Nostr-only location notes when the nearby-notes
+    /// counter happens to be live (it runs with the empty mesh timeline).
     var scopeHasNotices: Bool {
         boardPosts.contains { $0.geohash.isEmpty || $0.geohash == noticesGeoScope }
+            || nearbyNotes.noteCount > 0
     }
 
     /// New pins in either visible scope since the sheet was last opened.

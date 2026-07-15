@@ -10,6 +10,10 @@ final class AppChromeModel: ObservableObject {
     @Published var showingFingerprintFor: PeerID?
     @Published var isAppInfoPresented = false
     @Published var isLocationChannelsSheetPresented = false
+    @Published var isNoticesSheetPresented = false
+    /// When the sheet is opened for "notes left here" (empty mesh timeline),
+    /// it should land on the geo tab instead of the channel-derived default.
+    @Published var noticesSheetPrefersGeoTab = false
     @Published var showBluetoothAlert = false
     @Published var bluetoothAlertMessage = ""
     @Published var bluetoothState: CBManagerState = .unknown
@@ -69,6 +73,11 @@ final class AppChromeModel: ObservableObject {
 
     func presentAppInfo() {
         isAppInfoPresented = true
+    }
+
+    func presentNotices(geoTab: Bool = false) {
+        noticesSheetPrefersGeoTab = geoTab
+        isNoticesSheetPresented = true
     }
 
     /// Builds the mesh topology map model from the transport's gossiped

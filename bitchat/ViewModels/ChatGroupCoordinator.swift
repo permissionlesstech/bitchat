@@ -336,7 +336,12 @@ final class ChatGroupCoordinator {
         guard !content.isEmpty, content.count <= InputValidator.Limits.maxMessageLength else { return }
         guard let group = context.groupStore.group(for: groupPeerID),
               let key = context.groupStore.key(forGroupID: group.groupID) else {
-            context.addSystemMessage(String(localized: "system.group.unknown", comment: "System message when sending into an unknown group"))
+            // The person is inside the group thread; the error belongs there,
+            // not on the active public timeline.
+            context.addLocalPrivateSystemMessage(
+                String(localized: "system.group.unknown", comment: "System message when sending into an unknown group"),
+                to: groupPeerID
+            )
             return
         }
 
@@ -387,7 +392,7 @@ final class ChatGroupCoordinator {
     /// Decrypt-verify path for an incoming 0x25 broadcast. Drops silently for
     /// unknown groups (non-members relay but never read), wrong epochs, bad
     /// sender signatures, and senders missing from the pinned roster.
-    func handleGroupMessagePayload(_ payload: Data, timestamp: Date) {
+    func handleGroupMessagePayload(_ payload: Data, timestamp _: Date) {
         guard let envelope = GroupMessageEnvelope.decode(payload) else { return }
         guard let group = context.groupStore.group(withID: envelope.groupID) else { return }
         guard envelope.epoch == group.epoch else {

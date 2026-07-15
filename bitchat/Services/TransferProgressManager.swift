@@ -49,12 +49,6 @@ final class TransferProgressManager {
         }
     }
 
-    func reset(id: String) {
-        queue.async(flags: .barrier) { [weak self] in
-            self?.states.removeValue(forKey: id)
-        }
-    }
-
     func snapshot(id: String) -> (sent: Int, total: Int)? {
         var result: (sent: Int, total: Int)?
         queue.sync {

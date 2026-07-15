@@ -11,8 +11,6 @@ struct ContentPeopleSheetView: View {
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
     @EnvironmentObject private var verificationModel: VerificationModel
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
-    @EnvironmentObject private var locationChannelsModel: LocationChannelsModel
-    @EnvironmentObject private var peerListModel: PeerListModel
 
     @Binding var showSidebar: Bool
     @Binding var messageText: String
@@ -79,8 +77,7 @@ struct ContentPeopleSheetView: View {
                     #endif
                 } else {
                     ContentPeopleListView(
-                        showSidebar: $showSidebar,
-                        headerHeight: headerHeight
+                        showSidebar: $showSidebar
                     )
                 }
             }
@@ -142,8 +139,6 @@ private struct ContentPeopleListView: View {
 
     @Binding var showSidebar: Bool
 
-    let headerHeight: CGFloat
-
     @State private var showVerifySheet = false
 
     var body: some View {
@@ -179,32 +174,13 @@ private struct ContentPeopleListView: View {
                     }
                 }
 
-                let activeText = String.localizedStringWithFormat(
-                    String(localized: "%@ active", comment: "Count of active users in the people sheet"),
-                    "\(peopleSheetActiveCount)"
-                )
-
-                if let subtitle = peopleSheetSubtitle {
-                    let subtitleColor: Color = {
-                        switch locationChannelsModel.selectedChannel {
-                        case .mesh:
-                            return palette.accentBlue
-                        case .location:
-                            return palette.locationAccent
-                        }
-                    }()
-
-                    HStack(spacing: 6) {
-                        Text(subtitle)
-                            .foregroundColor(subtitleColor)
-                        Text(activeText)
-                            .foregroundColor(palette.secondary)
-                    }
-                    .bitchatFont(size: 12)
-                } else {
-                    Text(activeText)
+                // The mesh sheet titles its sections inline (#mesh / across
+                // the bridge / groups) — no subtitle or count up here.
+                // Location channels keep their geohash subtitle.
+                if case .location(let channel) = locationChannelsModel.selectedChannel {
+                    Text(verbatim: "#\(channel.geohash.lowercased())")
                         .bitchatFont(size: 12)
-                        .foregroundColor(palette.secondary)
+                        .foregroundColor(palette.locationAccent)
                 }
             }
             .padding(.horizontal, 16)
@@ -213,7 +189,10 @@ private struct ContentPeopleListView: View {
             .themedSurface()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 6) {
+                // spacing 0: every section supplies its own rhythm (header
+                // top 12 / bottom 4, rows vertical 4), so inter-child spacing
+                // here would make the first section's gap read differently.
+                VStack(alignment: .leading, spacing: 0) {
                     if case .location = locationChannelsModel.selectedChannel {
                         GeohashPeopleList(
                             onTapPerson: {
@@ -221,12 +200,10 @@ private struct ContentPeopleListView: View {
                             }
                         )
                     } else {
-                        GroupChatList(
-                            groups: peerListModel.groupRows,
-                            onTapGroup: { peerID in
-                                peerListModel.startConversation(with: peerID)
-                                showSidebar = true
-                            }
+                        PeopleSectionHeader(
+                            icon: "antenna.radiowaves.left.and.right",
+                            iconColor: palette.accentBlue,
+                            title: "#mesh"
                         )
                         MeshPeerList(
                             onTapPeer: { peerID in
@@ -247,9 +224,24 @@ private struct ContentPeopleListView: View {
                                 }
                             }
                         )
+                        // People in this area but beyond radio range, and
+                        // private groups: one sheet for the whole room.
+                        BridgePeopleList()
+                        GroupChatList(
+                            groups: peerListModel.groupRows,
+                            onTapGroup: { peerID in
+                                peerListModel.startConversation(with: peerID)
+                                showSidebar = true
+                            }
+                        )
                     }
                 }
                 .padding(.top, 4)
+                // Full width even when every row is narrow (empty mesh, no
+                // groups): without this the VStack hugs its widest child and
+                // the ScrollView centers it — headers and empty states
+                // floated mid-screen on iPhone.
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .id(peerListModel.renderID)
             }
         }
@@ -265,27 +257,9 @@ private extension ContentPeopleListView {
         String(localized: "content.header.people", comment: "Title for the people list sheet").lowercased()
     }
 
-    var peopleSheetSubtitle: String? {
-        switch locationChannelsModel.selectedChannel {
-        case .mesh:
-            return "#mesh"
-        case .location(let channel):
-            return "#\(channel.geohash.lowercased())"
-        }
-    }
-
-    var peopleSheetActiveCount: Int {
-        switch locationChannelsModel.selectedChannel {
-        case .mesh:
-            return peerListModel.reachableMeshPeerCount
-        case .location:
-            return peerListModel.visibleGeohashPeerCount
-        }
-    }
 }
 
 private struct ContentPrivateChatSheetView: View {
-    @EnvironmentObject private var appChromeModel: AppChromeModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
 
     @Binding var showSidebar: Bool
@@ -393,6 +367,11 @@ private struct ContentPrivateChatSheetView: View {
             )
             .themedSurface()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Swipe-right-to-leave lives on the message list only. On the
+            // whole sheet it preempted the composer's press-and-hold mic
+            // gesture (a high-priority ancestor drag cancels child gestures
+            // within milliseconds — same starvation as the image-reveal bug).
+            .highPriorityGesture(swipeToLeaveGesture)
 
             if !theme.usesGlassChrome {
                 Divider()
@@ -423,18 +402,19 @@ private struct ContentPrivateChatSheetView: View {
         }
         .themedSheetBackground()
         .foregroundColor(palette.primary)
-        .highPriorityGesture(
-            DragGesture(minimumDistance: 25, coordinateSpace: .local)
-                .onEnded { value in
-                    let horizontal = value.translation.width
-                    let vertical = abs(value.translation.height)
-                    guard horizontal > 80, vertical < 60 else { return }
-                    withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
-                        showSidebar = true
-                        privateConversationModel.endConversation()
-                    }
+    }
+
+    private var swipeToLeaveGesture: some Gesture {
+        DragGesture(minimumDistance: 25, coordinateSpace: .local)
+            .onEnded { value in
+                let horizontal = value.translation.width
+                let vertical = abs(value.translation.height)
+                guard horizontal > 80, vertical < 60 else { return }
+                withAnimation(.easeInOut(duration: TransportConfig.uiAnimationMediumSeconds)) {
+                    showSidebar = true
+                    privateConversationModel.endConversation()
                 }
-        )
+            }
     }
 
     /// Persistent one-line reminder that this composer feeds a private
@@ -542,10 +522,14 @@ private struct ContentPrivateHeaderInfoButton: View {
                             .foregroundColor(.purple)
                             .accessibilityLabel(String(localized: "content.accessibility.available_nostr", comment: "Accessibility label for Nostr-available peer indicator"))
                     case .offline:
-                        // Absence of a glyph was the only offline signal; say it.
-                        Text("mesh_peers.state.offline")
-                            .bitchatFont(size: 11)
+                        // Slashed variant of the connected glyph — offline as
+                        // the negation of connected, no text label (a leading
+                        // one read as part of the name: "sin conexión bob").
+                        // VoiceOver still says it.
+                        Image(systemName: "antenna.radiowaves.left.and.right.slash")
+                            .font(.bitchatSystem(size: 14))
                             .foregroundColor(palette.secondary)
+                            .accessibilityLabel(String(localized: "mesh_peers.state.offline", comment: "State label for a peer that is not currently reachable"))
                     }
                 }
 
@@ -580,6 +564,7 @@ private struct ContentPrivateHeaderInfoButton: View {
                             )
                         )
                 }
+
             }
         }
         .buttonStyle(.plain)

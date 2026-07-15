@@ -66,6 +66,52 @@ struct CourierStoreTests {
         #expect(store.takeEnvelopes(for: Data(repeating: 0xB0, count: 32)).count == 1)
     }
 
+    @Test func rejectedPhysicalHandoverRetainsEnvelopeUntilAcceptedRetry() {
+        let store = makeStore()
+        let recipientKey = Data(repeating: 0xB0, count: 32)
+        let envelope = makeEnvelope(recipientKey: recipientKey)
+        #expect(store.deposit(envelope, from: depositorA))
+
+        var rejectedOffers: [CourierEnvelope] = []
+        let rejected = store.handoverEnvelopes(for: recipientKey) { offered in
+            rejectedOffers.append(offered)
+            return false
+        }
+
+        #expect(rejected == 0)
+        #expect(rejectedOffers == [envelope])
+        #expect(!store.isEmpty)
+
+        var acceptedOffers: [CourierEnvelope] = []
+        let accepted = store.handoverEnvelopes(for: recipientKey) { offered in
+            acceptedOffers.append(offered)
+            return true
+        }
+        #expect(accepted == 1)
+        #expect(acceptedOffers == [envelope])
+        #expect(store.isEmpty)
+    }
+
+    @Test func midTrainFragmentRejectionRetainsDurableEnvelope() {
+        let store = makeStore()
+        let recipientKey = Data(repeating: 0xB0, count: 32)
+        let envelope = makeEnvelope(recipientKey: recipientKey)
+        #expect(store.deposit(envelope, from: depositorA))
+
+        var attemptedFragments: [Int] = []
+        let accepted = store.handoverEnvelopes(for: recipientKey) { _ in
+            BLEStrictFragmentAdmission.admitAll([0, 1, 2]) { fragment in
+                attemptedFragments.append(fragment)
+                return fragment != 1
+            }
+        }
+
+        #expect(accepted == 0)
+        #expect(attemptedFragments == [0, 1])
+        #expect(!store.isEmpty)
+        #expect(store.takeEnvelopes(for: recipientKey) == [envelope])
+    }
+
     @Test func duplicateDepositIsIdempotent() {
         let store = makeStore()
         let recipientKey = Data(repeating: 0xB0, count: 32)
@@ -172,6 +218,46 @@ struct CourierStoreTests {
 
         let second = CourierStore(persistsToDisk: true, fileURL: fileURL, now: { Self.baseDate })
         #expect(second.takeEnvelopes(for: recipientKey) == [envelope])
+    }
+
+    @Test func protectedDataReadFailureDoesNotOverwriteDurableMailAndMergesOnRecovery() {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("courier-protected-data-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("envelopes.json")
+        defer { try? FileManager.default.removeItem(at: fileURL.deletingLastPathComponent()) }
+
+        let durableRecipient = Data(repeating: 0xE1, count: 32)
+        let wakeRecipient = Data(repeating: 0xE2, count: 32)
+        let durableEnvelope = makeEnvelope(recipientKey: durableRecipient)
+        let wakeEnvelope = makeEnvelope(recipientKey: wakeRecipient)
+        let seed = CourierStore(persistsToDisk: true, fileURL: fileURL, now: { Self.baseDate })
+        #expect(seed.deposit(durableEnvelope, from: depositorA))
+        let durableBytes = try? Data(contentsOf: fileURL)
+
+        var protectedDataUnavailable = true
+        let restored = CourierStore(
+            persistsToDisk: true,
+            fileURL: fileURL,
+            now: { Self.baseDate },
+            readData: { url in
+                if protectedDataUnavailable {
+                    throw NSError(domain: NSCocoaErrorDomain, code: NSFileReadNoPermissionError)
+                }
+                return try Data(contentsOf: url)
+            }
+        )
+        #expect(restored.deposit(wakeEnvelope, from: depositorB))
+
+        // The locked wake accepted new work in memory but did not replace the
+        // unreadable file with that partial view.
+        #expect((try? Data(contentsOf: fileURL)) == durableBytes)
+
+        protectedDataUnavailable = false
+        restored.retryDeferredPersistence()
+
+        let afterUnlock = CourierStore(persistsToDisk: true, fileURL: fileURL, now: { Self.baseDate })
+        #expect(afterUnlock.takeEnvelopes(for: durableRecipient) == [durableEnvelope])
+        #expect(afterUnlock.takeEnvelopes(for: wakeRecipient) == [wakeEnvelope])
     }
 
     // MARK: - Tiers (open couriering)
@@ -282,6 +368,29 @@ struct CourierStoreTests {
         #expect(store.takeEnvelopes(for: recipientKey).count == 1)
     }
 
+    @Test func rejectedSprayTransferPreservesBudgetAndCourierEligibility() {
+        let store = makeStore()
+        let recipientKey = Data(repeating: 0xB0, count: 32)
+        let courier = Data(repeating: 0xC1, count: 32)
+        #expect(store.deposit(makeEnvelope(recipientKey: recipientKey).withCopies(4), from: depositorA))
+
+        var rejectedOffers: [CourierEnvelope] = []
+        let rejected = store.transferSprayCopies(to: courier) { offered in
+            rejectedOffers.append(offered)
+            return false
+        }
+
+        #expect(rejected == 0)
+        #expect(rejectedOffers.map(\.copies) == [2])
+
+        // The same courier remains eligible and receives the original half
+        // budget, proving neither `copies` nor `sprayedTo` changed on failure.
+        let acceptedRetry = store.takeSprayCopies(for: courier)
+        #expect(acceptedRetry.map(\.copies) == [2])
+        let nextCourier = store.takeSprayCopies(for: Data(repeating: 0xC2, count: 32))
+        #expect(nextCourier.map(\.copies) == [1])
+    }
+
     @Test func carryOnlyEnvelopesAreNeverSprayed() {
         let store = makeStore()
         #expect(store.deposit(makeEnvelope(), from: depositorA))
@@ -298,6 +407,28 @@ struct CourierStoreTests {
 
         let sprayed = store.takeSprayCopies(for: Data(repeating: 0xC1, count: 32))
         #expect(sprayed.first?.copies == 2)
+    }
+
+    @Test func duplicateReplayCannotReplenishSpentSprayBudget() {
+        let store = makeStore()
+        let recipientKey = Data(repeating: 0xB0, count: 32)
+        let original = makeEnvelope(recipientKey: recipientKey).withCopies(8)
+        #expect(store.deposit(original, from: depositorA))
+
+        let courierX = Data(repeating: 0xC1, count: 32)
+        let courierY = Data(repeating: 0xC2, count: 32)
+        let courierZ = Data(repeating: 0xC3, count: 32)
+        let courierW = Data(repeating: 0xC4, count: 32)
+        #expect(store.takeSprayCopies(for: courierX).map(\.copies) == [4])
+
+        // Replaying the original signed deposit still accepts idempotently,
+        // but it cannot reset the local branch from 4 copies back to 8.
+        #expect(store.deposit(original, from: depositorA))
+        #expect(store.takeSprayCopies(for: courierY).map(\.copies) == [2])
+        #expect(store.deposit(original, from: depositorA))
+        #expect(store.takeSprayCopies(for: courierZ).map(\.copies) == [1])
+        #expect(store.deposit(original, from: depositorA))
+        #expect(store.takeSprayCopies(for: courierW).isEmpty)
     }
 
     // MARK: - Remote handover (relayed announces)
