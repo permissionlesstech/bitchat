@@ -52,9 +52,10 @@ struct ContentHeaderView: View {
                 .onTapGesture(count: 1) {
                     appChromeModel.presentAppInfo()
                 }
-                // This is the only entry point to App Info, but it reads as
-                // static text; surface the tap. (The triple-tap panic wipe
-                // stays undiscoverable on purpose — it's destructive.)
+                // The gear in the icon cluster is the discoverable entry
+                // point to App Info; the logo tap stays as a shortcut but
+                // reads as static text, so surface it. (The triple-tap panic
+                // wipe stays undiscoverable on purpose — it's destructive.)
                 .accessibilityAddTraits(.isButton)
                 .accessibilityHint(
                     String(localized: "content.accessibility.app_info_hint", comment: "Accessibility hint on the bitchat/ logo explaining a tap opens app info")
@@ -285,6 +286,23 @@ struct ContentHeaderView: View {
                     : (headerPeersReachable
                         ? String(localized: "content.accessibility.peers_connected", comment: "Accessibility value when peers are reachable")
                         : String(localized: "content.accessibility.peers_none", comment: "Accessibility value when no peers are reachable"))
+                )
+
+                // Settings entry point new users can actually find; the
+                // logo tap remains as a shortcut for those who know it.
+                Button(action: { appChromeModel.presentAppInfo() }) {
+                    Image(systemName: "gearshape")
+                        .font(.bitchatSystem(size: 12))
+                        .foregroundColor(palette.secondary.opacity(0.9))
+                        .headerTapTarget()
+                }
+                .buttonStyle(.plain)
+                .padding(.leading, 4)
+                .accessibilityLabel(
+                    String(localized: "content.header.settings", defaultValue: "settings", comment: "Accessibility label and tooltip for the header gear button that opens the settings/app info sheet")
+                )
+                .help(
+                    String(localized: "content.header.settings", defaultValue: "settings", comment: "Accessibility label and tooltip for the header gear button that opens the settings/app info sheet")
                 )
             }
             .layoutPriority(3)
