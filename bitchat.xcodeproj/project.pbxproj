@@ -337,6 +337,7 @@
 				es,
 				ar,
 				de,
+				fa,
 				fr,
 				he,
 				id,

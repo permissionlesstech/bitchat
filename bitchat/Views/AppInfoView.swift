@@ -26,6 +26,10 @@ struct AppInfoView: View {
     /// introduction), and afterwards the sheet reopens wherever it was left.
     @AppStorage("appInfo.selectedPane") private var selectedPane: Pane = .info
     @State private var showPanicConfirmation = false
+    @AppStorage(AppLanguageSettings.overrideKey) private var languageOverride = ""
+    /// The override changed this session; localization resolves at process
+    /// start, so surface the restart hint.
+    @State private var showLanguageRestartNote = false
 
     private enum Pane: String {
         case settings
@@ -54,6 +58,11 @@ struct AppInfoView: View {
             static let tabInfo = String(localized: "app_info.tab.info", defaultValue: "info", comment: "Segmented control label for the info pane of the app info sheet")
 
             static let connectivityTitle = String(localized: "app_info.settings.connectivity.title", defaultValue: "CONNECTIVITY", comment: "Section header (uppercase) for the connectivity toggles: mesh bridge, internet gateway, tor routing")
+
+            static let languageTitle = String(localized: "app_info.settings.language.title", defaultValue: "LANGUAGE", comment: "Section header (uppercase) for the app language picker in settings")
+            static let languagePickerLabel = String(localized: "app_info.settings.language.picker_label", defaultValue: "app language", comment: "Label of the app language picker row in settings")
+            static let languageSystem = String(localized: "app_info.settings.language.system", defaultValue: "system default", comment: "Menu option that clears the in-app language override so the app follows the device language")
+            static let languageRestartNote = String(localized: "app_info.settings.language.restart_note", defaultValue: "restart bitchat to apply the new language", comment: "Caption shown after the user picks a different app language; the change takes effect on next launch")
 
             static let bridgeTitle = String(localized: "app_info.settings.bridge.title", defaultValue: "mesh bridge", comment: "Title of the mesh bridge toggle in settings")
             static let bridgeSubtitle = String(localized: "app_info.settings.bridge.subtitle", defaultValue: "joins nearby mesh islands over the internet: what you say in the mesh channel also reaches people in your area beyond radio range, and their messages appear here marked with the network glyph. while you have internet, your device also carries bridge and location-channel traffic for phones around you that have none.", comment: "Subtitle explaining what the mesh bridge toggle does")
@@ -313,6 +322,52 @@ struct AppInfoView: View {
                 }
             }
 
+            // Language — an in-app override so the UI language can differ
+            // from the device language (takes effect on next launch).
+            VStack(alignment: .leading, spacing: 12) {
+                SectionHeader(verbatim: Strings.Settings.languageTitle)
+
+                settingsCard {
+                    Menu {
+                        Button {
+                            selectLanguage(nil)
+                        } label: {
+                            menuItemLabel(Strings.Settings.languageSystem, isSelected: languageOverride.isEmpty)
+                        }
+                        Divider()
+                        ForEach(AppLanguageSettings.availableLanguages, id: \.self) { code in
+                            Button {
+                                selectLanguage(code)
+                            } label: {
+                                menuItemLabel(AppLanguageSettings.endonym(for: code), isSelected: languageOverride == code)
+                            }
+                        }
+                    } label: {
+                        HStack {
+                            Text(Strings.Settings.languagePickerLabel)
+                                .bitchatFont(size: 12, weight: .semibold)
+                                .foregroundColor(textColor)
+                            Spacer()
+                            Text(languageOverride.isEmpty ? Strings.Settings.languageSystem : AppLanguageSettings.endonym(for: languageOverride))
+                                .bitchatFont(size: 12)
+                                .foregroundColor(palette.accent)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.system(size: 10))
+                                .foregroundColor(secondaryTextColor)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+
+                    if showLanguageRestartNote {
+                        Text(Strings.Settings.languageRestartNote)
+                            .bitchatFont(size: 11)
+                            .foregroundColor(secondaryTextColor)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+
             // Voice — same card + IRC pill as every other toggle setting.
             VStack(alignment: .leading, spacing: 12) {
                 SectionHeader(Strings.Voice.title)
@@ -456,6 +511,24 @@ struct AppInfoView: View {
             }
         }
         .padding()
+    }
+
+    private func selectLanguage(_ code: String?) {
+        let previous = languageOverride
+        AppLanguageSettings.setOverride(code)
+        languageOverride = code ?? ""
+        if languageOverride != previous {
+            showLanguageRestartNote = true
+        }
+    }
+
+    private func menuItemLabel(_ title: String, isSelected: Bool) -> some View {
+        HStack {
+            Text(title)
+            if isSelected {
+                Image(systemName: "checkmark")
+            }
+        }
     }
 
     private var bridgeToggleBinding: Binding<Bool> {
