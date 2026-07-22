@@ -69564,6 +69564,378 @@
           }
         }
       }
+    },
+    "location_channels.quick_join.title" : {
+      "comment" : "Collapsible section header in the location channels sheet offering one-tap country channels for heavily censored countries",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "منطقة خاضعة للرقابة؟ انضمام سريع"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "সেন্সর করা অঞ্চল? দ্রুত যোগ দিন"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zensierte Region? Schnellbeitritt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "censored region? quick join"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿región censurada? unión rápida"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "منطقه سانسورشده؟ ورود سریع"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "na-censor na rehiyon? mabilisang pagsali"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "région censurée ? accès rapide"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אזור מצונזר? הצטרפות מהירה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सेंसर किया गया क्षेत्र? त्वरित जुड़ें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wilayah disensor? gabung cepat"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "regione censurata? accesso rapido"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "検閲地域の方は？クイック参加"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "검열 지역이신가요? 빠른 참여"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wilayah ditapis? sertai pantas"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "सेन्सर गरिएको क्षेत्र? छिटो सामेल हुनुहोस्"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gecensureerde regio? snel deelnemen"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "region z cenzurą? szybkie dołączenie"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "região censurada? entrada rápida"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "região censurada? entrada rápida"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "регион с цензурой? быстрый вход"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "censurerad region? snabbanslutning"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "தணிக்கை செய்யப்பட்ட பகுதியா? விரைவு இணைப்பு"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ภูมิภาคที่ถูกเซ็นเซอร์? เข้าร่วมด่วน"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sansürlü bölge mi? hızlı katılım"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "регіон із цензурою? швидкий вхід"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "سنسر شدہ علاقہ؟ فوری شمولیت"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "khu vực bị kiểm duyệt? tham gia nhanh"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "受审查地区？快速加入"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "受審查地區？快速加入"
+          }
+        }
+      }
+    },
+    "location_channels.quick_join.description" : {
+      "comment" : "Caption under the quick join header explaining what the country list does and that it needs no location permission",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نقرة واحدة تدخلك قناة منطقة بلدك — دون الحاجة إلى إذن الموقع. للأماكن التي يخضع فيها الإنترنت المفتوح للحجب أو المراقبة."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "এক ট্যাপে আপনার দেশের আঞ্চলিক চ্যানেলে যোগ দিন — লোকেশন অনুমতির প্রয়োজন নেই। যেসব জায়গায় মুক্ত ইন্টারনেট ফিল্টার বা নজরদারি করা হয় তাদের জন্য।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Tipp genügt, um dem Regionskanal deines Landes beizutreten — ohne Standortfreigabe. Für Orte, an denen das offene Internet gefiltert oder überwacht wird."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "one tap into your country's region channel — no location access needed. for places where the open internet is filtered or watched."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "un toque para entrar al canal regional de tu país — sin necesidad de acceso a la ubicación. para lugares donde el internet abierto está filtrado o vigilado."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "با یک لمس وارد کانال منطقه‌ای کشورتان شوید — بدون نیاز به دسترسی موقعیت. برای جاهایی که اینترنت آزاد فیلتر یا رصد می‌شود."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "isang tap para makapasok sa channel ng rehiyon ng iyong bansa — hindi kailangan ng location access. para sa mga lugar kung saan sinasala o binabantayan ang bukas na internet."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "un geste pour rejoindre le canal régional de votre pays — sans accès à la localisation. pour les endroits où l'internet libre est filtré ou surveillé."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הקשה אחת אל ערוץ האזור של מדינתך — ללא צורך בהרשאת מיקום. למקומות שבהם האינטרנט הפתוח מסונן או מנוטר."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "एक टैप में अपने देश के क्षेत्रीय चैनल में शामिल हों — लोकेशन अनुमति की ज़रूरत नहीं। उन जगहों के लिए जहाँ खुला इंटरनेट फ़िल्टर या निगरानी में है।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "satu ketukan untuk masuk ke kanal wilayah negara Anda — tanpa akses lokasi. untuk tempat di mana internet terbuka disaring atau diawasi."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "un tocco per entrare nel canale regionale del tuo paese — senza accesso alla posizione. per i luoghi dove l'internet aperto è filtrato o sorvegliato."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ワンタップで自国の地域チャンネルに参加 — 位置情報の許可は不要。オープンなインターネットが検閲・監視されている場所のために。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "한 번의 탭으로 자국의 지역 채널에 참여하세요 — 위치 권한이 필요 없습니다. 개방된 인터넷이 차단되거나 감시되는 곳을 위한 기능입니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "satu ketikan untuk menyertai saluran wilayah negara anda — tanpa akses lokasi. untuk tempat yang internet terbukanya ditapis atau dipantau."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "एक ट्यापमै आफ्नो देशको क्षेत्रीय च्यानलमा सामेल हुनुहोस् — स्थान अनुमति चाहिँदैन। खुला इन्टरनेट फिल्टर वा निगरानी हुने ठाउँका लागि।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "één tik en je zit in het regiokanaal van je land — geen locatietoegang nodig. voor plekken waar het open internet wordt gefilterd of bekeken."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "jedno dotknięcie, by dołączyć do kanału regionu twojego kraju — bez dostępu do lokalizacji. dla miejsc, gdzie otwarty internet jest filtrowany lub nadzorowany."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "um toque para entrar no canal da região do seu país — sem acesso à localização. para lugares onde a internet aberta é filtrada ou vigiada."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "um toque para entrar no canal regional do seu país — sem precisar de acesso à localização. para lugares onde a internet aberta é filtrada ou vigiada."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "одно касание — и вы в региональном канале своей страны, без доступа к геолокации. для мест, где открытый интернет фильтруется или отслеживается."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ett tryck för att gå med i ditt lands regionkanal — ingen platsåtkomst behövs. för platser där det öppna internet filtreras eller övervakas."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ஒரே தட்டலில் உங்கள் நாட்டின் மண்டல சேனலில் இணையுங்கள் — இருப்பிட அணுகல் தேவையில்லை. திறந்த இணையம் வடிகட்டப்படும் அல்லது கண்காணிக்கப்படும் இடங்களுக்காக."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "แตะครั้งเดียวเพื่อเข้าร่วมช่องภูมิภาคของประเทศคุณ — ไม่ต้องใช้สิทธิ์ตำแหน่งที่ตั้ง สำหรับที่ที่อินเทอร์เน็ตเสรีถูกกรองหรือถูกจับตา"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tek dokunuşla ülkenizin bölge kanalına katılın — konum izni gerekmez. açık internetin filtrelendiği veya izlendiği yerler için."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "один дотик — і ви в регіональному каналі своєї країни, без доступу до геолокації. для місць, де відкритий інтернет фільтрується або відстежується."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ایک ٹیپ سے اپنے ملک کے علاقائی چینل میں شامل ہوں — لوکیشن کی اجازت درکار نہیں۔ ان جگہوں کے لیے جہاں کھلا انٹرنیٹ فلٹر یا زیرِ نگرانی ہے۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "một chạm để vào kênh khu vực của nước bạn — không cần quyền vị trí. dành cho những nơi internet mở bị chặn lọc hoặc theo dõi."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一键进入你所在国家的地区频道 — 无需位置权限。为开放互联网被过滤或监控的地方而设。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一鍵進入你所在國家的地區頻道 — 無需位置權限。為開放網路被過濾或監控的地方而設。"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"

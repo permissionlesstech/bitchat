@@ -12,6 +12,7 @@ struct LocationChannelsSheet: View {
     @ThemedPalette private var palette
     @State private var customGeohash: String = ""
     @State private var customError: String? = nil
+    @State private var quickJoinExpanded = false
 
     private enum Strings {
         static let title: LocalizedStringKey = "location_channels.title"
@@ -23,6 +24,9 @@ struct LocationChannelsSheet: View {
         static let grantToFind: LocalizedStringKey = "location_channels.grant_to_find"
         static let teleport: LocalizedStringKey = "location_channels.action.teleport"
         static let bookmarked: LocalizedStringKey = "location_channels.bookmarked_section_title"
+
+        static let quickJoinTitle = String(localized: "location_channels.quick_join.title", defaultValue: "censored region? quick join", comment: "Collapsible section header in the location channels sheet offering one-tap country channels for heavily censored countries")
+        static let quickJoinDescription = String(localized: "location_channels.quick_join.description", defaultValue: "one tap into your country's region channel — no location access needed. for places where the open internet is filtered or watched.", comment: "Caption under the quick join header explaining what the country list does and that it needs no location permission")
 
         static let invalidGeohash = String(localized: "location_channels.error.invalid_geohash", comment: "Error shown when a custom geohash is invalid")
         static let switchChannelHint = String(localized: "location_channels.accessibility.switch_hint", comment: "Accessibility hint on a channel row explaining activation switches to it")
@@ -236,6 +240,10 @@ struct LocationChannelsSheet: View {
                 customTeleportSection
                     .padding(.vertical, 8)
 
+                sectionDivider
+                quickJoinSection
+                    .padding(.vertical, 8)
+
                 let bookmarkedList = locationChannelsModel.bookmarks
                 if !bookmarkedList.isEmpty {
                     sectionDivider
@@ -315,6 +323,58 @@ struct LocationChannelsSheet: View {
                 Text(err)
                     .bitchatFont(size: 12)
                     .foregroundColor(.red)
+            }
+        }
+    }
+
+    /// One-tap country channels for people under heavy internet censorship:
+    /// no typing, no location permission — the row teleports straight into
+    /// the country's region-level geohash channel.
+    private var quickJoinSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button(action: { withAnimation { quickJoinExpanded.toggle() } }) {
+                HStack(spacing: 6) {
+                    Text(Strings.quickJoinTitle)
+                        .bitchatFont(size: 12)
+                        .foregroundColor(palette.secondary)
+                    Spacer()
+                    Image(systemName: quickJoinExpanded ? "chevron.up" : "chevron.down")
+                        .font(.bitchatSystem(size: 11))
+                        .foregroundColor(palette.secondary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if quickJoinExpanded {
+                Text(Strings.quickJoinDescription)
+                    .bitchatFont(size: 11)
+                    .foregroundColor(palette.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                LazyVStack(spacing: 0) {
+                    ForEach(QuickJoinRegion.sortedByName) { region in
+                        Button(action: {
+                            locationChannelsModel.teleport(to: region.geohash)
+                            isPresented = false
+                        }) {
+                            HStack {
+                                Text(verbatim: "\(region.flag) \(region.localizedName)")
+                                    .bitchatFont(size: 14)
+                                    .foregroundColor(palette.primary)
+                                Spacer()
+                                Text(verbatim: "#\(region.geohash)")
+                                    .bitchatFont(size: 12)
+                                    .foregroundColor(palette.secondary)
+                            }
+                            .padding(.vertical, 6)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(region.localizedName)
+                        .accessibilityHint(Strings.switchChannelHint)
+                    }
+                }
             }
         }
     }
