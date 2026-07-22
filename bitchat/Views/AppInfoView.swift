@@ -203,6 +203,73 @@ struct AppInfoView: View {
             }
         }
 
+        /// A defensive OpSec guide for people using bitchat under
+        /// surveillance. Every claim here is grounded in the actual
+        /// implementation and deliberately states the limits of each
+        /// protection — false confidence is the dangerous failure mode.
+        enum Sensitive {
+            static let title = String(localized: "app_info.sensitive.title", defaultValue: "SENSITIVE AREAS", comment: "Section header (uppercase) for the safety/OpSec guide aimed at users in hostile surveillance environments")
+            static let intro = String(localized: "app_info.sensitive.intro", defaultValue: "bitchat reduces risk; it does not make you invisible. if you're somewhere hostile, read this before you post — assume public channels are watched, and act like it.", comment: "Intro paragraph for the sensitive-areas safety guide, setting an honest, non-alarmist tone")
+
+            static let entries: [AppInfoFeatureInfo] = [
+                AppInfoFeatureInfo(
+                    icon: "eye.slash",
+                    resolvedTitle: String(localized: "app_info.sensitive.public_channels.title", defaultValue: "public means watched", comment: "Guide entry title: public channels should be treated as monitored"),
+                    resolvedDescription: String(localized: "app_info.sensitive.public_channels.body", defaultValue: "anyone can join any mesh or geohash channel, and channel messages are signed but not encrypted — readable verbatim by any nearby radio or relay. treat every public channel as monitored. keep sensitive talk in verified private messages, never in channels.", comment: "Guide entry body explaining public channels are unencrypted and joinable by anyone")
+                ),
+                AppInfoFeatureInfo(
+                    icon: "person.fill.questionmark",
+                    resolvedTitle: String(localized: "app_info.sensitive.teleport.title", defaultValue: "a geohash is not an identity", comment: "Guide entry title: a geohash channel does not reveal who or where someone is"),
+                    resolvedDescription: String(localized: "app_info.sensitive.teleport.body", defaultValue: "being in a channel doesn't prove where anyone is — anyone can teleport into any geohash from anywhere, so a watcher looks identical to a neighbor and you cannot \"detect\" a monitor. teleporting doesn't silence you either: your device still sends coarse presence to your real city-level cells.", comment: "Guide entry body correcting the belief that a geohash identifies or locates a person")
+                ),
+                AppInfoFeatureInfo(
+                    icon: "mappin.and.ellipse",
+                    resolvedTitle: String(localized: "app_info.sensitive.precision.title", defaultValue: "pick a coarse geohash", comment: "Guide entry title: prefer low-precision geohash channels when location is sensitive"),
+                    resolvedDescription: String(localized: "app_info.sensitive.precision.body", defaultValue: "every message you post pins you to that channel's cell: block is ~150m, building ~38m, and custom teleport goes finer still. automatic presence stops at city level, but posting discloses the channel's precision. prefer city or coarser when your location is sensitive.", comment: "Guide entry body explaining geohash precision and location disclosure")
+                ),
+                AppInfoFeatureInfo(
+                    icon: "checkmark.shield",
+                    resolvedTitle: String(localized: "app_info.sensitive.verify.title", defaultValue: "verify before you trust", comment: "Guide entry title: verify a contact's identity out of band before trusting them"),
+                    resolvedDescription: String(localized: "app_info.sensitive.verify.body", defaultValue: "mesh dms are end-to-end encrypted, but the lock icon means encrypted, not identified. the green \"verified\" check is only as strong as your out-of-band step — \"mark as verified\" compares nothing on its own, so match the full fingerprint or scan the qr with the real person. it binds a key, not a human.", comment: "Guide entry body explaining fingerprint verification and that the lock only means encrypted")
+                ),
+                AppInfoFeatureInfo(
+                    icon: "arrow.triangle.branch",
+                    resolvedTitle: String(localized: "app_info.sensitive.transport.title", defaultValue: "verified on mesh isn't verified online", comment: "Guide entry title: verification only covers the Bluetooth mesh, not internet delivery"),
+                    resolvedDescription: String(localized: "app_info.sensitive.transport.body", defaultValue: "the verified badge comes from the bluetooth/noise session only. internet (nostr) dms use a separate key with no fingerprint, so a peer you verified over bluetooth isn't covered when messages fall back to the internet. relays also see the recipient's nostr key in the clear.", comment: "Guide entry body explaining verification does not extend to internet-routed messages")
+                ),
+                AppInfoFeatureInfo(
+                    icon: "network",
+                    resolvedTitle: String(localized: "app_info.sensitive.tor.title", defaultValue: "tor hides your ip, not your words", comment: "Guide entry title: Tor masks the IP address but does not encrypt content"),
+                    resolvedDescription: String(localized: "app_info.sensitive.tor.body", defaultValue: "tor routing is on by default and fails closed — it routes nostr relay traffic through tor to mask your ip from relays, and queues messages rather than leaking when tor isn't ready. it doesn't encrypt channel content, hide your nostr key from relays, or touch the bluetooth mesh, and an observer can still see you're using tor. leave it on; turning it off hands relays your real ip.", comment: "Guide entry body explaining what Tor routing does and does not protect")
+                ),
+                AppInfoFeatureInfo(
+                    icon: "antenna.radiowaves.left.and.right",
+                    resolvedTitle: String(localized: "app_info.sensitive.identity.title", defaultValue: "minimize what you leak", comment: "Guide entry title: reduce identifying information broadcast over Bluetooth"),
+                    resolvedDescription: String(localized: "app_info.sensitive.identity.body", defaultValue: "with bluetooth on you broadcast a fixed bitchat service id (you're visibly a user) plus a signed announce carrying your nickname and long-term keys in the clear. even encrypted dms expose both peer ids — who talks to whom. your id is stable across restarts until a wipe, so never use a real name or known handle as your nickname.", comment: "Guide entry body explaining what identifying information Bluetooth broadcasts reveal")
+                ),
+                AppInfoFeatureInfo(
+                    icon: "person.crop.circle.badge.questionmark",
+                    resolvedTitle: String(localized: "app_info.sensitive.elicitation.title", defaultValue: "watch for elicitation", comment: "Guide entry title: beware strangers fishing for identifying information"),
+                    resolvedDescription: String(localized: "app_info.sensitive.elicitation.body", defaultValue: "display names are freely chosen and unverifiable — a friendly stranger probing for who, where, when, or who-else is the cheapest attack there is. don't disclose real names, locations, or plans on the strength of a nickname, and verify out-of-band before moving sensitive talk to dm.", comment: "Guide entry body warning about social-engineering and elicitation in chats")
+                ),
+                AppInfoFeatureInfo(
+                    icon: "nosign",
+                    resolvedTitle: String(localized: "app_info.sensitive.blocking.title", defaultValue: "block is a local filter, not a shield", comment: "Guide entry title: blocking only hides messages locally"),
+                    resolvedDescription: String(localized: "app_info.sensitive.blocking.body", defaultValue: "there's no mute — only block. blocking drops a peer's messages on your device after they arrive and decrypt; it doesn't stop them transmitting, doesn't stop your phone relaying their traffic to others, and doesn't notify them. it's per-identity, so a fresh keypair walks right past it.", comment: "Guide entry body explaining the limits of blocking")
+                ),
+                AppInfoFeatureInfo(
+                    icon: "flame",
+                    resolvedTitle: String(localized: "app_info.sensitive.panic.title", defaultValue: "panic wipe is local and instant", comment: "Guide entry title: the panic wipe erases local data immediately"),
+                    resolvedDescription: String(localized: "app_info.sensitive.panic.body", defaultValue: "triple-tap the bitchat/ logo to wipe with no confirmation (settings has a confirmed version). it erases messages, keys, identity, favorites, blocks, and location on this device — but media clears a moment later in the background, so keep the app open briefly. it can't recall anything already sent, doesn't shred forensically, and leaves any icloud/finder backups untouched.", comment: "Guide entry body explaining what the panic wipe does and its limits")
+                ),
+                AppInfoFeatureInfo(
+                    icon: "lifepreserver",
+                    resolvedTitle: String(localized: "app_info.sensitive.help.title", defaultValue: "get real training", comment: "Guide entry title: seek dedicated digital-security resources"),
+                    resolvedDescription: String(localized: "app_info.sensitive.help.body", defaultValue: "this guide lowers risk; it doesn't make you invisible, and no app replaces an operational security plan. for threat modeling and incident response, see eff surveillance self-defense and the access now digital security helpline.", comment: "Guide entry body pointing to external digital-security resources (EFF Surveillance Self-Defense, Access Now Digital Security Helpline)")
+                )
+            ]
+        }
+
     }
 
     var body: some View {
@@ -523,6 +590,21 @@ struct AppInfoView: View {
                     .bitchatFont(size: 14)
                     .foregroundColor(textColor)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+
+            // Guide for users in sensitive areas — an honest OpSec primer
+            // for people using bitchat under surveillance.
+            VStack(alignment: .leading, spacing: 16) {
+                SectionHeader(verbatim: Strings.Sensitive.title)
+
+                Text(verbatim: Strings.Sensitive.intro)
+                    .bitchatFont(size: 13)
+                    .foregroundColor(secondaryTextColor)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                ForEach(Strings.Sensitive.entries, id: \.icon) { info in
+                    FeatureRow(info: info)
+                }
             }
 
             // Network diagnostics
