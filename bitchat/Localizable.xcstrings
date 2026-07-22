@@ -76527,6 +76527,564 @@
         "zh-Hans" : { "stringUnit" : { "state" : "needs_review", "value" : "用于草稿" } },
         "zh-Hant" : { "stringUnit" : { "state" : "needs_review", "value" : "用於草稿" } }
       }
+    },
+    "location_channels.quick_join.title" : {
+      "comment" : "Section header in the location channels sheet for the one-tap suggestion of the region channel derived from the device region",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0627\u0646\u0636\u0645\u0627\u0645 \u0633\u0631\u064a\u0639"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u09a6\u09cd\u09b0\u09c1\u09a4 \u09af\u09cb\u0997"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "schnellbeitritt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "quick join"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "acceso r\u00e1pido"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u067e\u06cc\u0648\u0633\u062a\u0646 \u0633\u0631\u06cc\u0639"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mabilis na pagsali"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "acc\u00e8s rapide"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u05d4\u05e6\u05d8\u05e8\u05e4\u05d5\u05ea \u05de\u05d4\u05d9\u05e8\u05d4"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u091d\u091f\u092a\u091f \u091c\u0941\u0921\u093c\u0947\u0902"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gabung cepat"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "accesso rapido"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u30af\u30a4\u30c3\u30af\u53c2\u52a0"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\ube60\ub978 \ucc38\uc5ec"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sertai pantas"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u091b\u093f\u091f\u094b \u0938\u093e\u092e\u0947\u0932"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "snel deelnemen"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "szybkie do\u0142\u0105czenie"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "entrada r\u00e1pida"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "entrada r\u00e1pida"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0431\u044b\u0441\u0442\u0440\u044b\u0439 \u0432\u0445\u043e\u0434"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "snabbanslutning"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0bb5\u0bbf\u0bb0\u0bc8\u0bb5\u0bc1 \u0b9a\u0bc7\u0bb0\u0bcd\u0b95\u0bcd\u0b95\u0bc8"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0e40\u0e02\u0e49\u0e32\u0e23\u0e48\u0e27\u0e21\u0e14\u0e48\u0e27\u0e19"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "h\u0131zl\u0131 kat\u0131l\u0131m"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0448\u0432\u0438\u0434\u043a\u0438\u0439 \u0432\u0445\u0456\u0434"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0641\u0648\u0631\u06cc \u0634\u0645\u0648\u0644\u06cc\u062a"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tham gia nhanh"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u5feb\u901f\u52a0\u5165"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u5feb\u901f\u52a0\u5165"
+          }
+        }
+      }
+    },
+    "location_channels.quick_join.description" : {
+      "comment" : "Caption under the quick join row; %@ is the localized country/region name. States plainly that the cell is the main population center's (not the person's location), that the channel must be assumed watched, and that quick join is discovery, not circumvention",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0642\u0646\u0627\u0629 \u0627\u0644\u0645\u0646\u0637\u0642\u0629 \u0627\u0644\u062a\u064a \u064a\u062a\u062c\u0645\u0639 \u0641\u064a\u0647\u0627 \u0639\u0627\u062f\u0629\u064b \u0627\u0644\u0646\u0627\u0633 \u0645\u0646 %@ \u2014 \u0627\u0644\u062e\u0644\u064a\u0629 \u0627\u0644\u0648\u0627\u0633\u0639\u0629 \u062d\u0648\u0644 \u0623\u0643\u0628\u0631 \u0645\u0631\u0643\u0632 \u0633\u0643\u0627\u0646\u064a\u060c \u0648\u0644\u064a\u0633\u062a \u0645\u0648\u0642\u0639\u0643. \u0625\u0646\u0647\u0627 \u0639\u0627\u0645\u0629 \u0648\u0645\u0639\u0631\u0648\u0641\u0629 \u0644\u0644\u062c\u0645\u064a\u0639\u060c \u0641\u0627\u0641\u062a\u0631\u0636 \u0623\u0646\u0647\u0627 \u0645\u0631\u0627\u0642\u0628\u0629: \u0627\u0644\u0627\u0646\u0636\u0645\u0627\u0645 \u0627\u0644\u0633\u0631\u064a\u0639 \u064a\u0648\u0641\u0651\u0631 \u0639\u0644\u064a\u0643 \u0643\u062a\u0627\u0628\u0629 \u0627\u0644\u062c\u064a\u0648\u0647\u0627\u0634 \u0641\u0642\u0637\u061b \u0644\u0627 \u064a\u062e\u0641\u064a\u0643 \u0648\u0644\u0627 \u064a\u062a\u062c\u0627\u0648\u0632 \u0627\u0644\u062d\u062c\u0628."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u09af\u09c7 \u0985\u099e\u09cd\u099a\u09b2-\u099a\u09cd\u09af\u09be\u09a8\u09c7\u09b2\u09c7 %@-\u098f\u09b0 \u09ae\u09be\u09a8\u09c1\u09b7 \u09b8\u09be\u09a7\u09be\u09b0\u09a3\u09a4 \u099c\u09a1\u09bc\u09cb \u09b9\u09af\u09bc \u2014 \u09b8\u09ac\u099a\u09c7\u09af\u09bc\u09c7 \u09ac\u09a1\u09bc \u099c\u09a8\u0995\u09c7\u09a8\u09cd\u09a6\u09cd\u09b0\u09c7\u09b0 \u099a\u09be\u09b0\u09aa\u09be\u09b6\u09c7\u09b0 \u09ac\u09bf\u09b8\u09cd\u09a4\u09c3\u09a4 \u09b8\u09c7\u09b2, \u0986\u09aa\u09a8\u09be\u09b0 \u0985\u09ac\u09b8\u09cd\u09a5\u09be\u09a8 \u09a8\u09af\u09bc\u0964 \u098f\u099f\u09bf \u09aa\u09cd\u09b0\u0995\u09be\u09b6\u09cd\u09af \u0993 \u09b8\u09c1\u09aa\u09b0\u09bf\u099a\u09bf\u09a4, \u09a4\u09be\u0987 \u09a7\u09b0\u09c7 \u09a8\u09bf\u09a8 \u098f\u099f\u09bf \u09a8\u099c\u09b0\u09a6\u09be\u09b0\u09bf\u09a4\u09c7 \u0986\u099b\u09c7: \u09a6\u09cd\u09b0\u09c1\u09a4 \u09af\u09cb\u0997 \u09b6\u09c1\u09a7\u09c1 \u099c\u09bf\u0993\u09b9\u09cd\u09af\u09be\u09b6 \u099f\u09be\u0987\u09aa \u0995\u09b0\u09be \u09ac\u09be\u0981\u099a\u09be\u09af\u09bc; \u098f\u099f\u09bf \u0986\u09aa\u09a8\u09be\u0995\u09c7 \u09b2\u09c1\u0995\u09be\u09af\u09bc \u09a8\u09be, \u09ac\u09cd\u09b2\u0995\u0993 \u098f\u09a1\u09bc\u09be\u09af\u09bc \u09a8\u09be\u0964"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "der regionskanal, in dem sich leute aus %@ meist sammeln \u2014 die weite zelle um das gr\u00f6\u00dfte bev\u00f6lkerungszentrum, nicht dein standort. er ist \u00f6ffentlich und allgemein bekannt, geh also davon aus, dass er beobachtet wird: schnellbeitritt spart nur das eintippen des geohash; er versteckt dich nicht und umgeht keine sperren."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the region channel where people from %@ tend to gather \u2014 the wide cell around the main population center, not your location. it's public and well-known, so assume it's watched: quick join saves typing a geohash; it doesn't hide you or bypass blocks."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "el canal de regi\u00f3n donde suele reunirse la gente de %@ \u2014 la celda amplia alrededor del mayor centro de poblaci\u00f3n, no tu ubicaci\u00f3n. es p\u00fablico y conocido, as\u00ed que asume que est\u00e1 vigilado: el acceso r\u00e1pido solo te ahorra escribir el geohash; no te oculta ni evita bloqueos."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u06a9\u0627\u0646\u0627\u0644 \u0645\u0646\u0637\u0642\u0647\u200c\u0627\u06cc \u06a9\u0647 \u0645\u0631\u062f\u0645 %@ \u0645\u0639\u0645\u0648\u0644\u0627\u064b \u062f\u0631 \u0622\u0646 \u062c\u0645\u0639 \u0645\u06cc\u200c\u0634\u0648\u0646\u062f \u2014 \u0633\u0644\u0648\u0644 \u067e\u0647\u0646\u0627\u0648\u0631 \u062f\u0648\u0631 \u0628\u0632\u0631\u06af\u200c\u062a\u0631\u06cc\u0646 \u0645\u0631\u06a9\u0632 \u062c\u0645\u0639\u06cc\u062a\u060c \u0646\u0647 \u0645\u0648\u0642\u0639\u06cc\u062a \u0634\u0645\u0627. \u0639\u0645\u0648\u0645\u06cc \u0648 \u0634\u0646\u0627\u062e\u062a\u0647\u200c\u0634\u062f\u0647 \u0627\u0633\u062a\u060c \u067e\u0633 \u0641\u0631\u0636 \u06a9\u0646\u06cc\u062f \u0632\u06cc\u0631 \u0646\u0638\u0631 \u0627\u0633\u062a: \u067e\u06cc\u0648\u0633\u062a\u0646 \u0633\u0631\u06cc\u0639 \u0641\u0642\u0637 \u062a\u0627\u06cc\u067e \u0698\u0626\u0648\u0647\u0634 \u0631\u0627 \u06a9\u0645 \u0645\u06cc\u200c\u06a9\u0646\u062f\u061b \u0634\u0645\u0627 \u0631\u0627 \u067e\u0646\u0647\u0627\u0646 \u0646\u0645\u06cc\u200c\u06a9\u0646\u062f \u0648 \u0641\u06cc\u0644\u062a\u0631\u0647\u0627 \u0631\u0627 \u062f\u0648\u0631 \u0646\u0645\u06cc\u200c\u0632\u0646\u062f."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ang region channel kung saan karaniwang nagtitipon ang mga tao mula sa %@ \u2014 ang malawak na cell sa paligid ng pinakamalaking sentro ng populasyon, hindi ang iyong lokasyon. pampubliko ito at kilala, kaya ipagpalagay na binabantayan: ang mabilis na pagsali ay nagtitipid lang ng pag-type ng geohash; hindi ka nito itinatago at hindi nito nilalampasan ang mga block."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "le canal de r\u00e9gion o\u00f9 les gens de %@ se retrouvent le plus souvent \u2014 la large cellule autour du principal centre de population, pas votre position. il est public et bien connu : partez du principe qu'il est surveill\u00e9. l'acc\u00e8s rapide \u00e9vite seulement de taper le geohash ; il ne vous cache pas et ne contourne aucun blocage."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u05e2\u05e8\u05d5\u05e5 \u05d4\u05d0\u05d6\u05d5\u05e8 \u05e9\u05d1\u05d5 \u05d0\u05e0\u05e9\u05d9\u05dd \u05de%@ \u05d1\u05d3\u05e8\u05da \u05db\u05dc\u05dc \u05de\u05ea\u05e7\u05d1\u05e6\u05d9\u05dd \u2014 \u05d4\u05ea\u05d0 \u05d4\u05e8\u05d7\u05d1 \u05e1\u05d1\u05d9\u05d1 \u05de\u05e8\u05db\u05d6 \u05d4\u05d0\u05d5\u05db\u05dc\u05d5\u05e1\u05d9\u05d9\u05d4 \u05d4\u05d2\u05d3\u05d5\u05dc \u05d1\u05d9\u05d5\u05ea\u05e8, \u05dc\u05d0 \u05d4\u05de\u05d9\u05e7\u05d5\u05dd \u05e9\u05dc\u05da. \u05d4\u05d5\u05d0 \u05e6\u05d9\u05d1\u05d5\u05e8\u05d9 \u05d5\u05de\u05d5\u05db\u05e8, \u05d0\u05d6 \u05d9\u05e9 \u05dc\u05d4\u05e0\u05d9\u05d7 \u05e9\u05d4\u05d5\u05d0 \u05de\u05e0\u05d5\u05d8\u05e8: \u05d4\u05e6\u05d8\u05e8\u05e4\u05d5\u05ea \u05de\u05d4\u05d9\u05e8\u05d4 \u05e8\u05e7 \u05d7\u05d5\u05e1\u05db\u05ea \u05d4\u05e7\u05dc\u05d3\u05ea geohash; \u05d4\u05d9\u05d0 \u05dc\u05d0 \u05de\u05e1\u05ea\u05d9\u05e8\u05d4 \u05d0\u05d5\u05ea\u05da \u05d5\u05dc\u05d0 \u05e2\u05d5\u05e7\u05e4\u05ea \u05d7\u05e1\u05d9\u05de\u05d5\u05ea."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0935\u0939 \u0915\u094d\u0937\u0947\u0924\u094d\u0930 \u091a\u0948\u0928\u0932 \u091c\u0939\u093e\u0901 %@ \u0915\u0947 \u0932\u094b\u0917 \u0906\u092e\u0924\u094c\u0930 \u092a\u0930 \u091c\u0941\u091f\u0924\u0947 \u0939\u0948\u0902 \u2014 \u0938\u092c\u0938\u0947 \u092c\u0921\u093c\u0947 \u0906\u092c\u093e\u0926\u0940 \u0915\u0947\u0902\u0926\u094d\u0930 \u0915\u0947 \u091a\u093e\u0930\u094b\u0902 \u0913\u0930 \u0915\u0940 \u091a\u094c\u0921\u093c\u0940 \u0938\u0947\u0932, \u0906\u092a\u0915\u0940 \u0932\u094b\u0915\u0947\u0936\u0928 \u0928\u0939\u0940\u0902\u0964 \u092f\u0939 \u0938\u093e\u0930\u094d\u0935\u091c\u0928\u093f\u0915 \u0914\u0930 \u091c\u093e\u0928\u093e-\u092a\u0939\u091a\u093e\u0928\u093e \u0939\u0948, \u0907\u0938\u0932\u093f\u090f \u092e\u093e\u0928 \u0932\u0947\u0902 \u0915\u093f \u0907\u0938 \u092a\u0930 \u0928\u091c\u093c\u0930 \u0939\u0948: \u091d\u091f\u092a\u091f \u091c\u0941\u0921\u093c\u0928\u093e \u0938\u093f\u0930\u094d\u092b\u093c geohash \u091f\u093e\u0907\u092a \u0915\u0930\u0928\u0947 \u0938\u0947 \u092c\u091a\u093e\u0924\u093e \u0939\u0948; \u092f\u0939 \u0906\u092a\u0915\u094b \u091b\u093f\u092a\u093e\u0924\u093e \u0928\u0939\u0940\u0902 \u0914\u0930 \u0928 \u0939\u0940 \u092c\u094d\u0932\u0949\u0915 \u0939\u091f\u093e\u0924\u093e \u0939\u0948\u0964"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "channel wilayah tempat orang-orang dari %@ biasanya berkumpul \u2014 sel luas di sekitar pusat populasi terbesar, bukan lokasimu. channel ini publik dan dikenal luas, jadi anggap saja dipantau: gabung cepat hanya menghemat pengetikan geohash; tidak menyembunyikanmu dan tidak menembus blokir."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "il canale di regione dove di solito si ritrovano le persone di %@ \u2014 la cella ampia attorno al principale centro abitato, non la tua posizione. \u00e8 pubblico e ben noto, quindi dai per scontato che sia sorvegliato: l'accesso rapido ti evita solo di digitare il geohash; non ti nasconde e non aggira i blocchi."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@\u306e\u4eba\u3005\u304c\u96c6\u307e\u308a\u3084\u3059\u3044\u5730\u57df\u30c1\u30e3\u30f3\u30cd\u30eb \u2014 \u6700\u5927\u306e\u4eba\u53e3\u96c6\u4e2d\u5730\u3092\u56f2\u3080\u5e83\u3044\u30bb\u30eb\u3067\u3001\u3042\u306a\u305f\u306e\u4f4d\u7f6e\u3067\u306f\u3042\u308a\u307e\u305b\u3093\u3002\u516c\u958b\u3055\u308c\u3066\u3044\u3066\u8ab0\u3082\u304c\u77e5\u308b\u5834\u6240\u306a\u306e\u3067\u3001\u76e3\u8996\u3055\u308c\u3066\u3044\u308b\u524d\u63d0\u3067\u3002\u30af\u30a4\u30c3\u30af\u53c2\u52a0\u306f\u30b8\u30aa\u30cf\u30c3\u30b7\u30e5\u5165\u529b\u3092\u7701\u304f\u3060\u3051\u3067\u3001\u3042\u306a\u305f\u3092\u96a0\u3057\u305f\u308a\u30d6\u30ed\u30c3\u30af\u3092\u56de\u907f\u3057\u305f\u308a\u306f\u3057\u307e\u305b\u3093\u3002"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ \uc0ac\ub78c\ub4e4\uc774 \uc8fc\ub85c \ubaa8\uc774\ub294 \uc9c0\uc5ed \ucc44\ub110 \u2014 \ucd5c\ub300 \uc778\uad6c \ubc00\uc9d1\uc9c0 \uc8fc\ubcc0\uc758 \ub113\uc740 \uc140\uc774\uba70, \ub2f9\uc2e0\uc758 \uc704\uce58\uac00 \uc544\ub2d9\ub2c8\ub2e4. \uacf5\uac1c\ub418\uc5b4 \uc788\uace0 \ub110\ub9ac \uc54c\ub824\uc838 \uc788\uc73c\ub2c8 \uac10\uc2dc\ub41c\ub2e4\uace0 \uac00\uc815\ud558\uc138\uc694: \ube60\ub978 \ucc38\uc5ec\ub294 \uc9c0\uc624\ud574\uc2dc \uc785\ub825\ub9cc \uc904\uc5ec\uc904 \ubfd0, \ub2f9\uc2e0\uc744 \uc228\uae30\uac70\ub098 \ucc28\ub2e8\uc744 \uc6b0\ud68c\ud558\uc9c0 \uc54a\uc2b5\ub2c8\ub2e4."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "saluran wilayah tempat orang dari %@ biasanya berkumpul \u2014 sel luas di sekitar pusat penduduk terbesar, bukan lokasi anda. ia terbuka dan dikenali ramai, jadi anggap ia dipantau: sertai pantas cuma menjimatkan menaip geohash; ia tidak menyembunyikan anda dan tidak memintas sekatan."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ \u0915\u093e \u092e\u093e\u0928\u093f\u0938\u0939\u0930\u0942 \u092a\u094d\u0930\u093e\u092f\u0903 \u092d\u0947\u0932\u093e \u0939\u0941\u0928\u0947 \u0915\u094d\u0937\u0947\u0924\u094d\u0930 \u091a\u094d\u092f\u093e\u0928\u0932 \u2014 \u0938\u092c\u0948\u092d\u0928\u094d\u0926\u093e \u0920\u0942\u0932\u094b \u091c\u0928\u0938\u0902\u0916\u094d\u092f\u093e \u0915\u0947\u0928\u094d\u0926\u094d\u0930 \u0935\u0930\u093f\u092a\u0930\u093f\u0915\u094b \u092b\u0930\u093e\u0915\u093f\u0932\u094b \u0938\u0947\u0932, \u0924\u092a\u093e\u0908\u0902\u0915\u094b \u0938\u094d\u0925\u093e\u0928 \u0939\u094b\u0907\u0928\u0964 \u092f\u094b \u0938\u093e\u0930\u094d\u0935\u091c\u0928\u093f\u0915 \u0930 \u0938\u092c\u0948\u0932\u093e\u0908 \u0925\u093e\u0939\u093e \u092d\u090f\u0915\u094b \u0939\u0941\u0928\u093e\u0932\u0947 \u0928\u093f\u0917\u0930\u093e\u0928\u0940\u092e\u093e \u091b \u092d\u0928\u0940 \u092e\u093e\u0928\u094d\u0928\u0941\u0939\u094b\u0938\u094d: \u091b\u093f\u091f\u094b \u0938\u093e\u092e\u0947\u0932\u0932\u0947 geohash \u091f\u093e\u0907\u092a \u0917\u0930\u094d\u0928\u092c\u093e\u091f \u092e\u093e\u0924\u094d\u0930 \u091c\u094b\u0917\u093e\u0909\u0901\u091b; \u092f\u0938\u0932\u0947 \u0924\u092a\u093e\u0908\u0902\u0932\u093e\u0908 \u0932\u0941\u0915\u093e\u0909\u0901\u0926\u0948\u0928 \u0930 \u092c\u094d\u0932\u0915 \u091b\u0932\u094d\u0926\u0948\u0928\u0964"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "het regiokanaal waar mensen uit %@ meestal samenkomen \u2014 de brede cel rond het grootste bevolkingscentrum, niet jouw locatie. het is openbaar en algemeen bekend, ga er dus van uit dat er wordt meegekeken: snel deelnemen bespaart alleen het intypen van de geohash; het verbergt je niet en omzeilt geen blokkades."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kana\u0142 regionu, w kt\u00f3rym zwykle zbieraj\u0105 si\u0119 ludzie z %@ \u2014 szeroka kom\u00f3rka wok\u00f3\u0142 najwi\u0119kszego skupiska ludno\u015bci, nie twoja lokalizacja. jest publiczny i powszechnie znany, wi\u0119c za\u0142\u00f3\u017c, \u017ce jest obserwowany: szybkie do\u0142\u0105czenie oszcz\u0119dza tylko wpisywania geohasha; nie ukrywa ci\u0119 i nie omija blokad."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "o canal de regi\u00e3o onde as pessoas de %@ costumam reunir-se \u2014 a c\u00e9lula ampla em torno do maior centro populacional, n\u00e3o a sua localiza\u00e7\u00e3o. \u00e9 p\u00fablico e conhecido, por isso presuma que est\u00e1 vigiado: a entrada r\u00e1pida apenas evita escrever o geohash; n\u00e3o o esconde nem contorna bloqueios."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "o canal de regi\u00e3o onde as pessoas de %@ costumam se reunir \u2014 a c\u00e9lula ampla em torno do maior centro populacional, n\u00e3o a sua localiza\u00e7\u00e3o. \u00e9 p\u00fablico e conhecido, ent\u00e3o presuma que est\u00e1 vigiado: a entrada r\u00e1pida s\u00f3 poupa digitar o geohash; n\u00e3o esconde voc\u00ea nem contorna bloqueios."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0440\u0435\u0433\u0438\u043e\u043d\u0430\u043b\u044c\u043d\u044b\u0439 \u043a\u0430\u043d\u0430\u043b, \u0433\u0434\u0435 \u043e\u0431\u044b\u0447\u043d\u043e \u0441\u043e\u0431\u0438\u0440\u0430\u044e\u0442\u0441\u044f \u043b\u044e\u0434\u0438 \u0438\u0437 %@ \u2014 \u0448\u0438\u0440\u043e\u043a\u0430\u044f \u044f\u0447\u0435\u0439\u043a\u0430 \u0432\u043e\u043a\u0440\u0443\u0433 \u043a\u0440\u0443\u043f\u043d\u0435\u0439\u0448\u0435\u0433\u043e \u0446\u0435\u043d\u0442\u0440\u0430 \u043d\u0430\u0441\u0435\u043b\u0435\u043d\u0438\u044f, \u0430 \u043d\u0435 \u0432\u0430\u0448\u0435 \u043c\u0435\u0441\u0442\u043e\u043f\u043e\u043b\u043e\u0436\u0435\u043d\u0438\u0435. \u043e\u043d \u043f\u0443\u0431\u043b\u0438\u0447\u043d\u044b\u0439 \u0438 \u0432\u0441\u0435\u043c \u0438\u0437\u0432\u0435\u0441\u0442\u043d\u044b\u0439, \u043f\u043e\u044d\u0442\u043e\u043c\u0443 \u0441\u0447\u0438\u0442\u0430\u0439\u0442\u0435, \u0447\u0442\u043e \u0437\u0430 \u043d\u0438\u043c \u043d\u0430\u0431\u043b\u044e\u0434\u0430\u044e\u0442: \u0431\u044b\u0441\u0442\u0440\u044b\u0439 \u0432\u0445\u043e\u0434 \u043b\u0438\u0448\u044c \u0438\u0437\u0431\u0430\u0432\u043b\u044f\u0435\u0442 \u043e\u0442 \u0432\u0432\u043e\u0434\u0430 \u0433\u0435\u043e\u0445\u044d\u0448\u0430; \u043e\u043d \u043d\u0435 \u0441\u043a\u0440\u044b\u0432\u0430\u0435\u0442 \u0432\u0430\u0441 \u0438 \u043d\u0435 \u043e\u0431\u0445\u043e\u0434\u0438\u0442 \u0431\u043b\u043e\u043a\u0438\u0440\u043e\u0432\u043a\u0438."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "regionkanalen d\u00e4r folk fr\u00e5n %@ oftast samlas \u2014 den vida cellen kring det st\u00f6rsta befolkningscentrumet, inte din plats. den \u00e4r offentlig och v\u00e4lk\u00e4nd, s\u00e5 utg\u00e5 fr\u00e5n att den bevakas: snabbanslutning sparar bara geohash-skrivandet; den d\u00f6ljer dig inte och kringg\u00e5r inga blockeringar."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ \u0bae\u0b95\u0bcd\u0b95\u0bb3\u0bcd \u0baa\u0bca\u0ba4\u0bc1\u0bb5\u0bbe\u0b95\u0b95\u0bcd \u0b95\u0bc2\u0b9f\u0bc1\u0bae\u0bcd \u0bae\u0ba3\u0bcd\u0b9f\u0bb2 \u0b9a\u0bc7\u0ba9\u0bb2\u0bcd \u2014 \u0bae\u0bbf\u0b95\u0baa\u0bcd\u0baa\u0bc6\u0bb0\u0bbf\u0baf \u0bae\u0b95\u0bcd\u0b95\u0bb3\u0bcd\u0ba4\u0bca\u0b95\u0bc8 \u0bae\u0bc8\u0baf\u0ba4\u0bcd\u0ba4\u0bc8\u0b9a\u0bcd \u0b9a\u0bc1\u0bb1\u0bcd\u0bb1\u0bbf\u0baf\u0bc1\u0bb3\u0bcd\u0bb3 \u0b85\u0b95\u0ba9\u0bcd\u0bb1 \u0b9a\u0bc6\u0bb2\u0bcd, \u0b89\u0b99\u0bcd\u0b95\u0bb3\u0bcd \u0b87\u0bb0\u0bc1\u0baa\u0bcd\u0baa\u0bbf\u0b9f\u0bae\u0bcd \u0b85\u0bb2\u0bcd\u0bb2. \u0b87\u0ba4\u0bc1 \u0baa\u0bca\u0ba4\u0bc1\u0bb5\u0bbe\u0ba9\u0ba4\u0bc1, \u0ba8\u0ba9\u0bcd\u0b95\u0bc1 \u0b85\u0bb1\u0bbf\u0baf\u0baa\u0bcd\u0baa\u0b9f\u0bcd\u0b9f\u0ba4\u0bc1; \u0b8e\u0ba9\u0bb5\u0bc7 \u0b95\u0ba3\u0bcd\u0b95\u0bbe\u0ba3\u0bbf\u0b95\u0bcd\u0b95\u0baa\u0bcd\u0baa\u0b9f\u0bc1\u0b95\u0bbf\u0bb1\u0ba4\u0bc1 \u0b8e\u0ba9\u0bcd\u0bb1\u0bc7 \u0b95\u0bb0\u0bc1\u0ba4\u0bc1\u0b99\u0bcd\u0b95\u0bb3\u0bcd: \u0bb5\u0bbf\u0bb0\u0bc8\u0bb5\u0bc1 \u0b9a\u0bc7\u0bb0\u0bcd\u0b95\u0bcd\u0b95\u0bc8 geohash \u0ba4\u0b9f\u0bcd\u0b9f\u0b9a\u0bcd\u0b9a\u0bc8 \u0bae\u0b9f\u0bcd\u0b9f\u0bc1\u0bae\u0bc7 \u0ba4\u0bb5\u0bbf\u0bb0\u0bcd\u0b95\u0bcd\u0b95\u0bbf\u0bb1\u0ba4\u0bc1; \u0b89\u0b99\u0bcd\u0b95\u0bb3\u0bc8 \u0bae\u0bb1\u0bc8\u0b95\u0bcd\u0b95\u0bbe\u0ba4\u0bc1, \u0ba4\u0b9f\u0bc8\u0b95\u0bb3\u0bc8\u0baf\u0bc1\u0bae\u0bcd \u0ba4\u0bbe\u0ba3\u0bcd\u0b9f\u0bbe\u0ba4\u0bc1."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0e41\u0e0a\u0e19\u0e41\u0e19\u0e25\u0e20\u0e39\u0e21\u0e34\u0e20\u0e32\u0e04\u0e17\u0e35\u0e48\u0e1c\u0e39\u0e49\u0e04\u0e19\u0e08\u0e32\u0e01 %@ \u0e21\u0e31\u0e01\u0e21\u0e32\u0e23\u0e27\u0e21\u0e01\u0e31\u0e19 \u2014 \u0e40\u0e0b\u0e25\u0e25\u0e4c\u0e01\u0e27\u0e49\u0e32\u0e07\u0e23\u0e2d\u0e1a\u0e28\u0e39\u0e19\u0e22\u0e4c\u0e01\u0e25\u0e32\u0e07\u0e1b\u0e23\u0e30\u0e0a\u0e32\u0e01\u0e23\u0e17\u0e35\u0e48\u0e43\u0e2b\u0e0d\u0e48\u0e17\u0e35\u0e48\u0e2a\u0e38\u0e14 \u0e44\u0e21\u0e48\u0e43\u0e0a\u0e48\u0e15\u0e33\u0e41\u0e2b\u0e19\u0e48\u0e07\u0e02\u0e2d\u0e07\u0e04\u0e38\u0e13 \u0e21\u0e31\u0e19\u0e40\u0e1b\u0e34\u0e14\u0e2a\u0e32\u0e18\u0e32\u0e23\u0e13\u0e30\u0e41\u0e25\u0e30\u0e40\u0e1b\u0e47\u0e19\u0e17\u0e35\u0e48\u0e23\u0e39\u0e49\u0e08\u0e31\u0e01 \u0e43\u0e2b\u0e49\u0e16\u0e37\u0e2d\u0e27\u0e48\u0e32\u0e16\u0e39\u0e01\u0e08\u0e31\u0e1a\u0e15\u0e32\u0e21\u0e2d\u0e07: \u0e40\u0e02\u0e49\u0e32\u0e23\u0e48\u0e27\u0e21\u0e14\u0e48\u0e27\u0e19\u0e41\u0e04\u0e48\u0e0a\u0e48\u0e27\u0e22\u0e43\u0e2b\u0e49\u0e44\u0e21\u0e48\u0e15\u0e49\u0e2d\u0e07\u0e1e\u0e34\u0e21\u0e1e\u0e4c geohash \u0e44\u0e21\u0e48\u0e44\u0e14\u0e49\u0e0b\u0e48\u0e2d\u0e19\u0e15\u0e31\u0e27\u0e04\u0e38\u0e13\u0e41\u0e25\u0e30\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49\u0e02\u0e49\u0e32\u0e21\u0e01\u0e32\u0e23\u0e1a\u0e25\u0e47\u0e2d\u0e01"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ insanlar\u0131n\u0131n genellikle topland\u0131\u011f\u0131 b\u00f6lge kanal\u0131 \u2014 en b\u00fcy\u00fck n\u00fcfus merkezinin \u00e7evresindeki geni\u015f h\u00fccre, sizin konumunuz de\u011fil. herkese a\u00e7\u0131k ve iyi bilinir, bu y\u00fczden izlendi\u011fini varsay\u0131n: h\u0131zl\u0131 kat\u0131l\u0131m yaln\u0131zca geohash yazmaktan kurtar\u0131r; sizi gizlemez ve engelleri a\u015fmaz."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0440\u0435\u0433\u0456\u043e\u043d\u0430\u043b\u044c\u043d\u0438\u0439 \u043a\u0430\u043d\u0430\u043b, \u0434\u0435 \u0437\u0430\u0437\u0432\u0438\u0447\u0430\u0439 \u0437\u0431\u0438\u0440\u0430\u044e\u0442\u044c\u0441\u044f \u043b\u044e\u0434\u0438 \u0437 %@ \u2014 \u0448\u0438\u0440\u043e\u043a\u0430 \u043a\u043e\u043c\u0456\u0440\u043a\u0430 \u043d\u0430\u0432\u043a\u043e\u043b\u043e \u043d\u0430\u0439\u0431\u0456\u043b\u044c\u0448\u043e\u0433\u043e \u0446\u0435\u043d\u0442\u0440\u0443 \u043d\u0430\u0441\u0435\u043b\u0435\u043d\u043d\u044f, \u0430 \u043d\u0435 \u0442\u0432\u043e\u0454 \u043c\u0456\u0441\u0446\u0435\u0437\u043d\u0430\u0445\u043e\u0434\u0436\u0435\u043d\u043d\u044f. \u0432\u0456\u043d \u043f\u0443\u0431\u043b\u0456\u0447\u043d\u0438\u0439 \u0456 \u0432\u0441\u0456\u043c \u0432\u0456\u0434\u043e\u043c\u0438\u0439, \u0442\u043e\u0436 \u0432\u0432\u0430\u0436\u0430\u0439, \u0449\u043e \u0437\u0430 \u043d\u0438\u043c \u0441\u0442\u0435\u0436\u0430\u0442\u044c: \u0448\u0432\u0438\u0434\u043a\u0438\u0439 \u0432\u0445\u0456\u0434 \u043b\u0438\u0448\u0435 \u043f\u043e\u0437\u0431\u0430\u0432\u043b\u044f\u0454 \u0432\u0432\u0435\u0434\u0435\u043d\u043d\u044f \u0433\u0435\u043e\u0445\u0435\u0448\u0443; \u0432\u0456\u043d \u043d\u0435 \u0445\u043e\u0432\u0430\u0454 \u0442\u0435\u0431\u0435 \u0439 \u043d\u0435 \u043e\u0431\u0445\u043e\u0434\u0438\u0442\u044c \u0431\u043b\u043e\u043a\u0443\u0432\u0430\u043d\u043d\u044f."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0648\u06c1 \u0639\u0644\u0627\u0642\u0627\u0626\u06cc \u0686\u06cc\u0646\u0644 \u062c\u06c1\u0627\u06ba %@ \u06a9\u06d2 \u0644\u0648\u06af \u0639\u0645\u0648\u0645\u0627\u064b \u062c\u0645\u0639 \u06c1\u0648\u062a\u06d2 \u06c1\u06cc\u06ba \u2014 \u0633\u0628 \u0633\u06d2 \u0628\u0691\u06d2 \u0622\u0628\u0627\u062f\u06cc \u06a9\u06d2 \u0645\u0631\u06a9\u0632 \u06a9\u06d2 \u06af\u0631\u062f \u0648\u0633\u06cc\u0639 \u0633\u06cc\u0644\u060c \u0622\u067e \u06a9\u0627 \u0645\u0642\u0627\u0645 \u0646\u06c1\u06cc\u06ba\u06d4 \u06cc\u06c1 \u0639\u0648\u0627\u0645\u06cc \u0627\u0648\u0631 \u0645\u0639\u0631\u0648\u0641 \u06c1\u06d2\u060c \u0627\u0633 \u0644\u06cc\u06d2 \u0641\u0631\u0636 \u06a9\u0631\u06cc\u06ba \u06a9\u06c1 \u0627\u0633 \u067e\u0631 \u0646\u0638\u0631 \u06c1\u06d2: \u0641\u0648\u0631\u06cc \u0634\u0645\u0648\u0644\u06cc\u062a \u0635\u0631\u0641 geohash \u0679\u0627\u0626\u067e \u06a9\u0631\u0646\u06d2 \u0633\u06d2 \u0628\u0686\u0627\u062a\u06cc \u06c1\u06d2\u061b \u06cc\u06c1 \u0622\u067e \u06a9\u0648 \u0686\u06be\u067e\u0627\u062a\u06cc \u0646\u06c1\u06cc\u06ba \u0627\u0648\u0631 \u0646\u06c1 \u0628\u0646\u062f\u0634\u06cc\u06ba \u0639\u0628\u0648\u0631 \u06a9\u0631\u062a\u06cc \u06c1\u06d2\u06d4"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "k\u00eanh khu v\u1ef1c n\u01a1i m\u1ecdi ng\u01b0\u1eddi t\u1eeb %@ th\u01b0\u1eddng t\u1ee5 h\u1ecdp \u2014 \u00f4 r\u1ed9ng quanh trung t\u00e2m d\u00e2n c\u01b0 l\u1edbn nh\u1ea5t, kh\u00f4ng ph\u1ea3i v\u1ecb tr\u00ed c\u1ee7a b\u1ea1n. k\u00eanh n\u00e0y c\u00f4ng khai v\u00e0 ai c\u0169ng bi\u1ebft, n\u00ean h\u00e3y m\u1eb7c \u0111\u1ecbnh l\u00e0 n\u00f3 b\u1ecb theo d\u00f5i: tham gia nhanh ch\u1ec9 gi\u00fap kh\u1ecfi g\u00f5 geohash; n\u00f3 kh\u00f4ng che gi\u1ea5u b\u1ea1n v\u00e0 kh\u00f4ng v\u01b0\u1ee3t ch\u1eb7n."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@\u7684\u4eba\u4eec\u901a\u5e38\u805a\u96c6\u7684\u533a\u57df\u9891\u9053\u2014\u2014\u56f4\u7ed5\u6700\u5927\u4eba\u53e3\u4e2d\u5fc3\u7684\u5bbd\u9614\u5355\u5143\u683c\uff0c\u800c\u4e0d\u662f\u4f60\u7684\u4f4d\u7f6e\u3002\u5b83\u516c\u5f00\u4e14\u4f17\u6240\u5468\u77e5\uff0c\u8bf7\u9ed8\u8ba4\u5b83\u88ab\u76d1\u89c6\uff1a\u5feb\u901f\u52a0\u5165\u53ea\u662f\u7701\u53bb\u8f93\u5165 geohash\uff1b\u5b83\u4e0d\u4f1a\u9690\u85cf\u4f60\uff0c\u4e5f\u4e0d\u4f1a\u7ed5\u8fc7\u5c01\u9501\u3002"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@\u7684\u4eba\u5011\u901a\u5e38\u805a\u96c6\u7684\u5340\u57df\u983b\u9053\u2014\u2014\u570d\u7e5e\u6700\u5927\u4eba\u53e3\u4e2d\u5fc3\u7684\u5bec\u95ca\u55ae\u5143\u683c\uff0c\u800c\u4e0d\u662f\u4f60\u7684\u4f4d\u7f6e\u3002\u5b83\u516c\u958b\u4e14\u773e\u6240\u5468\u77e5\uff0c\u8acb\u9810\u8a2d\u5b83\u53d7\u5230\u76e3\u8996\uff1a\u5feb\u901f\u52a0\u5165\u53ea\u662f\u7701\u53bb\u8f38\u5165 geohash\uff1b\u5b83\u4e0d\u6703\u96b1\u85cf\u4f60\uff0c\u4e5f\u4e0d\u6703\u7e5e\u904e\u5c01\u9396\u3002"
+          }
+        }
+      }
+    },
+    "location_channels.quick_join.join_label" : {
+      "comment" : "Accessibility label for the quick join row; %@ is the localized country/region name",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0627\u0644\u0627\u0646\u0636\u0645\u0627\u0645 \u0625\u0644\u0649 \u0642\u0646\u0627\u0629 \u0645\u0646\u0637\u0642\u0629 %@"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@-\u098f\u09b0 \u0985\u099e\u09cd\u099a\u09b2-\u099a\u09cd\u09af\u09be\u09a8\u09c7\u09b2\u09c7 \u09af\u09cb\u0997 \u09a6\u09bf\u09a8"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dem regionskanal von %@ beitreten"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "join the %@ region channel"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "unirse al canal de regi\u00f3n de %@"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u067e\u06cc\u0648\u0633\u062a\u0646 \u0628\u0647 \u06a9\u0627\u0646\u0627\u0644 \u0645\u0646\u0637\u0642\u0647\u200c\u0627\u06cc %@"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sumali sa region channel ng %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "rejoindre le canal de r\u00e9gion de %@"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u05d4\u05e6\u05d8\u05e8\u05e4\u05d5\u05ea \u05dc\u05e2\u05e8\u05d5\u05e5 \u05d4\u05d0\u05d6\u05d5\u05e8 \u05e9\u05dc %@"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ \u0915\u0947 \u0915\u094d\u0937\u0947\u0924\u094d\u0930 \u091a\u0948\u0928\u0932 \u0938\u0947 \u091c\u0941\u0921\u093c\u0947\u0902"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gabung ke channel wilayah %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "entra nel canale di regione di %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@\u306e\u5730\u57df\u30c1\u30e3\u30f3\u30cd\u30eb\u306b\u53c2\u52a0"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ \uc9c0\uc5ed \ucc44\ub110 \ucc38\uc5ec"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sertai saluran wilayah %@"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ \u0915\u094b \u0915\u094d\u0937\u0947\u0924\u094d\u0930 \u091a\u094d\u092f\u093e\u0928\u0932\u092e\u093e \u0938\u093e\u092e\u0947\u0932 \u0939\u0941\u0928\u0941\u0939\u094b\u0938\u094d"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "deelnemen aan het regiokanaal van %@"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "do\u0142\u0105cz do kana\u0142u regionu %@"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "entrar no canal de regi\u00e3o de %@"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "entrar no canal de regi\u00e3o de %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0432\u043e\u0439\u0442\u0438 \u0432 \u0440\u0435\u0433\u0438\u043e\u043d\u0430\u043b\u044c\u043d\u044b\u0439 \u043a\u0430\u043d\u0430\u043b %@"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "g\u00e5 med i regionkanalen f\u00f6r %@"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ \u0bae\u0ba3\u0bcd\u0b9f\u0bb2 \u0b9a\u0bc7\u0ba9\u0bb2\u0bbf\u0bb2\u0bcd \u0b9a\u0bc7\u0bb0\u0bcd"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0e40\u0e02\u0e49\u0e32\u0e23\u0e48\u0e27\u0e21\u0e41\u0e0a\u0e19\u0e41\u0e19\u0e25\u0e20\u0e39\u0e21\u0e34\u0e20\u0e32\u0e04\u0e02\u0e2d\u0e07 %@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ b\u00f6lge kanal\u0131na kat\u0131l"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u0443\u0432\u0456\u0439\u0442\u0438 \u0434\u043e \u0440\u0435\u0433\u0456\u043e\u043d\u0430\u043b\u044c\u043d\u043e\u0433\u043e \u043a\u0430\u043d\u0430\u043b\u0443 %@"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ \u06a9\u06d2 \u0639\u0644\u0627\u0642\u0627\u0626\u06cc \u0686\u06cc\u0646\u0644 \u0645\u06cc\u06ba \u0634\u0627\u0645\u0644 \u06c1\u0648\u06ba"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tham gia k\u00eanh khu v\u1ef1c c\u1ee7a %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u52a0\u5165%@\u7684\u533a\u57df\u9891\u9053"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\u52a0\u5165%@\u7684\u5340\u57df\u983b\u9053"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"

@@ -24,6 +24,22 @@ struct LocationChannelsSheet: View {
         static let teleport: LocalizedStringKey = "location_channels.action.teleport"
         static let bookmarked: LocalizedStringKey = "location_channels.bookmarked_section_title"
 
+        static let quickJoinTitle = String(localized: "location_channels.quick_join.title", defaultValue: "quick join", comment: "Section header in the location channels sheet for the one-tap suggestion of the region channel derived from the device region")
+        static func quickJoinDescription(_ regionName: String) -> String {
+            String(
+                format: String(localized: "location_channels.quick_join.description", defaultValue: "the region channel where people from %@ tend to gather — the wide cell around the main population center, not your location. it's public and well-known, so assume it's watched: quick join saves typing a geohash; it doesn't hide you or bypass blocks.", comment: "Caption under the quick join row; %@ is the localized country/region name. States plainly that the cell is the main population center's (not the person's location), that the channel must be assumed watched, and that quick join is discovery, not circumvention"),
+                locale: .current,
+                regionName
+            )
+        }
+        static func quickJoinLabel(_ regionName: String) -> String {
+            String(
+                format: String(localized: "location_channels.quick_join.join_label", defaultValue: "join the %@ region channel", comment: "Accessibility label for the quick join row; %@ is the localized country/region name"),
+                locale: .current,
+                regionName
+            )
+        }
+
         static let invalidGeohash = String(localized: "location_channels.error.invalid_geohash", comment: "Error shown when a custom geohash is invalid")
         static let switchChannelHint = String(localized: "location_channels.accessibility.switch_hint", comment: "Accessibility hint on a channel row explaining activation switches to it")
         static let addBookmark = String(localized: "location_channels.accessibility.add_bookmark", comment: "Accessibility action name for bookmarking a channel")
@@ -236,6 +252,12 @@ struct LocationChannelsSheet: View {
                 customTeleportSection
                     .padding(.vertical, 8)
 
+                if QuickJoinSuggestion.current() != nil {
+                    sectionDivider
+                    quickJoinSection
+                        .padding(.vertical, 8)
+                }
+
                 let bookmarkedList = locationChannelsModel.bookmarks
                 if !bookmarkedList.isEmpty {
                     sectionDivider
@@ -315,6 +337,46 @@ struct LocationChannelsSheet: View {
                 Text(err)
                     .bitchatFont(size: 12)
                     .foregroundColor(.red)
+            }
+        }
+    }
+
+    /// One tap into the region channel around the device region's main
+    /// population center — derived from the locale, no location access, no
+    /// roster (see QuickJoinSuggestion). The caption is deliberately blunt
+    /// that the cell is public and watched: discovery, not circumvention.
+    @ViewBuilder
+    private var quickJoinSection: some View {
+        if let suggestion = QuickJoinSuggestion.current() {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(Strings.quickJoinTitle)
+                    .bitchatFont(size: 12)
+                    .foregroundColor(palette.secondary)
+
+                Button(action: {
+                    locationChannelsModel.teleport(to: suggestion.geohash)
+                    isPresented = false
+                }) {
+                    HStack {
+                        Text(verbatim: "\(suggestion.flag) \(suggestion.localizedName)")
+                            .bitchatFont(size: 14)
+                            .foregroundColor(palette.primary)
+                        Spacer()
+                        Text(verbatim: "#\(suggestion.geohash)")
+                            .bitchatFont(size: 12)
+                            .foregroundColor(palette.secondary)
+                    }
+                    .padding(.vertical, 6)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Strings.quickJoinLabel(suggestion.localizedName))
+                .accessibilityHint(Strings.switchChannelHint)
+
+                Text(Strings.quickJoinDescription(suggestion.localizedName))
+                    .bitchatFont(size: 11)
+                    .foregroundColor(palette.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
