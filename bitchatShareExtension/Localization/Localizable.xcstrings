@@ -38,6 +38,12 @@
             "comment" : "Fallback title when saving a shared link"
           }
         },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پیوند اشتراک‌گذاری‌شده"
+          }
+        },
         "fil" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -231,6 +237,12 @@
             "state" : "translated",
             "value" : "no se pudo codificar el enlace",
             "comment" : "Shown when the share payload cannot be encoded"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "کدگذاری پیوند ناموفق بود"
           }
         },
         "fil" : {
@@ -428,6 +440,12 @@
             "comment" : "Shown when provided content cannot be shared"
           }
         },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "محتوای قابل اشتراک‌گذاری وجود ندارد"
+          }
+        },
         "fil" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -621,6 +639,12 @@
             "state" : "translated",
             "value" : "nada que compartir",
             "comment" : "Shown when the share extension receives no content"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "چیزی برای اشتراک‌گذاری نیست"
           }
         },
         "fil" : {
@@ -818,6 +842,12 @@
             "comment" : "Confirmation after successfully sharing a link"
           }
         },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✓ پیوند در bitchat به اشتراک گذاشته شد"
+          }
+        },
         "fil" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1011,6 +1041,12 @@
             "state" : "translated",
             "value" : "✓ texto compartido con bitchat",
             "comment" : "Confirmation after successfully sharing text"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✓ متن در bitchat به اشتراک گذاشته شد"
           }
         },
         "fil" : {
