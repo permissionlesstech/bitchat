@@ -33,6 +33,12 @@ protocol ChatDeliveryContext: AnyObject {
     func notifyUIChanged()
     /// Confirms receipt so the message router stops retaining the message for resend.
     func markMessageDelivered(_ messageID: String)
+    /// Peer-bound form for authenticated remote receipts. Only the supplied
+    /// conversation aliases may have retained state terminalized.
+    func markMessageDelivered(_ messageID: String, from peerIDs: Set<PeerID>)
+    /// Returns true only when `messageID` is one of our outgoing messages in
+    /// at least one of the authenticated peer's direct-conversation aliases.
+    func isOutgoingPrivateMessage(_ messageID: String, toAny peerIDs: Set<PeerID>) -> Bool
 }
 
 extension ChatViewModel: ChatDeliveryContext {
@@ -58,6 +64,18 @@ extension ChatViewModel: ChatDeliveryContext {
         mediaTransferCoordinator.confirmPrivateMediaDelivery(
             messageID: messageID
         )
+    }
+
+    func markMessageDelivered(_ messageID: String, from peerIDs: Set<PeerID>) {
+        messageRouter.markDelivered(messageID, from: peerIDs)
+    }
+
+    func isOutgoingPrivateMessage(_ messageID: String, toAny peerIDs: Set<PeerID>) -> Bool {
+        peerIDs.contains { peerID in
+            privateMessages(for: peerID).contains { message in
+                message.id == messageID && message.senderPeerID == myPeerID
+            }
+        }
     }
 }
 
@@ -86,9 +104,10 @@ final class ChatDeliveryCoordinator {
 
     @MainActor
     func didReceiveReadReceipt(_ receipt: ReadReceipt) {
-        updateMessageDeliveryStatus(
+        updateAcknowledgedMessageDeliveryStatus(
             receipt.originalMessageID,
-            status: .read(by: receipt.readerNickname, at: receipt.timestamp)
+            status: .read(by: receipt.readerNickname, at: receipt.timestamp),
+            from: [receipt.readerID]
         )
     }
 
@@ -105,17 +124,43 @@ final class ChatDeliveryCoordinator {
     @MainActor
     @discardableResult
     func updateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) -> Bool {
+        guard context.setDeliveryStatus(status, forMessageID: messageID) else {
+            return false
+        }
         switch status {
         case .delivered, .read:
-            // Confirmed receipt — stop retaining the message for resend.
+            // Terminalize only after the store accepted the transition.
             context.markMessageDelivered(messageID)
         default:
             break
         }
+        context.notifyUIChanged()
+        return true
+    }
 
-        guard context.setDeliveryStatus(status, forMessageID: messageID) else {
+    /// Applies an authenticated remote delivery/read receipt only when it
+    /// belongs to one of our outgoing messages in that peer's conversation.
+    /// Retry state is cleared after, never before, the status transition is
+    /// accepted by the store.
+    @MainActor
+    @discardableResult
+    func updateAcknowledgedMessageDeliveryStatus(
+        _ messageID: String,
+        status: DeliveryStatus,
+        from peerIDAliases: Set<PeerID>
+    ) -> Bool {
+        switch status {
+        case .delivered, .read:
+            break
+        default:
             return false
         }
+        guard !peerIDAliases.isEmpty,
+              context.isOutgoingPrivateMessage(messageID, toAny: peerIDAliases),
+              context.setDeliveryStatus(status, forMessageID: messageID) else {
+            return false
+        }
+        context.markMessageDelivered(messageID, from: peerIDAliases)
         context.notifyUIChanged()
         return true
     }

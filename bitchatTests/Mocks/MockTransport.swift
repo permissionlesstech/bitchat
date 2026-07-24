@@ -70,6 +70,9 @@ final class MockTransport: Transport, PrivateMediaDeletionPersisting {
     private var pendingDeletedPrivateMediaCompletions: [
         @MainActor (Bool) -> Void
     ] = []
+    /// Optional synchronous hook for send-ordering tests (for example, an ack
+    /// arriving before the router's send call returns).
+    var onSendPrivateMessage: (@MainActor (_ messageID: String) -> Void)?
     private let mockKeychain = MockKeychain()
 
     // MARK: - Transport Protocol Implementation
@@ -174,6 +177,11 @@ final class MockTransport: Transport, PrivateMediaDeletionPersisting {
 
     func sendPrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) {
         sentPrivateMessages.append((content, peerID, recipientNickname, messageID))
+        if let onSendPrivateMessage {
+            MainActor.assumeIsolated {
+                onSendPrivateMessage(messageID)
+            }
+        }
     }
 
     func sendReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {
