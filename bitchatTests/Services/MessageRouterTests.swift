@@ -583,6 +583,79 @@ struct MessageRouterTests {
     }
 
     @Test @MainActor
+    func scopedDeliveryAckClearsOnlySelectedPeerWhenMessageIDsCollide() async {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("router-outbox-scoped-ack-\(UUID().uuidString).sealed")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let keychain = MockKeychain()
+        let acknowledgedPeer = PeerID(str: "00000000000000d1")
+        let otherPeer = PeerID(str: "00000000000000d2")
+        let transport = MockTransport()
+        let router = MessageRouter(
+            transports: [transport],
+            outboxStore: MessageOutboxStore(keychain: keychain, fileURL: fileURL)
+        )
+        router.sendPrivate("For acknowledged peer", to: acknowledgedPeer, recipientNickname: "One", messageID: "shared-id")
+        router.sendPrivate("For other peer", to: otherPeer, recipientNickname: "Two", messageID: "shared-id")
+
+        #expect(router.markDelivered("shared-id", for: [acknowledgedPeer]))
+        transport.reachablePeers.formUnion([acknowledgedPeer, otherPeer])
+        router.flushOutbox(for: acknowledgedPeer)
+        router.flushOutbox(for: otherPeer)
+
+        #expect(transport.sentPrivateMessages.map(\.peerID) == [otherPeer])
+        let persisted = MessageOutboxStore(keychain: keychain, fileURL: fileURL).load()
+        #expect(persisted[acknowledgedPeer] == nil)
+        #expect(persisted[otherPeer]?.map(\.messageID) == ["shared-id"])
+    }
+
+    @Test @MainActor
+    func scopedAckWhileColdLoadIsLockedPreventsOnlyTargetPeerResurrection() async {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("router-locked-scoped-ack-\(UUID().uuidString).sealed")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let keychain = MockKeychain()
+        let acknowledgedPeer = PeerID(str: "00000000000000d3")
+        let otherPeer = PeerID(str: "00000000000000d4")
+        let durable = MessageOutboxStore.QueuedMessage(
+            content: "Queued before reboot",
+            nickname: "Peer",
+            messageID: "shared-locked-id",
+            timestamp: Date()
+        )
+        MessageOutboxStore(keychain: keychain, fileURL: fileURL).save([
+            acknowledgedPeer: [durable],
+            otherPeer: [durable]
+        ])
+
+        var protectedDataUnavailable = true
+        let restoredStore = MessageOutboxStore(
+            keychain: keychain,
+            fileURL: fileURL,
+            readData: { url in
+                if protectedDataUnavailable {
+                    throw NSError(domain: NSCocoaErrorDomain, code: NSFileReadNoPermissionError)
+                }
+                return try Data(contentsOf: url)
+            }
+        )
+        let transport = MockTransport()
+        transport.reachablePeers.formUnion([acknowledgedPeer, otherPeer])
+        let router = MessageRouter(transports: [transport], outboxStore: restoredStore)
+
+        #expect(!router.markDelivered("shared-locked-id", for: [acknowledgedPeer]))
+        protectedDataUnavailable = false
+        restoredStore.retryDeferredLoad()
+        await Task.yield()
+        await Task.yield()
+
+        #expect(transport.sentPrivateMessages.map(\.peerID) == [otherPeer])
+        let persisted = MessageOutboxStore(keychain: keychain, fileURL: fileURL).load()
+        #expect(persisted[acknowledgedPeer] == nil)
+        #expect(persisted[otherPeer]?.map(\.messageID) == ["shared-locked-id"])
+    }
+
+    @Test @MainActor
     func protectedDataRecoveryMergesDurableAndLockedWakeMessagesIntoRouter() async {
         let fileURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("router-protected-data-\(UUID().uuidString).sealed")

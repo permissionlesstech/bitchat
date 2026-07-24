@@ -375,6 +375,32 @@ final class MessageRouter {
         persistOutbox()
     }
 
+    /// A delivery or read ack authenticated to one account confirms receipt
+    /// only for that account's transport aliases. A colliding message ID
+    /// queued for another peer must remain retained.
+    @discardableResult
+    func markDelivered(_ messageID: String, for peerAliases: [PeerID]) -> Bool {
+        let peerIDs = Set(peerAliases)
+        guard !peerIDs.isEmpty else { return false }
+
+        var cleared = false
+        for peerID in peerIDs {
+            guard let queue = outbox[peerID] else { continue }
+            let filtered = queue.filter { $0.messageID != messageID }
+            guard filtered.count != queue.count else { continue }
+            outbox[peerID] = filtered.isEmpty ? nil : filtered
+            cleared = true
+        }
+        // Preserve the scoped ack even when protected data hides the durable
+        // queue during a cold launch.
+        outboxStore?.recordRemoval(messageID: messageID, for: peerIDs)
+        if cleared {
+            metrics?.record(.outboxDelivered)
+        }
+        persistOutbox()
+        return cleared
+    }
+
     private func enqueue(_ message: QueuedMessage, for peerID: PeerID) {
         var message = message
         var queue = outbox[peerID] ?? []
