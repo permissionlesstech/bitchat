@@ -132,7 +132,15 @@ final class NoiseSessionManager {
                 sessions[peerID] = newSession
                 session = newSession
             } else {
-                session = existingSession!
+                // `shouldCreateNew` is only false after the branch above assigned
+                // `existingSession`, so this should always succeed. Guard instead of
+                // force-unwrapping so a future change that breaks that coupling fails
+                // this handshake softly rather than crashing a critical path.
+                guard let reusableSession = existingSession else {
+                    SecureLogger.error("NoiseSessionManager: reuse branch reached with no session for \(peerID); rejecting handshake", category: .session)
+                    throw NoiseSessionError.invalidState
+                }
+                session = reusableSession
             }
             
             // Process the handshake message within the synchronized block
