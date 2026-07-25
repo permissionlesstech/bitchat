@@ -1145,6 +1145,29 @@ final class BLEService: NSObject {
         collectionsQueue.sync { peerRegistry.capabilities(for: peerID) }
     }
 
+    func authenticatedPrivateMediaReceiptSessionGeneration(
+        to peerID: PeerID
+    ) -> UUID? {
+        let normalizedPeerID = peerID.toShort()
+        let currentNoiseGeneration =
+            noiseService.sessionGeneration(for: normalizedPeerID)
+        return collectionsQueue.sync {
+            guard let generation =
+                    privateMediaSessionGenerations[normalizedPeerID],
+                  generation == currentNoiseGeneration,
+                  let authenticated =
+                    authenticatedPeerStates[normalizedPeerID],
+                  authenticated.sessionGeneration == generation,
+                  authenticated.capabilities.contains(.privateMedia),
+                  authenticated.capabilities.contains(
+                    .privateMediaReceipts
+                  ) else {
+                return nil
+            }
+            return generation
+        }
+    }
+
     private func privateMediaPolicyFingerprint(
         for peerID: PeerID,
         expectedSessionGeneration: UUID?
@@ -1630,6 +1653,36 @@ final class BLEService: NSObject {
         transferId: String,
         allowLegacyFallback: Bool
     ) {
+        sendFilePrivate(
+            filePacket,
+            to: peerID,
+            transferId: transferId,
+            allowLegacyFallback: allowLegacyFallback,
+            requiresAuthenticatedPrivateMediaReceipts: false
+        )
+    }
+
+    func sendFilePrivateReceiptRetry(
+        _ filePacket: BitchatFilePacket,
+        to peerID: PeerID,
+        transferId: String
+    ) {
+        sendFilePrivate(
+            filePacket,
+            to: peerID,
+            transferId: transferId,
+            allowLegacyFallback: false,
+            requiresAuthenticatedPrivateMediaReceipts: true
+        )
+    }
+
+    private func sendFilePrivate(
+        _ filePacket: BitchatFilePacket,
+        to peerID: PeerID,
+        transferId: String,
+        allowLegacyFallback: Bool,
+        requiresAuthenticatedPrivateMediaReceipts: Bool
+    ) {
         // Register before enqueueing onto messageQueue. This closes the window
         // where cancel/delete could run first, observe no scheduler state, and
         // then be followed by a deferred clear-media send.
@@ -1741,6 +1794,25 @@ final class BLEService: NSObject {
                 self.privateMediaTransferAdmissions.finish(transferId)
                 return
             }
+            if requiresAuthenticatedPrivateMediaReceipts,
+               self.authenticatedPrivateMediaReceiptSessionGeneration(
+                    to: targetID
+               ) == nil {
+                SecureLogger.warning(
+                    "Private media retry blocked without current authenticated receipt support for \(targetID.id.prefix(8))…",
+                    category: .security
+                )
+                TransferProgressManager.shared.rejectBeforeStart(
+                    id: transferId,
+                    reason: String(
+                        localized: "content.delivery.reason.private_media_capability_unresolved",
+                        defaultValue: "Could not confirm encrypted media support",
+                        comment: "Failure reason when private-media capability negotiation did not resolve"
+                    )
+                )
+                self.privateMediaTransferAdmissions.finish(transferId)
+                return
+            }
             guard let typedPayload = BLENoisePayloadFactory.privateFile(filePacket) else {
                 SecureLogger.error("❌ Failed to encode file packet for private send", category: .session)
                 TransferProgressManager.shared.rejectBeforeStart(
@@ -1751,6 +1823,21 @@ final class BLEService: NSObject {
                 return
             }
             guard self.noiseService.hasEstablishedSession(with: targetID) else {
+                if requiresAuthenticatedPrivateMediaReceipts {
+                    // A retry belongs to one exact authenticated generation.
+                    // Never let it enter the ordinary pending queue where a
+                    // bit-8-only replacement session could later flush it.
+                    TransferProgressManager.shared.rejectBeforeStart(
+                        id: transferId,
+                        reason: String(
+                            localized: "content.delivery.reason.private_media_capability_unresolved",
+                            defaultValue: "Could not confirm encrypted media support",
+                            comment: "Failure reason when private-media capability negotiation did not resolve"
+                        )
+                    )
+                    self.privateMediaTransferAdmissions.finish(transferId)
+                    return
+                }
                 let queued = self.collectionsQueue.sync(flags: .barrier) {
                     self.privateMediaTransferAdmissions.withActive(transferId) {
                         self.pendingNoiseSessionQueues.appendTypedPayload(
@@ -1782,7 +1869,12 @@ final class BLEService: NSObject {
                     self.privateMediaTransferAdmissions.finish(transferId)
                     return
                 }
-                let packet = try self.makeEncryptedNoisePacket(typedPayload, to: targetID)
+                let packet = try self.makeEncryptedNoisePacket(
+                    typedPayload,
+                    to: targetID,
+                    requiresAuthenticatedPrivateMediaReceipts:
+                        requiresAuthenticatedPrivateMediaReceipts
+                )
                 guard self.privateMediaTransferAdmissions.isActive(transferId) else {
                     self.privateMediaTransferAdmissions.finish(transferId)
                     return
@@ -5287,7 +5379,11 @@ extension BLEService {
         }
     }
 
-    private func makeEncryptedNoisePacket(_ typedPayload: Data, to peerID: PeerID) throws -> BitchatPacket {
+    private func makeEncryptedNoisePacket(
+        _ typedPayload: Data,
+        to peerID: PeerID,
+        requiresAuthenticatedPrivateMediaReceipts: Bool = false
+    ) throws -> BitchatPacket {
         let encrypted: Data
         let isPrivateFile = NoisePayloadType.isPrivateFile(rawValue: typedPayload.first)
         if isPrivateFile {
@@ -5297,6 +5393,13 @@ extension BLEService {
                       let authenticated = authenticatedPeerStates[peerID],
                       authenticated.sessionGeneration == generation,
                       authenticated.capabilities.contains(.privateMedia) else { return nil }
+                if requiresAuthenticatedPrivateMediaReceipts {
+                    guard authenticated.capabilities.contains(
+                        .privateMediaReceipts
+                    ) else {
+                        return nil
+                    }
+                }
                 return generation
             }
             guard let provenGeneration else {

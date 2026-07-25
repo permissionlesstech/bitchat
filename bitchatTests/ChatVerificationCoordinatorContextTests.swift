@@ -97,6 +97,7 @@ private final class MockChatVerificationContext: ChatVerificationContext {
     var noiseSessionKeysByPeerID: [PeerID: Data] = [:]
     private(set) var installedCallbacks: (onPeerAuthenticated: (PeerID, String) -> Void, onHandshakeRequired: (PeerID) -> Void)?
     private(set) var triggeredHandshakes: [PeerID] = []
+    private(set) var privateMediaAuthenticatedPeers: [PeerID] = []
     private(set) var sentChallenges: [(peerID: PeerID, noiseKeyHex: String, nonceA: Data)] = []
     private(set) var sentResponses: [(peerID: PeerID, noiseKeyHex: String, nonceA: Data)] = []
 
@@ -113,6 +114,9 @@ private final class MockChatVerificationContext: ChatVerificationContext {
         establishedNoiseSessions.contains(peerID)
     }
     func triggerHandshake(with peerID: PeerID) { triggeredHandshakes.append(peerID) }
+    func privateMediaPeerDidAuthenticate(_ peerID: PeerID) {
+        privateMediaAuthenticatedPeers.append(peerID)
+    }
 
     func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {
         sentChallenges.append((peerID, noiseKeyHex, nonceA))
@@ -277,6 +281,7 @@ struct ChatVerificationCoordinatorContextTests {
         #expect(context.encryptionStatuses[peerID] == .noiseVerified)
         #expect(context.stablePeerIDCache[peerID] == PeerID(hexData: noiseKey))
         #expect(context.invalidatedEncryptionCachePeers.contains(peerID))
+        #expect(context.privateMediaAuthenticatedPeers == [peerID])
 
         // Handshake required -> handshaking status.
         callbacks?.onHandshakeRequired(peerID)

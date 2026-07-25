@@ -19,6 +19,46 @@ struct PendingLegacyPrivateMediaConsent {
     let completion: @MainActor (Bool) -> Void
 }
 
+struct PrivateMediaReconnectRetryLimits: Equatable {
+    var maxRetainedPackets = 8
+    var maxRetainedBytes = 4 * 1024 * 1024
+    var maxRetriesPerMessage = 2
+    var retentionSeconds: TimeInterval = 120
+    var maxRetriesPerReconnect = 2
+}
+
+private struct PrivateMediaReconnectRetryRecord {
+    let messageID: String
+    let peerID: PeerID
+    let packet: BitchatFilePacket
+    var receiptSessionGeneration: UUID
+    var createdAt: Date
+    var retryCount: Int
+    var activeTransferID: String?
+    var retryAfterCompletion: Bool
+    var idleOutcome: PrivateMediaReconnectRetryIdleOutcome
+    var deferredTerminalFailureReason: String?
+    var expiryToken: UUID?
+
+    var retainedBytes: Int {
+        packet.content.count
+    }
+}
+
+private enum PrivateMediaReconnectRetryIdleOutcome {
+    case none
+    case locallyCompleted
+    case cancelled
+    case rejected(reason: String)
+}
+
+private struct PrivateMediaReconnectRetryCandidate {
+    let messageID: String
+    /// The receipt-capable Noise generation that owned this record when the
+    /// reconnect/authentication event captured it.
+    let receiptSessionGeneration: UUID
+}
+
 /// The narrow surface `ChatMediaTransferCoordinator` needs from its owner.
 ///
 /// Follows the `ChatDeliveryContext` exemplar: the coordinator depends on the
@@ -57,6 +97,7 @@ protocol ChatMediaTransferContext: AnyObject {
 
     // MARK: Mesh file transfer
     func privateMediaSendPolicy(to peerID: PeerID) -> PrivateMediaSendPolicy
+    func authenticatedPrivateMediaReceiptSessionGeneration(to peerID: PeerID) -> UUID?
     func resolvePrivateMediaSendPolicy(
         to peerID: PeerID,
         completion: @escaping @MainActor (PrivateMediaSendPolicy) -> Void
@@ -73,6 +114,11 @@ protocol ChatMediaTransferContext: AnyObject {
         to peerID: PeerID,
         transferId: String,
         allowLegacyFallback: Bool
+    )
+    func sendFilePrivateReceiptRetry(
+        _ packet: BitchatFilePacket,
+        to peerID: PeerID,
+        transferId: String
     )
     func sendFileBroadcast(_ packet: BitchatFilePacket, transferId: String)
     func cancelTransfer(_ transferId: String)
@@ -91,6 +137,14 @@ extension ChatViewModel: ChatMediaTransferContext {
 
     func privateMediaSendPolicy(to peerID: PeerID) -> PrivateMediaSendPolicy {
         meshService.privateMediaSendPolicy(to: peerID)
+    }
+
+    func authenticatedPrivateMediaReceiptSessionGeneration(
+        to peerID: PeerID
+    ) -> UUID? {
+        meshService.authenticatedPrivateMediaReceiptSessionGeneration(
+            to: peerID
+        )
     }
 
     func resolvePrivateMediaSendPolicy(
@@ -132,6 +186,18 @@ extension ChatViewModel: ChatMediaTransferContext {
             to: peerID,
             transferId: transferId,
             allowLegacyFallback: allowLegacyFallback
+        )
+    }
+
+    func sendFilePrivateReceiptRetry(
+        _ packet: BitchatFilePacket,
+        to peerID: PeerID,
+        transferId: String
+    ) {
+        meshService.sendFilePrivateReceiptRetry(
+            packet,
+            to: peerID,
+            transferId: transferId
         )
     }
 
@@ -225,9 +291,33 @@ final class ChatMediaTransferCoordinator {
     private let prepareImagePacket: @Sendable (URL) throws -> ChatPreparedImage
     private let imagePreparationBarrier = ImagePreparationBarrier()
     private let prepareVoiceNotePacket: @Sendable (URL) throws -> BitchatFilePacket
+    private let reconnectRetryLimits: PrivateMediaReconnectRetryLimits
+    private let now: () -> Date
+    private let transferIDFactory: (String) -> String
 
     private(set) var transferIdToMessageIDs: [String: [String]] = [:]
     private(set) var messageIDToTransferId: [String: String] = [:]
+    private var reconnectRetryRecords: [
+        String: PrivateMediaReconnectRetryRecord
+    ] = [:]
+    /// A newly authenticated session supersedes any raw-connect policy
+    /// resolution still in flight for that peer.
+    private var peersResolvingReconnectRetry: [
+        PeerID: (
+            id: UUID,
+            replacingActiveTransfer: Bool,
+            candidates: [PrivateMediaReconnectRetryCandidate]
+        )
+    ] = [:]
+    private var reconnectRetryExpiryTasks: [String: Task<Void, Never>] = [:]
+
+    var retainedReconnectRetryCount: Int {
+        reconnectRetryRecords.count
+    }
+
+    var retainedReconnectRetryBytes: Int {
+        reconnectRetryRecords.values.reduce(0) { $0 + $1.retainedBytes }
+    }
 
     init(
         context: any ChatMediaTransferContext,
@@ -236,11 +326,20 @@ final class ChatMediaTransferCoordinator {
         },
         prepareVoiceNotePacket: @escaping @Sendable (URL) throws -> BitchatFilePacket = {
             try ChatMediaPreparation.prepareVoiceNotePacket(at: $0)
+        },
+        reconnectRetryLimits: PrivateMediaReconnectRetryLimits =
+            PrivateMediaReconnectRetryLimits(),
+        now: @escaping () -> Date = Date.init,
+        transferIDFactory: @escaping (String) -> String = {
+            "\($0)-\(UUID().uuidString)"
         }
     ) {
         self.context = context
         self.prepareImagePacket = prepareImagePacket
         self.prepareVoiceNotePacket = prepareVoiceNotePacket
+        self.reconnectRetryLimits = reconnectRetryLimits
+        self.now = now
+        self.transferIDFactory = transferIDFactory
     }
 
     func sendVoiceNote(at url: URL) {
@@ -543,6 +642,12 @@ final class ChatMediaTransferCoordinator {
     ) {
         switch policy {
         case .encrypted:
+            retainForReconnectRetryIfEligible(
+                packet,
+                peerID: peerID,
+                messageID: messageID,
+                activeTransferID: transferId
+            )
             context.sendFilePrivate(
                 packet,
                 to: peerID,
@@ -631,16 +736,32 @@ final class ChatMediaTransferCoordinator {
     }
 
     func makeTransferID(messageID: String) -> String {
-        "\(messageID)-\(UUID().uuidString)"
+        transferIDFactory(messageID)
     }
 
     func clearTransferMapping(for messageID: String) {
-        guard let transferId = messageIDToTransferId.removeValue(forKey: messageID) else { return }
+        guard let transferId = messageIDToTransferId[messageID] else { return }
+        clearTransferMapping(
+            transferID: transferId,
+            messageID: messageID,
+            clearCurrentOwner: true
+        )
+    }
+
+    private func clearTransferMapping(
+        transferID: String,
+        messageID: String,
+        clearCurrentOwner: Bool
+    ) {
+        if clearCurrentOwner,
+           messageIDToTransferId[messageID] == transferID {
+            messageIDToTransferId.removeValue(forKey: messageID)
+        }
         context.cancelLegacyPrivateMediaConsent(
-            transferId: transferId,
+            transferId: transferID,
             messageID: messageID
         )
-        guard var queue = transferIdToMessageIDs[transferId] else { return }
+        guard var queue = transferIdToMessageIDs[transferID] else { return }
 
         if !queue.isEmpty {
             if queue.first == messageID {
@@ -650,10 +771,32 @@ final class ChatMediaTransferCoordinator {
             }
         }
 
-        transferIdToMessageIDs[transferId] = queue.isEmpty ? nil : queue
+        transferIdToMessageIDs[transferID] = queue.isEmpty ? nil : queue
+    }
+
+    /// Returns the message still owned by this exact transfer. Replacement
+    /// retries can receive late callbacks from the cancelled predecessor;
+    /// those callbacks may clear only their stale queue entry.
+    private func currentMessageID(forTransferID transferID: String) -> String? {
+        guard let messageID = transferIdToMessageIDs[transferID]?.first else {
+            return nil
+        }
+        guard messageIDToTransferId[messageID] == transferID else {
+            clearTransferMapping(
+                transferID: transferID,
+                messageID: messageID,
+                clearCurrentOwner: false
+            )
+            return nil
+        }
+        return messageID
     }
 
     func handleMediaSendFailure(messageID: String, reason: String) {
+        discardReconnectRetry(
+            messageID: messageID,
+            cancelActiveTransfer: false
+        )
         context.updateMessageDeliveryStatus(messageID, status: .failed(reason: reason))
         clearTransferMapping(for: messageID)
     }
@@ -661,21 +804,88 @@ final class ChatMediaTransferCoordinator {
     func handleTransferEvent(_ event: TransferProgressManager.Event) {
         switch event {
         case .started(let id, let total):
-            guard let messageID = transferIdToMessageIDs[id]?.first else { return }
+            guard let messageID = currentMessageID(forTransferID: id) else {
+                return
+            }
+            if isReconnectRetryTransfer(id, messageID: messageID) {
+                return
+            }
             context.updateMessageDeliveryStatus(messageID, status: .partiallyDelivered(reached: 0, total: total))
+
         case .updated(let id, let sent, let total):
-            guard let messageID = transferIdToMessageIDs[id]?.first else { return }
+            guard let messageID = currentMessageID(forTransferID: id) else {
+                return
+            }
+            if isReconnectRetryTransfer(id, messageID: messageID) {
+                return
+            }
             context.updateMessageDeliveryStatus(messageID, status: .partiallyDelivered(reached: sent, total: total))
+
         case .completed(let id, _):
-            guard let messageID = transferIdToMessageIDs[id]?.first else { return }
+            guard let messageID = currentMessageID(forTransferID: id) else {
+                return
+            }
+            let ownsRetainedRecord =
+                reconnectRetryRecords[messageID]?.activeTransferID == id
+            let retryAfterCompletion = ownsRetainedRecord
+                && reconnectRetryRecords[messageID]?.retryAfterCompletion == true
+            let deferredTerminalReason = ownsRetainedRecord
+                ? reconnectRetryRecords[messageID]?
+                    .deferredTerminalFailureReason
+                : nil
+            if ownsRetainedRecord {
+                reconnectRetryRecords[messageID]?.activeTransferID = nil
+                reconnectRetryRecords[messageID]?.retryAfterCompletion = false
+                reconnectRetryRecords[messageID]?.idleOutcome =
+                    .locallyCompleted
+                reconnectRetryRecords[messageID]?.createdAt = now()
+            }
             context.updateMessageDeliveryStatus(messageID, status: .sent)
             clearTransferMapping(for: messageID)
+            if let deferredTerminalReason {
+                terminalizeReconnectRetry(
+                    messageID: messageID,
+                    reason: deferredTerminalReason
+                )
+            } else if retryAfterCompletion {
+                startReconnectRetry(messageID: messageID)
+            } else if ownsRetainedRecord {
+                scheduleReconnectRetryExpiry(messageID: messageID)
+            }
+
         case .cancelled(let id, _, _):
-            guard let messageID = transferIdToMessageIDs[id]?.first else { return }
+            guard let messageID = currentMessageID(forTransferID: id) else {
+                return
+            }
+            if isRetainedPrivateMediaTransfer(id, messageID: messageID) {
+                finishRetainedTransfer(
+                    id,
+                    messageID: messageID,
+                    outcome: .cancelled,
+                    rejectionReason: nil
+                )
+                return
+            }
+            discardReconnectRetry(
+                messageID: messageID,
+                cancelActiveTransfer: false
+            )
             clearTransferMapping(for: messageID)
             context.removeMessage(withID: messageID, cleanupFile: true)
+
         case .rejected(let id, let reason):
-            guard let messageID = transferIdToMessageIDs[id]?.first else { return }
+            guard let messageID = currentMessageID(forTransferID: id) else {
+                return
+            }
+            if isRetainedPrivateMediaTransfer(id, messageID: messageID) {
+                finishRetainedTransfer(
+                    id,
+                    messageID: messageID,
+                    outcome: .rejected(reason: reason),
+                    rejectionReason: reason
+                )
+                return
+            }
             handleMediaSendFailure(messageID: messageID, reason: reason)
         }
     }
@@ -707,6 +917,10 @@ final class ChatMediaTransferCoordinator {
     }
 
     func cancelMediaSend(messageID: String) {
+        discardReconnectRetry(
+            messageID: messageID,
+            cancelActiveTransfer: false
+        )
         if let transferId = messageIDToTransferId[messageID],
            let active = transferIdToMessageIDs[transferId]?.first,
            active == messageID {
@@ -717,6 +931,10 @@ final class ChatMediaTransferCoordinator {
     }
 
     func deleteMediaMessage(messageID: String) {
+        discardReconnectRetry(
+            messageID: messageID,
+            cancelActiveTransfer: false
+        )
         // Delete is also a send cancellation. In particular, an approved
         // legacy-clear send may still be waiting on BLEService.messageQueue;
         // removing only the UI mapping would let that deferred work transmit.
@@ -728,12 +946,55 @@ final class ChatMediaTransferCoordinator {
         context.removeMessage(withID: messageID, cleanupFile: true)
     }
 
+    /// A raw link callback can arrive before the replacement Noise session
+    /// proves its capabilities. Resolve against the exact session before
+    /// releasing any retained bytes into a whole-file retry.
+    func peerDidReconnect(_ peerID: PeerID) {
+        resolveReconnectRetries(
+            for: peerID,
+            replacingActiveTransfer: false
+        )
+    }
+
+    /// Authentication supersedes a raw-connect resolution that may still
+    /// refer to the cached generation and replaces only stale active sends.
+    func peerDidAuthenticate(_ peerID: PeerID) {
+        resolveReconnectRetries(
+            for: peerID,
+            replacingActiveTransfer: true
+        )
+    }
+
+    /// Local fragment completion is not proof that the recipient reconstructed
+    /// the file. Only a remote delivery/read receipt releases retry ownership.
+    func confirmPrivateMediaDelivery(messageID: String) {
+        guard PrivateMediaMessageIdentity.isStableID(messageID) else {
+            return
+        }
+        discardReconnectRetry(
+            messageID: messageID,
+            cancelActiveTransfer: true
+        )
+    }
+
+    /// Deterministic clock seam for focused tests. Production records also own
+    /// wall-clock expiry tasks.
+    func _test_expireReconnectRetries() {
+        pruneExpiredReconnectRetries()
+    }
+
     /// Invalidates detached preparation work and cancels every transfer that
     /// reached the transport. Closing image-preparation admission and joining
     /// active synchronous writers ensures the following panic media deletion
     /// is the last filesystem mutation before the transaction can complete.
     func resetForPanic() {
         imagePreparationBarrier.invalidateAndWait()
+        peersResolvingReconnectRetry.removeAll(keepingCapacity: false)
+        for task in reconnectRetryExpiryTasks.values {
+            task.cancel()
+        }
+        reconnectRetryExpiryTasks.removeAll(keepingCapacity: false)
+        reconnectRetryRecords.removeAll(keepingCapacity: false)
         let transferIDs = Set(transferIdToMessageIDs.keys)
         transferIdToMessageIDs.removeAll(keepingCapacity: false)
         messageIDToTransferId.removeAll(keepingCapacity: false)
@@ -744,6 +1005,571 @@ final class ChatMediaTransferCoordinator {
 }
 
 private extension ChatMediaTransferCoordinator {
+    func reconnectRetryCandidates(
+        for peerID: PeerID,
+        limit: Int?
+    ) -> [PrivateMediaReconnectRetryCandidate] {
+        let records = reconnectRetryRecords.values
+            .filter {
+                $0.peerID == peerID
+                    && $0.retryCount
+                        < reconnectRetryLimits.maxRetriesPerMessage
+            }
+            .sorted {
+                if $0.createdAt == $1.createdAt {
+                    return $0.messageID < $1.messageID
+                }
+                return $0.createdAt < $1.createdAt
+            }
+        let selected: ArraySlice<PrivateMediaReconnectRetryRecord>
+        if let limit {
+            selected = records.prefix(max(0, limit))
+        } else {
+            selected = records[...]
+        }
+        return selected.map {
+            PrivateMediaReconnectRetryCandidate(
+                messageID: $0.messageID,
+                receiptSessionGeneration: $0.receiptSessionGeneration
+            )
+        }
+    }
+
+    func resolveReconnectRetries(
+        for peerID: PeerID,
+        replacingActiveTransfer: Bool
+    ) {
+        pruneExpiredReconnectRetries()
+        let normalizedPeerID = peerID.toShort()
+        let candidates: [PrivateMediaReconnectRetryCandidate]
+        if let pending = peersResolvingReconnectRetry[normalizedPeerID] {
+            // Authentication is the only event that may supersede a raw-link
+            // resolution; duplicate callbacks add no new proof.
+            guard replacingActiveTransfer,
+                  !pending.replacingActiveTransfer else {
+                return
+            }
+            candidates = reconnectRetryCandidates(
+                for: normalizedPeerID,
+                limit: nil
+            )
+        } else {
+            candidates = reconnectRetryCandidates(
+                for: normalizedPeerID,
+                limit: replacingActiveTransfer
+                    ? nil
+                    : max(
+                        0,
+                        reconnectRetryLimits.maxRetriesPerReconnect
+                    )
+            )
+        }
+        guard !candidates.isEmpty else { return }
+
+        let resolutionID = UUID()
+        peersResolvingReconnectRetry[normalizedPeerID] = (
+            id: resolutionID,
+            replacingActiveTransfer: replacingActiveTransfer,
+            candidates: candidates
+        )
+        context.resolvePrivateMediaSendPolicy(
+            to: normalizedPeerID
+        ) { [weak self] policy in
+            guard let self,
+                  let pending =
+                    self.peersResolvingReconnectRetry[normalizedPeerID],
+                  pending.id == resolutionID else {
+                return
+            }
+            self.peersResolvingReconnectRetry.removeValue(
+                forKey: normalizedPeerID
+            )
+            guard policy == .encrypted,
+                  let provenGeneration = self.context
+                    .authenticatedPrivateMediaReceiptSessionGeneration(
+                        to: normalizedPeerID
+                    ) else {
+                self.terminalizeUnavailableCapabilityProof(
+                    pending.candidates,
+                    for: normalizedPeerID
+                )
+                return
+            }
+            self.scheduleReconnectRetries(
+                pending.candidates,
+                for: normalizedPeerID,
+                replacingActiveTransfer:
+                    pending.replacingActiveTransfer,
+                provenGeneration: provenGeneration
+            )
+        }
+    }
+
+    func retainForReconnectRetryIfEligible(
+        _ packet: BitchatFilePacket,
+        peerID: PeerID,
+        messageID: String,
+        activeTransferID: String
+    ) {
+        let normalizedPeerID = peerID.toShort()
+        guard let receiptSessionGeneration = context
+                .authenticatedPrivateMediaReceiptSessionGeneration(
+                    to: normalizedPeerID
+                ),
+              reconnectRetryLimits.maxRetainedPackets > 0,
+              reconnectRetryLimits.maxRetainedBytes > 0,
+              reconnectRetryLimits.maxRetriesPerMessage > 0,
+              packet.content.count
+                <= reconnectRetryLimits.maxRetainedBytes,
+              PrivateMediaMessageIdentity.isStableID(messageID),
+              PrivateMediaMessageIdentity.stableID(
+                for: packet,
+                senderPeerID: context.myPeerID,
+                recipientPeerID: normalizedPeerID
+              ) == messageID else {
+            return
+        }
+
+        pruneExpiredReconnectRetries()
+        if var existing = reconnectRetryRecords[messageID] {
+            cancelReconnectRetryExpiry(messageID: messageID)
+            existing.receiptSessionGeneration = receiptSessionGeneration
+            existing.createdAt = now()
+            existing.activeTransferID = activeTransferID
+            existing.retryAfterCompletion = false
+            existing.idleOutcome = .none
+            existing.deferredTerminalFailureReason = nil
+            existing.expiryToken = nil
+            reconnectRetryRecords[messageID] = existing
+            return
+        }
+
+        makeReconnectRetryCapacity(for: packet.content.count)
+        guard reconnectRetryRecords.count
+                < reconnectRetryLimits.maxRetainedPackets,
+              retainedReconnectRetryBytes + packet.content.count
+                <= reconnectRetryLimits.maxRetainedBytes else {
+            SecureLogger.debug(
+                "Private media retry retention full; sending once id=\(messageID.prefix(12))…",
+                category: .session
+            )
+            return
+        }
+
+        reconnectRetryRecords[messageID] =
+            PrivateMediaReconnectRetryRecord(
+                messageID: messageID,
+                peerID: normalizedPeerID,
+                packet: packet,
+                receiptSessionGeneration: receiptSessionGeneration,
+                createdAt: now(),
+                retryCount: 0,
+                activeTransferID: activeTransferID,
+                retryAfterCompletion: false,
+                idleOutcome: .none,
+                deferredTerminalFailureReason: nil,
+                expiryToken: nil
+            )
+    }
+
+    func terminalizeUnavailableCapabilityProof(
+        _ candidates: [PrivateMediaReconnectRetryCandidate],
+        for peerID: PeerID
+    ) {
+        let reason = privateMediaCapabilityUnresolvedReason
+        for candidate in candidates {
+            guard var record =
+                    reconnectRetryRecords[candidate.messageID],
+                  record.peerID == peerID,
+                  record.receiptSessionGeneration
+                    == candidate.receiptSessionGeneration else {
+                continue
+            }
+            if record.activeTransferID != nil {
+                // The original transport owner can still produce a valid
+                // remote receipt. Defer failure until it releases ownership.
+                record.deferredTerminalFailureReason = reason
+                reconnectRetryRecords[candidate.messageID] = record
+            } else {
+                terminalizeReconnectRetry(
+                    messageID: candidate.messageID,
+                    reason: reason
+                )
+            }
+        }
+    }
+
+    func scheduleReconnectRetries(
+        _ candidates: [PrivateMediaReconnectRetryCandidate],
+        for peerID: PeerID,
+        replacingActiveTransfer: Bool,
+        provenGeneration: UUID
+    ) {
+        pruneExpiredReconnectRetries()
+
+        var scheduledCount = 0
+        let limit = max(
+            0,
+            reconnectRetryLimits.maxRetriesPerReconnect
+        )
+        for candidate in candidates {
+            guard scheduledCount < limit else { break }
+            let messageID = candidate.messageID
+            guard var record = reconnectRetryRecords[messageID],
+                  record.peerID == peerID,
+                  record.receiptSessionGeneration
+                    == candidate.receiptSessionGeneration,
+                  record.retryCount
+                    < reconnectRetryLimits.maxRetriesPerMessage else {
+                continue
+            }
+            if record.deferredTerminalFailureReason != nil {
+                record.deferredTerminalFailureReason = nil
+                reconnectRetryRecords[messageID] = record
+            }
+            if replacingActiveTransfer,
+               candidate.receiptSessionGeneration == provenGeneration {
+                continue
+            }
+            if record.activeTransferID != nil {
+                if replacingActiveTransfer {
+                    if replaceActiveTransferAfterAuthentication(
+                        messageID: messageID
+                    ) {
+                        scheduledCount += 1
+                    }
+                    continue
+                }
+                // Arm one retry after the current transfer drains. Duplicate
+                // reconnect callbacks cannot chain more work.
+                if record.retryCount == 0 {
+                    record.retryAfterCompletion = true
+                    reconnectRetryRecords[messageID] = record
+                    scheduledCount += 1
+                }
+            } else if startReconnectRetry(messageID: messageID) {
+                scheduledCount += 1
+            }
+        }
+    }
+
+    @discardableResult
+    func replaceActiveTransferAfterAuthentication(
+        messageID: String
+    ) -> Bool {
+        guard var record = reconnectRetryRecords[messageID],
+              let staleTransferID = record.activeTransferID,
+              record.retryCount
+                < reconnectRetryLimits.maxRetriesPerMessage else {
+            return false
+        }
+        record.activeTransferID = nil
+        record.retryAfterCompletion = false
+        record.createdAt = now()
+        reconnectRetryRecords[messageID] = record
+
+        if messageIDToTransferId[messageID] == staleTransferID {
+            clearTransferMapping(for: messageID)
+        }
+        context.cancelTransfer(staleTransferID)
+        return startReconnectRetry(messageID: messageID)
+    }
+
+    @discardableResult
+    func startReconnectRetry(messageID: String) -> Bool {
+        pruneExpiredReconnectRetries()
+        guard var record = reconnectRetryRecords[messageID],
+              record.activeTransferID == nil,
+              record.retryCount
+                < reconnectRetryLimits.maxRetriesPerMessage else {
+            return false
+        }
+        guard context.privateMediaSendPolicy(to: record.peerID)
+                == .encrypted,
+              let receiptSessionGeneration = context
+                .authenticatedPrivateMediaReceiptSessionGeneration(
+                    to: record.peerID
+                ) else {
+            terminalizeReconnectRetry(
+                messageID: messageID,
+                reason: privateMediaCapabilityUnresolvedReason
+            )
+            return false
+        }
+
+        cancelReconnectRetryExpiry(messageID: messageID)
+        let transferID = makeTransferID(messageID: messageID)
+        record.retryCount += 1
+        record.receiptSessionGeneration = receiptSessionGeneration
+        record.activeTransferID = transferID
+        record.retryAfterCompletion = false
+        record.idleOutcome = .none
+        record.deferredTerminalFailureReason = nil
+        record.expiryToken = nil
+        reconnectRetryRecords[messageID] = record
+        registerTransfer(
+            transferId: transferID,
+            messageID: messageID
+        )
+
+        SecureLogger.debug(
+            "🔄 Retrying private media after reconnect id=\(messageID.prefix(12))… attempt=\(record.retryCount)",
+            category: .session
+        )
+        context.sendFilePrivateReceiptRetry(
+            record.packet,
+            to: record.peerID,
+            transferId: transferID
+        )
+        return true
+    }
+
+    func finishRetainedTransfer(
+        _ transferID: String,
+        messageID: String,
+        outcome: PrivateMediaReconnectRetryIdleOutcome,
+        rejectionReason: String?
+    ) {
+        guard var record = reconnectRetryRecords[messageID],
+              record.activeTransferID == transferID else {
+            return
+        }
+        let retryAfterCompletion = record.retryAfterCompletion
+        let deferredTerminalReason =
+            record.deferredTerminalFailureReason
+        record.activeTransferID = nil
+        record.retryAfterCompletion = false
+        record.idleOutcome = outcome
+        record.createdAt = now()
+        reconnectRetryRecords[messageID] = record
+        clearTransferMapping(for: messageID)
+
+        if let deferredTerminalReason {
+            terminalizeReconnectRetry(
+                messageID: messageID,
+                reason: deferredTerminalReason
+            )
+        } else if retryAfterCompletion {
+            startReconnectRetry(messageID: messageID)
+        } else if record.retryCount
+                    >= reconnectRetryLimits.maxRetriesPerMessage {
+            terminalizeReconnectRetry(
+                messageID: messageID,
+                reason: rejectionReason
+                    ?? privateMediaNotDeliveredReason
+            )
+        } else {
+            scheduleReconnectRetryExpiry(messageID: messageID)
+        }
+
+        if let rejectionReason {
+            SecureLogger.debug(
+                "Private media retry rejected id=\(messageID.prefix(12))…: \(rejectionReason)",
+                category: .session
+            )
+        }
+    }
+
+    func isReconnectRetryTransfer(
+        _ transferID: String,
+        messageID: String
+    ) -> Bool {
+        guard let record = reconnectRetryRecords[messageID] else {
+            return false
+        }
+        return record.retryCount > 0
+            && record.activeTransferID == transferID
+    }
+
+    func isRetainedPrivateMediaTransfer(
+        _ transferID: String,
+        messageID: String
+    ) -> Bool {
+        reconnectRetryRecords[messageID]?.activeTransferID
+            == transferID
+    }
+
+    func discardReconnectRetry(
+        messageID: String,
+        cancelActiveTransfer: Bool
+    ) {
+        cancelReconnectRetryExpiry(messageID: messageID)
+        guard let record =
+                reconnectRetryRecords.removeValue(forKey: messageID) else {
+            return
+        }
+        guard cancelActiveTransfer,
+              let transferID = record.activeTransferID,
+              messageIDToTransferId[messageID] == transferID else {
+            return
+        }
+        // Release ownership before cancellation so its late callback cannot
+        // remove a remotely confirmed row.
+        clearTransferMapping(for: messageID)
+        context.cancelTransfer(transferID)
+    }
+
+    func pruneExpiredReconnectRetries() {
+        let current = now()
+        let lifetime = max(
+            0,
+            reconnectRetryLimits.retentionSeconds
+        )
+        let expiredMessageIDs: [String] =
+            reconnectRetryRecords.values.compactMap { record in
+                guard record.activeTransferID == nil,
+                      current.timeIntervalSince(record.createdAt)
+                        >= lifetime else {
+                    return nil
+                }
+                return record.messageID
+            }
+        for messageID in expiredMessageIDs {
+            guard let record = reconnectRetryRecords[messageID],
+                  record.activeTransferID == nil else {
+                continue
+            }
+            terminalizeReconnectRetry(
+                messageID: messageID,
+                reason: expiryFailureReason(for: record)
+            )
+        }
+    }
+
+    func makeReconnectRetryCapacity(for incomingBytes: Int) {
+        while reconnectRetryRecords.count
+                >= reconnectRetryLimits.maxRetainedPackets
+            || retainedReconnectRetryBytes + incomingBytes
+                > reconnectRetryLimits.maxRetainedBytes {
+            guard let victim = reconnectRetryRecords.values
+                .filter({ $0.activeTransferID == nil })
+                .min(by: {
+                    if $0.createdAt == $1.createdAt {
+                        return $0.messageID < $1.messageID
+                    }
+                    return $0.createdAt < $1.createdAt
+                }) else {
+                return
+            }
+            terminalizeReconnectRetry(
+                messageID: victim.messageID,
+                reason: expiryFailureReason(for: victim)
+            )
+        }
+    }
+
+    var privateMediaNotDeliveredReason: String {
+        String(
+            localized: "content.delivery.reason.not_delivered",
+            defaultValue: "Not delivered",
+            comment: "Failure reason shown when a private media transfer could not finish"
+        )
+    }
+
+    var privateMediaCapabilityUnresolvedReason: String {
+        String(
+            localized:
+                "content.delivery.reason.private_media_capability_unresolved",
+            defaultValue: "Could not confirm encrypted media support",
+            comment: "Failure reason when private-media capability negotiation did not resolve"
+        )
+    }
+
+    var privateMediaDeliveryUnconfirmedReason: String {
+        String(
+            localized:
+                "content.delivery.reason.private_media_delivery_unconfirmed",
+            defaultValue: "Delivery could not be confirmed",
+            comment: "Failure reason when private media left this device but no delivery receipt arrived"
+        )
+    }
+
+    func expiryFailureReason(
+        for record: PrivateMediaReconnectRetryRecord
+    ) -> String {
+        switch record.idleOutcome {
+        case .locallyCompleted:
+            return privateMediaDeliveryUnconfirmedReason
+        case .rejected(let reason):
+            return reason
+        case .none, .cancelled:
+            return privateMediaNotDeliveredReason
+        }
+    }
+
+    func terminalizeReconnectRetry(
+        messageID: String,
+        reason: String
+    ) {
+        guard let record = reconnectRetryRecords[messageID],
+              record.activeTransferID == nil else {
+            return
+        }
+        cancelReconnectRetryExpiry(messageID: messageID)
+        guard reconnectRetryRecords.removeValue(forKey: messageID) != nil else {
+            return
+        }
+        context.updateMessageDeliveryStatus(
+            messageID,
+            status: .failed(reason: reason)
+        )
+    }
+
+    func scheduleReconnectRetryExpiry(messageID: String) {
+        guard var record = reconnectRetryRecords[messageID],
+              record.activeTransferID == nil else {
+            return
+        }
+        cancelReconnectRetryExpiry(messageID: messageID)
+
+        let lifetime = max(
+            0,
+            reconnectRetryLimits.retentionSeconds
+        )
+        let elapsed = max(
+            0,
+            now().timeIntervalSince(record.createdAt)
+        )
+        let delay = max(0, lifetime - elapsed)
+        let token = UUID()
+        record.expiryToken = token
+        reconnectRetryRecords[messageID] = record
+
+        let nanoseconds = UInt64(
+            min(
+                delay,
+                TimeInterval(UInt64.max) / 1_000_000_000
+            ) * 1_000_000_000
+        )
+        reconnectRetryExpiryTasks[messageID] = Task {
+            @MainActor [weak self] in
+            if nanoseconds > 0 {
+                try? await Task.sleep(nanoseconds: nanoseconds)
+            }
+            guard !Task.isCancelled,
+                  let self,
+                  let current =
+                    self.reconnectRetryRecords[messageID],
+                  current.activeTransferID == nil,
+                  current.expiryToken == token else {
+                return
+            }
+            self.terminalizeReconnectRetry(
+                messageID: messageID,
+                reason: self.expiryFailureReason(for: current)
+            )
+        }
+    }
+
+    func cancelReconnectRetryExpiry(messageID: String) {
+        reconnectRetryExpiryTasks.removeValue(
+            forKey: messageID
+        )?.cancel()
+        if reconnectRetryRecords[messageID]?.expiryToken != nil {
+            reconnectRetryRecords[messageID]?.expiryToken = nil
+        }
+    }
+
     func applicationFilesDirectory() throws -> URL {
         let base = try FileManager.default.url(
             for: .applicationSupportDirectory,

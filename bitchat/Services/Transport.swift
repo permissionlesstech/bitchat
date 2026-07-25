@@ -190,6 +190,14 @@ protocol Transport: AnyObject {
         transferId: String,
         allowLegacyFallback: Bool
     )
+    /// Automatic whole-file retry is admitted only while this exact Noise
+    /// generation authenticates bit 9. It must never queue across a session
+    /// replacement or enter the signed raw legacy path.
+    func sendFilePrivateReceiptRetry(
+        _ packet: BitchatFilePacket,
+        to peerID: PeerID,
+        transferId: String
+    )
     func cancelTransfer(_ transferId: String)
 
     // Live voice / push-to-talk (mesh transports only): one encoded
@@ -236,6 +244,11 @@ protocol Transport: AnyObject {
     /// empty for peers that predate the capabilities TLV.
     func peerCapabilities(_ peerID: PeerID) -> PeerCapabilities
     func privateMediaSendPolicy(to peerID: PeerID) -> PrivateMediaSendPolicy
+    /// The exact current Noise generation that authenticated both encrypted
+    /// private media (bit 8) and durable receipts/retry (bit 9).
+    func authenticatedPrivateMediaReceiptSessionGeneration(
+        to peerID: PeerID
+    ) -> UUID?
     func resolvePrivateMediaSendPolicy(
         to peerID: PeerID,
         completion: @escaping @MainActor (PrivateMediaSendPolicy) -> Void
@@ -311,6 +324,11 @@ extension Transport {
     func broadcastGroupMessage(_ envelope: Data) {}
     func peerCapabilities(_ peerID: PeerID) -> PeerCapabilities { [] }
     func privateMediaSendPolicy(to peerID: PeerID) -> PrivateMediaSendPolicy { .blockedDowngrade }
+    func authenticatedPrivateMediaReceiptSessionGeneration(
+        to peerID: PeerID
+    ) -> UUID? {
+        nil
+    }
     func resolvePrivateMediaSendPolicy(
         to peerID: PeerID,
         completion: @escaping @MainActor (PrivateMediaSendPolicy) -> Void
@@ -345,6 +363,11 @@ extension Transport {
         guard !allowLegacyFallback else { return }
         sendFilePrivate(packet, to: peerID, transferId: transferId)
     }
+    func sendFilePrivateReceiptRetry(
+        _ packet: BitchatFilePacket,
+        to peerID: PeerID,
+        transferId: String
+    ) {}
     func cancelTransfer(_ transferId: String) {}
 
     func sendMessage(_ content: String, mentions: [String], messageID: String, timestamp: Date) {

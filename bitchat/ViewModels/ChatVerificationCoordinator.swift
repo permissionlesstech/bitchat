@@ -58,6 +58,7 @@ protocol ChatVerificationContext: AnyObject {
     func noiseStaticPublicKeyData() -> Data
     func hasEstablishedNoiseSession(with peerID: PeerID) -> Bool
     func triggerHandshake(with peerID: PeerID)
+    func privateMediaPeerDidAuthenticate(_ peerID: PeerID)
     func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data)
     func sendVerifyResponse(to peerID: PeerID, noiseKeyHex: String, nonceA: Data)
 
@@ -116,6 +117,10 @@ extension ChatViewModel: ChatVerificationContext {
         meshService.noiseStaticPublicKeyData()
     }
 
+    func privateMediaPeerDidAuthenticate(_ peerID: PeerID) {
+        mediaTransferCoordinator.peerDidAuthenticate(peerID.toShort())
+    }
+
     func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {
         meshService.sendVerifyChallenge(to: peerID, noiseKeyHex: noiseKeyHex, nonceA: nonceA)
     }
@@ -127,6 +132,10 @@ extension ChatViewModel: ChatVerificationContext {
     func postLocalNotification(title: String, body: String, identifier: String) {
         NotificationService.shared.sendLocalNotification(title: title, body: body, identifier: identifier)
     }
+}
+
+extension ChatVerificationContext {
+    func privateMediaPeerDidAuthenticate(_ peerID: PeerID) {}
 }
 
 @MainActor
@@ -197,6 +206,7 @@ final class ChatVerificationCoordinator {
                     guard let self else { return }
 
                     SecureLogger.debug("🔐 Authenticated: \(peerID)", category: .security)
+                    self.context.privateMediaPeerDidAuthenticate(peerID)
 
                     if self.context.isVerifiedFingerprint(fingerprint) {
                         self.context.setEncryptionStatus(.noiseVerified, for: peerID)

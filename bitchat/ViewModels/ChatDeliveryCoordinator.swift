@@ -55,6 +55,9 @@ extension ChatViewModel: ChatDeliveryContext {
 
     func markMessageDelivered(_ messageID: String) {
         messageRouter.markDelivered(messageID)
+        mediaTransferCoordinator.confirmPrivateMediaDelivery(
+            messageID: messageID
+        )
     }
 }
 
