@@ -155,6 +155,16 @@ final class NoiseSessionManager {
         }
     }
 
+    /// Whether this peer has an inbound ordinary XX responder that still
+    /// needs message 3 before its receive keys can become authoritative.
+    func isAwaitingResponderHandshakeCompletion(for peerID: PeerID) -> Bool {
+        managerQueue.sync {
+            guard let session = sessions[peerID] else { return false }
+            return session.role == .responder
+                && session.getState() == .handshaking
+        }
+    }
+
     /// Transfers one bounded recovery generation to whatever ordinary XX
     /// handshake currently owns the peer, or starts the generation's single
     /// retry. The request token prevents stale transport callbacks from
@@ -1156,12 +1166,22 @@ final class NoiseSessionManager {
     /// the exact session object that authenticated these bytes.
     func decryptWithSessionGeneration(
         _ ciphertext: Data,
-        from peerID: PeerID
+        from peerID: PeerID,
+        establishedGenerationIsReady: (UUID) -> Bool = { _ in true },
+        authorizeDecrypt: () throws -> Void = {}
     ) throws -> (plaintext: Data, sessionGeneration: UUID) {
         try managerQueue.sync {
             if let session = sessions[peerID],
                session.isEstablished(),
                let generation = sessionGenerations[peerID] {
+                // Keep the generation lease across the transport-readiness
+                // check and decrypt. Promotion/restoration needs this queue's
+                // barrier, so no new receive nonce can be consumed before BLE
+                // installs state for the exact generation.
+                guard establishedGenerationIsReady(generation) else {
+                    throw NoiseEncryptionError.transportGenerationNotReady
+                }
+                try authorizeDecrypt()
                 return (try session.decrypt(ciphertext), generation)
             }
 
@@ -1173,6 +1193,7 @@ final class NoiseSessionManager {
                responder.role == .responder,
                responder.getState() == .handshaking,
                let quarantined = quarantinedTransports[peerID] {
+                try authorizeDecrypt()
                 return (
                     try quarantined.session.decrypt(ciphertext),
                     quarantined.generation

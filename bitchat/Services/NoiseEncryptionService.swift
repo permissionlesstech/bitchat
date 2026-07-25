@@ -856,6 +856,13 @@ final class NoiseEncryptionService {
     func hasSession(with peerID: PeerID) -> Bool {
         return sessionManager.getSession(for: peerID) != nil
     }
+
+    /// True while an inbound ordinary XX responder is waiting for message 3.
+    /// A small amount of immediately-following ciphertext may arrive first
+    /// over BLE and must be retried only after responder promotion.
+    func isAwaitingResponderHandshakeCompletion(with peerID: PeerID) -> Bool {
+        sessionManager.isAwaitingResponderHandshakeCompletion(for: peerID)
+    }
     
     // MARK: - Encryption/Decryption
     
@@ -923,20 +930,15 @@ final class NoiseEncryptionService {
 
     func decryptWithSessionGeneration(
         _ data: Data,
-        from peerID: PeerID
+        from peerID: PeerID,
+        establishedGenerationIsReady: (UUID) -> Bool = { _ in true }
     ) throws -> (plaintext: Data, sessionGeneration: UUID) {
         // Standard transport ciphertext has 20 bytes of nonce/tag overhead.
-        // A larger candidate is admitted only up to the framed-file ceiling;
+        // A larger ciphertext is admitted only up to the framed-file ceiling;
         // after authenticated decryption it must prove it is `.privateFile`.
         let isStandardCiphertext = NoiseSecurityValidator.validateCiphertextSize(data)
-        guard isStandardCiphertext || NoiseSecurityValidator.validatePrivateFileCiphertextSize(data) else {
-            throw NoiseSecurityError.messageTooLarge
-        }
-        
-        // Check rate limit
-        guard rateLimiter.allowMessage(from: peerID) else {
-            throw NoiseSecurityError.rateLimitExceeded
-        }
+        let isAdmittedCiphertext = isStandardCiphertext
+            || NoiseSecurityValidator.validatePrivateFileCiphertextSize(data)
         
         // A quarantined transport is deliberately unavailable for outbound
         // state, but remains receive-only until the responder proves identity
@@ -945,7 +947,20 @@ final class NoiseEncryptionService {
             throw NoiseEncryptionError.sessionNotEstablished
         }
         
-        let result = try sessionManager.decryptWithSessionGeneration(data, from: peerID)
+        let result = try sessionManager.decryptWithSessionGeneration(
+            data,
+            from: peerID,
+            establishedGenerationIsReady:
+                establishedGenerationIsReady,
+            authorizeDecrypt: { [rateLimiter] in
+                guard isAdmittedCiphertext else {
+                    throw NoiseSecurityError.messageTooLarge
+                }
+                guard rateLimiter.allowMessage(from: peerID) else {
+                    throw NoiseSecurityError.rateLimitExceeded
+                }
+            }
+        )
         if !isStandardCiphertext {
             guard NoisePayloadType.isPrivateFile(rawValue: result.plaintext.first),
                   NoiseSecurityValidator.validatePrivateFileMessageSize(result.plaintext) else {
@@ -1162,6 +1177,9 @@ struct NoiseMessage: Codable {
 enum NoiseEncryptionError: Error {
     case handshakeRequired
     case sessionNotEstablished
+    /// Manager keys are established or restored, but BLE has not installed
+    /// generation-bound transport state. No receive nonce was consumed.
+    case transportGenerationNotReady
     /// Envelope references a prekey ID we don't hold (never ours, already
     /// deleted after its grace window, or wiped in a panic).
     case unknownPrekey

@@ -639,7 +639,7 @@ struct BLEServiceCoreTests {
     }
 
     @Test
-    func failedInboundReconnectRestoresAndDrainsTypedPayloadQueue() async throws {
+    func failedInboundReconnectRestoresAndDrainsWaitingWorkOnce() async throws {
         let ble = makeService()
         let alice = NoiseEncryptionService(keychain: MockKeychain())
         let mallory = NoiseEncryptionService(keychain: MockKeychain())
@@ -722,21 +722,48 @@ struct BLEServiceCoreTests {
                 message: forgedMessage2
             )
         )
+        let forgedEarlyPayload = try #require(
+            BLENoisePayloadFactory.privateMessage(
+                content: "forged early message",
+                messageID: "forged-early"
+            )
+        )
+        try #require(
+            mallory.hasEstablishedSession(with: ble.myPeerID),
+            "forged initiator did not establish after producing message three"
+        )
+        let forgedEarlyCiphertext = try mallory.encrypt(
+            forgedEarlyPayload,
+            for: ble.myPeerID
+        )
+        let earlyPacket = BitchatPacket(
+            type: MessageType.noiseEncrypted.rawValue,
+            senderID: Data(hexString: alicePeerID.id) ?? Data(),
+            recipientID: Data(hexString: ble.myPeerID.id),
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1_000) + 1,
+            payload: forgedEarlyCiphertext,
+            signature: nil,
+            ttl: 7
+        )
+        ble._test_handlePacket(earlyPacket, fromPeerID: alicePeerID)
+        await ble._test_drainNoiseMessagePipeline()
+
         let thirdPacket = BitchatPacket(
             type: MessageType.noiseHandshake.rawValue,
             senderID: Data(hexString: alicePeerID.id) ?? Data(),
             recipientID: Data(hexString: ble.myPeerID.id),
-            timestamp: UInt64(Date().timeIntervalSince1970 * 1_000) + 1,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1_000) + 2,
             payload: forgedMessage3,
             signature: nil,
             ttl: 7
         )
         ble._test_handlePacket(thirdPacket, fromPeerID: alicePeerID)
 
-        // Restore re-enters the generation-bound authentication transition:
-        // authenticated state and both outbound queues drain exactly once.
+        // Rollback restores the same generation. It retries the bounded early
+        // ciphertext and drains both outbound queues, but must not repeat a
+        // new-generation capability proof or forced announce.
         let drained = await TestHelpers.waitUntil(
-            { outbound.count(ofType: .noiseEncrypted) >= 3 },
+            { outbound.count(ofType: .noiseEncrypted) >= 2 },
             timeout: TestConstants.longTimeout
         )
         try #require(drained)
@@ -744,11 +771,11 @@ struct BLEServiceCoreTests {
         let plaintexts = try outbound.snapshot()
             .filter { $0.type == MessageType.noiseEncrypted.rawValue }
             .map { try alice.decrypt($0.payload, from: ble.myPeerID) }
-        #expect(plaintexts.count == 3)
+        #expect(plaintexts.count == 2)
         #expect(
             plaintexts.filter {
                 $0.first == NoisePayloadType.authenticatedPeerState.rawValue
-            }.count == 1
+            }.isEmpty
         )
         #expect(
             plaintexts.filter {
@@ -760,6 +787,13 @@ struct BLEServiceCoreTests {
                 $0.first == NoisePayloadType.groupInvite.rawValue
             }.count == 1
         )
+        #expect(outbound.count(ofType: .announce) == 0)
+
+        // A duplicate ready callback cannot replay either buffer.
+        ble._test_reconcileCurrentNoiseSession(for: alicePeerID)
+        await ble._test_drainNoiseMessagePipeline()
+        #expect(outbound.count(ofType: .noiseEncrypted) == 2)
+        #expect(outbound.count(ofType: .announce) == 0)
     }
 
     /// The message-loss interleaving behind a legitimate peer restart: the
@@ -1494,6 +1528,7 @@ private final class PublicCaptureDelegate: BitchatDelegate {
         defer { lock.unlock() }
         return publicMessages
     }
+
 }
 
 @MainActor

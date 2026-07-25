@@ -1,5 +1,6 @@
 import BitFoundation
 import BitLogger
+import CryptoKit
 import Foundation
 
 struct BLENoiseHandshakeHandlingResult {
@@ -33,6 +34,8 @@ struct BLENoisePacketHandlerEnvironment {
             -> NoiseHandshakeProcessingResult
     /// Whether any Noise session (established or pending) exists for the peer (crypto).
     let hasNoiseSession: (PeerID) -> Bool
+    /// Whether an inbound ordinary XX responder is waiting for message 3.
+    let isAwaitingResponderHandshakeCompletion: (PeerID) -> Bool
     /// Initiates a fresh Noise handshake with the peer (crypto + send).
     let initiateHandshake: (PeerID) -> Void
     /// Broadcasts a packet on the mesh (caller is already on the message queue).
@@ -63,7 +66,28 @@ struct BLENoisePacketHandlerEnvironment {
 /// processing (with response), encrypted payload decryption and dispatch,
 /// and session recovery on decrypt failure.
 final class BLENoisePacketHandler {
+    private struct DeferredCiphertext {
+        let packet: BitchatPacket
+        let receivedAt: Date
+    }
+
+    /// Early post-handshake packets are normally tiny control messages or
+    /// queued DMs. Keep the recovery surface deliberately small so an
+    /// unauthenticated half-handshake cannot create an unbounded memory queue.
+    private static let maxDeferredPacketsPerPeer = 4
+    private static let maxDeferredPacketsGlobal = 32
+    /// One legacy sender can immediately follow message 3 with the largest
+    /// valid private-file ciphertext and has no application-level retry. Keep
+    /// room for that packet plus a small control-message budget.
+    private static let maxDeferredBytes =
+        NoiseSecurityConstants.maxPrivateFileCiphertextSize + 256 * 1024
+    private static let deferredLifetime =
+        NoiseSecurityConstants.ordinaryResponderHandshakeTimeout
+
     private let environment: BLENoisePacketHandlerEnvironment
+    private let deferredLock = NSLock()
+    private var deferredCiphertexts: [PeerID: [DeferredCiphertext]] = [:]
+    private var deferredCiphertextBytes = 0
 
     init(environment: BLENoisePacketHandlerEnvironment) {
         self.environment = environment
@@ -105,8 +129,8 @@ final class BLENoisePacketHandler {
                     env.broadcastPacket(responsePacket)
                 }
 
-                // Session establishment will trigger onPeerAuthenticated callback
-                // which will send any pending messages at the right time
+                // The serialized authentication callback installs transport
+                // state before it drains any bounded early ciphertext.
                 return BLENoiseHandshakeHandlingResult(
                     processed: true,
                     didEstablishAuthenticatedSession:
@@ -151,6 +175,20 @@ final class BLENoisePacketHandler {
     }
 
     func handleEncrypted(_ packet: BitchatPacket, from peerID: PeerID) {
+        handleEncrypted(packet, from: peerID, isDeferredRetry: false)
+    }
+
+    /// Called by the transport's serialized authentication callback after it
+    /// has installed state for the promoted or restored session generation.
+    func handleSessionAuthenticated(_ peerID: PeerID) {
+        drainDeferredCiphertextsIfReady(for: peerID)
+    }
+
+    private func handleEncrypted(
+        _ packet: BitchatPacket,
+        from peerID: PeerID,
+        isDeferredRetry: Bool
+    ) {
         let env = environment
         guard let recipientID = PeerID(hexData: packet.recipientID) else {
             SecureLogger.warning("⚠️ Encrypted message has no recipient ID", category: .session)
@@ -192,19 +230,205 @@ final class BLENoisePacketHandler {
 
             let ts = Date(timeIntervalSince1970: Double(packet.timestamp) / 1000)
             env.deliverNoisePayload(peerID, noisePayloadType, Data(payloadData), ts)
+        } catch NoiseEncryptionError.transportGenerationNotReady {
+            if isDeferredRetry {
+                SecureLogger.warning(
+                    "Dropping deferred Noise ciphertext from \(peerID.id.prefix(8))… because its authenticated transport generation changed again",
+                    category: .session
+                )
+                return
+            }
+            // The manager promoted or restored keys before BLE's serialized
+            // callback installed generation-bound transport state. The
+            // manager rejected this before decrypting, so replay is safe.
+            deferCiphertext(packet, from: peerID)
         } catch NoiseEncryptionError.sessionNotEstablished {
+            if isDeferredRetry {
+                SecureLogger.warning(
+                    "Dropping deferred Noise ciphertext from \(peerID.id.prefix(8))… because the authenticated session is unavailable",
+                    category: .session
+                )
+                return
+            }
             // We received an encrypted message before establishing a session with this peer.
-            // Trigger a handshake so future messages can be decrypted.
+            // An initiator may already have sent message 3 followed by this
+            // ciphertext, with BLE delivering the ciphertext first.
+            if env.isAwaitingResponderHandshakeCompletion(peerID) {
+                deferCiphertext(packet, from: peerID)
+                return
+            }
+            // Otherwise trigger a handshake so future messages can decrypt.
             SecureLogger.debug("🔑 Encrypted message from \(peerID.id.prefix(8))… without session; initiating handshake")
             if !env.hasNoiseSession(peerID) {
                 env.initiateHandshake(peerID)
             }
         } catch {
+            if isDeferredRetry {
+                // An early packet cannot tear down the authenticated session
+                // merely because its single bounded retry still fails.
+                SecureLogger.warning(
+                    "Dropping deferred Noise ciphertext from \(peerID.id.prefix(8))… after retry failed: \(error)",
+                    category: .session
+                )
+                return
+            }
+            // A responder may retain an older transport as receive-only
+            // rollback state while ordinary XX waits for message 3. New-key
+            // ciphertext can fail against those retained receive keys first.
+            if env.isAwaitingResponderHandshakeCompletion(peerID) {
+                if isDeferrableEarlyHandshakeFailure(error) {
+                    deferCiphertext(packet, from: peerID)
+                } else {
+                    SecureLogger.warning(
+                        "Dropping invalid Noise ciphertext from \(peerID.id.prefix(8))… while responder handshake is completing: \(error)",
+                        category: .session
+                    )
+                }
+                return
+            }
+            if isDropOnlyCiphertextFailure(error) {
+                // The packet is attacker-controlled and did not prove a
+                // transport-state failure. Never let malformed, replayed,
+                // forged, oversized, or rate-limited bytes evict working keys.
+                SecureLogger.warning(
+                    "Dropping rejected Noise ciphertext from \(peerID.id.prefix(8))… without clearing its session: \(error)",
+                    category: .security
+                )
+                return
+            }
             // Decryption failed - clear the corrupted session and re-initiate handshake
-            // This handles cases where session state got out of sync (nonce mismatch, etc.)
+            // Only local/session lifecycle failures reach this path.
             SecureLogger.error("❌ Failed to decrypt message from \(peerID.id.prefix(8))…: \(error) - clearing session and re-initiating handshake")
             env.clearSession(peerID)
             env.initiateHandshake(peerID)
+        }
+    }
+
+    private func isDeferrableEarlyHandshakeFailure(_ error: Error) -> Bool {
+        if let noiseError = error as? NoiseError {
+            switch noiseError {
+            case .authenticationFailure, .replayDetected:
+                return true
+            default:
+                return false
+            }
+        }
+        if let cryptoError = error as? CryptoKitError,
+           case .authenticationFailure = cryptoError {
+            return true
+        }
+        return false
+    }
+
+    private func isDropOnlyCiphertextFailure(_ error: Error) -> Bool {
+        if let securityError = error as? NoiseSecurityError {
+            switch securityError {
+            case .messageTooLarge, .rateLimitExceeded, .invalidPeerID:
+                return true
+            case .sessionExpired, .sessionExhausted:
+                return false
+            }
+        }
+        if let noiseError = error as? NoiseError {
+            switch noiseError {
+            case .invalidCiphertext, .authenticationFailure, .replayDetected:
+                return true
+            case .uninitializedCipher, .handshakeComplete,
+                    .handshakeNotComplete, .missingLocalStaticKey,
+                    .missingKeys, .invalidMessage, .invalidPublicKey,
+                    .nonceExceeded:
+                return false
+            }
+        }
+        return error is CryptoKitError
+    }
+
+    private func deferCiphertext(_ packet: BitchatPacket, from peerID: PeerID) {
+        guard NoiseSecurityValidator.validatePrivateFileCiphertextSize(
+            packet.payload
+        ) else {
+            SecureLogger.warning(
+                "Dropping oversized early Noise ciphertext from \(peerID.id.prefix(8))…",
+                category: .security
+            )
+            return
+        }
+
+        let now = environment.now()
+        deferredLock.lock()
+        defer { deferredLock.unlock() }
+        purgeExpiredCiphertextsLocked(now: now)
+
+        let peerCount = deferredCiphertexts[peerID]?.count ?? 0
+        let globalCount = deferredCiphertexts.values.reduce(0) {
+            $0 + $1.count
+        }
+        guard peerCount < Self.maxDeferredPacketsPerPeer,
+              globalCount < Self.maxDeferredPacketsGlobal,
+              deferredCiphertextBytes + packet.payload.count
+                <= Self.maxDeferredBytes else {
+            SecureLogger.warning(
+                "Dropping early Noise ciphertext from \(peerID.id.prefix(8))… because the handshake buffer is full",
+                category: .security
+            )
+            return
+        }
+
+        deferredCiphertexts[peerID, default: []].append(
+            DeferredCiphertext(packet: packet, receivedAt: now)
+        )
+        deferredCiphertextBytes += packet.payload.count
+        SecureLogger.debug(
+            "Deferring early Noise ciphertext from \(peerID.id.prefix(8))… until responder handshake completion",
+            category: .session
+        )
+    }
+
+    private func drainDeferredCiphertextsIfReady(for peerID: PeerID) {
+        let env = environment
+        guard !env.isAwaitingResponderHandshakeCompletion(peerID),
+              env.hasNoiseSession(peerID) else {
+            return
+        }
+
+        let now = env.now()
+        deferredLock.lock()
+        purgeExpiredCiphertextsLocked(now: now)
+        let deferred = deferredCiphertexts.removeValue(forKey: peerID) ?? []
+        deferredCiphertextBytes -= deferred.reduce(0) {
+            $0 + $1.packet.payload.count
+        }
+        deferredLock.unlock()
+
+        guard !deferred.isEmpty else { return }
+        SecureLogger.debug(
+            "Retrying \(deferred.count) early Noise ciphertext packet(s) from \(peerID.id.prefix(8))… after handshake completion",
+            category: .session
+        )
+        for item in deferred {
+            handleEncrypted(item.packet, from: peerID, isDeferredRetry: true)
+        }
+    }
+
+    private func purgeExpiredCiphertextsLocked(now: Date) {
+        for peerID in Array(deferredCiphertexts.keys) {
+            guard let items = deferredCiphertexts[peerID] else { continue }
+            let retained = items.filter {
+                now.timeIntervalSince($0.receivedAt) <= Self.deferredLifetime
+            }
+            guard retained.count != items.count else { continue }
+
+            deferredCiphertextBytes -= items.reduce(0) {
+                $0 + $1.packet.payload.count
+            }
+            deferredCiphertextBytes += retained.reduce(0) {
+                $0 + $1.packet.payload.count
+            }
+            if retained.isEmpty {
+                deferredCiphertexts.removeValue(forKey: peerID)
+            } else {
+                deferredCiphertexts[peerID] = retained
+            }
         }
     }
 }

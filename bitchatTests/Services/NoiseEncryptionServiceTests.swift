@@ -1352,6 +1352,89 @@ struct NoiseEncryptionServiceTests {
         }
     }
 
+    @Test("Responder completion state spans ordinary XX message three")
+    func responderCompletionStateTracksOrdinaryHandshake() throws {
+        let alice = NoiseEncryptionService(keychain: MockKeychain())
+        let bob = NoiseEncryptionService(keychain: MockKeychain())
+        let alicePeerID = PeerID(
+            publicKey: alice.getStaticPublicKeyData()
+        )
+        let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
+
+        let message1 = try alice.initiateHandshake(with: bobPeerID)
+        #expect(
+            !bob.isAwaitingResponderHandshakeCompletion(with: alicePeerID)
+        )
+
+        let message2 = try #require(
+            try bob.processHandshakeMessage(
+                from: alicePeerID,
+                message: message1
+            )
+        )
+        #expect(
+            bob.isAwaitingResponderHandshakeCompletion(with: alicePeerID)
+        )
+
+        let message3 = try #require(
+            try alice.processHandshakeMessage(
+                from: bobPeerID,
+                message: message2
+            )
+        )
+        #expect(
+            bob.isAwaitingResponderHandshakeCompletion(with: alicePeerID)
+        )
+
+        _ = try bob.processHandshakeMessage(
+            from: alicePeerID,
+            message: message3
+        )
+        #expect(
+            !bob.isAwaitingResponderHandshakeCompletion(with: alicePeerID)
+        )
+    }
+
+    @Test("Transport readiness rejection spends no message budget")
+    func transportReadinessRejectionSpendsNoMessageBudget() throws {
+        let alice = NoiseEncryptionService(keychain: MockKeychain())
+        let bob = NoiseEncryptionService(keychain: MockKeychain())
+        let alicePeerID = PeerID(
+            publicKey: alice.getStaticPublicKeyData()
+        )
+        let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
+        try establishSessions(alice: alice, bob: bob)
+        let plaintext = Data([
+            NoisePayloadType.privateMessage.rawValue,
+            0xAB, 0xCD
+        ])
+        let ciphertext = try alice.encrypt(plaintext, for: bobPeerID)
+
+        for _ in 0...NoiseSecurityConstants.maxMessagesPerSecond {
+            do {
+                _ = try bob.decryptWithSessionGeneration(
+                    ciphertext,
+                    from: alicePeerID,
+                    establishedGenerationIsReady: { _ in false }
+                )
+                Issue.record(
+                    "Expected transport generation readiness rejection"
+                )
+            } catch NoiseEncryptionError.transportGenerationNotReady {
+                // Expected: authorization and nonce mutation are both later.
+            } catch {
+                Issue.record("Unexpected readiness error: \(error)")
+            }
+        }
+
+        let decrypted = try bob.decryptWithSessionGeneration(
+            ciphertext,
+            from: alicePeerID,
+            establishedGenerationIsReady: { _ in true }
+        )
+        #expect(decrypted.plaintext == plaintext)
+    }
+
     @Test("NoiseMessage JSON and binary encoding round-trip")
     func noiseMessageRoundTrips() throws {
         let message = NoiseMessage(
