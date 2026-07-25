@@ -155,6 +155,10 @@ final class BLEService: NSObject {
     private var centralManager: CBCentralManager?
     private var peripheralManager: CBPeripheralManager?
     private var characteristic: CBMutableCharacteristic?
+    private let shouldInitializeBluetoothManagers: Bool
+    private let panicLifecycleLock = NSLock()
+    private var _isPanicSuspended: Bool
+    private var panicLifecycleGeneration: UInt64 = 0
     
     // MARK: - Identity
     
@@ -275,10 +279,13 @@ final class BLEService: NSObject {
         keychain: KeychainManagerProtocol,
         idBridge: NostrIdentityBridge,
         identityManager: SecureIdentityStateManagerProtocol,
-        initializeBluetoothManagers: Bool = true
+        initializeBluetoothManagers: Bool = true,
+        startSuspendedForPanicRecovery: Bool = false
     ) {
         self.keychain = keychain
         self.idBridge = idBridge
+        self.shouldInitializeBluetoothManagers = initializeBluetoothManagers
+        self._isPanicSuspended = startSuspendedForPanicRecovery
         noiseService = NoiseEncryptionService(keychain: keychain)
         self.identityManager = identityManager
         super.init()
@@ -327,37 +334,90 @@ final class BLEService: NSObject {
         // any access from another queue (cross-queue reads use readLinkState).
         linkStateStore.assumeOwnership(of: bleQueue)
 
-        if initializeBluetoothManagers {
-            // Initialize BLE on background queue to prevent main thread blocking.
-            #if os(iOS)
-            let centralOptions: [String: Any] = [
-                CBCentralManagerOptionRestoreIdentifierKey: BLEService.centralRestorationID
-            ]
-            centralManager = CBCentralManager(delegate: self, queue: bleQueue, options: centralOptions)
-
-            let peripheralOptions: [String: Any] = [
-                CBPeripheralManagerOptionRestoreIdentifierKey: BLEService.peripheralRestorationID
-            ]
-            peripheralManager = CBPeripheralManager(delegate: self, queue: bleQueue, options: peripheralOptions)
-            #else
-            centralManager = CBCentralManager(delegate: self, queue: bleQueue)
-            peripheralManager = CBPeripheralManager(delegate: self, queue: bleQueue)
-            #endif
+        if !startSuspendedForPanicRecovery {
+            initializeBluetoothManagersIfNeeded()
         }
         
         // Single maintenance timer for all periodic tasks (dispatch-based for
         // determinism). Only run it when real Bluetooth managers exist.
         meshBackgroundEnabled = initializeBluetoothManagers
-        startMaintenanceTimer()
+        if !startSuspendedForPanicRecovery {
+            startMaintenanceTimer()
+        }
 
         // Publish initial empty state
         requestPeerDataPublish()
 
         // Initialize gossip sync manager
-        restartGossipManager()
+        if !startSuspendedForPanicRecovery {
+            restartGossipManager()
+        }
+    }
+
+    private var isPanicSuspended: Bool {
+        panicLifecycleLock.lock()
+        defer { panicLifecycleLock.unlock() }
+        return _isPanicSuspended
+    }
+
+    private func setPanicSuspended(_ suspended: Bool) {
+        panicLifecycleLock.lock()
+        if suspended {
+            panicLifecycleGeneration &+= 1
+        }
+        _isPanicSuspended = suspended
+        panicLifecycleLock.unlock()
+    }
+
+    private func capturePanicLifecycleGeneration() -> UInt64? {
+        panicLifecycleLock.lock()
+        defer { panicLifecycleLock.unlock() }
+        return _isPanicSuspended ? nil : panicLifecycleGeneration
+    }
+
+    private func isCurrentPanicLifecycleGeneration(_ generation: UInt64) -> Bool {
+        panicLifecycleLock.lock()
+        defer { panicLifecycleLock.unlock() }
+        return !_isPanicSuspended && panicLifecycleGeneration == generation
+    }
+
+    private func initializeBluetoothManagersIfNeeded() {
+        guard shouldInitializeBluetoothManagers,
+              centralManager == nil,
+              peripheralManager == nil,
+              !isPanicSuspended else { return }
+
+        // Initialize BLE on its dedicated delegate queue. On iOS, retain the
+        // restoration identifiers even when construction was deferred by a
+        // pending panic-recovery latch.
+        #if os(iOS)
+        let centralOptions: [String: Any] = [
+            CBCentralManagerOptionRestoreIdentifierKey:
+                BLEService.centralRestorationID
+        ]
+        centralManager = CBCentralManager(
+            delegate: self,
+            queue: bleQueue,
+            options: centralOptions
+        )
+
+        let peripheralOptions: [String: Any] = [
+            CBPeripheralManagerOptionRestoreIdentifierKey:
+                BLEService.peripheralRestorationID
+        ]
+        peripheralManager = CBPeripheralManager(
+            delegate: self,
+            queue: bleQueue,
+            options: peripheralOptions
+        )
+        #else
+        centralManager = CBCentralManager(delegate: self, queue: bleQueue)
+        peripheralManager = CBPeripheralManager(delegate: self, queue: bleQueue)
+        #endif
     }
     
     private func restartGossipManager() {
+        guard !isPanicSuspended else { return }
         // Stop existing
         gossipSyncManager?.stop()
         
@@ -416,7 +476,35 @@ final class BLEService: NSObject {
         #endif
     }
 
-    func resetIdentityForPanic(currentNickname: String) {
+    /// Close radio admission before application state starts disappearing.
+    /// CoreBluetooth callbacks consult the same gate and cannot restart scan
+    /// or advertising while the full panic transaction is incomplete.
+    func suspendForPanicReset() {
+        setPanicSuspended(true)
+        gossipSyncManager?.stop()
+        gossipSyncManager = nil
+        // Wait out sends that passed admission before the gate closed. Work
+        // queued behind this barrier observes `isPanicSuspended` and exits,
+        // so the radio stop below is a true synchronous boundary.
+        messageQueue.sync(flags: .barrier) {}
+        stopServicesImmediatelyForPanic()
+        clearEmergencySessionState()
+    }
+
+    /// Reopen the radio only after media deletion and recovery-marker commit.
+    func completePanicReset(restartServices: Bool) {
+        setPanicSuspended(false)
+        guard restartServices else { return }
+        startServices()
+        sendAnnounce(forceSend: true)
+    }
+
+    func resetIdentityForPanic(
+        currentNickname: String,
+        restartServices: Bool = true
+    ) {
+        gossipSyncManager?.stop()
+        gossipSyncManager = nil
         messageQueue.sync(flags: .barrier) {
             pendingNoiseSessionQueues.removeAll()
         }
@@ -460,16 +548,19 @@ final class BLEService: NSObject {
             configureNoiseServiceCallbacks(for: newNoise)
             refreshPeerIdentity()
         }
-        restartGossipManager()
-
-        setNickname(currentNickname)
-
+        // Keep the transport silent until the application-level transaction
+        // has also removed its media and committed both recovery markers.
+        myNickname = currentNickname
         messageDeduplicator.reset()
         messageQueue.async(flags: .barrier) { [weak self] in
             self?.selfBroadcastTracker.removeAll()
         }
         requestPeerDataPublish()
-        startServices()
+        if restartServices {
+            restartGossipManager()
+            startServices()
+            sendAnnounce(forceSend: true)
+        }
     }
     
     // Ensure this runs on message queue to avoid main thread blocking
@@ -481,6 +572,7 @@ final class BLEService: NSObject {
             }
             return
         }
+        guard !isPanicSuspended else { return }
         
         guard content.count <= maxMessageLength else {
             SecureLogger.error("Message too long: \(content.count) chars", category: .session)
@@ -562,7 +654,9 @@ final class BLEService: NSObject {
     /// `startServices()` — the latter matters after a panic reset, where
     /// `stopServices()` cancels and nils the timer.
     private func startMaintenanceTimer() {
-        guard meshBackgroundEnabled, maintenanceTimer == nil else { return }
+        guard !isPanicSuspended,
+              meshBackgroundEnabled,
+              maintenanceTimer == nil else { return }
         let timer = DispatchSource.makeTimerSource(queue: bleQueue)
         timer.schedule(deadline: .now() + TransportConfig.bleMaintenanceInterval,
                        repeating: TransportConfig.bleMaintenanceInterval,
@@ -575,6 +669,12 @@ final class BLEService: NSObject {
     }
 
     func startServices() {
+        guard let lifecycleGeneration =
+                capturePanicLifecycleGeneration() else { return }
+        initializeBluetoothManagersIfNeeded()
+        if gossipSyncManager == nil {
+            restartGossipManager()
+        }
         // Restart the maintenance timer if a prior stopServices() cancelled it
         // (e.g. the panic flow), otherwise periodic announces, peer reconciliation
         // and cache cleanup would never resume until app restart.
@@ -591,7 +691,11 @@ final class BLEService: NSObject {
         // Send initial announce after services are ready
         // Use longer delay to avoid conflicts with other announces
         messageQueue.asyncAfter(deadline: .now() + TransportConfig.bleInitialAnnounceDelaySeconds) { [weak self] in
-            self?.sendAnnounce(forceSend: true)
+            guard let self,
+                  self.isCurrentPanicLifecycleGeneration(
+                    lifecycleGeneration
+                  ) else { return }
+            self.sendAnnounce(forceSend: true)
         }
     }
     
@@ -659,10 +763,37 @@ final class BLEService: NSObject {
             centralManager?.cancelPeripheralConnection(state.peripheral)
         }
     }
+
+    /// Panic cannot spend its security boundary sending a signed LEAVE or
+    /// pumping the main run loop. Close the radio and timers immediately;
+    /// the identity/session cleanup follows synchronously.
+    private func stopServicesImmediatelyForPanic() {
+        collectionsQueue.sync(flags: .barrier) {
+            pendingNotifications.removeAll()
+        }
+
+        maintenanceTimer?.cancel()
+        maintenanceTimer = nil
+        scanDutyTimer?.cancel()
+        scanDutyTimer = nil
+
+        centralManager?.stopScan()
+        peripheralManager?.stopAdvertising()
+
+        let peripheralsToDisconnect = bleQueue.sync {
+            linkStateStore.peripheralStates
+        }
+        for state in peripheralsToDisconnect {
+            centralManager?.cancelPeripheralConnection(state.peripheral)
+        }
+    }
     
     func emergencyDisconnectAll() {
         stopServices()
+        clearEmergencySessionState()
+    }
 
+    private func clearEmergencySessionState() {
         // Clear all sessions and peers
         let cancelledTransfers: [(id: String, items: [DispatchWorkItem])] = collectionsQueue.sync(flags: .barrier) {
             let entries = outboundFragmentTransfers.removeAll().map { ($0.id, $0.workItems) }
@@ -899,6 +1030,7 @@ final class BLEService: NSObject {
     func sendFileBroadcast(_ filePacket: BitchatFilePacket, transferId: String) {
         messageQueue.async { [weak self] in
             guard let self = self else { return }
+            guard !self.isPanicSuspended else { return }
             guard let payload = filePacket.encode() else {
                 SecureLogger.error("❌ Failed to encode file packet for broadcast", category: .session)
                 return
@@ -935,6 +1067,7 @@ final class BLEService: NSObject {
     func sendFilePrivate(_ filePacket: BitchatFilePacket, to peerID: PeerID, transferId: String) {
         messageQueue.async { [weak self] in
             guard let self = self else { return }
+            guard !self.isPanicSuspended else { return }
             guard let payload = filePacket.encode() else {
                 SecureLogger.error("❌ Failed to encode file packet for private send", category: .session)
                 return
@@ -1088,6 +1221,7 @@ final class BLEService: NSObject {
     // MARK: - Packet Broadcasting
     
     private func broadcastPacket(_ packet: BitchatPacket, transferId: String? = nil) {
+        guard !isPanicSuspended else { return }
         // Apply route if recipient exists (centralized route application)
         let packetToSend: BitchatPacket
         if let recipientPeerID = PeerID(hexData: packet.recipientID) {
@@ -1169,8 +1303,10 @@ final class BLEService: NSObject {
     }
 
     private func enqueuePendingNotification(data: Data, centrals: [CBCentral]?, context: String, attempt: Int = 0) {
+        guard !isPanicSuspended else { return }
         collectionsQueue.async(flags: .barrier) { [weak self] in
             guard let self = self else { return }
+            guard !self.isPanicSuspended else { return }
             let result = self.pendingNotifications.enqueue(
                 data: data,
                 targets: centrals,
@@ -1271,6 +1407,7 @@ final class BLEService: NSObject {
         requireDirectPeerLink: Bool = false,
         requireNoiseAuthenticatedPeerLink: Bool = false
     ) -> Bool {
+        guard !isPanicSuspended else { return false }
         let ingressRecord = collectionsQueue.sync { ingressLinks.record(for: packet) }
         var excludedPeerLinks = links(to: ingressRecord?.peerID)
         if requireNoiseAuthenticatedPeerLink {
@@ -1421,6 +1558,7 @@ final class BLEService: NSObject {
     }
 
     private func flushDirectedSpool() {
+        guard !isPanicSuspended else { return }
         // Move items out and attempt broadcast; if still no links, they'll be re-spooled
         let toSend = collectionsQueue.sync(flags: .barrier) {
             pendingDirectedRelays.drainUnexpired(
@@ -1637,6 +1775,7 @@ final class BLEService: NSObject {
         }
     }
     private func sendAnnounce(forceSend: Bool = false) {
+        guard !isPanicSuspended else { return }
         // Throttle announces to prevent flooding
         if !announceThrottle.shouldSend(force: forceSend, now: Date()) {
             return
@@ -1846,6 +1985,13 @@ extension BLEService: CBCentralManagerDelegate {
     #if os(iOS)
     func centralManager(_ central: CBCentralManager, willRestoreState dict: [String: Any]) {
         let restoredPeripherals = (dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral]) ?? []
+        guard !isPanicSuspended else {
+            central.stopScan()
+            restoredPeripherals.forEach {
+                central.cancelPeripheralConnection($0)
+            }
+            return
+        }
         let restoredServices = (dict[CBCentralManagerRestoredStateScanServicesKey] as? [CBUUID]) ?? []
         let restoredOptions = (dict[CBCentralManagerRestoredStateScanOptionsKey] as? [String: Any]) ?? [:]
         let allowDuplicates = restoredOptions[CBCentralManagerScanOptionAllowDuplicatesKey] as? Bool
@@ -1901,6 +2047,10 @@ extension BLEService: CBCentralManagerDelegate {
 
         switch central.state {
         case .poweredOn:
+            guard !isPanicSuspended else {
+                central.stopScan()
+                return
+            }
             // Links restored as connected have no characteristic in the new
             // process; without rediscovery they sit connected-but-unusable
             // until the peer disconnects. Runs here (not willRestoreState)
@@ -1957,7 +2107,8 @@ extension BLEService: CBCentralManagerDelegate {
     }
     
     private func startScanning() {
-        guard let central = centralManager,
+        guard !isPanicSuspended,
+              let central = centralManager,
               central.state == .poweredOn,
               !central.isScanning else { return }
         
@@ -1978,6 +2129,7 @@ extension BLEService: CBCentralManagerDelegate {
     }
     
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
+        guard !isPanicSuspended else { return }
         let peripheralID = peripheral.identifier.uuidString
         let advertisedName = advertisementData[CBAdvertisementDataLocalNameKey] as? String ?? (peripheralID.prefix(6) + "…")
         let isConnectable = (advertisementData[CBAdvertisementDataIsConnectable] as? NSNumber)?.boolValue ?? true
@@ -2019,6 +2171,10 @@ extension BLEService: CBCentralManagerDelegate {
     }
     
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+        guard !isPanicSuspended else {
+            central.cancelPeripheralConnection(peripheral)
+            return
+        }
         let peripheralID = peripheral.identifier.uuidString
 
         #if os(iOS)
@@ -2169,7 +2325,9 @@ private extension CBPeripheralState {
 
 extension BLEService {
     private func tryConnectFromQueue() {
-        guard let central = centralManager, central.state == .poweredOn else { return }
+        guard !isPanicSuspended,
+              let central = centralManager,
+              central.state == .poweredOn else { return }
 
         let decision = connectionScheduler.nextCandidate(
             connectedOrConnectingCount: linkStateStore.connectedOrConnectingPeripheralCount,
@@ -2195,6 +2353,7 @@ extension BLEService {
         using central: CBCentralManager,
         logPrefix: String
     ) {
+        guard !isPanicSuspended else { return }
         let peripheral = candidate.peripheral
         let peripheralID = candidate.peripheralID
         linkStateStore.beginConnecting(to: peripheral, at: Date())
@@ -2376,6 +2535,7 @@ extension BLEService {
 
 extension BLEService: CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
+        guard !isPanicSuspended else { return }
         if let error = error {
             SecureLogger.error("❌ Error discovering services for \(peripheral.name ?? "Unknown"): \(error.localizedDescription)", category: .session)
             // Retry service discovery after a delay
@@ -2402,6 +2562,7 @@ extension BLEService: CBPeripheralDelegate {
     }
     
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
+        guard !isPanicSuspended else { return }
         if let error = error {
             SecureLogger.error("❌ Error discovering characteristics for \(peripheral.name ?? "Unknown"): \(error.localizedDescription)", category: .session)
             return
@@ -2449,6 +2610,7 @@ extension BLEService: CBPeripheralDelegate {
     }
     
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
+        guard !isPanicSuspended else { return }
         if let error = error {
             SecureLogger.error("❌ Error receiving notification: \(error.localizedDescription)", category: .session)
             return
@@ -2566,6 +2728,7 @@ extension BLEService: CBPeripheralDelegate {
     }
     
     func peripheralIsReady(toSendWriteWithoutResponse peripheral: CBPeripheral) {
+        guard !isPanicSuspended else { return }
         // Resume queued writes for this peripheral - called when canSendWriteWithoutResponse becomes true again
         if logRateLimiter.shouldLog(key: "peripheral-ready:\(peripheral.identifier.uuidString)") {
             SecureLogger.debug("📤 Peripheral \(peripheral.name ?? peripheral.identifier.uuidString.prefix(8).description) ready for more writes", category: .session)
@@ -2574,6 +2737,7 @@ extension BLEService: CBPeripheralDelegate {
     }
     
     func peripheral(_ peripheral: CBPeripheral, didModifyServices invalidatedServices: [CBService]) {
+        guard !isPanicSuspended else { return }
         SecureLogger.warning("⚠️ Services modified for \(peripheral.name ?? peripheral.identifier.uuidString)", category: .session)
 
         let shouldRediscover = BLEService.shouldRediscoverBitChatService(
@@ -2594,6 +2758,7 @@ extension BLEService: CBPeripheralDelegate {
     }
     
     func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
+        guard !isPanicSuspended else { return }
         if let error = error {
             SecureLogger.error("❌ Error updating notification state: \(error.localizedDescription)", category: .session)
         } else {
@@ -2617,6 +2782,12 @@ extension BLEService: CBPeripheralManagerDelegate {
 
         switch peripheral.state {
         case .poweredOn:
+            guard !isPanicSuspended else {
+                peripheral.stopAdvertising()
+                peripheral.removeAllServices()
+                characteristic = nil
+                return
+            }
             // Remove all services first to ensure clean state
             peripheral.removeAllServices()
 
@@ -2677,6 +2848,12 @@ extension BLEService: CBPeripheralManagerDelegate {
     
     #if os(iOS)
     func peripheralManager(_ peripheral: CBPeripheralManager, willRestoreState dict: [String: Any]) {
+        guard !isPanicSuspended else {
+            peripheral.stopAdvertising()
+            peripheral.removeAllServices()
+            characteristic = nil
+            return
+        }
         let restoredServices = (dict[CBPeripheralManagerRestoredStateServicesKey] as? [CBMutableService]) ?? []
         let restoredAdvertisement = (dict[CBPeripheralManagerRestoredStateAdvertisementDataKey] as? [String: Any]) ?? [:]
 
@@ -2703,6 +2880,10 @@ extension BLEService: CBPeripheralManagerDelegate {
     #endif
     
     func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBService, error: Error?) {
+        guard !isPanicSuspended else {
+            peripheral.stopAdvertising()
+            return
+        }
         if let error = error {
             SecureLogger.error("❌ Failed to add service: \(error.localizedDescription)", category: .session)
             return
@@ -2718,6 +2899,7 @@ extension BLEService: CBPeripheralManagerDelegate {
     }
     
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didSubscribeTo characteristic: CBCharacteristic) {
+        guard !isPanicSuspended else { return }
         let centralUUID = central.identifier.uuidString
         SecureLogger.debug("📥 Central subscribed: \(centralUUID.prefix(8))…", category: .session)
         linkStateStore.addSubscribedCentral(central)
@@ -2759,7 +2941,7 @@ extension BLEService: CBPeripheralManagerDelegate {
         let removedPeerID = linkStateStore.removeSubscribedCentral(central)
         
         // Ensure we're still advertising for other devices to find us
-        if peripheral.isAdvertising == false {
+        if !isPanicSuspended, peripheral.isAdvertising == false {
             SecureLogger.debug("📡 Restarting advertising after central unsubscribed", category: .session)
             peripheral.startAdvertising(buildAdvertisementData())
         }
@@ -2796,6 +2978,7 @@ extension BLEService: CBPeripheralManagerDelegate {
     }
     
     func peripheralManagerIsReady(toUpdateSubscribers peripheral: CBPeripheralManager) {
+        guard !isPanicSuspended else { return }
         drainPendingNotifications(logPrefix: "✅ Sent")
     }
 
@@ -2856,6 +3039,7 @@ extension BLEService: CBPeripheralManagerDelegate {
         for request in requests {
             peripheral.respond(to: request, withResult: .success)
         }
+        guard !isPanicSuspended else { return }
         
         // Process writes. For long writes, CoreBluetooth may deliver multiple CBATTRequest values with offsets.
         // Combine per-central request values by offset before decoding.
@@ -4138,6 +4322,7 @@ extension BLEService {
         let uuid = peripheral.identifier.uuidString
         bleQueue.async { [weak self] in
             guard let self = self else { return }
+            guard !self.isPanicSuspended else { return }
             guard let state = self.linkStateStore.state(forPeripheralID: uuid), let ch = state.characteristic else { return }
 
             // Atomically take all pending items from the queue to avoid race conditions
@@ -4228,7 +4413,10 @@ extension BLEService {
         slotReserve: Int = TransportConfig.bleBackgroundPendingConnectSlotReserve
     ) {
         bleQueue.async { [weak self] in
-            guard let self, let central = self.centralManager, central.state == .poweredOn else { return }
+            guard let self,
+                  !self.isPanicSuspended,
+                  let central = self.centralManager,
+                  central.state == .poweredOn else { return }
             let budget = TransportConfig.bleMaxCentralLinks
                 - slotReserve
                 - self.linkStateStore.connectedOrConnectingPeripheralCount
@@ -5535,6 +5723,7 @@ extension BLEService {
     // MARK: Consolidated Maintenance
     
     private func performMaintenance() {
+        guard !isPanicSuspended else { return }
         maintenanceCounter += 1
         lastMaintenanceAt = Date()
 

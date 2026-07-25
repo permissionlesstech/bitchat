@@ -573,6 +573,26 @@ struct BLEServiceCoreTests {
     }
 
     @Test
+    func panicSuspension_dropsLateOutboundWorkUntilCommit() async {
+        let ble = makeService()
+        let outbound = OutboundPacketTap()
+        ble._test_onOutboundPacket = outbound.record
+        let packet = makePublicPacket(
+            content: "late callback",
+            sender: ble.myPeerID,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000)
+        )
+
+        ble.suspendForPanicReset()
+        ble.sendPacket(packet)
+        #expect(outbound.count(ofType: .message) == 0)
+
+        ble.completePanicReset(restartServices: false)
+        ble.sendPacket(packet)
+        #expect(outbound.count(ofType: .message) == 1)
+    }
+
+    @Test
     func modifiedServices_rediscoverWhenBitChatServiceIsInvalidated() async throws {
         let otherService = CBUUID(string: "0000180F-0000-1000-8000-00805F9B34FB")
 

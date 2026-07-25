@@ -107,12 +107,15 @@ final class AppRuntime: ObservableObject {
             )
         )
 
-        GeoRelayDirectory.shared.prefetchIfNeeded()
+        if chatViewModel.networkActivationAllowed {
+            GeoRelayDirectory.shared.prefetchIfNeeded()
+        }
         bindRuntimeObservers()
         NotificationDelegate.shared.runtime = self
     }
 
     func start() {
+        guard chatViewModel.networkActivationAllowed else { return }
         guard !started else {
             checkForSharedContent()
             return
@@ -151,12 +154,14 @@ final class AppRuntime: ObservableObject {
     }
 
     func handleDidBecomeActiveNotification() {
+        guard chatViewModel.networkActivationAllowed else { return }
         chatViewModel.handleDidBecomeActive()
         checkForSharedContent()
     }
 
     #if os(macOS)
     func handleMacDidBecomeActiveNotification() {
+        guard chatViewModel.networkActivationAllowed else { return }
         record(.scenePhaseChanged(.active))
         chatViewModel.handleDidBecomeActive()
         checkForSharedContent()
@@ -175,6 +180,7 @@ final class AppRuntime: ObservableObject {
             didEnterBackground = true
 
         case .active:
+            guard chatViewModel.networkActivationAllowed else { return }
             record(.scenePhaseChanged(.active))
             chatViewModel.meshService.startServices()
             TorManager.shared.setAppForeground(true)
@@ -222,6 +228,7 @@ final class AppRuntime: ObservableObject {
         actionIdentifier: String = UNNotificationDefaultActionIdentifier,
         userInfo: [AnyHashable: Any]
     ) {
+        guard chatViewModel.networkActivationAllowed else { return }
         if actionIdentifier == NotificationService.waveActionID {
             chatViewModel.sendMeshWave()
             return
@@ -273,6 +280,8 @@ private extension AppRuntime {
         NotificationCenter.default.publisher(for: .TorWillRestart)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
+                guard self?.chatViewModel.networkActivationAllowed == true
+                else { return }
                 self?.record(.torLifecycleChanged(.willRestart))
                 self?.chatViewModel.handleTorWillRestart()
             }
@@ -281,6 +290,8 @@ private extension AppRuntime {
         NotificationCenter.default.publisher(for: .TorDidBecomeReady)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
+                guard self?.chatViewModel.networkActivationAllowed == true
+                else { return }
                 self?.record(.torLifecycleChanged(.didBecomeReady))
                 self?.chatViewModel.handleTorDidBecomeReady()
             }
@@ -289,6 +300,8 @@ private extension AppRuntime {
         NotificationCenter.default.publisher(for: .TorWillStart)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
+                guard self?.chatViewModel.networkActivationAllowed == true
+                else { return }
                 self?.record(.torLifecycleChanged(.willStart))
                 self?.chatViewModel.handleTorWillStart()
             }
@@ -297,6 +310,8 @@ private extension AppRuntime {
         NotificationCenter.default.publisher(for: .TorUserPreferenceChanged)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] notification in
+                guard self?.chatViewModel.networkActivationAllowed == true
+                else { return }
                 self?.record(.torLifecycleChanged(.preferenceChanged))
                 self?.chatViewModel.handleTorPreferenceChanged(notification)
             }
@@ -313,6 +328,7 @@ private extension AppRuntime {
     }
 
     func checkForSharedContent() {
+        guard chatViewModel.networkActivationAllowed else { return }
         guard let userDefaults = UserDefaults(suiteName: BitchatApp.groupID) else { return }
         let clearSharedContent = {
             userDefaults.removeObject(forKey: "sharedContent")
@@ -359,7 +375,9 @@ private extension AppRuntime {
         let becameConnected = isConnected && !lastNostrRelayConnectedState
         lastNostrRelayConnectedState = isConnected
 
-        guard started, becameConnected else { return }
+        guard chatViewModel.networkActivationAllowed,
+              started,
+              becameConnected else { return }
 
         let isInitialConnection = !didHandleInitialNostrConnection
         didHandleInitialNostrConnection = true

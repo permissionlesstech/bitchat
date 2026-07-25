@@ -2,8 +2,116 @@ import BitLogger
 import BitFoundation
 import Foundation
 
+struct PanicRecoveryIntent {
+    let fileMarkerEstablished: Bool
+    let externalMarkerEstablished: Bool
+
+    var hasDurableMarker: Bool {
+        fileMarkerEstablished || externalMarkerEstablished
+    }
+}
+
+/// Small, dependency-injectable transaction surface used by ChatViewModel.
+/// Production persists the same intent in two independent locations before
+/// any application state is erased. Tests can inject an ephemeral operation
+/// set without touching the developer's Application Support directory.
+struct PanicRecoveryOperations {
+    let isPending: () throws -> Bool
+    let begin: () -> PanicRecoveryIntent
+    let wipeMedia: (PanicRecoveryIntent) throws -> Void
+    let complete: () throws -> Void
+
+    static func ephemeral(
+        wipeMedia: @escaping () throws -> Void = {}
+    ) -> PanicRecoveryOperations {
+        PanicRecoveryOperations(
+            isPending: { false },
+            begin: {
+                PanicRecoveryIntent(
+                    fileMarkerEstablished: false,
+                    externalMarkerEstablished: false
+                )
+            },
+            wipeMedia: { _ in try wipeMedia() },
+            complete: {}
+        )
+    }
+
+    static func live(
+        fileStore: BLEIncomingFileStore = BLEIncomingFileStore(),
+        defaults: UserDefaults = .standard
+    ) -> PanicRecoveryOperations {
+        let defaultsKey = "bitchat.panicResetPending"
+        return PanicRecoveryOperations(
+            isPending: {
+                if defaults.bool(forKey: defaultsKey) {
+                    return true
+                }
+                return try fileStore.isPanicRecoveryPending()
+            },
+            begin: {
+                defaults.set(true, forKey: defaultsKey)
+                let externalMarkerEstablished =
+                    defaults.synchronize()
+                    && defaults.bool(forKey: defaultsKey)
+
+                let fileMarkerEstablished: Bool
+                do {
+                    try fileStore.markPanicRecoveryPending()
+                    fileMarkerEstablished = true
+                } catch {
+                    fileMarkerEstablished = false
+                    SecureLogger.error(
+                        "Failed to persist file panic-recovery marker: \(error)",
+                        category: .security
+                    )
+                }
+
+                return PanicRecoveryIntent(
+                    fileMarkerEstablished: fileMarkerEstablished,
+                    externalMarkerEstablished: externalMarkerEstablished
+                )
+            },
+            wipeMedia: { intent in
+                try fileStore.panicWipe(
+                    hasDurablePendingMarker: intent.hasDurableMarker
+                )
+            },
+            complete: {
+                // Keep the independent defaults latch until the file marker
+                // has definitely cleared. Any failure therefore remains
+                // visible to the next launch.
+                try fileStore.completePanicRecovery()
+                defaults.removeObject(forKey: defaultsKey)
+                guard defaults.synchronize(),
+                      !defaults.bool(forKey: defaultsKey) else {
+                    throw BLEIncomingFileStore.PanicRecoveryError
+                        .externalMarkerCommitFailed
+                }
+            }
+        )
+    }
+}
+
 struct BLEIncomingFileStore {
+    enum PanicRecoveryError: Error {
+        case externalMarkerCommitFailed
+        case markerWriteFailed(Error)
+        case markerWriteAndMediaWipeFailed(
+            markerError: Error,
+            mediaError: Error
+        )
+    }
+
     private static let quotaBytes: Int64 = 100 * 1024 * 1024
+    /// Kept outside `files/` so deleting the media tree cannot erase the
+    /// fail-closed startup decision before the full panic has committed.
+    private static let panicRecoveryPendingMarkerFileName =
+        ".panic-recovery-pending"
+    /// Compatibility with a short-lived development build that used the
+    /// media-specific name for the same full-transaction latch.
+    private static let legacyPanicRecoveryPendingMarkerFileName =
+        ".panic-media-wipe-pending"
     private static let mediaSubdirectories = [
         "voicenotes/incoming",
         "voicenotes/outgoing",
@@ -25,27 +133,95 @@ struct BLEIncomingFileStore {
     let fileManager: FileManager
     private let baseDirectory: URL?
     private let dateProvider: () -> Date
+    private let panicMarkerWriter: (Data, URL) throws -> Void
 
-    init(fileManager: FileManager = .default, baseDirectory: URL? = nil, dateProvider: @escaping () -> Date = Date.init) {
+    init(
+        fileManager: FileManager = .default,
+        baseDirectory: URL? = nil,
+        dateProvider: @escaping () -> Date = Date.init,
+        panicMarkerWriter: @escaping (Data, URL) throws -> Void = {
+            try $0.write(to: $1, options: .atomic)
+        }
+    ) {
         self.fileManager = fileManager
         self.baseDirectory = baseDirectory
         self.dateProvider = dateProvider
+        self.panicMarkerWriter = panicMarkerWriter
     }
 
     /// Panic-wipe every managed incoming and outgoing media artifact before
     /// returning. Recreating the directory tree keeps later capture/receive
     /// paths usable without allowing a detached cleanup task to race them.
-    func panicWipe() throws {
-        let filesDirectory = try rootDirectory().appendingPathComponent("files", isDirectory: true)
-        if fileManager.fileExists(atPath: filesDirectory.path) {
-            try fileManager.removeItem(at: filesDirectory)
-        }
-        for subdirectory in Self.mediaSubdirectories {
-            try fileManager.createDirectory(
-                at: filesDirectory.appendingPathComponent(subdirectory, isDirectory: true),
-                withIntermediateDirectories: true,
-                attributes: nil
+    ///
+    /// Marker persistence and deletion are deliberately separate error
+    /// domains: even when both durable marker channels fail, deletion is
+    /// still attempted before this method reports the marker failure.
+    func panicWipe(
+        hasDurablePendingMarker: Bool = false
+    ) throws {
+        let markerError: Error?
+        do {
+            try markPanicRecoveryPending()
+            markerError = nil
+        } catch {
+            markerError = error
+            SecureLogger.error(
+                "Could not persist file panic-recovery marker; attempting media deletion anyway: \(error)",
+                category: .security
             )
+        }
+
+        do {
+            let filesDirectory = try rootDirectory()
+                .appendingPathComponent("files", isDirectory: true)
+            if fileManager.fileExists(atPath: filesDirectory.path) {
+                try fileManager.removeItem(at: filesDirectory)
+            }
+            for subdirectory in Self.mediaSubdirectories {
+                try fileManager.createDirectory(
+                    at: filesDirectory.appendingPathComponent(
+                        subdirectory,
+                        isDirectory: true
+                    ),
+                    withIntermediateDirectories: true,
+                    attributes: nil
+                )
+            }
+        } catch {
+            if let markerError {
+                throw PanicRecoveryError.markerWriteAndMediaWipeFailed(
+                    markerError: markerError,
+                    mediaError: error
+                )
+            }
+            throw error
+        }
+
+        if let markerError, !hasDurablePendingMarker {
+            throw PanicRecoveryError.markerWriteFailed(markerError)
+        }
+    }
+
+    func markPanicRecoveryPending() throws {
+        let markerURL = try panicRecoveryPendingMarkerURL()
+        try fileManager.createDirectory(
+            at: markerURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true,
+            attributes: nil
+        )
+        try panicMarkerWriter(Data([1]), markerURL)
+    }
+
+    func isPanicRecoveryPending() throws -> Bool {
+        try panicRecoveryMarkerURLs().contains {
+            fileManager.fileExists(atPath: $0.path)
+        }
+    }
+
+    func completePanicRecovery() throws {
+        for markerURL in try panicRecoveryMarkerURLs()
+        where fileManager.fileExists(atPath: markerURL.path) {
+            try fileManager.removeItem(at: markerURL)
         }
     }
 
@@ -150,6 +326,27 @@ struct BLEIncomingFileStore {
             appropriateFor: nil,
             create: true
         )
+    }
+
+    private func panicRecoveryPendingMarkerURL() throws -> URL {
+        try rootDirectory().appendingPathComponent(
+            Self.panicRecoveryPendingMarkerFileName,
+            isDirectory: false
+        )
+    }
+
+    private func panicRecoveryMarkerURLs() throws -> [URL] {
+        let root = try rootDirectory()
+        return [
+            root.appendingPathComponent(
+                Self.panicRecoveryPendingMarkerFileName,
+                isDirectory: false
+            ),
+            root.appendingPathComponent(
+                Self.legacyPanicRecoveryPendingMarkerFileName,
+                isDirectory: false
+            )
+        ]
     }
 
     private func sanitizedFileName(_ name: String?, defaultName: String, fallbackExtension: String?) -> String {

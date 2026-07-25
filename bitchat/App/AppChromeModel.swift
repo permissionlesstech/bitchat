@@ -21,6 +21,9 @@ final class AppChromeModel: ObservableObject {
 
     private let chatViewModel: ChatViewModel
     private var cancellables = Set<AnyCancellable>()
+    /// The composer owns capture state above ChatViewModel. ContentView
+    /// installs this hook so both panic entry points synchronously stop it.
+    private var prepareForPanic: (@MainActor () -> Void)?
 
     /// Bulletin-board coordinator, created on first use of the board sheet.
     private(set) lazy var boardManager = BoardManager(transport: chatViewModel.meshService)
@@ -97,7 +100,12 @@ final class AppChromeModel: ObservableObject {
         showScreenshotPrivacyWarning = true
     }
 
+    func setPanicPreparation(_ preparation: (@MainActor () -> Void)?) {
+        prepareForPanic = preparation
+    }
+
     func panicClearAllData() {
+        prepareForPanic?()
         chatViewModel.panicClearAllData()
     }
 

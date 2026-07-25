@@ -213,6 +213,7 @@ private final class ControllableReachabilityMonitor: NetworkReachabilityMonitori
         subject.removeDuplicates().dropFirst().eraseToAnyPublisher()
     }
     func start() { startCalled = true }
+    func stop() { startCalled = false }
     func set(_ reachable: Bool) { subject.send(reachable) }
 }
 

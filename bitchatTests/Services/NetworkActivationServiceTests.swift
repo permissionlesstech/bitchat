@@ -91,6 +91,53 @@ final class NetworkActivationServiceTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(context.relayController.connectCallCount, 1)
     }
 
+    func test_stopForPanic_synchronouslyStopsAndIgnoresPublisherUpdates() async {
+        let context = makeService(permission: .authorized, favorites: [])
+
+        context.service.start()
+        context.service.stopForPanic()
+        let connectCountAfterStop = context.relayController.connectCallCount
+        let startCountAfterStop = context.torController.startIfNeededCallCount
+
+        context.favoritesSubject.send([Data([0x01])])
+        context.reachability.set(false)
+        context.reachability.set(true)
+        try? await Task.sleep(nanoseconds: 30_000_000)
+
+        XCTAssertFalse(context.service.activationAllowed)
+        XCTAssertEqual(context.reachability.stopCallCount, 1)
+        XCTAssertEqual(context.torController.autoStartAllowedValues.last, false)
+        XCTAssertEqual(context.proxyController.proxyModes.last, false)
+        XCTAssertGreaterThanOrEqual(
+            context.torController.shutdownCompletelyCallCount,
+            1
+        )
+        XCTAssertGreaterThanOrEqual(
+            context.relayController.disconnectCallCount,
+            1
+        )
+        XCTAssertEqual(
+            context.relayController.connectCallCount,
+            connectCountAfterStop
+        )
+        XCTAssertEqual(
+            context.torController.startIfNeededCallCount,
+            startCountAfterStop
+        )
+    }
+
+    func test_start_afterPanicStop_reestablishesSubscriptions() {
+        let context = makeService(permission: .authorized, favorites: [])
+
+        context.service.start()
+        context.service.stopForPanic()
+        context.service.start()
+
+        XCTAssertTrue(context.service.activationAllowed)
+        XCTAssertEqual(context.reachability.startCallCount, 2)
+        XCTAssertEqual(context.relayController.connectCallCount, 2)
+    }
+
     private func makeService(
         permission: LocationChannelManager.PermissionState,
         favorites: Set<Data>
@@ -104,6 +151,7 @@ final class NetworkActivationServiceTests: XCTestCase {
         let torController = MockNetworkActivationTorController()
         let relayController = MockNetworkActivationRelayController()
         let proxyController = MockNetworkActivationProxyController()
+        let reachability = MockNetworkActivationReachability()
         let notificationCenter = NotificationCenter()
         let service = NetworkActivationService(
             storage: storage,
@@ -111,7 +159,7 @@ final class NetworkActivationServiceTests: XCTestCase {
             mutualFavoritesPublisher: favoritesSubject.eraseToAnyPublisher(),
             permissionProvider: { permissionSubject.value },
             mutualFavoritesProvider: { favoritesSubject.value },
-            reachabilityMonitor: AlwaysReachableMonitor(),
+            reachabilityMonitor: reachability,
             torController: torController,
             relayController: relayController,
             proxyController: proxyController,
@@ -121,6 +169,7 @@ final class NetworkActivationServiceTests: XCTestCase {
             service: service,
             storage: storage,
             favoritesSubject: favoritesSubject,
+            reachability: reachability,
             torController: torController,
             relayController: relayController,
             proxyController: proxyController,
@@ -148,10 +197,36 @@ private struct NetworkActivationTestContext {
     let service: NetworkActivationService
     let storage: UserDefaults
     let favoritesSubject: CurrentValueSubject<Set<Data>, Never>
+    let reachability: MockNetworkActivationReachability
     let torController: MockNetworkActivationTorController
     let relayController: MockNetworkActivationRelayController
     let proxyController: MockNetworkActivationProxyController
     let notificationCenter: NotificationCenter
+}
+
+@MainActor
+private final class MockNetworkActivationReachability:
+    NetworkReachabilityMonitoring {
+    private let subject = CurrentValueSubject<Bool, Never>(true)
+    private(set) var startCallCount = 0
+    private(set) var stopCallCount = 0
+
+    var isReachable: Bool { subject.value }
+    var reachabilityPublisher: AnyPublisher<Bool, Never> {
+        subject.removeDuplicates().dropFirst().eraseToAnyPublisher()
+    }
+
+    func start() {
+        startCallCount += 1
+    }
+
+    func stop() {
+        stopCallCount += 1
+    }
+
+    func set(_ reachable: Bool) {
+        subject.send(reachable)
+    }
 }
 
 @MainActor

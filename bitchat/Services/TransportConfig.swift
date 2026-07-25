@@ -114,7 +114,6 @@ enum TransportConfig {
     // UI sleeps/delays
     static let uiStartupInitialDelaySeconds: TimeInterval = 1.0
     static let uiStartupPhaseDurationSeconds: TimeInterval = 2.0
-    static let uiAsyncShortSleepNs: UInt64 = 100_000_000
     static let uiReadReceiptRetryShortSeconds: TimeInterval = 0.1
     static let uiReadReceiptRetryLongSeconds: TimeInterval = 0.5
     static let uiBatchDispatchStaggerSeconds: TimeInterval = 0.15

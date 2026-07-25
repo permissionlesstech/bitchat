@@ -154,6 +154,19 @@ final class NetworkActivationService: ObservableObject {
             .store(in: &cancellables)
     }
 
+    /// Stops all internet-facing work at the synchronous panic boundary.
+    /// `start()` may be called again only after the full wipe commits.
+    func stopForPanic() {
+        cancellables.removeAll()
+        started = false
+        reachabilityMonitor.stop()
+        activationAllowed = false
+        torAutoStartDesired = false
+        relayController.disconnect()
+        torController.setAutoStartAllowed(false)
+        applyTorState(torDesired: false)
+    }
+
     func setUserTorEnabled(_ enabled: Bool) {
         guard enabled != userTorEnabled else { return }
         userTorEnabled = enabled
@@ -167,6 +180,7 @@ final class NetworkActivationService: ObservableObject {
     }
 
     private func reevaluate() {
+        guard started else { return }
         let allowed = effectiveAllowed()
         let torDesired = allowed && userTorEnabled
         let statusChanged = allowed != activationAllowed

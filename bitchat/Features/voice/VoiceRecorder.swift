@@ -246,6 +246,21 @@ actor VoiceRecorder {
         currentURL = nil
     }
 
+    /// Panic is a synchronous security boundary: the caller must know the
+    /// microphone, audio-session lease, and partial file are gone before it
+    /// rotates identities or deletes the media tree. VoiceRecorder is an
+    /// independent actor and this cleanup path never hops to MainActor, so a
+    /// short semaphore join is safe even when invoked by the UI actor.
+    nonisolated
+    func panicCancelSynchronously(owner: RecordingOwner) {
+        let finished = DispatchSemaphore(value: 0)
+        Task {
+            await cancelRecording(owner: owner)
+            finished.signal()
+        }
+        finished.wait()
+    }
+
     /// The audio session was interrupted (call, Siri) or reconfigured: stop
     /// the recorder but keep `recorder`/`currentURL` so the caller's pending
     /// `stopRecording()` still returns the partial note.

@@ -360,6 +360,35 @@ struct VoiceRecorderTests {
         #expect(FileManager.default.fileExists(atPath: secondURL.path))
     }
 
+    @Test func classicSessionPanicStopsRecorderAndDeletesFileBeforeReturning() async throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let rawSession = VoiceRecorderTestSession()
+        let coordinator = AudioSessionCoordinator(session: rawSession)
+        let factory = TestVoiceAudioRecorderFactory(plans: [.success])
+        let voiceRecorder = VoiceRecorder(
+            sessionCoordinator: coordinator,
+            recorderFactory: factory,
+            permissionGranted: { true },
+            paddingInterval: 0,
+            outputDirectory: directory
+        )
+        let capture = VoiceNoteCaptureSession(recorder: voiceRecorder)
+
+        try await capture.start()
+        let url = try #require(factory.urls.first)
+        let recorder = try #require(factory.recorders.first)
+
+        capture.panicCancelSynchronously()
+
+        #expect(recorder.stopCallCount == 1)
+        #expect(!recorder.isRecording)
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+        await coordinator.drain()
+        #expect(rawSession.activationCalls == [true, false])
+    }
+
     private func verifyFailedStart(
         firstPlan: TestVoiceAudioRecorderFactory.Plan,
         expectedPrepareCalls: Int,

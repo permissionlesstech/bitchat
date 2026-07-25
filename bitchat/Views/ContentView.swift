@@ -79,6 +79,9 @@ struct ContentView: View {
                 voiceRecordingVM.sessionProvider = { [weak conversationUIModel] in
                     conversationUIModel?.makeVoiceCaptureSession() ?? VoiceNoteCaptureSession()
                 }
+                appChromeModel.setPanicPreparation { [weak voiceRecordingVM] in
+                    voiceRecordingVM?.panicWipe()
+                }
                 #if os(macOS)
                 DispatchQueue.main.async {
                     isNicknameFieldFocused = false
@@ -229,6 +232,7 @@ struct ContentView: View {
         }
         .onDisappear {
             autocompleteDebounceTimer?.invalidate()
+            appChromeModel.setPanicPreparation(nil)
         }
     }
 

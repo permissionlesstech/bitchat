@@ -89,6 +89,26 @@ import UIKit
 #endif
 import UniformTypeIdentifiers
 
+struct PanicNetworkLifecycle {
+    let stop: @MainActor () -> Void
+    let restart: @MainActor () -> Void
+
+    static let noop = PanicNetworkLifecycle(stop: {}, restart: {})
+
+    static var live: PanicNetworkLifecycle {
+        PanicNetworkLifecycle(
+            stop: {
+                GeohashPresenceService.shared.stopForPanic()
+                NetworkActivationService.shared.stopForPanic()
+            },
+            restart: {
+                NetworkActivationService.shared.start()
+                GeohashPresenceService.shared.start()
+            }
+        )
+    }
+}
+
 /// Manages the application state and business logic for BitChat.
 /// Acts as the primary coordinator between UI components and backend services,
 /// implementing the BitchatDelegate protocol to handle network events.
@@ -142,6 +162,8 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     @Published var currentColorScheme: ColorScheme = .light
     @Published var currentTheme: AppTheme = .matrix
     @Published var isConnected = false
+    @Published private(set) var panicRecoveryBlocked = false
+    var networkActivationAllowed: Bool { !panicRecoveryBlocked }
     @Published var nickname: String = "" {
         didSet {
             // Trim whitespace whenever nickname is set; whitespace-only becomes ""
@@ -151,7 +173,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
                 return
             }
             // Update mesh service nickname if it's initialized
-            if !meshService.myPeerID.isEmpty {
+            if !isPanicResetting, !meshService.myPeerID.isEmpty {
                 meshService.setNickname(nickname)
             }
         }
@@ -295,7 +317,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
     var nostrRelayManager: NostrRelayManager?
     private let userDefaults = UserDefaults.standard
     let keychain: KeychainManagerProtocol
-    private let panicMediaWipe: () throws -> Void
+    private let panicRecoveryOperations: PanicRecoveryOperations
+    private let panicNetworkLifecycle: PanicNetworkLifecycle
+    private var isPanicResetting = false
     /// Private group membership: keys in the keychain, metadata on disk.
     let groupStore: GroupStore
     private let nicknameKey = "bitchat.nickname"
@@ -773,7 +797,34 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         locationPresenceStore: LocationPresenceStore? = nil,
         locationManager: LocationChannelManager = .shared
     ) {
-        let meshService = BLEService(keychain: keychain, idBridge: idBridge, identityManager: identityManager)
+        let livePanicRecoveryOperations = PanicRecoveryOperations.live()
+        let startSuspendedForRecovery: Bool
+        do {
+            startSuspendedForRecovery =
+                try livePanicRecoveryOperations.isPending()
+        } catch {
+            startSuspendedForRecovery = true
+        }
+        // Preserve the preflight decision used to defer CoreBluetooth. A
+        // transiently successful second read must not skip recovery and leave
+        // the service permanently suspended without running the wipe.
+        let panicRecoveryOperations = PanicRecoveryOperations(
+            isPending: {
+                if startSuspendedForRecovery {
+                    return true
+                }
+                return try livePanicRecoveryOperations.isPending()
+            },
+            begin: livePanicRecoveryOperations.begin,
+            wipeMedia: livePanicRecoveryOperations.wipeMedia,
+            complete: livePanicRecoveryOperations.complete
+        )
+        let meshService = BLEService(
+            keychain: keychain,
+            idBridge: idBridge,
+            identityManager: identityManager,
+            startSuspendedForPanicRecovery: startSuspendedForRecovery
+        )
         meshService.sfMetrics = .shared
         self.init(
             keychain: keychain,
@@ -785,7 +836,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
             locationPresenceStore: locationPresenceStore ?? LocationPresenceStore(),
             locationManager: locationManager,
             outboxStore: MessageOutboxStore(keychain: keychain),
-            sfMetrics: .shared
+            sfMetrics: .shared,
+            panicRecoveryOperations: panicRecoveryOperations,
+            panicNetworkLifecycle: .live
         )
     }
 
@@ -804,7 +857,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         readReceiptsDefaults: UserDefaults? = nil,
         outboxStore: MessageOutboxStore? = nil,
         sfMetrics: StoreAndForwardMetrics? = nil,
-        panicMediaWipe: (() throws -> Void)? = nil
+        panicMediaWipe: (() throws -> Void)? = nil,
+        panicRecoveryOperations: PanicRecoveryOperations? = nil,
+        panicNetworkLifecycle: PanicNetworkLifecycle = .noop
     ) {
         let conversations = conversations ?? ConversationStore()
         let peerIdentityStore = peerIdentityStore ?? PeerIdentityStore()
@@ -819,13 +874,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         )
 
         self.keychain = keychain
-        self.panicMediaWipe = panicMediaWipe ?? {
-            // Unit tests share the developer's real Application Support
-            // directory. Production uses the managed store; tests that need
-            // to exercise the wipe inject a temporary-directory closure.
-            guard !TestEnvironment.isRunningTests else { return }
-            try BLEIncomingFileStore().panicWipe()
-        }
+        self.panicRecoveryOperations = panicRecoveryOperations
+            ?? .ephemeral(wipeMedia: panicMediaWipe ?? {})
+        self.panicNetworkLifecycle = panicNetworkLifecycle
         self.groupStore = GroupStore(keychain: keychain)
         self.idBridge = idBridge
         self.identityManager = identityManager
@@ -861,7 +912,31 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
             }
             .store(in: &cancellables)
 
-        ChatViewModelBootstrapper(viewModel: self).configure()
+        let recoveryRequired: Bool
+        do {
+            recoveryRequired = try self.panicRecoveryOperations.isPending()
+        } catch {
+            // Failure to read the latch cannot fail open. Re-run the complete
+            // transaction; a persistent storage failure leaves services
+            // blocked below.
+            recoveryRequired = true
+            SecureLogger.error(
+                "Could not read panic-recovery state; retrying the full wipe before startup: \(error)",
+                category: .security
+            )
+        }
+
+        if recoveryRequired {
+            SecureLogger.warning(
+                "Pending panic recovery detected; wiping before runtime services start",
+                category: .security
+            )
+            _ = panicClearAllData(restartServices: false)
+        }
+
+        if networkActivationAllowed {
+            ChatViewModelBootstrapper(viewModel: self).configure()
+        }
     }
 
     // MARK: - Deinitialization
@@ -1165,8 +1240,28 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
 
     // PANIC: Emergency data clearing for activist safety
     @MainActor
-    func panicClearAllData() {
-        // Messages are processed immediately - nothing to flush
+    @discardableResult
+    func panicClearAllData(restartServices: Bool = true) -> Bool {
+        panicRecoveryBlocked = true
+        isPanicResetting = true
+        defer { isPanicResetting = false }
+
+        // Stop internet and location-presence work before clearing identity or
+        // state. These services cancel their subscriptions and delayed tasks,
+        // so old callbacks cannot reconnect during the transaction.
+        panicNetworkLifecycle.stop()
+
+        // Establish both independent durable intents before erasing anything.
+        // `wipeMedia` will still attempt deletion if neither write succeeds.
+        let recoveryIntent = panicRecoveryOperations.begin()
+
+        // Quiesce the mesh before clearing stores. Identity replacement below
+        // deliberately stays stopped until media deletion and marker commit.
+        if let bleService = meshService as? BLEService {
+            bleService.suspendForPanicReset()
+        } else {
+            meshService.emergencyDisconnectAll()
+        }
 
         // Invalidate detached media preparation and close live capture file
         // handles before clearing state or removing the media directory.
@@ -1180,7 +1275,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         pendingGeohashSystemMessages.removeAll()
 
         // Delete all keychain data (including Noise and Nostr keys)
-        _ = keychain.deleteAllKeychainData()
+        let keychainWipeCompleted = keychain.deleteAllKeychainData()
+        if !keychainWipeCompleted {
+            SecureLogger.error(
+                "Panic keychain cleanup incomplete; recovery remains pending",
+                category: .security
+            )
+        }
 
         // Clear UserDefaults identity data
         userDefaults.removeObject(forKey: "bitchat.noiseIdentityKey")
@@ -1193,7 +1294,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
 
         // Reset nickname to anonymous
         nickname = "anon\(Int.random(in: 1000...9999))"
-        saveNickname()
+        userDefaults.set(nickname, forKey: nicknameKey)
 
         // Clear favorites and peer mappings
         // Clear through SecureIdentityStateManager instead of directly
@@ -1265,46 +1366,43 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         // Clear Nostr identity associations
         idBridge.clearAllAssociations()
 
-        // Disconnect from all peers and clear persistent identity
-        // This will force creation of a new identity (new fingerprint) on next launch
-        meshService.emergencyDisconnectAll()
+        // Replace the BLE identity while keeping the radio stopped. It may
+        // reopen only after the durable panic transaction commits.
         if let bleService = meshService as? BLEService {
-            bleService.resetIdentityForPanic(currentNickname: nickname)
-        }
-
-        // No need to force UserDefaults synchronization
-
-        // Reinitialize Nostr with new identity
-        // This will generate new Nostr keys derived from new Noise keys.
-        // Skipped under tests: connecting the shared relay singleton starts
-        // real network/reconnect work that never completes and would keep the
-        // test process alive (the singleton, unlike a discardable instance, is
-        // never deallocated to cancel it).
-        if !TestEnvironment.isRunningTests {
-            Task { @MainActor in
-                // Small delay to ensure cleanup completes
-                try? await Task.sleep(nanoseconds: TransportConfig.uiAsyncShortSleepNs) // 0.1 seconds
-
-                // Reinitialize Nostr relay manager with new identity. Reuse the
-                // shared singleton — every other component (NostrTransport, geohash
-                // subscriptions, AppRuntime observers) is bound to `.shared`, so
-                // creating a fresh instance here would split relay state and leave
-                // sends running against a disconnected manager.
-                nostrRelayManager = NostrRelayManager.shared
-                setupNostrMessageHandling()
-                nostrRelayManager?.connect()
-            }
+            bleService.resetIdentityForPanic(
+                currentNickname: nickname,
+                restartServices: false
+            )
+        } else {
+            meshService.setNickname(nickname)
         }
 
         // The wipe must finish before this security action returns. A detached
         // task could otherwise lose a race with a new capture or app exit and
         // leave pre-panic media behind.
+        let panicCompleted: Bool
         do {
-            try panicMediaWipe()
-            SecureLogger.info("🗑️ Deleted all media files during panic clear", category: .session)
+            try panicRecoveryOperations.wipeMedia(recoveryIntent)
+            if keychainWipeCompleted {
+                try panicRecoveryOperations.complete()
+                panicCompleted = true
+                SecureLogger.info(
+                    "🗑️ Deleted all media files during panic clear",
+                    category: .session
+                )
+            } else {
+                // Do not clear either durable recovery marker. Startup must
+                // retry the entire transaction before any transport restarts.
+                panicCompleted = false
+            }
         } catch {
-            SecureLogger.error("Failed to clear media files during panic: \(error)", category: .session)
+            panicCompleted = false
+            SecureLogger.error(
+                "Panic transaction did not commit; services remain stopped: \(error)",
+                category: .security
+            )
         }
+        panicRecoveryBlocked = !panicCompleted
 
         // BCH-01-013: Clear iOS app switcher snapshots. Keep tests away from
         // the host user's real cache tree just as the default media wipe does.
@@ -1314,9 +1412,31 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         }
         #endif
 
-        // Force immediate UI update for panic mode
-        // UI updates immediately - no flushing needed
+        guard panicCompleted else { return false }
 
+        if let bleService = meshService as? BLEService {
+            // Startup recovery reopens admission but leaves actual service
+            // start to the bootstrapper immediately after this method.
+            bleService.completePanicReset(
+                restartServices: restartServices
+            )
+        }
+
+        if restartServices {
+            // All persistent state and media are gone. Bring each service back
+            // only now, under the new identity.
+            if !(meshService is BLEService) {
+                meshService.startServices()
+            }
+
+            if !TestEnvironment.isRunningTests {
+                nostrRelayManager = NostrRelayManager.shared
+                setupNostrMessageHandling()
+            }
+            panicNetworkLifecycle.restart()
+        }
+
+        return true
     }
 
     /// BCH-01-013: Clear iOS app switcher snapshots during panic mode
