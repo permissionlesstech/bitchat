@@ -308,9 +308,9 @@ struct NoiseEncryptionServiceTests {
     func largePrivateFileNoiseRoundTrip() throws {
         let alice = NoiseEncryptionService(keychain: MockKeychain())
         let bob = NoiseEncryptionService(keychain: MockKeychain())
-        let alicePeerID = PeerID(str: "0011223344556677")
-        let bobPeerID = PeerID(str: "8899aabbccddeeff")
-        try establishSessions(alice: alice, bob: bob, alicePeerID: alicePeerID, bobPeerID: bobPeerID)
+        let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
+        let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
+        try establishSessions(alice: alice, bob: bob)
 
         let content = Data("%PDF-1.7\n".utf8) + Data(repeating: 0x51, count: 96 * 1024)
         let file = BitchatFilePacket(
@@ -328,7 +328,7 @@ struct NoiseEncryptionServiceTests {
         )
 
         do {
-            _ = try alice.encrypt(typedPayload, for: alicePeerID)
+            _ = try alice.encrypt(typedPayload, for: bobPeerID)
             Issue.record("Ordinary Noise payload path must retain its 64 KiB ceiling")
         } catch NoiseSecurityError.messageTooLarge {
             // Expected: only the purpose-specific private-file API may extend it.
@@ -336,14 +336,14 @@ struct NoiseEncryptionServiceTests {
 
         let ciphertext: Data
         do {
-            ciphertext = try alice.encryptPrivateFilePayload(typedPayload, for: alicePeerID)
+            ciphertext = try alice.encryptPrivateFilePayload(typedPayload, for: bobPeerID)
         } catch {
             Issue.record("Private-file encryption failed: \(error)")
             return
         }
         let decrypted: Data
         do {
-            decrypted = try bob.decrypt(ciphertext, from: bobPeerID)
+            decrypted = try bob.decrypt(ciphertext, from: alicePeerID)
         } catch {
             Issue.record("Private-file decryption failed: \(error); ciphertextBytes=\(ciphertext.count)")
             return
