@@ -28,6 +28,11 @@ public struct PeerCapabilities: OptionSet, Equatable, Hashable, Sendable {
     /// before outer BLE fragmentation. Peers that omit this bit require the
     /// signed directed raw-file migration fallback.
     public static let privateMedia = PeerCapabilities(rawValue: 1 << 8)
+    /// Reserved for test builds that briefly advertised non-destructive Noise
+    /// replacement. Current clients intentionally do not advertise or act on
+    /// this bit; keep it decodable so the wire assignment is never reused.
+    public static let nonDestructiveNoiseReplacement =
+        PeerCapabilities(rawValue: 1 << 10)
 
     /// Minimal little-endian byte encoding; always at least one byte so an
     /// empty set is distinguishable from an absent TLV.

@@ -502,14 +502,26 @@ struct BLEServiceCoreTests {
         )
         let replay = try #require(victim.signPacket(unsigned), "Failed to sign replayed announce")
         #expect(ble._test_recordIngressIfNew(packet: replay, linkID: attackerLink))
+        let rebindGate = VerifiedDirectRebindGate()
+        ble._test_afterVerifiedDirectRebindEnqueued = rebindGate.pause
+        defer {
+            rebindGate.release()
+            ble._test_afterVerifiedDirectRebindEnqueued = nil
+        }
         ble._test_handlePacket(replay, fromPeerID: victimPeerID, preseedPeer: false)
 
-        let rebound = await TestHelpers.waitUntil(
-            { ble._test_centralBinding(attackerLink) == victimPeerID },
+        let announcePaused = await TestHelpers.waitUntil(
+            { rebindGate.hasPaused },
             timeout: TestConstants.longTimeout
         )
-        #expect(rebound)
-        #expect(ble.canDeliverSecurely(to: victimPeerID))
+        try #require(announcePaused)
+
+        // Rebind and ordinary reconnect preparation are one bleQueue
+        // critical section. Once the binding is visible, stale sending keys
+        // must already be unavailable.
+        #expect(ble._test_centralBinding(attackerLink) == victimPeerID)
+        #expect(!ble.canDeliverSecurely(to: victimPeerID))
+        rebindGate.release()
 
         let outbound = OutboundPacketTap()
         ble._test_onOutboundPacket = { outbound.record($0) }
@@ -614,7 +626,117 @@ struct BLEServiceCoreTests {
                 for: victimPeerID
             )
         )
-        #expect(ble.canDeliverSecurely(to: victimPeerID))
+        // Ordinary reconnect hardening quarantines the cached transport while
+        // this candidate proves the claimed identity. It must be unavailable
+        // for sending as well as unable to authenticate this ingress link.
+        #expect(!ble.canDeliverSecurely(to: victimPeerID))
+    }
+
+    @Test
+    func failedInboundReconnectRestoresAndDrainsTypedPayloadQueue() async throws {
+        let ble = makeService()
+        let alice = NoiseEncryptionService(keychain: MockKeychain())
+        let mallory = NoiseEncryptionService(keychain: MockKeychain())
+        let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
+
+        let message1 = try ble._test_noiseInitiateHandshake(with: alicePeerID)
+        let message2 = try #require(
+            try alice.processHandshakeMessage(from: ble.myPeerID, message: message1)
+        )
+        let message3 = try #require(
+            try ble._test_noiseProcessHandshakeMessage(from: alicePeerID, message: message2)
+        )
+        _ = try alice.processHandshakeMessage(from: ble.myPeerID, message: message3)
+        await ble._test_drainNoiseMessagePipeline()
+        #expect(ble.canDeliverSecurely(to: alicePeerID))
+
+        let outbound = OutboundPacketTap()
+        ble._test_onOutboundPacket = outbound.record
+        let forgedMessage1 = try mallory.initiateHandshake(with: ble.myPeerID)
+        let firstPacket = BitchatPacket(
+            type: MessageType.noiseHandshake.rawValue,
+            senderID: Data(hexString: alicePeerID.id) ?? Data(),
+            recipientID: Data(hexString: ble.myPeerID.id),
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1_000),
+            payload: forgedMessage1,
+            signature: nil,
+            ttl: 7
+        )
+        ble._test_handlePacket(firstPacket, fromPeerID: alicePeerID)
+
+        let responseReady = await TestHelpers.waitUntil(
+            {
+                outbound.snapshot().contains {
+                    $0.type == MessageType.noiseHandshake.rawValue
+                }
+            },
+            timeout: TestConstants.longTimeout
+        )
+        try #require(responseReady)
+        let forgedMessage2 = try #require(
+            outbound.snapshot().first {
+                $0.type == MessageType.noiseHandshake.rawValue
+            }?.payload
+        )
+        #expect(!ble.canDeliverSecurely(to: alicePeerID))
+
+        // Typed control traffic must queue behind the ordinary responder,
+        // rather than attempting encryption and disappearing.
+        let privateMessageID = "quarantine-pm-\(UUID().uuidString)"
+        ble.sendPrivateMessage(
+            "queued private message",
+            to: alicePeerID,
+            recipientNickname: "Alice",
+            messageID: privateMessageID
+        )
+        ble.sendGroupInvite(Data("queued-during-quarantine".utf8), to: alicePeerID)
+        await ble._test_drainNoiseMessagePipeline()
+        #expect(outbound.count(ofType: .noiseEncrypted) == 0)
+
+        let forgedMessage3 = try #require(
+            try mallory.processHandshakeMessage(
+                from: ble.myPeerID,
+                message: forgedMessage2
+            )
+        )
+        let thirdPacket = BitchatPacket(
+            type: MessageType.noiseHandshake.rawValue,
+            senderID: Data(hexString: alicePeerID.id) ?? Data(),
+            recipientID: Data(hexString: ble.myPeerID.id),
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1_000) + 1,
+            payload: forgedMessage3,
+            signature: nil,
+            ttl: 7
+        )
+        ble._test_handlePacket(thirdPacket, fromPeerID: alicePeerID)
+
+        // Restore re-enters the generation-bound authentication transition:
+        // authenticated state and both outbound queues drain exactly once.
+        let drained = await TestHelpers.waitUntil(
+            { outbound.count(ofType: .noiseEncrypted) >= 3 },
+            timeout: TestConstants.longTimeout
+        )
+        try #require(drained)
+        await ble._test_drainNoiseMessagePipeline()
+        let plaintexts = try outbound.snapshot()
+            .filter { $0.type == MessageType.noiseEncrypted.rawValue }
+            .map { try alice.decrypt($0.payload, from: ble.myPeerID) }
+        #expect(plaintexts.count == 3)
+        #expect(
+            plaintexts.filter {
+                $0.first == NoisePayloadType.authenticatedPeerState.rawValue
+            }.count == 1
+        )
+        #expect(
+            plaintexts.filter {
+                $0.first == NoisePayloadType.privateMessage.rawValue
+            }.count == 1
+        )
+        #expect(
+            plaintexts.filter {
+                $0.first == NoisePayloadType.groupInvite.rawValue
+            }.count == 1
+        )
     }
 
     /// A legitimate rotation announce necessarily arrives on a link still
@@ -942,6 +1064,40 @@ private final class OutboundPacketTap {
     func count(ofType type: MessageType) -> Int {
         lock.lock(); defer { lock.unlock() }
         return packets.filter { $0.type == type.rawValue }.count
+    }
+
+    func snapshot() -> [BitchatPacket] {
+        lock.lock(); defer { lock.unlock() }
+        return packets
+    }
+}
+
+private final class VerifiedDirectRebindGate: @unchecked Sendable {
+    private let condition = NSCondition()
+    private var paused = false
+    private var released = false
+
+    var hasPaused: Bool {
+        condition.lock()
+        defer { condition.unlock() }
+        return paused
+    }
+
+    func pause() {
+        condition.lock()
+        paused = true
+        condition.broadcast()
+        while !released {
+            condition.wait()
+        }
+        condition.unlock()
+    }
+
+    func release() {
+        condition.lock()
+        released = true
+        condition.broadcast()
+        condition.unlock()
     }
 }
 

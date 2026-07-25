@@ -20,6 +20,10 @@ struct PeerCapabilitiesTests {
 
         let high = PeerCapabilities(rawValue: 1 << 9)
         #expect(high.encoded() == Data([0x00, 0x02]))
+        #expect(
+            PeerCapabilities.nonDestructiveNoiseReplacement.encoded()
+                == Data([0x00, 0x04])
+        )
 
         let all: PeerCapabilities = [.prekeys, .wifiBulk, .gateway, .groups, .board, .vouch, .meshDiagnostics, .privateMedia]
         #expect(PeerCapabilities(encoded: all.encoded()) == all)

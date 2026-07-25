@@ -171,8 +171,8 @@ struct NoiseEncryptionServiceTests {
         #expect(!emittedAuthentication)
     }
 
-    @Test("Failed forged replacement preserves the established peer session")
-    func forgedReplacementPreservesEstablishedSession() async throws {
+    @Test("Failed forged reconnect restores the established peer session")
+    func forgedReconnectRestoresEstablishedSession() async throws {
         let alice = NoiseEncryptionService(keychain: MockKeychain())
         let receiver = NoiseEncryptionService(keychain: MockKeychain())
         let mallory = NoiseEncryptionService(keychain: MockKeychain())
@@ -195,20 +195,20 @@ struct NoiseEncryptionServiceTests {
         let forgedMessage2 = try #require(
             try receiver.processHandshakeMessage(from: alicePeerID, message: forgedMessage1)
         )
-        // The replacement has not authenticated yet; the working Alice
-        // transport session must remain available throughout the candidate.
-        #expect(receiver.hasEstablishedSession(with: alicePeerID))
+        // Outbound/session-generation APIs fail closed while the old
+        // transport is retained solely for receive and bounded rollback.
+        #expect(!receiver.hasEstablishedSession(with: alicePeerID))
         let forgedMessage3 = try #require(
             try mallory.processHandshakeMessage(from: receiverPeerID, message: forgedMessage2)
         )
 
         do {
             _ = try receiver.processHandshakeMessage(from: alicePeerID, message: forgedMessage3)
-            Issue.record("Expected forged replacement to fail peer binding")
+            Issue.record("Expected forged reconnect to fail peer binding")
         } catch let error as NoiseSessionError {
             #expect(error == .peerIdentityMismatch)
         } catch {
-            Issue.record("Unexpected replacement error: \(error)")
+            Issue.record("Unexpected reconnect error: \(error)")
         }
 
         #expect(receiver.hasEstablishedSession(with: alicePeerID))
@@ -221,8 +221,8 @@ struct NoiseEncryptionServiceTests {
         #expect(!emittedReplacementAuthentication)
     }
 
-    @Test("Valid rehandshake atomically replaces the established session")
-    func validRehandshakeReplacesEstablishedSession() throws {
+    @Test("Valid ordinary rehandshake atomically replaces the established session")
+    func validOrdinaryRehandshakeReplacesEstablishedSession() throws {
         let alice = NoiseEncryptionService(keychain: MockKeychain())
         let receiver = NoiseEncryptionService(keychain: MockKeychain())
         let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
@@ -235,7 +235,7 @@ struct NoiseEncryptionServiceTests {
         let message2 = try #require(
             try receiver.processHandshakeMessage(from: alicePeerID, message: message1)
         )
-        #expect(receiver.hasEstablishedSession(with: alicePeerID))
+        #expect(!receiver.hasEstablishedSession(with: alicePeerID))
         let message3 = try #require(
             try alice.processHandshakeMessage(from: receiverPeerID, message: message2)
         )
@@ -351,6 +351,226 @@ struct NoiseEncryptionServiceTests {
 
         #expect(ciphertext.range(of: content) == nil)
         #expect(decrypted == typedPayload)
+    }
+
+    @Test("Atomic reconnect retires old sending keys before message one")
+    func atomicReconnectQueuesUntilOrdinaryHandshakeCompletes() throws {
+        let alice = NoiseEncryptionService(keychain: MockKeychain())
+        let bob = NoiseEncryptionService(keychain: MockKeychain())
+        let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
+        let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
+
+        try establishSessions(alice: alice, bob: bob)
+        let oldCiphertext = try alice.encrypt(Data("old transport".utf8), for: bobPeerID)
+        #expect(try bob.decrypt(oldCiphertext, from: alicePeerID) == Data("old transport".utf8))
+
+        let initiation = try alice.initiateReconnectHandshake(with: bobPeerID)
+        #expect(alice.hasSession(with: bobPeerID))
+        #expect(!alice.hasEstablishedSession(with: bobPeerID))
+        do {
+            _ = try alice.encrypt(Data("must queue".utf8), for: bobPeerID)
+            Issue.record("Expected encryption to wait for the reconnect")
+        } catch NoiseEncryptionError.handshakeRequired {
+            // Expected: BLE queues behind the ordinary handshaking session.
+        } catch {
+            Issue.record("Unexpected in-window encryption error: \(error)")
+        }
+
+        let message1 = try #require(
+            alice.claimHandshakeInitiation(initiation, for: bobPeerID)
+        )
+        bob.clearSession(for: alicePeerID)
+        let message2 = try #require(
+            try bob.processHandshakeMessage(from: alicePeerID, message: message1)
+        )
+        let message3 = try #require(
+            try alice.processHandshakeMessage(from: bobPeerID, message: message2)
+        )
+        _ = try bob.processHandshakeMessage(from: alicePeerID, message: message3)
+
+        let fresh = try alice.encrypt(Data("fresh transport".utf8), for: bobPeerID)
+        #expect(try bob.decrypt(fresh, from: alicePeerID) == Data("fresh transport".utf8))
+    }
+
+    @Test("Inbound reconnect quarantines old sending keys until identity proof")
+    func inboundReconnectQuarantinesOldTransport() throws {
+        let restarted = NoiseEncryptionService(keychain: MockKeychain())
+        let retained = NoiseEncryptionService(keychain: MockKeychain())
+        let restartedPeerID = PeerID(publicKey: restarted.getStaticPublicKeyData())
+        let retainedPeerID = PeerID(publicKey: retained.getStaticPublicKeyData())
+
+        try establishSessions(alice: restarted, bob: retained)
+        let inFlightOldCiphertext = try restarted.encrypt(
+            Data("old receive-only transport".utf8),
+            for: retainedPeerID
+        )
+        restarted.clearSession(for: retainedPeerID)
+
+        let message1 = try restarted.initiateHandshake(with: retainedPeerID)
+        let message2 = try #require(
+            try retained.processHandshakeMessage(
+                from: restartedPeerID,
+                message: message1
+            )
+        )
+        #expect(!retained.hasEstablishedSession(with: restartedPeerID))
+        #expect(
+            try retained.decrypt(
+                inFlightOldCiphertext,
+                from: restartedPeerID
+            ) == Data("old receive-only transport".utf8)
+        )
+        do {
+            _ = try retained.encrypt(
+                Data("must queue at responder".utf8),
+                for: restartedPeerID
+            )
+            Issue.record("Expected quarantined responder encryption to wait")
+        } catch NoiseEncryptionError.handshakeRequired {
+            // Expected.
+        } catch {
+            Issue.record("Unexpected quarantine encryption error: \(error)")
+        }
+
+        let message3 = try #require(
+            try restarted.processHandshakeMessage(
+                from: retainedPeerID,
+                message: message2
+            )
+        )
+        _ = try retained.processHandshakeMessage(
+            from: restartedPeerID,
+            message: message3
+        )
+
+        let fresh = try retained.encrypt(
+            Data("identity proved".utf8),
+            for: restartedPeerID
+        )
+        #expect(
+            try restarted.decrypt(fresh, from: retainedPeerID)
+                == Data("identity proved".utf8)
+        )
+    }
+
+    @Test("Forged reconnect restores the quarantined transport")
+    func forgedReconnectRestoresQuarantinedTransport() throws {
+        let alice = NoiseEncryptionService(keychain: MockKeychain())
+        let bob = NoiseEncryptionService(keychain: MockKeychain())
+        let mallory = NoiseEncryptionService(keychain: MockKeychain())
+        let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
+        let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
+
+        try establishSessions(alice: alice, bob: bob)
+
+        let forgedMessage1 = try mallory.initiateHandshake(with: bobPeerID)
+        let forgedMessage2 = try #require(
+            try bob.processHandshakeMessage(
+                from: alicePeerID,
+                message: forgedMessage1
+            )
+        )
+        #expect(!bob.hasEstablishedSession(with: alicePeerID))
+        let forgedMessage3 = try #require(
+            try mallory.processHandshakeMessage(
+                from: bobPeerID,
+                message: forgedMessage2
+            )
+        )
+
+        do {
+            _ = try bob.processHandshakeMessage(
+                from: alicePeerID,
+                message: forgedMessage3
+            )
+            Issue.record("Expected forged static identity to be rejected")
+        } catch NoiseSessionError.peerIdentityMismatch {
+            // Expected; the manager restores the quarantined transport.
+        } catch {
+            Issue.record("Unexpected forged reconnect error: \(error)")
+        }
+
+        #expect(bob.hasEstablishedSession(with: alicePeerID))
+        let oldTransport = try alice.encrypt(
+            Data("rollback survived".utf8),
+            for: bobPeerID
+        )
+        #expect(
+            try bob.decrypt(oldTransport, from: alicePeerID)
+                == Data("rollback survived".utf8)
+        )
+    }
+
+    @Test("Lost reconnect completion restores the quarantined transport")
+    func timedOutReconnectRestoresQuarantinedTransport() async throws {
+        let alice = NoiseEncryptionService(keychain: MockKeychain())
+        let bob = NoiseEncryptionService(
+            keychain: MockKeychain(),
+            ordinaryResponderHandshakeTimeout: 0.02
+        )
+        let mallory = NoiseEncryptionService(keychain: MockKeychain())
+        let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
+        let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
+
+        try establishSessions(alice: alice, bob: bob)
+        let forgedMessage1 = try mallory.initiateHandshake(with: bobPeerID)
+        _ = try #require(
+            try bob.processHandshakeMessage(
+                from: alicePeerID,
+                message: forgedMessage1
+            )
+        )
+        #expect(!bob.hasEstablishedSession(with: alicePeerID))
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        #expect(bob.hasEstablishedSession(with: alicePeerID))
+        let oldTransport = try alice.encrypt(
+            Data("timeout rollback".utf8),
+            for: bobPeerID
+        )
+        #expect(
+            try bob.decrypt(oldTransport, from: alicePeerID)
+                == Data("timeout rollback".utf8)
+        )
+    }
+
+    @Test("Failed reconnect authorization preserves the established transport")
+    func failedReconnectAuthorizationPreservesSession() throws {
+        let alice = NoiseEncryptionService(keychain: MockKeychain())
+        let bob = NoiseEncryptionService(keychain: MockKeychain())
+        let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
+        let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
+
+        try establishSessions(alice: alice, bob: bob)
+        // The initiator exchange consumed two authorizations for this peer.
+        for _ in 2..<NoiseSecurityConstants.maxHandshakesPerMinute {
+            do {
+                _ = try alice.initiateHandshake(with: bobPeerID)
+                Issue.record("Expected the established-session guard")
+            } catch NoiseSessionError.alreadyEstablished {
+                // Expected.
+            }
+        }
+
+        do {
+            _ = try alice.initiateReconnectHandshake(with: bobPeerID)
+            Issue.record("Expected reconnect authorization to be rate limited")
+        } catch NoiseSecurityError.rateLimitExceeded {
+            // Expected before the working session moves.
+        } catch {
+            Issue.record("Unexpected reconnect authorization error: \(error)")
+        }
+
+        #expect(alice.hasEstablishedSession(with: bobPeerID))
+        let ciphertext = try alice.encrypt(
+            Data("still established".utf8),
+            for: bobPeerID
+        )
+        #expect(
+            try bob.decrypt(ciphertext, from: alicePeerID)
+                == Data("still established".utf8)
+        )
     }
 
     @Test("Encrypt without a session requests handshake and decrypt without session fails")

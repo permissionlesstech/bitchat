@@ -36,6 +36,10 @@ enum NoiseSecurityConstants {
 
     // Noise XX message 1 contains only the initiator's 32-byte ephemeral key.
     static let xxInitialMessageSize = 32
+
+    // Bounds the receive-only rollback quarantine created by an unauthenticated
+    // inbound message 1. A lost message 3 must not strand outbound traffic.
+    static let ordinaryResponderHandshakeTimeout: TimeInterval = 20
     
     // Session timeout - sessions older than this should be renegotiated
     static let sessionTimeout: TimeInterval = 86400 // 24 hours

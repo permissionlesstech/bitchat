@@ -189,6 +189,10 @@ final class NoiseEncryptionService {
     /// on the wire; merely reporting "handshake required" strands the partial
     /// initiator session because a second initiate call sees it already exists.
     var onRekeyHandshakeReady: ((_ peerID: PeerID, _ message: Data) -> Void)?
+    /// An unauthenticated reconnect attempt failed or timed out and the
+    /// receive-only rollback session became the active transport again.
+    /// Transport queues must be drained for this exact restored generation.
+    var onSessionRestoredWithGeneration: ((_ peerID: PeerID, _ generation: UUID) -> Void)?
     
     // Add a handler for peer authentication
     func addOnPeerAuthenticatedHandler(_ handler: @escaping (PeerID, String) -> Void) {
@@ -219,7 +223,11 @@ final class NoiseEncryptionService {
         }
     }
     
-    init(keychain: KeychainManagerProtocol) {
+    init(
+        keychain: KeychainManagerProtocol,
+        ordinaryResponderHandshakeTimeout: TimeInterval =
+            NoiseSecurityConstants.ordinaryResponderHandshakeTimeout
+    ) {
         self.keychain = keychain
         self.localPrekeys = LocalPrekeyStore(keychain: keychain)
 
@@ -309,7 +317,11 @@ final class NoiseEncryptionService {
         self.signingPublicKey = signingKey.publicKey
 
         // Initialize session manager
-        self.sessionManager = NoiseSessionManager(localStaticKey: staticIdentityKey, keychain: keychain)
+        self.sessionManager = NoiseSessionManager(
+            localStaticKey: staticIdentityKey,
+            keychain: keychain,
+            ordinaryResponderHandshakeTimeout: ordinaryResponderHandshakeTimeout
+        )
 
         // Set up session callbacks
         sessionManager.onSessionEstablished = { [weak self] peerID, remoteStaticKey, generation in
@@ -318,6 +330,9 @@ final class NoiseEncryptionService {
                 remoteStaticKey: remoteStaticKey,
                 sessionGeneration: generation
             )
+        }
+        sessionManager.onSessionRestored = { [weak self] peerID, generation in
+            self?.onSessionRestoredWithGeneration?(peerID, generation)
         }
 
         // Start session maintenance timer
@@ -682,6 +697,37 @@ final class NoiseEncryptionService {
         let handshakeData = try sessionManager.initiateHandshake(with: peerID)
         return handshakeData
     }
+
+    /// Atomically prepares an ordinary reconnect for a peer whose cached
+    /// transport belongs to an earlier physical link. Failed authorization or
+    /// handshake setup preserves the established session.
+    func initiateReconnectHandshake(
+        with peerID: PeerID
+    ) throws -> NoiseHandshakeInitiation {
+        guard peerID.isValid else {
+            SecureLogger.warning(.authenticationFailed(peerID: peerID.id))
+            throw NoiseSecurityError.invalidPeerID
+        }
+
+        return try sessionManager.initiateReconnectHandshake(
+            with: peerID,
+            authorize: { [rateLimiter] in
+                guard rateLimiter.allowHandshake(from: peerID) else {
+                    SecureLogger.warning(
+                        .authenticationFailed(peerID: "Rate limited: \(peerID)")
+                    )
+                    throw NoiseSecurityError.rateLimitExceeded
+                }
+            }
+        )
+    }
+
+    func claimHandshakeInitiation(
+        _ initiation: NoiseHandshakeInitiation,
+        for peerID: PeerID
+    ) -> Data? {
+        sessionManager.claimHandshakeInitiation(initiation, for: peerID)
+    }
     
     /// Process an incoming handshake message
     func processHandshakeMessage(from peerID: PeerID, message: Data) throws -> Data? {
@@ -819,8 +865,10 @@ final class NoiseEncryptionService {
             throw NoiseSecurityError.rateLimitExceeded
         }
         
-        // Check if we have an established session
-        guard hasEstablishedSession(with: peerID) else {
+        // A quarantined transport is deliberately unavailable for outbound
+        // state, but remains receive-only until the responder proves identity
+        // or the bounded rollback restores it.
+        guard sessionManager.hasReceiveSession(for: peerID) else {
             throw NoiseEncryptionError.sessionNotEstablished
         }
         
