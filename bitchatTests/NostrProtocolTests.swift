@@ -290,7 +290,65 @@ struct NostrProtocolTests {
         #expect(object["limit"] as? Int == 42)
     }
 
+
+    @Test func inboundNostrEventRejectsTooManyTags() throws {
+        var eventDict = Self.validInboundEventDict()
+        eventDict["tags"] = Array(
+            repeating: ["g", "u4pruyd"],
+            count: TransportConfig.nostrMaxEventTags + 1
+        )
+
+        #expect(throws: NostrError.invalidEvent) {
+            _ = try NostrEvent(from: eventDict)
+        }
+    }
+
+    @Test func inboundNostrEventRejectsTooManyTagValues() throws {
+        var eventDict = Self.validInboundEventDict()
+        eventDict["tags"] = [Array(
+            repeating: "value",
+            count: TransportConfig.nostrMaxEventTagValues + 1
+        )]
+
+        #expect(throws: NostrError.invalidEvent) {
+            _ = try NostrEvent(from: eventDict)
+        }
+    }
+
+    @Test func inboundNostrEventRejectsOversizedTagValues() throws {
+        var eventDict = Self.validInboundEventDict()
+        eventDict["tags"] = [[
+            "g",
+            String(repeating: "a", count: TransportConfig.nostrMaxEventTagValueBytes + 1)
+        ]]
+
+        #expect(throws: NostrError.invalidEvent) {
+            _ = try NostrEvent(from: eventDict)
+        }
+    }
+
+    @Test func inboundNostrEventAcceptsTagsWithinLimits() throws {
+        var eventDict = Self.validInboundEventDict()
+        eventDict["tags"] = [["g", "u4pruyd"], ["t", "teleport"]]
+
+        let event = try NostrEvent(from: eventDict)
+
+        #expect(event.tags.count == 2)
+    }
+
     // MARK: - Helpers
+    private static func validInboundEventDict() -> [String: Any] {
+        [
+            "id": String(repeating: "0", count: 64),
+            "pubkey": String(repeating: "1", count: 64),
+            "created_at": 1_234_567,
+            "kind": NostrProtocol.EventKind.ephemeralEvent.rawValue,
+            "tags": [["g", "u4pruyd"]],
+            "content": "hello",
+            "sig": String(repeating: "2", count: 128)
+        ]
+    }
+
     private static func base64URLDecode(_ s: String) -> Data? {
         var str = s.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
         let rem = str.count % 4

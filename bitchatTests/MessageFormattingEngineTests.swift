@@ -323,6 +323,32 @@ struct MessageFormattingEngineTests {
         // Exactly at threshold DOES trigger (uses >= comparison)
         #expect(content.hasVeryLongToken(threshold: 50))
     }
+
+    @Test func isLongForDisplay_doesNotIgnoreCashuLinks() {
+        let cashu = "cashuA" + String(repeating: "a", count: 40)
+        let content = String(repeating: "a", count: TransportConfig.uiLongMessageLengthThreshold + 1) + " " + cashu
+
+        #expect(content.extractCashuLinks().count == 1)
+        #expect(content.isLongForDisplay())
+    }
+
+    @MainActor
+    @Test func formatMessage_longCashuMessageFallsBackToPlainContentPath() {
+        let context = MockMessageFormattingContext(nickname: "carol")
+        let cashu = "cashuA" + String(repeating: "a", count: 40)
+        let longContent = "hi @bob " + cashu + " " + String(repeating: "x", count: 4_100)
+        let message = BitchatMessage(
+            id: "long-cashu",
+            sender: "alice",
+            content: longContent,
+            timestamp: Date(timeIntervalSince1970: 1_700_000_999),
+            isRelay: false
+        )
+
+        let formatted = MessageFormattingEngine.formatMessage(message, context: context, colorScheme: .light)
+
+        #expect(String(formatted.characters) == "<@alice> \(longContent) [\(message.formattedTimestamp)]")
+    }
 }
 
 @MainActor

@@ -21,6 +21,26 @@ extension String {
         return current >= threshold
     }
 
+    /// True when the message should collapse behind Show more in the UI.
+    /// Length alone decides this — embedding a Cashu-looking token must not
+    /// disable the guard (remote DoS via unbounded layout).
+    func isLongForDisplay(
+        lengthThreshold: Int = TransportConfig.uiLongMessageLengthThreshold,
+        tokenThreshold: Int = TransportConfig.uiVeryLongTokenThreshold
+    ) -> Bool {
+        count > lengthThreshold || hasVeryLongToken(threshold: tokenThreshold)
+    }
+
+    /// True when rich formatting (regex / link detectors) should be skipped.
+    /// Cashu presence used to exempt oversized content from the plain path;
+    /// that let untrusted input force expensive formatting work.
+    func isOversizedForRichFormatting(
+        lengthThreshold: Int = 4000,
+        tokenThreshold: Int = 1024
+    ) -> Bool {
+        count > lengthThreshold || hasVeryLongToken(threshold: tokenThreshold)
+    }
+
     // Extract up to `max` distinct Cashu tokens (cashuA/cashuB), as the bare
     // bearer strings. Allow dot '.' and shorter lengths. The `cashu:` URI
     // form matches too — the token embedded after the scheme is the match.

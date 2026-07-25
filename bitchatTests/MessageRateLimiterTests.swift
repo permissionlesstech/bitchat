@@ -116,4 +116,87 @@ struct MessageRateLimiterTests {
         #expect(plain)
         #expect(!plainExhausted)
     }
+
+    @Test("Content buckets do not grow when sender is rate limited")
+    func contentBucketsDoNotGrowAfterSenderLimit() {
+        var limiter = MessageRateLimiter(
+            senderCapacity: 1,
+            senderRefillPerSec: 0,
+            contentCapacity: 1,
+            contentRefillPerSec: 0,
+            maxSenderBuckets: 10,
+            maxContentBuckets: 10,
+            bucketIdleTTL: 60
+        )
+        let now = Date()
+
+        let first = limiter.allow(senderKey: "sender", contentKey: "content-0", now: now)
+        var rejected = true
+        for index in 1...100 {
+            if limiter.allow(senderKey: "sender", contentKey: "content-\(index)", now: now) {
+                rejected = false
+            }
+        }
+
+        #expect(first)
+        #expect(rejected)
+        #expect(limiter.bucketCountsForTesting.sender == 1)
+        #expect(limiter.bucketCountsForTesting.content == 1)
+    }
+
+    @Test("Bucket maps evict entries at configured caps")
+    func bucketMapsEvictAtConfiguredCaps() {
+        let maxEntries = 3
+        var limiter = MessageRateLimiter(
+            senderCapacity: 1,
+            senderRefillPerSec: 0,
+            contentCapacity: 1,
+            contentRefillPerSec: 0,
+            maxSenderBuckets: maxEntries,
+            maxContentBuckets: maxEntries,
+            bucketIdleTTL: 60
+        )
+        let now = Date()
+
+        for index in 0..<25 {
+            _ = limiter.allow(
+                senderKey: "sender-\(index)",
+                contentKey: "content-\(index)",
+                now: now.addingTimeInterval(TimeInterval(index))
+            )
+        }
+
+        #expect(limiter.bucketCountsForTesting.sender == maxEntries)
+        #expect(limiter.bucketCountsForTesting.content == maxEntries)
+    }
+
+    @Test("PoW bypass still creates content buckets under the cap")
+    func powBypassCreatesBoundedContentBuckets() {
+        let maxEntries = 3
+        var limiter = MessageRateLimiter(
+            senderCapacity: 1,
+            senderRefillPerSec: 0,
+            contentCapacity: 100,
+            contentRefillPerSec: 0,
+            maxSenderBuckets: maxEntries,
+            maxContentBuckets: maxEntries,
+            bucketIdleTTL: 60
+        )
+        let now = Date()
+
+        var allAllowed = true
+        for index in 0..<10 {
+            let allowed = limiter.allow(
+                senderKey: "sender",
+                contentKey: "content-\(index)",
+                powBits: NostrPoW.rateLimitBypassBits,
+                now: now.addingTimeInterval(TimeInterval(index))
+            )
+            if !allowed { allAllowed = false }
+        }
+
+        #expect(allAllowed)
+        #expect(limiter.bucketCountsForTesting.sender == 0)
+        #expect(limiter.bucketCountsForTesting.content == maxEntries)
+    }
 }

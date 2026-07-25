@@ -1480,7 +1480,7 @@ private enum ParsedInbound {
     case notice(String)
     
     init?(_ message: URLSessionWebSocketTask.Message) {
-        guard let data = message.data,
+        guard let data = message.dataWithinInboundLimit,
               let array = try? JSONSerialization.jsonObject(with: data) as? [Any],
               array.count >= 2,
               let type = array[0] as? String else {
@@ -1525,11 +1525,19 @@ private enum ParsedInbound {
 }
 
 private extension URLSessionWebSocketTask.Message {
-    var data: Data? {
+    /// Prefer rejecting oversized frames before UTF-8/Data materialization
+    /// where we can (string length), and always before JSON parse.
+    var dataWithinInboundLimit: Data? {
+        let maxBytes = TransportConfig.nostrMaxInboundMessageBytes
         switch self {
-        case .string(let text): text.data(using: .utf8)
-        case .data(let data):   data
-        @unknown default:       nil
+        case .string(let text):
+            guard text.utf8.count <= maxBytes else { return nil }
+            return text.data(using: .utf8)
+        case .data(let data):
+            guard data.count <= maxBytes else { return nil }
+            return data
+        @unknown default:
+            return nil
         }
     }
 }

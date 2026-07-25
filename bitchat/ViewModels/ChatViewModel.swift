@@ -1183,6 +1183,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         identityManager.clearAllIdentityData()
         peerIdentityStore.clearAll()
         locationPresenceStore.reset()
+        publicRateLimiter.reset()
 
         // Clear persistent favorites from keychain
         FavoritesPersistenceService.shared.clearAllFavorites()

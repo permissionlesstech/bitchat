@@ -46,6 +46,7 @@ enum TransportConfig {
     static let privateChatCap: Int = 1337
     static let meshTimelineCap: Int = 1337
     static let geoTimelineCap: Int = 1337
+    static let geoNicknameParticipantsCap: Int = 1337
     static let contentLRUCap: Int = 2000
     static let geoSamplingEventLRUCap: Int = 2000
 
@@ -81,6 +82,11 @@ enum TransportConfig {
     static let nostrDuplicateEventLogInterval: Int = 50
     // Sample interval for per-event debug logs on the inbound hot path.
     static let nostrInboundEventLogInterval: Int = 100
+    // Reject oversized/untrusted relay frames before JSON parse / store.
+    static let nostrMaxInboundMessageBytes: Int = 256 * 1024
+    static let nostrMaxEventTags: Int = 64
+    static let nostrMaxEventTagValues: Int = 16
+    static let nostrMaxEventTagValueBytes: Int = 1024
 
     // Conversation store diagnostics (field observability)
     // Sample interval for the periodic store-audit "OK" heartbeat line
@@ -98,6 +104,12 @@ enum TransportConfig {
     static let uiSenderRateBucketRefillPerSec: Double = 1.0
     static let uiContentRateBucketCapacity: Double = 3
     static let uiContentRateBucketRefillPerSec: Double = 0.5
+    // Bound attacker-keyed bucket maps (sender IDs / content digests).
+    static let uiSenderRateBucketMaxEntries: Int = 2000
+    static let uiContentRateBucketMaxEntries: Int = 2000
+    static let uiRateBucketIdleTTL: TimeInterval = 10 * 60
+    // Cap teleported-participant markers so remote events cannot grow the set.
+    static let geoTeleportedParticipantsCap: Int = 1337
 
     // UI sleeps/delays
     static let uiStartupInitialDelaySeconds: TimeInterval = 1.0
