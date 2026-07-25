@@ -25,11 +25,6 @@ enum AppLanguageSettings {
         return name.lowercased(with: locale)
     }
 
-    static var currentOverride: String? {
-        let value = UserDefaults.standard.string(forKey: overrideKey) ?? ""
-        return value.isEmpty ? nil : value
-    }
-
     /// Persists the override (nil clears it). AppleLanguages drives the
     /// actual localization lookup on next launch.
     static func setOverride(_ code: String?) {
