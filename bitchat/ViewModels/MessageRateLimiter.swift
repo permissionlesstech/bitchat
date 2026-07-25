@@ -71,12 +71,13 @@ struct MessageRateLimiter {
         if powBits >= NostrPoW.rateLimitBypassBits {
             senderAllowed = true
         } else {
-            var senderBucket = bucket(
+            var senderBucket = Self.bucket(
                 for: senderKey,
                 in: &senderBuckets,
                 capacity: senderCapacity,
                 refillPerSec: senderRefill,
                 maxBuckets: maxSenderBuckets,
+                idleTTL: bucketIdleTTL,
                 now: now
             )
             senderAllowed = senderBucket.allow(now: now)
@@ -86,12 +87,13 @@ struct MessageRateLimiter {
         // Rejected senders must not mint attacker-keyed content entries.
         guard senderAllowed else { return false }
 
-        var contentBucket = bucket(
+        var contentBucket = Self.bucket(
             for: contentKey,
             in: &contentBuckets,
             capacity: contentCapacity,
             refillPerSec: contentRefill,
             maxBuckets: maxContentBuckets,
+            idleTTL: bucketIdleTTL,
             now: now
         )
         let contentAllowed = contentBucket.allow(now: now)
@@ -109,19 +111,22 @@ struct MessageRateLimiter {
         (senderBuckets.count, contentBuckets.count)
     }
 
-    private mutating func bucket(
+    // Static so we can take `inout` on a stored dictionary without overlapping
+    // exclusive access through a mutating method on `self`.
+    private static func bucket(
         for key: String,
         in buckets: inout [String: TokenBucket],
         capacity: Double,
         refillPerSec: Double,
         maxBuckets: Int,
+        idleTTL: TimeInterval,
         now: Date
     ) -> TokenBucket {
         if let existing = buckets[key] {
             return existing
         }
 
-        evictIfNeeded(from: &buckets, maxBuckets: maxBuckets, now: now)
+        evictIfNeeded(from: &buckets, maxBuckets: maxBuckets, idleTTL: idleTTL, now: now)
         return TokenBucket(
             capacity: capacity,
             tokens: capacity,
@@ -130,10 +135,15 @@ struct MessageRateLimiter {
         )
     }
 
-    private func evictIfNeeded(from buckets: inout [String: TokenBucket], maxBuckets: Int, now: Date) {
+    private static func evictIfNeeded(
+        from buckets: inout [String: TokenBucket],
+        maxBuckets: Int,
+        idleTTL: TimeInterval,
+        now: Date
+    ) {
         guard buckets.count >= maxBuckets else { return }
 
-        buckets = buckets.filter { !$0.value.isIdle(since: now, idleTTL: bucketIdleTTL) }
+        buckets = buckets.filter { !$0.value.isIdle(since: now, idleTTL: idleTTL) }
         guard buckets.count >= maxBuckets else { return }
 
         if let oldestKey = buckets.min(by: { $0.value.lastRefill < $1.value.lastRefill })?.key {
