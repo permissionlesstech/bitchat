@@ -11,6 +11,7 @@ struct ContentPeopleSheetView: View {
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
     @EnvironmentObject private var verificationModel: VerificationModel
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
+    @Environment(\.scenePhase) private var scenePhase
 
     @Binding var showSidebar: Bool
     @Binding var messageText: String
@@ -34,6 +35,35 @@ struct ContentPeopleSheetView: View {
     #else
     @Binding var showMacImagePicker: Bool
     #endif
+
+    private var hasModalPresentation: Bool {
+        if imagePreviewURL != nil {
+            return true
+        }
+        #if os(iOS)
+        return showImagePicker
+        #else
+        return showMacImagePicker
+        #endif
+    }
+
+    private var bluetoothAlertBinding: Binding<Bool> {
+        Binding(
+            get: {
+                scenePhase == .active
+                    && appChromeModel.showBluetoothAlert
+                    && !hasModalPresentation
+            },
+            set: { isPresented in
+                guard !isPresented,
+                      scenePhase == .active,
+                      !hasModalPresentation else {
+                    return
+                }
+                appChromeModel.showBluetoothAlert = false
+            }
+        )
+    }
 
     var body: some View {
         let legacyConsentRequest = conversationUIModel.legacyPrivateMediaConsentRequest
@@ -182,6 +212,17 @@ struct ContentPeopleSheetView: View {
             }
         }
         #endif
+        .alert(
+            "content.alert.bluetooth_required.title",
+            isPresented: bluetoothAlertBinding
+        ) {
+            Button("content.alert.bluetooth_required.settings") {
+                SystemSettings.bluetooth.open()
+            }
+            Button("common.ok", role: .cancel) {}
+        } message: {
+            Text(appChromeModel.bluetoothAlertMessage)
+        }
     }
 }
 

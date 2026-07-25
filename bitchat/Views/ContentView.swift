@@ -43,6 +43,7 @@ struct ContentView: View {
     @FocusState private var isTextFieldFocused: Bool
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.appTheme) private var appTheme
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showSidebar = false
     @State private var selectedMessageSender: String?
     @State private var selectedMessageSenderID: PeerID?
@@ -79,6 +80,44 @@ struct ContentView: View {
     }
 
     private var usesGlassLayout: Bool { appTheme.usesGlassChrome }
+
+    private var isPeopleSheetPresented: Bool {
+        showSidebar || selectedPrivatePeerID != nil
+    }
+
+    private var hasRootModalPresentation: Bool {
+        if isPeopleSheetPresented
+            || appChromeModel.isAppInfoPresented
+            || appChromeModel.showingFingerprintFor != nil
+            || imagePreviewURL != nil
+            || showVerifySheet
+            || voiceRecordingVM.showAlert {
+            return true
+        }
+        #if os(iOS)
+        return showImagePicker
+        #else
+        return showMacImagePicker
+        #endif
+    }
+
+    private var rootBluetoothAlertBinding: Binding<Bool> {
+        Binding(
+            get: {
+                scenePhase == .active
+                    && appChromeModel.showBluetoothAlert
+                    && !hasRootModalPresentation
+            },
+            set: { isPresented in
+                guard !isPresented,
+                      scenePhase == .active,
+                      !hasRootModalPresentation else {
+                    return
+                }
+                appChromeModel.showBluetoothAlert = false
+            }
+        )
+    }
 
     var body: some View {
         mainContent
@@ -121,11 +160,18 @@ struct ContentView: View {
         }
         .sheet(
             isPresented: Binding(
-                get: { showSidebar || selectedPrivatePeerID != nil },
+                get: { isPeopleSheetPresented },
                 set: { isPresented in
                     if !isPresented {
                         showSidebar = false
-                        privateConversationModel.endConversation()
+                        // Scene/background and Bluetooth-alert presentation
+                        // reconciliation are not user requests to leave the
+                        // conversation. Keep the selected DM so the sheet
+                        // remains live when the app returns from Settings.
+                        if scenePhase == .active,
+                           !appChromeModel.showBluetoothAlert {
+                            privateConversationModel.endConversation()
+                        }
                     }
                 }
             )
@@ -236,7 +282,7 @@ struct ContentView: View {
         }, message: {
             Text(voiceRecordingVM.state.alertMessage)
         })
-        .alert("content.alert.bluetooth_required.title", isPresented: $appChromeModel.showBluetoothAlert) {
+        .alert("content.alert.bluetooth_required.title", isPresented: rootBluetoothAlertBinding) {
             Button("content.alert.bluetooth_required.settings") {
                 SystemSettings.bluetooth.open()
             }
