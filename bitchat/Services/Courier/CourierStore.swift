@@ -491,6 +491,15 @@ final class CourierStore {
         }
 
         var acceptedCount = 0
+        // CALLER INVARIANT: no suspension point between the scan above and the
+        // commit below. `accepting` puts copies on the wire irreversibly, so a
+        // commit that then loses its revalidation leaves those copies uncharged
+        // — two couriers each offered `copies / 2` before either commits would
+        // put 6 copies out from a budget of 4. What prevents it is that the sole
+        // caller (`BLEService.sprayCourierMail`) runs scan/send/commit inside a
+        // single `Task { @MainActor }` containing no `await`, so the actor's
+        // executor runs it to completion. Adding an `await` anywhere in that
+        // block reopens this. See `concurrentOffersToDifferentCouriersConserveCopies`.
         for copy in offered where accepting(copy) {
             // As with `transferSprayCopies`, BLE acceptance runs outside the
             // store queue. Revalidate and commit the exact budget that left this
@@ -557,6 +566,14 @@ final class CourierStore {
     /// the courier now actually holds. At most one lifetime pending offer per
     /// (envelope, courier) means every receipt resolves that one entry
     /// idempotently.
+    ///
+    /// **Trust assumption.** A taker can sign a decline and keep the copy, so the
+    /// giver restores a budget the copy still occupies: at most 2x on that
+    /// envelope, bounded by `maxCopies`. This is not defended against, because
+    /// spray only ever reaches favorites and verified peers (`courierDepositPolicy`),
+    /// and a peer inside that boundary can already drop carried mail outright —
+    /// total loss, no protocol needed. Closing the smaller hole would cost a
+    /// three-round offer/accept/deliver handshake on contacts that last seconds.
     ///
     /// The restore is gated on the matched record *still listing this courier in
     /// `sprayedTo`*, not on the ciphertext hash alone. A hash match is not proof

@@ -4939,6 +4939,7 @@ extension BLEService {
     /// offer.
     private func handleCourierSprayAck(_ packet: BitchatPacket, from peerID: PeerID) {
         guard let takerKey = verifiedSprayReceiptTakerKey(packet, from: peerID, kind: "ack") else { return }
+        guard packet.payload.count == CourierEnvelope.tagLength else { return }
         let ciphertextHash = packet.payload
         guard courierStore.confirmSpray(courierNoiseKey: takerKey, ciphertextHash: ciphertextHash) else { return }
         let key = PendingSprayTimeoutKey(ciphertextHash: ciphertextHash, courierNoiseKey: takerKey)
@@ -4967,6 +4968,7 @@ extension BLEService {
     ///    the baseline — the strictly worse failure, so we accept the floor.
     private func handleCourierSprayDecline(_ packet: BitchatPacket, from peerID: PeerID) {
         guard let takerKey = verifiedSprayReceiptTakerKey(packet, from: peerID, kind: "decline") else { return }
+        guard packet.payload.count == CourierEnvelope.tagLength else { return }
         let ciphertextHash = packet.payload
         guard courierStore.cancelSpray(ciphertextHash: ciphertextHash, courierNoiseKey: takerKey) else { return }
         let key = PendingSprayTimeoutKey(ciphertextHash: ciphertextHash, courierNoiseKey: takerKey)
