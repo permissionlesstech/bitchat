@@ -549,20 +549,26 @@ struct BLEServiceCoreTests {
 
         // Preserve a working victim session while an unauthenticated
         // replacement candidate arrives on a newly bound physical link.
-        let message1 = try ble._test_noiseInitiateHandshake(with: victimPeerID)
+        // Establish BLE as responder so the replacement candidate below is
+        // not coalesced by the initiator-completion grace path.
+        let message1 = try victim.initiateHandshake(with: ble.myPeerID)
         let message2 = try #require(
-            try victim.processHandshakeMessage(from: ble.myPeerID, message: message1)
-        )
-        let message3 = try #require(
             try ble._test_noiseProcessHandshakeMessage(
                 from: victimPeerID,
+                message: message1
+            )
+        )
+        let message3 = try #require(
+            try victim.processHandshakeMessage(
+                from: ble.myPeerID,
                 message: message2
             )
         )
-        _ = try victim.processHandshakeMessage(
-            from: ble.myPeerID,
+        _ = try ble._test_noiseProcessHandshakeMessage(
+            from: victimPeerID,
             message: message3
         )
+        await ble._test_drainNoiseMessagePipeline()
         #expect(ble.canDeliverSecurely(to: victimPeerID))
 
         let centralUUID = "central-replacement-xx-message-one"

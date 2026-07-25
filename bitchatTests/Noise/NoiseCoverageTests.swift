@@ -5,7 +5,7 @@ import BitFoundation
 
 @testable import bitchat
 
-@Suite("Noise Coverage Tests")
+@Suite("Noise Coverage Tests", .serialized)
 struct NoiseCoverageTests {
     private let keychain = MockKeychain()
     private let aliceStaticKey = Curve25519.KeyAgreement.PrivateKey()
@@ -633,8 +633,16 @@ struct NoiseCoverageTests {
         )
         let replacementSession = try #require(manager.getSession(for: alicePeerID))
 
-        #expect(replacementResponse != nil)
-        #expect(replacementSession !== restartedSession)
+        let localPeerID = PeerID(
+            publicKey: aliceStaticKey.publicKey.rawRepresentation
+        )
+        if localPeerID < alicePeerID {
+            #expect(replacementResponse == nil)
+            #expect(replacementSession === restartedSession)
+        } else {
+            #expect(replacementResponse != nil)
+            #expect(replacementSession !== restartedSession)
+        }
 
         let aliceManager = NoiseSessionManager(localStaticKey: aliceStaticKey, keychain: keychain)
         let bobManager = NoiseSessionManager(localStaticKey: bobStaticKey, keychain: keychain)
@@ -654,7 +662,13 @@ struct NoiseCoverageTests {
             try aliceManager.initiateHandshake(with: alicePeerID)
         }
 
-        let rekeyHandshake = try aliceManager.initiateRekey(for: alicePeerID)
+        let rekeyInitiation = try aliceManager.initiateRekey(for: alicePeerID)
+        let rekeyHandshake = try #require(
+            aliceManager.claimHandshakeInitiation(
+                rekeyInitiation,
+                for: alicePeerID
+            )
+        )
         #expect(!rekeyHandshake.isEmpty)
         let rekeyedSession = try #require(aliceManager.getSession(for: alicePeerID))
 
@@ -667,6 +681,7 @@ struct NoiseCoverageTests {
         let aliceManager = NoiseSessionManager(
             localStaticKey: aliceStaticKey,
             keychain: keychain,
+            recentInitiatorCompletionGracePeriod: 0,
             sessionFactory: { peerID, role in
                 BlockingDecryptNoiseSession(
                     peerID: peerID,

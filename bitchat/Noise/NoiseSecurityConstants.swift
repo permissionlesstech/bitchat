@@ -37,9 +37,29 @@ enum NoiseSecurityConstants {
     // Noise XX message 1 contains only the initiator's 32-byte ephemeral key.
     static let xxInitialMessageSize = 32
 
+    // Bounds an ordinary initiator whose message 1 or 2 is lost.
+    static let ordinaryHandshakeTimeout: TimeInterval = 10
+
     // Bounds the receive-only rollback quarantine created by an unauthenticated
     // inbound message 1. A lost message 3 must not strand outbound traffic.
     static let ordinaryResponderHandshakeTimeout: TimeInterval = 20
+
+    // A released client may immediately retry after both crossed initiators
+    // yielded. Give that unilateral retry a brief head start before the
+    // patched side spends its one bounded recovery.
+    static let handshakeCollisionRecoveryDelay: TimeInterval = 0.2
+
+    // Rate-limited recovery remains actionable without spinning.
+    static let handshakeRateLimitRecoveryDelay: TimeInterval = 60
+
+    // Covers only reordering between a winning message 3 and the losing
+    // crossed message 1.
+    static let recentInitiatorCompletionGracePeriod: TimeInterval = 1
+
+    // After unauthenticated responder rollback, reject another attempt long
+    // enough that paced message 1 traffic cannot keep outbound paused. A
+    // legitimate peer converges through the one manager-owned local retry.
+    static let ordinaryReconnectRollbackCooldown: TimeInterval = 60
     
     // Session timeout - sessions older than this should be renegotiated
     static let sessionTimeout: TimeInterval = 86400 // 24 hours

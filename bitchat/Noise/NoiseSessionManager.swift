@@ -21,6 +21,16 @@ struct NoiseHandshakeInitiation: Equatable, Sendable {
     let attemptID: UUID
 }
 
+struct NoiseHandshakeRecoveryRequest: Equatable, Sendable {
+    let peerID: PeerID
+    fileprivate let recoveryID: UUID
+}
+
+enum NoiseHandshakeRecoveryPreparation {
+    case ordinary(NoiseHandshakeInitiation)
+    case transferred
+}
+
 final class NoiseSessionManager {
     private var sessions: [PeerID: NoiseSession] = [:]
     /// Opaque identity for each exact entry in `sessions`. The generation is
@@ -30,6 +40,13 @@ final class NoiseSessionManager {
     /// One-time handoff tokens prevent a prepared XX message 1 from leaving
     /// after an inbound collision has already changed this peer's role.
     private var ordinaryInitiationIDs: [PeerID: UUID] = [:]
+    private var ordinaryInitiatorTimeouts: [PeerID: DispatchWorkItem] = [:]
+    private var ordinaryInitiatorRetryNotifications: [PeerID: Bool] = [:]
+    private var ordinaryResponderTimeouts: [PeerID: DispatchWorkItem] = [:]
+    private var ordinaryResponderDeadlines: [PeerID: DispatchTime] = [:]
+    private var ordinaryResponderRetryNotifications: [PeerID: Bool] = [:]
+    private var ordinaryRespondersCreatedByYield: Set<PeerID> = []
+    private var recentOrdinaryInitiatorCompletions: [PeerID: Date] = [:]
     private struct QuarantinedTransport {
         let session: NoiseSession
         let generation: UUID
@@ -43,23 +60,44 @@ final class NoiseSessionManager {
     /// claimed static identity, then is discarded on success or restored on
     /// bounded failure.
     private var quarantinedTransports: [PeerID: QuarantinedTransport] = [:]
-    private var quarantinedResponderTimeouts: [PeerID: DispatchWorkItem] = [:]
+    private var quarantineRollbackCooldownUntil: [PeerID: Date] = [:]
+    private var suppressedInitiationRecoveryTimeouts: [PeerID: DispatchWorkItem] = [:]
+    private var delayedHandshakeRecoveryWorkItems: [PeerID: DispatchWorkItem] = [:]
+    private var handshakeRecoveryCallbackIDs: [PeerID: UUID] = [:]
+    private var pendingHandshakeRecoveryIDs: [PeerID: UUID] = [:]
     private let sessionFactory: (PeerID, NoiseRole) -> NoiseSession
+    private let localPeerID: PeerID
+    private let ordinaryHandshakeTimeout: TimeInterval
     private let ordinaryResponderHandshakeTimeout: TimeInterval
+    private let recentInitiatorCompletionGracePeriod: TimeInterval
+    private let ordinaryReconnectRollbackCooldown: TimeInterval
     private let managerQueue = DispatchQueue(label: "chat.bitchat.noise.manager", attributes: .concurrent)
     
     // Callbacks
     var onSessionEstablished: ((PeerID, Curve25519.KeyAgreement.PublicKey, UUID) -> Void)?
     var onSessionRestored: ((PeerID, UUID) -> Void)?
     var onSessionFailed: ((PeerID, Error) -> Void)?
+    var onHandshakeRecoveryRequired: ((NoiseHandshakeRecoveryRequest) -> Void)?
     
     init(
         localStaticKey: Curve25519.KeyAgreement.PrivateKey,
         keychain: KeychainManagerProtocol,
+        ordinaryHandshakeTimeout: TimeInterval =
+            NoiseSecurityConstants.ordinaryHandshakeTimeout,
         ordinaryResponderHandshakeTimeout: TimeInterval =
-            NoiseSecurityConstants.ordinaryResponderHandshakeTimeout
+            NoiseSecurityConstants.ordinaryResponderHandshakeTimeout,
+        recentInitiatorCompletionGracePeriod: TimeInterval =
+            NoiseSecurityConstants.recentInitiatorCompletionGracePeriod,
+        ordinaryReconnectRollbackCooldown: TimeInterval =
+            NoiseSecurityConstants.ordinaryReconnectRollbackCooldown
     ) {
+        self.localPeerID = PeerID(publicKey: localStaticKey.publicKey.rawRepresentation)
+        self.ordinaryHandshakeTimeout = ordinaryHandshakeTimeout
         self.ordinaryResponderHandshakeTimeout = ordinaryResponderHandshakeTimeout
+        self.recentInitiatorCompletionGracePeriod =
+            recentInitiatorCompletionGracePeriod
+        self.ordinaryReconnectRollbackCooldown =
+            ordinaryReconnectRollbackCooldown
         self.sessionFactory = { peerID, role in
             SecureNoiseSession(
                 peerID: peerID,
@@ -72,13 +110,25 @@ final class NoiseSessionManager {
 
     #if DEBUG
     init(
-        localStaticKey _: Curve25519.KeyAgreement.PrivateKey,
+        localStaticKey: Curve25519.KeyAgreement.PrivateKey,
         keychain _: KeychainManagerProtocol,
+        ordinaryHandshakeTimeout: TimeInterval =
+            NoiseSecurityConstants.ordinaryHandshakeTimeout,
         ordinaryResponderHandshakeTimeout: TimeInterval =
             NoiseSecurityConstants.ordinaryResponderHandshakeTimeout,
+        recentInitiatorCompletionGracePeriod: TimeInterval =
+            NoiseSecurityConstants.recentInitiatorCompletionGracePeriod,
+        ordinaryReconnectRollbackCooldown: TimeInterval =
+            NoiseSecurityConstants.ordinaryReconnectRollbackCooldown,
         sessionFactory: @escaping (PeerID, NoiseRole) -> NoiseSession
     ) {
+        self.localPeerID = PeerID(publicKey: localStaticKey.publicKey.rawRepresentation)
+        self.ordinaryHandshakeTimeout = ordinaryHandshakeTimeout
         self.ordinaryResponderHandshakeTimeout = ordinaryResponderHandshakeTimeout
+        self.recentInitiatorCompletionGracePeriod =
+            recentInitiatorCompletionGracePeriod
+        self.ordinaryReconnectRollbackCooldown =
+            ordinaryReconnectRollbackCooldown
         self.sessionFactory = sessionFactory
     }
     #endif
@@ -88,6 +138,110 @@ final class NoiseSessionManager {
     func getSession(for peerID: PeerID) -> NoiseSession? {
         return managerQueue.sync {
             return sessions[peerID]
+        }
+    }
+
+    /// Transfers one bounded recovery generation to whatever ordinary XX
+    /// handshake currently owns the peer, or starts the generation's single
+    /// retry. The request token prevents stale transport callbacks from
+    /// creating additional attempts.
+    func prepareHandshakeRecovery(
+        _ request: NoiseHandshakeRecoveryRequest,
+        authorizeAttempt: () throws -> Void
+    ) throws -> NoiseHandshakeRecoveryPreparation? {
+        try managerQueue.sync(flags: .barrier) {
+            let peerID = request.peerID
+            guard pendingHandshakeRecoveryIDs[peerID] == request.recoveryID else {
+                return nil
+            }
+
+            if let current = sessions[peerID],
+               current.getState() == .handshaking {
+                if current.role == .initiator {
+                    scheduleOrdinaryInitiatorTimeoutLocked(
+                        current,
+                        for: peerID,
+                        notifyOnTimeout: true
+                    )
+                } else {
+                    // A recovery may transfer to a responder that raced ahead
+                    // of the callback. Preserve an existing quarantine deadline
+                    // so duplicate unauthenticated message 1 packets cannot
+                    // extend the outbound pause.
+                    scheduleOrdinaryResponderTimeoutLocked(
+                        current,
+                        for: peerID,
+                        notifyOnTimeout: true,
+                        createdByYield: true,
+                        rearmDeadline: quarantinedTransports[peerID] == nil
+                    )
+                }
+                return .transferred
+            }
+
+            do {
+                try authorizeAttempt()
+            } catch {
+                redispatchHandshakeRecoveryLocked(
+                    request,
+                    after: NoiseSecurityConstants.handshakeRateLimitRecoveryDelay
+                )
+                throw error
+            }
+
+            let next = sessionFactory(peerID, .initiator)
+            let payload: Data
+            do {
+                payload = try next.startHandshake()
+            } catch {
+                next.reset()
+                redispatchHandshakeRecoveryLocked(
+                    request,
+                    after: NoiseSecurityConstants.handshakeCollisionRecoveryDelay
+                )
+                throw error
+            }
+
+            // Start before retiring a working transport. If preparation fails,
+            // the established session and its generation are untouched.
+            if let current = sessions.removeValue(forKey: peerID) {
+                current.reset()
+            }
+            if let quarantined = quarantinedTransports.removeValue(forKey: peerID) {
+                quarantined.session.reset()
+            }
+            sessionGenerations.removeValue(forKey: peerID)
+            ordinaryInitiationIDs.removeValue(forKey: peerID)
+            cancelOrdinaryInitiatorTimeoutLocked(for: peerID)
+            cancelOrdinaryResponderTimeoutLocked(for: peerID)
+            cancelSuppressedInitiationRecoveryLocked(for: peerID)
+            recentOrdinaryInitiatorCompletions.removeValue(forKey: peerID)
+            quarantineRollbackCooldownUntil.removeValue(forKey: peerID)
+
+            let attemptID = UUID()
+            sessions[peerID] = next
+            sessionGenerations[peerID] = UUID()
+            ordinaryInitiationIDs[peerID] = attemptID
+            // This is the one retry owned by `request`; it may time out but
+            // must not recursively mint another generation.
+            scheduleOrdinaryInitiatorTimeoutLocked(
+                next,
+                for: peerID,
+                notifyOnTimeout: false
+            )
+            consumeHandshakeRecoveryLocked(request)
+            return .ordinary(
+                NoiseHandshakeInitiation(
+                    payload: payload,
+                    attemptID: attemptID
+                )
+            )
+        }
+    }
+
+    func cancelHandshakeRecovery(_ request: NoiseHandshakeRecoveryRequest) {
+        managerQueue.sync(flags: .barrier) {
+            consumeHandshakeRecoveryLocked(request)
         }
     }
     
@@ -104,9 +258,14 @@ final class NoiseSessionManager {
         if let quarantined = quarantinedTransports.removeValue(forKey: peerID) {
             quarantined.session.reset()
         }
-        quarantinedResponderTimeouts.removeValue(forKey: peerID)?.cancel()
         sessionGenerations.removeValue(forKey: peerID)
         ordinaryInitiationIDs.removeValue(forKey: peerID)
+        cancelOrdinaryInitiatorTimeoutLocked(for: peerID)
+        cancelOrdinaryResponderTimeoutLocked(for: peerID)
+        recentOrdinaryInitiatorCompletions.removeValue(forKey: peerID)
+        quarantineRollbackCooldownUntil.removeValue(forKey: peerID)
+        cancelSuppressedInitiationRecoveryLocked(for: peerID)
+        cancelDelayedHandshakeRecoveryLocked(for: peerID)
     }
 
     func removeAllSessions() {
@@ -117,14 +276,34 @@ final class NoiseSessionManager {
             for (_, quarantined) in quarantinedTransports {
                 quarantined.session.reset()
             }
-            for (_, timeout) in quarantinedResponderTimeouts {
+            for (_, timeout) in ordinaryInitiatorTimeouts {
+                timeout.cancel()
+            }
+            for (_, timeout) in ordinaryResponderTimeouts {
+                timeout.cancel()
+            }
+            for (_, timeout) in suppressedInitiationRecoveryTimeouts {
+                timeout.cancel()
+            }
+            for (_, timeout) in delayedHandshakeRecoveryWorkItems {
                 timeout.cancel()
             }
             sessions.removeAll()
             sessionGenerations.removeAll()
             ordinaryInitiationIDs.removeAll()
+            ordinaryInitiatorTimeouts.removeAll()
+            ordinaryInitiatorRetryNotifications.removeAll()
+            ordinaryResponderTimeouts.removeAll()
+            ordinaryResponderDeadlines.removeAll()
+            ordinaryResponderRetryNotifications.removeAll()
+            ordinaryRespondersCreatedByYield.removeAll()
+            recentOrdinaryInitiatorCompletions.removeAll()
             quarantinedTransports.removeAll()
-            quarantinedResponderTimeouts.removeAll()
+            quarantineRollbackCooldownUntil.removeAll()
+            suppressedInitiationRecoveryTimeouts.removeAll()
+            delayedHandshakeRecoveryWorkItems.removeAll()
+            handshakeRecoveryCallbackIDs.removeAll()
+            pendingHandshakeRecoveryIDs.removeAll()
         }
     }
     
@@ -140,11 +319,9 @@ final class NoiseSessionManager {
             
             // Remove any existing non-established session
             if let existingSession = sessions[peerID], !existingSession.isEstablished() {
-                _ = sessions.removeValue(forKey: peerID)
-                sessionGenerations.removeValue(forKey: peerID)
-                ordinaryInitiationIDs.removeValue(forKey: peerID)
-                existingSession.reset()
+                removeSessionLocked(for: peerID)
             }
+            recentOrdinaryInitiatorCompletions.removeValue(forKey: peerID)
             
             // Create new initiator session
             let session = sessionFactory(peerID, .initiator)
@@ -153,14 +330,69 @@ final class NoiseSessionManager {
             
             do {
                 let handshakeData = try session.startHandshake()
+                scheduleOrdinaryInitiatorTimeoutLocked(
+                    session,
+                    for: peerID,
+                    notifyOnTimeout: false
+                )
+                cancelDelayedHandshakeRecoveryLocked(for: peerID)
                 return handshakeData
             } catch {
                 // Clean up failed session
                 _ = sessions.removeValue(forKey: peerID)
                 sessionGenerations.removeValue(forKey: peerID)
                 ordinaryInitiationIDs.removeValue(forKey: peerID)
+                cancelOrdinaryInitiatorTimeoutLocked(for: peerID)
                 session.reset()
                 SecureLogger.error(.handshakeFailed(peerID: peerID.id, error: error.localizedDescription))
+                throw error
+            }
+        }
+    }
+
+    /// Atomically starts an ordinary initiator only when no other session
+    /// already owns the peer. BLE discovery can report the same peer on
+    /// multiple links; combining the absence check, authorization, creation,
+    /// and handoff token prevents two different message 1 packets escaping.
+    func initiateHandshakeIfAbsent(
+        with peerID: PeerID,
+        notifyOnTimeout: Bool,
+        authorize: () throws -> Void
+    ) throws -> NoiseHandshakeInitiation? {
+        try managerQueue.sync(flags: .barrier) {
+            guard sessions[peerID] == nil,
+                  quarantinedTransports[peerID] == nil else {
+                return nil
+            }
+            try authorize()
+
+            let session = sessionFactory(peerID, .initiator)
+            do {
+                let payload = try session.startHandshake()
+                let attemptID = UUID()
+                sessions[peerID] = session
+                sessionGenerations[peerID] = UUID()
+                ordinaryInitiationIDs[peerID] = attemptID
+                recentOrdinaryInitiatorCompletions.removeValue(forKey: peerID)
+                quarantineRollbackCooldownUntil.removeValue(forKey: peerID)
+                scheduleOrdinaryInitiatorTimeoutLocked(
+                    session,
+                    for: peerID,
+                    notifyOnTimeout: notifyOnTimeout
+                )
+                cancelDelayedHandshakeRecoveryLocked(for: peerID)
+                return NoiseHandshakeInitiation(
+                    payload: payload,
+                    attemptID: attemptID
+                )
+            } catch {
+                session.reset()
+                SecureLogger.error(
+                    .handshakeFailed(
+                        peerID: peerID.id,
+                        error: error.localizedDescription
+                    )
+                )
                 throw error
             }
         }
@@ -172,6 +404,7 @@ final class NoiseSessionManager {
     /// handshaking session and must queue until it establishes.
     func initiateReconnectHandshake(
         with peerID: PeerID,
+        notifyOnTimeout: Bool,
         authorize: () throws -> Void
     ) throws -> NoiseHandshakeInitiation {
         try managerQueue.sync(flags: .barrier) {
@@ -196,11 +429,29 @@ final class NoiseSessionManager {
                 throw error
             }
 
-            removeSessionLocked(for: peerID)
+            // Retire only after the replacement initiator has successfully
+            // produced message 1. Do not use the broad removal helper here:
+            // this transition owns the exact new session installed below.
+            _ = sessions.removeValue(forKey: peerID)
+            sessionGenerations.removeValue(forKey: peerID)
+            ordinaryInitiationIDs.removeValue(forKey: peerID)
+            cancelOrdinaryInitiatorTimeoutLocked(for: peerID)
+            cancelOrdinaryResponderTimeoutLocked(for: peerID)
+            cancelSuppressedInitiationRecoveryLocked(for: peerID)
+            cancelDelayedHandshakeRecoveryLocked(for: peerID)
+            recentOrdinaryInitiatorCompletions.removeValue(forKey: peerID)
+            quarantineRollbackCooldownUntil.removeValue(forKey: peerID)
+            established.reset()
+
             let attemptID = UUID()
             sessions[peerID] = next
             sessionGenerations[peerID] = UUID()
             ordinaryInitiationIDs[peerID] = attemptID
+            scheduleOrdinaryInitiatorTimeoutLocked(
+                next,
+                for: peerID,
+                notifyOnTimeout: notifyOnTimeout
+            )
             return NoiseHandshakeInitiation(
                 payload: payload,
                 attemptID: attemptID
@@ -222,6 +473,16 @@ final class NoiseSessionManager {
                 return nil
             }
             ordinaryInitiationIDs.removeValue(forKey: peerID)
+            let notifyOnTimeout =
+                ordinaryInitiatorRetryNotifications[peerID] ?? false
+            // Preparation and on-wire exchange have independent bounds. Once
+            // BLE owns these exact bytes, give the peer the full response
+            // window without changing retry ownership.
+            scheduleOrdinaryInitiatorTimeoutLocked(
+                session,
+                for: peerID,
+                notifyOnTimeout: notifyOnTimeout
+            )
             return initiation.payload
         }
     }
@@ -253,59 +514,170 @@ final class NoiseSessionManager {
                 generation: UUID
             )?
         ) = try managerQueue.sync(flags: .barrier) {
+            var yieldedInitiatorShouldRetry = false
+            var didYieldLocalInitiator = false
+            var inheritedResponderShouldRetry = false
+            var inheritedResponderWasCreatedByYield = false
+            let existingAtIngress = sessions[peerID]
+            let isFreshInitiation =
+                message.count == NoiseSecurityConstants.xxInitialMessageSize
+                || existingAtIngress == nil
+                || (
+                    existingAtIngress?.isEstablished() == true
+                    && message.count
+                        > NoiseSecurityConstants.xxInitialMessageSize
+                )
+
+            if isFreshInitiation {
+                if let cooldownUntil = quarantineRollbackCooldownUntil[peerID] {
+                    if cooldownUntil > Date(),
+                       sessions[peerID]?.isEstablished() == true {
+                        SecureLogger.debug(
+                            "Ignoring unauthenticated reconnect initiation during rollback cooldown for \(peerID)",
+                            category: .session
+                        )
+                        return (nil, nil)
+                    }
+                    quarantineRollbackCooldownUntil.removeValue(forKey: peerID)
+                }
+
+                if suppressedInitiationRecoveryTimeouts[peerID] != nil,
+                   localPeerID < peerID.toShort(),
+                   sessions[peerID]?.isEstablished() == true {
+                    SecureLogger.debug(
+                        "Coalescing duplicate initiation while convergence recovery is pending for \(peerID)",
+                        category: .session
+                    )
+                    return (nil, nil)
+                }
+
+                if let completedAt = recentOrdinaryInitiatorCompletions[peerID] {
+                    let stillInGrace = Date().timeIntervalSince(completedAt)
+                        < recentInitiatorCompletionGracePeriod
+                    if stillInGrace,
+                       localPeerID < peerID.toShort(),
+                       let established = sessions[peerID],
+                       established.isEstablished() {
+                        recentOrdinaryInitiatorCompletions.removeValue(forKey: peerID)
+                        scheduleSuppressedInitiationRecoveryLocked(
+                            established,
+                            completedAt: completedAt,
+                            for: peerID
+                        )
+                        SecureLogger.debug(
+                            "Deferring delayed crossed initiation from \(peerID) after initiator completion",
+                            category: .session
+                        )
+                        return (nil, nil)
+                    }
+                    recentOrdinaryInitiatorCompletions.removeValue(forKey: peerID)
+                }
+
+                if let ordinaryInitiator = sessions[peerID],
+                   ordinaryInitiator.role == .initiator,
+                   ordinaryInitiator.getState() == .handshaking {
+                    if localPeerID < peerID.toShort() {
+                        SecureLogger.debug(
+                            "Ignoring crossed ordinary initiation from \(peerID); keeping deterministic initiator role",
+                            category: .session
+                        )
+                        return (nil, nil)
+                    }
+                    yieldedInitiatorShouldRetry =
+                        ordinaryInitiatorRetryNotifications[peerID] ?? false
+                    didYieldLocalInitiator = true
+                    _ = sessions.removeValue(forKey: peerID)
+                    sessionGenerations.removeValue(forKey: peerID)
+                    ordinaryInitiationIDs.removeValue(forKey: peerID)
+                    cancelOrdinaryInitiatorTimeoutLocked(for: peerID)
+                    cancelOrdinaryResponderTimeoutLocked(for: peerID)
+                    ordinaryInitiator.reset()
+                }
+            }
+
             let session: NoiseSession
 
-            if let existing = sessions[peerID],
-               existing.isEstablished()
-                    || message.count
-                        == NoiseSecurityConstants.xxInitialMessageSize {
+            if let existing = sessions[peerID] {
                 if existing.isEstablished(),
-                   let generation = sessionGenerations[peerID] {
-                    // Message 1 cannot prove that the remote still owns its
-                    // old keys. Remove them from every sending/generation API
-                    // immediately, but retain the object solely for bounded
-                    // rollback until the ordinary responder authenticates.
-                    _ = sessions.removeValue(forKey: peerID)
-                    sessionGenerations.removeValue(forKey: peerID)
-                    ordinaryInitiationIDs.removeValue(forKey: peerID)
-                    if let prior = quarantinedTransports.updateValue(
-                        QuarantinedTransport(
-                            session: existing,
-                            generation: generation,
-                            rollbackDeadline: .now()
-                                + ordinaryResponderHandshakeTimeout
-                        ),
-                        forKey: peerID
-                    ) {
-                        prior.session.reset()
-                    }
-                } else {
-                    _ = sessions.removeValue(forKey: peerID)
-                    sessionGenerations.removeValue(forKey: peerID)
-                    ordinaryInitiationIDs.removeValue(forKey: peerID)
-                    existing.reset()
-                }
-                let replacement = sessionFactory(peerID, .responder)
-                sessions[peerID] = replacement
-                sessionGenerations[peerID] = UUID()
-                session = replacement
-                if quarantinedTransports[peerID] != nil {
-                    scheduleQuarantinedResponderTimeoutLocked(
-                        replacement,
-                        for: peerID
+                   !isFreshInitiation {
+                    // An established ordinary XX transport has no remaining
+                    // handshake messages to consume. Unauthenticated garbage
+                    // must not tear down its working keys.
+                    SecureLogger.debug(
+                        "Ignoring non-initial handshake bytes for established peer \(peerID)",
+                        category: .session
                     )
+                    return (nil, nil)
                 }
-            } else if let existing = sessions[peerID] {
-                session = existing
+                if isFreshInitiation {
+                    if existing.isEstablished(),
+                       let generation = sessionGenerations[peerID] {
+                        // Message 1 is unauthenticated. Remove the old
+                        // transport from every outbound/generation API now,
+                        // retaining it only as receive-only rollback state.
+                        _ = sessions.removeValue(forKey: peerID)
+                        sessionGenerations.removeValue(forKey: peerID)
+                        ordinaryInitiationIDs.removeValue(forKey: peerID)
+                        cancelOrdinaryInitiatorTimeoutLocked(for: peerID)
+                        cancelOrdinaryResponderTimeoutLocked(for: peerID)
+                        if let prior = quarantinedTransports.updateValue(
+                            QuarantinedTransport(
+                                session: existing,
+                                generation: generation,
+                                rollbackDeadline: .now()
+                                    + ordinaryResponderHandshakeTimeout
+                            ),
+                            forKey: peerID
+                        ) {
+                            prior.session.reset()
+                        }
+                    } else {
+                        inheritedResponderShouldRetry =
+                            ordinaryResponderRetryNotifications[peerID] ?? false
+                        inheritedResponderWasCreatedByYield =
+                            ordinaryRespondersCreatedByYield.contains(peerID)
+                        _ = sessions.removeValue(forKey: peerID)
+                        sessionGenerations.removeValue(forKey: peerID)
+                        ordinaryInitiationIDs.removeValue(forKey: peerID)
+                        // Keep the first responder/quarantine deadline. A
+                        // repeated message 1 may refresh message 2, but never
+                        // refreshes the attacker's outbound-pause budget.
+                        cancelOrdinaryResponderTimeoutLocked(
+                            for: peerID,
+                            preserveDeadline: true
+                        )
+                        existing.reset()
+                    }
+
+                    let replacement = sessionFactory(peerID, .responder)
+                    sessions[peerID] = replacement
+                    sessionGenerations[peerID] = UUID()
+                    session = replacement
+                } else {
+                    session = existing
+                }
             } else {
                 let newSession = sessionFactory(peerID, .responder)
                 sessions[peerID] = newSession
                 sessionGenerations[peerID] = UUID()
                 session = newSession
             }
-            
-            // Process the handshake message within the synchronized block
+
             do {
+                if isFreshInitiation,
+                   session.role == .responder {
+                    scheduleOrdinaryResponderTimeoutLocked(
+                        session,
+                        for: peerID,
+                        notifyOnTimeout:
+                            yieldedInitiatorShouldRetry
+                            || inheritedResponderShouldRetry,
+                        createdByYield:
+                            didYieldLocalInitiator
+                            || inheritedResponderWasCreatedByYield
+                    )
+                }
+
                 let response = try session.processHandshakeMessage(message)
                 
                 // Check the exact session that processed this message. A
@@ -324,12 +696,21 @@ final class NoiseSessionManager {
                     if let quarantined = quarantinedTransports.removeValue(
                         forKey: peerID
                     ) {
-                        quarantinedResponderTimeouts.removeValue(
-                            forKey: peerID
-                        )?.cancel()
                         quarantined.session.reset()
                     }
                     ordinaryInitiationIDs.removeValue(forKey: peerID)
+                    cancelOrdinaryInitiatorTimeoutLocked(for: peerID)
+                    cancelOrdinaryResponderTimeoutLocked(for: peerID)
+                    quarantineRollbackCooldownUntil.removeValue(forKey: peerID)
+                    if session.role == .initiator {
+                        recentOrdinaryInitiatorCompletions[peerID] = Date()
+                    } else {
+                        recentOrdinaryInitiatorCompletions.removeValue(
+                            forKey: peerID
+                        )
+                    }
+                    cancelSuppressedInitiationRecoveryLocked(for: peerID)
+                    cancelDelayedHandshakeRecoveryLocked(for: peerID)
                     guard let generation = sessionGenerations[peerID] else {
                         throw NoiseEncryptionError.sessionNotEstablished
                     }
@@ -338,19 +719,36 @@ final class NoiseSessionManager {
                 
                 return (response, establishedSession)
             } catch {
+                var shouldRequestRecovery = false
+                var shouldSuppressImmediateHandlerRestart = false
+                if session.role == .initiator {
+                    shouldRequestRecovery =
+                        ordinaryInitiatorRetryNotifications[peerID] ?? false
+                    shouldSuppressImmediateHandlerRestart = true
+                } else {
+                    shouldRequestRecovery =
+                        ordinaryResponderRetryNotifications[peerID] ?? false
+                    shouldSuppressImmediateHandlerRestart =
+                        ordinaryRespondersCreatedByYield.contains(peerID)
+                }
+
                 if let storedSession = sessions[peerID],
                    storedSession === session {
                     _ = sessions.removeValue(forKey: peerID)
                     sessionGenerations.removeValue(forKey: peerID)
                 }
                 ordinaryInitiationIDs.removeValue(forKey: peerID)
+                cancelOrdinaryInitiatorTimeoutLocked(for: peerID)
+                cancelOrdinaryResponderTimeoutLocked(for: peerID)
+                recentOrdinaryInitiatorCompletions.removeValue(forKey: peerID)
                 session.reset()
-                quarantinedResponderTimeouts.removeValue(forKey: peerID)?.cancel()
+
                 let restoredGeneration: UUID?
                 if let quarantined = quarantinedTransports.removeValue(forKey: peerID) {
                     sessions[peerID] = quarantined.session
                     sessionGenerations[peerID] = quarantined.generation
                     restoredGeneration = quarantined.generation
+                    markRollbackCooldownLocked(for: peerID)
                 } else {
                     restoredGeneration = nil
                 }
@@ -362,8 +760,34 @@ final class NoiseSessionManager {
                     }
                     self?.onSessionFailed?(peerID, error)
                 }
+
+                let isIdentityMismatch =
+                    (error as? NoiseSessionError) == .peerIdentityMismatch
+                if pendingHandshakeRecoveryIDs[peerID] != nil {
+                    shouldSuppressImmediateHandlerRestart = true
+                }
+                if shouldRequestRecovery, !isIdentityMismatch {
+                    requestHandshakeRecovery(
+                        for: peerID,
+                        after: NoiseSecurityConstants
+                            .handshakeCollisionRecoveryDelay
+                    )
+                } else if isIdentityMismatch,
+                          let recoveryID = pendingHandshakeRecoveryIDs[peerID] {
+                    redispatchHandshakeRecoveryLocked(
+                        NoiseHandshakeRecoveryRequest(
+                            peerID: peerID,
+                            recoveryID: recoveryID
+                        ),
+                        after: NoiseSecurityConstants
+                            .handshakeCollisionRecoveryDelay
+                    )
+                }
                 
                 SecureLogger.error(.handshakeFailed(peerID: peerID.id, error: error.localizedDescription))
+                if shouldSuppressImmediateHandlerRestart, !isIdentityMismatch {
+                    throw NoiseManagedHandshakeFailure(underlying: error)
+                }
                 throw error
             }
         }
@@ -377,45 +801,261 @@ final class NoiseSessionManager {
         )
     }
 
-    private func scheduleQuarantinedResponderTimeoutLocked(
-        _ responder: NoiseSession,
-        for peerID: PeerID
+    private func scheduleOrdinaryInitiatorTimeoutLocked(
+        _ session: NoiseSession,
+        for peerID: PeerID,
+        notifyOnTimeout: Bool
     ) {
-        quarantinedResponderTimeouts.removeValue(forKey: peerID)?.cancel()
-        let timeout = DispatchWorkItem(flags: .barrier) { [weak self, weak responder] in
+        cancelOrdinaryInitiatorTimeoutLocked(for: peerID)
+        ordinaryInitiatorRetryNotifications[peerID] = notifyOnTimeout
+        let timeout = DispatchWorkItem(flags: .barrier) { [weak self, weak session] in
             guard let self,
-                  let responder,
+                  let session,
                   let current = self.sessions[peerID],
-                  current === responder,
-                  current.role == .responder,
-                  current.getState() == .handshaking,
-                  let quarantined = self.quarantinedTransports.removeValue(
-                    forKey: peerID
-                  ) else {
+                  current === session,
+                  current.role == .initiator,
+                  current.getState() == .handshaking else {
                 return
             }
 
             _ = self.sessions.removeValue(forKey: peerID)
             self.sessionGenerations.removeValue(forKey: peerID)
             self.ordinaryInitiationIDs.removeValue(forKey: peerID)
-            self.quarantinedResponderTimeouts.removeValue(forKey: peerID)
-            responder.reset()
-            self.sessions[peerID] = quarantined.session
-            self.sessionGenerations[peerID] = quarantined.generation
+            self.ordinaryInitiatorTimeouts.removeValue(forKey: peerID)
+            self.ordinaryInitiatorRetryNotifications.removeValue(forKey: peerID)
+            self.recentOrdinaryInitiatorCompletions.removeValue(forKey: peerID)
+            session.reset()
             SecureLogger.debug(
-                "Ordinary responder handshake with \(peerID) timed out; restored quarantined transport",
+                "Ordinary initiator handshake with \(peerID) timed out",
                 category: .session
             )
-            DispatchQueue.global().async { [weak self] in
-                self?.onSessionRestored?(peerID, quarantined.generation)
+
+            if notifyOnTimeout {
+                self.requestHandshakeRecovery(for: peerID)
             }
         }
-        quarantinedResponderTimeouts[peerID] = timeout
-        guard let deadline = quarantinedTransports[peerID]?.rollbackDeadline else {
-            quarantinedResponderTimeouts.removeValue(forKey: peerID)
+        ordinaryInitiatorTimeouts[peerID] = timeout
+        managerQueue.asyncAfter(
+            deadline: .now() + ordinaryHandshakeTimeout,
+            execute: timeout
+        )
+    }
+
+    private func cancelOrdinaryInitiatorTimeoutLocked(for peerID: PeerID) {
+        ordinaryInitiatorTimeouts.removeValue(forKey: peerID)?.cancel()
+        ordinaryInitiatorRetryNotifications.removeValue(forKey: peerID)
+    }
+
+    private func scheduleOrdinaryResponderTimeoutLocked(
+        _ session: NoiseSession,
+        for peerID: PeerID,
+        notifyOnTimeout: Bool,
+        createdByYield: Bool,
+        rearmDeadline: Bool = false
+    ) {
+        let previousDeadline = ordinaryResponderDeadlines[peerID]
+        cancelOrdinaryResponderTimeoutLocked(
+            for: peerID,
+            preserveDeadline: true
+        )
+        ordinaryResponderRetryNotifications[peerID] = notifyOnTimeout
+        if createdByYield {
+            ordinaryRespondersCreatedByYield.insert(peerID)
+        }
+
+        let deadline: DispatchTime
+        if let rollbackDeadline =
+            quarantinedTransports[peerID]?.rollbackDeadline {
+            deadline = rollbackDeadline
+        } else if !rearmDeadline, let previousDeadline {
+            deadline = previousDeadline
+        } else {
+            deadline = .now() + ordinaryResponderHandshakeTimeout
+        }
+        ordinaryResponderDeadlines[peerID] = deadline
+
+        let timeout = DispatchWorkItem(flags: .barrier) { [weak self, weak session] in
+            guard let self,
+                  let session,
+                  let current = self.sessions[peerID],
+                  current === session,
+                  current.role == .responder,
+                  current.getState() == .handshaking else {
+                return
+            }
+
+            _ = self.sessions.removeValue(forKey: peerID)
+            self.sessionGenerations.removeValue(forKey: peerID)
+            self.ordinaryInitiationIDs.removeValue(forKey: peerID)
+            self.ordinaryResponderTimeouts.removeValue(forKey: peerID)
+            self.ordinaryResponderDeadlines.removeValue(forKey: peerID)
+            self.ordinaryResponderRetryNotifications.removeValue(forKey: peerID)
+            self.ordinaryRespondersCreatedByYield.remove(peerID)
+            self.recentOrdinaryInitiatorCompletions.removeValue(forKey: peerID)
+            session.reset()
+
+            let restored: QuarantinedTransport?
+            if let quarantined =
+                self.quarantinedTransports.removeValue(forKey: peerID) {
+                self.sessions[peerID] = quarantined.session
+                self.sessionGenerations[peerID] = quarantined.generation
+                self.markRollbackCooldownLocked(for: peerID)
+                restored = quarantined
+            } else {
+                restored = nil
+            }
+
+            SecureLogger.debug(
+                restored == nil
+                    ? "Ordinary responder handshake with \(peerID) timed out"
+                    : "Ordinary responder handshake with \(peerID) timed out; restored quarantined transport",
+                category: .session
+            )
+            if let restored {
+                DispatchQueue.global().async { [weak self] in
+                    self?.onSessionRestored?(peerID, restored.generation)
+                }
+            }
+
+            // A rollback always owns one local convergence attempt. The retry
+            // retires the restored session atomically, so an attacker cannot
+            // pace unauthenticated message 1 packets to pause outbound forever.
+            if notifyOnTimeout || restored != nil {
+                self.requestHandshakeRecovery(for: peerID)
+            }
+        }
+        ordinaryResponderTimeouts[peerID] = timeout
+        managerQueue.asyncAfter(deadline: deadline, execute: timeout)
+    }
+
+    private func cancelOrdinaryResponderTimeoutLocked(
+        for peerID: PeerID,
+        preserveDeadline: Bool = false
+    ) {
+        ordinaryResponderTimeouts.removeValue(forKey: peerID)?.cancel()
+        if !preserveDeadline {
+            ordinaryResponderDeadlines.removeValue(forKey: peerID)
+        }
+        ordinaryResponderRetryNotifications.removeValue(forKey: peerID)
+        ordinaryRespondersCreatedByYield.remove(peerID)
+    }
+
+    private func markRollbackCooldownLocked(for peerID: PeerID) {
+        quarantineRollbackCooldownUntil[peerID] =
+            Date().addingTimeInterval(ordinaryReconnectRollbackCooldown)
+    }
+
+    private func scheduleSuppressedInitiationRecoveryLocked(
+        _ establishedSession: NoiseSession,
+        completedAt: Date,
+        for peerID: PeerID
+    ) {
+        cancelSuppressedInitiationRecoveryLocked(for: peerID)
+        let elapsed = max(0, Date().timeIntervalSince(completedAt))
+        let remainingGrace = max(
+            0,
+            recentInitiatorCompletionGracePeriod - elapsed
+        )
+        let timeout = DispatchWorkItem(flags: .barrier) {
+            [weak self, weak establishedSession] in
+            guard let self,
+                  let establishedSession,
+                  let current = self.sessions[peerID],
+                  current === establishedSession,
+                  current.isEstablished() else {
+                return
+            }
+
+            self.suppressedInitiationRecoveryTimeouts.removeValue(
+                forKey: peerID
+            )
+            self.requestHandshakeRecovery(for: peerID)
+        }
+        suppressedInitiationRecoveryTimeouts[peerID] = timeout
+        managerQueue.asyncAfter(
+            deadline: .now() + remainingGrace,
+            execute: timeout
+        )
+    }
+
+    private func cancelSuppressedInitiationRecoveryLocked(for peerID: PeerID) {
+        suppressedInitiationRecoveryTimeouts.removeValue(forKey: peerID)?
+            .cancel()
+    }
+
+    private func requestHandshakeRecovery(
+        for peerID: PeerID,
+        after delay: TimeInterval = 0
+    ) {
+        cancelDelayedHandshakeRecoveryLocked(for: peerID)
+        let request = NoiseHandshakeRecoveryRequest(
+            peerID: peerID,
+            recoveryID: UUID()
+        )
+        pendingHandshakeRecoveryIDs[peerID] = request.recoveryID
+        scheduleHandshakeRecoveryCallbackLocked(request, after: delay)
+    }
+
+    private func redispatchHandshakeRecoveryLocked(
+        _ request: NoiseHandshakeRecoveryRequest,
+        after delay: TimeInterval
+    ) {
+        guard pendingHandshakeRecoveryIDs[request.peerID]
+                == request.recoveryID else {
             return
         }
-        managerQueue.asyncAfter(deadline: deadline, execute: timeout)
+        scheduleHandshakeRecoveryCallbackLocked(request, after: delay)
+    }
+
+    private func scheduleHandshakeRecoveryCallbackLocked(
+        _ request: NoiseHandshakeRecoveryRequest,
+        after delay: TimeInterval
+    ) {
+        let peerID = request.peerID
+        guard pendingHandshakeRecoveryIDs[peerID] == request.recoveryID else {
+            return
+        }
+
+        delayedHandshakeRecoveryWorkItems.removeValue(forKey: peerID)?.cancel()
+        let callbackID = UUID()
+        handshakeRecoveryCallbackIDs[peerID] = callbackID
+        let callback = DispatchWorkItem(flags: .barrier) { [weak self] in
+            guard let self,
+                  self.pendingHandshakeRecoveryIDs[peerID]
+                    == request.recoveryID,
+                  self.handshakeRecoveryCallbackIDs[peerID] == callbackID else {
+                return
+            }
+            self.delayedHandshakeRecoveryWorkItems.removeValue(forKey: peerID)
+            self.handshakeRecoveryCallbackIDs.removeValue(forKey: peerID)
+            let handler = self.onHandshakeRecoveryRequired
+            DispatchQueue.global().async {
+                handler?(request)
+            }
+        }
+        delayedHandshakeRecoveryWorkItems[peerID] = callback
+        managerQueue.asyncAfter(
+            deadline: .now() + max(0, delay),
+            execute: callback
+        )
+    }
+
+    private func consumeHandshakeRecoveryLocked(
+        _ request: NoiseHandshakeRecoveryRequest
+    ) {
+        let peerID = request.peerID
+        guard pendingHandshakeRecoveryIDs[peerID] == request.recoveryID else {
+            return
+        }
+        delayedHandshakeRecoveryWorkItems.removeValue(forKey: peerID)?.cancel()
+        handshakeRecoveryCallbackIDs.removeValue(forKey: peerID)
+        pendingHandshakeRecoveryIDs.removeValue(forKey: peerID)
+    }
+
+    private func cancelDelayedHandshakeRecoveryLocked(for peerID: PeerID) {
+        delayedHandshakeRecoveryWorkItems.removeValue(forKey: peerID)?.cancel()
+        handshakeRecoveryCallbackIDs.removeValue(forKey: peerID)
+        pendingHandshakeRecoveryIDs.removeValue(forKey: peerID)
     }
 
     /// Mesh handshakes normally use a 16-hex wire ID. Full Noise-key IDs are
@@ -563,14 +1203,11 @@ final class NoiseSessionManager {
         }
     }
     
-    func initiateRekey(for peerID: PeerID) throws -> Data {
-        let initiation = try initiateReconnectHandshake(
+    func initiateRekey(for peerID: PeerID) throws -> NoiseHandshakeInitiation {
+        try initiateReconnectHandshake(
             with: peerID,
+            notifyOnTimeout: true,
             authorize: {}
         )
-        guard let payload = claimHandshakeInitiation(initiation, for: peerID) else {
-            throw NoiseSessionError.invalidState
-        }
-        return payload
     }
 }

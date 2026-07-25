@@ -112,6 +112,14 @@ final class BLENoisePacketHandler {
                     didEstablishAuthenticatedSession:
                         result.didEstablishAuthenticatedSession
                 )
+            } catch let managedFailure as NoiseManagedHandshakeFailure {
+                SecureLogger.error(
+                    "Failed to process handshake; manager owns recovery: \(managedFailure.underlying)"
+                )
+                return BLENoiseHandshakeHandlingResult(
+                    processed: false,
+                    didEstablishAuthenticatedSession: false
+                )
             } catch NoiseSessionError.peerIdentityMismatch {
                 // The responder was already discarded by the session manager.
                 // Do not let a spoofed claimed ID trigger a fresh outbound

@@ -2955,14 +2955,21 @@ extension BLEService: CBCentralManagerDelegate {
             startScanning()
 
         case .poweredOff:
-            // Bluetooth was turned off - stop scanning and clean up connection state
+            // CoreBluetooth has already transitioned out of poweredOn. Do
+            // not issue stop/cancel commands now; they are rejected as API
+            // misuse. Retire our link state locally instead.
             SecureLogger.info("📴 Bluetooth powered off - cleaning up central state", category: .session)
-            central.stopScan()
-            // Mark all peripheral connections as disconnected (they are now invalid)
             let peripheralStates = linkStateStore.peripheralStates
             let peerIDs: [PeerID] = peripheralStates.compactMap(\.peerID)
             for state in peripheralStates {
-                central.cancelPeripheralConnection(state.peripheral)
+                let peripheralID = state.peripheral.identifier.uuidString
+                collectionsQueue.sync(flags: .barrier) {
+                    pendingPeripheralWrites.discardAll(for: peripheralID)
+                }
+                noiseAuthenticatedLinkOwners.removeValue(
+                    forKey: .peripheral(peripheralID)
+                )
+                noiseReconnectPolicy.endLinkEpoch(.peripheral(peripheralID))
             }
             _ = linkStateStore.clearPeripherals()
             // Notify UI of disconnections
@@ -2975,7 +2982,6 @@ extension BLEService: CBCentralManagerDelegate {
         case .unauthorized:
             // User denied Bluetooth permission
             SecureLogger.warning("🚫 Bluetooth unauthorized - user denied permission", category: .session)
-            central.stopScan()
             _ = linkStateStore.clearPeripherals()
 
         case .unsupported:
@@ -3867,8 +3873,19 @@ extension BLEService: CBPeripheralManagerDelegate {
         case .poweredOff:
             // Bluetooth was turned off - clean up peripheral state
             SecureLogger.info("📴 Bluetooth powered off - cleaning up peripheral state", category: .session)
-            peripheral.stopAdvertising()
             // Clear subscribed centrals (they are now invalid)
+            let centralSnapshot = linkStateStore.subscribedCentralSnapshot
+            for central in centralSnapshot.centrals {
+                let centralID = central.identifier.uuidString
+                noiseAuthenticatedLinkOwners.removeValue(
+                    forKey: .central(centralID)
+                )
+                noiseReconnectPolicy.endLinkEpoch(.central(centralID))
+            }
+            collectionsQueue.sync(flags: .barrier) {
+                pendingNotifications.removeAll()
+                pendingWriteBuffers.removeAll()
+            }
             let centralPeerIDs = linkStateStore.clearCentrals()
             subscriptionAnnounceLimiter.removeAll()
             characteristic = nil
@@ -3882,7 +3899,6 @@ extension BLEService: CBPeripheralManagerDelegate {
         case .unauthorized:
             // User denied Bluetooth permission
             SecureLogger.warning("🚫 Bluetooth unauthorized for peripheral role", category: .session)
-            peripheral.stopAdvertising()
             _ = linkStateStore.clearCentrals()
             subscriptionAnnounceLimiter.removeAll()
             characteristic = nil
@@ -4659,11 +4675,69 @@ extension BLEService {
                 )
             }
         }
-        service.onRekeyHandshakeReady = { [weak self] peerID, message in
-            self?.messageQueue.async { [weak self] in
-                guard let self else { return }
+        service.onRekeyHandshakeReady = {
+            [weak self, weak service] peerID, initiation in
+            self?.messageQueue.async(flags: .barrier) {
+                [weak self, weak service] in
+                guard let self,
+                      let service,
+                      self.noiseService === service else {
+                    return
+                }
                 self.noteNoiseSessionCleared(for: peerID)
+                guard let message = service.claimHandshakeInitiation(
+                    initiation,
+                    for: peerID
+                ) else {
+                    return
+                }
                 self.broadcastNoiseHandshake(message, to: peerID)
+            }
+        }
+        service.onHandshakeRecoveryRequired = {
+            [weak self, weak service] request in
+            guard let self, let service else { return }
+            self.messageQueue.async(flags: .barrier) {
+                [weak self, weak service] in
+                guard let self,
+                      let service,
+                      self.noiseService === service else {
+                    return
+                }
+                let peerID = request.peerID
+                guard self.isPeerReachable(peerID) else {
+                    service.cancelHandshakeRecovery(request)
+                    return
+                }
+
+                do {
+                    guard let preparation =
+                        try service.prepareHandshakeRecovery(request) else {
+                        return
+                    }
+                    switch preparation {
+                    case .ordinary(let initiation):
+                        self.noteNoiseSessionCleared(for: peerID)
+                        guard let handshakeData =
+                            service.claimHandshakeInitiation(
+                                initiation,
+                                for: peerID
+                            ) else {
+                            return
+                        }
+                        self.broadcastNoiseHandshake(
+                            handshakeData,
+                            to: peerID
+                        )
+                    case .transferred:
+                        return
+                    }
+                } catch {
+                    SecureLogger.error(
+                        "Failed to prepare handshake recovery with \(peerID.id.prefix(8))…: \(error)",
+                        category: .session
+                    )
+                }
             }
         }
         service.onSessionRestoredWithGeneration = { [weak self, weak service] peerID, generation in
@@ -5941,12 +6015,27 @@ extension BLEService {
     }
     
     private func initiateNoiseHandshake(with peerID: PeerID) {
-        // Use NoiseEncryptionService for handshake
-        guard !noiseService.hasSession(with: peerID) else { return }
-        
+        let service = noiseService
         do {
-            let handshakeData = try noiseService.initiateHandshake(with: peerID)
-            broadcastNoiseHandshake(handshakeData, to: peerID)
+            guard let initiation = try service.initiateHandshakeIfNeeded(
+                with: peerID,
+                retryOnTimeout: true
+            ) else {
+                return
+            }
+            messageQueue.async(flags: .barrier) {
+                [weak self, weak service] in
+                guard let self,
+                      let service,
+                      self.noiseService === service,
+                      let handshakeData = service.claimHandshakeInitiation(
+                        initiation,
+                        for: peerID
+                      ) else {
+                    return
+                }
+                self.broadcastNoiseHandshake(handshakeData, to: peerID)
+            }
         } catch {
             SecureLogger.error("Failed to initiate handshake: \(error)")
         }
@@ -5972,13 +6061,18 @@ extension BLEService {
     private func initiateNoiseReconnectHandshake(with peerID: PeerID) {
         let service = noiseService
         do {
-            let initiation = try service.initiateReconnectHandshake(with: peerID)
-            noteNoiseSessionCleared(for: peerID)
+            let initiation = try service.initiateReconnectHandshake(
+                with: peerID,
+                retryOnTimeout: true
+            )
             messageQueue.async(flags: .barrier) { [weak self, weak service] in
                 guard let self,
                       let service,
-                      self.noiseService === service,
-                      let handshakeData = service.claimHandshakeInitiation(
+                      self.noiseService === service else {
+                    return
+                }
+                self.noteNoiseSessionCleared(for: peerID)
+                guard let handshakeData = service.claimHandshakeInitiation(
                           initiation,
                           for: peerID
                       ) else {

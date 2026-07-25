@@ -3,7 +3,7 @@ import Testing
 import BitFoundation
 @testable import bitchat
 
-@Suite("NoiseEncryptionService Tests")
+@Suite("NoiseEncryptionService Tests", .serialized)
 struct NoiseEncryptionServiceTests {
 
     @Test("Encryption status accessors cover all cases")
@@ -267,10 +267,10 @@ struct NoiseEncryptionServiceTests {
         #expect(leaseRan)
 
         var emittedPeerID: PeerID?
-        var emittedMessage: Data?
-        alice.onRekeyHandshakeReady = { peerID, message in
+        var emittedInitiation: NoiseHandshakeInitiation?
+        alice.onRekeyHandshakeReady = { peerID, initiation in
             emittedPeerID = peerID
-            emittedMessage = message
+            emittedInitiation = initiation
         }
         try alice._test_initiateAutomaticRekey(for: bobPeerID)
 
@@ -286,7 +286,10 @@ struct NoiseEncryptionServiceTests {
         }
         #expect(staleLease == nil)
         #expect(!leaseRan)
-        let message1 = try #require(emittedMessage)
+        let initiation = try #require(emittedInitiation)
+        let message1 = try #require(
+            alice.claimHandshakeInitiation(initiation, for: bobPeerID)
+        )
         #expect(!message1.isEmpty)
         #expect(alice.hasSession(with: bobPeerID))
         #expect(!alice.hasEstablishedSession(with: bobPeerID))
@@ -351,6 +354,700 @@ struct NoiseEncryptionServiceTests {
 
         #expect(ciphertext.range(of: content) == nil)
         #expect(decrypted == typedPayload)
+    }
+
+    @Test("Concurrent BLE starts preserve one ordinary attempt")
+    func duplicateHandshakeIfNeededPreservesFirstAttempt() throws {
+        let alice = NoiseEncryptionService(keychain: MockKeychain())
+        let bob = NoiseEncryptionService(keychain: MockKeychain())
+        let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
+        let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
+        let starts = HandshakeInitiationRecorder()
+
+        DispatchQueue.concurrentPerform(iterations: 20) { _ in
+            do {
+                starts.record(
+                    try alice.initiateHandshakeIfNeeded(with: bobPeerID)
+                )
+            } catch {
+                starts.record(error: error)
+            }
+        }
+
+        #expect(starts.errorCount == 0)
+        let attempt = try #require(starts.initiations.first)
+        #expect(starts.initiations.count == 1)
+        let message1 = try #require(
+            alice.claimHandshakeInitiation(attempt, for: bobPeerID)
+        )
+        let message2 = try #require(
+            try bob.processHandshakeMessage(from: alicePeerID, message: message1)
+        )
+        let message3 = try #require(
+            try alice.processHandshakeMessage(from: bobPeerID, message: message2)
+        )
+        _ = try bob.processHandshakeMessage(from: alicePeerID, message: message3)
+
+        let ciphertext = try alice.encrypt(
+            Data("one atomic start".utf8),
+            for: bobPeerID
+        )
+        #expect(
+            try bob.decrypt(ciphertext, from: alicePeerID)
+                == Data("one atomic start".utf8)
+        )
+    }
+
+    @Test("Restarted peer establishes against a retained ordinary session")
+    func restartedPeerCompletesRetainedRemoteRehandshake() throws {
+        let aliceKeychain = MockKeychain()
+        let alice = NoiseEncryptionService(keychain: aliceKeychain)
+        let bob = NoiseEncryptionService(keychain: MockKeychain())
+        let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
+        let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
+        try establishSessions(alice: alice, bob: bob)
+
+        let restartedAlice = NoiseEncryptionService(keychain: aliceKeychain)
+        let attempt = try #require(
+            try restartedAlice.initiateHandshakeIfNeeded(with: bobPeerID)
+        )
+        #expect(
+            try restartedAlice.initiateHandshakeIfNeeded(with: bobPeerID)
+                == nil
+        )
+        let message1 = try #require(
+            restartedAlice.claimHandshakeInitiation(
+                attempt,
+                for: bobPeerID
+            )
+        )
+        let message2 = try #require(
+            try bob.processHandshakeMessage(from: alicePeerID, message: message1)
+        )
+        let message3 = try #require(
+            try restartedAlice.processHandshakeMessage(
+                from: bobPeerID,
+                message: message2
+            )
+        )
+        _ = try bob.processHandshakeMessage(from: alicePeerID, message: message3)
+
+        let forward = try restartedAlice.encrypt(
+            Data("after restart".utf8),
+            for: bobPeerID
+        )
+        #expect(
+            try bob.decrypt(forward, from: alicePeerID)
+                == Data("after restart".utf8)
+        )
+    }
+
+    @Test("Crossed ordinary initiations choose one deterministic initiator")
+    func crossedOrdinaryInitiationsResolveDeterministically() throws {
+        let endpoints = orderedServices()
+        let lowerAttempt = try #require(
+            try endpoints.lower.initiateHandshakeIfNeeded(
+                with: endpoints.higherPeerID
+            )
+        )
+        let higherAttempt = try #require(
+            try endpoints.higher.initiateHandshakeIfNeeded(
+                with: endpoints.lowerPeerID
+            )
+        )
+        let lowerMessage1 = try #require(
+            endpoints.lower.claimHandshakeInitiation(
+                lowerAttempt,
+                for: endpoints.higherPeerID
+            )
+        )
+        let higherMessage1 = try #require(
+            endpoints.higher.claimHandshakeInitiation(
+                higherAttempt,
+                for: endpoints.lowerPeerID
+            )
+        )
+
+        #expect(
+            try endpoints.lower.processHandshakeMessage(
+                from: endpoints.higherPeerID,
+                message: higherMessage1
+            ) == nil
+        )
+        let message2 = try #require(
+            try endpoints.higher.processHandshakeMessage(
+                from: endpoints.lowerPeerID,
+                message: lowerMessage1
+            )
+        )
+        let message3 = try #require(
+            try endpoints.lower.processHandshakeMessage(
+                from: endpoints.higherPeerID,
+                message: message2
+            )
+        )
+        _ = try endpoints.higher.processHandshakeMessage(
+            from: endpoints.lowerPeerID,
+            message: message3
+        )
+
+        let ciphertext = try endpoints.lower.encrypt(
+            Data("crossed".utf8),
+            for: endpoints.higherPeerID
+        )
+        #expect(
+            try endpoints.higher.decrypt(
+                ciphertext,
+                from: endpoints.lowerPeerID
+            ) == Data("crossed".utf8)
+        )
+    }
+
+    @Test("Delayed losing message one cannot replace the fresh winner")
+    func delayedCrossedInitiationIsSuppressed() throws {
+        let endpoints = orderedServices()
+        let lowerAttempt = try #require(
+            try endpoints.lower.initiateHandshakeIfNeeded(
+                with: endpoints.higherPeerID
+            )
+        )
+        let higherAttempt = try #require(
+            try endpoints.higher.initiateHandshakeIfNeeded(
+                with: endpoints.lowerPeerID
+            )
+        )
+        let lowerMessage1 = try #require(
+            endpoints.lower.claimHandshakeInitiation(
+                lowerAttempt,
+                for: endpoints.higherPeerID
+            )
+        )
+        let delayedHigherMessage1 = try #require(
+            endpoints.higher.claimHandshakeInitiation(
+                higherAttempt,
+                for: endpoints.lowerPeerID
+            )
+        )
+
+        let message2 = try #require(
+            try endpoints.higher.processHandshakeMessage(
+                from: endpoints.lowerPeerID,
+                message: lowerMessage1
+            )
+        )
+        let message3 = try #require(
+            try endpoints.lower.processHandshakeMessage(
+                from: endpoints.higherPeerID,
+                message: message2
+            )
+        )
+        #expect(
+            try endpoints.lower.processHandshakeMessage(
+                from: endpoints.higherPeerID,
+                message: delayedHigherMessage1
+            ) == nil
+        )
+        _ = try endpoints.higher.processHandshakeMessage(
+            from: endpoints.lowerPeerID,
+            message: message3
+        )
+
+        let ciphertext = try endpoints.higher.encrypt(
+            Data("winner intact".utf8),
+            for: endpoints.lowerPeerID
+        )
+        #expect(
+            try endpoints.lower.decrypt(
+                ciphertext,
+                from: endpoints.higherPeerID
+            ) == Data("winner intact".utf8)
+        )
+    }
+
+    @Test("Automatic rekey token dies if an inbound initiation wins first")
+    func automaticRekeyClaimsOnlyAtTransportHandoff() throws {
+        let endpoints = orderedServices()
+        try establishSessions(
+            alice: endpoints.lower,
+            bob: endpoints.higher
+        )
+
+        var preparedRekey: NoiseHandshakeInitiation?
+        endpoints.higher.onRekeyHandshakeReady = { _, initiation in
+            preparedRekey = initiation
+        }
+        try endpoints.higher._test_initiateAutomaticRekey(
+            for: endpoints.lowerPeerID
+        )
+        let staleRekey = try #require(preparedRekey)
+
+        let winningAttempt = try endpoints.lower.initiateReconnectHandshake(
+            with: endpoints.higherPeerID
+        )
+        let winningMessage1 = try #require(
+            endpoints.lower.claimHandshakeInitiation(
+                winningAttempt,
+                for: endpoints.higherPeerID
+            )
+        )
+        let message2 = try #require(
+            try endpoints.higher.processHandshakeMessage(
+                from: endpoints.lowerPeerID,
+                message: winningMessage1
+            )
+        )
+        #expect(
+            endpoints.higher.claimHandshakeInitiation(
+                staleRekey,
+                for: endpoints.lowerPeerID
+            ) == nil
+        )
+        let message3 = try #require(
+            try endpoints.lower.processHandshakeMessage(
+                from: endpoints.higherPeerID,
+                message: message2
+            )
+        )
+        _ = try endpoints.higher.processHandshakeMessage(
+            from: endpoints.lowerPeerID,
+            message: message3
+        )
+        #expect(
+            endpoints.higher.hasEstablishedSession(
+                with: endpoints.lowerPeerID
+            )
+        )
+    }
+
+    @Test("Ordinary timeout produces exactly one bounded retry")
+    func ordinaryInitiationTimeoutIsBounded() async throws {
+        let service = NoiseEncryptionService(
+            keychain: MockKeychain(),
+            ordinaryHandshakeTimeout: 0.03
+        )
+        let peerID = PeerID(str: "1021324354657687")
+        let recorder = HandshakeStartRecorder()
+        service.onHandshakeRecoveryRequired = { [weak service] request in
+            guard let service else { return }
+            do {
+                let payload = try claimPreparedRecoveryPayload(
+                    service,
+                    request: request
+                )
+                recorder.recordTimeout()
+                recorder.record(message: payload)
+            } catch {
+                recorder.record(error: error)
+            }
+        }
+
+        let first = try #require(
+            try service.initiateHandshakeIfNeeded(
+                with: peerID,
+                retryOnTimeout: true
+            )
+        )
+        #expect(
+            service.claimHandshakeInitiation(first, for: peerID) != nil
+        )
+        let retried = await TestHelpers.waitUntil(
+            { recorder.messages.count == 1 },
+            timeout: 1
+        )
+        #expect(retried)
+        let retryExpired = await TestHelpers.waitUntil(
+            { !service.hasSession(with: peerID) },
+            timeout: 1
+        )
+        #expect(retryExpired)
+        #expect(recorder.timeoutCount == 1)
+        #expect(recorder.errorCount == 0)
+    }
+
+    @Test("Claim gives an attempt a full on-wire timeout window")
+    func handshakeClaimRearmsDeadline() async throws {
+        let service = NoiseEncryptionService(
+            keychain: MockKeychain(),
+            ordinaryHandshakeTimeout: 0.08
+        )
+        let peerID = PeerID(str: "1021324354657687")
+        let recorder = HandshakeStartRecorder()
+        service.onHandshakeRecoveryRequired = { [weak service] request in
+            service?.cancelHandshakeRecovery(request)
+            recorder.recordTimeout()
+        }
+
+        let attempt = try #require(
+            try service.initiateHandshakeIfNeeded(
+                with: peerID,
+                retryOnTimeout: true
+            )
+        )
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        #expect(
+            service.claimHandshakeInitiation(attempt, for: peerID)
+                == attempt.payload
+        )
+        try? await Task.sleep(nanoseconds: 45_000_000)
+        #expect(service.hasSession(with: peerID))
+        #expect(recorder.timeoutCount == 0)
+        let expired = await TestHelpers.waitUntil(
+            { recorder.timeoutCount == 1 },
+            timeout: 1
+        )
+        #expect(expired)
+    }
+
+    @Test("Duplicate spoofed message one cannot extend rollback or repause during cooldown")
+    func pacedMessageOneCannotHoldOutboundPaused() async throws {
+        let alice = NoiseEncryptionService(keychain: MockKeychain())
+        let bob = NoiseEncryptionService(
+            keychain: MockKeychain(),
+            ordinaryResponderHandshakeTimeout: 0.06,
+            ordinaryReconnectRollbackCooldown: 0.3
+        )
+        let mallory = NoiseEncryptionService(keychain: MockKeychain())
+        let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
+        let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
+        let recovery = HandshakeStartRecorder()
+        bob.onHandshakeRecoveryRequired = { [weak bob] request in
+            bob?.cancelHandshakeRecovery(request)
+            recovery.recordTimeout()
+        }
+        try establishSessions(alice: alice, bob: bob)
+
+        let spoofedMessage1 = try mallory.initiateHandshake(with: bobPeerID)
+        _ = try #require(
+            try bob.processHandshakeMessage(
+                from: alicePeerID,
+                message: spoofedMessage1
+            )
+        )
+        try? await Task.sleep(nanoseconds: 35_000_000)
+        _ = try #require(
+            try bob.processHandshakeMessage(
+                from: alicePeerID,
+                message: spoofedMessage1
+            )
+        )
+
+        let restored = await TestHelpers.waitUntil(
+            { bob.hasEstablishedSession(with: alicePeerID) },
+            timeout: 1
+        )
+        #expect(restored)
+        let callbackArrived = await TestHelpers.waitUntil(
+            { recovery.timeoutCount == 1 },
+            timeout: 1
+        )
+        #expect(callbackArrived)
+
+        // Still inside cooldown: the same unauthenticated initiation is
+        // coalesced without removing the restored outbound generation.
+        #expect(
+            try bob.processHandshakeMessage(
+                from: alicePeerID,
+                message: spoofedMessage1
+            ) == nil
+        )
+        #expect(bob.hasEstablishedSession(with: alicePeerID))
+        let ciphertext = try alice.encrypt(
+            Data("not repaused".utf8),
+            for: bobPeerID
+        )
+        #expect(
+            try bob.decrypt(ciphertext, from: alicePeerID)
+                == Data("not repaused".utf8)
+        )
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        #expect(recovery.timeoutCount == 1)
+    }
+
+    @Test("Lost reconnect message three restores then retries once")
+    func lostReconnectCompletionGetsOneLocalRetry() async throws {
+        let alice = NoiseEncryptionService(
+            keychain: MockKeychain(),
+            ordinaryHandshakeTimeout: 0.04
+        )
+        let bob = NoiseEncryptionService(
+            keychain: MockKeychain(),
+            ordinaryHandshakeTimeout: 0.04,
+            ordinaryResponderHandshakeTimeout: 0.04
+        )
+        let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
+        let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
+        try establishSessions(alice: alice, bob: bob)
+        alice.clearSession(for: bobPeerID)
+
+        let recovery = HandshakeStartRecorder()
+        bob.onHandshakeRecoveryRequired = { [weak bob] request in
+            guard let bob else { return }
+            do {
+                recovery.recordTimeout()
+                recovery.record(
+                    message: try claimPreparedRecoveryPayload(
+                        bob,
+                        request: request
+                    )
+                )
+            } catch {
+                recovery.record(error: error)
+            }
+        }
+
+        let message1 = try alice.initiateHandshake(with: bobPeerID)
+        let message2 = try #require(
+            try bob.processHandshakeMessage(from: alicePeerID, message: message1)
+        )
+        _ = try #require(
+            try alice.processHandshakeMessage(from: bobPeerID, message: message2)
+        )
+        // Drop message 3. Bob restores its old receive-only transport and
+        // initiates one bounded convergence retry; drop that message 1 too.
+        let retryPrepared = await TestHelpers.waitUntil(
+            { recovery.messages.count == 1 },
+            timeout: 1
+        )
+        #expect(retryPrepared)
+        let retryExpired = await TestHelpers.waitUntil(
+            { !bob.hasSession(with: alicePeerID) },
+            timeout: 1
+        )
+        #expect(retryExpired)
+        #expect(recovery.timeoutCount == 1)
+        #expect(recovery.errorCount == 0)
+    }
+
+    @Test("Deterministic responder recovers once from an always-yield peer")
+    func yieldedResponderRecoversFromLegacyDoubleYield() async throws {
+        let endpoints = orderedServices(
+            ordinaryHandshakeTimeout: 0.08,
+            ordinaryResponderHandshakeTimeout: 0.08
+        )
+        let modern = endpoints.higher
+        let legacy = endpoints.lower
+        let recovery = HandshakeStartRecorder()
+        modern.onHandshakeRecoveryRequired = { [weak modern] request in
+            guard let modern else { return }
+            do {
+                recovery.recordTimeout()
+                recovery.record(
+                    message: try claimPreparedRecoveryPayload(
+                        modern,
+                        request: request
+                    )
+                )
+            } catch {
+                recovery.record(error: error)
+            }
+        }
+
+        let modernAttempt = try #require(
+            try modern.initiateHandshakeIfNeeded(
+                with: endpoints.lowerPeerID,
+                retryOnTimeout: true
+            )
+        )
+        let legacyAttempt = try #require(
+            try legacy.initiateHandshakeIfNeeded(
+                with: endpoints.higherPeerID
+            )
+        )
+        let modernMessage1 = try #require(
+            modern.claimHandshakeInitiation(
+                modernAttempt,
+                for: endpoints.lowerPeerID
+            )
+        )
+        let legacyMessage1 = try #require(
+            legacy.claimHandshakeInitiation(
+                legacyAttempt,
+                for: endpoints.higherPeerID
+            )
+        )
+
+        let modernMessage2 = try #require(
+            try modern.processHandshakeMessage(
+                from: endpoints.lowerPeerID,
+                message: legacyMessage1
+            )
+        )
+        // Released peers yielded regardless of ID. Clearing their local
+        // initiator reproduces that role choice without changing wire bytes.
+        legacy.clearSession(for: endpoints.higherPeerID)
+        let legacyMessage2 = try #require(
+            try legacy.processHandshakeMessage(
+                from: endpoints.higherPeerID,
+                message: modernMessage1
+            )
+        )
+
+        do {
+            _ = try modern.processHandshakeMessage(
+                from: endpoints.lowerPeerID,
+                message: legacyMessage2
+            )
+            Issue.record("Expected the crossed responder message to fail")
+        } catch is NoiseManagedHandshakeFailure {
+            // The manager owns the single retry.
+        } catch {
+            Issue.record("Unexpected managed failure: \(error)")
+        }
+        do {
+            _ = try legacy.processHandshakeMessage(
+                from: endpoints.higherPeerID,
+                message: modernMessage2
+            )
+            Issue.record("Expected the legacy responder message to fail")
+        } catch {
+            // Expected; this side did not own retry intent.
+        }
+
+        let didRecover = await TestHelpers.waitUntil(
+            { recovery.messages.count == 1 },
+            timeout: 1
+        )
+        #expect(didRecover)
+        let retryMessage1 = try #require(recovery.messages.first)
+        let retryMessage2 = try #require(
+            try legacy.processHandshakeMessage(
+                from: endpoints.higherPeerID,
+                message: retryMessage1
+            )
+        )
+        let retryMessage3 = try #require(
+            try modern.processHandshakeMessage(
+                from: endpoints.lowerPeerID,
+                message: retryMessage2
+            )
+        )
+        _ = try legacy.processHandshakeMessage(
+            from: endpoints.higherPeerID,
+            message: retryMessage3
+        )
+        try? await Task.sleep(nanoseconds: 120_000_000)
+        #expect(recovery.timeoutCount == 1)
+        #expect(recovery.errorCount == 0)
+        let ciphertext = try modern.encrypt(
+            Data("legacy converged".utf8),
+            for: endpoints.lowerPeerID
+        )
+        #expect(
+            try legacy.decrypt(
+                ciphertext,
+                from: endpoints.higherPeerID
+            ) == Data("legacy converged".utf8)
+        )
+    }
+
+    @Test("Immediate legacy restart during completion grace converges once")
+    func immediateLegacyRestartDuringCompletionGrace() async throws {
+        let firstKeychain = MockKeychain()
+        let secondKeychain = MockKeychain()
+        let first = NoiseEncryptionService(
+            keychain: firstKeychain,
+            recentInitiatorCompletionGracePeriod: 0.03
+        )
+        let second = NoiseEncryptionService(
+            keychain: secondKeychain,
+            recentInitiatorCompletionGracePeriod: 0.03
+        )
+        let firstPeerID = PeerID(publicKey: first.getStaticPublicKeyData())
+        let secondPeerID = PeerID(publicKey: second.getStaticPublicKeyData())
+
+        let lower: NoiseEncryptionService
+        let higher: NoiseEncryptionService
+        let higherKeychain: MockKeychain
+        let lowerPeerID: PeerID
+        let higherPeerID: PeerID
+        if firstPeerID < secondPeerID {
+            lower = first
+            lowerPeerID = firstPeerID
+            higher = second
+            higherKeychain = secondKeychain
+            higherPeerID = secondPeerID
+        } else {
+            lower = second
+            lowerPeerID = secondPeerID
+            higher = first
+            higherKeychain = firstKeychain
+            higherPeerID = firstPeerID
+        }
+        try establishSessions(alice: lower, bob: higher)
+
+        let restartedHigher = NoiseEncryptionService(keychain: higherKeychain)
+        let recovery = HandshakeStartRecorder()
+        lower.onHandshakeRecoveryRequired = { [weak lower] request in
+            guard let lower else { return }
+            do {
+                recovery.recordTimeout()
+                recovery.record(
+                    message: try claimPreparedRecoveryPayload(
+                        lower,
+                        request: request
+                    )
+                )
+            } catch {
+                recovery.record(error: error)
+            }
+        }
+
+        let restartAttempt = try #require(
+            try restartedHigher.initiateHandshakeIfNeeded(with: lowerPeerID)
+        )
+        let restartMessage1 = try #require(
+            restartedHigher.claimHandshakeInitiation(
+                restartAttempt,
+                for: lowerPeerID
+            )
+        )
+        #expect(
+            try lower.processHandshakeMessage(
+                from: higherPeerID,
+                message: restartMessage1
+            ) == nil
+        )
+        #expect(
+            try lower.processHandshakeMessage(
+                from: higherPeerID,
+                message: restartMessage1
+            ) == nil
+        )
+        #expect(lower.hasEstablishedSession(with: higherPeerID))
+
+        let requested = await TestHelpers.waitUntil(
+            { recovery.messages.count == 1 },
+            timeout: 1
+        )
+        #expect(requested)
+        let retryMessage1 = try #require(recovery.messages.first)
+        let retryMessage2 = try #require(
+            try restartedHigher.processHandshakeMessage(
+                from: lowerPeerID,
+                message: retryMessage1
+            )
+        )
+        let retryMessage3 = try #require(
+            try lower.processHandshakeMessage(
+                from: higherPeerID,
+                message: retryMessage2
+            )
+        )
+        _ = try restartedHigher.processHandshakeMessage(
+            from: lowerPeerID,
+            message: retryMessage3
+        )
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        #expect(recovery.timeoutCount == 1)
+        #expect(recovery.errorCount == 0)
+        let ciphertext = try restartedHigher.encrypt(
+            Data("restart converged".utf8),
+            for: lowerPeerID
+        )
+        #expect(
+            try lower.decrypt(ciphertext, from: higherPeerID)
+                == Data("restart converged".utf8)
+        )
     }
 
     @Test("Atomic reconnect retires old sending keys before message one")
@@ -450,6 +1147,31 @@ struct NoiseEncryptionServiceTests {
         #expect(
             try restarted.decrypt(fresh, from: retainedPeerID)
                 == Data("identity proved".utf8)
+        )
+    }
+
+    @Test("Malformed handshake bytes cannot tear down an established session")
+    func establishedSessionIgnoresNonInitialHandshakeGarbage() throws {
+        let alice = NoiseEncryptionService(keychain: MockKeychain())
+        let bob = NoiseEncryptionService(keychain: MockKeychain())
+        let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
+        let bobPeerID = PeerID(publicKey: bob.getStaticPublicKeyData())
+        try establishSessions(alice: alice, bob: bob)
+
+        #expect(
+            try bob.processHandshakeMessage(
+                from: alicePeerID,
+                message: Data(repeating: 0xA5, count: 31)
+            ) == nil
+        )
+        #expect(bob.hasEstablishedSession(with: alicePeerID))
+        let ciphertext = try alice.encrypt(
+            Data("session survived".utf8),
+            for: bobPeerID
+        )
+        #expect(
+            try bob.decrypt(ciphertext, from: alicePeerID)
+                == Data("session survived".utf8)
         )
     }
 
@@ -661,6 +1383,56 @@ struct NoiseEncryptionServiceTests {
     }
 }
 
+private func orderedServices(
+    ordinaryHandshakeTimeout: TimeInterval =
+        NoiseSecurityConstants.ordinaryHandshakeTimeout,
+    ordinaryResponderHandshakeTimeout: TimeInterval =
+        NoiseSecurityConstants.ordinaryResponderHandshakeTimeout
+) -> (
+    lower: NoiseEncryptionService,
+    lowerPeerID: PeerID,
+    higher: NoiseEncryptionService,
+    higherPeerID: PeerID
+) {
+    let first = NoiseEncryptionService(
+        keychain: MockKeychain(),
+        ordinaryHandshakeTimeout: ordinaryHandshakeTimeout,
+        ordinaryResponderHandshakeTimeout:
+            ordinaryResponderHandshakeTimeout
+    )
+    let second = NoiseEncryptionService(
+        keychain: MockKeychain(),
+        ordinaryHandshakeTimeout: ordinaryHandshakeTimeout,
+        ordinaryResponderHandshakeTimeout:
+            ordinaryResponderHandshakeTimeout
+    )
+    let firstPeerID = PeerID(publicKey: first.getStaticPublicKeyData())
+    let secondPeerID = PeerID(publicKey: second.getStaticPublicKeyData())
+    if firstPeerID < secondPeerID {
+        return (first, firstPeerID, second, secondPeerID)
+    }
+    return (second, secondPeerID, first, firstPeerID)
+}
+
+private func claimPreparedRecoveryPayload(
+    _ service: NoiseEncryptionService,
+    request: NoiseHandshakeRecoveryRequest
+) throws -> Data? {
+    guard let preparation =
+        try service.prepareHandshakeRecovery(request) else {
+        return nil
+    }
+    switch preparation {
+    case .ordinary(let initiation):
+        return service.claimHandshakeInitiation(
+            initiation,
+            for: request.peerID
+        )
+    case .transferred:
+        return nil
+    }
+}
+
 private final class AuthenticationRecorder: @unchecked Sendable {
     private let lock = NSLock()
     private var entries: [(PeerID, String)] = []
@@ -694,5 +1466,80 @@ private final class AuthenticationRecorder: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return generationEntries.last { $0.0 == peerID }?.1
+    }
+}
+
+private final class HandshakeInitiationRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedInitiations: [NoiseHandshakeInitiation] = []
+    private var storedErrorCount = 0
+
+    var initiations: [NoiseHandshakeInitiation] {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedInitiations
+    }
+
+    var errorCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedErrorCount
+    }
+
+    func record(_ initiation: NoiseHandshakeInitiation?) {
+        guard let initiation else { return }
+        lock.lock()
+        storedInitiations.append(initiation)
+        lock.unlock()
+    }
+
+    func record(error _: Error) {
+        lock.lock()
+        storedErrorCount += 1
+        lock.unlock()
+    }
+}
+
+private final class HandshakeStartRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedMessages: [Data] = []
+    private var storedErrorCount = 0
+    private var storedTimeoutCount = 0
+
+    var messages: [Data] {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedMessages
+    }
+
+    var errorCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedErrorCount
+    }
+
+    var timeoutCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedTimeoutCount
+    }
+
+    func record(message: Data?) {
+        guard let message else { return }
+        lock.lock()
+        storedMessages.append(message)
+        lock.unlock()
+    }
+
+    func record(error _: Error) {
+        lock.lock()
+        storedErrorCount += 1
+        lock.unlock()
+    }
+
+    func recordTimeout() {
+        lock.lock()
+        storedTimeoutCount += 1
+        lock.unlock()
     }
 }
