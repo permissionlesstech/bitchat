@@ -184,6 +184,16 @@ final class BLENoisePacketHandler {
         drainDeferredCiphertextsIfReady(for: peerID)
     }
 
+    /// Synchronously discards ciphertext retained for a pre-panic Noise
+    /// generation. The handler survives the service's identity replacement,
+    /// so keeping this queue would replay old bytes after post-panic auth.
+    func resetForPanic() {
+        deferredLock.lock()
+        deferredCiphertexts.removeAll(keepingCapacity: false)
+        deferredCiphertextBytes = 0
+        deferredLock.unlock()
+    }
+
     private func handleEncrypted(
         _ packet: BitchatPacket,
         from peerID: PeerID,

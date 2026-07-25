@@ -522,6 +522,60 @@ struct BLENoisePacketHandlerTests {
     }
 
     @Test
+    func panicResetDiscardsDeferredCiphertextBeforeFutureAuthentication() {
+        let recorder = Recorder()
+        recorder.hasSession = true
+        recorder.awaitingResponderHandshake = true
+        recorder.decryptResult = .failure(
+            CryptoKitError.authenticationFailure
+        )
+        let handler = makeHandler(recorder: recorder)
+        let prePanicCiphertext = makeEncryptedPacket(
+            recipientID: Data(hexString: localPeerID.id),
+            payload: Data(
+                count: NoiseSecurityConstants.maxMessageSize
+                    + NoiseSecurityConstants.transportCiphertextOverhead
+            )
+        )
+
+        handler.handleEncrypted(prePanicCiphertext, from: remotePeerID)
+        #expect(recorder.decryptCalls.count == 1)
+
+        handler.resetForPanic()
+
+        // Three maximum-sized packets fit only when reset also zeroed the
+        // global byte accounting. They model ciphertext received under the
+        // replacement identity before that responder handshake completes.
+        for index in 0..<3 {
+            handler.handleEncrypted(
+                makeEncryptedPacket(
+                    recipientID: Data(hexString: localPeerID.id),
+                    timestamp: UInt64(901_000 + index),
+                    payload: Data(
+                        count: NoiseSecurityConstants.maxMessageSize
+                            + NoiseSecurityConstants.transportCiphertextOverhead
+                    )
+                ),
+                from: remotePeerID
+            )
+        }
+        #expect(recorder.decryptCalls.count == 4)
+
+        recorder.awaitingResponderHandshake = false
+        recorder.decryptResult = .success(
+            Data([NoisePayloadType.privateMessage.rawValue, 0xCA, 0xFE])
+        )
+        handler.handleSessionAuthenticated(remotePeerID)
+
+        // Only the three post-reset packets replay; the pre-panic packet does
+        // not survive into the replacement session.
+        #expect(recorder.decryptCalls.count == 7)
+        #expect(recorder.deliveries.count == 3)
+        #expect(recorder.clearedSessions.isEmpty)
+        #expect(recorder.initiatedHandshakes.isEmpty)
+    }
+
+    @Test
     func ciphertextQueuedAheadOfEstablishmentCallbackDoesNotConsumeNonce()
         throws {
         let alice = NoiseEncryptionService(keychain: MockKeychain())
