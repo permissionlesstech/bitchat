@@ -112,7 +112,7 @@ struct PanicNetworkLifecycle {
 /// Manages the application state and business logic for BitChat.
 /// Acts as the primary coordinator between UI components and backend services,
 /// implementing the BitchatDelegate protocol to handle network events.
-final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDelegate, CommandContextProvider, GeohashParticipantContext, MessageFormattingContext {
+final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessageTransportEventDelegate, CommandContextProvider, GeohashParticipantContext, MessageFormattingContext {
     // Use MessageFormattingEngine.Patterns for regex matching (shared, precompiled)
     typealias Patterns = MessageFormattingEngine.Patterns
 
@@ -1715,7 +1715,81 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
 
     @MainActor
     func didReceiveTransportEvent(_ event: TransportEvent) {
-        receiveTransportEvent(event)
+        switch event {
+        case .messageReceived(let message):
+            _ = didReceiveTransportMessageSynchronously(message)
+
+        case let .publicMessageReceived(
+            peerID,
+            nickname,
+            content,
+            timestamp,
+            messageID
+        ):
+            transportEventCoordinator.didReceivePublicMessageSynchronously(
+                from: peerID,
+                nickname: nickname,
+                content: content,
+                timestamp: timestamp,
+                messageID: messageID
+            )
+
+        case let .noisePayloadReceived(peerID, type, payload, timestamp):
+            transportEventCoordinator.didReceiveNoisePayloadSynchronously(
+                from: peerID,
+                type: type,
+                payload: payload,
+                timestamp: timestamp
+            )
+
+        case let .groupMessageReceived(payload, timestamp):
+            groupCoordinator.handleGroupMessagePayload(
+                payload,
+                timestamp: timestamp
+            )
+
+        case let .publicVoiceFrameReceived(
+            peerID,
+            nickname,
+            payload,
+            timestamp
+        ):
+            liveVoiceCoordinator.handlePublicVoiceFramePayload(
+                from: peerID,
+                nickname: nickname,
+                payload: payload,
+                timestamp: timestamp
+            )
+
+        case .peerConnected(let peerID):
+            transportEventCoordinator.didConnectToPeerSynchronously(peerID)
+
+        case .peerDisconnected(let peerID):
+            transportEventCoordinator.didDisconnectFromPeerSynchronously(peerID)
+
+        case .peerListUpdated(let peers):
+            peerListCoordinator.didUpdatePeerListSynchronously(peers)
+            // A peer-list update follows every verified announce, which is
+            // where a peer's `.vouch` capability actually arrives.
+            vouchCoordinator.peersUpdated(peers)
+
+        case .peerSnapshotsUpdated:
+            break
+
+        case let .messageDeliveryStatusUpdated(messageID, status):
+            deliveryCoordinator.didUpdateMessageDeliveryStatus(
+                messageID,
+                status: status
+            )
+
+        case .bluetoothStateUpdated(let state):
+            updateBluetoothState(state)
+        }
+    }
+
+    @MainActor
+    func didReceiveTransportMessageSynchronously(_ message: BitchatMessage) -> Bool {
+        transportEventCoordinator.didReceiveMessageSynchronously(message)
     }
 
     func didReceiveMessage(_ message: BitchatMessage) {

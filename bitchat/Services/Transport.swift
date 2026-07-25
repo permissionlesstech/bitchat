@@ -101,6 +101,13 @@ protocol TransportEventDelegate: AnyObject {
     @MainActor func didReceiveTransportEvent(_ event: TransportEvent)
 }
 
+/// Optional typed-event contract for sinks that can synchronously decide
+/// whether an inbound message was accepted.
+protocol SynchronousMessageTransportEventDelegate: TransportEventDelegate {
+    @MainActor
+    func didReceiveTransportMessageSynchronously(_ message: BitchatMessage) -> Bool
+}
+
 protocol Transport: AnyObject {
     // Event sink
     var delegate: BitchatDelegate? { get set }

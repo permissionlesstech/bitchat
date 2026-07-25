@@ -865,6 +865,80 @@ struct ChatViewModelPublicConversationTests {
 struct ChatViewModelPeerTests {
 
     @Test @MainActor
+    func typedPeerLifecycleEvents_applyBeforeReturning() {
+        let (viewModel, _) = makeTestableViewModel()
+        let peerID = PeerID(str: "1122334455667788")
+        let incoming = BitchatMessage(
+            id: "typed-peer-incoming",
+            sender: "Alice",
+            content: "Hello",
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: true,
+            recipientNickname: viewModel.nickname,
+            senderPeerID: peerID
+        )
+        viewModel.seedPrivateChat([incoming], for: peerID)
+        viewModel.sentReadReceipts.insert(incoming.id)
+
+        viewModel.didReceiveTransportEvent(.peerConnected(peerID))
+
+        #expect(viewModel.isConnected)
+
+        viewModel.didReceiveTransportEvent(.peerDisconnected(peerID))
+
+        #expect(!viewModel.sentReadReceipts.contains(incoming.id))
+    }
+
+    @Test @MainActor
+    func typedPeerListDeliveryAndBluetoothEvents_applyBeforeReturning() {
+        let (viewModel, transport) = makeTestableViewModel()
+        let stalePeer = PeerID(str: "00000000000000a2")
+        let deliveryPeer = PeerID(str: "0102030405060708")
+        let messageID = "typed-delivery-status"
+        let delivered = DeliveryStatus.delivered(
+            to: "Alice",
+            at: Date(timeIntervalSince1970: 1_234)
+        )
+        let outgoing = BitchatMessage(
+            id: messageID,
+            sender: viewModel.nickname,
+            content: "On the way",
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: true,
+            recipientNickname: "Alice",
+            senderPeerID: transport.myPeerID,
+            deliveryStatus: .sent
+        )
+        viewModel.markPrivateChatUnread(stalePeer)
+        viewModel.seedPrivateChat([outgoing], for: deliveryPeer)
+
+        viewModel.didReceiveTransportEvent(.peerListUpdated([]))
+        #expect(!viewModel.unreadPrivateMessages.contains(stalePeer))
+
+        viewModel.didReceiveTransportEvent(
+            .messageDeliveryStatusUpdated(
+                messageID: messageID,
+                status: delivered
+            )
+        )
+        #expect(
+            viewModel.privateMessages(for: deliveryPeer).first?.deliveryStatus
+                == delivered
+        )
+
+        viewModel.didReceiveTransportEvent(.bluetoothStateUpdated(.poweredOff))
+        #expect(viewModel.bluetoothState == .poweredOff)
+        #expect(viewModel.showBluetoothAlert)
+
+        // Snapshot events belong to TransportPeerEventsDelegate and are
+        // intentionally ignored at this typed sink.
+        viewModel.didReceiveTransportEvent(.peerSnapshotsUpdated([]))
+        #expect(viewModel.bluetoothState == .poweredOff)
+    }
+
+    @Test @MainActor
     func didConnectToPeer_notifiesDelegate() async {
         let (_, transport) = makeTestableViewModel()
         let peerID = PeerID(str: "NEWPEER")

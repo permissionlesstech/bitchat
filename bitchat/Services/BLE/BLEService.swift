@@ -4303,16 +4303,54 @@ extension BLEService {
 
     private func emitTransportEvent(_ event: TransportEvent) {
         notifyUI { [weak self] in
-            self?.deliverTransportEvent(event)
+            _ = self?.deliverTransportEvent(event)
         }
     }
 
+    /// Delivers a transport event to the installed delegates and reports
+    /// whether acceptance was confirmed.
+    ///
+    /// For `.messageReceived`, returns `true` only when a
+    /// `SynchronousMessageTransportEventDelegate` synchronously confirmed
+    /// acceptance of the message (duplicates count as accepted). Returns
+    /// `false` when acceptance cannot be confirmed: the sink blocked the
+    /// message, the content was empty, or only a non-synchronous delegate is
+    /// installed so delivery happens without confirmation. Downstream logic
+    /// MUST NOT treat `false` as safe to acknowledge — a `false` return
+    /// means do not ACK.
+    ///
+    /// For all other events, returns `true` when any delegate received the
+    /// event and `false` when no delegate is installed.
     @MainActor
-    private func deliverTransportEvent(_ event: TransportEvent) {
+    @discardableResult
+    private func deliverTransportEvent(_ event: TransportEvent) -> Bool {
+        if case .messageReceived(let message) = event {
+            if let synchronousDelegate =
+                eventDelegate as? SynchronousMessageTransportEventDelegate {
+                return synchronousDelegate
+                    .didReceiveTransportMessageSynchronously(message)
+            }
+            if let eventDelegate {
+                eventDelegate.didReceiveTransportEvent(event)
+                return false
+            }
+            if let synchronousDelegate =
+                delegate as? SynchronousMessageTransportEventDelegate {
+                return synchronousDelegate
+                    .didReceiveTransportMessageSynchronously(message)
+            }
+        }
+
         if let eventDelegate {
             eventDelegate.didReceiveTransportEvent(event)
+            return true
         } else {
-            delegate?.receiveTransportEvent(event)
+            guard let delegate else { return false }
+            delegate.receiveTransportEvent(event)
+            if case .messageReceived = event {
+                return false
+            }
+            return true
         }
     }
 

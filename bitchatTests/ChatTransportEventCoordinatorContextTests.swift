@@ -243,6 +243,30 @@ struct ChatTransportEventCoordinatorContextTests {
     }
 
     @Test @MainActor
+    func synchronousMessageDeliveryReportsAcceptanceForAckGating() {
+        let context = MockChatTransportEventContext()
+        let coordinator = ChatTransportEventCoordinator(context: context)
+        let peerID = PeerID(str: "1122334455667788")
+        let blocked = makeMessage(
+            id: "blocked-private-media",
+            isPrivate: true,
+            senderPeerID: peerID
+        )
+        context.blockedMessageIDs = [blocked.id]
+
+        #expect(coordinator.didReceiveMessageSynchronously(blocked) == false)
+        #expect(context.handledPrivateMessages.isEmpty)
+
+        let accepted = makeMessage(
+            id: "accepted-private-media",
+            isPrivate: true,
+            senderPeerID: peerID
+        )
+        #expect(coordinator.didReceiveMessageSynchronously(accepted) == true)
+        #expect(context.handledPrivateMessages.map(\.id) == [accepted.id])
+    }
+
+    @Test @MainActor
     func didReceivePublicMessage_trimsContentAndParsesMentions() async {
         let context = MockChatTransportEventContext()
         let coordinator = ChatTransportEventCoordinator(context: context)
@@ -292,6 +316,32 @@ struct ChatTransportEventCoordinatorContextTests {
         await drainMainActorTasks()
         #expect(context.removedEphemeralSessions == [peerID])
         #expect(context.unmarkedReadReceiptBatches == [["theirs-1", "theirs-2"]])
+        #expect(context.notifyUIChangedCount == 2)
+    }
+
+    @Test @MainActor
+    func synchronousConnectAndDisconnect_applyBeforeReturning() {
+        let context = MockChatTransportEventContext()
+        let coordinator = ChatTransportEventCoordinator(context: context)
+        let peerID = PeerID(str: "2233445566778899")
+        let incoming = makeMessage(
+            id: "incoming-receipt",
+            isPrivate: true,
+            senderPeerID: peerID
+        )
+        context.privateChats[peerID] = [incoming]
+
+        coordinator.didConnectToPeerSynchronously(peerID)
+
+        #expect(context.isConnected)
+        #expect(context.registeredEphemeralSessions == [peerID])
+        #expect(context.flushedOutboxPeerIDs == [peerID])
+        #expect(context.courierRetryPeerIDs == [peerID])
+
+        coordinator.didDisconnectFromPeerSynchronously(peerID)
+
+        #expect(context.removedEphemeralSessions == [peerID])
+        #expect(context.unmarkedReadReceiptBatches == [[incoming.id]])
         #expect(context.notifyUIChangedCount == 2)
     }
 
