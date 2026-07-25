@@ -12,6 +12,7 @@ import Testing
 @testable import BitFoundation // to avoid unnecessary public's
 @testable import bitchat
 
+@Suite("Integration Tests", .serialized)
 struct IntegrationTests {
     
     private var helper = TestNetworkHelper()
@@ -272,8 +273,18 @@ struct IntegrationTests {
         // Re-establish Noise handshake explicitly via managers
         do {
             let m1 = try helper.noiseManagers["Bob"]!.initiateHandshake(with: helper.nodes["Alice"]!.peerID)
-            let m2 = try helper.noiseManagers["Alice"]!.handleIncomingHandshake(from: helper.nodes["Bob"]!.peerID, message: m1)!
-            let m3 = try helper.noiseManagers["Bob"]!.handleIncomingHandshake(from: helper.nodes["Alice"]!.peerID, message: m2)!
+            let m2 = try #require(
+                try helper.noiseManagers["Alice"]!.handleIncomingHandshake(
+                    from: helper.nodes["Bob"]!.peerID,
+                    message: m1
+                )
+            )
+            let m3 = try #require(
+                try helper.noiseManagers["Bob"]!.handleIncomingHandshake(
+                    from: helper.nodes["Alice"]!.peerID,
+                    message: m2
+                )
+            )
             _ = try helper.noiseManagers["Alice"]!.handleIncomingHandshake(from: helper.nodes["Bob"]!.peerID, message: m3)
         } catch {
             Issue.record("Failed to re-establish Noise session after restart: \(error)")

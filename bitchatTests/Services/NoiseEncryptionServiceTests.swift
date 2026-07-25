@@ -666,15 +666,17 @@ struct NoiseEncryptionServiceTests {
 
     @Test("Claim gives an attempt a full on-wire timeout window")
     func handshakeClaimRearmsDeadline() async throws {
+        let timeoutInterval: TimeInterval = 1
         let service = NoiseEncryptionService(
             keychain: MockKeychain(),
-            ordinaryHandshakeTimeout: 0.08
+            ordinaryHandshakeTimeout: timeoutInterval
         )
         let peerID = PeerID(str: "1021324354657687")
         let recorder = HandshakeStartRecorder()
         service.onHandshakeRecoveryRequired = { [weak service] request in
+            let firedAt = DispatchTime.now().uptimeNanoseconds
             service?.cancelHandshakeRecovery(request)
-            recorder.recordTimeout()
+            recorder.recordTimeout(at: firedAt)
         }
 
         let attempt = try #require(
@@ -683,19 +685,24 @@ struct NoiseEncryptionServiceTests {
                 retryOnTimeout: true
             )
         )
-        try? await Task.sleep(nanoseconds: 50_000_000)
-        #expect(
-            service.claimHandshakeInitiation(attempt, for: peerID)
-                == attempt.payload
-        )
-        try? await Task.sleep(nanoseconds: 45_000_000)
-        #expect(service.hasSession(with: peerID))
-        #expect(recorder.timeoutCount == 0)
+        try? await Task.sleep(nanoseconds: 500_000_000)
+        let claimed = service.claimHandshakeInitiation(attempt, for: peerID)
+        let claimedAt = DispatchTime.now().uptimeNanoseconds
+        #expect(claimed == attempt.payload)
         let expired = await TestHelpers.waitUntil(
             { recorder.timeoutCount == 1 },
-            timeout: 1
+            timeout: 5
         )
         #expect(expired)
+        let firedAt = try #require(recorder.firstTimeoutUptimeNanoseconds)
+        try #require(firedAt >= claimedAt)
+        let elapsed = TimeInterval(firedAt - claimedAt) / 1_000_000_000
+        // A non-rearmed deadline would fire roughly 0.5 seconds after the
+        // claim. Measure on the timeout queue instead of relying on a task to
+        // resume inside a narrow pre-deadline window under parallel CI load.
+        #expect(elapsed >= timeoutInterval * 0.75)
+        #expect(!service.hasSession(with: peerID))
+        #expect(recorder.timeoutCount == 1)
     }
 
     @Test("Duplicate spoofed message one cannot extend rollback or repause during cooldown")
@@ -723,7 +730,8 @@ struct NoiseEncryptionServiceTests {
                 message: spoofedMessage1
             )
         )
-        try? await Task.sleep(nanoseconds: 35_000_000)
+        // Exercise replacement before yielding: the test runner may resume a
+        // short sleep after the fixed responder deadline under parallel load.
         _ = try #require(
             try bob.processHandshakeMessage(
                 from: alicePeerID,
@@ -820,26 +828,20 @@ struct NoiseEncryptionServiceTests {
 
     @Test("Deterministic responder recovers once from an always-yield peer")
     func yieldedResponderRecoversFromLegacyDoubleYield() async throws {
+        let timeoutInterval: TimeInterval = 1
         let endpoints = orderedServices(
-            ordinaryHandshakeTimeout: 0.08,
-            ordinaryResponderHandshakeTimeout: 0.08
+            ordinaryHandshakeTimeout: timeoutInterval,
+            ordinaryResponderHandshakeTimeout: timeoutInterval
         )
         let modern = endpoints.higher
         let legacy = endpoints.lower
         let recovery = HandshakeStartRecorder()
-        modern.onHandshakeRecoveryRequired = { [weak modern] request in
-            guard let modern else { return }
-            do {
-                recovery.recordTimeout()
-                recovery.record(
-                    message: try claimPreparedRecoveryPayload(
-                        modern,
-                        request: request
-                    )
-                )
-            } catch {
-                recovery.record(error: error)
-            }
+        modern.onHandshakeRecoveryRequired = { request in
+            // Preparing here would arm the retry before the test task can
+            // forward message 1. Record the token so preparation and the
+            // simulated on-wire exchange remain synchronous.
+            recovery.recordTimeout()
+            recovery.record(request: request)
         }
 
         let modernAttempt = try #require(
@@ -903,12 +905,18 @@ struct NoiseEncryptionServiceTests {
             // Expected; this side did not own retry intent.
         }
 
-        let didRecover = await TestHelpers.waitUntil(
-            { recovery.messages.count == 1 },
-            timeout: 1
+        let recoveryRequested = await TestHelpers.waitUntil(
+            { recovery.requests.count == 1 },
+            timeout: 5
         )
-        #expect(didRecover)
-        let retryMessage1 = try #require(recovery.messages.first)
+        #expect(recoveryRequested)
+        let recoveryRequest = try #require(recovery.requests.first)
+        let retryMessage1 = try #require(
+            try claimPreparedRecoveryPayload(
+                modern,
+                request: recoveryRequest
+            )
+        )
         let retryMessage2 = try #require(
             try legacy.processHandshakeMessage(
                 from: endpoints.higherPeerID,
@@ -925,9 +933,10 @@ struct NoiseEncryptionServiceTests {
             from: endpoints.higherPeerID,
             message: retryMessage3
         )
-        try? await Task.sleep(nanoseconds: 120_000_000)
+        try? await Task.sleep(
+            nanoseconds: UInt64(timeoutInterval * 1_200_000_000)
+        )
         #expect(recovery.timeoutCount == 1)
-        #expect(recovery.errorCount == 0)
         let ciphertext = try modern.encrypt(
             Data("legacy converged".utf8),
             for: endpoints.lowerPeerID
@@ -1503,13 +1512,21 @@ private final class HandshakeInitiationRecorder: @unchecked Sendable {
 private final class HandshakeStartRecorder: @unchecked Sendable {
     private let lock = NSLock()
     private var storedMessages: [Data] = []
+    private var storedRequests: [NoiseHandshakeRecoveryRequest] = []
     private var storedErrorCount = 0
     private var storedTimeoutCount = 0
+    private var storedTimeoutUptimes: [UInt64] = []
 
     var messages: [Data] {
         lock.lock()
         defer { lock.unlock() }
         return storedMessages
+    }
+
+    var requests: [NoiseHandshakeRecoveryRequest] {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedRequests
     }
 
     var errorCount: Int {
@@ -1524,10 +1541,22 @@ private final class HandshakeStartRecorder: @unchecked Sendable {
         return storedTimeoutCount
     }
 
+    var firstTimeoutUptimeNanoseconds: UInt64? {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedTimeoutUptimes.first
+    }
+
     func record(message: Data?) {
         guard let message else { return }
         lock.lock()
         storedMessages.append(message)
+        lock.unlock()
+    }
+
+    func record(request: NoiseHandshakeRecoveryRequest) {
+        lock.lock()
+        storedRequests.append(request)
         lock.unlock()
     }
 
@@ -1537,9 +1566,12 @@ private final class HandshakeStartRecorder: @unchecked Sendable {
         lock.unlock()
     }
 
-    func recordTimeout() {
+    func recordTimeout(
+        at uptimeNanoseconds: UInt64 = DispatchTime.now().uptimeNanoseconds
+    ) {
         lock.lock()
         storedTimeoutCount += 1
+        storedTimeoutUptimes.append(uptimeNanoseconds)
         lock.unlock()
     }
 }

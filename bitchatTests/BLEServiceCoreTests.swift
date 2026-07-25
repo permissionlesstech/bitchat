@@ -645,14 +645,25 @@ struct BLEServiceCoreTests {
         let mallory = NoiseEncryptionService(keychain: MockKeychain())
         let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
 
-        let message1 = try ble._test_noiseInitiateHandshake(with: alicePeerID)
+        // Establish BLE as responder so the following inbound reconnect is
+        // not intentionally coalesced by the initiator-completion grace path.
+        let message1 = try alice.initiateHandshake(with: ble.myPeerID)
         let message2 = try #require(
-            try alice.processHandshakeMessage(from: ble.myPeerID, message: message1)
+            try ble._test_noiseProcessHandshakeMessage(
+                from: alicePeerID,
+                message: message1
+            )
         )
         let message3 = try #require(
-            try ble._test_noiseProcessHandshakeMessage(from: alicePeerID, message: message2)
+            try alice.processHandshakeMessage(
+                from: ble.myPeerID,
+                message: message2
+            )
         )
-        _ = try alice.processHandshakeMessage(from: ble.myPeerID, message: message3)
+        _ = try ble._test_noiseProcessHandshakeMessage(
+            from: alicePeerID,
+            message: message3
+        )
         await ble._test_drainNoiseMessagePipeline()
         #expect(ble.canDeliverSecurely(to: alicePeerID))
 
@@ -674,6 +685,9 @@ struct BLEServiceCoreTests {
             {
                 outbound.snapshot().contains {
                     $0.type == MessageType.noiseHandshake.rawValue
+                        && PeerID(hexData: $0.senderID) == ble.myPeerID
+                        && $0.payload.count
+                            != NoiseSecurityConstants.xxInitialMessageSize
                 }
             },
             timeout: TestConstants.longTimeout
@@ -682,6 +696,9 @@ struct BLEServiceCoreTests {
         let forgedMessage2 = try #require(
             outbound.snapshot().first {
                 $0.type == MessageType.noiseHandshake.rawValue
+                    && PeerID(hexData: $0.senderID) == ble.myPeerID
+                    && $0.payload.count
+                        != NoiseSecurityConstants.xxInitialMessageSize
             }?.payload
         )
         #expect(!ble.canDeliverSecurely(to: alicePeerID))

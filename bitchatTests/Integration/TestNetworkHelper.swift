@@ -8,6 +8,7 @@
 
 import Foundation
 import CryptoKit
+import Testing
 @testable import BitFoundation // to avoid unnecessary public's
 @testable import bitchat
 
@@ -27,9 +28,14 @@ final class TestNetworkHelper {
         node.mockNickname = name
         nodes[name] = node
         
-        // Create/replace Noise manager for this node
+        // This synchronous helper directly drives all three XX messages and
+        // has no transport callback loop for delayed collision recovery.
         let key = Curve25519.KeyAgreement.PrivateKey()
-        noiseManagers[name] = NoiseSessionManager(localStaticKey: key, keychain: mockKeychain)
+        noiseManagers[name] = NoiseSessionManager(
+            localStaticKey: key,
+            keychain: mockKeychain,
+            recentInitiatorCompletionGracePeriod: 0
+        )
         return node
     }
     
@@ -108,8 +114,18 @@ final class TestNetworkHelper {
               let peer2ID = nodes[node2]?.peerID else { return }
         
         let msg1 = try manager1.initiateHandshake(with: peer2ID)
-        let msg2 = try manager2.handleIncomingHandshake(from: peer1ID, message: msg1)!
-        let msg3 = try manager1.handleIncomingHandshake(from: peer2ID, message: msg2)!
+        let msg2 = try #require(
+            try manager2.handleIncomingHandshake(
+                from: peer1ID,
+                message: msg1
+            )
+        )
+        let msg3 = try #require(
+            try manager1.handleIncomingHandshake(
+                from: peer2ID,
+                message: msg2
+            )
+        )
         _ = try manager2.handleIncomingHandshake(from: peer1ID, message: msg3)
     }
 }
