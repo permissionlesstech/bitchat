@@ -2558,8 +2558,29 @@ final class BLEService: NSObject {
                     defaultPrefix: defaultPrefix
                 )
             },
+            isPrivateMediaSenderBlocked: { [weak self] peerID in
+                guard let self else { return false }
+                let senderStaticKey = self.noiseService.getPeerPublicKeyData(peerID)
+                    ?? self.collectionsQueue.sync {
+                        self.peerRegistry.info(for: peerID)?.noisePublicKey
+                    }
+                guard let senderStaticKey else { return false }
+                return self.identityManager.isBlocked(
+                    fingerprint: senderStaticKey.sha256Fingerprint()
+                )
+            },
             updatePeerLastSeen: { [weak self] peerID in
                 self?.updatePeerLastSeen(peerID)
+            },
+            acknowledgePrivateMediaDuplicate: { [weak self] messageID, peerID in
+                guard let self,
+                      let senderStaticKey = self.noiseService.getPeerPublicKeyData(peerID),
+                      !self.identityManager.isBlocked(
+                        fingerprint: senderStaticKey.sha256Fingerprint()
+                      ) else {
+                    return
+                }
+                self.sendDeliveryAck(for: messageID, to: peerID)
             },
             deliverMessage: { [weak self] message in
                 // Single main-actor hop delivering `.messageReceived`.

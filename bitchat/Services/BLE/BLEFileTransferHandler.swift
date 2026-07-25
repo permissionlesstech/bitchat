@@ -32,10 +32,55 @@ struct BLEFileTransferHandlerEnvironment {
         _ fallbackExtension: String?,
         _ defaultPrefix: String
     ) -> URL?
+    /// Checks the authenticated sender before any private-media disk work.
+    let isPrivateMediaSenderBlocked: (PeerID) -> Bool
     /// Updates the registry last-seen timestamp for the peer (async barrier write).
     let updatePeerLastSeen: (PeerID) -> Void
+    /// Re-acknowledges a stable private-media duplicate without saving or
+    /// re-delivering it. This lets a sender recover from a lost ACK.
+    let acknowledgePrivateMediaDuplicate: (_ messageID: String, _ peerID: PeerID) -> Void
     /// Delivers `.messageReceived` to the UI as one main-actor hop.
     let deliverMessage: (BitchatMessage) -> Void
+}
+
+/// Process-lifetime reservation cache for stable private-media IDs.
+///
+/// The first arrival reserves its ID before quota enforcement and commits it
+/// only after durable save. Concurrent/retried arrivals are rejected before
+/// they can create uniquified orphan files or churn the incoming-media quota.
+private final class PrivateMediaArrivalDeduplicator {
+    enum Reservation {
+        case reserved
+        case pending
+        case accepted
+    }
+
+    private let lock = NSLock()
+    private var accepted = BoundedIDSet(capacity: 4_096)
+    private var pending: Set<String> = []
+
+    func reserve(_ messageID: String) -> Reservation {
+        lock.lock()
+        defer { lock.unlock() }
+        if accepted.contains(messageID) {
+            return .accepted
+        }
+        if pending.contains(messageID) {
+            return .pending
+        }
+
+        pending.insert(messageID)
+        return .reserved
+    }
+
+    func finish(_ messageID: String, accepted didAccept: Bool) {
+        lock.lock()
+        defer { lock.unlock() }
+        pending.remove(messageID)
+        if didAccept {
+            accepted.insert(messageID)
+        }
+    }
 }
 
 /// Orchestrates inbound file transfers: self-echo policy, sender display-name
@@ -43,6 +88,7 @@ struct BLEFileTransferHandlerEnvironment {
 /// and UI delivery.
 final class BLEFileTransferHandler {
     private let environment: BLEFileTransferHandlerEnvironment
+    private let privateMediaArrivals = PrivateMediaArrivalDeduplicator()
 
     init(environment: BLEFileTransferHandlerEnvironment) {
         self.environment = environment
@@ -129,6 +175,7 @@ final class BLEFileTransferHandler {
         env: BLEFileTransferHandlerEnvironment
     ) -> Bool {
 
+        let localPeerID = env.localPeerID()
         let filePacket: BitchatFilePacket
         let mime: MimeType
         switch BLEIncomingFileValidator.validate(payload: payload) {
@@ -149,6 +196,51 @@ final class BLEFileTransferHandler {
             return false
         }
 
+        if isPrivate, env.isPrivateMediaSenderBlocked(peerID) {
+            SecureLogger.debug(
+                "🚫 Dropping private media from blocked peer \(peerID.id.prefix(8))… before disk write",
+                category: .security
+            )
+            return true
+        }
+
+        let messageID = isPrivate
+            ? PrivateMediaMessageIdentity.stableID(
+                for: filePacket,
+                senderPeerID: peerID,
+                recipientPeerID: localPeerID
+            )
+            : nil
+        if let messageID {
+            switch privateMediaArrivals.reserve(messageID) {
+            case .reserved:
+                break
+            case .pending:
+                // The first arrival has not reached durable storage yet.
+                // Coalesce this retry without ACKing so a failed first save
+                // remains retryable by the sender.
+                SecureLogger.debug(
+                    "📁 Coalesced in-flight private media id=\(messageID.prefix(12))… from \(peerID.id.prefix(8))…",
+                    category: .session
+                )
+                return true
+            case .accepted:
+                env.updatePeerLastSeen(peerID)
+                env.acknowledgePrivateMediaDuplicate(messageID, peerID)
+                SecureLogger.debug(
+                    "📁 Ignored durable private media duplicate id=\(messageID.prefix(12))… from \(peerID.id.prefix(8))…",
+                    category: .session
+                )
+                return true
+            }
+        }
+        var acceptedStableMedia = false
+        defer {
+            if let messageID {
+                privateMediaArrivals.finish(messageID, accepted: acceptedStableMedia)
+            }
+        }
+
         // BCH-01-002: Enforce storage quota before saving
         env.enforceStorageQuota(filePacket.content.count)
 
@@ -167,6 +259,7 @@ final class BLEFileTransferHandler {
         }
 
         let message = BitchatMessage(
+            id: messageID,
             sender: senderNickname,
             content: "\(mime.category.messagePrefix)\(destination.lastPathComponent)",
             timestamp: timestamp,
@@ -185,6 +278,7 @@ final class BLEFileTransferHandler {
 
         SecureLogger.debug("📁 Stored incoming media from \(peerID.id.prefix(8))… -> \(destination.lastPathComponent)", category: .session)
 
+        acceptedStableMedia = messageID != nil
         env.deliverMessage(message)
         return true
     }

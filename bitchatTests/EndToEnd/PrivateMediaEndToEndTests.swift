@@ -876,7 +876,7 @@ struct PrivateMediaEndToEndTests {
             + marker
             + Data(repeating: 0x4A, count: 6 * 1024)
         try await assertPrivateMediaRoundTrip(
-            fileName: "private.jpg",
+            fileName: "img_20260725_120000_11111111-1111-1111-1111-111111111111.jpg",
             mimeType: "image/jpeg",
             content: content,
             marker: marker,
@@ -1147,6 +1147,17 @@ struct PrivateMediaEndToEndTests {
         #expect(message.isPrivate)
         #expect(message.senderPeerID == alice.myPeerID)
         #expect(message.content.hasPrefix(expectedMessagePrefix))
+        if let stableMessageID = PrivateMediaMessageIdentity.stableID(
+            for: file,
+            senderPeerID: alice.myPeerID,
+            recipientPeerID: bob.myPeerID
+        ) {
+            #expect(message.id == stableMessageID)
+        } else {
+            // Generic/legacy filenames retain random per-arrival IDs so two
+            // unrelated "photo.jpg" transfers are never deduplicated.
+            #expect(!message.id.hasPrefix("media-"))
+        }
 
         let stored = recursivelyStoredFiles(under: bobRoot)
         #expect(stored.count == 1)

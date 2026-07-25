@@ -14,6 +14,7 @@ import BitFoundation
 @MainActor
 private final class MockChatLiveVoiceContext: ChatLiveVoiceContext {
     var nickname = "me"
+    var myPeerID = PeerID(str: "0102030405060708")
     var selectedPrivateChatPeer: PeerID?
     var isViewingPublicMeshTimeline = false
     var blockedPeers: Set<PeerID> = []
@@ -23,7 +24,10 @@ private final class MockChatLiveVoiceContext: ChatLiveVoiceContext {
     private(set) var upsertedMessages: [(message: BitchatMessage, peerID: PeerID)] = []
     private(set) var upsertedPublicMessages: [BitchatMessage] = []
     private(set) var removedMessageIDs: [String] = []
+    private(set) var sentReadReceipts: [(receipt: ReadReceipt, peerID: PeerID)] = []
     private(set) var talkerUpdates: [String?] = []
+    private(set) var privateMutationLog: [String] = []
+    private var readReceiptMessageIDs: Set<String> = []
 
     func isPeerBlocked(_ peerID: PeerID) -> Bool { blockedPeers.contains(peerID) }
     func resolveNickname(for peerID: PeerID) -> String { "alice" }
@@ -31,6 +35,7 @@ private final class MockChatLiveVoiceContext: ChatLiveVoiceContext {
     func appendPublicMeshMessage(_ message: BitchatMessage) { appendedPublicMessages.append(message) }
     func upsertPrivateMessage(_ message: BitchatMessage, in peerID: PeerID) {
         upsertedMessages.append((message, peerID))
+        privateMutationLog.append("upsert:\(message.id)")
     }
     func upsertPublicMeshMessage(_ message: BitchatMessage) {
         upsertedPublicMessages.append(message)
@@ -38,7 +43,17 @@ private final class MockChatLiveVoiceContext: ChatLiveVoiceContext {
     @discardableResult
     func removePrivateMessage(withID messageID: String) -> BitchatMessage? {
         removedMessageIDs.append(messageID)
+        privateMutationLog.append("remove:\(messageID)")
         return nil
+    }
+    func hasSentReadReceipt(_ messageID: String) -> Bool {
+        readReceiptMessageIDs.contains(messageID)
+    }
+    func markReadReceiptSent(_ messageID: String) -> Bool {
+        readReceiptMessageIDs.insert(messageID).inserted
+    }
+    func sendMeshReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {
+        sentReadReceipts.append((receipt, peerID))
     }
     func removeMessage(withID messageID: String, cleanupFile: Bool) {
         removedMessageIDs.append(messageID)
@@ -151,17 +166,29 @@ struct ChatLiveVoiceCoordinatorTests {
 
     @Test func absorbsFinalizedNoteIntoLiveBubble() throws {
         let context = MockChatLiveVoiceContext()
+        context.selectedPrivateChatPeer = peer
         let coordinator = ChatLiveVoiceCoordinator(context: context, sweepsOnInit: false)
         let burstID = makeBurstID(0xB2)
         let hex = burstID.hexEncodedString()
+        let fileName = "voice_\(hex).m4a"
+        let stableMessageID = try #require(PrivateMediaMessageIdentity.stableID(
+            senderPeerID: peer,
+            recipientPeerID: context.myPeerID,
+            fileName: fileName
+        ))
 
         send(try #require(VoiceBurstPacket(burstID: burstID, seq: 1, kind: .frames([Data(repeating: 7, count: 50)]))), to: coordinator, from: peer)
         send(try #require(VoiceBurstPacket(burstID: burstID, seq: 2, kind: .end(totalDataPackets: 1, durationMs: 64))), to: coordinator, from: peer)
         let bubble = try #require(context.handledPrivateMessages.first)
+        // The user read the live bubble, then left before the finalized file
+        // arrived. Stable-ID adoption must preserve that read state.
+        #expect(context.markReadReceiptSent(bubble.id))
+        context.selectedPrivateChatPeer = nil
 
         let note = BitchatMessage(
+            id: stableMessageID,
             sender: "alice",
-            content: "[voice] voice_\(hex).m4a",
+            content: "[voice] \(fileName)",
             timestamp: Date(),
             isRelay: false,
             isPrivate: true,
@@ -170,12 +197,21 @@ struct ChatLiveVoiceCoordinatorTests {
         )
         #expect(coordinator.absorbFinalizedVoiceNote(note))
 
-        // The note replaced the live bubble in place: same message ID, new
-        // content, partial capture deleted.
+        // The finalized note adopts the sender-correlatable ID, removes the
+        // receiver-local live ID, and emits a fresh READ now that the sender
+        // has created its finalized media row.
         let replacement = try #require(context.upsertedMessages.last)
-        #expect(replacement.message.id == bubble.id)
+        #expect(replacement.message.id == stableMessageID)
         #expect(replacement.message.content == note.content)
         #expect(replacement.peerID == peer)
+        #expect(context.removedMessageIDs.contains(bubble.id))
+        #expect(Array(context.privateMutationLog.suffix(2)) == [
+            "upsert:\(stableMessageID)",
+            "remove:\(bubble.id)"
+        ])
+        #expect(context.sentReadReceipts.count == 1)
+        #expect(context.sentReadReceipts.first?.receipt.originalMessageID == stableMessageID)
+        #expect(context.sentReadReceipts.first?.peerID == peer)
         // The promoted partial capture is deleted in favor of the note.
         let url = try #require(fallbackFileURL(burstID: burstID, peerID: peer))
         #expect(!FileManager.default.fileExists(atPath: url.path))
@@ -449,7 +485,8 @@ struct ChatLiveVoiceCoordinatorTests {
             isRelay: false, isPrivate: true, recipientNickname: "me", senderPeerID: peer
         )
         #expect(coordinator.absorbFinalizedVoiceNote(dmNote))
-        #expect(try #require(context.upsertedMessages.last).message.id == dmBubble.id)
+        #expect(try #require(context.upsertedMessages.last).message.id == dmNote.id)
+        #expect(context.removedMessageIDs.contains(dmBubble.id))
     }
 
     @Test func finalizedNoteBindsToItsAuthenticatedSender() throws {
@@ -479,8 +516,9 @@ struct ChatLiveVoiceCoordinatorTests {
         )
         #expect(coordinator.absorbFinalizedVoiceNote(note))
         let replacement = try #require(context.upsertedMessages.last)
-        #expect(replacement.message.id == victimBubble.id)
+        #expect(replacement.message.id == note.id)
         #expect(replacement.peerID == peer)
+        #expect(context.removedMessageIDs.contains(victimBubble.id))
 
         // The attacker's note can only ever claim the attacker's own bubble.
         let attackerNote = BitchatMessage(
@@ -489,8 +527,9 @@ struct ChatLiveVoiceCoordinatorTests {
         )
         #expect(coordinator.absorbFinalizedVoiceNote(attackerNote))
         let attackerReplacement = try #require(context.upsertedMessages.last)
-        #expect(attackerReplacement.message.id == attackerBubble.id)
+        #expect(attackerReplacement.message.id == attackerNote.id)
         #expect(attackerReplacement.peerID == attacker)
+        #expect(context.removedMessageIDs.contains(attackerBubble.id))
 
         // Both registry entries are consumed — nothing left to hijack.
         #expect(!coordinator.absorbFinalizedVoiceNote(note))
