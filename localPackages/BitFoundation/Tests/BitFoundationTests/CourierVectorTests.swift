@@ -95,40 +95,66 @@ struct CourierVectorTests {
 
     // MARK: Packet canonicalization — the trap worth a vector
 
+    /// A real `courierEnvelope` frame: type 0x04 carrying an encoded envelope,
+    /// which is what a deposit actually puts on the wire.
+    static func envelopePacket() throws -> BitchatPacket {
+        let envelope = CourierEnvelope(recipientTag: recipientTag,
+                                       expiry: expiryMs,
+                                       ciphertext: ciphertext,
+                                       copies: 4,
+                                       prekeyID: 0x1122_3344)
+        return BitchatPacket(type: 0x04,
+                             senderID: senderID,
+                             recipientID: recipientID,
+                             timestamp: timestampMs,
+                             payload: try #require(envelope.encode()),
+                             signature: nil,
+                             ttl: 7)
+    }
+
+    /// Every byte of the unsigned frame. 14 header + 8 sender + 8 recipient +
+    /// 74 envelope = 104. The envelope is under the 100-byte compression
+    /// threshold, so the compressed path never applies here.
+    static let unpaddedHex = """
+    010407000001977420dc0001004a112233445566778899aabbccddeeff000100100001020\
+    30405060708090a0b0c0d0e0f020008000001a3185c500003001e636f75726965722d76656\
+    3746f722d636970686572746578742d303030310400010405000411223344
+    """.replacingOccurrences(of: "\n", with: "")
+
+    /// Identical to `unpaddedHex` except `ttl` at offset 2 is zeroed.
+    static let preimageBodyHex = """
+    010400000001977420dc0001004a112233445566778899aabbccddeeff000100100001020\
+    30405060708090a0b0c0d0e0f020008000001a3185c500003001e636f75726965722d76656\
+    3746f722d636970686572746578742d303030310400010405000411223344
+    """.replacingOccurrences(of: "\n", with: "")
+
     /// The signed pre-image is **not** the wire bytes. It zeroes `ttl`, clears
     /// the `hasSignature` flag, and is PKCS#7-padded to a block boundary.
+    /// Both sequences are compared in full — a change to timestamp encoding,
+    /// payload length, or field layout has to fail here, otherwise the JSON
+    /// fixture could go stale while this stayed green.
     @Test func signingPreimageIsTTLZeroedAndPadded() throws {
-        let payload = Data(Self.ciphertext.sha256Hash().prefix(CourierEnvelope.tagLength))
-        let packet = BitchatPacket(type: 0x2A,
-                                   senderID: Self.senderID,
-                                   recipientID: Self.recipientID,
-                                   timestamp: Self.timestampMs,
-                                   payload: payload,
-                                   signature: nil,
-                                   ttl: 7)
+        let packet = try Self.envelopePacket()
 
-        // Unsigned, unpadded: 14 header + 8 sender + 8 recipient + 16 payload.
         let unpadded = try #require(BinaryProtocol.encode(packet, padding: false))
-        #expect(unpadded.count == 46)
-        #expect(unpadded.hexEncodedString().hasPrefix("012a07"))   // ttl = 7 here
+        #expect(unpadded.count == 104)
+        #expect(unpadded.hexEncodedString() == Self.unpaddedHex)
 
         let preimage = try #require(packet.toBinaryDataForSigning())
-        #expect(preimage.count == 256)                              // padded, not 46
-        #expect(preimage.hexEncodedString().hasPrefix("012a00"))    // ttl zeroed
+        #expect(preimage.count == 256)
+        #expect(preimage.hexEncodedString()
+                == Self.preimageBodyHex + String(repeating: "98", count: 152))
+
+        // 152 == 0x98 == the shortfall to the 256-byte block, and every pad
+        // byte equals it.
+        #expect(preimage.dropFirst(104).allSatisfy { $0 == 152 })
         #expect(preimage[BinaryProtocol.Offsets.flags] == BinaryProtocol.Flags.hasRecipient)
-        #expect(preimage.dropFirst(46).allSatisfy { $0 == 210 })    // 210 == 0xD2 == pad length
+        #expect(unpadded[2] == 7 && preimage[2] == 0)   // ttl on wire vs signed
     }
 
     /// Ed25519 — CryptoKit's `Curve25519.Signing`, not X25519 key agreement.
     @Test func signatureOverPreimageVerifies() throws {
-        let payload = Data(Self.ciphertext.sha256Hash().prefix(CourierEnvelope.tagLength))
-        let packet = BitchatPacket(type: 0x2A,
-                                   senderID: Self.senderID,
-                                   recipientID: Self.recipientID,
-                                   timestamp: Self.timestampMs,
-                                   payload: payload,
-                                   signature: nil,
-                                   ttl: 7)
+        let packet = try Self.envelopePacket()
         let preimage = try #require(packet.toBinaryDataForSigning())
 
         let key = try Curve25519.Signing.PrivateKey(rawRepresentation: Self.signingSeed)
@@ -150,12 +176,12 @@ struct CourierVectorTests {
 
         let signature = a
 
-        // On the wire the packet is 110 bytes — the 46 above plus a 64-byte
+        // On the wire the packet is 168 bytes — the 104 above plus a 64-byte
         // signature — and the flags byte now also carries hasSignature.
         var signed = packet
         signed.signature = Data(signature)
         let wire = try #require(BinaryProtocol.encode(signed, padding: false))
-        #expect(wire.count == 110)
+        #expect(wire.count == 168)
         #expect(wire[BinaryProtocol.Offsets.flags]
                 == BinaryProtocol.Flags.hasRecipient | BinaryProtocol.Flags.hasSignature)
     }
