@@ -239,10 +239,9 @@ struct ChatTransportEventCoordinatorContextTests {
         #expect(context.meshDeliveryAcks.isEmpty)
 
         // Private goes to the private handler, public to the public handler;
-        // both get mention checks and haptics. Only current-iOS media with a
-        // cross-device stable ID and authenticated sender gets the
-        // durable-arrival acknowledgement. Legacy/Android-style random IDs
-        // remain transfer-compatible but cannot correlate receipts.
+        // both get mention checks and haptics. Stable-media ACK authorization
+        // belongs to BLEFileTransferHandler after its durable commit and this
+        // synchronous acceptance result, not to the generic UI coordinator.
         let stableMediaID = "media-\(String(repeating: "a", count: 32))"
         coordinator.didReceiveMessage(makeMessage(
             id: stableMediaID,
@@ -275,9 +274,7 @@ struct ChatTransportEventCoordinatorContextTests {
             "pm-missing-sender",
             "pub"
         ])
-        #expect(context.meshDeliveryAcks.count == 1)
-        #expect(context.meshDeliveryAcks.first?.messageID == stableMediaID)
-        #expect(context.meshDeliveryAcks.first?.peerID == peerID)
+        #expect(context.meshDeliveryAcks.isEmpty)
     }
 
     @Test @MainActor

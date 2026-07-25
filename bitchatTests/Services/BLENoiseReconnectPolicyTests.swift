@@ -111,5 +111,8 @@ struct BLENoiseReconnectPolicyTests {
             )
         )
         #expect(PeerCapabilities.localSupported.contains(.privateMedia))
+        #expect(
+            PeerCapabilities.localSupported.contains(.privateMediaReceipts)
+        )
     }
 }

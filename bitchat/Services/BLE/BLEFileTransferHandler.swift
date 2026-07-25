@@ -32,54 +32,78 @@ struct BLEFileTransferHandlerEnvironment {
         _ fallbackExtension: String?,
         _ defaultPrefix: String
     ) -> URL?
+    /// Resolves the durable receiver decision for a stable private-media ID.
+    let privateMediaReceiptState: (
+        _ messageID: String
+    ) -> BLEPrivateMediaReceiptState
+    /// Atomically records a stable private-media ID after the payload save.
+    let commitPrivateMediaFile: (_ messageID: String, _ storedURL: URL) -> Bool
+    /// Rolls back a saved payload when its durable receipt commit fails.
+    let removeIncomingFile: (_ storedURL: URL) -> Void
     /// Checks the authenticated sender before any private-media disk work.
     let isPrivateMediaSenderBlocked: (PeerID) -> Bool
     /// Updates the registry last-seen timestamp for the peer (async barrier write).
     let updatePeerLastSeen: (PeerID) -> Void
-    /// Re-acknowledges a stable private-media duplicate without saving or
-    /// re-delivering it. This lets a sender recover from a lost ACK.
-    let acknowledgePrivateMediaDuplicate: (_ messageID: String, _ peerID: PeerID) -> Void
-    /// Delivers `.messageReceived` to the UI as one main-actor hop.
-    let deliverMessage: (BitchatMessage) -> Void
+    /// Acknowledges stable private media only after its synchronous
+    /// conversation delivery has completed.
+    let acknowledgePrivateMedia: (_ messageID: String, _ peerID: PeerID) -> Void
+    /// Delivers `.messageReceived` as one main-actor hop while
+    /// `shouldDeliver` remains true before and after the synchronous sink.
+    /// The completion authorizes the stable-media ACK.
+    let deliverMessage: (
+        _ message: BitchatMessage,
+        _ shouldDeliver: @escaping () -> Bool,
+        _ completion: @escaping () -> Void
+    ) -> Void
 }
 
 /// Process-lifetime reservation cache for stable private-media IDs.
 ///
-/// The first arrival reserves its ID before quota enforcement and commits it
-/// only after durable save. Concurrent/retried arrivals are rejected before
-/// they can create uniquified orphan files or churn the incoming-media quota.
+/// The first arrival reserves its ID before quota enforcement. Concurrent
+/// arrivals remain coalesced in memory, while accepted state is resolved from
+/// the durable ID-to-file ledger so it survives relaunch and becomes retryable
+/// if quota cleanup removed the file.
 private final class PrivateMediaArrivalDeduplicator {
     enum Reservation {
         case reserved
         case pending
-        case accepted
+        case accepted(URL)
+        case tombstoned
+        case unavailable
     }
 
     private let lock = NSLock()
-    private var accepted = BoundedIDSet(capacity: 4_096)
     private var pending: Set<String> = []
 
-    func reserve(_ messageID: String) -> Reservation {
+    func reserve(
+        _ messageID: String,
+        receiptState: () -> BLEPrivateMediaReceiptState
+    ) -> Reservation {
         lock.lock()
         defer { lock.unlock() }
-        if accepted.contains(messageID) {
-            return .accepted
-        }
         if pending.contains(messageID) {
             return .pending
+        }
+
+        switch receiptState() {
+        case .accepted(let existingURL):
+            return .accepted(existingURL)
+        case .tombstoned:
+            return .tombstoned
+        case .unavailable:
+            return .unavailable
+        case .absent:
+            break
         }
 
         pending.insert(messageID)
         return .reserved
     }
 
-    func finish(_ messageID: String, accepted didAccept: Bool) {
+    func finish(_ messageID: String) {
         lock.lock()
         defer { lock.unlock() }
         pending.remove(messageID)
-        if didAccept {
-            accepted.insert(messageID)
-        }
     }
 }
 
@@ -132,6 +156,7 @@ final class BLEFileTransferHandler {
             senderNickname: senderNickname,
             timestamp: Date(timeIntervalSince1970: Double(packet.timestamp) / 1000),
             isPrivate: deliveryPlan.isPrivateMessage,
+            usesDurableReceipts: false,
             env: env
         )
         // Once authenticated, a local decode/quota/save failure is not proof
@@ -162,6 +187,11 @@ final class BLEFileTransferHandler {
             senderNickname: senderNickname,
             timestamp: timestamp,
             isPrivate: true,
+            // Every authenticated Noise private-file keeps the stable ID/ACK
+            // contract introduced with capability bit 8. Bit 9 advertises
+            // sender-side automatic retry support; it must not downgrade
+            // prior iOS clients to random IDs or single-check delivery.
+            usesDurableReceipts: true,
             env: env
         )
     }
@@ -172,6 +202,7 @@ final class BLEFileTransferHandler {
         senderNickname: String,
         timestamp: Date,
         isPrivate: Bool,
+        usesDurableReceipts: Bool,
         env: BLEFileTransferHandlerEnvironment
     ) -> Bool {
 
@@ -204,7 +235,7 @@ final class BLEFileTransferHandler {
             return true
         }
 
-        let messageID = isPrivate
+        let messageID = usesDurableReceipts
             ? PrivateMediaMessageIdentity.stableID(
                 for: filePacket,
                 senderPeerID: peerID,
@@ -212,7 +243,10 @@ final class BLEFileTransferHandler {
             )
             : nil
         if let messageID {
-            switch privateMediaArrivals.reserve(messageID) {
+            switch privateMediaArrivals.reserve(
+                messageID,
+                receiptState: { env.privateMediaReceiptState(messageID) }
+            ) {
             case .reserved:
                 break
             case .pending:
@@ -224,20 +258,55 @@ final class BLEFileTransferHandler {
                     category: .session
                 )
                 return true
-            case .accepted:
+            case .accepted(let existingFile):
                 env.updatePeerLastSeen(peerID)
-                env.acknowledgePrivateMediaDuplicate(messageID, peerID)
+                let message = incomingMessage(
+                    messageID: messageID,
+                    senderNickname: senderNickname,
+                    timestamp: timestamp,
+                    isPrivate: true,
+                    peerID: peerID,
+                    destination: existingFile,
+                    category: storedMediaCategory(
+                        for: existingFile,
+                        fallback: mime.category
+                    ),
+                    env: env
+                )
                 SecureLogger.debug(
-                    "📁 Ignored durable private media duplicate id=\(messageID.prefix(12))… from \(peerID.id.prefix(8))…",
+                    "📁 Restored durable private media duplicate id=\(messageID.prefix(12))… from \(peerID.id.prefix(8))… -> \(existingFile.lastPathComponent)",
+                    category: .session
+                )
+                deliverStableMessage(
+                    message,
+                    messageID: messageID,
+                    peerID: peerID,
+                    expectedURL: existingFile,
+                    env: env
+                )
+                return true
+            case .tombstoned:
+                // Explicit deletion is a durable terminal receiver decision.
+                env.updatePeerLastSeen(peerID)
+                env.acknowledgePrivateMedia(messageID, peerID)
+                SecureLogger.debug(
+                    "📁 Dropped explicitly deleted private media id=\(messageID.prefix(12))… from \(peerID.id.prefix(8))…",
+                    category: .session
+                )
+                return true
+            case .unavailable:
+                // Never turn an unreadable ledger into an empty ledger. The
+                // sender can retry after the transient storage failure clears.
+                SecureLogger.warning(
+                    "📁 Withholding private media id=\(messageID.prefix(12))… while durable receipt state is unavailable",
                     category: .session
                 )
                 return true
             }
         }
-        var acceptedStableMedia = false
         defer {
             if let messageID {
-                privateMediaArrivals.finish(messageID, accepted: acceptedStableMedia)
+                privateMediaArrivals.finish(messageID)
             }
         }
 
@@ -254,14 +323,82 @@ final class BLEFileTransferHandler {
             return false
         }
 
+        if let messageID,
+           !env.commitPrivateMediaFile(messageID, destination) {
+            // A payload without its durable ID mapping cannot safely suppress
+            // a retry after relaunch. Roll it back and withhold UI/ACK.
+            env.removeIncomingFile(destination)
+            return false
+        }
+
         if isPrivate {
             env.updatePeerLastSeen(peerID)
         }
 
-        let message = BitchatMessage(
+        let message = incomingMessage(
+            messageID: messageID,
+            senderNickname: senderNickname,
+            timestamp: timestamp,
+            isPrivate: isPrivate,
+            peerID: peerID,
+            destination: destination,
+            category: mime.category,
+            env: env
+        )
+
+        SecureLogger.debug("📁 Stored incoming media from \(peerID.id.prefix(8))… -> \(destination.lastPathComponent)", category: .session)
+
+        if let messageID {
+            deliverStableMessage(
+                message,
+                messageID: messageID,
+                peerID: peerID,
+                expectedURL: destination,
+                env: env
+            )
+        } else {
+            env.deliverMessage(message, { true }, {})
+        }
+        return true
+    }
+
+    private func deliverStableMessage(
+        _ message: BitchatMessage,
+        messageID: String,
+        peerID: PeerID,
+        expectedURL: URL,
+        env: BLEFileTransferHandlerEnvironment
+    ) {
+        env.deliverMessage(
+            message,
+            {
+                guard case .accepted(let resolvedURL) =
+                        env.privateMediaReceiptState(messageID) else {
+                    return false
+                }
+                return resolvedURL.standardizedFileURL
+                    == expectedURL.standardizedFileURL
+            },
+            {
+                env.acknowledgePrivateMedia(messageID, peerID)
+            }
+        )
+    }
+
+    private func incomingMessage(
+        messageID: String?,
+        senderNickname: String,
+        timestamp: Date,
+        isPrivate: Bool,
+        peerID: PeerID,
+        destination: URL,
+        category: MimeType.Category,
+        env: BLEFileTransferHandlerEnvironment
+    ) -> BitchatMessage {
+        BitchatMessage(
             id: messageID,
             sender: senderNickname,
-            content: "\(mime.category.messagePrefix)\(destination.lastPathComponent)",
+            content: "\(category.messagePrefix)\(destination.lastPathComponent)",
             timestamp: timestamp,
             isRelay: false,
             originalSender: nil,
@@ -269,18 +406,35 @@ final class BLEFileTransferHandler {
             recipientNickname: nil,
             senderPeerID: peerID,
             // Received messages need an explicit status: BitchatMessage
-            // defaults private messages to .sending, which the media views
-            // render as an in-flight send (empty reveal mask, disabled tap).
+            // defaults private messages to .sending, which media views render
+            // as an in-flight send.
             deliveryStatus: isPrivate
                 ? .delivered(to: env.localNickname(), at: timestamp)
                 : nil
         )
+    }
 
-        SecureLogger.debug("📁 Stored incoming media from \(peerID.id.prefix(8))… -> \(destination.lastPathComponent)", category: .session)
-
-        acceptedStableMedia = messageID != nil
-        env.deliverMessage(message)
-        return true
+    /// The durable URL is authoritative during reconstruction. A sender that
+    /// reuses a stable filename with a different MIME type must not change how
+    /// the already-stored payload renders.
+    private func storedMediaCategory(
+        for url: URL,
+        fallback: MimeType.Category
+    ) -> MimeType.Category {
+        let mediaDirectory = url
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .lastPathComponent
+        switch mediaDirectory {
+        case MimeType.Category.audio.mediaDir:
+            return .audio
+        case MimeType.Category.image.mediaDir:
+            return .image
+        case MimeType.Category.file.mediaDir:
+            return .file
+        default:
+            return fallback
+        }
     }
 
     /// Every remaining raw file transfer is signed, regardless of whether it

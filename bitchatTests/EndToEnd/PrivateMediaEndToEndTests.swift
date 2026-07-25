@@ -682,13 +682,18 @@ struct PrivateMediaEndToEndTests {
         #expect(!identity.hasObservedPrivateMediaCapability(
             fingerprint: impostorKey.sha256Fingerprint()
         ))
+        #expect(identity.hasObservedPrivateMediaCapability(
+            fingerprint: bob.noiseStaticPublicKeyData().sha256Fingerprint()
+        ))
         alice._test_seedConnectedPeer(
             bob.myPeerID,
             nickname: "Bob",
             capabilities: [],
             noisePublicKey: impostorKey
         )
-        #expect(alice.privateMediaSendPolicy(to: bob.myPeerID) == .legacyRequiresConsent)
+        // The exact live Noise identity remains authoritative over a later
+        // impostor registry rewrite.
+        #expect(alice.privateMediaSendPolicy(to: bob.myPeerID) == .encrypted)
     }
 
     @Test
@@ -1300,6 +1305,8 @@ struct PrivateMediaEndToEndTests {
 
         return enumerator.compactMap { item in
             guard let url = item as? URL,
+                  !url.pathComponents.contains(".private-media-receipts"),
+                  url.lastPathComponent != ".private-media-receipts.json",
                   (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else {
                 return nil
             }

@@ -134,6 +134,7 @@ struct BLEIncomingFileStore {
     private let baseDirectory: URL?
     private let dateProvider: () -> Date
     private let panicMarkerWriter: (Data, URL) throws -> Void
+    private let privateMediaReceipts: BLEPrivateMediaReceiptStore
 
     init(
         fileManager: FileManager = .default,
@@ -147,6 +148,11 @@ struct BLEIncomingFileStore {
         self.baseDirectory = baseDirectory
         self.dateProvider = dateProvider
         self.panicMarkerWriter = panicMarkerWriter
+        self.privateMediaReceipts = BLEPrivateMediaReceiptStore(
+            fileManager: fileManager,
+            baseDirectory: baseDirectory,
+            now: dateProvider
+        )
     }
 
     /// Panic-wipe every managed incoming and outgoing media artifact before
@@ -159,6 +165,11 @@ struct BLEIncomingFileStore {
     func panicWipe(
         hasDurablePendingMarker: Bool = false
     ) throws {
+        // The receipt index caches tombstones as well as accepted payloads.
+        // Always invalidate it on return, including partial-failure paths, so
+        // no pre-panic receiver decision survives after identity reset.
+        defer { privateMediaReceipts.resetForPanic() }
+
         let markerError: Error?
         do {
             try markPanicRecoveryPending()
@@ -257,6 +268,35 @@ struct BLEIncomingFileStore {
         }
     }
 
+    func privateMediaReceiptState(
+        messageID: String
+    ) -> BLEPrivateMediaReceiptState {
+        privateMediaReceipts.state(for: messageID)
+    }
+
+    func commitPrivateMediaFile(
+        messageID: String,
+        storedURL: URL
+    ) -> Bool {
+        privateMediaReceipts.commitAccepted(
+            messageID: messageID,
+            storedURL: storedURL
+        )
+    }
+
+    /// Best-effort rollback for a payload whose durable receipt commit failed.
+    func removeIncomingFile(at storedURL: URL) {
+        guard isURLInsideFilesDirectory(storedURL) else { return }
+        do {
+            try fileManager.removeItem(at: storedURL)
+        } catch {
+            SecureLogger.warning(
+                "⚠️ Failed to roll back uncommitted incoming media: \(error)",
+                category: .session
+            )
+        }
+    }
+
     /// Frees least-recently-modified incoming files until `reservingBytes`
     /// fits under the quota. Files named `voice_live_*` (in-flight live
     /// captures) are never evicted regardless of who triggers enforcement —
@@ -347,6 +387,13 @@ struct BLEIncomingFileStore {
                 isDirectory: false
             )
         ]
+    }
+
+    private func isURLInsideFilesDirectory(_ url: URL) -> Bool {
+        guard let filesDirectory = try? filesDirectory().standardizedFileURL else {
+            return false
+        }
+        return url.standardizedFileURL.path.hasPrefix(filesDirectory.path + "/")
     }
 
     private func sanitizedFileName(_ name: String?, defaultName: String, fallbackExtension: String?) -> String {

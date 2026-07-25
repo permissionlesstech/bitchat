@@ -1139,6 +1139,28 @@ final class BLEService: NSObject {
         collectionsQueue.sync { peerRegistry.capabilities(for: peerID) }
     }
 
+    private func privateMediaPolicyFingerprint(
+        for peerID: PeerID,
+        expectedSessionGeneration: UUID?
+    ) -> String? {
+        let normalizedPeerID = peerID.toShort()
+        if let expectedSessionGeneration,
+           noiseService.sessionGeneration(for: normalizedPeerID)
+                == expectedSessionGeneration,
+           let fingerprint = noiseService.getPeerFingerprint(normalizedPeerID),
+           noiseService.sessionGeneration(for: normalizedPeerID)
+                == expectedSessionGeneration {
+            // The exact authenticated Noise static key is stronger than a
+            // registry entry populated by a public announce.
+            return fingerprint
+        }
+        return collectionsQueue.sync {
+            peerRegistry.info(for: normalizedPeerID)?
+                .noisePublicKey?
+                .sha256Fingerprint()
+        }
+    }
+
     func privateMediaSendPolicy(to peerID: PeerID) -> PrivateMediaSendPolicy {
         let normalizedPeerID = peerID.toShort()
         let state: (
@@ -1166,7 +1188,10 @@ final class BLEService: NSObject {
             return .awaitingCapabilityProof
         }
 
-        guard let fingerprint = state.fingerprint else {
+        guard let fingerprint = privateMediaPolicyFingerprint(
+            for: normalizedPeerID,
+            expectedSessionGeneration: state.sessionGeneration
+        ) ?? state.fingerprint else {
             // A raw fallback must be bound to the stable Noise key from a
             // verified registry entry; a routing ID alone can rotate or be
             // spoofed. Without that key neither proof nor safe migration state
@@ -1220,11 +1245,13 @@ final class BLEService: NSObject {
                 return
             }
 
-            let fingerprint: String? = self.collectionsQueue.sync {
-                self.peerRegistry.info(for: normalizedPeerID)?
-                    .noisePublicKey?
-                    .sha256Fingerprint()
+            let generation = self.collectionsQueue.sync {
+                self.privateMediaSessionGenerations[normalizedPeerID]
             }
+            let fingerprint = self.privateMediaPolicyFingerprint(
+                for: normalizedPeerID,
+                expectedSessionGeneration: generation
+            )
             guard let fingerprint else {
                 self.completePrivateMediaPolicyResolution([completion], with: .blockedDowngrade)
                 return
@@ -2558,6 +2585,20 @@ final class BLEService: NSObject {
                     defaultPrefix: defaultPrefix
                 )
             },
+            privateMediaReceiptState: { [weak self] messageID in
+                self?.incomingFileStore.privateMediaReceiptState(
+                    messageID: messageID
+                ) ?? .unavailable
+            },
+            commitPrivateMediaFile: { [weak self] messageID, storedURL in
+                self?.incomingFileStore.commitPrivateMediaFile(
+                    messageID: messageID,
+                    storedURL: storedURL
+                ) ?? false
+            },
+            removeIncomingFile: { [weak self] storedURL in
+                self?.incomingFileStore.removeIncomingFile(at: storedURL)
+            },
             isPrivateMediaSenderBlocked: { [weak self] peerID in
                 guard let self else { return false }
                 let senderStaticKey = self.noiseService.getPeerPublicKeyData(peerID)
@@ -2572,7 +2613,7 @@ final class BLEService: NSObject {
             updatePeerLastSeen: { [weak self] peerID in
                 self?.updatePeerLastSeen(peerID)
             },
-            acknowledgePrivateMediaDuplicate: { [weak self] messageID, peerID in
+            acknowledgePrivateMedia: { [weak self] messageID, peerID in
                 guard let self,
                       let senderStaticKey = self.noiseService.getPeerPublicKeyData(peerID),
                       !self.identityManager.isBlocked(
@@ -2582,9 +2623,12 @@ final class BLEService: NSObject {
                 }
                 self.sendDeliveryAck(for: messageID, to: peerID)
             },
-            deliverMessage: { [weak self] message in
-                // Single main-actor hop delivering `.messageReceived`.
-                self?.emitTransportEvent(.messageReceived(message))
+            deliverMessage: { [weak self] message, shouldDeliver, completion in
+                self?.emitTransportEvent(
+                    .messageReceived(message),
+                    shouldDeliver: shouldDeliver,
+                    completion: completion
+                )
             }
         )
     }
@@ -4322,9 +4366,22 @@ extension BLEService {
         }
     }
 
-    private func emitTransportEvent(_ event: TransportEvent) {
+    private func emitTransportEvent(
+        _ event: TransportEvent,
+        shouldDeliver: (() -> Bool)? = nil,
+        completion: (() -> Void)? = nil
+    ) {
         notifyUI { [weak self] in
-            _ = self?.deliverTransportEvent(event)
+            guard let self,
+                  shouldDeliver?() ?? true,
+                  self.deliverTransportEvent(event),
+                  // Quota cleanup can race the asynchronous main-actor hop or
+                  // the synchronous ConversationStore upsert. ACK only while
+                  // the exact durable mapping and file still resolve.
+                  shouldDeliver?() ?? true else {
+                return
+            }
+            completion?()
         }
     }
 

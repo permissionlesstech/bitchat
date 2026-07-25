@@ -28,6 +28,13 @@ public struct PeerCapabilities: OptionSet, Equatable, Hashable, Sendable {
     /// before outer BLE fragmentation. Peers that omit this bit require the
     /// signed directed raw-file migration fallback.
     public static let privateMedia = PeerCapabilities(rawValue: 1 << 8)
+    /// Stable private-media IDs are durably deduplicated by the receiver and
+    /// correlated delivery/read receipts permit bounded automatic resend.
+    ///
+    /// Bit 8 remains the encrypted-media compatibility contract. Bit 9 only
+    /// enables sender-side automatic retry after exact-session proof.
+    public static let privateMediaReceipts =
+        PeerCapabilities(rawValue: 1 << 9)
     /// Reserved for test builds that briefly advertised non-destructive Noise
     /// replacement. Current clients intentionally do not advertise or act on
     /// this bit; keep it decodable so the wire assignment is never reused.

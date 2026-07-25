@@ -28,6 +28,13 @@ peer's Noise session before BLE fragmentation.
   `0x21`. A valid bit-8 proof selects Noise `0x20`; a valid no-bit proof or a
   no-proof timeout reaches the explicit legacy-consent path for an unpinned
   peer. No timeout automatically sends raw bytes.
+- `PeerCapabilities.privateMediaReceipts` is bit 9. Its exact-session
+  authenticated proof enables bounded sender-side automatic retry; a public
+  announce never does. It does not replace bit 8: encrypted `0x20` media from
+  bit-8-only prior iOS clients keeps the same deterministic stable ID and
+  delivery ACK. Receivers durably commit that ID before UI delivery or ACK, so
+  a lost proof followed by a later bit-9 retry cannot create a second,
+  random-ID bubble.
 - An unpinned peer with a stable Noise key but without that capability is
   eligible for one signed, directed
   `fileTransfer`, matching the pre-migration wire form used by older iOS and

@@ -15,6 +15,13 @@ enum TransportConfig {
     static let privateMediaCapabilityProofTimeoutSeconds: TimeInterval = 5
     static let privateMediaCapabilityProofPendingPeerCap: Int = 64
     static let privateMediaCapabilityProofWaitersPerPeerCap: Int = 16
+    /// Accepted private-media receipts and explicit-deletion tombstones each
+    /// receive this independent capacity.
+    static let privateMediaReceivedLedgerCapacity: Int = 4_096
+    /// A bounded retry horizon prevents stable receipt state from growing into
+    /// permanent application history.
+    static let privateMediaReceivedLedgerTTLSeconds: TimeInterval =
+        7 * 24 * 60 * 60
     static let bleFragmentRelayMinDelayMs: Int = 8          // Faster forwarding for media fragments
     static let bleFragmentRelayMaxDelayMs: Int = 25         // Upper jitter bound for fragment relays
     // Fragment relay TTL in sparse graphs; matches messageTTLDefault so media

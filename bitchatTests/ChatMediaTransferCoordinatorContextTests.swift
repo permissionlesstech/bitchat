@@ -8,7 +8,7 @@
 // `ChatPrivateConversationCoordinatorContextTests` exemplars.
 //
 // Real file/codec work remains covered by `ChatMediaPreparationTests`. These
-// tests inject a paused voice-note preparer to exercise cancellation ownership
+// tests inject paused media preparers to exercise cancellation ownership
 // across the detached-preparation/MainActor boundary deterministically.
 //
 
@@ -500,6 +500,58 @@ struct ChatMediaTransferCoordinatorContextTests {
             recipientPeerID: peerID
         ))
         coordinator.cleanupLocalFile(forMessage: message)
+    }
+
+    @Test @MainActor
+    func panicDuringImagePreparationDeletesStaleOutputWithoutSideEffects() async throws {
+        let context = MockChatMediaTransferContext()
+        let peerID = PeerID(str: "99aabbccddeeff00")
+        context.selectedPrivateChatPeer = peerID
+        let sourceURL = try makeCoordinatorTestImageURL()
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "panic-stale-image-\(UUID().uuidString).jpg"
+            )
+        let preparer = PausedImagePreparer(outputURL: outputURL)
+        let coordinator = ChatMediaTransferCoordinator(
+            context: context,
+            prepareImagePacket: { url in try preparer.prepare(url) }
+        )
+        defer {
+            preparer.release()
+            try? FileManager.default.removeItem(at: sourceURL)
+            try? FileManager.default.removeItem(at: outputURL)
+        }
+
+        coordinator.sendImage(from: sourceURL)
+        #expect(await TestHelpers.waitUntil(
+            { preparer.hasStarted },
+            timeout: TestConstants.longTimeout
+        ))
+
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(
+            deadline: .now() + .milliseconds(100)
+        ) {
+            preparer.release()
+        }
+        coordinator.resetForPanic()
+
+        #expect(await TestHelpers.waitUntil(
+            { preparer.hasFinished },
+            timeout: TestConstants.longTimeout
+        ))
+        #expect(await TestHelpers.waitUntil(
+            { !FileManager.default.fileExists(atPath: outputURL.path) },
+            timeout: TestConstants.longTimeout
+        ))
+        #expect(context.privateChats[peerID]?.isEmpty != false)
+        #expect(context.appendedPublicMessages.isEmpty)
+        #expect(context.privateFileSends.isEmpty)
+        #expect(context.broadcastFileSends.isEmpty)
+        #expect(context.systemMessages.isEmpty)
+        #expect(context.deliveryStatusUpdates.isEmpty)
+        #expect(coordinator.transferIdToMessageIDs.isEmpty)
+        #expect(coordinator.messageIDToTransferId.isEmpty)
     }
 
     @Test @MainActor
