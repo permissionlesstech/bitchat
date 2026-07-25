@@ -33,15 +33,25 @@ final class NearbyNotesCounter: ObservableObject {
     private let locationManager: LocationChannelManager
     private let managerFactory: @MainActor (String) -> LocationNotesManager
     private let releaseManager: @MainActor (LocationNotesManager?) -> Void
+    private let locationNotesEnabled: @MainActor () -> Bool
+    private let locationNotesSettingsPublisher: AnyPublisher<Void, Never>
 
     init(
         locationManager: LocationChannelManager = .shared,
         managerFactory: @escaping @MainActor (String) -> LocationNotesManager = { LocationNotesPool.shared.acquire($0) },
-        releaseManager: @escaping @MainActor (LocationNotesManager?) -> Void = { LocationNotesPool.shared.release($0) }
+        releaseManager: @escaping @MainActor (LocationNotesManager?) -> Void = { LocationNotesPool.shared.release($0) },
+        locationNotesEnabled: @escaping @MainActor () -> Bool = { LocationNotesSettings.enabled },
+        locationNotesSettings: AnyPublisher<Void, Never>? = nil
     ) {
         self.locationManager = locationManager
         self.managerFactory = managerFactory
         self.releaseManager = releaseManager
+        self.locationNotesEnabled = locationNotesEnabled
+        self.locationNotesSettingsPublisher = locationNotesSettings
+            ?? NotificationCenter.default
+                .publisher(for: LocationNotesSettings.didChangeNotification)
+                .map { _ in () }
+                .eraseToAnyPublisher()
     }
 
     /// Whether the empty-timeline "check for notes" hint should render.
@@ -53,7 +63,7 @@ final class NearbyNotesCounter: ObservableObject {
     /// passes its own observed permission state so the hint re-renders when
     /// authorization changes.
     func offersRevealHint(permissionState: LocationChannelManager.PermissionState) -> Bool {
-        !revealed && LocationNotesSettings.enabled && permissionState == .authorized
+        !revealed && locationNotesEnabled() && permissionState == .authorized
     }
 
     /// Marks the one explicit act that lets the counter subscribe. Sticky for
@@ -83,8 +93,7 @@ final class NearbyNotesCounter: ObservableObject {
             .sink { [weak self] _ in self?.retarget() }
         // The app-info kill switch must take effect immediately, not on the
         // next location change or remount.
-        settingCancellable = NotificationCenter.default
-            .publisher(for: LocationNotesSettings.didChangeNotification)
+        settingCancellable = locationNotesSettingsPublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.retarget() }
         retarget()
@@ -105,7 +114,7 @@ final class NearbyNotesCounter: ObservableObject {
     private func retarget() {
         guard activeHolders > 0,
               revealed,
-              LocationNotesSettings.enabled,
+              locationNotesEnabled(),
               locationManager.permissionState == .authorized,
               let geohash = locationManager.availableChannels
                   .first(where: { $0.level == .building })?.geohash
