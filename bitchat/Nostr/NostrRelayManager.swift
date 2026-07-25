@@ -1525,14 +1525,6 @@ private enum ParsedInbound {
 }
 
 private extension URLSessionWebSocketTask.Message {
-    var data: Data? {
-        switch self {
-        case .string(let text): text.data(using: .utf8)
-        case .data(let data):   data
-        @unknown default:       nil
-        }
-    }
-
     /// Prefer rejecting oversized frames before UTF-8/Data materialization
     /// where we can (string length), and always before JSON parse.
     var dataWithinInboundLimit: Data? {
