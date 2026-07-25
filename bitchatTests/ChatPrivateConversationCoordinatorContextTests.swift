@@ -176,6 +176,7 @@ private final class MockChatPrivateConversationContext: ChatPrivateConversationC
     private(set) var geoPrivateMessages: [(content: String, recipientHex: String, messageID: String)] = []
     private(set) var geoDeliveryAcks: [(messageID: String, recipientHex: String)] = []
     private(set) var geoReadReceipts: [(messageID: String, recipientHex: String)] = []
+    var geohashPrivateMessageAccepted = true
 
     func routePrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) {
         routedPrivateMessages.append((content, peerID, messageID))
@@ -191,8 +192,14 @@ private final class MockChatPrivateConversationContext: ChatPrivateConversationC
         meshReadReceipts.append((receipt.originalMessageID, peerID))
     }
 
-    func sendGeohashPrivateMessage(_ content: String, toRecipientHex recipientHex: String, from identity: NostrIdentity, messageID: String) {
+    func sendGeohashPrivateMessage(
+        _ content: String,
+        toRecipientHex recipientHex: String,
+        from identity: NostrIdentity,
+        messageID: String
+    ) -> Bool {
         geoPrivateMessages.append((content, recipientHex, messageID))
+        return geohashPrivateMessageAccepted
     }
 
     func sendGeohashDeliveryAck(for messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity) {
@@ -276,6 +283,11 @@ private func isDelivered(_ status: DeliveryStatus?, to expected: String) -> Bool
 
 private func isRead(_ status: DeliveryStatus?, by expected: String) -> Bool {
     if case .read(let by, _) = status { return by == expected }
+    return false
+}
+
+private func isFailed(_ status: DeliveryStatus?) -> Bool {
+    if case .failed = status { return true }
     return false
 }
 
@@ -410,6 +422,25 @@ struct ChatPrivateConversationCoordinatorContextTests {
         )
         #expect(context.geoDeliveryAcks.count == 1)
         #expect(context.privateChats[convKey]?.count == 1)
+    }
+
+    @Test @MainActor
+    func sendGeohashDM_rejectedAdmissionNeverBecomesSent() async {
+        let context = MockChatPrivateConversationContext()
+        let coordinator = ChatPrivateConversationCoordinator(context: context)
+        let recipientHex = String(repeating: "33", count: 32)
+        let peerID = PeerID(nostr_: recipientHex)
+        context.activeChannel = .location(
+            GeohashChannel(level: .city, geohash: "u4pruy")
+        )
+        context.nostrKeyMapping[peerID] = recipientHex
+        context.geohashPrivateMessageAccepted = false
+
+        coordinator.sendGeohashDM("rejected", to: peerID)
+
+        #expect(context.geoPrivateMessages.map(\.content) == ["rejected"])
+        #expect(context.privateChats[peerID]?.count == 1)
+        #expect(isFailed(context.privateChats[peerID]?.first?.deliveryStatus))
     }
 
     @Test @MainActor

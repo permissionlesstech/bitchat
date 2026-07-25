@@ -52,6 +52,10 @@ struct NostrProtocol {
     static let maximumPrivateEnvelopeCiphertextBytes = 64 * 1024
 
     /// Bound the inner authenticated message JSON before allocation/parsing.
+    /// This is intentionally an envelope limit, not the generic composer
+    /// limit. Raising it alone would not make larger private-message packets
+    /// compatible with released readers; callers must surface a rejected
+    /// packet or envelope as a failed send.
     static let maximumPrivateEnvelopePlaintextBytes = 32 * 1024
 
     /// The outer authenticated seal JSON contains a Base64-encoded encrypted

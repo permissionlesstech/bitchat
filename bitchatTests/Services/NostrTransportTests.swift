@@ -302,6 +302,128 @@ struct NostrTransportTests {
         #expect(reported)
     }
 
+    @Test("Envelope construction failure rejects visibly without publishing")
+    @MainActor
+    func envelopeConstructionFailureRejectsVisibly() async throws {
+        let keychain = MockKeychain()
+        let idBridge = NostrIdentityBridge(keychain: keychain)
+        let sender = try NostrIdentity.generate()
+        let eventProbe = NostrTransportEventProbe()
+        let publicationProbe = NostrTransportProbe()
+        let transport = NostrTransport(
+            keychain: keychain,
+            idBridge: idBridge,
+            dependencies: makeDependencies(
+                currentIdentity: { sender },
+                sendPrivateEnvelopeBatch: { events, _ in
+                    publicationProbe.record(batch: events)
+                }
+            )
+        )
+        transport.senderPeerID = PeerID(str: "0123456789abcdef")
+        transport.eventDelegate = eventProbe
+
+        // Non-empty but invalid hex reaches envelope construction after the
+        // embedded BitChat packet succeeds, reproducing the throwing batch
+        // builder path without allocating an oversized test fixture.
+        let accepted = transport.sendPrivateMessageGeohash(
+            content: "must fail before sent",
+            toRecipientHex: "not-a-hex-public-key",
+            from: sender,
+            messageID: "build-reject"
+        )
+
+        #expect(!accepted)
+        #expect(publicationProbe.sentEvents.isEmpty)
+        #expect(eventProbe.failedMessageIDs == ["build-reject"])
+    }
+
+    @Test("Unencodable user message rejects visibly without publishing")
+    @MainActor
+    func unencodableUserMessageRejectsVisibly() async throws {
+        let keychain = MockKeychain()
+        let idBridge = NostrIdentityBridge(keychain: keychain)
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let eventProbe = NostrTransportEventProbe()
+        let publicationProbe = NostrTransportProbe()
+        let transport = NostrTransport(
+            keychain: keychain,
+            idBridge: idBridge,
+            dependencies: makeDependencies(
+                currentIdentity: { sender },
+                sendPrivateEnvelopeBatch: { events, _ in
+                    publicationProbe.record(batch: events)
+                }
+            )
+        )
+        transport.senderPeerID = PeerID(str: "0123456789abcdef")
+        transport.eventDelegate = eventProbe
+
+        // PrivateMessagePacket uses the deployed UInt8 content length. Do not
+        // create a larger wire shape that released clients cannot decode.
+        let accepted = transport.sendPrivateMessageGeohash(
+            content: String(repeating: "x", count: 256),
+            toRecipientHex: recipient.publicKeyHex,
+            from: sender,
+            messageID: "packet-reject"
+        )
+
+        #expect(!accepted)
+        #expect(publicationProbe.sentEvents.isEmpty)
+        #expect(eventProbe.failedMessageIDs == ["packet-reject"])
+    }
+
+    @Test("Unencodable direct message emits a visible failure")
+    @MainActor
+    func unencodableDirectMessageEmitsVisibleFailure() async throws {
+        let keychain = MockKeychain()
+        let idBridge = NostrIdentityBridge(keychain: keychain)
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let noiseKey = Data((224..<256).map(UInt8.init))
+        let peerID = PeerID(hexData: noiseKey)
+        let relationship = makeRelationship(
+            peerNoisePublicKey: noiseKey,
+            peerNostrPublicKey: recipient.npub,
+            peerNickname: "Oversized peer"
+        )
+        let eventProbe = NostrTransportEventProbe()
+        let publicationProbe = NostrTransportProbe()
+        let transport = NostrTransport(
+            keychain: keychain,
+            idBridge: idBridge,
+            dependencies: makeDependencies(
+                favoriteStatusForNoiseKey: {
+                    $0 == noiseKey ? relationship : nil
+                },
+                currentIdentity: { sender },
+                sendPrivateEnvelopeBatch: { events, _ in
+                    publicationProbe.record(batch: events)
+                }
+            )
+        )
+        transport.senderPeerID = PeerID(str: "0123456789abcdef")
+        transport.eventDelegate = eventProbe
+
+        transport.sendPrivateMessage(
+            String(repeating: "x", count: 256),
+            to: peerID,
+            recipientNickname: "Oversized peer",
+            messageID: "direct-packet-reject"
+        )
+
+        let failed = await TestHelpers.waitUntil(
+            {
+                eventProbe.failedMessageIDs
+                    == ["direct-packet-reject"]
+            },
+            timeout: 5.0
+        )
+        #expect(failed)
+        #expect(publicationProbe.sentEvents.isEmpty)
+    }
+
     @Test("Rejected favorite notification retains and retries the exact pair")
     @MainActor
     func rejectedFavoriteNotificationRetriesExactPair() async throws {

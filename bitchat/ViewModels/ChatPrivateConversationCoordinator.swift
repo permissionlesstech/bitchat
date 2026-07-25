@@ -86,7 +86,13 @@ protocol ChatPrivateConversationContext: AnyObject {
     @discardableResult
     func routeReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) -> Bool
     func sendMeshReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID)
-    func sendGeohashPrivateMessage(_ content: String, toRecipientHex recipientHex: String, from identity: NostrIdentity, messageID: String)
+    @discardableResult
+    func sendGeohashPrivateMessage(
+        _ content: String,
+        toRecipientHex recipientHex: String,
+        from identity: NostrIdentity,
+        messageID: String
+    ) -> Bool
     func sendGeohashDeliveryAck(for messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity)
     func sendGeohashReadReceipt(_ messageID: String, toRecipientHex recipientHex: String, from identity: NostrIdentity)
 
@@ -174,7 +180,13 @@ extension ChatViewModel: ChatPrivateConversationContext {
         meshService.sendReadReceipt(receipt, to: peerID)
     }
 
-    func sendGeohashPrivateMessage(_ content: String, toRecipientHex recipientHex: String, from identity: NostrIdentity, messageID: String) {
+    @discardableResult
+    func sendGeohashPrivateMessage(
+        _ content: String,
+        toRecipientHex recipientHex: String,
+        from identity: NostrIdentity,
+        messageID: String
+    ) -> Bool {
         makeGeohashNostrTransport().sendPrivateMessageGeohash(
             content: content,
             toRecipientHex: recipientHex,
@@ -399,13 +411,21 @@ final class ChatPrivateConversationCoordinator {
                 "GeoDM: local send mid=\(messageID.prefix(8))… to=\(recipientHex.prefix(8))… conv=\(peerID)",
                 category: .session
             )
-            context.sendGeohashPrivateMessage(
+            let accepted = context.sendGeohashPrivateMessage(
                 content,
                 toRecipientHex: recipientHex,
                 from: identity,
                 messageID: messageID
             )
-            context.setPrivateDeliveryStatus(.sent, forMessageID: messageID, peerID: peerID)
+            let status: DeliveryStatus = accepted
+                ? .sent
+                : .failed(
+                    reason: String(
+                        localized: "content.delivery.reason.not_delivered",
+                        comment: "Failure reason shown when a private message could not enter the relay delivery queue"
+                    )
+                )
+            context.setPrivateDeliveryStatus(status, forMessageID: messageID, peerID: peerID)
         } catch {
             context.setPrivateDeliveryStatus(
                 .failed(

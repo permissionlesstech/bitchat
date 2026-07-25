@@ -323,6 +323,11 @@ final class NostrTransport: Transport, @unchecked Sendable {
             SecureLogger.debug("NostrTransport: preparing PM to \(recipientNpub.prefix(16))… id=\(messageID.prefix(8))…", category: .session)
             guard let embedded = NostrEmbeddedBitChat.encodePMForNostr(content: content, messageID: messageID, recipientPeerID: peerID, senderPeerID: senderPeerID) else {
                 SecureLogger.error("NostrTransport: failed to embed PM packet", category: .session)
+                handlePrivateEnvelopeFailure(
+                    events: [],
+                    registerPending: false,
+                    policy: .userMessage(messageID: messageID)
+                )
                 return
             }
             sendPrivateEnvelope(
@@ -387,22 +392,48 @@ extension NostrTransport {
     }
 
     // MARK: Geohash DMs (per-geohash identity)
-    func sendPrivateMessageGeohash(content: String, toRecipientHex recipientHex: String, from identity: NostrIdentity, messageID: String) {
-        Task { @MainActor in
-            guard !recipientHex.isEmpty else { return }
-            SecureLogger.debug("GeoDM: send PM mid=\(messageID.prefix(8))…", category: .session)
-            guard let embedded = NostrEmbeddedBitChat.encodePMForNostrNoRecipient(content: content, messageID: messageID, senderPeerID: senderPeerID) else {
-                SecureLogger.error("NostrTransport: failed to embed geohash PM packet", category: .session)
-                return
-            }
-            sendPrivateEnvelope(
-                content: embedded,
-                recipientHex: recipientHex,
-                senderIdentity: identity,
-                registerPending: true,
-                failurePolicy: .userMessage(messageID: messageID)
+    /// Returns true only when the complete migration pair entered the relay
+    /// delivery queue. GeoDM callers use this synchronous admission result
+    /// before showing "sent"; deterministic packet/envelope failures must not
+    /// be hidden behind an unobserved MainActor task.
+    @MainActor
+    @discardableResult
+    func sendPrivateMessageGeohash(
+        content: String,
+        toRecipientHex recipientHex: String,
+        from identity: NostrIdentity,
+        messageID: String
+    ) -> Bool {
+        let failurePolicy = PrivateEnvelopeFailurePolicy.userMessage(messageID: messageID)
+        guard !recipientHex.isEmpty else {
+            handlePrivateEnvelopeFailure(
+                events: [],
+                registerPending: false,
+                policy: failurePolicy
             )
+            return false
         }
+        SecureLogger.debug("GeoDM: send PM mid=\(messageID.prefix(8))…", category: .session)
+        guard let embedded = NostrEmbeddedBitChat.encodePMForNostrNoRecipient(
+            content: content,
+            messageID: messageID,
+            senderPeerID: senderPeerID
+        ) else {
+            SecureLogger.error("NostrTransport: failed to embed geohash PM packet", category: .session)
+            handlePrivateEnvelopeFailure(
+                events: [],
+                registerPending: false,
+                policy: failurePolicy
+            )
+            return false
+        }
+        return sendPrivateEnvelope(
+            content: embedded,
+            recipientHex: recipientHex,
+            senderIdentity: identity,
+            registerPending: true,
+            failurePolicy: failurePolicy
+        )
     }
 }
 
@@ -424,20 +455,35 @@ extension NostrTransport {
 
     /// Creates and sends a BitChat private-envelope event over Nostr.
     @MainActor
+    @discardableResult
     private func sendPrivateEnvelope(
         content: String,
         recipientHex: String,
         senderIdentity: NostrIdentity,
         registerPending: Bool = false,
         failurePolicy: PrivateEnvelopeFailurePolicy
-    ) {
-        guard let events = try? NostrProtocol.createPrivateEnvelopePublicationBatch(
-            content: content,
-            recipientPubkey: recipientHex,
-            senderIdentity: senderIdentity
-        ) else {
-            SecureLogger.error("NostrTransport: failed to build Nostr private-envelope batch", category: .session)
-            return
+    ) -> Bool {
+        let events: [NostrEvent]
+        do {
+            events = try NostrProtocol.createPrivateEnvelopePublicationBatch(
+                content: content,
+                recipientPubkey: recipientHex,
+                senderIdentity: senderIdentity
+            )
+        } catch {
+            SecureLogger.error(
+                "NostrTransport: failed to build Nostr private-envelope batch: \(error)",
+                category: .session
+            )
+            // Construction failures are deterministic. User-authored messages
+            // must become visibly failed; control payloads have no valid event
+            // pair to retain and retry.
+            handlePrivateEnvelopeFailure(
+                events: [],
+                registerPending: false,
+                policy: failurePolicy
+            )
+            return false
         }
         let accepted = dependencies.sendPrivateEnvelopeBatch(events) { [self] in
             handlePrivateEnvelopeFailure(
@@ -456,9 +502,10 @@ extension NostrTransport {
                 registerPending: registerPending,
                 policy: failurePolicy
             )
-            return
+            return false
         }
         registerPendingPrivateEnvelopesIfNeeded(events, registerPending: registerPending)
+        return true
     }
 
     @MainActor
@@ -477,6 +524,10 @@ extension NostrTransport {
                 ))
             ))
         case .retry(let retryKey):
+            // A deterministic packet/envelope construction failure has no
+            // events to retry. Only relay admission/delivery failures reach
+            // this branch with the complete atomic pair.
+            guard !events.isEmpty else { return }
             envelopeRetryQueue.enqueue(
                 key: retryKey,
                 events: events,

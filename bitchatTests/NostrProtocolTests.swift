@@ -429,6 +429,27 @@ struct NostrProtocolTests {
         }
     }
 
+    @Test func privateEnvelopePublicationBatchRejectsMaximumComposerPayload() throws {
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let composerMaximum = String(
+            repeating: "x",
+            count: InputValidator.Limits.maxMessageLength
+        )
+
+        #expect(
+            composerMaximum.utf8.count
+                > NostrProtocol.maximumPrivateEnvelopePlaintextBytes
+        )
+        expectInvalidCiphertext {
+            _ = try NostrProtocol.createPrivateEnvelopePublicationBatch(
+                content: composerMaximum,
+                recipientPubkey: recipient.publicKeyHex,
+                senderIdentity: sender
+            )
+        }
+    }
+
     @Test func privateEnvelopeRejectsOversizedNestedJSONBeforeParsing() {
         let oversizedJSON = String(
             repeating: "{",
