@@ -16,6 +16,11 @@
 import Testing
 import Foundation
 import BitFoundation
+#if os(iOS)
+import UIKit
+#else
+import AppKit
+#endif
 @testable import bitchat
 
 // MARK: - Mock Context
@@ -204,6 +209,99 @@ struct ChatMediaTransferCoordinatorContextTests {
     }
 
     @Test @MainActor
+    func resetForPanic_waitsForActiveImageWriterBeforeReturning() async throws {
+        let context = MockChatMediaTransferContext()
+        let sourceURL = try makeCoordinatorTestImageURL()
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("panic-prepared-\(UUID().uuidString).jpg")
+        let preparer = PausedImagePreparer(outputURL: outputURL)
+        let coordinator = ChatMediaTransferCoordinator(
+            context: context,
+            prepareImagePacket: { sourceURL in
+                try preparer.prepare(sourceURL)
+            }
+        )
+        defer {
+            preparer.release()
+            try? FileManager.default.removeItem(at: sourceURL)
+            try? FileManager.default.removeItem(at: outputURL)
+        }
+
+        coordinator.sendImage(from: sourceURL)
+        #expect(await TestHelpers.waitUntil(
+            { preparer.hasStarted },
+            timeout: TestConstants.longTimeout
+        ))
+
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(
+            deadline: .now() + .milliseconds(100)
+        ) {
+            preparer.release()
+        }
+        coordinator.resetForPanic()
+
+        // The synchronous reset boundary cannot return while a pre-panic
+        // writer can still create output. The real panic path deletes media
+        // immediately after this method returns.
+        #expect(preparer.hasFinished)
+
+        try? FileManager.default.removeItem(at: outputURL)
+        #expect(await TestHelpers.waitUntil(
+            { !FileManager.default.fileExists(atPath: outputURL.path) },
+            timeout: TestConstants.longTimeout
+        ))
+        await Task.yield()
+        #expect(context.privateFileSends.isEmpty)
+        #expect(context.broadcastFileSends.isEmpty)
+        #expect(context.systemMessages.isEmpty)
+    }
+
+    @Test @MainActor
+    func imagePreparation_doesNotRetainCoordinatorOrDeallocatedContext() async throws {
+        let sourceURL = try makeCoordinatorTestImageURL()
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("released-context-\(UUID().uuidString).jpg")
+        let preparer = PausedImagePreparer(outputURL: outputURL)
+        var context: MockChatMediaTransferContext? = MockChatMediaTransferContext()
+        var coordinator: ChatMediaTransferCoordinator? = ChatMediaTransferCoordinator(
+            context: context!,
+            prepareImagePacket: { sourceURL in
+                try preparer.prepare(sourceURL)
+            }
+        )
+        weak var weakContext: MockChatMediaTransferContext?
+        weak var weakCoordinator: ChatMediaTransferCoordinator?
+        weakContext = context
+        weakCoordinator = coordinator
+        defer {
+            preparer.release()
+            try? FileManager.default.removeItem(at: sourceURL)
+            try? FileManager.default.removeItem(at: outputURL)
+        }
+
+        coordinator?.sendImage(from: sourceURL)
+        #expect(await TestHelpers.waitUntil(
+            { preparer.hasStarted },
+            timeout: TestConstants.longTimeout
+        ))
+
+        coordinator = nil
+        context = nil
+        #expect(weakCoordinator == nil)
+        #expect(weakContext == nil)
+
+        preparer.release()
+        #expect(await TestHelpers.waitUntil(
+            { preparer.hasFinished },
+            timeout: TestConstants.longTimeout
+        ))
+        #expect(await TestHelpers.waitUntil(
+            { !FileManager.default.fileExists(atPath: outputURL.path) },
+            timeout: TestConstants.longTimeout
+        ))
+    }
+
+    @Test @MainActor
     func sendVoiceNote_blockedContextRemovesFileAndExplains() async throws {
         let context = MockChatMediaTransferContext()
         let coordinator = ChatMediaTransferCoordinator(context: context)
@@ -221,4 +319,92 @@ struct ChatMediaTransferCoordinatorContextTests {
         #expect(context.appendedPublicMessages.isEmpty)
         #expect(coordinator.transferIdToMessageIDs.isEmpty)
     }
+}
+
+private final class PausedImagePreparer: @unchecked Sendable {
+    private let condition = NSCondition()
+    private let outputURL: URL
+    private var started = false
+    private var released = false
+    private var finished = false
+
+    init(outputURL: URL) {
+        self.outputURL = outputURL
+    }
+
+    var hasStarted: Bool {
+        condition.lock()
+        defer { condition.unlock() }
+        return started
+    }
+
+    var hasFinished: Bool {
+        condition.lock()
+        defer { condition.unlock() }
+        return finished
+    }
+
+    func prepare(_ _: URL) throws -> ChatPreparedImage {
+        condition.lock()
+        started = true
+        condition.broadcast()
+        while !released {
+            condition.wait()
+        }
+        condition.unlock()
+
+        let data = Data("prepared image".utf8)
+        try data.write(to: outputURL, options: .atomic)
+        let packet = BitchatFilePacket(
+            fileName: outputURL.lastPathComponent,
+            fileSize: UInt64(data.count),
+            mimeType: "image/jpeg",
+            content: data
+        )
+
+        condition.lock()
+        finished = true
+        condition.broadcast()
+        condition.unlock()
+        return ChatPreparedImage(outputURL: outputURL, packet: packet)
+    }
+
+    func release() {
+        condition.lock()
+        released = true
+        condition.broadcast()
+        condition.unlock()
+    }
+}
+
+private func makeCoordinatorTestImageURL() throws -> URL {
+    let url = FileManager.default.temporaryDirectory
+        .appendingPathComponent("coordinator-image-\(UUID().uuidString).png")
+    #if os(iOS)
+    let image = UIGraphicsImageRenderer(size: CGSize(width: 16, height: 16))
+        .image { context in
+            UIColor.systemBlue.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 16, height: 16))
+        }
+    guard let data = image.pngData() else {
+        throw CoordinatorImageTestError.encodingFailed
+    }
+    #else
+    let image = NSImage(size: NSSize(width: 16, height: 16))
+    image.lockFocus()
+    NSColor.systemBlue.setFill()
+    NSRect(x: 0, y: 0, width: 16, height: 16).fill()
+    image.unlockFocus()
+    guard let tiff = image.tiffRepresentation,
+          let bitmap = NSBitmapImageRep(data: tiff),
+          let data = bitmap.representation(using: .png, properties: [:]) else {
+        throw CoordinatorImageTestError.encodingFailed
+    }
+    #endif
+    try data.write(to: url, options: .atomic)
+    return url
+}
+
+private enum CoordinatorImageTestError: Error {
+    case encodingFailed
 }
