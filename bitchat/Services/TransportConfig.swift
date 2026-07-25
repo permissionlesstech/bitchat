@@ -98,6 +98,12 @@ enum TransportConfig {
     static let uiSenderRateBucketRefillPerSec: Double = 1.0
     static let uiContentRateBucketCapacity: Double = 3
     static let uiContentRateBucketRefillPerSec: Double = 0.5
+    // Bound attacker-keyed bucket maps (sender IDs / content digests).
+    static let uiSenderRateBucketMaxEntries: Int = 2000
+    static let uiContentRateBucketMaxEntries: Int = 2000
+    static let uiRateBucketIdleTTL: TimeInterval = 10 * 60
+    // Cap teleported-participant markers so remote events cannot grow the set.
+    static let geoTeleportedParticipantsCap: Int = 1337
 
     // UI sleeps/delays
     static let uiStartupInitialDelaySeconds: TimeInterval = 1.0
