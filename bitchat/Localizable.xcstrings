@@ -1128,6 +1128,50 @@
         }
       }
     },
+    "app_info.appearance.nord" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nord"
+          }
+        }
+      }
+    },
+    "app_info.appearance.dracula" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dracula"
+          }
+        }
+      }
+    },
+    "app_info.appearance.solarized_dark" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "solarized dark"
+          }
+        }
+      }
+    },
+    "app_info.appearance.tokyo_night" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tokyo night"
+          }
+        }
+      }
+    },
     "app_info.appearance.title" : {
       "extractionState" : "manual",
       "localizations" : {
