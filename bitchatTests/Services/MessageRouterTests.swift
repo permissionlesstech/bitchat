@@ -189,6 +189,58 @@ struct MessageRouterTests {
     }
 
     @Test @MainActor
+    func authenticationRetry_scopesCollidingMessageIDsByPeer() async {
+        let securePeer = PeerID(str: "0000000000000025")
+        let pendingPeer = PeerID(str: "0000000000000026")
+        let transport = MockTransport()
+        transport.connectedPeers = [securePeer, pendingPeer]
+        transport.securePeers = [securePeer]
+
+        let router = MessageRouter(transports: [transport])
+        let promotedID = "collision-promoted"
+        let clearedID = "collision-cleared"
+
+        // Pending B then secure A: an ID-global marker falsely promotes B.
+        router.sendPrivate(
+            "pending promoted",
+            to: pendingPeer,
+            recipientNickname: "Pending",
+            messageID: promotedID
+        )
+        router.sendPrivate(
+            "secure promoted",
+            to: securePeer,
+            recipientNickname: "Secure",
+            messageID: promotedID
+        )
+
+        // Secure A then pending B: an ID-global removal falsely clears A.
+        router.sendPrivate(
+            "secure cleared",
+            to: securePeer,
+            recipientNickname: "Secure",
+            messageID: clearedID
+        )
+        router.sendPrivate(
+            "pending cleared",
+            to: pendingPeer,
+            recipientNickname: "Pending",
+            messageID: clearedID
+        )
+
+        transport.resetRecordings()
+        transport.securePeers = [securePeer, pendingPeer]
+
+        router.retrySecurePrivateMessagesAfterAuthentication(for: [pendingPeer])
+        #expect(transport.sentPrivateMessages.isEmpty)
+
+        router.retrySecurePrivateMessagesAfterAuthentication(for: [securePeer])
+        #expect(transport.sentPrivateMessages.count == 2)
+        #expect(Set(transport.sentPrivateMessages.map(\.messageID)) == [promotedID, clearedID])
+        #expect(transport.sentPrivateMessages.allSatisfy { $0.peerID == securePeer })
+    }
+
+    @Test @MainActor
     func authenticationRetry_doesNotDuplicateMessageRequeuedByBLEForHandshake() async {
         let peerID = PeerID(str: "0000000000000021")
         let transport = MockTransport()
@@ -713,6 +765,52 @@ struct MessageRouterTests {
         #expect(carried == ["bridge-ack"])
     }
 
+    @Test @MainActor
+    func bridgeDepositsScopeCollidingMessageIDsByRecipient() async {
+        let firstRecipient = PeerID(str: "00000000000000b1")
+        let secondRecipient = PeerID(str: "00000000000000b2")
+        let firstKey = Data(repeating: 0xB1, count: 32)
+        let secondKey = Data(repeating: 0xB2, count: 32)
+        let recipientKeys = [
+            firstRecipient: firstKey,
+            secondRecipient: secondKey
+        ]
+        let router = MessageRouter(
+            transports: [MockTransport()],
+            courierDirectory: CourierDirectory(
+                noiseKey: { recipientKeys[$0] },
+                isTrustedCourier: { _ in false }
+            )
+        )
+        var requestedKeys: [Data] = []
+        var completions: [@MainActor (Bool) -> Void] = []
+        router.bridgeCourierDeposit = { _, _, recipientKey, completion in
+            requestedKeys.append(recipientKey)
+            completions.append(completion)
+        }
+        var carriedPeers: [PeerID] = []
+        router.onMessageCarried = { _, peerID in carriedPeers.append(peerID) }
+
+        router.sendPrivate(
+            "First",
+            to: firstRecipient,
+            recipientNickname: "First",
+            messageID: "bridge-collision"
+        )
+        router.sendPrivate(
+            "Second",
+            to: secondRecipient,
+            recipientNickname: "Second",
+            messageID: "bridge-collision"
+        )
+
+        #expect(completions.count == 2)
+        #expect(Set(requestedKeys) == [firstKey, secondKey])
+
+        completions.forEach { $0(true) }
+        #expect(Set(carriedPeers) == [firstRecipient, secondRecipient])
+    }
+
     // MARK: - Outbox persistence
 
     @Test @MainActor
@@ -829,7 +927,10 @@ struct MessageRouterTests {
         transport.reachablePeers.formUnion([acknowledgedPeer, otherPeer])
         let router = MessageRouter(transports: [transport], outboxStore: restoredStore)
 
-        #expect(!router.markDelivered("shared-locked-id", for: [acknowledgedPeer]))
+        router.markDelivered(
+            "shared-locked-id",
+            from: [acknowledgedPeer]
+        )
         protectedDataUnavailable = false
         restoredStore.retryDeferredLoad()
         await Task.yield()

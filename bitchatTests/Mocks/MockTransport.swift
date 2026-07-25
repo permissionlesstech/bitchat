@@ -65,6 +65,7 @@ final class MockTransport: Transport, PrivateMediaDeletionPersisting {
     var peerFingerprints: [PeerID: String] = [:]
     var peerNoiseStates: [PeerID: LazyHandshakeState] = [:]
     var privateMediaPolicies: [PeerID: PrivateMediaSendPolicy] = [:]
+    var privateMediaReceiptSessionGenerations: [PeerID: UUID] = [:]
     var persistDeletedPrivateMediaResult = true
     var deferDeletedPrivateMediaPersistence = false
     private var pendingDeletedPrivateMediaCompletions: [
@@ -221,6 +222,12 @@ final class MockTransport: Transport, PrivateMediaDeletionPersisting {
 
     func privateMediaSendPolicy(to peerID: PeerID) -> PrivateMediaSendPolicy {
         privateMediaPolicies[peerID] ?? .encrypted
+    }
+
+    func authenticatedPrivateMediaReceiptSessionGeneration(
+        to peerID: PeerID
+    ) -> UUID? {
+        privateMediaReceiptSessionGenerations[peerID]
     }
 
     func resolvePrivateMediaSendPolicy(

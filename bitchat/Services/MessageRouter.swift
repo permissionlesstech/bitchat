@@ -34,6 +34,20 @@ struct CourierDirectory {
 final class MessageRouter {
     typealias QueuedMessage = MessageOutboxStore.QueuedMessage
 
+    private struct PeerMessageKey: Hashable {
+        let peerID: PeerID
+        let messageID: String
+
+        static func == (lhs: PeerMessageKey, rhs: PeerMessageKey) -> Bool {
+            lhs.peerID == rhs.peerID && lhs.messageID == rhs.messageID
+        }
+
+        func hash(into hasher: inout Hasher) {
+            hasher.combine(peerID)
+            hasher.combine(messageID)
+        }
+    }
+
     private let transports: [Transport]
     private let now: () -> Date
     private let courierDirectory: CourierDirectory
@@ -104,15 +118,17 @@ final class MessageRouter {
     }
 
     private var bridgeSweepTask: Task<Void, Never>?
-    private var bridgeDepositsInFlight = Set<String>()
+    private var bridgeDepositsInFlight = Set<PeerMessageKey>()
 
     private var outbox: [PeerID: [QueuedMessage]] = [:]
-    /// IDs whose latest router-owned transmission used an already-established
-    /// secure session and still awaits an ack. This deliberately excludes
-    /// messages handed to BLE while a handshake is pending: BLE owns those
-    /// sends and drains its queue after authentication, so retrying them here
-    /// would duplicate every normal first-handshake DM.
-    private var securelyTransmittedMessageIDs = Set<String>()
+    /// Peer/message pairs whose latest router-owned transmission used an
+    /// already-established secure session and still await an ack. Peer scope
+    /// is required because message IDs are not globally unique across direct
+    /// conversations. This deliberately excludes messages handed to BLE while
+    /// a handshake is pending: BLE owns those sends and drains its queue after
+    /// authentication, so retrying them here would duplicate every normal
+    /// first-handshake DM.
+    private var secureTransmissions = Set<PeerMessageKey>()
 
     // Outbox limits to prevent unbounded memory growth
     private static let maxMessagesPerPeer = 100
@@ -195,7 +211,7 @@ final class MessageRouter {
             // replacement handshake will retry this same message ID, which
             // receivers deduplicate.
             enqueue(message, for: peerID)
-            securelyTransmittedMessageIDs.insert(messageID)
+            secureTransmissions.insert(PeerMessageKey(peerID: peerID, messageID: messageID))
             SecureLogger.debug("Routing PM via \(type(of: transport)) (connected) to \(peerID.id.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
             transport.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname, messageID: messageID)
             return
@@ -219,7 +235,7 @@ final class MessageRouter {
             // away.
             SecureLogger.debug("Routing PM via \(type(of: transport)) (connected, no secure session) to \(peerID.id.prefix(8))… id=\(messageID.prefix(8))…", category: .session)
             enqueue(message, for: peerID)
-            securelyTransmittedMessageIDs.remove(messageID)
+            secureTransmissions.remove(PeerMessageKey(peerID: peerID, messageID: messageID))
             transport.sendPrivateMessage(content, to: peerID, recipientNickname: recipientNickname, messageID: messageID)
             attemptCourierDeposit(messageID: messageID, for: peerID)
             return
@@ -355,11 +371,12 @@ final class MessageRouter {
         for peerID: PeerID,
         recipientKey: Data
     ) {
+        let inFlightKey = PeerMessageKey(peerID: peerID, messageID: message.messageID)
         guard let bridgeCourierDeposit,
-              bridgeDepositsInFlight.insert(message.messageID).inserted else { return }
+              bridgeDepositsInFlight.insert(inFlightKey).inserted else { return }
         bridgeCourierDeposit(message.content, message.messageID, recipientKey) { [weak self] succeeded in
             guard let self else { return }
-            self.bridgeDepositsInFlight.remove(message.messageID)
+            self.bridgeDepositsInFlight.remove(inFlightKey)
             // A direct delivery may have cleared the outbox while the relay
             // relay confirmation was in flight; do not regress its UI state.
             guard succeeded, self.queuedMessage(message.messageID, for: peerID) != nil else { return }
@@ -391,7 +408,7 @@ final class MessageRouter {
     /// retry state.
     func markDelivered(_ messageID: String, from peerIDs: Set<PeerID>) {
         guard !peerIDs.isEmpty else { return }
-        clearRetainedMessage(messageID, allowedPeerIDs: peerIDs)
+        _ = markDelivered(messageID, for: Array(peerIDs))
     }
 
     private func clearRetainedMessage(
@@ -408,11 +425,10 @@ final class MessageRouter {
             outbox[peerID] = filtered.isEmpty ? nil : filtered
             cleared = true
         }
-        if !outbox.values.contains(where: { queue in
-            queue.contains { $0.messageID == messageID }
-        }) {
-            securelyTransmittedMessageIDs.remove(messageID)
+        let matchingSecureTransmissions = secureTransmissions.filter {
+            $0.messageID == messageID
         }
+        secureTransmissions.subtract(matchingSecureTransmissions)
         // The durable snapshot may still be hidden by protected data. Record
         // the ack even when this cold-load view cannot find the message, then
         // persist the current view so the store retains a removal tombstone.
@@ -439,10 +455,8 @@ final class MessageRouter {
             outbox[peerID] = filtered.isEmpty ? nil : filtered
             cleared = true
         }
-        if !outbox.values.contains(where: { queue in
-            queue.contains { $0.messageID == messageID }
-        }) {
-            securelyTransmittedMessageIDs.remove(messageID)
+        for peerID in peerIDs {
+            secureTransmissions.remove(PeerMessageKey(peerID: peerID, messageID: messageID))
         }
         // Preserve the scoped ack even when protected data hides the durable
         // queue during a cold launch.
@@ -504,7 +518,7 @@ final class MessageRouter {
     }
 
     private func dropMessage(_ messageID: String, for peerID: PeerID) {
-        securelyTransmittedMessageIDs.remove(messageID)
+        secureTransmissions.remove(PeerMessageKey(peerID: peerID, messageID: messageID))
         metrics?.record(.outboxDropped)
         onMessageDropped?(messageID, peerID)
     }
@@ -548,7 +562,7 @@ final class MessageRouter {
     /// Panic wipe: forget queued mail on disk and in memory.
     func wipeOutbox() {
         outbox.removeAll()
-        securelyTransmittedMessageIDs.removeAll()
+        secureTransmissions.removeAll()
         outboxStore?.wipe()
     }
 
@@ -582,7 +596,7 @@ final class MessageRouter {
     /// A peer restart can leave that local session looking usable until the
     /// replacement handshake arrives; the first ciphertext is then
     /// undecryptable remotely. Normal pre-handshake sends are intentionally
-    /// absent from `securelyTransmittedMessageIDs` because BLE already queues
+    /// absent from `secureTransmissions` because BLE already queues
     /// and drains them when authentication completes.
     func retrySecurePrivateMessagesAfterAuthentication(for peerIDAliases: [PeerID]) {
         typealias Candidate = (
@@ -607,7 +621,8 @@ final class MessageRouter {
             }
 
             for (queueOrder, message) in queued.enumerated() {
-                guard securelyTransmittedMessageIDs.contains(message.messageID) else { continue }
+                let key = PeerMessageKey(peerID: peerID, messageID: message.messageID)
+                guard secureTransmissions.contains(key) else { continue }
                 candidates.append((
                     peerID: peerID,
                     message: message,
@@ -637,8 +652,9 @@ final class MessageRouter {
         for candidate in candidates {
             let peerID = candidate.peerID
             let message = candidate.message
+            let key = PeerMessageKey(peerID: peerID, messageID: message.messageID)
             guard retriedMessageIDs.insert(message.messageID).inserted,
-                  securelyTransmittedMessageIDs.contains(message.messageID),
+                  secureTransmissions.contains(key),
                   queuedMessage(message.messageID, for: peerID) != nil,
                   let transport = connectedTransport(for: peerID),
                   transport.canDeliverSecurely(to: peerID) else {
@@ -722,7 +738,9 @@ final class MessageRouter {
                     continue
                 }
                 SecureLogger.debug("Outbox -> \(type(of: transport)) (connected) for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))…", category: .session)
-                securelyTransmittedMessageIDs.insert(message.messageID)
+                secureTransmissions.insert(
+                    PeerMessageKey(peerID: peerID, messageID: message.messageID)
+                )
                 transport.sendPrivateMessage(message.content, to: peerID, recipientNickname: message.nickname, messageID: message.messageID)
                 metrics?.record(.outboxResent)
                 outboxChanged = incrementSendAttemptsIfQueued(message.messageID, for: peerID) || outboxChanged
@@ -738,7 +756,9 @@ final class MessageRouter {
                 // preserve. Retention stays bounded by the 24h outbox TTL
                 // and the per-peer FIFO cap.
                 SecureLogger.debug("Outbox -> \(type(of: transport)) (connected, no secure session) for \(peerID.id.prefix(8))… id=\(message.messageID.prefix(8))…", category: .session)
-                securelyTransmittedMessageIDs.remove(message.messageID)
+                secureTransmissions.remove(
+                    PeerMessageKey(peerID: peerID, messageID: message.messageID)
+                )
                 transport.sendPrivateMessage(message.content, to: peerID, recipientNickname: message.nickname, messageID: message.messageID)
                 metrics?.record(.outboxResent)
             } else if let transport = reachableTransport(for: peerID) {

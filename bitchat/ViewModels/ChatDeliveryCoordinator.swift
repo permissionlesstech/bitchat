@@ -21,6 +21,14 @@ protocol ChatDeliveryContext: AnyObject {
     /// message is unknown or no copy changed.
     @discardableResult
     func setDeliveryStatus(_ status: DeliveryStatus, forMessageID messageID: String) -> Bool
+    /// Applies an authenticated receipt only to the direct conversations
+    /// represented by the supplied peer aliases.
+    @discardableResult
+    func setDeliveryStatus(
+        _ status: DeliveryStatus,
+        forMessageID messageID: String,
+        inDirectPeerAliases peerIDs: Set<PeerID>
+    ) -> Bool
     /// Current delivery status of the message in whichever conversation holds it.
     func deliveryStatus(forMessageID messageID: String) -> DeliveryStatus?
     /// Message IDs across all direct conversations (read-receipt pruning).
@@ -47,6 +55,19 @@ extension ChatViewModel: ChatDeliveryContext {
         conversations.setDeliveryStatus(status, forMessageID: messageID)
     }
 
+    @discardableResult
+    func setDeliveryStatus(
+        _ status: DeliveryStatus,
+        forMessageID messageID: String,
+        inDirectPeerAliases peerIDs: Set<PeerID>
+    ) -> Bool {
+        conversations.setDeliveryStatus(
+            status,
+            forMessageID: messageID,
+            inDirectPeerAliases: peerIDs
+        )
+    }
+
     func deliveryStatus(forMessageID messageID: String) -> DeliveryStatus? {
         conversations.deliveryStatus(forMessageID: messageID)
     }
@@ -68,6 +89,12 @@ extension ChatViewModel: ChatDeliveryContext {
 
     func markMessageDelivered(_ messageID: String, from peerIDs: Set<PeerID>) {
         messageRouter.markDelivered(messageID, from: peerIDs)
+        // The caller has already bound this receipt to one of our outgoing
+        // conversations. Release the matching media retry only after that
+        // peer-scoped validation and accepted delivery-status transition.
+        mediaTransferCoordinator.confirmPrivateMediaDelivery(
+            messageID: messageID
+        )
     }
 
     func isOutgoingPrivateMessage(_ messageID: String, toAny peerIDs: Set<PeerID>) -> Bool {
@@ -157,7 +184,11 @@ final class ChatDeliveryCoordinator {
         }
         guard !peerIDAliases.isEmpty,
               context.isOutgoingPrivateMessage(messageID, toAny: peerIDAliases),
-              context.setDeliveryStatus(status, forMessageID: messageID) else {
+              context.setDeliveryStatus(
+                status,
+                forMessageID: messageID,
+                inDirectPeerAliases: peerIDAliases
+              ) else {
             return false
         }
         context.markMessageDelivered(messageID, from: peerIDAliases)
