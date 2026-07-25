@@ -579,6 +579,64 @@ struct ViewSmokeTests {
         )
     }
 
+    @Test("Root Bluetooth alert waits for screenshot privacy alert")
+    @MainActor
+    func rootBluetoothAlertGuard_tracksScreenshotPrivacyState() {
+        let (viewModel, _, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+
+        #expect(
+            !ContentRootModalPresentationState(
+                appChromeModel: featureModels.appChromeModel
+            ).hasPresentation
+        )
+
+        featureModels.appChromeModel.showScreenshotPrivacyWarning = true
+
+        #expect(
+            ContentRootModalPresentationState(
+                appChromeModel: featureModels.appChromeModel
+            ).hasPresentation
+        )
+    }
+
+    @Test("People-sheet Bluetooth alert waits for legacy media consent")
+    @MainActor
+    func peopleSheetBluetoothAlertGuard_tracksLegacyConsentState() async {
+        let (viewModel, _, _) = makeSmokeViewModel()
+        let featureModels = makeSmokeFeatureModels(for: viewModel)
+
+        #expect(
+            !ContentPeopleSheetModalPresentationState(
+                legacyPrivateMediaConsentRequest:
+                    featureModels.conversationUIModel
+                        .legacyPrivateMediaConsentRequest
+            ).hasPresentation
+        )
+
+        viewModel.enqueueLegacyPrivateMediaConsent(
+            for: PeerID(str: "5152535455565758"),
+            transferId: "legacy-consent-transfer",
+            messageID: "legacy-consent-message"
+        ) { _ in }
+        defer { viewModel.cancelAllLegacyPrivateMediaConsents() }
+
+        let consentPropagated = await TestHelpers.waitUntil {
+            featureModels.conversationUIModel
+                .legacyPrivateMediaConsentRequest != nil
+        }
+        #expect(
+            consentPropagated
+        )
+        #expect(
+            ContentPeopleSheetModalPresentationState(
+                legacyPrivateMediaConsentRequest:
+                    featureModels.conversationUIModel
+                        .legacyPrivateMediaConsentRequest
+            ).hasPresentation
+        )
+    }
+
     @Test
     func geohashAndTextMessageViews_renderCoreBranches() {
         let (viewModel, _, _) = makeSmokeViewModel()

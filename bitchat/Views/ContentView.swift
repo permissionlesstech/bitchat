@@ -23,6 +23,7 @@ struct ContentRootModalPresentationState {
     var isImagePreviewPresented = false
     var isVerificationSheetPresented = false
     var isVoiceAlertPresented = false
+    var isScreenshotPrivacyAlertPresented = false
     var isMediaPickerPresented = false
 
     var hasPresentation: Bool {
@@ -34,7 +35,37 @@ struct ContentRootModalPresentationState {
             || isImagePreviewPresented
             || isVerificationSheetPresented
             || isVoiceAlertPresented
+            || isScreenshotPrivacyAlertPresented
             || isMediaPickerPresented
+    }
+}
+
+extension ContentRootModalPresentationState {
+    @MainActor
+    init(
+        appChromeModel: AppChromeModel,
+        isPeopleSheetPresented: Bool = false,
+        isImagePreviewPresented: Bool = false,
+        isVerificationSheetPresented: Bool = false,
+        isVoiceAlertPresented: Bool = false,
+        isMediaPickerPresented: Bool = false
+    ) {
+        self.init(
+            isPeopleSheetPresented: isPeopleSheetPresented,
+            isAppInfoPresented: appChromeModel.isAppInfoPresented,
+            isFingerprintPresented:
+                appChromeModel.showingFingerprintFor != nil,
+            isLocationChannelsSheetPresented:
+                appChromeModel.isLocationChannelsSheetPresented,
+            isNoticesSheetPresented:
+                appChromeModel.isNoticesSheetPresented,
+            isImagePreviewPresented: isImagePreviewPresented,
+            isVerificationSheetPresented: isVerificationSheetPresented,
+            isVoiceAlertPresented: isVoiceAlertPresented,
+            isScreenshotPrivacyAlertPresented:
+                appChromeModel.showScreenshotPrivacyWarning,
+            isMediaPickerPresented: isMediaPickerPresented
+        )
     }
 }
 
@@ -117,11 +148,8 @@ struct ContentView: View {
         #endif
 
         return ContentRootModalPresentationState(
+            appChromeModel: appChromeModel,
             isPeopleSheetPresented: isPeopleSheetPresented,
-            isAppInfoPresented: appChromeModel.isAppInfoPresented,
-            isFingerprintPresented: appChromeModel.showingFingerprintFor != nil,
-            isLocationChannelsSheetPresented: appChromeModel.isLocationChannelsSheetPresented,
-            isNoticesSheetPresented: appChromeModel.isNoticesSheetPresented,
             isImagePreviewPresented: imagePreviewURL != nil,
             isVerificationSheetPresented: showVerifySheet,
             isVoiceAlertPresented: voiceRecordingVM.showAlert,

@@ -9,11 +9,13 @@ import AppKit
 struct ContentPeopleSheetModalPresentationState {
     var isImagePreviewPresented = false
     var isVerificationSheetPresented = false
+    var legacyPrivateMediaConsentRequest: LegacyPrivateMediaConsentRequest? = nil
     var isMediaPickerPresented = false
 
     var hasPresentation: Bool {
         isImagePreviewPresented
             || isVerificationSheetPresented
+            || legacyPrivateMediaConsentRequest != nil
             || isMediaPickerPresented
     }
 }
@@ -59,6 +61,8 @@ struct ContentPeopleSheetView: View {
         return ContentPeopleSheetModalPresentationState(
             isImagePreviewPresented: imagePreviewURL != nil,
             isVerificationSheetPresented: showVerifySheet,
+            legacyPrivateMediaConsentRequest:
+                conversationUIModel.legacyPrivateMediaConsentRequest,
             isMediaPickerPresented: isMediaPickerPresented
         ).hasPresentation
     }
