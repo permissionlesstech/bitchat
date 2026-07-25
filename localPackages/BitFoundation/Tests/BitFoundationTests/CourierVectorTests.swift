@@ -157,6 +157,13 @@ struct CourierVectorTests {
         let packet = try Self.envelopePacket()
         let preimage = try #require(packet.toBinaryDataForSigning())
 
+        // Pin what is being signed. Without this the test is self-consistent by
+        // construction — it would sign whatever it was handed, verify it, and
+        // pass over a wrong canonicalization. Proven by mutating an input and
+        // watching this line, not the verification below, be the one that fails.
+        #expect(preimage.hexEncodedString()
+                == Self.preimageBodyHex + String(repeating: "98", count: 152))
+
         let key = try Curve25519.Signing.PrivateKey(rawRepresentation: Self.signingSeed)
         #expect(key.publicKey.rawRepresentation.hexEncodedString()
                 == "2152f8d19b791d24453242e15f2eab6cb7cffa7b6a5ed30097960e069881db12")
