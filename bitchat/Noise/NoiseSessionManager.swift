@@ -11,6 +11,11 @@ import CryptoKit
 import Foundation
 import BitFoundation
 
+struct NoiseHandshakeProcessingResult {
+    let response: Data?
+    let didEstablishAuthenticatedSession: Bool
+}
+
 final class NoiseSessionManager {
     private var sessions: [PeerID: NoiseSession] = [:]
     /// A responder rehandshake must not evict a working transport session
@@ -112,6 +117,21 @@ final class NoiseSessionManager {
     }
     
     func handleIncomingHandshake(from peerID: PeerID, message: Data) throws -> Data? {
+        try handleIncomingHandshakeWithResult(
+            from: peerID,
+            message: message
+        ).response
+    }
+
+    /// Processes one exact handshake candidate and reports whether that
+    /// candidate completed authenticated establishment. The peer's retained
+    /// session may already be established while a replacement is only on
+    /// message one, so callers must not infer candidate completion from the
+    /// peer-level session table.
+    func handleIncomingHandshakeWithResult(
+        from peerID: PeerID,
+        message: Data
+    ) throws -> NoiseHandshakeProcessingResult {
         // Process everything within the synchronized block to prevent race conditions
         return try managerQueue.sync(flags: .barrier) {
             let session: NoiseSession
@@ -164,8 +184,11 @@ final class NoiseSessionManager {
             do {
                 let response = try session.processHandshakeMessage(message)
                 
-                // Check if session is established after processing
-                if session.isEstablished() {
+                // Check the exact session that processed this message. A
+                // preserved peer-level session can remain established while a
+                // replacement candidate is still unauthenticated.
+                let didEstablishAuthenticatedSession = session.isEstablished()
+                if didEstablishAuthenticatedSession {
                     guard let remoteKey = session.getRemoteStaticPublicKey(),
                           authenticatedRemoteKey(remoteKey, matches: peerID) else {
                         throw NoiseSessionError.peerIdentityMismatch
@@ -185,7 +208,11 @@ final class NoiseSessionManager {
                     }
                 }
                 
-                return response
+                return NoiseHandshakeProcessingResult(
+                    response: response,
+                    didEstablishAuthenticatedSession:
+                        didEstablishAuthenticatedSession
+                )
             } catch {
                 // A failed candidate is discarded without touching the
                 // established session. Ordinary failed handshakes retain the

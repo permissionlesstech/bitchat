@@ -529,6 +529,94 @@ struct BLEServiceCoreTests {
         #expect(outbound.count(ofType: .courierEnvelope) == 0)
     }
 
+    @Test
+    func replacementXXMessageOneWithPayloadCannotAuthenticateIngressLink() async throws {
+        let ble = makeService()
+        let victim = NoiseEncryptionService(keychain: MockKeychain())
+        let victimPeerID = PeerID(publicKey: victim.getStaticPublicKeyData())
+
+        // Preserve a working victim session while an unauthenticated
+        // replacement candidate arrives on a newly bound physical link.
+        let message1 = try ble._test_noiseInitiateHandshake(with: victimPeerID)
+        let message2 = try #require(
+            try victim.processHandshakeMessage(from: ble.myPeerID, message: message1)
+        )
+        let message3 = try #require(
+            try ble._test_noiseProcessHandshakeMessage(
+                from: victimPeerID,
+                message: message2
+            )
+        )
+        _ = try victim.processHandshakeMessage(
+            from: ble.myPeerID,
+            message: message3
+        )
+        #expect(ble.canDeliverSecurely(to: victimPeerID))
+
+        let centralUUID = "central-replacement-xx-message-one"
+        ble._test_bindCentral(centralUUID, to: victimPeerID)
+        #expect(
+            !ble._test_isNoiseAuthenticatedCentral(
+                centralUUID,
+                for: victimPeerID
+            )
+        )
+
+        // XX message one may legally carry a payload, so its length is not a
+        // reliable signal that the replacement handshake completed.
+        let unauthenticatedInitiator = NoiseHandshakeState(
+            role: .initiator,
+            pattern: .XX,
+            keychain: MockKeychain()
+        )
+        let replacementMessage1 = try unauthenticatedInitiator.writeMessage(
+            payload: Data([0xA5])
+        )
+        #expect(
+            replacementMessage1.count
+                > NoiseSecurityConstants.xxInitialMessageSize
+        )
+
+        let packet = BitchatPacket(
+            type: MessageType.noiseHandshake.rawValue,
+            senderID: Data(hexString: victimPeerID.id) ?? Data(),
+            recipientID: Data(hexString: ble.myPeerID.id),
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: replacementMessage1,
+            signature: nil,
+            ttl: TransportConfig.messageTTLDefault
+        )
+        #expect(
+            ble._test_recordIngressIfNew(
+                packet: packet,
+                linkID: centralUUID
+            )
+        )
+
+        let outbound = OutboundPacketTap()
+        ble._test_onOutboundPacket = outbound.record
+        ble._test_handlePacket(
+            packet,
+            fromPeerID: victimPeerID,
+            preseedPeer: false
+        )
+
+        // Waiting for the responder's message two proves the candidate was
+        // processed before checking its exact authentication result.
+        let candidateProcessed = await TestHelpers.waitUntil(
+            { outbound.count(ofType: .noiseHandshake) == 1 },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(candidateProcessed)
+        #expect(
+            !ble._test_isNoiseAuthenticatedCentral(
+                centralUUID,
+                for: victimPeerID
+            )
+        )
+        #expect(ble.canDeliverSecurely(to: victimPeerID))
+    }
+
     /// A legitimate rotation announce necessarily arrives on a link still
     /// bound to the OLD ID, so its registry upsert stores the new peer
     /// disconnected. The successful rebind must promote it: a healed

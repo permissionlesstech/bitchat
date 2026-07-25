@@ -5770,15 +5770,11 @@ extension BLEService {
     }
 
     private func handleNoiseHandshake(_ packet: BitchatPacket, from peerID: PeerID) {
-        let wasEstablished = noiseService.hasEstablishedSession(with: peerID)
-        let processed = noisePacketHandler.handleHandshake(packet, from: peerID)
-        let isEstablished = noiseService.hasEstablishedSession(with: peerID)
-        // XX message 1 is exactly the unauthenticated 32-byte ephemeral key.
-        // While replacing an existing session, do not authenticate its ingress
-        // link until a later message completes and validates the candidate.
-        let completedAuthenticatedHandshake = !wasEstablished
-            || packet.payload.count != NoiseSecurityConstants.xxInitialMessageSize
-        if processed, isEstablished, completedAuthenticatedHandshake {
+        let result = noisePacketHandler.handleHandshakeWithResult(
+            packet,
+            from: peerID
+        )
+        if result.didEstablishAuthenticatedSession {
             markNoiseAuthenticatedIngressLink(for: packet, peerID: peerID)
         }
     }
@@ -5801,7 +5797,16 @@ extension BLEService {
             messageTTL: messageTTL,
             now: { Date() },
             processHandshakeMessage: { [weak self] peerID, message in
-                try self?.noiseService.processHandshakeMessage(from: peerID, message: message)
+                guard let self else {
+                    return NoiseHandshakeProcessingResult(
+                        response: nil,
+                        didEstablishAuthenticatedSession: false
+                    )
+                }
+                return try self.noiseService.processHandshakeMessageWithResult(
+                    from: peerID,
+                    message: message
+                )
             },
             hasNoiseSession: { [weak self] peerID in
                 self?.noiseService.hasSession(with: peerID) ?? false

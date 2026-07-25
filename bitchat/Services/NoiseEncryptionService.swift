@@ -664,6 +664,18 @@ final class NoiseEncryptionService {
     
     /// Process an incoming handshake message
     func processHandshakeMessage(from peerID: PeerID, message: Data) throws -> Data? {
+        try processHandshakeMessageWithResult(
+            from: peerID,
+            message: message
+        ).response
+    }
+
+    /// Process an incoming handshake message and report whether the exact
+    /// session that consumed it completed authenticated establishment.
+    func processHandshakeMessageWithResult(
+        from peerID: PeerID,
+        message: Data
+    ) throws -> NoiseHandshakeProcessingResult {
         
         // Validate peer ID
         guard peerID.isValid else {
@@ -685,11 +697,14 @@ final class NoiseEncryptionService {
         
         // For handshakes, we process the raw data directly without NoiseMessage wrapper
         // The Noise protocol handles its own message format
-        let responsePayload = try sessionManager.handleIncomingHandshake(from: peerID, message: message)
+        let result = try sessionManager.handleIncomingHandshakeWithResult(
+            from: peerID,
+            message: message
+        )
         
         
         // Return raw response without wrapper
-        return responsePayload
+        return result
     }
     
     /// Check if we have an established session with a peer
