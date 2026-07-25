@@ -196,7 +196,10 @@ final class NostrInboundPipeline {
         // Sampled: fires for every geo event and floods dev logs in busy geohashes.
         geoEventLogCount += 1
         if geoEventLogCount == 1 || geoEventLogCount.isMultiple(of: TransportConfig.nostrInboundEventLogInterval) {
-            SecureLogger.debug("GeoTeleport: recv #\(geoEventLogCount) pub=\(event.pubkey.prefix(8))… pow=\(powBits) tags=\(event.tags.map { "[" + $0.joined(separator: ",") + "]" }.joined(separator: ","))", category: .session)
+            SecureLogger.debug(
+                "GeoTeleport: recv #\(geoEventLogCount) pub=\(event.pubkey.prefix(8))… pow=\(powBits) tagCount=\(event.tags.count)",
+                category: .session
+            )
         }
 
         if context.isNostrBlocked(pubkeyHexLowercased: event.pubkey) {

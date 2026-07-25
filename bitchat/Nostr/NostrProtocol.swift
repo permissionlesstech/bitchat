@@ -700,6 +700,10 @@ struct NostrEvent: Codable {
               let content = dict["content"] as? String else {
             throw NostrError.invalidEvent
         }
+
+        guard Self.isWithinInboundTagLimits(tags) else {
+            throw NostrError.invalidEvent
+        }
         
         self.id = dict["id"] as? String ?? ""
         self.pubkey = pubkey
@@ -708,6 +712,21 @@ struct NostrEvent: Codable {
         self.tags = tags
         self.content = content
         self.sig = dict["sig"] as? String
+    }
+
+    /// Bounds untrusted relay tag arrays so attackers cannot force large
+    /// allocations or expensive joins on the inbound hot path.
+    static func isWithinInboundTagLimits(_ tags: [[String]]) -> Bool {
+        guard tags.count <= TransportConfig.nostrMaxEventTags else { return false }
+
+        for tag in tags {
+            guard tag.count <= TransportConfig.nostrMaxEventTagValues else { return false }
+            guard tag.allSatisfy({ $0.utf8.count <= TransportConfig.nostrMaxEventTagValueBytes }) else {
+                return false
+            }
+        }
+
+        return true
     }
     
     func sign(with key: P256K.Schnorr.PrivateKey) throws -> NostrEvent {
