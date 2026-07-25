@@ -1147,6 +1147,52 @@ struct BLEFileTransferHandlerTests {
     }
 
     @Test
+    func panicWipeInvalidatesPayloadCoordinationReservations() throws {
+        let base = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "panic-payload-coordination-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: base) }
+        let store = BLEIncomingFileStore(baseDirectory: base)
+        let pendingName = "pending-before-panic.jpg"
+        let pendingURL = try #require(store.save(
+            data: Data("old".utf8),
+            preferredName: pendingName,
+            subdirectory: "images/incoming",
+            fallbackExtension: "jpg",
+            defaultPrefix: "image"
+        ))
+        let messageID = "media-aabbccddeeff00112233445566778899"
+        let reservation = try #require(store.reservePrivateMediaDeletion(
+            messageIDs: [messageID],
+            payloadRelativePaths: [
+                messageID: "images/incoming/delete-before-panic.jpg"
+            ]
+        ))
+
+        try store.panicWipe()
+
+        #expect(!store.commitPrivateMediaDeletion(
+            reservation: reservation,
+            messageIDs: [messageID],
+            payloadRelativePaths: [
+                messageID: "images/incoming/delete-before-panic.jpg"
+            ],
+            protectedPayloadRelativePaths: []
+        ))
+        let postPanicURL = try #require(store.save(
+            data: Data("new".utf8),
+            preferredName: pendingName,
+            subdirectory: "images/incoming",
+            fallbackExtension: "jpg",
+            defaultPrefix: "image"
+        ))
+        #expect(pendingURL.lastPathComponent == pendingName)
+        #expect(postPanicURL.lastPathComponent == pendingName)
+    }
+
+    @Test
     func panicWipeAttemptsDeletionWhenMarkerPersistenceFails() throws {
         enum MarkerFailure: Error { case unavailable }
 

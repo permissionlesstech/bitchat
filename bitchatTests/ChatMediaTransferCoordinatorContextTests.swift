@@ -608,6 +608,24 @@ struct ChatMediaTransferCoordinatorContextTests {
     }
 
     @Test @MainActor
+    func deleteIncomingStableMediaCompletionAfterPanicIsIgnored() {
+        let context = MockChatMediaTransferContext()
+        let coordinator = ChatMediaTransferCoordinator(context: context)
+        let messageID = "media-11223344556677889900aabbccddeeff"
+        context.requiredTombstoneIDs = [messageID]
+        context.deferDeletedMediaPersistence = true
+
+        coordinator.deleteMediaMessage(messageID: messageID)
+        #expect(context.persistedDeletionBatches == [[messageID]])
+
+        coordinator.resetForPanic()
+        context.resolveNextDeletionPersistence(true)
+
+        #expect(context.removedMessages.isEmpty)
+        #expect(context.untombstonedMediaRemovals.isEmpty)
+    }
+
+    @Test @MainActor
     func deleteIncomingStableMediaPreservesStateWhenTombstoneFails() {
         let context = MockChatMediaTransferContext()
         let coordinator = ChatMediaTransferCoordinator(context: context)

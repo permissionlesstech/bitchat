@@ -1865,6 +1865,68 @@ struct ChatViewModelPrivateMediaDeletionTests {
         #expect((viewModel.privateChats[aliasPeerID] ?? []).isEmpty)
     }
 
+    @Test @MainActor
+    func panicInvalidatesActiveAndQueuedPrivateChatClears() {
+        let (viewModel, transport) = makeTestableViewModel()
+        transport.deferDeletedPrivateMediaPersistence = true
+        let firstPeerID = PeerID(str: String(repeating: "4", count: 64))
+        let secondPeerID = PeerID(str: String(repeating: "5", count: 64))
+        let firstID = "media-\(String(repeating: "6", count: 32))"
+        let secondID = "media-\(String(repeating: "7", count: 32))"
+        viewModel.seedPrivateChat([
+            privateMediaMessage(
+                id: firstID,
+                sender: "First",
+                senderPeerID: firstPeerID,
+                recipient: viewModel.nickname,
+                filename: "first-pre-panic.jpg"
+            )
+        ], for: firstPeerID)
+        viewModel.seedPrivateChat([
+            privateMediaMessage(
+                id: secondID,
+                sender: "Second",
+                senderPeerID: secondPeerID,
+                recipient: viewModel.nickname,
+                filename: "second-pre-panic.jpg"
+            )
+        ], for: secondPeerID)
+
+        viewModel.clearPrivateChat(firstPeerID)
+        viewModel.clearPrivateChat(secondPeerID)
+        #expect(
+            transport.deletedPrivateMediaMessageIDBatches == [[firstID]]
+        )
+
+        _ = viewModel.panicClearAllData(restartServices: false)
+        viewModel.seedPrivateChat([
+            privateMediaMessage(
+                id: firstID,
+                sender: "First",
+                senderPeerID: firstPeerID,
+                recipient: viewModel.nickname,
+                filename: "first-post-panic.jpg"
+            )
+        ], for: firstPeerID)
+        viewModel.seedPrivateChat([
+            privateMediaMessage(
+                id: secondID,
+                sender: "Second",
+                senderPeerID: secondPeerID,
+                recipient: viewModel.nickname,
+                filename: "second-post-panic.jpg"
+            )
+        ], for: secondPeerID)
+
+        transport.resolveNextDeletedPrivateMediaPersistence(true)
+
+        #expect(
+            transport.deletedPrivateMediaMessageIDBatches == [[firstID]]
+        )
+        #expect(viewModel.privateChats[firstPeerID]?.map(\.id) == [firstID])
+        #expect(viewModel.privateChats[secondPeerID]?.map(\.id) == [secondID])
+    }
+
     private func privateMediaMessage(
         id: String,
         sender: String,

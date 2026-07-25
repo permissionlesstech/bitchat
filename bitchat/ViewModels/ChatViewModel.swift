@@ -390,6 +390,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         PendingPrivateChatClear
     ] = []
     @MainActor private var privateChatClearInFlight = false
+    @MainActor private var privateChatClearGeneration: UInt64 = 0
     private var pendingLegacyPrivateMediaConsents: [PendingLegacyPrivateMediaConsent] = []
 
     private func performDeliveryUpdate(_ update: @escaping @MainActor (ChatDeliveryCoordinator) -> Void) {
@@ -718,8 +719,15 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         }
         privateChatClearInFlight = true
         let request = queuedPrivateChatClears.removeFirst()
-        performPrivateChatClear(request) { [weak self] in
-            guard let self else { return }
+        let generation = privateChatClearGeneration
+        performPrivateChatClear(
+            request,
+            generation: generation
+        ) { [weak self] in
+            guard let self,
+                  self.privateChatClearGeneration == generation else {
+                return
+            }
             self.privateChatClearInFlight = false
             self.startNextPrivateChatClearIfNeeded()
         }
@@ -728,8 +736,13 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     @MainActor
     private func performPrivateChatClear(
         _ request: PendingPrivateChatClear,
+        generation: UInt64,
         completion: @escaping @MainActor () -> Void
     ) {
+        guard privateChatClearGeneration == generation else {
+            completion()
+            return
+        }
         let peerID = request.peerID
         let selectedConversationID = request.sourceConversationID
         let messagesToClear = request.messages
@@ -816,6 +829,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
             persisted: Bool,
             durableStableIDs: Set<String>
         ) {
+            guard privateChatClearGeneration == generation else {
+                completion()
+                return
+            }
             guard persisted else {
                 SecureLogger.error(
                     "Refusing to clear private chat without durable media tombstones peer=\(peerID.id.prefix(8))…",
@@ -1537,6 +1554,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
         // handles before clearing state or removing the media directory.
         mediaTransferCoordinator.resetForPanic()
         liveVoiceCoordinator.resetForPanic()
+        privateChatClearGeneration &+= 1
+        queuedPrivateChatClears.removeAll(keepingCapacity: false)
+        privateChatClearInFlight = false
 
         // Deny and release any clear-media confirmations before identities,
         // message state, and local files are wiped.

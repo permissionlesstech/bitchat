@@ -1230,6 +1230,44 @@ struct BLEServiceCoreTests {
         ))
     }
 
+    @Test @MainActor
+    func panicSuspension_finalizesStaleTransportEventsAsRejected() async {
+        let ble = makeService()
+        let delegate = TransportEventCaptureDelegate()
+        ble.eventDelegate = delegate
+        let message = BitchatMessage(
+            id: "pre-panic-finalization",
+            sender: "Peer",
+            content: "must be rejected",
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: true,
+            recipientNickname: "Me",
+            senderPeerID: PeerID(str: "1122334455667788")
+        )
+        var completions = 0
+        var outcomes: [TransportEventDeliveryOutcome] = []
+
+        ble._test_emitTransportEvent(
+            .messageReceived(message),
+            completion: { completions += 1 },
+            finalization: { outcomes.append($0) }
+        )
+        ble.suspendForPanicReset()
+        ble._test_emitTransportEvent(
+            .messageReceived(message),
+            completion: { completions += 1 },
+            finalization: { outcomes.append($0) }
+        )
+        for _ in 0..<4 {
+            await Task.yield()
+        }
+
+        #expect(delegate.messageIDs.isEmpty)
+        #expect(completions == 0)
+        #expect(outcomes == [.rejected, .rejected])
+    }
+
     @Test
     func modifiedServices_rediscoverWhenBitChatServiceIsInvalidated() async throws {
         let otherService = CBUUID(string: "0000180F-0000-1000-8000-00805F9B34FB")

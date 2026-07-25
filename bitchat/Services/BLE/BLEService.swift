@@ -3545,6 +3545,18 @@ extension BLEService {
         }
     }
 
+    func _test_emitTransportEvent(
+        _ event: TransportEvent,
+        completion: @escaping () -> Void,
+        finalization: @escaping (TransportEventDeliveryOutcome) -> Void
+    ) {
+        emitTransportEvent(
+            event,
+            completion: completion,
+            finalization: finalization
+        )
+    }
+
     func _test_handlePacket(_ packet: BitchatPacket, fromPeerID: PeerID, preseedPeer: Bool = true, signingPublicKey: Data? = nil) {
         if preseedPeer {
             // Ensure the synthetic peer is known and marked verified for public-message tests
@@ -4571,11 +4583,24 @@ extension BLEService {
         completion: (() -> Void)? = nil,
         finalization: ((TransportEventDeliveryOutcome) -> Void)? = nil
     ) {
-        notifyUI { [weak self] in
+        guard let generation = capturePanicLifecycleGeneration() else {
+            Task { @MainActor in
+                finalization?(.rejected)
+            }
+            return
+        }
+        Task { @MainActor [weak self] in
+            guard let self,
+                  self.isCurrentPanicLifecycleGeneration(generation) else {
+                finalization?(.rejected)
+                return
+            }
             TransportEventDeliveryGate.attempt(
-                shouldDeliver: { shouldDeliver?() ?? true },
+                shouldDeliver: {
+                    self.isCurrentPanicLifecycleGeneration(generation)
+                        && (shouldDeliver?() ?? true)
+                },
                 deliver: {
-                    guard let self else { return .rejected }
                     return self.deliverTransportEvent(event)
                 },
                 completion: { completion?() },

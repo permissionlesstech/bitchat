@@ -179,10 +179,21 @@ struct BLEIncomingFileStore: @unchecked Sendable {
     func panicWipe(
         hasDurablePendingMarker: Bool = false
     ) throws {
-        // The receipt index caches tombstones as well as accepted payloads.
-        // Always invalidate it on return, including partial-failure paths, so
-        // no pre-panic receiver decision survives after identity reset.
-        defer { privateMediaReceipts.resetForPanic() }
+        // The receipt index caches tombstones as well as accepted payloads,
+        // while payload coordination retains save/delete reservations. Always
+        // invalidate both on return, including partial-failure paths, so no
+        // pre-panic receiver decision survives after identity reset.
+        defer {
+            privateMediaReceipts.resetForPanic()
+            payloadCoordination.lock.lock()
+            payloadCoordination.pendingDeliveryPaths.removeAll(
+                keepingCapacity: false
+            )
+            payloadCoordination.deletionReservations.removeAll(
+                keepingCapacity: false
+            )
+            payloadCoordination.lock.unlock()
+        }
 
         let markerError: Error?
         do {

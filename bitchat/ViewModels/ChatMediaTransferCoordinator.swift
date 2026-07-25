@@ -434,6 +434,7 @@ final class ChatMediaTransferCoordinator {
 
     private(set) var transferIdToMessageIDs: [String: [String]] = [:]
     private(set) var messageIDToTransferId: [String: String] = [:]
+    private var deletionGeneration: UInt64 = 0
     private var reconnectRetryRecords: [
         String: PrivateMediaReconnectRetryRecord
     ] = [:]
@@ -1129,10 +1130,14 @@ final class ChatMediaTransferCoordinator {
             return
         }
 
+        let generation = deletionGeneration
         context.persistDeletedPrivateMedia(
             messageIDs: [messageID]
         ) { [weak self] persisted in
-            guard let self else { return }
+            guard let self,
+                  self.deletionGeneration == generation else {
+                return
+            }
             guard persisted else {
                 SecureLogger.error(
                     "Refusing to delete private media without a durable tombstone id=\(messageID.prefix(12))…",
@@ -1231,6 +1236,7 @@ final class ChatMediaTransferCoordinator {
     /// is the last filesystem mutation before the transaction can complete.
     func resetForPanic() {
         imagePreparationBarrier.invalidateAndWait()
+        deletionGeneration &+= 1
         peersResolvingReconnectRetry.removeAll(keepingCapacity: false)
         for task in reconnectRetryExpiryTasks.values {
             task.cancel()
