@@ -130,11 +130,16 @@ struct MessageRateLimiterTests {
         )
         let now = Date()
 
-        #expect(limiter.allow(senderKey: "sender", contentKey: "content-0", now: now))
+        let first = limiter.allow(senderKey: "sender", contentKey: "content-0", now: now)
+        var rejected = true
         for index in 1...100 {
-            #expect(!limiter.allow(senderKey: "sender", contentKey: "content-\(index)", now: now))
+            if limiter.allow(senderKey: "sender", contentKey: "content-\(index)", now: now) {
+                rejected = false
+            }
         }
 
+        #expect(first)
+        #expect(rejected)
         #expect(limiter.bucketCountsForTesting.sender == 1)
         #expect(limiter.bucketCountsForTesting.content == 1)
     }
@@ -179,17 +184,18 @@ struct MessageRateLimiterTests {
         )
         let now = Date()
 
+        var allAllowed = true
         for index in 0..<10 {
-            #expect(
-                limiter.allow(
-                    senderKey: "sender",
-                    contentKey: "content-\(index)",
-                    powBits: NostrPoW.rateLimitBypassBits,
-                    now: now.addingTimeInterval(TimeInterval(index))
-                )
+            let allowed = limiter.allow(
+                senderKey: "sender",
+                contentKey: "content-\(index)",
+                powBits: NostrPoW.rateLimitBypassBits,
+                now: now.addingTimeInterval(TimeInterval(index))
             )
+            if !allowed { allAllowed = false }
         }
 
+        #expect(allAllowed)
         #expect(limiter.bucketCountsForTesting.sender == 0)
         #expect(limiter.bucketCountsForTesting.content == maxEntries)
     }
