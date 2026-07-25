@@ -228,9 +228,16 @@ extension ChatViewModel: ChatPrivateConversationContext {
         NotificationService.shared.sendPrivateMessageNotification(from: senderName, message: message, peerID: peerID)
     }
 
-    private func makeGeohashNostrTransport() -> NostrTransport {
-        let transport = NostrTransport(keychain: keychain, idBridge: idBridge)
+    func makeGeohashNostrTransport(
+        dependencies: NostrTransport.Dependencies? = nil
+    ) -> NostrTransport {
+        let transport = NostrTransport(
+            keychain: keychain,
+            idBridge: idBridge,
+            dependencies: dependencies
+        )
         transport.senderPeerID = meshService.myPeerID
+        transport.eventDelegate = self
         return transport
     }
 }

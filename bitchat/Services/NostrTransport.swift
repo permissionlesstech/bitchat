@@ -317,16 +317,40 @@ final class NostrTransport: Transport, @unchecked Sendable {
 
     func sendPrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) {
         Task { @MainActor in
-            guard let recipientNpub = resolveRecipientNpub(for: peerID),
-                  let recipientHex = npubToHex(recipientNpub),
-                  let senderIdentity = try? dependencies.currentIdentity() else { return }
+            let failurePolicy = PrivateEnvelopeFailurePolicy.userMessage(
+                messageID: messageID
+            )
+            guard let recipientNpub = resolveRecipientNpub(for: peerID) else {
+                handlePrivateEnvelopeFailure(
+                    events: [],
+                    registerPending: false,
+                    policy: failurePolicy
+                )
+                return
+            }
+            guard let recipientHex = npubToHex(recipientNpub) else {
+                handlePrivateEnvelopeFailure(
+                    events: [],
+                    registerPending: false,
+                    policy: failurePolicy
+                )
+                return
+            }
+            guard let senderIdentity = try? dependencies.currentIdentity() else {
+                handlePrivateEnvelopeFailure(
+                    events: [],
+                    registerPending: false,
+                    policy: failurePolicy
+                )
+                return
+            }
             SecureLogger.debug("NostrTransport: preparing PM to \(recipientNpub.prefix(16))… id=\(messageID.prefix(8))…", category: .session)
             guard let embedded = NostrEmbeddedBitChat.encodePMForNostr(content: content, messageID: messageID, recipientPeerID: peerID, senderPeerID: senderPeerID) else {
                 SecureLogger.error("NostrTransport: failed to embed PM packet", category: .session)
                 handlePrivateEnvelopeFailure(
                     events: [],
                     registerPending: false,
-                    policy: .userMessage(messageID: messageID)
+                    policy: failurePolicy
                 )
                 return
             }
@@ -334,7 +358,7 @@ final class NostrTransport: Transport, @unchecked Sendable {
                 content: embedded,
                 recipientHex: recipientHex,
                 senderIdentity: senderIdentity,
-                failurePolicy: .userMessage(messageID: messageID)
+                failurePolicy: failurePolicy
             )
         }
     }

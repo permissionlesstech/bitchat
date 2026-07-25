@@ -771,6 +771,63 @@ struct ChatViewModelGeoDMTests {
         #expect(isFailed(status: viewModel.privateChats[convKey]?.last?.deliveryStatus))
     }
 
+    @Test @MainActor
+    func geohashTerminalRelayFailure_transitionsSentMessageToFailed() async throws {
+        let (viewModel, _) = makeTestableViewModel()
+        let sender = try NostrIdentity.generate()
+        let recipient = try NostrIdentity.generate()
+        let messageID = "geo-terminal-failure"
+        let convKey = PeerID(nostr_: recipient.publicKeyHex)
+        let message = BitchatMessage(
+            id: messageID,
+            sender: viewModel.nickname,
+            content: "queued geohash message",
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: true,
+            recipientNickname: "recipient",
+            senderPeerID: viewModel.myPeerID,
+            deliveryStatus: .sent
+        )
+        viewModel.seedPrivateChat([message], for: convKey)
+
+        var terminalFailure: (@MainActor () -> Void)?
+        let dependencies = NostrTransport.Dependencies(
+            notificationCenter: NotificationCenter(),
+            loadFavorites: { [:] },
+            favoriteStatusForNoiseKey: { _ in nil },
+            favoriteStatusForPeerID: { _ in nil },
+            currentIdentity: { sender },
+            registerPendingPrivateEnvelope: { _ in },
+            sendPrivateEnvelopeBatch: { _, failure in
+                terminalFailure = failure
+                return true
+            },
+            scheduleAfter: { _, _ in },
+            relayConnectivity: {
+                Just(false).eraseToAnyPublisher()
+            }
+        )
+        let transport = viewModel.makeGeohashNostrTransport(
+            dependencies: dependencies
+        )
+
+        let accepted = transport.sendPrivateMessageGeohash(
+            content: message.content,
+            toRecipientHex: recipient.publicKeyHex,
+            from: sender,
+            messageID: messageID
+        )
+
+        #expect(accepted)
+        #expect(viewModel.privateChats[convKey]?.first?.deliveryStatus == .sent)
+        let fail = try #require(terminalFailure)
+        fail()
+        #expect(isFailed(
+            status: viewModel.privateChats[convKey]?.first?.deliveryStatus
+        ))
+    }
+
     /// The blocked notice belongs in the DM thread the person is typing in,
     /// not on the active location-channel timeline.
     @Test @MainActor

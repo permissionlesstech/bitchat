@@ -424,6 +424,135 @@ struct NostrTransportTests {
         #expect(publicationProbe.sentEvents.isEmpty)
     }
 
+    @Test("Direct message with an invalid npub emits a visible failure")
+    @MainActor
+    func invalidDirectRecipientNpubEmitsVisibleFailure() async throws {
+        let keychain = MockKeychain()
+        let idBridge = NostrIdentityBridge(keychain: keychain)
+        let sender = try NostrIdentity.generate()
+        let noiseKey = Data(repeating: 0xA5, count: 32)
+        let peerID = PeerID(hexData: noiseKey)
+        let relationship = makeRelationship(
+            peerNoisePublicKey: noiseKey,
+            peerNostrPublicKey: "not-a-valid-npub",
+            peerNickname: "Invalid npub peer"
+        )
+        let eventProbe = NostrTransportEventProbe()
+        let publicationProbe = NostrTransportProbe()
+        let transport = NostrTransport(
+            keychain: keychain,
+            idBridge: idBridge,
+            dependencies: makeDependencies(
+                favoriteStatusForNoiseKey: {
+                    $0 == noiseKey ? relationship : nil
+                },
+                currentIdentity: { sender },
+                sendPrivateEnvelopeBatch: { events, _ in
+                    publicationProbe.record(batch: events)
+                }
+            )
+        )
+        transport.senderPeerID = PeerID(str: "0123456789abcdef")
+        transport.eventDelegate = eventProbe
+
+        transport.sendPrivateMessage(
+            "must fail before publication",
+            to: peerID,
+            recipientNickname: "Invalid npub peer",
+            messageID: "invalid-npub"
+        )
+
+        let failed = await TestHelpers.waitUntil(
+            { eventProbe.failedMessageIDs == ["invalid-npub"] },
+            timeout: 5.0
+        )
+        #expect(failed)
+        #expect(publicationProbe.sentEvents.isEmpty)
+    }
+
+    @Test("Direct message without a resolvable recipient emits a visible failure")
+    @MainActor
+    func missingDirectRecipientEmitsVisibleFailure() async throws {
+        let keychain = MockKeychain()
+        let idBridge = NostrIdentityBridge(keychain: keychain)
+        let sender = try NostrIdentity.generate()
+        let peerID = PeerID(hexData: Data(repeating: 0xC3, count: 32))
+        let eventProbe = NostrTransportEventProbe()
+        let publicationProbe = NostrTransportProbe()
+        let transport = NostrTransport(
+            keychain: keychain,
+            idBridge: idBridge,
+            dependencies: makeDependencies(
+                currentIdentity: { sender },
+                sendPrivateEnvelopeBatch: { events, _ in
+                    publicationProbe.record(batch: events)
+                }
+            )
+        )
+        transport.senderPeerID = PeerID(str: "0123456789abcdef")
+        transport.eventDelegate = eventProbe
+
+        transport.sendPrivateMessage(
+            "must fail without recipient",
+            to: peerID,
+            recipientNickname: "Unknown peer",
+            messageID: "missing-recipient"
+        )
+
+        let failed = await TestHelpers.waitUntil(
+            { eventProbe.failedMessageIDs == ["missing-recipient"] },
+            timeout: 5.0
+        )
+        #expect(failed)
+        #expect(publicationProbe.sentEvents.isEmpty)
+    }
+
+    @Test("Direct message without a current identity emits a visible failure")
+    @MainActor
+    func missingDirectSenderIdentityEmitsVisibleFailure() async throws {
+        let keychain = MockKeychain()
+        let idBridge = NostrIdentityBridge(keychain: keychain)
+        let recipient = try NostrIdentity.generate()
+        let noiseKey = Data(repeating: 0x5A, count: 32)
+        let peerID = PeerID(hexData: noiseKey)
+        let relationship = makeRelationship(
+            peerNoisePublicKey: noiseKey,
+            peerNostrPublicKey: recipient.npub,
+            peerNickname: "Missing identity peer"
+        )
+        let eventProbe = NostrTransportEventProbe()
+        let publicationProbe = NostrTransportProbe()
+        let transport = NostrTransport(
+            keychain: keychain,
+            idBridge: idBridge,
+            dependencies: makeDependencies(
+                favoriteStatusForNoiseKey: {
+                    $0 == noiseKey ? relationship : nil
+                },
+                currentIdentity: { nil },
+                sendPrivateEnvelopeBatch: { events, _ in
+                    publicationProbe.record(batch: events)
+                }
+            )
+        )
+        transport.senderPeerID = PeerID(str: "0123456789abcdef")
+        transport.eventDelegate = eventProbe
+
+        transport.sendPrivateMessage(
+            "must fail without identity",
+            to: peerID,
+            recipientNickname: "Missing identity peer",
+            messageID: "missing-identity"
+        )
+
+        let failed = await TestHelpers.waitUntil(
+            { eventProbe.failedMessageIDs == ["missing-identity"] },
+            timeout: 5.0
+        )
+        #expect(failed)
+        #expect(publicationProbe.sentEvents.isEmpty)
+    }
+
     @Test("Rejected favorite notification retains and retries the exact pair")
     @MainActor
     func rejectedFavoriteNotificationRetriesExactPair() async throws {
