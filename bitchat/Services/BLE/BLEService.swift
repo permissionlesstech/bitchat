@@ -744,9 +744,8 @@ final class BLEService: NSObject {
             ingressLinks.removeAll()
             recentTrafficTracker.removeAll()
             scheduledRelays.cancelAll()
-            let policyCompletions = pendingPrivateMediaPolicyResolutions.values.flatMap {
-                Array($0.completions.values)
-            }
+            // These callbacks belong to pre-panic transfer state. Invoking
+            // them would let queued UI work recreate or resend wiped media.
             pendingPrivateMediaPolicyResolutions.removeAll()
             privateMediaSessionGenerations.removeAll()
             authenticatedPeerStates.removeAll()
@@ -755,14 +754,13 @@ final class BLEService: NSObject {
             authenticatedPeerStateSendProgress.removeAll()
             // Let the post-panic identity publish its fresh bundle promptly.
             lastPrekeyBundleSentAt = nil
-            return (transfers, policyCompletions)
+            return transfers
         }
 
-        for entry in panicReset.0 {
+        for entry in panicReset {
             entry.workItems.forEach { $0.cancel() }
             TransferProgressManager.shared.cancel(id: entry.id)
         }
-        completePrivateMediaPolicyResolution(panicReset.1, with: .blockedDowngrade)
 
         bleQueue.sync {
             pendingWriteBuffers.removeAll()
@@ -1262,7 +1260,7 @@ final class BLEService: NSObject {
         with policy: PrivateMediaSendPolicy
     ) {
         guard !completions.isEmpty else { return }
-        Task { @MainActor in
+        notifyUI {
             completions.forEach { $0(policy) }
         }
     }

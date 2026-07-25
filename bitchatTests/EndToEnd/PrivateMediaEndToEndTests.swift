@@ -547,6 +547,71 @@ struct PrivateMediaEndToEndTests {
     }
 
     @Test
+    func panicDropsPendingPrivateMediaPolicyCompletion() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "private-media-policy-panic-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let alice = makeService(
+            baseDirectory: root.appendingPathComponent(
+                "alice",
+                isDirectory: true
+            )
+        )
+        let bob = makeService(
+            baseDirectory: root.appendingPathComponent(
+                "bob",
+                isDirectory: true
+            )
+        )
+        alice._test_seedConnectedPeer(
+            bob.myPeerID,
+            nickname: "Prerelease Bob",
+            capabilities: .privateMedia,
+            noisePublicKey: bob.noiseStaticPublicKeyData()
+        )
+
+        _ = try await establishSessionCapturingPeerState(
+            alice: alice,
+            bob: bob
+        )
+        #expect(
+            alice.privateMediaSendPolicy(to: bob.myPeerID)
+                == .awaitingCapabilityProof
+        )
+        let recorder = PrivateMediaPolicyRecorder()
+        alice.resolvePrivateMediaSendPolicy(to: bob.myPeerID) {
+            recorder.record($0)
+        }
+        let registered = await TestHelpers.waitUntil(
+            {
+                alice._test_hasPendingPrivateMediaPolicyResolution(
+                    for: bob.myPeerID
+                )
+            },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(registered)
+
+        alice.suspendForPanicReset()
+        alice.resetIdentityForPanic(
+            currentNickname: "anon",
+            restartServices: false
+        )
+        alice._test_forcePrivateMediaProofTimeout(for: bob.myPeerID)
+        await Task.yield()
+
+        #expect(recorder.snapshot() == nil)
+        #expect(
+            !alice._test_hasPendingPrivateMediaPolicyResolution(
+                for: bob.myPeerID
+            )
+        )
+    }
+
+    @Test
     func queuedPrivatePayloadWaitsForProofNotHandshakeCompletion() async throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("private-media-proof-drain-\(UUID().uuidString)", isDirectory: true)
