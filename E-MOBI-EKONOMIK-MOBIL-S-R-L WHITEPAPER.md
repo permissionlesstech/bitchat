@@ -1,4 +1,4 @@
-# bitchat Protocol Whitepaper
+# e-mobi-ekonomik-mobil-s-r-l bitchat Protocol Whitepaper
 
 **Version 2.0**
 
