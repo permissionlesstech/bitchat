@@ -554,6 +554,31 @@ struct ViewSmokeTests {
         #expect(featureModels.privateConversationModel.selectedHeaderState?.headerPeerID == peerID)
     }
 
+    @Test("Root Bluetooth alert waits for location and notices sheets")
+    func rootBluetoothAlertGuard_includesHeaderSheets() {
+        #expect(!ContentRootModalPresentationState().hasPresentation)
+        #expect(
+            ContentRootModalPresentationState(
+                isLocationChannelsSheetPresented: true
+            ).hasPresentation
+        )
+        #expect(
+            ContentRootModalPresentationState(
+                isNoticesSheetPresented: true
+            ).hasPresentation
+        )
+    }
+
+    @Test("People-sheet Bluetooth alert waits for local verification sheet")
+    func peopleSheetBluetoothAlertGuard_includesVerificationSheet() {
+        #expect(!ContentPeopleSheetModalPresentationState().hasPresentation)
+        #expect(
+            ContentPeopleSheetModalPresentationState(
+                isVerificationSheetPresented: true
+            ).hasPresentation
+        )
+    }
+
     @Test
     func geohashAndTextMessageViews_renderCoreBranches() {
         let (viewModel, _, _) = makeSmokeViewModel()

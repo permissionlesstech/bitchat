@@ -6,6 +6,18 @@ import UIKit
 import AppKit
 #endif
 
+struct ContentPeopleSheetModalPresentationState {
+    var isImagePreviewPresented = false
+    var isVerificationSheetPresented = false
+    var isMediaPickerPresented = false
+
+    var hasPresentation: Bool {
+        isImagePreviewPresented
+            || isVerificationSheetPresented
+            || isMediaPickerPresented
+    }
+}
+
 struct ContentPeopleSheetView: View {
     @EnvironmentObject private var appChromeModel: AppChromeModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
@@ -24,6 +36,7 @@ struct ContentPeopleSheetView: View {
     var isTextFieldFocused: FocusState<Bool>.Binding
     @ObservedObject var voiceRecordingVM: VoiceRecordingViewModel
     @Binding var autocompleteDebounceTimer: Timer?
+    @State private var showVerifySheet = false
     @ThemedPalette private var palette
 
     let headerHeight: CGFloat
@@ -37,14 +50,17 @@ struct ContentPeopleSheetView: View {
     #endif
 
     private var hasModalPresentation: Bool {
-        if imagePreviewURL != nil {
-            return true
-        }
         #if os(iOS)
-        return showImagePicker
+        let isMediaPickerPresented = showImagePicker
         #else
-        return showMacImagePicker
+        let isMediaPickerPresented = showMacImagePicker
         #endif
+
+        return ContentPeopleSheetModalPresentationState(
+            isImagePreviewPresented: imagePreviewURL != nil,
+            isVerificationSheetPresented: showVerifySheet,
+            isMediaPickerPresented: isMediaPickerPresented
+        ).hasPresentation
     }
 
     private var bluetoothAlertBinding: Binding<Bool> {
@@ -108,7 +124,8 @@ struct ContentPeopleSheetView: View {
                     #endif
                 } else {
                     ContentPeopleListView(
-                        showSidebar: $showSidebar
+                        showSidebar: $showSidebar,
+                        showVerifySheet: $showVerifySheet
                     )
                 }
             }
@@ -237,8 +254,7 @@ private struct ContentPeopleListView: View {
     @ThemedPalette private var palette
 
     @Binding var showSidebar: Bool
-
-    @State private var showVerifySheet = false
+    @Binding var showVerifySheet: Bool
 
     var body: some View {
         VStack(spacing: 0) {

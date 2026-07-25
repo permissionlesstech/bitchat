@@ -14,6 +14,30 @@ import AppKit
 #endif
 import BitFoundation
 
+struct ContentRootModalPresentationState {
+    var isPeopleSheetPresented = false
+    var isAppInfoPresented = false
+    var isFingerprintPresented = false
+    var isLocationChannelsSheetPresented = false
+    var isNoticesSheetPresented = false
+    var isImagePreviewPresented = false
+    var isVerificationSheetPresented = false
+    var isVoiceAlertPresented = false
+    var isMediaPickerPresented = false
+
+    var hasPresentation: Bool {
+        isPeopleSheetPresented
+            || isAppInfoPresented
+            || isFingerprintPresented
+            || isLocationChannelsSheetPresented
+            || isNoticesSheetPresented
+            || isImagePreviewPresented
+            || isVerificationSheetPresented
+            || isVoiceAlertPresented
+            || isMediaPickerPresented
+    }
+}
+
 /// On macOS 14+, disables the default system focus ring on TextFields.
 /// On earlier macOS versions and on iOS this is a no-op.
 struct FocusEffectDisabledModifier: ViewModifier {
@@ -86,19 +110,23 @@ struct ContentView: View {
     }
 
     private var hasRootModalPresentation: Bool {
-        if isPeopleSheetPresented
-            || appChromeModel.isAppInfoPresented
-            || appChromeModel.showingFingerprintFor != nil
-            || imagePreviewURL != nil
-            || showVerifySheet
-            || voiceRecordingVM.showAlert {
-            return true
-        }
         #if os(iOS)
-        return showImagePicker
+        let isMediaPickerPresented = showImagePicker
         #else
-        return showMacImagePicker
+        let isMediaPickerPresented = showMacImagePicker
         #endif
+
+        return ContentRootModalPresentationState(
+            isPeopleSheetPresented: isPeopleSheetPresented,
+            isAppInfoPresented: appChromeModel.isAppInfoPresented,
+            isFingerprintPresented: appChromeModel.showingFingerprintFor != nil,
+            isLocationChannelsSheetPresented: appChromeModel.isLocationChannelsSheetPresented,
+            isNoticesSheetPresented: appChromeModel.isNoticesSheetPresented,
+            isImagePreviewPresented: imagePreviewURL != nil,
+            isVerificationSheetPresented: showVerifySheet,
+            isVoiceAlertPresented: voiceRecordingVM.showAlert,
+            isMediaPickerPresented: isMediaPickerPresented
+        ).hasPresentation
     }
 
     private var rootBluetoothAlertBinding: Binding<Bool> {
