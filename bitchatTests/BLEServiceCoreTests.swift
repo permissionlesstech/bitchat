@@ -592,6 +592,88 @@ struct BLEServiceCoreTests {
         #expect(outbound.count(ofType: .message) == 1)
     }
 
+    @Test @MainActor
+    func panicSuspension_invalidatesQueuedMainActorIngress() async {
+        let ble = makeService()
+        let delegate = TransportEventCaptureDelegate()
+        ble.eventDelegate = delegate
+        let message = BitchatMessage(
+            id: "pre-panic-ingress",
+            sender: "Peer",
+            content: "must not survive panic",
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: true,
+            recipientNickname: "Me",
+            senderPeerID: PeerID(str: "1122334455667788")
+        )
+
+        // The test already owns MainActor, so this task cannot run until the
+        // synchronous panic boundary below has invalidated its generation.
+        ble._test_emitTransportEvent(.messageReceived(message))
+        ble.suspendForPanicReset()
+        await Task.yield()
+        #expect(delegate.messageIDs.isEmpty)
+
+        ble.completePanicReset(restartServices: false)
+        ble._test_emitTransportEvent(.messageReceived(message))
+        await Task.yield()
+        #expect(delegate.messageIDs == [message.id])
+    }
+
+    @Test @MainActor
+    func panicSuspension_rejectsPausedBLEReceiveBeforeMessageQueueHandoff() async {
+        let ble = makeService()
+        let gate = ReceivePacketHandoffGate()
+        ble._test_beforeReceivePacketHandoff = gate.pause
+        ble._test_onReceivePacketHandoff = gate.recordHandoff
+        defer {
+            gate.release()
+            ble._test_beforeReceivePacketHandoff = nil
+            ble._test_onReceivePacketHandoff = nil
+        }
+
+        let sender = PeerID(str: "1122334455667788")
+        let packet = makePublicPacket(
+            content: "must not cross panic",
+            sender: sender,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000)
+        )
+        ble._test_handlePacketFromBLEQueue(packet, fromPeerID: sender)
+        #expect(await TestHelpers.waitUntil(
+            { gate.hasPaused },
+            timeout: TestConstants.longTimeout
+        ))
+
+        // Panic closes the lifecycle before waiting for the paused bleQueue
+        // callback. Releasing it afterward lets the callback enqueue its
+        // messageQueue handoff, where the captured generation must be rejected
+        // before packet processing starts.
+        let panicIngressObserver = PanicIngressObserver(service: ble)
+        let didObservePanicClosure = await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let didObserveClosure = panicIngressObserver.waitUntilClosed(
+                    timeout: TestConstants.defaultTimeout
+                )
+                gate.release()
+                continuation.resume(returning: didObserveClosure)
+            }
+            ble.suspendForPanicReset()
+        }
+
+        #expect(didObservePanicClosure)
+        #expect(gate.handoffCount == 0)
+
+        // A packet captured under the reopened lifecycle still crosses the
+        // same handoff, proving the test did not merely disable the hook.
+        ble.completePanicReset(restartServices: false)
+        ble._test_handlePacketFromBLEQueue(packet, fromPeerID: sender)
+        #expect(await TestHelpers.waitUntil(
+            { gate.handoffCount == 1 },
+            timeout: TestConstants.longTimeout
+        ))
+    }
+
     @Test
     func modifiedServices_rediscoverWhenBitChatServiceIsInvalidated() async throws {
         let otherService = CBUUID(string: "0000180F-0000-1000-8000-00805F9B34FB")
@@ -686,6 +768,68 @@ private final class OutboundPacketTap {
     }
 }
 
+private final class ReceivePacketHandoffGate: @unchecked Sendable {
+    private let condition = NSCondition()
+    private var paused = false
+    private var released = false
+    private var recordedHandoffCount = 0
+
+    var hasPaused: Bool {
+        condition.lock()
+        defer { condition.unlock() }
+        return paused
+    }
+
+    var handoffCount: Int {
+        condition.lock()
+        defer { condition.unlock() }
+        return recordedHandoffCount
+    }
+
+    func pause() {
+        condition.lock()
+        paused = true
+        condition.broadcast()
+        while !released {
+            condition.wait()
+        }
+        condition.unlock()
+    }
+
+    func release() {
+        condition.lock()
+        released = true
+        condition.broadcast()
+        condition.unlock()
+    }
+
+    func recordHandoff() {
+        condition.lock()
+        recordedHandoffCount += 1
+        condition.unlock()
+    }
+}
+
+/// Lets a dedicated dispatch worker observe the lock-protected panic gate
+/// without treating the full BLE service as generally Sendable.
+private final class PanicIngressObserver: @unchecked Sendable {
+    private let service: BLEService
+
+    init(service: BLEService) {
+        self.service = service
+    }
+
+    func waitUntilClosed(timeout: TimeInterval) -> Bool {
+        let deadline = DispatchTime.now().uptimeNanoseconds
+            + UInt64(timeout * 1_000_000_000)
+        while service._test_isPanicIngressOpen,
+              DispatchTime.now().uptimeNanoseconds < deadline {
+            Thread.sleep(forTimeInterval: 0.001)
+        }
+        return !service._test_isPanicIngressOpen
+    }
+}
+
 private func makeService() -> BLEService {
     let keychain = MockKeychain()
     let identityManager = MockIdentityManager(keychain)
@@ -742,5 +886,15 @@ private final class PublicCaptureDelegate: BitchatDelegate {
         lock.lock()
         defer { lock.unlock() }
         return publicMessages
+    }
+}
+
+@MainActor
+private final class TransportEventCaptureDelegate: TransportEventDelegate {
+    private(set) var messageIDs: [String] = []
+
+    func didReceiveTransportEvent(_ event: TransportEvent) {
+        guard case .messageReceived(let message) = event else { return }
+        messageIDs.append(message.id)
     }
 }

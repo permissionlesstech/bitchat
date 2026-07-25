@@ -104,6 +104,10 @@ final class BLEService: NSObject {
     // Test-only tap on the outbound pipeline so multi-node tests can ferry
     // packets between in-process service instances.
     var _test_onOutboundPacket: ((BitchatPacket) -> Void)?
+    /// May block a synthetic CoreBluetooth receive callback immediately
+    /// before it hands a packet to `messageQueue`.
+    var _test_beforeReceivePacketHandoff: (() -> Void)?
+    var _test_onReceivePacketHandoff: (() -> Void)?
     #endif
     private var selfBroadcastTracker = BLESelfBroadcastTracker()
     private let meshTopology = MeshTopologyTracker()
@@ -119,6 +123,7 @@ final class BLEService: NSObject {
     private struct PendingMeshPing {
         let peerID: PeerID
         let sentAt: Date
+        let lifecycleGeneration: UInt64
         let completion: @MainActor (MeshPingResult?) -> Void
         let timeout: DispatchWorkItem
     }
@@ -483,11 +488,15 @@ final class BLEService: NSObject {
         setPanicSuspended(true)
         gossipSyncManager?.stop()
         gossipSyncManager = nil
-        // Wait out sends that passed admission before the gate closed. Work
-        // queued behind this barrier observes `isPanicSuspended` and exits,
-        // so the radio stop below is a true synchronous boundary.
-        messageQueue.sync(flags: .barrier) {}
+        // Stop the radio and drain CoreBluetooth's delegate queue first. A
+        // callback may already have passed its initial suspension check; the
+        // bleQueue drain forces its final messageQueue handoff to happen
+        // before the receive barrier below.
         stopServicesImmediatelyForPanic()
+        // Drain every receive/send submitted by callbacks that finished ahead
+        // of the radio stop. Later callbacks observe the closed lifecycle, and
+        // generation-bound handoffs that raced this barrier reject themselves.
+        messageQueue.sync(flags: .barrier) {}
         clearEmergencySessionState()
     }
 
@@ -795,21 +804,30 @@ final class BLEService: NSObject {
 
     private func clearEmergencySessionState() {
         // Clear all sessions and peers
-        let cancelledTransfers: [(id: String, items: [DispatchWorkItem])] = collectionsQueue.sync(flags: .barrier) {
-            let entries = outboundFragmentTransfers.removeAll().map { ($0.id, $0.workItems) }
+        let cancelled = collectionsQueue.sync(flags: .barrier) {
+            let entries = outboundFragmentTransfers.removeAll().map {
+                (id: $0.id, items: $0.workItems)
+            }
+            let pingTimeouts = pendingMeshPings.values.map(\.timeout)
+            pendingMeshPings.removeAll()
+            meshPingResponseLimiter = SyncResponseRateLimiter(
+                maxResponses: TransportConfig.meshPingInboundMaxPerLink,
+                window: TransportConfig.meshPingInboundWindowSeconds
+            )
             peerRegistry.removeAll()
             fragmentAssemblyBuffer.removeAll()
             sourceRouteFailures = BLESourceRouteFailureCache()
             // Also clear pending message queues to avoid stale state across sessions
             pendingNoiseSessionQueues.removeAll()
             pendingDirectedRelays.removeAll()
-            return entries
+            return (transfers: entries, pingTimeouts: pingTimeouts)
         }
 
-        for entry in cancelledTransfers {
+        for entry in cancelled.transfers {
             entry.items.forEach { $0.cancel() }
             TransferProgressManager.shared.cancel(id: entry.id)
         }
+        cancelled.pingTimeouts.forEach { $0.cancel() }
 
         // Clear processed messages
         messageDeduplicator.reset()
@@ -1602,22 +1620,40 @@ final class BLEService: NSObject {
     }
 
     func collectArchivedPublicMessages(completion: @escaping @MainActor ([ArchivedPublicMessage]) -> Void) {
+        guard let generation = capturePanicLifecycleGeneration() else {
+            return
+        }
         guard let sync = gossipSyncManager else {
-            Task { @MainActor in completion([]) }
+            notifyUI { [weak self] in
+                guard let self,
+                      self.isCurrentPanicLifecycleGeneration(generation) else {
+                    return
+                }
+                completion([])
+            }
             return
         }
         sync.collectPublicMessagePackets { [weak self] packets in
-            guard let self = self else {
-                Task { @MainActor in completion([]) }
+            guard let self,
+                  self.isCurrentPanicLifecycleGeneration(generation) else {
                 return
             }
             // Signature verification and registry lookups run on messageQueue
             // like the live receive path.
             self.messageQueue.async {
+                guard self.isCurrentPanicLifecycleGeneration(generation) else {
+                    return
+                }
                 let decoded = packets
                     .compactMap { self.decodeArchivedPublicMessage($0) }
                     .sorted { $0.timestamp < $1.timestamp }
-                Task { @MainActor in completion(decoded) }
+                self.notifyUI { [weak self] in
+                    guard let self,
+                          self.isCurrentPanicLifecycleGeneration(generation) else {
+                        return
+                    }
+                    completion(decoded)
+                }
             }
         }
     }
@@ -2414,6 +2450,28 @@ private extension BLEService {
 #if DEBUG
 // Test-only helper to inject packets into the receive pipeline
 extension BLEService {
+    /// Queues an event through the same MainActor hop as production receive
+    /// handlers so panic-boundary tests can deterministically invalidate it.
+    func _test_emitTransportEvent(_ event: TransportEvent) {
+        emitTransportEvent(event)
+    }
+
+    var _test_isPanicIngressOpen: Bool {
+        capturePanicLifecycleGeneration() != nil
+    }
+
+    /// Models a CoreBluetooth delegate callback without requiring a physical
+    /// peripheral. The callback itself runs on `bleQueue`, exactly where the
+    /// panic radio-stop barrier must linearize it.
+    func _test_handlePacketFromBLEQueue(
+        _ packet: BitchatPacket,
+        fromPeerID: PeerID
+    ) {
+        bleQueue.async { [weak self] in
+            self?.handleReceivedPacket(packet, from: fromPeerID)
+        }
+    }
+
     func _test_handlePacket(_ packet: BitchatPacket, fromPeerID: PeerID, preseedPeer: Bool = true, signingPublicKey: Data? = nil) {
         if preseedPeer {
             // Ensure the synthetic peer is known and marked verified for public-message tests
@@ -3149,8 +3207,18 @@ extension BLEService {
     
     /// Notify UI on the MainActor to satisfy Swift concurrency isolation
     private func notifyUI(_ block: @escaping @MainActor () -> Void) {
-        // Always hop onto the MainActor so calls to @MainActor delegates are safe
-        Task { @MainActor in
+        // Capture the panic lifecycle before queueing the MainActor hop. A
+        // receive callback can enqueue UI delivery immediately before panic
+        // clears application state; rechecking here prevents that stale work
+        // from repopulating the wiped conversation store afterward.
+        guard let generation = capturePanicLifecycleGeneration() else {
+            return
+        }
+        Task { @MainActor [weak self] in
+            guard let self,
+                  self.isCurrentPanicLifecycleGeneration(generation) else {
+                return
+            }
             block()
         }
     }
@@ -3315,14 +3383,24 @@ extension BLEService {
     /// The completion fires exactly once on the main actor: with RTT/hops
     /// when the matching pong returns, or nil after the timeout window.
     func sendMeshPing(to peerID: PeerID, completion: @escaping @MainActor (MeshPingResult?) -> Void) {
+        guard let generation = capturePanicLifecycleGeneration() else {
+            return
+        }
         messageQueue.async { [weak self] in
             guard let self,
+                  self.isCurrentPanicLifecycleGeneration(generation),
                   let recipientData = peerID.toShort().routingData,
                   let payload = MeshPingPayload(
                     nonce: Data((0..<MeshPingPayload.nonceLength).map { _ in UInt8.random(in: .min ... .max) }),
                     originTTL: self.messageTTL
                   ) else {
-                Task { @MainActor in completion(nil) }
+                self?.notifyUI { [weak self] in
+                    guard let self,
+                          self.isCurrentPanicLifecycleGeneration(generation) else {
+                        return
+                    }
+                    completion(nil)
+                }
                 return
             }
             let nonce = payload.nonce
@@ -3341,12 +3419,21 @@ extension BLEService {
                     self.pendingMeshPings.removeValue(forKey: nonce)
                 }
                 guard let expired else { return }
-                Task { @MainActor in expired.completion(nil) }
+                self.notifyUI { [weak self] in
+                    guard let self,
+                          self.isCurrentPanicLifecycleGeneration(
+                              expired.lifecycleGeneration
+                          ) else {
+                        return
+                    }
+                    expired.completion(nil)
+                }
             }
             self.collectionsQueue.sync(flags: .barrier) {
                 self.pendingMeshPings[nonce] = PendingMeshPing(
                     peerID: PeerID(hexData: recipientData),
                     sentAt: Date(),
+                    lifecycleGeneration: generation,
                     completion: completion,
                     timeout: timeout
                 )
@@ -3413,7 +3500,15 @@ extension BLEService {
             rttMs: max(0, rttMs),
             hops: MeshPingPayload.hopCount(originTTL: pong.originTTL, receivedTTL: packet.ttl)
         )
-        Task { @MainActor in pending.completion(result) }
+        notifyUI { [weak self] in
+            guard let self,
+                  self.isCurrentPanicLifecycleGeneration(
+                      pending.lifecycleGeneration
+                  ) else {
+                return
+            }
+            pending.completion(result)
+        }
     }
 
     /// Estimated intermediate hops toward `peerID`, BFS over gossiped
@@ -3897,7 +3992,7 @@ extension BLEService {
         let store = courierStore
         let policy = courierDepositPolicy
         let metrics = sfMetrics
-        Task { @MainActor in
+        notifyUI {
             guard let tier = policy(depositorKey, isVerifiedPeer) else {
                 SecureLogger.debug("📦 Courier deposit from \(peerID.id.prefix(8))… rejected (neither favorite nor verified)", category: .session)
                 return
@@ -3977,7 +4072,7 @@ extension BLEService {
             }
         }
         let policy = courierDepositPolicy
-        Task { @MainActor in
+        notifyUI {
             // Same trust gate as deposits: don't hand mail to a peer who
             // would reject it from us.
             guard policy(noiseKey, isVerifiedPeer) != nil else { return }
@@ -4869,8 +4964,24 @@ extension BLEService {
     private func handleReceivedPacket(_ packet: BitchatPacket, from peerID: PeerID) {
         // Call directly if already on messageQueue, otherwise dispatch
         if DispatchQueue.getSpecific(key: messageQueueKey) == nil {
+            guard let lifecycleGeneration =
+                    capturePanicLifecycleGeneration() else {
+                return
+            }
+            #if DEBUG
+            _test_beforeReceivePacketHandoff?()
+            #endif
             messageQueue.async { [weak self] in
-                self?.handleReceivedPacket(packet, from: peerID)
+                guard let self,
+                      self.isCurrentPanicLifecycleGeneration(
+                          lifecycleGeneration
+                      ) else {
+                    return
+                }
+                #if DEBUG
+                self._test_onReceivePacketHandoff?()
+                #endif
+                self.handleReceivedPacket(packet, from: peerID)
             }
             return
         }
@@ -5714,8 +5825,7 @@ extension BLEService {
         let transportPeers: [TransportPeerSnapshot] = collectionsQueue.sync {
             peerRegistry.transportSnapshots(selfNickname: myNickname)
         }
-        // Notify UI on MainActor via delegate
-        Task { @MainActor [weak self] in
+        notifyUI { [weak self] in
             self?.peerEventsDelegate?.didUpdatePeerSnapshots(transportPeers)
         }
     }
