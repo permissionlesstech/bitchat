@@ -4,8 +4,22 @@ import Testing
 
 struct BLEPrivateMediaReceiptStoreTests {
     private struct TestError: Error {}
+    private struct ReceiptFixture: Codable {
+        let kind: String
+        let relativePath: String?
+        let recordedAt: Date
+    }
+    private struct JournalEntryFixture: Codable {
+        let relativePaths: [String]
+        let recordedAt: Date
+    }
+    private struct JournalFixture: Codable {
+        let version: Int
+        let entries: [String: JournalEntryFixture]
+    }
 
     private let messageID = "media-00112233445566778899aabbccddeeff"
+    private let secondMessageID = "media-ffeeddccbbaa99887766554433221100"
 
     @Test
     func acceptedReceiptPersistsAcrossStoreInstances() throws {
@@ -19,6 +33,215 @@ struct BLEPrivateMediaReceiptStoreTests {
 
         let relaunched = BLEPrivateMediaReceiptStore(baseDirectory: root)
         #expect(relaunched.state(for: messageID) == .accepted(payload))
+    }
+
+    @Test
+    func acceptedReceiptRejectsOutgoingPayloadAndCrossIDPathReuse() throws {
+        let root = makeRoot("accepted-ownership")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let incoming = try makePayload(in: root)
+        let outgoingDirectory = root.appendingPathComponent(
+            "files/images/outgoing",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(
+            at: outgoingDirectory,
+            withIntermediateDirectories: true
+        )
+        let outgoing = outgoingDirectory.appendingPathComponent("image.jpg")
+        try Data([0x01]).write(to: outgoing)
+        let store = BLEPrivateMediaReceiptStore(baseDirectory: root)
+
+        #expect(!store.commitAccepted(
+            messageID: messageID,
+            storedURL: outgoing
+        ))
+        #expect(store.commitAccepted(
+            messageID: messageID,
+            storedURL: incoming
+        ))
+        #expect(!store.commitAccepted(
+            messageID: secondMessageID,
+            storedURL: incoming
+        ))
+        #expect(FileManager.default.fileExists(atPath: incoming.path))
+        #expect(FileManager.default.fileExists(atPath: outgoing.path))
+    }
+
+    @Test
+    func liveAcceptedPathSurvivesTTLAndCapacityPressure() throws {
+        let root = makeRoot("accepted-retention")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let firstPayload = try makePayload(in: root, name: "first.jpg")
+        let secondPayload = try makePayload(in: root, name: "second.jpg")
+        let recordedAt = Date(timeIntervalSince1970: 2_000)
+        let seed = BLEPrivateMediaReceiptStore(
+            baseDirectory: root,
+            capacity: 1,
+            ttl: 1,
+            now: { recordedAt }
+        )
+        #expect(seed.commitAccepted(
+            messageID: messageID,
+            storedURL: firstPayload
+        ))
+
+        let relaunched = BLEPrivateMediaReceiptStore(
+            baseDirectory: root,
+            capacity: 1,
+            ttl: 1,
+            now: { recordedAt.addingTimeInterval(2) }
+        )
+        #expect(relaunched.state(for: messageID) == .accepted(firstPayload))
+        #expect(!relaunched.commitAccepted(
+            messageID: secondMessageID,
+            storedURL: secondPayload
+        ))
+        #expect(relaunched.state(for: messageID) == .accepted(firstPayload))
+    }
+
+    @Test
+    func incomingAllocationDoesNotReuseReceiptOwnedMissingPath() throws {
+        let root = makeRoot("accepted-reservation")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let original = try makePayload(in: root)
+        #expect(BLEPrivateMediaReceiptStore(
+            baseDirectory: root
+        ).commitAccepted(
+            messageID: messageID,
+            storedURL: original
+        ))
+        try FileManager.default.removeItem(at: original)
+
+        let stored = BLEIncomingFileStore(baseDirectory: root).save(
+            data: Data([0x03]),
+            preferredName: "image.jpg",
+            subdirectory: "images/incoming",
+            fallbackExtension: "jpg",
+            defaultPrefix: "image"
+        )
+
+        #expect(stored?.lastPathComponent != "image.jpg")
+        #expect(stored.map {
+            FileManager.default.fileExists(atPath: $0.path)
+        } == true)
+    }
+
+    @Test
+    func pendingRawArrivalBlocksDeletionFallbackPathReuse() throws {
+        let root = makeRoot("pending-raw-arrival")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let incoming = BLEIncomingFileStore(baseDirectory: root)
+
+        // The old stable bubble names image.jpg, but its receipt and payload
+        // have already been pruned. A raw arrival saves that basename before
+        // its main-actor bubble is inserted.
+        let rawArrival = incoming.save(
+            data: Data([0x03]),
+            preferredName: "image.jpg",
+            subdirectory: "images/incoming",
+            fallbackExtension: "jpg",
+            defaultPrefix: "image"
+        )
+        #expect(rawArrival?.lastPathComponent == "image.jpg")
+
+        let reservation = incoming.reservePrivateMediaDeletion(
+            messageIDs: [messageID],
+            payloadRelativePaths: [
+                messageID: "images/incoming/image.jpg"
+            ]
+        )
+        #expect(reservation == nil)
+        #expect(rawArrival.map {
+            FileManager.default.fileExists(atPath: $0.path)
+        } == true)
+    }
+
+    @Test
+    func quotaDoesNotEvictOrReusePendingDeliveryPath() throws {
+        let root = makeRoot("pending-quota")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let incoming = BLEIncomingFileStore(
+            baseDirectory: root,
+            quotaBytes: 1
+        )
+        let first = try #require(incoming.save(
+            data: Data([0x01, 0x02]),
+            preferredName: "image.jpg",
+            subdirectory: "images/incoming",
+            fallbackExtension: "jpg",
+            defaultPrefix: "image"
+        ))
+
+        incoming.enforceQuota(reservingBytes: 1)
+        #expect(FileManager.default.fileExists(atPath: first.path))
+
+        let second = try #require(incoming.save(
+            data: Data([0x03]),
+            preferredName: "image.jpg",
+            subdirectory: "images/incoming",
+            fallbackExtension: "jpg",
+            defaultPrefix: "image"
+        ))
+        #expect(second != first)
+        #expect(second.lastPathComponent == "image (1).jpg")
+        #expect(FileManager.default.fileExists(atPath: first.path))
+        #expect(FileManager.default.fileExists(atPath: second.path))
+    }
+
+    @Test
+    func invalidReceiptAndJournalCannotTargetOutgoingPayload() throws {
+        let root = makeRoot("invalid-owned-path")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let outgoingDirectory = root.appendingPathComponent(
+            "files/images/outgoing",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(
+            at: outgoingDirectory,
+            withIntermediateDirectories: true
+        )
+        let victim = outgoingDirectory.appendingPathComponent("victim.jpg")
+        try Data([0x02]).write(to: victim)
+        let receiptURL = receiptRecord(in: root)
+        try FileManager.default.createDirectory(
+            at: receiptURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let fixture = ReceiptFixture(
+            kind: "tombstone",
+            relativePath: "images/outgoing/victim.jpg",
+            recordedAt: Date()
+        )
+        try JSONEncoder().encode(fixture).write(
+            to: receiptURL,
+            options: .atomic
+        )
+
+        #expect(
+            BLEPrivateMediaReceiptStore(baseDirectory: root)
+                .state(for: messageID) == .unavailable
+        )
+        #expect(FileManager.default.fileExists(atPath: victim.path))
+
+        try FileManager.default.removeItem(at: receiptURL)
+        let journal = JournalFixture(
+            version: 1,
+            entries: [messageID: JournalEntryFixture(
+                relativePaths: ["images/outgoing/victim.jpg"],
+                recordedAt: fixture.recordedAt
+            )]
+        )
+        try JSONEncoder().encode(journal).write(
+            to: deletionJournal(in: root),
+            options: .atomic
+        )
+
+        #expect(
+            BLEPrivateMediaReceiptStore(baseDirectory: root)
+                .state(for: messageID) == .unavailable
+        )
+        #expect(FileManager.default.fileExists(atPath: victim.path))
     }
 
     @Test
@@ -199,25 +422,447 @@ struct BLEPrivateMediaReceiptStoreTests {
     }
 
     @Test
-    func failedTombstonePersistenceDoesNotPoisonVolatileState() throws {
-        let root = makeRoot("failed-tombstone-write")
+    func deletionBatchCommitsEveryIDBeforeRemovingPayloads() throws {
+        let root = makeRoot("batch")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let firstPayload = try makePayload(in: root, name: "first.jpg")
+        let secondPayload = try makePayload(in: root, name: "second.jpg")
+        let store = BLEPrivateMediaReceiptStore(baseDirectory: root)
+        #expect(store.commitAccepted(
+            messageID: messageID,
+            storedURL: firstPayload
+        ))
+        #expect(store.commitAccepted(
+            messageID: secondMessageID,
+            storedURL: secondPayload
+        ))
+
+        #expect(store.recordDeleted(
+            messageIDs: [secondMessageID, messageID]
+        ))
+
+        #expect(store.state(for: messageID) == .tombstoned)
+        #expect(store.state(for: secondMessageID) == .tombstoned)
+        #expect(!FileManager.default.fileExists(atPath: firstPayload.path))
+        #expect(!FileManager.default.fileExists(atPath: secondPayload.path))
+        #expect(!FileManager.default.fileExists(
+            atPath: deletionJournal(in: root).path
+        ))
+    }
+
+    @Test
+    func failedJournalCommitPreservesAcceptedStateAndPayloads() throws {
+        let root = makeRoot("journal-failure")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let firstPayload = try makePayload(in: root, name: "first.jpg")
+        let secondPayload = try makePayload(in: root, name: "second.jpg")
+        let seed = BLEPrivateMediaReceiptStore(baseDirectory: root)
+        #expect(seed.commitAccepted(
+            messageID: messageID,
+            storedURL: firstPayload
+        ))
+        #expect(seed.commitAccepted(
+            messageID: secondMessageID,
+            storedURL: secondPayload
+        ))
+
+        let failing = BLEPrivateMediaReceiptStore(
+            baseDirectory: root,
+            dataWriter: { _, _, _ in throw TestError() }
+        )
+        #expect(!failing.recordDeleted(
+            messageIDs: [messageID, secondMessageID]
+        ))
+
+        // A failed commit must not install a volatile tombstone. Otherwise a
+        // sender retry could be ACKed although the caller kept both bubbles.
+        #expect(failing.state(for: messageID) == .accepted(firstPayload))
+        #expect(
+            failing.state(for: secondMessageID) == .accepted(secondPayload)
+        )
+        #expect(FileManager.default.fileExists(atPath: firstPayload.path))
+        #expect(FileManager.default.fileExists(atPath: secondPayload.path))
+        #expect(!FileManager.default.fileExists(
+            atPath: deletionJournal(in: root).path
+        ))
+    }
+
+    @Test
+    func journalRecoversBatchAfterCrashDuringMaterialization() throws {
+        let root = makeRoot("crash-recovery")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let firstPayload = try makePayload(in: root, name: "first.jpg")
+        let secondPayload = try makePayload(in: root, name: "second.jpg")
+        let seed = BLEPrivateMediaReceiptStore(baseDirectory: root)
+        #expect(seed.commitAccepted(
+            messageID: messageID,
+            storedURL: firstPayload
+        ))
+        #expect(seed.commitAccepted(
+            messageID: secondMessageID,
+            storedURL: secondPayload
+        ))
+
+        let interrupted = BLEPrivateMediaReceiptStore(
+            baseDirectory: root,
+            dataWriter: { data, url, options in
+                let isJournal =
+                    url.lastPathComponent == ".deletion-journal.json"
+                let isFirstRecord =
+                    url.deletingPathExtension().lastPathComponent == messageID
+                guard isJournal || isFirstRecord else {
+                    throw TestError()
+                }
+                try data.write(to: url, options: options)
+            }
+        )
+        #expect(interrupted.recordDeleted(
+            messageIDs: [messageID, secondMessageID]
+        ))
+        #expect(FileManager.default.fileExists(
+            atPath: deletionJournal(in: root).path
+        ))
+        #expect(!FileManager.default.fileExists(atPath: firstPayload.path))
+        #expect(FileManager.default.fileExists(atPath: secondPayload.path))
+        #expect(interrupted.state(for: messageID) == .tombstoned)
+        #expect(interrupted.state(for: secondMessageID) == .tombstoned)
+
+        let relaunched = BLEPrivateMediaReceiptStore(baseDirectory: root)
+        #expect(relaunched.state(for: messageID) == .tombstoned)
+        #expect(relaunched.state(for: secondMessageID) == .tombstoned)
+        #expect(!FileManager.default.fileExists(atPath: firstPayload.path))
+        #expect(!FileManager.default.fileExists(atPath: secondPayload.path))
+        #expect(!FileManager.default.fileExists(
+            atPath: deletionJournal(in: root).path
+        ))
+    }
+
+    @Test
+    func journalRetriesPayloadUnlinkAfterRelaunch() throws {
+        let root = makeRoot("unlink-recovery")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let payload = try makePayload(in: root)
+        let seed = BLEPrivateMediaReceiptStore(baseDirectory: root)
+        #expect(seed.commitAccepted(
+            messageID: messageID,
+            storedURL: payload
+        ))
+
+        let unlinkFailure = BLEPrivateMediaReceiptStore(
+            baseDirectory: root,
+            payloadRemover: { _ in throw TestError() }
+        )
+        #expect(unlinkFailure.recordDeleted(messageID: messageID))
+        #expect(unlinkFailure.state(for: messageID) == .tombstoned)
+        #expect(FileManager.default.fileExists(atPath: payload.path))
+        #expect(FileManager.default.fileExists(
+            atPath: deletionJournal(in: root).path
+        ))
+
+        let relaunched = BLEPrivateMediaReceiptStore(baseDirectory: root)
+        #expect(relaunched.state(for: messageID) == .tombstoned)
+        #expect(!FileManager.default.fileExists(atPath: payload.path))
+        #expect(!FileManager.default.fileExists(
+            atPath: deletionJournal(in: root).path
+        ))
+    }
+
+    @Test
+    func expiredReceiptUsesFallbackPathForCrashSafeCleanup() throws {
+        let root = makeRoot("expired-fallback")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let payload = try makePayload(in: root)
+        let recordedAt = Date(timeIntervalSince1970: 1_000)
+        let seed = BLEPrivateMediaReceiptStore(
+            baseDirectory: root,
+            ttl: 10,
+            now: { recordedAt }
+        )
+        #expect(seed.commitAccepted(
+            messageID: messageID,
+            storedURL: payload
+        ))
+        // Simulate a receipt pruned by an older app version while its bubble
+        // and payload remain. Current code retains live accepted-path owners.
+        try FileManager.default.removeItem(at: receiptRecord(in: root))
+
+        let afterExpiry = recordedAt.addingTimeInterval(11)
+        let interrupted = BLEPrivateMediaReceiptStore(
+            baseDirectory: root,
+            ttl: 10,
+            now: { afterExpiry },
+            payloadRemover: { _ in throw TestError() }
+        )
+        #expect(interrupted.recordDeleted(
+            messageIDs: [messageID],
+            payloadRelativePaths: [
+                messageID: "images/incoming/image.jpg"
+            ]
+        ))
+        #expect(interrupted.state(for: messageID) == .tombstoned)
+        #expect(FileManager.default.fileExists(atPath: payload.path))
+        #expect(FileManager.default.fileExists(
+            atPath: deletionJournal(in: root).path
+        ))
+
+        let relaunched = BLEPrivateMediaReceiptStore(
+            baseDirectory: root,
+            ttl: 10,
+            now: { afterExpiry }
+        )
+        #expect(relaunched.state(for: messageID) == .tombstoned)
+        #expect(!FileManager.default.fileExists(atPath: payload.path))
+        #expect(!FileManager.default.fileExists(
+            atPath: deletionJournal(in: root).path
+        ))
+    }
+
+    @Test
+    func retryAtSuffixedPathDeletesReceiptAndBubblePayloads() throws {
+        let root = makeRoot("retry-suffix")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let original = try makePayload(in: root)
+        let seed = BLEPrivateMediaReceiptStore(baseDirectory: root)
+        #expect(seed.commitAccepted(
+            messageID: messageID,
+            storedURL: original
+        ))
+
+        // Simulate an older build pruning only the receipt. A retry must use a
+        // suffixed filename while the old bubble still references image.jpg.
+        try FileManager.default.removeItem(at: receiptRecord(in: root))
+        let retry = try makePayload(in: root, name: "image (1).jpg")
+        let retried = BLEPrivateMediaReceiptStore(baseDirectory: root)
+        #expect(retried.commitAccepted(
+            messageID: messageID,
+            storedURL: retry
+        ))
+
+        #expect(retried.recordDeleted(
+            messageIDs: [messageID],
+            payloadRelativePaths: [
+                messageID: "images/incoming/image.jpg"
+            ]
+        ))
+        #expect(retried.state(for: messageID) == .tombstoned)
+        #expect(!FileManager.default.fileExists(atPath: original.path))
+        #expect(!FileManager.default.fileExists(atPath: retry.path))
+        #expect(!FileManager.default.fileExists(
+            atPath: deletionJournal(in: root).path
+        ))
+
+        let relaunched = BLEPrivateMediaReceiptStore(baseDirectory: root)
+        #expect(relaunched.state(for: messageID) == .tombstoned)
+        #expect(!FileManager.default.fileExists(atPath: original.path))
+        #expect(!FileManager.default.fileExists(atPath: retry.path))
+    }
+
+    @Test
+    func protectedUIPathRejectsAcceptedReceiptDeletion() throws {
+        let root = makeRoot("protected-ui-owner")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let payload = try makePayload(in: root)
+        let store = BLEPrivateMediaReceiptStore(baseDirectory: root)
+        #expect(store.commitAccepted(
+            messageID: messageID,
+            storedURL: payload
+        ))
+
+        #expect(!store.recordDeleted(
+            messageIDs: [messageID],
+            protectedPayloadRelativePaths: [
+                "images/incoming/image.jpg"
+            ]
+        ))
+        #expect(store.state(for: messageID) == .accepted(payload))
+        #expect(FileManager.default.fileExists(atPath: payload.path))
+    }
+
+    @Test
+    func pathlessNewDeletionFailsWithoutChangingReceiverState() {
+        let root = makeRoot("pathless-delete")
         defer { try? FileManager.default.removeItem(at: root) }
         let store = BLEPrivateMediaReceiptStore(baseDirectory: root)
-        #expect(store.state(for: messageID) == .absent)
 
-        // Force the atomic record write itself to fail after the store has
-        // successfully loaded its empty index.
-        let record = receiptRecord(in: root)
+        #expect(!store.recordDeleted(messageID: messageID))
+        #expect(store.state(for: messageID) == .absent)
+        #expect(!FileManager.default.fileExists(
+            atPath: deletionJournal(in: root).path
+        ))
+    }
+
+    @Test
+    func completedTombstoneNeverDeletesReusedPayloadPath() throws {
+        let root = makeRoot("path-reuse")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let original = try makePayload(in: root)
+        let store = BLEPrivateMediaReceiptStore(baseDirectory: root)
+        #expect(store.commitAccepted(
+            messageID: messageID,
+            storedURL: original
+        ))
+        #expect(store.recordDeleted(messageID: messageID))
+        #expect(!FileManager.default.fileExists(atPath: original.path))
+
+        let reused = try makePayload(in: root)
+        #expect(store.commitAccepted(
+            messageID: secondMessageID,
+            storedURL: reused
+        ))
+        #expect(store.state(for: messageID) == .tombstoned)
+        #expect(FileManager.default.fileExists(atPath: reused.path))
+
+        let relaunched = BLEPrivateMediaReceiptStore(baseDirectory: root)
+        #expect(relaunched.state(for: messageID) == .tombstoned)
+        #expect(FileManager.default.fileExists(atPath: reused.path))
+        #expect(
+            relaunched.state(for: secondMessageID) == .accepted(reused)
+        )
+    }
+
+    @Test
+    func expiredLegacyPathfulTombstoneDoesNotDeleteAcceptedOwner() throws {
+        let root = makeRoot("legacy-path-conflict")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let payload = try makePayload(in: root)
+        let receiptDirectory = receiptRecord(in: root)
+            .deletingLastPathComponent()
         try FileManager.default.createDirectory(
-            at: record,
+            at: receiptDirectory,
             withIntermediateDirectories: true
         )
-        #expect(!store.recordDeleted(messageID: messageID))
-        try FileManager.default.removeItem(at: record)
+        let recordedAt = Date(timeIntervalSince1970: 3_000)
+        try JSONEncoder().encode(ReceiptFixture(
+            kind: "tombstone",
+            relativePath: "images/incoming/image.jpg",
+            recordedAt: recordedAt
+        )).write(
+            to: receiptRecord(in: root),
+            options: .atomic
+        )
+        try JSONEncoder().encode(ReceiptFixture(
+            kind: "accepted",
+            relativePath: "images/incoming/image.jpg",
+            recordedAt: recordedAt
+        )).write(
+            to: receiptRecord(
+                in: root,
+                messageID: secondMessageID
+            ),
+            options: .atomic
+        )
 
-        // The UI must be able to report the deletion failure without a
-        // process-lifetime tombstone silently hiding a later retry.
+        let store = BLEPrivateMediaReceiptStore(
+            baseDirectory: root,
+            ttl: 1,
+            now: { recordedAt.addingTimeInterval(2) }
+        )
         #expect(store.state(for: messageID) == .absent)
+        #expect(FileManager.default.fileExists(atPath: payload.path))
+        #expect(
+            store.state(for: secondMessageID) == .accepted(payload)
+        )
+        #expect(FileManager.default.fileExists(atPath: payload.path))
+    }
+
+    @Test
+    func expiredLegacyPathfulTombstonePreservesAmbiguousPayload() throws {
+        let root = makeRoot("legacy-expired-cleanup")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let payload = try makePayload(in: root)
+        let receiptURL = receiptRecord(in: root)
+        try FileManager.default.createDirectory(
+            at: receiptURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let recordedAt = Date(timeIntervalSince1970: 3_000)
+        try JSONEncoder().encode(ReceiptFixture(
+            kind: "tombstone",
+            relativePath: "images/incoming/image.jpg",
+            recordedAt: recordedAt
+        )).write(to: receiptURL, options: .atomic)
+
+        let store = BLEPrivateMediaReceiptStore(
+            baseDirectory: root,
+            ttl: 1,
+            now: { recordedAt.addingTimeInterval(2) }
+        )
+
+        #expect(store.state(for: messageID) == .absent)
+        #expect(FileManager.default.fileExists(atPath: payload.path))
+        #expect(!FileManager.default.fileExists(atPath: receiptURL.path))
+    }
+
+    @Test
+    func deletionJournalNeverRecursivelyRemovesDirectoryTarget() throws {
+        let root = makeRoot("journal-directory")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let directory = root.appendingPathComponent(
+            "files/images/incoming/archive",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        let child = directory.appendingPathComponent("child.jpg")
+        try Data([0x01]).write(to: child)
+        let receiptDirectory = receiptRecord(in: root)
+            .deletingLastPathComponent()
+        try FileManager.default.createDirectory(
+            at: receiptDirectory,
+            withIntermediateDirectories: true
+        )
+        #expect(!BLEPrivateMediaReceiptStore(
+            baseDirectory: root
+        ).recordDeleted(
+            messageIDs: [messageID],
+            payloadRelativePaths: [
+                messageID: "images/incoming/archive"
+            ]
+        ))
+        #expect(!FileManager.default.fileExists(
+            atPath: deletionJournal(in: root).path
+        ))
+        try JSONEncoder().encode(JournalFixture(
+            version: 1,
+            entries: [messageID: JournalEntryFixture(
+                relativePaths: ["images/incoming/archive"],
+                recordedAt: Date()
+            )]
+        )).write(to: deletionJournal(in: root), options: .atomic)
+
+        let store = BLEPrivateMediaReceiptStore(baseDirectory: root)
+        #expect(store.state(for: messageID) == .tombstoned)
+        #expect(FileManager.default.fileExists(atPath: directory.path))
+        #expect(FileManager.default.fileExists(atPath: child.path))
+        #expect(FileManager.default.fileExists(
+            atPath: deletionJournal(in: root).path
+        ))
+    }
+
+    @Test
+    func corruptDeletionJournalFailsClosedWithoutRemovingPayload() throws {
+        let root = makeRoot("corrupt-journal")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let payload = try makePayload(in: root)
+        #expect(BLEPrivateMediaReceiptStore(
+            baseDirectory: root
+        ).commitAccepted(
+            messageID: messageID,
+            storedURL: payload
+        ))
+        let journal = deletionJournal(in: root)
+        try Data("{not-json".utf8).write(to: journal, options: .atomic)
+
+        let relaunched = BLEPrivateMediaReceiptStore(baseDirectory: root)
+        #expect(relaunched.state(for: messageID) == .unavailable)
+        #expect(!relaunched.commitAccepted(
+            messageID: messageID,
+            storedURL: payload
+        ))
+        #expect(FileManager.default.fileExists(atPath: payload.path))
+        #expect(try Data(contentsOf: journal) == Data("{not-json".utf8))
     }
 
     @Test
@@ -268,18 +913,30 @@ struct BLEPrivateMediaReceiptStoreTests {
         return payload
     }
 
-    private func receiptRecord(in root: URL) -> URL {
+    private func receiptRecord(
+        in root: URL,
+        messageID requestedMessageID: String? = nil
+    ) -> URL {
         root
             .appendingPathComponent(
                 "files/.private-media-receipts",
                 isDirectory: true
             )
-            .appendingPathComponent(messageID)
+            .appendingPathComponent(requestedMessageID ?? messageID)
             .appendingPathExtension("json")
     }
 
     private func quarantinedRecord(in root: URL) -> URL {
         receiptRecord(in: root).appendingPathExtension("corrupt")
+    }
+
+    private func deletionJournal(in root: URL) -> URL {
+        root
+            .appendingPathComponent(
+                "files/.private-media-receipts",
+                isDirectory: true
+            )
+            .appendingPathComponent(".deletion-journal.json")
     }
 }
 

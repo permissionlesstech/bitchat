@@ -58,6 +58,8 @@ private final class MockChatMediaTransferContext: ChatMediaTransferContext {
 
     private(set) var appendedPublicMessages: [(message: BitchatMessage, conversationID: ConversationID)] = []
     private(set) var removedMessages: [(messageID: String, cleanupFile: Bool)] = []
+    private(set) var untombstonedMediaRemovals: [String] = []
+    private(set) var outgoingMediaRemovals: [String] = []
     private(set) var systemMessages: [String] = []
     private(set) var notifyUIChangedCount = 0
 
@@ -69,6 +71,16 @@ private final class MockChatMediaTransferContext: ChatMediaTransferContext {
 
     func removeMessage(withID messageID: String, cleanupFile: Bool) {
         removedMessages.append((messageID, cleanupFile))
+    }
+
+    func removeUntombstonedMediaMessage(withID messageID: String) {
+        untombstonedMediaRemovals.append(messageID)
+        removedMessages.append((messageID, false))
+    }
+
+    func removeOutgoingMediaMessage(withID messageID: String) {
+        outgoingMediaRemovals.append(messageID)
+        removedMessages.append((messageID, false))
     }
 
     func addSystemMessage(_ content: String) { systemMessages.append(content) }
@@ -99,6 +111,13 @@ private final class MockChatMediaTransferContext: ChatMediaTransferContext {
     private(set) var broadcastFileSends: [String] = []
     private(set) var cancelledTransfers: [String] = []
     private(set) var privateMediaPolicyResolutionRequests: [PeerID] = []
+    private(set) var persistedDeletionBatches: [[String]] = []
+    var requiredTombstoneIDs: Set<String> = []
+    var deletedMediaPersistenceResult = true
+    var deferDeletedMediaPersistence = false
+    private var pendingDeletionCompletions: [
+        @MainActor (Bool) -> Void
+    ] = []
     var privateMediaPolicy: PrivateMediaSendPolicy = .encrypted
     var resolvedPrivateMediaPolicy: PrivateMediaSendPolicy?
     var resolvesPrivateMediaPolicyImmediately = true
@@ -217,6 +236,28 @@ private final class MockChatMediaTransferContext: ChatMediaTransferContext {
 
     func cancelTransfer(_ transferId: String) {
         cancelledTransfers.append(transferId)
+    }
+
+    func persistDeletedPrivateMedia(
+        messageIDs: [String],
+        completion: @escaping @MainActor (Bool) -> Void
+    ) {
+        persistedDeletionBatches.append(messageIDs)
+        if deferDeletedMediaPersistence {
+            pendingDeletionCompletions.append(completion)
+        } else {
+            completion(deletedMediaPersistenceResult)
+        }
+    }
+
+    func requiresPrivateMediaTombstone(messageID: String) -> Bool {
+        requiredTombstoneIDs.contains(messageID)
+    }
+
+    func resolveNextDeletionPersistence(_ result: Bool? = nil) {
+        guard !pendingDeletionCompletions.isEmpty else { return }
+        let completion = pendingDeletionCompletions.removeFirst()
+        completion(result ?? deletedMediaPersistenceResult)
     }
 }
 
@@ -381,7 +422,8 @@ struct ChatMediaTransferCoordinatorContextTests {
         coordinator.handleTransferEvent(.cancelled(id: "t2", sentFragments: 1, totalFragments: 5))
         #expect(context.removedMessages.count == 1)
         #expect(context.removedMessages.first?.messageID == "m2")
-        #expect(context.removedMessages.first?.cleanupFile == true)
+        #expect(context.removedMessages.first?.cleanupFile == false)
+        #expect(context.outgoingMediaRemovals == ["m2"])
 
         // A pre-start rejection keeps the placeholder visible and failed,
         // including queued post-handshake encryption failures.
@@ -531,7 +573,154 @@ struct ChatMediaTransferCoordinatorContextTests {
         #expect(context.cancelledTransfers == ["approved-delete"])
         #expect(coordinator.messageIDToTransferId["message-delete"] == nil)
         #expect(context.removedMessages.map(\.messageID) == ["message-delete"])
-        #expect(context.removedMessages.first?.cleanupFile == true)
+        #expect(context.removedMessages.first?.cleanupFile == false)
+        #expect(
+            context.untombstonedMediaRemovals == ["message-delete"]
+        )
+    }
+
+    @Test @MainActor
+    func deleteIncomingStableMediaWaitsForDurableTombstone() {
+        let context = MockChatMediaTransferContext()
+        let coordinator = ChatMediaTransferCoordinator(context: context)
+        let messageID = "media-00112233445566778899aabbccddeeff"
+        context.requiredTombstoneIDs = [messageID]
+        context.deferDeletedMediaPersistence = true
+        coordinator.registerTransfer(
+            transferId: "incoming-delete",
+            messageID: messageID
+        )
+
+        coordinator.deleteMediaMessage(messageID: messageID)
+
+        #expect(context.persistedDeletionBatches == [[messageID]])
+        #expect(context.removedMessages.isEmpty)
+        #expect(context.cancelledTransfers == ["incoming-delete"])
+        #expect(coordinator.messageIDToTransferId[messageID] == nil)
+
+        context.resolveNextDeletionPersistence(true)
+
+        #expect(context.cancelledTransfers == ["incoming-delete"])
+        #expect(context.removedMessages.map(\.messageID) == [messageID])
+        #expect(context.removedMessages.first?.cleanupFile == false)
+        #expect(context.untombstonedMediaRemovals.isEmpty)
+        #expect(coordinator.messageIDToTransferId[messageID] == nil)
+    }
+
+    @Test @MainActor
+    func deleteIncomingStableMediaPreservesStateWhenTombstoneFails() {
+        let context = MockChatMediaTransferContext()
+        let coordinator = ChatMediaTransferCoordinator(context: context)
+        let messageID = "media-ffeeddccbbaa99887766554433221100"
+        context.requiredTombstoneIDs = [messageID]
+        context.deletedMediaPersistenceResult = false
+        coordinator.registerTransfer(
+            transferId: "failed-delete",
+            messageID: messageID
+        )
+
+        coordinator.deleteMediaMessage(messageID: messageID)
+
+        #expect(context.persistedDeletionBatches == [[messageID]])
+        #expect(context.removedMessages.isEmpty)
+        #expect(context.cancelledTransfers == ["failed-delete"])
+        #expect(coordinator.messageIDToTransferId[messageID] == nil)
+    }
+
+    @Test @MainActor
+    func deleteStableMediaReleasesRetainedRetryBeforeTombstoneCommit()
+        async throws
+    {
+        let context = MockChatMediaTransferContext()
+        let peerID = PeerID(str: "1122334455667788")
+        context.selectedPrivateChatPeer = peerID
+        context.supportsAuthenticatedPrivateMediaReceipts = true
+        context.deferDeletedMediaPersistence = true
+        let fileName = "voice_deadbeefdeadbeef.m4a"
+        let preparer = StaticVoiceNotePreparer(fileName: fileName)
+        let coordinator = ChatMediaTransferCoordinator(
+            context: context,
+            prepareVoiceNotePacket: { url in
+                try preparer.prepare(url)
+            }
+        )
+        let url = try makeCoordinatorVoiceURL(fileName: fileName)
+        defer {
+            try? FileManager.default.removeItem(
+                at: url.deletingLastPathComponent()
+            )
+        }
+
+        coordinator.sendVoiceNote(at: url)
+        #expect(await TestHelpers.waitUntil(
+            { context.privateFileSends.count == 1 },
+            timeout: TestConstants.longTimeout
+        ))
+        let messageID = try #require(
+            context.privateChats[peerID]?.first?.id
+        )
+        let transferID = try #require(
+            context.privateFileSends.first?.transferId
+        )
+        context.requiredTombstoneIDs = [messageID]
+        #expect(coordinator.retainedReconnectRetryCount == 1)
+
+        coordinator.deleteMediaMessage(messageID: messageID)
+
+        #expect(context.persistedDeletionBatches == [[messageID]])
+        #expect(coordinator.retainedReconnectRetryCount == 0)
+        #expect(coordinator.retainedReconnectRetryBytes == 0)
+        #expect(context.cancelledTransfers == [transferID])
+        #expect(context.removedMessages.isEmpty)
+
+        coordinator.peerDidReconnect(peerID)
+        #expect(context.privateFileSends.count == 1)
+
+        context.resolveNextDeletionPersistence(true)
+        #expect(context.removedMessages.map(\.messageID) == [messageID])
+    }
+
+    @Test @MainActor
+    func legacyCleanupNeverRecursivelyDeletesDirectoryTarget() throws {
+        let context = MockChatMediaTransferContext()
+        let coordinator = ChatMediaTransferCoordinator(context: context)
+        let incoming = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        .appendingPathComponent(
+            "files/images/incoming",
+            isDirectory: true
+        )
+        let directoryName = "cleanup-dir-\(UUID().uuidString)"
+        let directory = incoming.appendingPathComponent(
+            directoryName,
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        let child = directory.appendingPathComponent("child.jpg")
+        try Data([0x01]).write(to: child)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let message = BitchatMessage(
+            id: UUID().uuidString,
+            sender: "Peer",
+            content:
+                "\(MimeType.Category.image.messagePrefix)\(directoryName)",
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: true,
+            recipientNickname: "Me"
+        )
+
+        coordinator.cleanupIncomingLocalFile(forMessage: message)
+
+        #expect(FileManager.default.fileExists(atPath: directory.path))
+        #expect(FileManager.default.fileExists(atPath: child.path))
     }
 
     @Test @MainActor

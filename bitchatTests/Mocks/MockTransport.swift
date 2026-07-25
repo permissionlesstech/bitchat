@@ -14,7 +14,7 @@ import BitFoundation
 
 /// Mock Transport implementation for testing ChatViewModel in isolation.
 /// Records all method calls and allows test code to verify interactions.
-final class MockTransport: Transport {
+final class MockTransport: Transport, PrivateMediaDeletionPersisting {
 
     // MARK: - Protocol Properties
 
@@ -38,6 +38,11 @@ final class MockTransport: Transport {
     private(set) var sentPrivateFiles: [(packet: BitchatFilePacket, peerID: PeerID, transferID: String)] = []
     private(set) var sentPrivateFileLegacyAllowances: [Bool] = []
     private(set) var cancelledTransfers: [String] = []
+    private(set) var deletedPrivateMediaMessageIDBatches: [[String]] = []
+    private(set) var deletedPrivateMediaRelativePaths: [
+        [String: String]
+    ] = []
+    private(set) var protectedPrivateMediaRelativePaths: [Set<String>] = []
     private(set) var sentVerifyChallenges: [(peerID: PeerID, noiseKeyHex: String, nonceA: Data)] = []
     private(set) var sentVerifyResponses: [(peerID: PeerID, noiseKeyHex: String, nonceA: Data)] = []
     private(set) var sentCourierMessages: [(content: String, messageID: String, recipientNoiseKey: Data, couriers: [PeerID])] = []
@@ -60,6 +65,11 @@ final class MockTransport: Transport {
     var peerFingerprints: [PeerID: String] = [:]
     var peerNoiseStates: [PeerID: LazyHandshakeState] = [:]
     var privateMediaPolicies: [PeerID: PrivateMediaSendPolicy] = [:]
+    var persistDeletedPrivateMediaResult = true
+    var deferDeletedPrivateMediaPersistence = false
+    private var pendingDeletedPrivateMediaCompletions: [
+        @MainActor (Bool) -> Void
+    ] = []
     private let mockKeychain = MockKeychain()
 
     // MARK: - Transport Protocol Implementation
@@ -217,6 +227,34 @@ final class MockTransport: Transport {
         cancelledTransfers.append(transferId)
     }
 
+    @MainActor
+    func persistDeletedPrivateMedia(
+        messageIDs: [String],
+        payloadRelativePaths: [String: String],
+        protectedPayloadRelativePaths: Set<String>,
+        completion: @escaping @MainActor (Bool) -> Void
+    ) {
+        deletedPrivateMediaMessageIDBatches.append(messageIDs)
+        deletedPrivateMediaRelativePaths.append(payloadRelativePaths)
+        protectedPrivateMediaRelativePaths.append(
+            protectedPayloadRelativePaths
+        )
+        if deferDeletedPrivateMediaPersistence {
+            pendingDeletedPrivateMediaCompletions.append(completion)
+        } else {
+            completion(persistDeletedPrivateMediaResult)
+        }
+    }
+
+    @MainActor
+    func resolveNextDeletedPrivateMediaPersistence(
+        _ result: Bool? = nil
+    ) {
+        guard !pendingDeletedPrivateMediaCompletions.isEmpty else { return }
+        let completion = pendingDeletedPrivateMediaCompletions.removeFirst()
+        completion(result ?? persistDeletedPrivateMediaResult)
+    }
+
     func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {
         sentVerifyChallenges.append((peerID, noiseKeyHex, nonceA))
     }
@@ -264,6 +302,9 @@ final class MockTransport: Transport {
         sentBroadcastFiles.removeAll()
         sentPrivateFiles.removeAll()
         cancelledTransfers.removeAll()
+        deletedPrivateMediaMessageIDBatches.removeAll()
+        deletedPrivateMediaRelativePaths.removeAll()
+        protectedPrivateMediaRelativePaths.removeAll()
         sentVerifyChallenges.removeAll()
         sentVerifyResponses.removeAll()
         startServicesCallCount = 0

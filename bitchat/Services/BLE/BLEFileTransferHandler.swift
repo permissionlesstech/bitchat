@@ -40,6 +40,9 @@ struct BLEFileTransferHandlerEnvironment {
     let commitPrivateMediaFile: (_ messageID: String, _ storedURL: URL) -> Bool
     /// Rolls back a saved payload when its durable receipt commit fails.
     let removeIncomingFile: (_ storedURL: URL) -> Void
+    /// Releases the allocator's save-to-UI ownership guard after synchronous
+    /// conversation insertion has completed.
+    let finishIncomingFileDelivery: (_ storedURL: URL) -> Void
     /// Checks the authenticated sender before any private-media disk work.
     let isPrivateMediaSenderBlocked: (PeerID) -> Bool
     /// Updates the registry last-seen timestamp for the peer (async barrier write).
@@ -49,11 +52,14 @@ struct BLEFileTransferHandlerEnvironment {
     let acknowledgePrivateMedia: (_ messageID: String, _ peerID: PeerID) -> Void
     /// Delivers `.messageReceived` as one main-actor hop while
     /// `shouldDeliver` remains true before and after the synchronous sink.
-    /// The completion authorizes the stable-media ACK.
+    /// The completion authorizes the stable-media ACK. Finalization runs after
+    /// every delivery attempt, including rejection, so allocator ownership
+    /// cannot leak indefinitely.
     let deliverMessage: (
         _ message: BitchatMessage,
         _ shouldDeliver: @escaping () -> Bool,
-        _ completion: @escaping () -> Void
+        _ completion: @escaping () -> Void,
+        _ finalization: @escaping (TransportEventDeliveryOutcome) -> Void
     ) -> Void
 }
 
@@ -359,7 +365,24 @@ final class BLEFileTransferHandler {
                 env: env
             )
         } else {
-            env.deliverMessage(message, { true }, {})
+            env.deliverMessage(
+                message,
+                { true },
+                {},
+                { outcome in
+                    if outcome == .rejected {
+                        // Raw media has no durable receipt that can redeliver
+                        // it later. Do not leave a newly saved, UI-unowned file
+                        // available for a stale fallback path to misidentify.
+                        env.removeIncomingFile(destination)
+                    } else {
+                        // Plain delegates are invoked without synchronous
+                        // insertion confirmation. Preserve the payload for
+                        // that supported delivery path.
+                        env.finishIncomingFileDelivery(destination)
+                    }
+                }
+            )
         }
         return true
     }
@@ -383,6 +406,9 @@ final class BLEFileTransferHandler {
             },
             {
                 env.acknowledgePrivateMedia(messageID, peerID)
+            },
+            { _ in
+                env.finishIncomingFileDelivery(expectedURL)
             }
         )
     }

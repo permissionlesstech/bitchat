@@ -109,6 +109,16 @@ struct PanicNetworkLifecycle {
     }
 }
 
+private struct PendingPrivateChatClear {
+    let peerID: PeerID
+    let sourceConversationID: ConversationID
+    let messages: [BitchatMessage]
+    let otherMessageIDs: Set<String>
+    let localPeerID: PeerID
+    let nickname: String
+    let outgoingMedia: [BitchatMessage]
+}
+
 /// Manages the application state and business logic for BitChat.
 /// Acts as the primary coordinator between UI components and backend services,
 /// implementing the BitchatDelegate protocol to handle network events.
@@ -376,6 +386,10 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     @Published var bluetoothAlertMessage = ""
     @Published var bluetoothState: CBManagerState = .unknown
     @Published private(set) var legacyPrivateMediaConsentRequest: LegacyPrivateMediaConsentRequest?
+    @MainActor private var queuedPrivateChatClears: [
+        PendingPrivateChatClear
+    ] = []
+    @MainActor private var privateChatClearInFlight = false
     private var pendingLegacyPrivateMediaConsents: [PendingLegacyPrivateMediaConsent] = []
 
     private func performDeliveryUpdate(_ update: @escaping @MainActor (ChatDeliveryCoordinator) -> Void) {
@@ -643,7 +657,255 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
     /// Empties the peer's chat but keeps the conversation alive (`/clear`).
     @MainActor
     func clearPrivateChat(_ peerID: PeerID) {
-        conversations.clear(.directPeer(peerID))
+        let sourceConversationID = ConversationID.directPeer(peerID)
+        // An active live-voice row owns an open FileHandle and may be
+        // republished as frames/final media arrive. Treat it like an in-flight
+        // arrival rather than unlinking its capture or removing its bubble.
+        let messages = privateMessages(for: peerID).filter {
+            !liveVoiceCoordinator.isLiveVoiceMessage($0)
+        }
+        let localPeerID = meshService.myPeerID.toShort()
+        let currentNickname = nickname
+        let mediaPrefixes = [
+            MimeType.Category.audio.messagePrefix,
+            MimeType.Category.image.messagePrefix,
+            MimeType.Category.file.messagePrefix
+        ]
+        let outgoingMedia = messages.filter { message in
+            guard mediaPrefixes.contains(where: {
+                message.content.hasPrefix($0)
+            }) else {
+                return false
+            }
+            if let senderPeerID = message.senderPeerID {
+                return senderPeerID.toShort() == localPeerID
+            }
+            return message.sender == currentNickname
+                || message.sender.hasPrefix(currentNickname + "#")
+        }
+
+        // Send ownership is canceled at command time even when another clear
+        // transaction is ahead in the queue. UI and files remain untouched
+        // until this request's receiver journal commit succeeds.
+        for message in outgoingMedia {
+            mediaTransferCoordinator
+                .cancelMediaTransferForConversationClear(
+                    messageID: message.id
+                )
+        }
+
+        queuedPrivateChatClears.append(PendingPrivateChatClear(
+            peerID: peerID,
+            sourceConversationID: sourceConversationID,
+            messages: messages,
+            otherMessageIDs: Set(
+                privateChats
+                    .filter { $0.key != peerID }
+                    .flatMap { $0.value.map(\.id) }
+            ),
+            localPeerID: localPeerID,
+            nickname: currentNickname,
+            outgoingMedia: outgoingMedia
+        ))
+        startNextPrivateChatClearIfNeeded()
+    }
+
+    @MainActor
+    private func startNextPrivateChatClearIfNeeded() {
+        guard !privateChatClearInFlight,
+              !queuedPrivateChatClears.isEmpty else {
+            return
+        }
+        privateChatClearInFlight = true
+        let request = queuedPrivateChatClears.removeFirst()
+        performPrivateChatClear(request) { [weak self] in
+            guard let self else { return }
+            self.privateChatClearInFlight = false
+            self.startNextPrivateChatClearIfNeeded()
+        }
+    }
+
+    @MainActor
+    private func performPrivateChatClear(
+        _ request: PendingPrivateChatClear,
+        completion: @escaping @MainActor () -> Void
+    ) {
+        let peerID = request.peerID
+        let selectedConversationID = request.sourceConversationID
+        let messagesToClear = request.messages
+        guard !messagesToClear.isEmpty else {
+            completion()
+            return
+        }
+
+        // Capture the transaction's exact UI set before any off-main receipt
+        // I/O. Messages arriving while the journal is written are not part of
+        // this command and must remain visible.
+        let capturedMessageIDs = Set(messagesToClear.map(\.id))
+        let survivingMessageIDs = request.otherMessageIDs
+        let mediaPrefixes = [
+            MimeType.Category.audio.messagePrefix,
+            MimeType.Category.image.messagePrefix,
+            MimeType.Category.file.messagePrefix
+        ]
+        let localPeerID = request.localPeerID
+        let isMedia: (BitchatMessage) -> Bool = { message in
+            mediaPrefixes.contains(where: message.content.hasPrefix)
+        }
+        let isFromMe: (BitchatMessage) -> Bool = { [nickname = request.nickname] message in
+            if let senderPeerID = message.senderPeerID {
+                return senderPeerID.toShort() == localPeerID
+            }
+            return message.sender == nickname
+                || message.sender.hasPrefix(nickname + "#")
+        }
+
+        let outgoingMedia = request.outgoingMedia
+        let outgoingMediaIDs = Set(outgoingMedia.map(\.id))
+
+        let capturedExclusiveIDs =
+            capturedMessageIDs.subtracting(survivingMessageIDs)
+        let capturedIncomingMedia = messagesToClear.filter {
+            isMedia($0) && !isFromMe($0)
+        }
+        let capturedStableMediaIDs = Set(
+            capturedIncomingMedia.compactMap { message in
+                PrivateMediaMessageIdentity.isStableID(message.id)
+                    ? message.id
+                    : nil
+            }
+        )
+
+        func currentRemovalPlan() -> [ConversationID: Set<String>] {
+            // Identity handoff removes the source conversation and inserts its
+            // rows elsewhere. The old source may then be recreated by a new
+            // arrival before journal I/O finishes, so always scan all direct
+            // conversations. Only IDs exclusive at command time may follow a
+            // migration; shared aliases remain outside the source.
+            var plan: [ConversationID: Set<String>] = [:]
+            for (conversationID, conversation) in
+                conversations.conversationsByID {
+                guard case .direct = conversationID else { continue }
+                let eligibleIDs = conversationID == selectedConversationID
+                    ? capturedMessageIDs
+                    : capturedExclusiveIDs
+                let matchingIDs = Set(conversation.messages.map(\.id))
+                    .intersection(eligibleIDs)
+                if !matchingIDs.isEmpty {
+                    plan[conversationID] = matchingIDs
+                }
+            }
+            return plan
+        }
+
+        func hasRemainingCopy(
+            of messageID: String,
+            after plan: [ConversationID: Set<String>]
+        ) -> Bool {
+            conversations.conversationsByID.contains { conversationID, conversation in
+                guard case .direct = conversationID else { return false }
+                return conversation.messages.contains { message in
+                    message.id == messageID
+                        && plan[conversationID]?.contains(messageID) != true
+                }
+            }
+        }
+
+        @MainActor
+        func continueClear(
+            persisted: Bool,
+            durableStableIDs: Set<String>
+        ) {
+            guard persisted else {
+                SecureLogger.error(
+                    "Refusing to clear private chat without durable media tombstones peer=\(peerID.id.prefix(8))…",
+                    category: .session
+                )
+                completion()
+                return
+            }
+
+            let plan = currentRemovalPlan()
+            let newlyLastStableIDs = Set(
+                capturedStableMediaIDs.filter {
+                    !durableStableIDs.contains($0)
+                        && !hasRemainingCopy(of: $0, after: plan)
+                }
+            )
+            if !newlyLastStableIDs.isEmpty {
+                persistDeletedPrivateMedia(
+                    messageIDs: Array(newlyLastStableIDs).sorted()
+                ) { persisted in
+                    continueClear(
+                        persisted: persisted,
+                        durableStableIDs:
+                            durableStableIDs.union(newlyLastStableIDs)
+                    )
+                }
+                return
+            }
+
+            // A stable receiver tombstone is global for that message ID.
+            // Remove any alias that arrived while journal I/O was in flight.
+            if !durableStableIDs.isEmpty {
+                let directConversationIDs = conversations
+                    .conversationsByID.keys.filter {
+                        if case .direct = $0 { return true }
+                        return false
+                    }
+                for conversationID in directConversationIDs {
+                    conversations.removeMessages(from: conversationID) {
+                        durableStableIDs.contains($0.id)
+                    }
+                }
+            }
+
+            for message in outgoingMedia {
+                mediaTransferCoordinator.cleanupOutgoingLocalFile(
+                    forMessage: message
+                )
+            }
+            if !outgoingMediaIDs.isEmpty {
+                let directConversationIDs = conversations
+                    .conversationsByID.keys.filter {
+                        if case .direct = $0 { return true }
+                        return false
+                    }
+                for conversationID in directConversationIDs {
+                    conversations.removeMessages(from: conversationID) {
+                        outgoingMediaIDs.contains($0.id)
+                    }
+                }
+            }
+
+            // Stable payload cleanup belongs entirely to the durable receiver
+            // journal. Legacy/raw incoming payloads have no durable identity,
+            // so their basenames may already belong to a pending new arrival;
+            // leave those files for bounded quota cleanup.
+            let finalPlan = currentRemovalPlan()
+
+            for (conversationID, messageIDs) in finalPlan {
+                conversations.removeMessages(from: conversationID) {
+                    messageIDs.contains($0.id)
+                }
+            }
+            completion()
+        }
+
+        let initialPlan = currentRemovalPlan()
+        let initialStableIDs = Set(
+            capturedStableMediaIDs.filter {
+                !hasRemainingCopy(of: $0, after: initialPlan)
+            }
+        )
+        persistDeletedPrivateMedia(
+            messageIDs: Array(initialStableIDs).sorted()
+        ) { persisted in
+            continueClear(
+                persisted: persisted,
+                durableStableIDs: initialStableIDs
+            )
+        }
     }
 
     /// Removes the peer's chat entirely, including unread state.

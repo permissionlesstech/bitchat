@@ -97,6 +97,19 @@ enum PrivateMediaSendPolicy: Equatable {
     case blockedDowngrade
 }
 
+/// Receiver-only persistence surface for explicit private-media deletion.
+/// Kept separate from `Transport` so sender retry branches can rebase without
+/// inheriting or implementing receiver storage concerns.
+protocol PrivateMediaDeletionPersisting: AnyObject {
+    @MainActor
+    func persistDeletedPrivateMedia(
+        messageIDs: [String],
+        payloadRelativePaths: [String: String],
+        protectedPayloadRelativePaths: Set<String>,
+        completion: @escaping @MainActor (Bool) -> Void
+    )
+}
+
 protocol TransportEventDelegate: AnyObject {
     @MainActor func didReceiveTransportEvent(_ event: TransportEvent)
 }
