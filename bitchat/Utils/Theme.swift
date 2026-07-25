@@ -16,6 +16,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
     case dracula
     case solarizedDark
     case tokyoNight
+    case monochrome
 
     var id: String { rawValue }
 
@@ -30,6 +31,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
         case .dracula: return "app_info.appearance.dracula"
         case .solarizedDark: return "app_info.appearance.solarized_dark"
         case .tokyoNight: return "app_info.appearance.tokyo_night"
+        case .monochrome: return "app_info.appearance.monochrome"
         }
     }
 
@@ -43,6 +45,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
         case .dracula: return .monospaced
         case .solarizedDark: return .monospaced
         case .tokyoNight: return .default
+        case .monochrome: return .default
         }
     }
 
@@ -51,7 +54,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
     var usesGlassChrome: Bool {
         switch self {
         case .liquidGlass: return true
-        case .matrix, .nord, .dracula, .solarizedDark, .tokyoNight: return false
+        case .matrix, .nord, .dracula, .solarizedDark, .tokyoNight, .monochrome: return false
         }
     }
 
@@ -66,6 +69,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
         case .dracula: return "dc:"
         case .solarizedDark: return "sd:"
         case .tokyoNight: return "tn:"
+        case .monochrome: return "mc:"
         }
     }
 
@@ -78,6 +82,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
         case .dracula: return .dracula(colorScheme)
         case .solarizedDark: return .solarizedDark(colorScheme)
         case .tokyoNight: return .tokyoNight(colorScheme)
+        case .monochrome: return .monochrome(colorScheme)
         }
     }
 }
@@ -183,6 +188,20 @@ struct ThemePalette {
             accentBlue: isDark ? Color(red: 0.48, green: 0.64, blue: 0.97) : Color(red: 0.18, green: 0.49, blue: 0.91),
             alertRed: isDark ? Color(red: 0.97, green: 0.46, blue: 0.56) : Color(red: 0.78, green: 0.26, blue: 0.26),
             divider: isDark ? Color(red: 0.18, green: 0.24, blue: 0.39) : Color(red: 0.71, green: 0.71, blue: 0.77)
+        )
+    }
+
+    static func monochrome(_ colorScheme: ColorScheme) -> ThemePalette {
+        let isDark = colorScheme == .dark
+        return ThemePalette(
+            background: isDark ? .black : .white,
+            primary: isDark ? .white : .black,
+            secondary: isDark ? Color(white: 0.65) : Color(white: 0.40),
+            accent: isDark ? .white : .black,
+            locationAccent: isDark ? Color(white: 0.75) : Color(white: 0.25),
+            accentBlue: isDark ? Color(white: 0.75) : Color(white: 0.25),
+            alertRed: isDark ? Color(white: 0.55) : Color(white: 0.55),
+            divider: isDark ? Color(white: 0.25) : Color(white: 0.80)
         )
     }
 
