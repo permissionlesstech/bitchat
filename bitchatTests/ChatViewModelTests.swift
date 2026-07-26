@@ -15,8 +15,13 @@ import BitFoundation
 
 /// Creates a ChatViewModel with mock dependencies for testing
 @MainActor
-private func makeTestableViewModel() -> (viewModel: ChatViewModel, transport: MockTransport) {
-    let keychain = MockKeychain()
+private func makeTestableViewModel(
+    keychain injectedKeychain: MockKeychain? = nil,
+    panicMediaWipe: (() throws -> Void)? = nil,
+    panicRecoveryOperations: PanicRecoveryOperations? = nil,
+    panicNetworkLifecycle: PanicNetworkLifecycle = .noop
+) -> (viewModel: ChatViewModel, transport: MockTransport) {
+    let keychain = injectedKeychain ?? MockKeychain()
     let keychainHelper = MockKeychainHelper()
     let idBridge = NostrIdentityBridge(keychain: keychainHelper)
     let identityManager = MockIdentityManager(keychain)
@@ -26,7 +31,10 @@ private func makeTestableViewModel() -> (viewModel: ChatViewModel, transport: Mo
         keychain: keychain,
         idBridge: idBridge,
         identityManager: identityManager,
-        transport: transport
+        transport: transport,
+        panicMediaWipe: panicMediaWipe,
+        panicRecoveryOperations: panicRecoveryOperations,
+        panicNetworkLifecycle: panicNetworkLifecycle
     )
 
     return (viewModel, transport)
@@ -313,7 +321,7 @@ struct ChatViewModelCommandTests {
         transport.simulateConnect(peerID, nickname: "Alice")
         let resolved = await TestHelpers.waitUntil({
             viewModel.getPeerIDForNickname("Alice") == peerID
-        }, timeout: TestConstants.defaultTimeout)
+        }, timeout: TestConstants.negativeWaitWindow)
         #expect(resolved)
 
         viewModel.handleCommand("/msg Alice")
@@ -414,7 +422,7 @@ struct ChatViewModelServiceLifecycleTests {
             transport.sentReadReceipts.contains {
                 $0.peerID == peerID && $0.receipt.originalMessageID == "read-1"
             }
-        }, timeout: TestConstants.defaultTimeout)
+        }, timeout: TestConstants.negativeWaitWindow)
 
         #expect(sentReadReceipt)
         #expect(!viewModel.unreadPrivateMessages.contains(peerID))
@@ -498,7 +506,7 @@ struct ChatViewModelReceivingTests {
 
         let found = await TestHelpers.waitUntil({
             viewModel.publicMessages(for: .mesh).contains { $0.content == "Public hello from Bob" }
-        }, timeout: TestConstants.defaultTimeout)
+        }, timeout: TestConstants.settleTimeout)
 
         #expect(found)
     }
@@ -527,11 +535,11 @@ struct ChatViewModelNoisePayloadTests {
 
         let stored = await TestHelpers.waitUntil({
             viewModel.privateChats[peerID]?.contains(where: { $0.id == "pm-noise-1" && $0.content == "Secret hello" }) == true
-        }, timeout: TestConstants.defaultTimeout)
+        }, timeout: TestConstants.settleTimeout)
 
         let acked = await TestHelpers.waitUntil({
             transport.sentDeliveryAcks.contains { $0.messageID == "pm-noise-1" && $0.peerID == peerID }
-        }, timeout: TestConstants.defaultTimeout)
+        }, timeout: TestConstants.settleTimeout)
 
         #expect(stored)
         #expect(acked)
@@ -571,7 +579,7 @@ struct ChatViewModelNoisePayloadTests {
                 return name == "Bob"
             }
             return false
-        }, timeout: TestConstants.defaultTimeout)
+        }, timeout: TestConstants.settleTimeout)
 
         #expect(delivered)
     }
@@ -609,7 +617,7 @@ struct ChatViewModelNoisePayloadTests {
                 return true
             }
             return false
-        }, timeout: TestConstants.defaultTimeout)
+        }, timeout: TestConstants.settleTimeout)
 
         let conversationStoreUpdated = await TestHelpers.waitUntil({
             let messages = viewModel.conversations.conversationsByID[.directPeer(peerID)]?.messages ?? []
@@ -618,7 +626,7 @@ struct ChatViewModelNoisePayloadTests {
                 return true
             }
             return false
-        }, timeout: TestConstants.defaultTimeout)
+        }, timeout: TestConstants.settleTimeout)
 
         #expect(privateChatUpdated)
         #expect(conversationStoreUpdated)
@@ -722,7 +730,7 @@ struct ChatViewModelVerificationTests {
 
         let bound = await TestHelpers.waitUntil({
             viewModel.unifiedPeerService.peers.contains { $0.peerID == peerID }
-        }, timeout: TestConstants.defaultTimeout)
+        }, timeout: TestConstants.settleTimeout)
         #expect(bound)
 
         let qr = VerificationService.VerificationQR(
@@ -857,6 +865,80 @@ struct ChatViewModelPublicConversationTests {
 struct ChatViewModelPeerTests {
 
     @Test @MainActor
+    func typedPeerLifecycleEvents_applyBeforeReturning() {
+        let (viewModel, _) = makeTestableViewModel()
+        let peerID = PeerID(str: "1122334455667788")
+        let incoming = BitchatMessage(
+            id: "typed-peer-incoming",
+            sender: "Alice",
+            content: "Hello",
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: true,
+            recipientNickname: viewModel.nickname,
+            senderPeerID: peerID
+        )
+        viewModel.seedPrivateChat([incoming], for: peerID)
+        viewModel.sentReadReceipts.insert(incoming.id)
+
+        viewModel.didReceiveTransportEvent(.peerConnected(peerID))
+
+        #expect(viewModel.isConnected)
+
+        viewModel.didReceiveTransportEvent(.peerDisconnected(peerID))
+
+        #expect(!viewModel.sentReadReceipts.contains(incoming.id))
+    }
+
+    @Test @MainActor
+    func typedPeerListDeliveryAndBluetoothEvents_applyBeforeReturning() {
+        let (viewModel, transport) = makeTestableViewModel()
+        let stalePeer = PeerID(str: "00000000000000a2")
+        let deliveryPeer = PeerID(str: "0102030405060708")
+        let messageID = "typed-delivery-status"
+        let delivered = DeliveryStatus.delivered(
+            to: "Alice",
+            at: Date(timeIntervalSince1970: 1_234)
+        )
+        let outgoing = BitchatMessage(
+            id: messageID,
+            sender: viewModel.nickname,
+            content: "On the way",
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: true,
+            recipientNickname: "Alice",
+            senderPeerID: transport.myPeerID,
+            deliveryStatus: .sent
+        )
+        viewModel.markPrivateChatUnread(stalePeer)
+        viewModel.seedPrivateChat([outgoing], for: deliveryPeer)
+
+        viewModel.didReceiveTransportEvent(.peerListUpdated([]))
+        #expect(!viewModel.unreadPrivateMessages.contains(stalePeer))
+
+        viewModel.didReceiveTransportEvent(
+            .messageDeliveryStatusUpdated(
+                messageID: messageID,
+                status: delivered
+            )
+        )
+        #expect(
+            viewModel.privateMessages(for: deliveryPeer).first?.deliveryStatus
+                == delivered
+        )
+
+        viewModel.didReceiveTransportEvent(.bluetoothStateUpdated(.poweredOff))
+        #expect(viewModel.bluetoothState == .poweredOff)
+        #expect(viewModel.showBluetoothAlert)
+
+        // Snapshot events belong to TransportPeerEventsDelegate and are
+        // intentionally ignored at this typed sink.
+        viewModel.didReceiveTransportEvent(.peerSnapshotsUpdated([]))
+        #expect(viewModel.bluetoothState == .poweredOff)
+    }
+
+    @Test @MainActor
     func didConnectToPeer_notifiesDelegate() async {
         let (_, transport) = makeTestableViewModel()
         let peerID = PeerID(str: "NEWPEER")
@@ -900,7 +982,7 @@ struct ChatViewModelPeerTests {
 
         let cleaned = await TestHelpers.waitUntil({
             !viewModel.unreadPrivateMessages.contains(stalePeer)
-        }, timeout: TestConstants.defaultTimeout)
+        }, timeout: TestConstants.settleTimeout)
 
         #expect(cleaned)
     }
@@ -1112,9 +1194,1039 @@ struct ChatViewModelBluetoothTests {
     }
 }
 
+// MARK: - Private Media Deletion Tests
+
+struct ChatViewModelPrivateMediaDeletionTests {
+
+    @Test @MainActor
+    func deleteMediaMessageTombstonesIncomingButNotOutgoingStableMedia() {
+        let (viewModel, transport) = makeTestableViewModel()
+        let peerID = PeerID(str: String(repeating: "8", count: 64))
+        let incomingID = "media-\(String(repeating: "e", count: 32))"
+        let outgoingID = "media-\(String(repeating: "f", count: 32))"
+        viewModel.seedPrivateChat([
+            privateMediaMessage(
+                id: incomingID,
+                sender: "Peer",
+                senderPeerID: peerID,
+                recipient: viewModel.nickname,
+                filename: "incoming.jpg"
+            ),
+            privateMediaMessage(
+                id: outgoingID,
+                sender: viewModel.nickname,
+                senderPeerID: transport.myPeerID,
+                recipient: "Peer",
+                filename: "outgoing.jpg"
+            )
+        ], for: peerID)
+
+        viewModel.deleteMediaMessage(messageID: outgoingID)
+        #expect(transport.deletedPrivateMediaMessageIDBatches.isEmpty)
+        #expect(viewModel.privateChats[peerID]?.map(\.id) == [incomingID])
+
+        viewModel.deleteMediaMessage(messageID: incomingID)
+        #expect(
+            transport.deletedPrivateMediaMessageIDBatches == [[incomingID]]
+        )
+        #expect(
+            transport.deletedPrivateMediaRelativePaths
+                == [[incomingID: "images/incoming/incoming.jpg"]]
+        )
+        #expect((viewModel.privateChats[peerID] ?? []).isEmpty)
+    }
+
+    @Test @MainActor
+    func stableDeleteProtectsPathSharedWithLegacyBubble() {
+        let (viewModel, transport) = makeTestableViewModel()
+        transport.persistDeletedPrivateMediaResult = false
+        let peerID = PeerID(str: String(repeating: "6", count: 64))
+        let stableID = "media-\(String(repeating: "5", count: 32))"
+        let legacyID = UUID().uuidString
+        let filename = "shared-migration.jpg"
+        viewModel.seedPrivateChat([
+            privateMediaMessage(
+                id: stableID,
+                sender: "Peer",
+                senderPeerID: peerID,
+                recipient: viewModel.nickname,
+                filename: filename
+            ),
+            privateMediaMessage(
+                id: legacyID,
+                sender: "Old client",
+                senderPeerID: peerID,
+                recipient: viewModel.nickname,
+                filename: filename
+            )
+        ], for: peerID)
+
+        viewModel.deleteMediaMessage(messageID: stableID)
+
+        #expect(
+            transport.deletedPrivateMediaMessageIDBatches == [[stableID]]
+        )
+        #expect(transport.deletedPrivateMediaRelativePaths == [[:]])
+        #expect(
+            transport.protectedPrivateMediaRelativePaths == [[
+                "images/incoming/\(filename)"
+            ]]
+        )
+        let messages = viewModel.privateChats[peerID] ?? []
+        #expect(messages.prefix(2).map(\.id) == [stableID, legacyID])
+        // The refusal is surfaced in the affected chat, not just logged.
+        #expect(messages.last?.sender == "system")
+        #expect(
+            messages.last?.content
+                == String(localized: "content.system.media_delete_refused")
+        )
+    }
+
+    @Test @MainActor
+    func clearPrivateChatTombstonesIncomingAndCancelsOutgoingBeforeClear() {
+        let (viewModel, transport) = makeTestableViewModel()
+        let peerID = PeerID(str: String(repeating: "1", count: 64))
+        let incomingID = "media-\(String(repeating: "a", count: 32))"
+        let outgoingID = "media-\(String(repeating: "b", count: 32))"
+        viewModel.seedPrivateChat([
+            privateMediaMessage(
+                id: incomingID,
+                sender: "Peer",
+                senderPeerID: peerID,
+                recipient: viewModel.nickname,
+                filename: "incoming.jpg"
+            ),
+            privateMediaMessage(
+                id: outgoingID,
+                sender: viewModel.nickname,
+                senderPeerID: transport.myPeerID,
+                recipient: "Peer",
+                filename: "outgoing.jpg"
+            ),
+            BitchatMessage(
+                id: "ordinary-message",
+                sender: "Peer",
+                content: "hello",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: viewModel.nickname,
+                senderPeerID: peerID
+            )
+        ], for: peerID)
+        viewModel.registerTransfer(
+            transferId: "outgoing-clear-transfer",
+            messageID: outgoingID
+        )
+
+        viewModel.clearPrivateChat(peerID)
+
+        #expect(
+            transport.deletedPrivateMediaMessageIDBatches == [[incomingID]]
+        )
+        #expect(
+            transport.deletedPrivateMediaRelativePaths
+                == [[incomingID: "images/incoming/incoming.jpg"]]
+        )
+        #expect(
+            transport.cancelledTransfers == ["outgoing-clear-transfer"]
+        )
+        #expect(viewModel.messageIDToTransferId[outgoingID] == nil)
+        #expect(viewModel.privateChats[peerID]?.isEmpty == true)
+    }
+
+    @Test @MainActor
+    func clearPrivateChatPreservesCapturedMessagesWhenTombstoneFails() {
+        let (viewModel, transport) = makeTestableViewModel()
+        transport.persistDeletedPrivateMediaResult = false
+        let peerID = PeerID(str: String(repeating: "2", count: 64))
+        let incomingID = "media-\(String(repeating: "c", count: 32))"
+        let outgoingID = "media-\(String(repeating: "7", count: 32))"
+        viewModel.seedPrivateChat([
+            privateMediaMessage(
+                id: incomingID,
+                sender: "Peer",
+                senderPeerID: peerID,
+                recipient: viewModel.nickname,
+                filename: "incoming.jpg"
+            ),
+            privateMediaMessage(
+                id: outgoingID,
+                sender: viewModel.nickname,
+                senderPeerID: transport.myPeerID,
+                recipient: "Peer",
+                filename: "outgoing.jpg"
+            ),
+            BitchatMessage(
+                id: "ordinary-message",
+                sender: "Peer",
+                content: "keep me on failure",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: viewModel.nickname,
+                senderPeerID: peerID
+            )
+        ], for: peerID)
+        viewModel.registerTransfer(
+            transferId: "failed-clear-outgoing",
+            messageID: outgoingID
+        )
+
+        viewModel.clearPrivateChat(peerID)
+
+        #expect(
+            transport.deletedPrivateMediaMessageIDBatches == [[incomingID]]
+        )
+        let messages = viewModel.privateChats[peerID] ?? []
+        #expect(
+            messages.prefix(3).map(\.id)
+                == [incomingID, outgoingID, "ordinary-message"]
+        )
+        // The refused /clear is surfaced in the affected chat.
+        #expect(messages.last?.sender == "system")
+        #expect(
+            messages.last?.content
+                == String(localized: "content.system.media_delete_refused")
+        )
+        #expect(transport.cancelledTransfers == ["failed-clear-outgoing"])
+        #expect(viewModel.messageIDToTransferId[outgoingID] == nil)
+    }
+
+    @Test @MainActor
+    func clearFailurePreservesSameNameIncomingPayload() throws {
+        let (viewModel, transport) = makeTestableViewModel()
+        transport.persistDeletedPrivateMediaResult = false
+        let peerID = PeerID(str: String(repeating: "7", count: 64))
+        let incomingID = "media-\(String(repeating: "8", count: 32))"
+        let outgoingID = "media-\(String(repeating: "9", count: 32))"
+        let filename = "clear-collision-\(UUID().uuidString).jpg"
+        let filesDirectory = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        .appendingPathComponent("files/images", isDirectory: true)
+        let incomingDirectory = filesDirectory.appendingPathComponent(
+            "incoming",
+            isDirectory: true
+        )
+        let outgoingDirectory = filesDirectory.appendingPathComponent(
+            "outgoing",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(
+            at: incomingDirectory,
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.createDirectory(
+            at: outgoingDirectory,
+            withIntermediateDirectories: true
+        )
+        let incomingURL = incomingDirectory.appendingPathComponent(filename)
+        let outgoingURL = outgoingDirectory.appendingPathComponent(filename)
+        try Data("incoming".utf8).write(to: incomingURL, options: .atomic)
+        try Data("outgoing".utf8).write(to: outgoingURL, options: .atomic)
+        defer {
+            try? FileManager.default.removeItem(at: incomingURL)
+            try? FileManager.default.removeItem(at: outgoingURL)
+        }
+        viewModel.seedPrivateChat([
+            privateMediaMessage(
+                id: incomingID,
+                sender: "Peer",
+                senderPeerID: peerID,
+                recipient: viewModel.nickname,
+                filename: filename
+            ),
+            privateMediaMessage(
+                id: outgoingID,
+                sender: viewModel.nickname,
+                senderPeerID: transport.myPeerID,
+                recipient: "Peer",
+                filename: filename
+            )
+        ], for: peerID)
+
+        viewModel.clearPrivateChat(peerID)
+
+        #expect(FileManager.default.fileExists(atPath: incomingURL.path))
+        #expect(FileManager.default.fileExists(atPath: outgoingURL.path))
+        #expect(
+            transport.deletedPrivateMediaRelativePaths
+                == [[incomingID: "images/incoming/\(filename)"]]
+        )
+        let messages = viewModel.privateChats[peerID] ?? []
+        #expect(messages.prefix(2).map(\.id) == [incomingID, outgoingID])
+        #expect(messages.last?.sender == "system")
+        #expect(
+            messages.last?.content
+                == String(localized: "content.system.media_delete_refused")
+        )
+    }
+
+    @Test @MainActor
+    func clearPrivateChatPreservesArrivalDuringTombstoneIO() {
+        let (viewModel, transport) = makeTestableViewModel()
+        transport.deferDeletedPrivateMediaPersistence = true
+        let peerID = PeerID(str: String(repeating: "3", count: 64))
+        let incomingID = "media-\(String(repeating: "d", count: 32))"
+        viewModel.seedPrivateChat([
+            privateMediaMessage(
+                id: incomingID,
+                sender: "Peer",
+                senderPeerID: peerID,
+                recipient: viewModel.nickname,
+                filename: "incoming.jpg"
+            ),
+            BitchatMessage(
+                id: "captured-text",
+                sender: "Peer",
+                content: "old",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: viewModel.nickname,
+                senderPeerID: peerID
+            )
+        ], for: peerID)
+
+        viewModel.clearPrivateChat(peerID)
+        let arrival = BitchatMessage(
+            id: "concurrent-arrival",
+            sender: "Peer",
+            content: "new",
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: true,
+            recipientNickname: viewModel.nickname,
+            senderPeerID: peerID
+        )
+        #expect(viewModel.appendPrivateMessage(arrival, to: peerID))
+
+        transport.resolveNextDeletedPrivateMediaPersistence(true)
+
+        #expect(
+            viewModel.privateChats[peerID]?.map(\.id)
+                == ["concurrent-arrival"]
+        )
+    }
+
+    @Test @MainActor
+    func clearPrivateChatPreservesActiveLiveVoiceAssembly() throws {
+        let (viewModel, transport) = makeTestableViewModel()
+        let peerID = PeerID(str: String(repeating: "7", count: 64))
+        viewModel.selectedPrivateChatPeer = peerID
+        let burstID = Data(
+            repeating: 0xE1,
+            count: VoiceBurstPacket.burstIDSize
+        )
+        let start = try #require(VoiceBurstPacket(
+            burstID: burstID,
+            seq: 0,
+            kind: .start(codec: .aacLC16kMono)
+        ))
+        let cancel = try #require(VoiceBurstPacket(
+            burstID: burstID,
+            seq: 1,
+            kind: .canceled
+        ))
+        let coordinator = viewModel.liveVoiceCoordinator
+        defer {
+            coordinator.handleVoiceFramePayload(
+                from: peerID,
+                payload: cancel.encode(),
+                timestamp: Date()
+            )
+        }
+        coordinator.handleVoiceFramePayload(
+            from: peerID,
+            payload: start.encode(),
+            timestamp: Date()
+        )
+        let liveMessage = try #require(
+            viewModel.privateChats[peerID]?.first
+        )
+        #expect(coordinator.isLiveVoiceMessage(liveMessage))
+        let ordinary = BitchatMessage(
+            id: "clear-around-live-voice",
+            sender: "Peer",
+            content: "old text",
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: true,
+            recipientNickname: viewModel.nickname,
+            senderPeerID: peerID
+        )
+        #expect(viewModel.appendPrivateMessage(ordinary, to: peerID))
+
+        viewModel.clearPrivateChat(peerID)
+
+        #expect(transport.deletedPrivateMediaMessageIDBatches.isEmpty)
+        #expect(
+            viewModel.privateChats[peerID]?.map(\.id)
+                == [liveMessage.id]
+        )
+        #expect(coordinator.isLiveVoiceMessage(liveMessage))
+    }
+
+    @Test @MainActor
+    func overlappingClearsTombstoneTheLastMirroredStableAlias() {
+        let (viewModel, transport) = makeTestableViewModel()
+        transport.deferDeletedPrivateMediaPersistence = true
+        let firstPeerID = PeerID(str: String(repeating: "b", count: 64))
+        let secondPeerID = PeerID(str: String(repeating: "c", count: 64))
+        let sharedID = "media-\(String(repeating: "1", count: 32))"
+        let firstUniqueID = "media-\(String(repeating: "2", count: 32))"
+        let secondUniqueID = "media-\(String(repeating: "3", count: 32))"
+        viewModel.seedPrivateChat([
+            privateMediaMessage(
+                id: sharedID,
+                sender: "Peer",
+                senderPeerID: firstPeerID,
+                recipient: viewModel.nickname,
+                filename: "shared.jpg"
+            ),
+            privateMediaMessage(
+                id: firstUniqueID,
+                sender: "Peer",
+                senderPeerID: firstPeerID,
+                recipient: viewModel.nickname,
+                filename: "first.jpg"
+            )
+        ], for: firstPeerID)
+        viewModel.seedPrivateChat([
+            privateMediaMessage(
+                id: sharedID,
+                sender: "Peer",
+                senderPeerID: secondPeerID,
+                recipient: viewModel.nickname,
+                filename: "shared.jpg"
+            ),
+            privateMediaMessage(
+                id: secondUniqueID,
+                sender: "Peer",
+                senderPeerID: secondPeerID,
+                recipient: viewModel.nickname,
+                filename: "second.jpg"
+            )
+        ], for: secondPeerID)
+
+        viewModel.clearPrivateChat(firstPeerID)
+        viewModel.clearPrivateChat(secondPeerID)
+        let queuedArrival = BitchatMessage(
+            id: "arrival-after-queued-clear",
+            sender: "Peer",
+            content: "new",
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: true,
+            recipientNickname: viewModel.nickname,
+            senderPeerID: secondPeerID
+        )
+        #expect(viewModel.appendPrivateMessage(
+            queuedArrival,
+            to: secondPeerID
+        ))
+
+        #expect(
+            transport.deletedPrivateMediaMessageIDBatches
+                == [[firstUniqueID]]
+        )
+
+        transport.resolveNextDeletedPrivateMediaPersistence(true)
+
+        #expect(
+            transport.deletedPrivateMediaMessageIDBatches == [
+                [firstUniqueID],
+                [secondUniqueID, sharedID].sorted()
+            ]
+        )
+
+        transport.resolveNextDeletedPrivateMediaPersistence(true)
+
+        #expect((viewModel.privateChats[firstPeerID] ?? []).isEmpty)
+        #expect(
+            viewModel.privateChats[secondPeerID]?.map(\.id)
+                == ["arrival-after-queued-clear"]
+        )
+    }
+
+    @Test @MainActor
+    func clearFollowsCapturedRowsAcrossPeerIdentityMigration() {
+        let (viewModel, transport) = makeTestableViewModel()
+        transport.deferDeletedPrivateMediaPersistence = true
+        let sourcePeerID = PeerID(str: String(repeating: "d", count: 64))
+        let destinationPeerID = PeerID(str: String(repeating: "e", count: 64))
+        let thirdPeerID = PeerID(str: String(repeating: "f", count: 64))
+        let stableID = "media-\(String(repeating: "4", count: 32))"
+        viewModel.selectedPrivateChatPeer = sourcePeerID
+        viewModel.seedPrivateChat([
+            privateMediaMessage(
+                id: stableID,
+                sender: "Peer",
+                senderPeerID: sourcePeerID,
+                recipient: viewModel.nickname,
+                filename: "migrated.jpg"
+            ),
+            BitchatMessage(
+                id: "captured-before-migration",
+                sender: "Peer",
+                content: "old",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: viewModel.nickname,
+                senderPeerID: sourcePeerID
+            )
+        ], for: sourcePeerID)
+
+        viewModel.clearPrivateChat(sourcePeerID)
+        viewModel.migratePrivateChat(
+            from: sourcePeerID,
+            to: destinationPeerID
+        )
+        viewModel.selectedPrivateChatPeer = thirdPeerID
+        let arrival = BitchatMessage(
+            id: "arrival-after-migration",
+            sender: "Peer",
+            content: "new",
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: true,
+            recipientNickname: viewModel.nickname,
+            senderPeerID: destinationPeerID
+        )
+        #expect(viewModel.appendPrivateMessage(
+            arrival,
+            to: destinationPeerID
+        ))
+
+        transport.resolveNextDeletedPrivateMediaPersistence(true)
+
+        #expect(
+            viewModel.privateChats[destinationPeerID]?.map(\.id)
+                == ["arrival-after-migration"]
+        )
+    }
+
+    @Test @MainActor
+    func clearFollowsMigrationWhenOldSourceIsRecreated() {
+        let (viewModel, transport) = makeTestableViewModel()
+        transport.deferDeletedPrivateMediaPersistence = true
+        let sourcePeerID = PeerID(str: String(repeating: "1", count: 64))
+        let destinationPeerID = PeerID(str: String(repeating: "2", count: 64))
+        let stableID = "media-\(String(repeating: "6", count: 32))"
+        viewModel.seedPrivateChat([
+            privateMediaMessage(
+                id: stableID,
+                sender: "Peer",
+                senderPeerID: sourcePeerID,
+                recipient: viewModel.nickname,
+                filename: "migrated-recreated.jpg"
+            ),
+            BitchatMessage(
+                id: "captured-before-recreation",
+                sender: "Peer",
+                content: "old",
+                timestamp: Date(),
+                isRelay: false,
+                isPrivate: true,
+                recipientNickname: viewModel.nickname,
+                senderPeerID: sourcePeerID
+            )
+        ], for: sourcePeerID)
+
+        viewModel.clearPrivateChat(sourcePeerID)
+        viewModel.migratePrivateChat(
+            from: sourcePeerID,
+            to: destinationPeerID
+        )
+        let recreatedArrival = BitchatMessage(
+            id: "arrival-recreating-source",
+            sender: "Peer",
+            content: "new",
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: true,
+            recipientNickname: viewModel.nickname,
+            senderPeerID: sourcePeerID
+        )
+        #expect(viewModel.appendPrivateMessage(
+            recreatedArrival,
+            to: sourcePeerID
+        ))
+
+        transport.resolveNextDeletedPrivateMediaPersistence(true)
+
+        #expect(
+            (viewModel.privateChats[destinationPeerID] ?? []).isEmpty
+        )
+        #expect(
+            viewModel.privateChats[sourcePeerID]?.map(\.id)
+                == ["arrival-recreating-source"]
+        )
+    }
+
+    @Test @MainActor
+    func clearPrivateChatKeepsMediaReferencedByAnotherConversation() {
+        let (viewModel, transport) = makeTestableViewModel()
+        let firstPeerID = PeerID(str: String(repeating: "4", count: 64))
+        let aliasPeerID = PeerID(str: String(repeating: "5", count: 64))
+        let messageID = "media-\(String(repeating: "6", count: 32))"
+        let message = privateMediaMessage(
+            id: messageID,
+            sender: "Peer",
+            senderPeerID: firstPeerID,
+            recipient: viewModel.nickname,
+            filename: "mirrored.jpg"
+        )
+        viewModel.seedPrivateChat([message], for: firstPeerID)
+        viewModel.seedPrivateChat([message], for: aliasPeerID)
+
+        viewModel.clearPrivateChat(firstPeerID)
+
+        #expect(transport.deletedPrivateMediaMessageIDBatches.isEmpty)
+        #expect(viewModel.privateChats[firstPeerID]?.isEmpty == true)
+        #expect(
+            viewModel.privateChats[aliasPeerID]?.map(\.id) == [messageID]
+        )
+    }
+
+    @Test @MainActor
+    func clearPrivateChatKeepsOutgoingMediaReferencedByAnotherConversation()
+        throws {
+        let (viewModel, transport) = makeTestableViewModel()
+        let firstPeerID = PeerID(str: String(repeating: "4", count: 64))
+        let aliasPeerID = PeerID(str: String(repeating: "5", count: 64))
+        let outgoingDirectory = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        .appendingPathComponent("files/images/outgoing", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: outgoingDirectory,
+            withIntermediateDirectories: true
+        )
+        let fileURL = outgoingDirectory.appendingPathComponent(
+            "outgoing-mirrored-\(UUID().uuidString).jpg"
+        )
+        try Data("outgoing-image".utf8).write(to: fileURL, options: .atomic)
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let message = privateMediaMessage(
+            id: UUID().uuidString,
+            sender: viewModel.nickname,
+            senderPeerID: transport.myPeerID,
+            recipient: "Peer",
+            filename: fileURL.lastPathComponent
+        )
+        viewModel.seedPrivateChat([message], for: firstPeerID)
+        viewModel.seedPrivateChat([message], for: aliasPeerID)
+
+        viewModel.clearPrivateChat(firstPeerID)
+
+        // The mirrored conversation keeps its bubble and the payload file:
+        // clearing conversation A must not reach across an identity-alias
+        // handoff into conversation B.
+        #expect(transport.deletedPrivateMediaMessageIDBatches.isEmpty)
+        #expect(viewModel.privateChats[firstPeerID]?.isEmpty == true)
+        #expect(
+            viewModel.privateChats[aliasPeerID]?.map(\.id) == [message.id]
+        )
+        #expect(FileManager.default.fileExists(atPath: fileURL.path))
+
+        // Clearing the last conversation that references the outgoing
+        // payload removes both the bubble and the file.
+        viewModel.clearPrivateChat(aliasPeerID)
+
+        #expect((viewModel.privateChats[aliasPeerID] ?? []).isEmpty)
+        #expect(!FileManager.default.fileExists(atPath: fileURL.path))
+    }
+
+    @Test @MainActor
+    func clearPrivateChatUnlinksLegacyFileOnlyAfterLastReference()
+        throws {
+        let (viewModel, transport) = makeTestableViewModel()
+        let firstPeerID = PeerID(str: String(repeating: "9", count: 64))
+        let aliasPeerID = PeerID(str: String(repeating: "a", count: 64))
+        let incomingDirectory = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        .appendingPathComponent("files/images/incoming", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: incomingDirectory,
+            withIntermediateDirectories: true
+        )
+        let fileURL = incomingDirectory.appendingPathComponent(
+            "legacy-clear-\(UUID().uuidString).jpg"
+        )
+        try Data("legacy-image".utf8).write(to: fileURL, options: .atomic)
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let message = privateMediaMessage(
+            id: UUID().uuidString,
+            sender: "Old client",
+            senderPeerID: firstPeerID,
+            recipient: viewModel.nickname,
+            filename: fileURL.lastPathComponent
+        )
+        viewModel.seedPrivateChat([message], for: firstPeerID)
+        viewModel.seedPrivateChat([message], for: aliasPeerID)
+
+        viewModel.clearPrivateChat(firstPeerID)
+
+        // A surviving mirror in another conversation keeps the payload.
+        #expect(transport.deletedPrivateMediaMessageIDBatches.isEmpty)
+        #expect(transport.removedLegacyPrivateMediaPaths.isEmpty)
+        #expect(FileManager.default.fileExists(atPath: fileURL.path))
+        #expect(viewModel.privateChats[aliasPeerID]?.map(\.id) == [message.id])
+
+        viewModel.clearPrivateChat(aliasPeerID)
+
+        // Clearing the last reference routes the legacy payload through the
+        // transport's gated unlink, which deletes it (nothing pending or
+        // reserved names this basename).
+        #expect((viewModel.privateChats[aliasPeerID] ?? []).isEmpty)
+        #expect(
+            transport.removedLegacyPrivateMediaPaths
+                == ["images/incoming/\(fileURL.lastPathComponent)"]
+        )
+        #expect(!FileManager.default.fileExists(atPath: fileURL.path))
+    }
+
+    @Test @MainActor
+    func deleteLegacyIncomingMediaUnlinksUnreferencedPayload() throws {
+        let (viewModel, transport) = makeTestableViewModel()
+        let peerID = PeerID(str: String(repeating: "b", count: 64))
+        let incomingDirectory = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        .appendingPathComponent("files/images/incoming", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: incomingDirectory,
+            withIntermediateDirectories: true
+        )
+        let fileURL = incomingDirectory.appendingPathComponent(
+            "legacy-delete-\(UUID().uuidString).jpg"
+        )
+        try Data("legacy-image".utf8).write(to: fileURL, options: .atomic)
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let message = privateMediaMessage(
+            id: UUID().uuidString,
+            sender: "Old client",
+            senderPeerID: peerID,
+            recipient: viewModel.nickname,
+            filename: fileURL.lastPathComponent
+        )
+        viewModel.seedPrivateChat([message], for: peerID)
+
+        viewModel.deleteMediaMessage(messageID: message.id)
+
+        // Legacy incoming media has no stable receipt, so no journal batch —
+        // but the explicit delete must still remove the decrypted payload
+        // through the gated unlink.
+        #expect(transport.deletedPrivateMediaMessageIDBatches.isEmpty)
+        #expect((viewModel.privateChats[peerID] ?? []).isEmpty)
+        #expect(
+            transport.removedLegacyPrivateMediaPaths
+                == ["images/incoming/\(fileURL.lastPathComponent)"]
+        )
+        #expect(!FileManager.default.fileExists(atPath: fileURL.path))
+    }
+
+    @Test @MainActor
+    func deleteLegacyIncomingMediaKeepsPayloadReferencedByAnotherBubble()
+        throws {
+        let (viewModel, transport) = makeTestableViewModel()
+        let peerID = PeerID(str: String(repeating: "c", count: 64))
+        let incomingDirectory = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        .appendingPathComponent("files/images/incoming", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: incomingDirectory,
+            withIntermediateDirectories: true
+        )
+        let fileURL = incomingDirectory.appendingPathComponent(
+            "legacy-shared-\(UUID().uuidString).jpg"
+        )
+        try Data("legacy-image".utf8).write(to: fileURL, options: .atomic)
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let deleted = privateMediaMessage(
+            id: UUID().uuidString,
+            sender: "Old client",
+            senderPeerID: peerID,
+            recipient: viewModel.nickname,
+            filename: fileURL.lastPathComponent
+        )
+        // A different bubble (different ID) references the same basename.
+        let survivor = privateMediaMessage(
+            id: UUID().uuidString,
+            sender: "Old client",
+            senderPeerID: peerID,
+            recipient: viewModel.nickname,
+            filename: fileURL.lastPathComponent
+        )
+        viewModel.seedPrivateChat([deleted, survivor], for: peerID)
+
+        viewModel.deleteMediaMessage(messageID: deleted.id)
+
+        #expect(
+            viewModel.privateChats[peerID]?.map(\.id) == [survivor.id]
+        )
+        #expect(transport.removedLegacyPrivateMediaPaths.isEmpty)
+        #expect(FileManager.default.fileExists(atPath: fileURL.path))
+    }
+
+    @Test @MainActor
+    func panicInvalidatesActiveAndQueuedPrivateChatClears() {
+        let (viewModel, transport) = makeTestableViewModel()
+        transport.deferDeletedPrivateMediaPersistence = true
+        let firstPeerID = PeerID(str: String(repeating: "4", count: 64))
+        let secondPeerID = PeerID(str: String(repeating: "5", count: 64))
+        let firstID = "media-\(String(repeating: "6", count: 32))"
+        let secondID = "media-\(String(repeating: "7", count: 32))"
+        viewModel.seedPrivateChat([
+            privateMediaMessage(
+                id: firstID,
+                sender: "First",
+                senderPeerID: firstPeerID,
+                recipient: viewModel.nickname,
+                filename: "first-pre-panic.jpg"
+            )
+        ], for: firstPeerID)
+        viewModel.seedPrivateChat([
+            privateMediaMessage(
+                id: secondID,
+                sender: "Second",
+                senderPeerID: secondPeerID,
+                recipient: viewModel.nickname,
+                filename: "second-pre-panic.jpg"
+            )
+        ], for: secondPeerID)
+
+        viewModel.clearPrivateChat(firstPeerID)
+        viewModel.clearPrivateChat(secondPeerID)
+        #expect(
+            transport.deletedPrivateMediaMessageIDBatches == [[firstID]]
+        )
+
+        _ = viewModel.panicClearAllData(restartServices: false)
+        viewModel.seedPrivateChat([
+            privateMediaMessage(
+                id: firstID,
+                sender: "First",
+                senderPeerID: firstPeerID,
+                recipient: viewModel.nickname,
+                filename: "first-post-panic.jpg"
+            )
+        ], for: firstPeerID)
+        viewModel.seedPrivateChat([
+            privateMediaMessage(
+                id: secondID,
+                sender: "Second",
+                senderPeerID: secondPeerID,
+                recipient: viewModel.nickname,
+                filename: "second-post-panic.jpg"
+            )
+        ], for: secondPeerID)
+
+        transport.resolveNextDeletedPrivateMediaPersistence(true)
+
+        #expect(
+            transport.deletedPrivateMediaMessageIDBatches == [[firstID]]
+        )
+        #expect(viewModel.privateChats[firstPeerID]?.map(\.id) == [firstID])
+        #expect(viewModel.privateChats[secondPeerID]?.map(\.id) == [secondID])
+    }
+
+    private func privateMediaMessage(
+        id: String,
+        sender: String,
+        senderPeerID: PeerID,
+        recipient: String,
+        filename: String
+    ) -> BitchatMessage {
+        BitchatMessage(
+            id: id,
+            sender: sender,
+            content: "\(MimeType.Category.image.messagePrefix)\(filename)",
+            timestamp: Date(),
+            isRelay: false,
+            isPrivate: true,
+            recipientNickname: recipient,
+            senderPeerID: senderPeerID
+        )
+    }
+}
+
 // MARK: - Panic Clear Tests
 
 struct ChatViewModelPanicTests {
+
+    @Test @MainActor
+    func panicClearAllData_finishesMediaWipeBeforeReturning() {
+        var wipeFinished = false
+        let (viewModel, _) = makeTestableViewModel(panicMediaWipe: {
+            wipeFinished = true
+        })
+
+        viewModel.panicClearAllData()
+
+        #expect(wipeFinished)
+    }
+
+    @Test @MainActor
+    func panicClearAllData_stopsNetworkBeforeWipeAndRestartsAfterCommit() {
+        var events: [String] = []
+        let lifecycle = PanicNetworkLifecycle(
+            stop: { events.append("stop") },
+            restart: { events.append("restart") }
+        )
+        let (viewModel, _) = makeTestableViewModel(
+            panicMediaWipe: { events.append("wipe") },
+            panicNetworkLifecycle: lifecycle
+        )
+
+        let completed = viewModel.panicClearAllData()
+
+        #expect(completed)
+        #expect(events == ["stop", "wipe", "restart"])
+        #expect(viewModel.networkActivationAllowed)
+    }
+
+    @Test @MainActor
+    func panicKeychainFailureKeepsRecoveryPendingAndServicesStopped() {
+        let keychain = MockKeychain()
+        keychain.simulatedDeleteAllResult = false
+        var events: [String] = []
+        let operations = PanicRecoveryOperations(
+            isPending: { false },
+            begin: {
+                events.append("begin")
+                return PanicRecoveryIntent(
+                    fileMarkerEstablished: true,
+                    externalMarkerEstablished: false
+                )
+            },
+            wipeMedia: { _ in events.append("wipe") },
+            complete: { events.append("complete") }
+        )
+        let lifecycle = PanicNetworkLifecycle(
+            stop: { events.append("stop") },
+            restart: { events.append("restart") }
+        )
+        let (viewModel, transport) = makeTestableViewModel(
+            keychain: keychain,
+            panicRecoveryOperations: operations,
+            panicNetworkLifecycle: lifecycle
+        )
+        let startsBeforePanic = transport.startServicesCallCount
+
+        let completed = viewModel.panicClearAllData()
+
+        #expect(!completed)
+        #expect(events == ["stop", "begin", "wipe"])
+        #expect(keychain.deleteAllCallCount == 1)
+        #expect(transport.startServicesCallCount == startsBeforePanic)
+        #expect(!viewModel.networkActivationAllowed)
+    }
+
+    @Test @MainActor
+    func pendingPanicRecoveryCompletesBeforeTransportBootstrap() {
+        var events: [String] = []
+        let operations = PanicRecoveryOperations(
+            isPending: {
+                events.append("read")
+                return true
+            },
+            begin: {
+                events.append("begin")
+                return PanicRecoveryIntent(
+                    fileMarkerEstablished: true,
+                    externalMarkerEstablished: false
+                )
+            },
+            wipeMedia: { _ in events.append("wipe") },
+            complete: { events.append("complete") }
+        )
+
+        let (viewModel, transport) = makeTestableViewModel(
+            panicRecoveryOperations: operations
+        )
+
+        #expect(events == ["read", "begin", "wipe", "complete"])
+        #expect(transport.emergencyDisconnectCallCount == 1)
+        #expect(transport.startServicesCallCount == 1)
+        #expect(viewModel.networkActivationAllowed)
+    }
+
+    @Test @MainActor
+    func failedStartupRecoveryLeavesTransportAndNetworkBlocked() {
+        enum WipeFailure: Error { case failed }
+        var completedMarker = false
+        let operations = PanicRecoveryOperations(
+            isPending: { true },
+            begin: {
+                PanicRecoveryIntent(
+                    fileMarkerEstablished: true,
+                    externalMarkerEstablished: false
+                )
+            },
+            wipeMedia: { _ in throw WipeFailure.failed },
+            complete: { completedMarker = true }
+        )
+
+        let (viewModel, transport) = makeTestableViewModel(
+            panicRecoveryOperations: operations
+        )
+
+        #expect(!completedMarker)
+        #expect(transport.emergencyDisconnectCallCount == 1)
+        #expect(transport.startServicesCallCount == 0)
+        #expect(!viewModel.networkActivationAllowed)
+    }
+
+    @Test @MainActor
+    func failedStartupKeychainRecoveryLeavesIntentAndTransportBlocked() {
+        let keychain = MockKeychain()
+        keychain.simulatedDeleteAllResult = false
+        var events: [String] = []
+        let operations = PanicRecoveryOperations(
+            isPending: { true },
+            begin: {
+                events.append("begin")
+                return PanicRecoveryIntent(
+                    fileMarkerEstablished: true,
+                    externalMarkerEstablished: true
+                )
+            },
+            wipeMedia: { _ in events.append("wipe") },
+            complete: { events.append("complete") }
+        )
+
+        let (viewModel, transport) = makeTestableViewModel(
+            keychain: keychain,
+            panicRecoveryOperations: operations
+        )
+
+        #expect(events == ["begin", "wipe"])
+        #expect(keychain.deleteAllCallCount == 1)
+        #expect(transport.emergencyDisconnectCallCount == 1)
+        #expect(transport.startServicesCallCount == 0)
+        #expect(!viewModel.networkActivationAllowed)
+    }
 
     @Test @MainActor
     func panicClearAllData_delegatesToTransport() async {

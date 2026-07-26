@@ -265,10 +265,10 @@ final class PrivateConversationModel: ObservableObject {
         let headerPeerID = chatViewModel.getShortIDForNoiseKey(conversationPeerID)
         let peer = chatViewModel.getPeer(byID: headerPeerID)
         let displayName = resolveDisplayName(for: conversationPeerID, headerPeerID: headerPeerID, peer: peer)
-        // Geo DMs are always routed over Nostr (NIP-17); their nostr_ keys
-        // never resolve to a reachable mesh peer, so resolveAvailability would
-        // report .offline. Report .nostrAvailable so the header shows the
-        // globe instead of a misleading "offline" tag.
+        // Geo DMs are always routed through BitChat private envelopes over
+        // Nostr; their nostr_ keys never resolve to a reachable mesh peer, so
+        // resolveAvailability would report .offline. Report .nostrAvailable
+        // so the header shows the globe instead of a misleading "offline" tag.
         let availability = conversationPeerID.isGeoDM
             ? .nostrAvailable
             : resolveAvailability(for: headerPeerID, peer: peer)

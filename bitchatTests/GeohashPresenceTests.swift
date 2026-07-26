@@ -326,26 +326,11 @@ struct ChatViewModelPresenceHandlingTests {
         #expect(viewModel.geohashParticipantCount(for: activeGeohash) >= 1)
     }
 
-    @Test func subscribeNostrEvent_samplingInvalidSignatureDoesNotPoisonDedup() async throws {
-        let (viewModel, _) = makeTestableViewModel()
-        let sampleGeohash = "u4pru"
-        let identity = try NostrIdentity.generate()
-        let event = NostrEvent(
-            pubkey: identity.publicKeyHex,
-            createdAt: Date(),
-            kind: .geohashPresence,
-            tags: [["g", sampleGeohash]],
-            content: ""
-        )
-        let signed = try event.sign(with: identity.schnorrSigningKey())
-        var invalid = signed
-        invalid.sig = String(repeating: "0", count: 128)
-
-        viewModel.subscribeNostrEvent(invalid, gh: sampleGeohash)
-        viewModel.subscribeNostrEvent(signed, gh: sampleGeohash)
-
-        #expect(viewModel.geohashParticipantCount(for: sampleGeohash) == 1)
-    }
+    // NOTE: Tampered-signature rejection (and the forged-copy dedup-poisoning
+    // invariant) is enforced once, off the main actor, at the relay boundary —
+    // the sampling path only ever sees verified events. See
+    // NostrRelayManagerTests
+    // `test_receiveEvent_invalidSignatureDoesNotPoisonDuplicateCache`.
 
     // MARK: - Test Helper
 

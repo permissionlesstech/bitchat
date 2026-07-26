@@ -48,7 +48,14 @@ private struct URLSessionAdapter: NostrRelaySessionProtocol {
     let base: URLSession
 
     func webSocketTask(with url: URL) -> NostrRelayConnectionProtocol {
-        URLSessionWebSocketTaskAdapter(base: base.webSocketTask(with: url))
+        let task = base.webSocketTask(with: url)
+        // Byte bound per inbound frame; without it the per-relay buffer cap
+        // (nostrInboundPerRelayBufferCap) bounds FRAMES but not BYTES, and a
+        // hostile relay could pile up cap × 1 MiB (URLSession default) per
+        // connection. See TransportConfig.nostrInboundMaxFrameBytes for the
+        // sizing rationale. Oversized frames fail the receive with an error.
+        task.maximumMessageSize = TransportConfig.nostrInboundMaxFrameBytes
+        return URLSessionWebSocketTaskAdapter(base: task)
     }
 }
 
@@ -69,6 +76,18 @@ struct NostrRelayManagerDependencies {
     /// Uniform random value in [0, 1) used to jitter reconnect backoff.
     /// Injectable so tests can pin or sweep the jitter deterministically.
     var jitterUnit: () -> Double
+    /// Where relay-settings changes are observed. Injectable so a test can use
+    /// its own center instead of racing the process-wide one.
+    var notificationCenter: NotificationCenter = .default
+    /// Relays added by hand, merged with the built-in set. Injectable so tests
+    /// do not have to write to shared preferences.
+    var customRelays: () -> [String] = { NostrRelaySettings.customRelays() }
+    /// Whether a location channel is currently open. Mirrors the third arm of
+    /// `NetworkActivationService`'s gate: teleporting into a geohash needs no
+    /// location permission, and without this the relays would stay filtered out
+    /// for someone who denied location and has no mutual favorites.
+    var isInLocationChannel: () -> Bool = { false }
+    var selectedChannelPublisher: AnyPublisher<ChannelID, Never> = Empty().eraseToAnyPublisher()
 }
 
 private extension NostrRelayManagerDependencies {
@@ -97,7 +116,12 @@ private extension NostrRelayManagerDependencies {
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: action)
             },
             now: Date.init,
-            jitterUnit: { Double.random(in: 0..<1) }
+            jitterUnit: { Double.random(in: 0..<1) },
+            isInLocationChannel: {
+                if case .location = LocationChannelManager.shared.selectedChannel { return true }
+                return false
+            },
+            selectedChannelPublisher: LocationChannelManager.shared.$selectedChannel.eraseToAnyPublisher()
         )
     }
 }
@@ -106,7 +130,10 @@ private extension NostrRelayManagerDependencies {
 @MainActor
 final class NostrRelayManager: ObservableObject {
     static let shared = NostrRelayManager()
-    // Track gift-wraps (kind 1059) we initiated so we can log OK acks at info
+    // Track gift-wraps (kind 1059) we initiated so we can log OK acks at info.
+    // Entries are removed only on OK acks (or panic wipe); relays that never
+    // ack leave entries behind for the process lifetime. Observability-only
+    // state, bounded in practice by outbound DM volume.
     private(set) static var pendingGiftWrapIDs = Set<String>()
     static func registerPendingGiftWrap(id: String) {
         pendingGiftWrapIDs.insert(id)
@@ -124,15 +151,40 @@ final class NostrRelayManager: ObservableObject {
         var nextReconnectTime: Date?
     }
     
-    // Default relays carry NIP-17 gift wraps, so avoid relays known to reject kind 1059.
-    private static let defaultRelays = [
+    // Built-in relays carry private-message envelopes, so avoid relays known to
+    // reject the kinds they use.
+    private static let builtInRelays = [
         "wss://relay.damus.io",
         "wss://nos.lol",
         "wss://relay.primal.net",
         "wss://offchain.pub"
         // For local testing, you can add: "ws://localhost:8080"
     ]
-    private static let defaultRelaySet = Set(defaultRelays.compactMap { NostrRelayURL.normalized($0) })
+    private static let builtInRelaySet = Set(builtInRelays.compactMap { NostrRelayURL.normalized($0) })
+
+    /// The relays private messages target: the built-in set plus any added by
+    /// hand. Four hardcoded hostnames are four names for a censor to block, so
+    /// the added ones are what keeps this reachable without a new build.
+    ///
+    /// Cached rather than computed per access: `allowedRelayList` consults the
+    /// set once per candidate URL, and recomputing would mean a `UserDefaults`
+    /// read and a fresh normalize-and-dedupe pass inside that loop. Refreshed
+    /// from `reloadDefaultRelays()` on construction and whenever the relay
+    /// settings change.
+    private var defaultRelays: [String] = []
+    private var defaultRelaySet: Set<String> = []
+
+    private func reloadDefaultRelays() {
+        var seen = Set<String>()
+        defaultRelays = (Self.builtInRelays + dependencies.customRelays())
+            .compactMap { NostrRelayURL.normalized($0) }
+            .filter { seen.insert($0).inserted }
+        defaultRelaySet = Set(defaultRelays)
+    }
+
+    /// Exposed so the relay settings UI can reject re-adding a built-in.
+    /// `nonisolated` because it is an immutable constant with no actor state.
+    nonisolated static var builtInRelayURLs: Set<String> { builtInRelaySet }
     
     @Published private(set) var relays: [Relay] = []
     @Published private(set) var isConnected = false
@@ -217,7 +269,7 @@ final class NostrRelayManager: ObservableObject {
     private var messageQueue: [PendingSend] = []
     private let messageQueueLock = NSLock()
     /// Non-queued sends whose callers require relay durability. A WebSocket
-    /// write only proves bytes left this process; NIP-20 OK is the relay's
+    /// write only proves bytes left this process; NIP-01 `OK` is the relay's
     /// accept/reject acknowledgment.
     private struct ConfirmedSendState {
         let token: UUID
@@ -239,38 +291,42 @@ final class NostrRelayManager: ObservableObject {
     
     // Bump generation to invalidate scheduled reconnects when we reset/disconnect
     private var connectionGeneration: Int = 0
-    
-    init() {
-        self.dependencies = .live()
-        hasMutualFavorites = dependencies.hasMutualFavorites()
-        hasLocationPermission = dependencies.hasLocationPermission()
-        applyDefaultRelayPolicy(force: true)
-        // Deterministic JSON shape for outbound requests
-        self.encoder.outputFormatting = .sortedKeys
-        dependencies.mutualFavoritesPublisher
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] favorites in
-                guard let self = self else { return }
-                self.hasMutualFavorites = !favorites.isEmpty
-                self.applyDefaultRelayPolicy()
-            }
-            .store(in: &cancellables)
-        dependencies.locationPermissionPublisher
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] state in
-                guard let self = self else { return }
-                let authorized = (state == .authorized)
-                if authorized == self.hasLocationPermission { return }
-                self.hasLocationPermission = authorized
-                self.applyDefaultRelayPolicy()
-            }
-            .store(in: &cancellables)
+
+    // Per-relay off-main inbound pipeline: raw socket frames are parsed and
+    // Schnorr-verified in arrival order OFF the main actor (this is the single
+    // signature verification for the whole inbound path — downstream handlers
+    // receive only verified events), then hop back to the main actor for dedup
+    // recording and handler dispatch.
+    //
+    // Each relay connection owns its OWN AsyncStream + consumer task, so N
+    // relays verify in parallel while every relay's frames stay in arrival
+    // order (a single subscription's events for a relay all arrive on that
+    // relay's socket, so per-relay ordering preserves per-subscription
+    // ordering). A burst of EVENT frames from one busy/malicious relay only
+    // blocks that relay's own verification backlog — DMs, OKs, EOSEs, and
+    // events from every other relay keep flowing on their own pipelines.
+    //
+    // Each stream is bounded (`.bufferingNewest`) so a relay flooding faster
+    // than its verification drains sheds its own oldest frames instead of
+    // growing memory without bound; it can never starve other relays.
+    //
+    // Continuations live in a lock-guarded, `Sendable` router (see
+    // `InboundFrameRouter` at file scope) so the raw socket receive callback
+    // (which is NOT main-actor isolated) can route a frame to the right relay
+    // stream without a per-frame main hop, while the main actor owns pipeline
+    // creation/teardown. The expensive work (Schnorr verify) is what runs
+    // off-main; the yield stays cheap.
+    private let inboundRouter = InboundFrameRouter()
+
+    convenience init() {
+        self.init(dependencies: .live())
     }
 
     internal init(dependencies: NostrRelayManagerDependencies) {
         self.dependencies = dependencies
         hasMutualFavorites = dependencies.hasMutualFavorites()
         hasLocationPermission = dependencies.hasLocationPermission()
+        reloadDefaultRelays()
         applyDefaultRelayPolicy(force: true)
         // Deterministic JSON shape for outbound requests
         self.encoder.outputFormatting = .sortedKeys
@@ -292,8 +348,93 @@ final class NostrRelayManager: ObservableObject {
                 self.applyDefaultRelayPolicy()
             }
             .store(in: &cancellables)
+        dependencies.selectedChannelPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.applyDefaultRelayPolicy()
+            }
+            .store(in: &cancellables)
+        // Adding or removing a relay by hand changes the target set, so
+        // reconcile connections now rather than at the next send.
+        dependencies.notificationCenter
+            .publisher(for: NostrRelaySettings.didChangeNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                // Reconcile against the previous set: a removed relay is no
+                // longer in `defaultRelays`, so nothing downstream would ever
+                // close its socket or drop its queued sends.
+                let previous = self.defaultRelaySet
+                self.reloadDefaultRelays()
+                self.dropRelays(previous.subtracting(self.defaultRelaySet))
+                self.applyDefaultRelayPolicy(force: true)
+            }
+            .store(in: &cancellables)
     }
-    
+
+    deinit {
+        inboundRouter.finishAll()
+    }
+
+    /// Ensure a serial off-main consumer pipeline exists for a relay. Called on
+    /// the main actor when a socket is (re)armed for receiving. Idempotent.
+    ///
+    /// Ordering within the relay is deliberate and security/performance-critical:
+    /// 1. `precheckInboundEvent` (main hop): per-relay stats plus a cheap
+    ///    duplicate LOOKUP — duplicate fan-in from multiple relays dominates
+    ///    real traffic and must never pay for Schnorr verification.
+    /// 2. `isValidSignature()` runs here, off the main actor — the ONLY
+    ///    signature verification on the inbound path (JSON re-serialization +
+    ///    SHA-256 + secp256k1 Schnorr per event).
+    /// 3. `deliverVerifiedInboundEvent` (main hop): authoritative
+    ///    check-and-RECORD plus handler dispatch. Recording only after
+    ///    verification means a forged-signature copy can never poison the
+    ///    dedup cache and suppress the genuine event.
+    private func ensureRelayInboundPipeline(for relayUrl: String) {
+        let started = inboundRouter.startPipeline(for: relayUrl) { [weak self] stream in
+            Task.detached(priority: .userInitiated) {
+                for await frame in stream {
+                    guard let parsed = ParsedInbound(frame.message) else { continue }
+                    guard let self else { return }
+                    switch parsed {
+                    case .event(let subId, let event):
+                        guard await self.precheckInboundEvent(
+                            subscriptionID: subId,
+                            eventID: event.id,
+                            relayUrl: relayUrl
+                        ) else {
+                            continue
+                        }
+                        guard event.isValidSignature() else {
+                            SecureLogger.warning(
+                                "⚠️ Dropped invalid Nostr event id=\(event.id.prefix(16))… sub=\(subId) relay=\(relayUrl)",
+                                category: .session
+                            )
+                            continue
+                        }
+                        await self.deliverVerifiedInboundEvent(subscriptionID: subId, event: event, from: relayUrl)
+                    case .eose, .ok, .notice:
+                        await self.handleParsedMessage(parsed, from: relayUrl)
+                    }
+                }
+            }
+        }
+        if started {
+            SecureLogger.debug("🧵 Started inbound verify pipeline for \(relayUrl)", category: .session)
+        }
+    }
+
+    /// Tear down a relay's inbound pipeline (socket gone or state wiped). The
+    /// consumer drains any already-buffered frames before finishing, so
+    /// in-flight verified events are still delivered.
+    private func teardownRelayInboundPipeline(for relayUrl: String) {
+        inboundRouter.finishPipeline(for: relayUrl)
+    }
+
+    private func teardownAllRelayInboundPipelines() {
+        inboundRouter.finishAll()
+    }
+
     /// Connect to all configured relays
     func connect() {
         // Global network policy gate
@@ -308,6 +449,8 @@ final class NostrRelayManager: ObservableObject {
             task.cancel(with: .goingAway, reason: nil)
         }
         connections.removeAll()
+        // Sockets are gone; drop every relay's inbound verify pipeline.
+        teardownAllRelayInboundPipelines()
         markRelaySocketsClosed(resetState: false)
         // Sockets are gone, so per-relay subscription state is cleared — but
         // durable intent (subscriptionRequestState, messageHandlers, parked
@@ -340,6 +483,7 @@ final class NostrRelayManager: ObservableObject {
             task.cancel(with: .goingAway, reason: nil)
         }
         connections.removeAll()
+        teardownAllRelayInboundPipelines()
         markRelaySocketsClosed(resetState: true)
         subscriptions.removeAll()
         pendingSubscriptions.removeAll()
@@ -407,13 +551,13 @@ final class NostrRelayManager: ObservableObject {
             // event locally so it survives a slow bootstrap (queued sends flush
             // when relays connect), then kick off connection setup, which itself
             // waits for Tor readiness.
-            let targetRelays = allowedRelayList(from: relayUrls ?? Self.defaultRelays)
+            let targetRelays = allowedRelayList(from: relayUrls ?? defaultRelays)
             guard !targetRelays.isEmpty else { return }
             enqueuePendingSend(event, pendingRelays: Set(targetRelays))
             ensureConnections(to: targetRelays)
             return
         }
-        let requestedRelays = relayUrls ?? Self.defaultRelays
+        let requestedRelays = relayUrls ?? defaultRelays
         let targetRelays = allowedRelayList(from: requestedRelays)
         guard !targetRelays.isEmpty else { return }
         ensureConnections(to: targetRelays)
@@ -433,8 +577,8 @@ final class NostrRelayManager: ObservableObject {
     }
 
     /// Attempts an event only on currently connected target relays and
-    /// reports whether at least one relay explicitly accepted it via NIP-20
-    /// OK. A successful WebSocket write alone is not durable acceptance.
+    /// reports whether at least one relay explicitly accepted it via NIP-01
+    /// `OK`. A successful WebSocket write alone is not durable acceptance.
     /// Unlike `sendEvent`, this never enters the process-local pending queue;
     /// callers use it when success unlocks durable state or user-visible
     /// delivery progress.
@@ -452,7 +596,7 @@ final class NostrRelayManager: ObservableObject {
             return
         }
 
-        let requestedRelays = relayUrls ?? Self.defaultRelays
+        let requestedRelays = relayUrls ?? defaultRelays
         let targetRelays = allowedRelayList(from: requestedRelays)
         let connectedTargets = targetRelays.compactMap { relayUrl -> (String, NostrRelayConnectionProtocol)? in
             guard let connection = connectedConnection(for: relayUrl) else { return nil }
@@ -621,7 +765,7 @@ final class NostrRelayManager: ObservableObject {
             // SecureLogger.debug("📋 Subscription filter JSON: \(messageString.prefix(200))...", category: .session)
             
             // Target specific relays if provided; else default. Filter permanently failed relays.
-            let baseUrls = relayUrls ?? Self.defaultRelays
+            let baseUrls = relayUrls ?? defaultRelays
             let urls = allowedRelayList(from: baseUrls).filter { !isPermanentlyFailed($0) }
             let requestState = SubscriptionRequestState(messageString: messageString, relayURLs: Set(urls))
             if subscriptionRequestState[id] == requestState, subscriptionStateExists(id: id, requestState: requestState) {
@@ -663,41 +807,52 @@ final class NostrRelayManager: ObservableObject {
     }
 
     private func applyDefaultRelayPolicy(force: Bool = false) {
-        let shouldAllow = hasMutualFavorites || hasLocationPermission
+        let shouldAllow = hasMutualFavorites || hasLocationPermission || dependencies.isInLocationChannel()
         if !force && shouldAllow == allowDefaultRelays { return }
         allowDefaultRelays = shouldAllow
         if shouldAllow {
             var existing = Set(relays.map { $0.url })
-            for url in Self.defaultRelays where !existing.contains(url) {
+            for url in defaultRelays where !existing.contains(url) {
                 relays.append(Relay(url: url))
                 existing.insert(url)
             }
             if dependencies.activationAllowed() {
-                ensureConnections(to: Self.defaultRelays)
+                ensureConnections(to: defaultRelays)
             }
         } else {
-            for url in Self.defaultRelays {
-                if let connection = connections[url] {
-                    connection.cancel(with: .goingAway, reason: nil)
-                }
-                connections.removeValue(forKey: url)
-                subscriptions.removeValue(forKey: url)
-                pendingSubscriptions.removeValue(forKey: url)
-            }
-            messageQueueLock.lock()
-            for index in (0..<messageQueue.count).reversed() {
-                var item = messageQueue[index]
-                item.pendingRelays.subtract(Self.defaultRelaySet)
-                if item.pendingRelays.isEmpty {
-                    messageQueue.remove(at: index)
-                } else {
-                    messageQueue[index] = item
-                }
-            }
-            messageQueueLock.unlock()
-            relays.removeAll { Self.defaultRelaySet.contains($0.url) }
-            updateConnectionStatus()
+            dropRelays(defaultRelaySet)
         }
+    }
+
+    /// Closes and forgets a set of relays: connection, inbound pipeline,
+    /// subscriptions, queued sends addressed only to them, and the published row.
+    private func dropRelays(_ urls: Set<String>) {
+        guard !urls.isEmpty else { return }
+        for url in urls {
+            if let connection = connections[url] {
+                connection.cancel(with: .goingAway, reason: nil)
+            }
+            connections.removeValue(forKey: url)
+            teardownRelayInboundPipeline(for: url)
+            subscriptions.removeValue(forKey: url)
+            pendingSubscriptions.removeValue(forKey: url)
+        }
+        messageQueueLock.lock()
+        for index in (0..<messageQueue.count).reversed() {
+            var item = messageQueue[index]
+            item.pendingRelays.subtract(urls)
+            if item.pendingRelays.isEmpty {
+                messageQueue.remove(at: index)
+            } else {
+                messageQueue[index] = item
+            }
+        }
+        messageQueueLock.unlock()
+        // A relay queued while Tor bootstraps would otherwise reconnect when
+        // the queue drains, overriding the explicit removal.
+        pendingTorConnectionURLs.subtract(urls)
+        relays.removeAll { urls.contains($0.url) }
+        updateConnectionStatus()
     }
 
     private func allowedRelayList(from urls: [String]) -> [String] {
@@ -705,7 +860,7 @@ final class NostrRelayManager: ObservableObject {
         var result: [String] = []
         for rawURL in urls {
             guard let url = NostrRelayURL.normalized(rawURL) else { continue }
-            if !allowDefaultRelays && Self.defaultRelaySet.contains(url) { continue }
+            if !allowDefaultRelays && defaultRelaySet.contains(url) { continue }
             if seen.insert(url).inserted {
                 result.append(url)
             }
@@ -1020,7 +1175,11 @@ final class NostrRelayManager: ObservableObject {
         
         connections[urlString] = task
         task.resume()
-        
+
+        // Bring up this relay's own serial verify pipeline before arming the
+        // socket, so inbound frames have somewhere to land.
+        ensureRelayInboundPipeline(for: urlString)
+
         // Start receiving messages
         receiveMessage(from: task, relayUrl: urlString)
         
@@ -1095,15 +1254,14 @@ final class NostrRelayManager: ObservableObject {
             
             switch result {
             case .success(let message):
-                // Parse off-main to reduce UI jank, then hop back for state updates
-                Task.detached(priority: .utility) {
-                    guard let parsed = ParsedInbound(message) else { return }
-                    await MainActor.run {
-                        guard self.connections[relayUrl] === task else { return }
-                        self.handleParsedMessage(parsed, from: relayUrl)
-                    }
-                }
-                
+                // Hand the raw frame to this relay's serial inbound pipeline:
+                // parsing and signature verification run off-main, in arrival
+                // order, independently of every other relay's pipeline. Routing
+                // through the lock-guarded router keeps this off the main actor
+                // (no per-frame main hop).
+                self.inboundRouter.yield(InboundFrame(message: message), to: relayUrl)
+
+
                 // Continue receiving
                 Task { @MainActor in
                     guard self.connections[relayUrl] === task else { return }
@@ -1122,35 +1280,55 @@ final class NostrRelayManager: ObservableObject {
     // Note: declared at file scope below to avoid MainActor isolation inside this class
     // and keep parsing off the main actor.
 
-    // Handle parsed message on MainActor (state updates and handlers)
+    /// First main-actor hop for an inbound EVENT: per-relay stats plus a cheap
+    /// duplicate LOOKUP (no recording) so duplicate fan-in from multiple
+    /// relays never pays for Schnorr verification. Recording happens only
+    /// after the signature verifies (`deliverVerifiedInboundEvent`), so a
+    /// forged-signature copy can never poison the dedup cache and suppress
+    /// the genuine event.
+    private func precheckInboundEvent(subscriptionID: String, eventID: String, relayUrl: String) -> Bool {
+        if let index = relays.firstIndex(where: { $0.url == relayUrl }) {
+            relays[index].messagesReceived += 1
+        }
+        guard !eventID.isEmpty else { return true }
+        let key = InboundEventKey(subscriptionID: subscriptionID, eventID: eventID)
+        if recentInboundEventKeys.contains(key) {
+            recordDuplicateInboundEventDrop(subscriptionID: subscriptionID)
+            return false
+        }
+        return true
+    }
+
+    /// Second main-actor hop, after off-main signature verification:
+    /// authoritative check-and-record (the serial pipeline means the same
+    /// event is never in flight twice, but the record must stay atomic with
+    /// delivery) and handler dispatch.
+    private func deliverVerifiedInboundEvent(subscriptionID subId: String, event: NostrEvent, from relayUrl: String) {
+        guard shouldDeliverInboundEvent(subscriptionID: subId, eventID: event.id) else {
+            return
+        }
+        if event.kind != 1059 {
+            // Per-event logging floods dev builds in busy geohashes; sample it.
+            inboundEventLogCount += 1
+            if inboundEventLogCount == 1 || inboundEventLogCount.isMultiple(of: TransportConfig.nostrInboundEventLogInterval) {
+                SecureLogger.debug("📥 Event #\(inboundEventLogCount) kind=\(event.kind) id=\(event.id.prefix(16))… relay=\(relayUrl)", category: .session)
+            }
+        }
+        if let handler = self.messageHandlers[subId] {
+            handler(event)
+        } else {
+            SecureLogger.warning("⚠️ No handler for subscription \(subId)", category: .session)
+        }
+    }
+
+    // Handle parsed non-EVENT messages on MainActor (state updates and handlers)
     private func handleParsedMessage(_ parsed: ParsedInbound, from relayUrl: String) {
         switch parsed {
-        case .event(let subId, let event):
-            if let index = self.relays.firstIndex(where: { $0.url == relayUrl }) {
-                self.relays[index].messagesReceived += 1
-            }
-            guard event.isValidSignature() else {
-                SecureLogger.warning(
-                    "⚠️ Dropped invalid Nostr event id=\(event.id.prefix(16))… sub=\(subId) relay=\(relayUrl)",
-                    category: .session
-                )
-                return
-            }
-            guard shouldDeliverInboundEvent(subscriptionID: subId, eventID: event.id) else {
-                return
-            }
-            if event.kind != 1059 {
-                // Per-event logging floods dev builds in busy geohashes; sample it.
-                inboundEventLogCount += 1
-                if inboundEventLogCount == 1 || inboundEventLogCount.isMultiple(of: TransportConfig.nostrInboundEventLogInterval) {
-                    SecureLogger.debug("📥 Event #\(inboundEventLogCount) kind=\(event.kind) id=\(event.id.prefix(16))… relay=\(relayUrl)", category: .session)
-                }
-            }
-            if let handler = self.messageHandlers[subId] {
-                handler(event)
-            } else {
-                SecureLogger.warning("⚠️ No handler for subscription \(subId)", category: .session)
-            }
+        case .event:
+            // Events flow through the serial inbound pipeline (precheck →
+            // off-main signature verification → deliverVerifiedInboundEvent)
+            // and never reach this fallback.
+            assertionFailure("inbound EVENT bypassed the verified pipeline")
         case .eose(let subId):
             if var tracker = eoseTrackers[subId] {
                 // An EOSE proves the relay received the REQ even if the local
@@ -1240,7 +1418,7 @@ final class NostrRelayManager: ObservableObject {
         isConnected = relays.contains { $0.isConnected }
         // Relay URLs are normalized before entries are created, so direct
         // set membership is sound.
-        isDMRelayConnected = relays.contains { $0.isConnected && Self.defaultRelaySet.contains($0.url) }
+        isDMRelayConnected = relays.contains { $0.isConnected && defaultRelaySet.contains($0.url) }
     }
     
     /// A relay that drops before sending EOSE must not stall initial-load
@@ -1285,6 +1463,7 @@ final class NostrRelayManager: ObservableObject {
     ) {
         if let connection, connections[relayUrl] !== connection { return }
         connections.removeValue(forKey: relayUrl)
+        teardownRelayInboundPipeline(for: relayUrl)
         subscriptions.removeValue(forKey: relayUrl)
         let awaitingConfirmation = confirmedSends.compactMap { eventID, state in
             state.awaitingRelays.contains(relayUrl) ? eventID : nil
@@ -1379,8 +1558,9 @@ final class NostrRelayManager: ObservableObject {
         if let connection = connections[normalizedRelayUrl] {
             connection.cancel(with: .goingAway, reason: nil)
             connections.removeValue(forKey: normalizedRelayUrl)
+            teardownRelayInboundPipeline(for: normalizedRelayUrl)
         }
-        
+
         // Attempt immediate reconnection
         connectToRelay(normalizedRelayUrl)
     }
@@ -1472,6 +1652,77 @@ final class NostrRelayManager: ObservableObject {
 }
 
 // MARK: - Off-main inbound parsing helpers (file scope, non-isolated)
+
+/// A single raw socket frame awaiting off-main parse + Schnorr verification.
+private struct InboundFrame: Sendable {
+    let message: URLSessionWebSocketTask.Message
+}
+
+/// Lock-guarded registry of per-relay inbound streams.
+///
+/// The raw WebSocket receive callback is not main-actor isolated, so it needs a
+/// `Sendable` path to route a frame to the correct relay's stream without a
+/// per-frame hop onto the main actor. Pipeline lifecycle (start/finish) is
+/// driven from the main actor; frame delivery (`yield`) can come from any
+/// thread. All access is serialized by a single lock — contention is negligible
+/// because the guarded critical section is only a dictionary lookup + yield.
+private final class InboundFrameRouter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuations: [String: AsyncStream<InboundFrame>.Continuation] = [:]
+    private var tasks: [String: Task<Void, Never>] = [:]
+
+    /// Start a relay's stream + consumer if one does not already exist.
+    /// Returns true when a new pipeline was created. The bounded
+    /// `.bufferingNewest` policy makes a single relay shed its OWN oldest
+    /// frames under a flood, never other relays' frames. Buffered memory per
+    /// relay is bounded (not eliminated) at the frame cap times the per-frame
+    /// byte cap (`maximumMessageSize`) — see TransportConfig.
+    func startPipeline(
+        for relayUrl: String,
+        makeConsumer: (AsyncStream<InboundFrame>) -> Task<Void, Never>
+    ) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if continuations[relayUrl] != nil { return false }
+        let (stream, continuation) = AsyncStream<InboundFrame>.makeStream(
+            bufferingPolicy: .bufferingNewest(TransportConfig.nostrInboundPerRelayBufferCap)
+        )
+        continuations[relayUrl] = continuation
+        tasks[relayUrl] = makeConsumer(stream)
+        return true
+    }
+
+    /// Route a frame to a relay's stream. No-op if the relay has no live
+    /// pipeline (socket already torn down) — the frame is simply dropped, which
+    /// is safe for best-effort Nostr inbound.
+    func yield(_ frame: InboundFrame, to relayUrl: String) {
+        lock.lock()
+        let continuation = continuations[relayUrl]
+        lock.unlock()
+        continuation?.yield(frame)
+    }
+
+    /// Finish a relay's stream. The consumer drains any already-buffered frames
+    /// before exiting, so in-flight verified events are still delivered.
+    func finishPipeline(for relayUrl: String) {
+        lock.lock()
+        let continuation = continuations.removeValue(forKey: relayUrl)
+        tasks.removeValue(forKey: relayUrl)
+        lock.unlock()
+        continuation?.finish()
+    }
+
+    func finishAll() {
+        lock.lock()
+        let allContinuations = continuations
+        continuations.removeAll()
+        tasks.removeAll()
+        lock.unlock()
+        for continuation in allContinuations.values {
+            continuation.finish()
+        }
+    }
+}
 
 private enum ParsedInbound {
     case event(subId: String, event: NostrEvent)

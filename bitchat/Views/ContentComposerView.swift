@@ -73,7 +73,14 @@ struct ContentComposerView: View {
                 .textInputAutocapitalization(.sentences)
                 #endif
                 .submitLabel(.send)
-                .onSubmit(onSendMessage)
+                .onSubmit {
+                    onSendMessage()
+                    // Only the return-key path: it steals focus on iOS, so
+                    // every message would cost a tap to reopen the keyboard.
+                    // The send button must not reopen a deliberately
+                    // dismissed keyboard, so it stays out of this.
+                    isTextFieldFocused.wrappedValue = true
+                }
                 .padding(.vertical, theme.usesGlassChrome ? 8 : 4)
                 .padding(.horizontal, 6)
                 .themedInputBackground()

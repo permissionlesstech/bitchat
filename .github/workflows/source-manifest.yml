@@ -1,0 +1,112 @@
+name: Source manifest
+
+# Publishes a hash manifest for every tagged release so a copy of the source
+# obtained from somewhere other than this repository can be checked against it.
+#
+# This exists because the repository has been the target of takedown demands.
+# When that succeeds, mirrors appear, and without a manifest there is no way to
+# tell a faithful mirror from a modified one. The manifest is attested to this
+# workflow run, so its own provenance is verifiable with `gh attestation verify`.
+#
+# Scope, stated plainly: this verifies SOURCE. It does not verify any compiled
+# app. See docs/VERIFYING-A-BUILD.md.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Tag or commit to produce a manifest for'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  manifest:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write      # attach the manifest to the release
+      id-token: write      # provenance attestation
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+          # Full history so the commit the tag names can be recorded exactly.
+          fetch-depth: 0
+
+      - name: Build manifest
+        id: build
+        run: |
+          set -euo pipefail
+          ref_name="${{ github.event.inputs.ref || github.ref_name }}"
+          commit="$(git rev-parse HEAD)"
+          tree="$(git rev-parse HEAD^{tree})"
+
+          # Hash every tracked file, in a stable order, with NUL separation so
+          # paths containing spaces or newlines cannot shift the columns.
+          git ls-files -z \
+            | sort -z \
+            | xargs -0 sha256sum \
+            > files.sha256
+
+          {
+            echo "# bitchat source manifest"
+            echo "#"
+            echo "# ref:    ${ref_name}"
+            echo "# commit: ${commit}"
+            echo "# tree:   ${tree}"
+            echo "# files:  $(wc -l < files.sha256 | tr -d ' ')"
+            echo "#"
+            echo "# Verify a checkout of this ref with:"
+            echo "#   shasum -a 256 -c files.sha256"
+            echo "# Hash checking alone ignores files this manifest does not list, and"
+            echo "# the Xcode project compiles any source file present in the tree. So"
+            echo "# also confirm nothing extra is present:"
+            echo "#   git status --porcelain --ignored   # git checkout: must print nothing"
+            echo "# or, for a tarball, diff this manifest's path list against find(1)."
+            echo "# Full instructions: docs/VERIFYING-A-BUILD.md"
+            echo "# The git tree hash above is the single value covering all tracked content:"
+            echo "#   git rev-parse HEAD^{tree}"
+            echo "#"
+          } > SOURCE-MANIFEST.txt
+          cat files.sha256 >> SOURCE-MANIFEST.txt
+
+          echo "commit=${commit}" >> "$GITHUB_OUTPUT"
+          echo "tree=${tree}" >> "$GITHUB_OUTPUT"
+
+      - name: Self-check the manifest
+        run: |
+          set -euo pipefail
+          # A manifest that does not validate against the tree it was made from
+          # is worse than none, so fail loudly rather than publishing it.
+          grep -v '^#' SOURCE-MANIFEST.txt > check.sha256
+          sha256sum -c check.sha256 > /dev/null
+          echo "manifest validates against this checkout"
+
+      - name: Attest the manifest
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: SOURCE-MANIFEST.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: source-manifest
+          path: SOURCE-MANIFEST.txt
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # A tag may be pushed before its release exists; only attach when
+          # there is a release to attach to, and never fail the run over it.
+          if gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
+            gh release upload "${{ github.ref_name }}" SOURCE-MANIFEST.txt --clobber
+          else
+            echo "no release for ${{ github.ref_name }} yet; manifest is available as a workflow artifact"
+          fi

@@ -94,6 +94,24 @@ jobs:
           kill "$watchdog_pid" 2>/dev/null || true
           exit "$status"
 
+      # Read coverage before the serial benchmark command below rebuilds the
+      # test binary without instrumentation. Reporting against that newer
+      # binary makes llvm-cov reject the profile as out of date.
+      # Informational only: there is deliberately no percentage threshold, but
+      # a broken/missing report is a CI configuration error and must be visible.
+      - name: Coverage summary
+        run: |
+          BIN_PATH=$(swift build --show-bin-path --package-path ${{ matrix.path }})
+          PROF="$BIN_PATH/codecov/default.profdata"
+          XCTEST=$(find "$BIN_PATH" -maxdepth 1 -name '*.xctest' | head -1)
+          BINARY="$XCTEST/Contents/MacOS/$(basename "$XCTEST" .xctest)"
+          if [ ! -f "$PROF" ] || [ ! -f "$BINARY" ]; then
+            echo "::error::Coverage profile or test binary is missing"
+            exit 1
+          fi
+          xcrun llvm-cov report "$BINARY" -instr-profile "$PROF" \
+            -ignore-filename-regex='(Tests|\.build|checkouts|Mocks|_PreviewHelpers)'
+
       # Benchmarks run serially on an otherwise idle runner for stable
       # numbers; BITCHAT_PERF_LOG captures the PERF[...] lines for the gate.
       - name: Run performance benchmarks (serial)
@@ -115,22 +133,6 @@ jobs:
         timeout-minutes: 10
         run: ./scripts/check-perf-floors.sh perf-output.log
 
-      # Informational only: surfaces per-file and total line coverage in the
-      # job log so coverage trends are visible on every PR. No thresholds —
-      # this must never be the reason a build goes red.
-      - name: Coverage summary
-        run: |
-          BIN_PATH=$(swift build --show-bin-path --package-path ${{ matrix.path }})
-          PROF="$BIN_PATH/codecov/default.profdata"
-          XCTEST=$(find "$BIN_PATH" -maxdepth 1 -name '*.xctest' | head -1)
-          BINARY="$XCTEST/Contents/MacOS/$(basename "$XCTEST" .xctest)"
-          if [ -f "$PROF" ] && [ -f "$BINARY" ]; then
-            xcrun llvm-cov report "$BINARY" -instr-profile "$PROF" \
-              -ignore-filename-regex='(Tests|\.build|checkouts|Mocks|_PreviewHelpers)' || true
-          else
-            echo "No coverage data found; skipping summary."
-          fi
-
   # SPM tests do not link the shipping app targets. This job covers the
   # iOS-conditional paths and both universal Release link configurations.
   ios-build:
@@ -141,6 +143,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+
+      - name: Check clean recipe safety
+        run: bash scripts/check-just-clean-safety.sh
 
       - name: Build iOS (simulator, no signing)
         # Build both simulator architectures so CI validates every vendored
@@ -168,6 +173,96 @@ jobs:
             ONLY_ACTIVE_ARCH=NO \
             CODE_SIGNING_ALLOWED=NO \
             build
+
+  # The SwiftPM matrix runs on macOS and cannot execute UIKit/CoreBluetooth
+  # conditional tests. Build the shared iOS test target and run it on the first
+  # available iPhone simulator from the runner image instead of hard-coding a
+  # model that changes when GitHub updates Xcode. The suite intentionally runs
+  # in one test runner: a number of integration tests exercise process-global
+  # stores and notification centers, so overlapping workers can corrupt each
+  # other's fixtures and turn sub-second tests into multi-minute timeouts.
+  ios-tests:
+    name: Run iOS simulator tests
+    runs-on: macos-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      # Some runner images list only placeholder destinations (rows carrying
+      # "error:" or "unavailable") or ship the selected Xcode without a
+      # matching iOS simulator runtime, so this walks three paths in order:
+      # a usable xcodebuild destination, an existing simctl device, and
+      # finally creating a device from the newest installed iOS runtime.
+      - name: Select available iPhone simulator
+        id: destination
+        run: |
+          set -uo pipefail
+          destinations=$(xcodebuild -project bitchat.xcodeproj -scheme "bitchat (iOS)" -showdestinations 2>/dev/null || true)
+          destination_id=$(awk -F'id:' '
+            /platform:iOS Simulator/ && /name:iPhone/ \
+              && !/error/ && !/unavailable/ && !found {
+              value=$2
+              sub(/,.*/, "", value)
+              gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+              print value
+              found=1
+            }
+          ' <<< "$destinations")
+
+          if [ -n "$destination_id" ]; then
+            echo "Selected destination via xcodebuild -showdestinations: $destination_id"
+          else
+            echo "No usable iPhone destination in -showdestinations output; falling back to simctl"
+            destination_id=$(xcrun simctl list devices available --json | jq -r '
+              [.devices | to_entries[]
+                | select(.key | contains("iOS"))
+                | .value[]
+                | select(.isAvailable and (.name | startswith("iPhone")))]
+              | first.udid // empty')
+            if [ -n "$destination_id" ]; then
+              echo "Selected existing simctl device: $destination_id"
+            else
+              echo "No available iPhone simulator device; creating one"
+              # Newest installed iOS runtime plus an iPhone device type that
+              # runtime itself reports as supported, so the pair always match.
+              create_spec=$(xcrun simctl list runtimes --json | jq -r '
+                [.runtimes[] | select(.platform == "iOS" and .isAvailable)]
+                | sort_by(.version | split(".") | map(tonumber))
+                | last // empty
+                | .identifier as $runtime
+                | ([(.supportedDeviceTypes // [])[]
+                    | select(.productFamily == "iPhone"
+                        or (.name // "" | startswith("iPhone")))]
+                  | first.identifier // empty) as $devicetype
+                | "\($devicetype) \($runtime)"')
+              read -r devicetype runtime <<< "$create_spec" || true
+              if [ -z "${devicetype:-}" ] || [ -z "${runtime:-}" ]; then
+                echo "::error::No iPhone simulator destination found and none creatable (no installed iOS runtime with an iPhone device type)"
+                exit 1
+              fi
+              destination_id=$(xcrun simctl create ci-iphone "$devicetype" "$runtime") || {
+                echo "::error::simctl create failed for $devicetype on $runtime"
+                exit 1
+              }
+              echo "Created simulator $destination_id ($devicetype, $runtime)"
+            fi
+          fi
+
+          echo "Using iPhone simulator destination id: $destination_id"
+          echo "id=$destination_id" >> "$GITHUB_OUTPUT"
+
+      - name: Run iOS tests
+        run: |
+          set -o pipefail
+          xcodebuild -project bitchat.xcodeproj \
+            -scheme "bitchat (iOS)" \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=${{ steps.destination.outputs.id }}" \
+            -parallel-testing-enabled NO \
+            CODE_SIGNING_ALLOWED=NO \
+            test
 
   # Advisory only: SwiftLint reports style violations without ever failing the
   # build. Runs in a pinned container (no Xcode plugin, no pbxproj changes) so

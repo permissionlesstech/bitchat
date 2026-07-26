@@ -41,6 +41,7 @@ struct BitchatApp: App {
                 .environmentObject(runtime.peerListModel)
                 .environmentObject(runtime.appChromeModel)
                 .environmentObject(runtime.boardAlertsModel)
+                .environmentObject(runtime.sharedContentImportModel)
                 .onAppear {
                     appDelegate.runtime = runtime
                     runtime.start()
@@ -73,7 +74,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     weak var runtime: AppRuntime?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
-        true
+        // Installed before the first resign-active so the app-switcher snapshot
+        // never captures an open conversation.
+        PrivacyScreen.shared.install()
+        return true
     }
 
     func applicationWillTerminate(_ application: UIApplication) {

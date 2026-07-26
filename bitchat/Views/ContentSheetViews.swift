@@ -6,11 +6,28 @@ import UIKit
 import AppKit
 #endif
 
+struct ContentPeopleSheetModalPresentationState {
+    var isImagePreviewPresented = false
+    var isVerificationSheetPresented = false
+    var legacyPrivateMediaConsentRequest: LegacyPrivateMediaConsentRequest? = nil
+    var isVoiceAlertPresented = false
+    var isMediaPickerPresented = false
+
+    var hasPresentation: Bool {
+        isImagePreviewPresented
+            || isVerificationSheetPresented
+            || legacyPrivateMediaConsentRequest != nil
+            || isVoiceAlertPresented
+            || isMediaPickerPresented
+    }
+}
+
 struct ContentPeopleSheetView: View {
     @EnvironmentObject private var appChromeModel: AppChromeModel
     @EnvironmentObject private var privateConversationModel: PrivateConversationModel
     @EnvironmentObject private var verificationModel: VerificationModel
     @EnvironmentObject private var conversationUIModel: ConversationUIModel
+    @Environment(\.scenePhase) private var scenePhase
 
     @Binding var showSidebar: Bool
     @Binding var messageText: String
@@ -23,6 +40,7 @@ struct ContentPeopleSheetView: View {
     var isTextFieldFocused: FocusState<Bool>.Binding
     @ObservedObject var voiceRecordingVM: VoiceRecordingViewModel
     @Binding var autocompleteDebounceTimer: Timer?
+    @State private var showVerifySheet = false
     @ThemedPalette private var palette
 
     let headerHeight: CGFloat
@@ -35,7 +53,77 @@ struct ContentPeopleSheetView: View {
     @Binding var showMacImagePicker: Bool
     #endif
 
+    private func modalPresentationState(
+        includingVoiceAlert: Bool
+    ) -> ContentPeopleSheetModalPresentationState {
+        #if os(iOS)
+        let isMediaPickerPresented = showImagePicker
+        #else
+        let isMediaPickerPresented = showMacImagePicker
+        #endif
+
+        return ContentPeopleSheetModalPresentationState(
+            isImagePreviewPresented: imagePreviewURL != nil,
+            isVerificationSheetPresented: showVerifySheet,
+            legacyPrivateMediaConsentRequest:
+                conversationUIModel.legacyPrivateMediaConsentRequest,
+            isVoiceAlertPresented: includingVoiceAlert && voiceRecordingVM.showAlert,
+            isMediaPickerPresented: isMediaPickerPresented
+        )
+    }
+
+    private var hasModalPresentation: Bool {
+        modalPresentationState(includingVoiceAlert: true).hasPresentation
+    }
+
+    /// The voice alert cannot defer to itself: its own binding must keep
+    /// reporting `true` while it is the presented modal.
+    private var hasModalPresentationBesidesVoiceAlert: Bool {
+        modalPresentationState(includingVoiceAlert: false).hasPresentation
+    }
+
+    private var bluetoothAlertBinding: Binding<Bool> {
+        Binding(
+            get: {
+                scenePhase == .active
+                    && appChromeModel.showBluetoothAlert
+                    && !hasModalPresentation
+            },
+            set: { isPresented in
+                guard !isPresented,
+                      scenePhase == .active,
+                      !hasModalPresentation else {
+                    return
+                }
+                appChromeModel.showBluetoothAlert = false
+            }
+        )
+    }
+
+    /// Voice recording happens inside this sheet, so its error alert must
+    /// present from here as well: the root copy defers whenever this sheet
+    /// is up, exactly like the Bluetooth alert above. Presenting from the
+    /// root instead would force-dismiss the sheet and end the conversation.
+    private var voiceAlertBinding: Binding<Bool> {
+        Binding(
+            get: {
+                scenePhase == .active
+                    && voiceRecordingVM.showAlert
+                    && !hasModalPresentationBesidesVoiceAlert
+            },
+            set: { isPresented in
+                guard !isPresented,
+                      scenePhase == .active,
+                      !hasModalPresentationBesidesVoiceAlert else {
+                    return
+                }
+                voiceRecordingVM.showAlert = false
+            }
+        )
+    }
+
     var body: some View {
+        let legacyConsentRequest = conversationUIModel.legacyPrivateMediaConsentRequest
         NavigationStack {
             Group {
                 if privateConversationModel.selectedPeerID != nil {
@@ -77,7 +165,8 @@ struct ContentPeopleSheetView: View {
                     #endif
                 } else {
                     ContentPeopleListView(
-                        showSidebar: $showSidebar
+                        showSidebar: $showSidebar,
+                        showVerifySheet: $showVerifySheet
                     )
                 }
             }
@@ -97,6 +186,63 @@ struct ContentPeopleSheetView: View {
         }
         .themedSheetBackground()
         .foregroundColor(palette.primary)
+        .confirmationDialog(
+            String(
+                localized: "content.private_media.legacy_warning.title",
+                defaultValue: "Send without end-to-end encryption?",
+                comment: "Title warning before sending private media to an older client in a clear signed envelope"
+            ),
+            isPresented: Binding(
+                get: { legacyConsentRequest != nil },
+                set: { isPresented in
+                    if !isPresented, let requestID = legacyConsentRequest?.id {
+                        conversationUIModel.resolveLegacyPrivateMediaConsent(
+                            requestID: requestID,
+                            approved: false
+                        )
+                    }
+                }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button(
+                String(
+                    localized: "content.private_media.legacy_warning.send",
+                    defaultValue: "send visible file",
+                    comment: "Destructive confirmation action for one legacy clear private-media send"
+                ),
+                role: .destructive
+            ) {
+                if let requestID = legacyConsentRequest?.id {
+                    conversationUIModel.resolveLegacyPrivateMediaConsent(
+                        requestID: requestID,
+                        approved: true
+                    )
+                }
+            }
+            Button("common.cancel", role: .cancel) {
+                if let requestID = legacyConsentRequest?.id {
+                    conversationUIModel.resolveLegacyPrivateMediaConsent(
+                        requestID: requestID,
+                        approved: false
+                    )
+                }
+            }
+        } message: {
+            if let request = legacyConsentRequest {
+                Text(
+                    String(
+                        format: String(
+                            localized: "content.private_media.legacy_warning.message",
+                            defaultValue: "%@'s client does not advertise encrypted private media. This file will be signed but not end-to-end encrypted, so mesh relays can see it. Send this file anyway?",
+                            comment: "Warning explaining the confidentiality loss for one legacy private-media send; parameter is the peer name"
+                        ),
+                        locale: .current,
+                        request.peerName
+                    )
+                )
+            }
+        }
         #if os(macOS)
         .frame(minWidth: 420, minHeight: 520)
         #endif
@@ -124,6 +270,27 @@ struct ContentPeopleSheetView: View {
             }
         }
         #endif
+        .alert("Recording Error", isPresented: voiceAlertBinding, actions: {
+            Button("common.ok", role: .cancel) {}
+            if voiceRecordingVM.state == .permissionDenied {
+                Button("location_channels.action.open_settings") {
+                    SystemSettings.microphone.open()
+                }
+            }
+        }, message: {
+            Text(voiceRecordingVM.state.alertMessage)
+        })
+        .alert(
+            "content.alert.bluetooth_required.title",
+            isPresented: bluetoothAlertBinding
+        ) {
+            Button("content.alert.bluetooth_required.settings") {
+                SystemSettings.bluetooth.open()
+            }
+            Button("common.ok", role: .cancel) {}
+        } message: {
+            Text(appChromeModel.bluetoothAlertMessage)
+        }
     }
 }
 
@@ -138,8 +305,7 @@ private struct ContentPeopleListView: View {
     @ThemedPalette private var palette
 
     @Binding var showSidebar: Bool
-
-    @State private var showVerifySheet = false
+    @Binding var showVerifySheet: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -446,7 +612,8 @@ private struct ContentPrivateChatSheetView: View {
         if privateConversationModel.selectedPeerID?.isGroup == true {
             return String(localized: "content.private.caption_group", comment: "Caption above the group chat composer noting messages are encrypted to group members")
         }
-        // Geohash DMs are NIP-17 gift-wrapped — always end-to-end encrypted,
+        // Geohash DMs use BitChat's private-envelope encryption over Nostr —
+        // always end-to-end encrypted,
         // even though they carry no Noise session status. Mesh DMs earn the
         // "encrypted" claim only once the Noise handshake has secured.
         let isGeoDM = privateConversationModel.selectedPeerID?.isGeoDM == true

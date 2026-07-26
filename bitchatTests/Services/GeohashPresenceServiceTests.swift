@@ -76,6 +76,7 @@ final class GeohashPresenceServiceTests: XCTestCase {
             burstMaxDelay: 0
         )
 
+        service.start()
         service.performHeartbeat()
 
         let sentAllAllowedChannels = await waitUntil { sentGeohashes.count == 3 }
@@ -83,7 +84,7 @@ final class GeohashPresenceServiceTests: XCTestCase {
         XCTAssertEqual(Set(sentGeohashes), Set(["9q", "9q8y", "9q8yy"]))
         XCTAssertEqual(Set(lookedUpGeohashes), Set(["9q", "9q8y", "9q8yy"]))
         XCTAssertEqual(sleptNanoseconds.count, 3)
-        XCTAssertEqual(scheduler.intervals, [17])
+        XCTAssertEqual(scheduler.intervals, [17, 17])
     }
 
     func test_performHeartbeat_skipsBroadcastWhenTorIsNotReady() async {
@@ -97,11 +98,12 @@ final class GeohashPresenceServiceTests: XCTestCase {
             loopMaxInterval: 21
         )
 
+        service.start()
         service.performHeartbeat()
         try? await Task.sleep(nanoseconds: 20_000_000)
 
         XCTAssertEqual(sendCount, 0)
-        XCTAssertEqual(scheduler.intervals, [21])
+        XCTAssertEqual(scheduler.intervals, [21, 21])
     }
 
     func test_performHeartbeat_skipsBroadcastWhenAppIsBackgrounded() async {
@@ -115,11 +117,45 @@ final class GeohashPresenceServiceTests: XCTestCase {
             loopMaxInterval: 22
         )
 
+        service.start()
         service.performHeartbeat()
         try? await Task.sleep(nanoseconds: 20_000_000)
 
         XCTAssertEqual(sendCount, 0)
-        XCTAssertEqual(scheduler.intervals, [22])
+        XCTAssertEqual(scheduler.intervals, [22, 22])
+    }
+
+    func test_stopForPanic_cancelsTimerAndSuppressesDelayedBroadcast() async throws {
+        let identity = try NostrIdentity.generate()
+        let scheduler = MockGeohashPresenceScheduler()
+        var sleeperContinuation: CheckedContinuation<Void, Never>?
+        var sendCount = 0
+        let service = makeService(
+            scheduler: scheduler,
+            deriveIdentity: { _ in identity },
+            relaySender: { _, _ in sendCount += 1 },
+            sleeper: { _ in
+                await withCheckedContinuation { continuation in
+                    sleeperContinuation = continuation
+                }
+            },
+            burstMinDelay: 1,
+            burstMaxDelay: 1
+        )
+
+        service.start()
+        service.performHeartbeat()
+        let delayStarted = await waitUntil {
+            sleeperContinuation != nil
+        }
+        XCTAssertTrue(delayStarted)
+
+        service.stopForPanic()
+        sleeperContinuation?.resume()
+        try? await Task.sleep(nanoseconds: 20_000_000)
+
+        XCTAssertEqual(sendCount, 0)
+        XCTAssertEqual(scheduler.timers.first?.invalidateCallCount, 1)
     }
 
     func test_broadcastPresence_skipsSendWhenNoRelaysAreAvailable() async throws {
@@ -191,7 +227,7 @@ final class GeohashPresenceServiceTests: XCTestCase {
     }
 
     private func waitUntil(
-        timeout: TimeInterval = 1.0,
+        timeout: TimeInterval = TestConstants.settleTimeout,
         condition: @escaping @MainActor () -> Bool
     ) async -> Bool {
         let deadline = Date().addingTimeInterval(timeout)

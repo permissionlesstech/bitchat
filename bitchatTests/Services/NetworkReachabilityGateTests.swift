@@ -69,25 +69,45 @@ final class NetworkReachabilityGateTests: XCTestCase {
         XCTAssertNil(d.pendingRemaining(at: t0.addingTimeInterval(2.5)))
     }
 
-    func test_monitor_duplicateUpdatesDoNotPostponeOfflineCommit() async {
-        let monitor = NWPathReachabilityMonitor(debounceInterval: 1.0)
+    /// Wiring only: a duplicate mid-window still yields exactly one committed
+    /// `false`, published through the monitor's debounce.
+    ///
+    /// This deliberately makes no assertion about *when* the flush fires. It
+    /// used to bound elapsed wall-clock time at 1.4 s to prove the deadline was
+    /// not restarted, which flaked on loaded CI runners — one observed run took
+    /// 3.75 s, because `Task.sleep` and the `asyncAfter` flush are both real
+    /// time and neither is bounded above on a busy machine. No wall-clock bound
+    /// can distinguish "deadline preserved" from "runner is slow", so the timing
+    /// property is asserted where it is computable instead:
+    /// `test_debounce_duplicateObservationsPreservePendingDeadline` drives
+    /// `ReachabilityDebounce` with injected timestamps and checks
+    /// `pendingRemaining` directly.
+    ///
+    /// The clock is injected here so the debounce arithmetic is deterministic
+    /// even though the flush itself is scheduled in real time.
+    func test_monitor_duplicateUpdatesCommitOnceThroughTheDebounce() async {
+        let clock = MutableDate(now: Date(timeIntervalSince1970: 1_784_000_000))
+        let monitor = NWPathReachabilityMonitor(
+            debounceInterval: 0.2,
+            now: { clock.now }
+        )
         var received: [Bool] = []
         let cancellable = monitor.reachabilityPublisher.sink { received.append($0) }
         defer { cancellable.cancel() }
 
-        let start = Date()
         monitor.ingest(reachable: false)
-        try? await Task.sleep(nanoseconds: 500_000_000)
-        // Duplicate unsatisfied update mid-window (e.g. interface detail change
-        // while still offline) must not restart the debounce window.
+        // Duplicate unsatisfied update mid-window (e.g. an interface detail
+        // change while still offline).
+        clock.now = clock.now.addingTimeInterval(0.1)
         monitor.ingest(reachable: false)
+        // Past the original deadline, so the scheduled flush commits.
+        clock.now = clock.now.addingTimeInterval(0.2)
 
-        let committed = await waitUntil(timeout: 2.0) { !received.isEmpty }
+        // Generous: this is a liveness check, not a latency bound. A real
+        // regression — never committing — still fails, just later.
+        let committed = await waitUntil(timeout: 10.0) { !received.isEmpty }
         XCTAssertTrue(committed)
         XCTAssertEqual(received, [false])
-        // The flush must fire at the original ~1.0s deadline, not ~1.5s
-        // (a full interval after the duplicate).
-        XCTAssertLessThan(Date().timeIntervalSince(start), 1.4)
     }
 
     // MARK: - Service gating
@@ -179,7 +199,7 @@ final class NetworkReachabilityGateTests: XCTestCase {
     }
 
     private func waitUntil(
-        timeout: TimeInterval = 1.0,
+        timeout: TimeInterval = TestConstants.settleTimeout,
         condition: @escaping @MainActor () -> Bool
     ) async -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
@@ -213,6 +233,7 @@ private final class ControllableReachabilityMonitor: NetworkReachabilityMonitori
         subject.removeDuplicates().dropFirst().eraseToAnyPublisher()
     }
     func start() { startCalled = true }
+    func stop() { startCalled = false }
     func set(_ reachable: Bool) { subject.send(reachable) }
 }
 
@@ -237,4 +258,14 @@ private final class GateMockRelayController: NetworkActivationRelayControlling {
 private final class GateMockProxyController: NetworkActivationProxyControlling {
     private(set) var proxyModes: [Bool] = []
     func setProxyMode(useTor: Bool) { proxyModes.append(useTor) }
+}
+
+/// Controllable clock, so debounce arithmetic is deterministic even where the
+/// flush itself is scheduled in real time.
+private final class MutableDate: @unchecked Sendable {
+    var now: Date
+
+    init(now: Date) {
+        self.now = now
+    }
 }

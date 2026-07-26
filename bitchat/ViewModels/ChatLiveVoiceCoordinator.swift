@@ -10,6 +10,7 @@ import Foundation
 @MainActor
 protocol ChatLiveVoiceContext: AnyObject {
     var nickname: String { get }
+    var myPeerID: PeerID { get }
     var selectedPrivateChatPeer: PeerID? { get }
     /// Whether the public mesh timeline is what's on screen (autoplay gate
     /// for public bursts).
@@ -30,6 +31,12 @@ protocol ChatLiveVoiceContext: AnyObject {
     func upsertPublicMeshMessage(_ message: BitchatMessage)
     @discardableResult
     func removePrivateMessage(withID messageID: String) -> BitchatMessage?
+    /// Records and sends the finalized note's read receipt after a live
+    /// bubble adopts its wire-derivable message ID.
+    func hasSentReadReceipt(_ messageID: String) -> Bool
+    @discardableResult
+    func markReadReceiptSent(_ messageID: String) -> Bool
+    func sendMeshReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID)
     /// Removes a message from whichever conversation holds it.
     func removeMessage(withID messageID: String, cleanupFile: Bool)
     /// Publishes who is currently talking live in the public mesh channel
@@ -226,6 +233,21 @@ final class ChatLiveVoiceCoordinator {
         assemblies.values.contains { $0.messageID == message.id }
     }
 
+    /// Stop every live file handle/player before the panic media directory is
+    /// removed. This prevents an in-flight assembly from continuing to write
+    /// through an unlinked file after the wipe returns.
+    func resetForPanic() {
+        for assembly in Array(assemblies.values) {
+            cancelAssembly(assembly)
+        }
+        for player in drainingPlayers.values {
+            player.stop()
+        }
+        drainingPlayers.removeAll(keepingCapacity: false)
+        finishedBursts.removeAll(keepingCapacity: false)
+        updatePublicTalkerIndicator()
+    }
+
     /// Called for every inbound private message: when it is the finalized
     /// voice note of a burst we assembled (matched by burst ID in the file
     /// name), swap it into the existing live bubble and report `true` so the
@@ -257,8 +279,16 @@ final class ChatLiveVoiceCoordinator {
         guard let entry = finishedBursts.first(where: { matches($0.key) }) else { return false }
         let finished = entry.value
 
+        // A DM live bubble starts before the finalized file exists and
+        // therefore has a receiver-local random ID. Adopt the finalized
+        // message's deterministic ID so delivery/read ACKs address the same
+        // row as the sender's media placeholder. Public notes retain their
+        // live-bubble ID because public transfers have no private receipts.
+        let replacementID = finished.scope == .directMessage
+            ? message.id
+            : finished.messageID
         let replacement = BitchatMessage(
-            id: finished.messageID,
+            id: replacementID,
             sender: message.sender,
             content: message.content,
             timestamp: finished.messageTimestamp,
@@ -272,7 +302,31 @@ final class ChatLiveVoiceCoordinator {
         )
         switch finished.scope {
         case .directMessage:
+            // Capture read state before rekeying. The user may have read the
+            // live bubble and navigated away before the finalized .m4a lands.
+            let shouldSendAdoptedReadReceipt =
+                context.hasSentReadReceipt(finished.messageID)
+                || context.selectedPrivateChatPeer == finished.peerID
+
+            // Insert first so replacing the only row in a DM never
+            // transiently deletes its conversation, unread state, or current
+            // selection. Then remove the receiver-local live-bubble alias.
             context.upsertPrivateMessage(replacement, in: finished.peerID)
+            if replacementID != finished.messageID {
+                context.removePrivateMessage(withID: finished.messageID)
+            }
+            // The live bubble may already have emitted a receiver-local READ
+            // before the sender created its finalized media row. Re-emit once
+            // for the adopted stable ID now that the file has arrived.
+            if shouldSendAdoptedReadReceipt,
+               context.markReadReceiptSent(replacementID) {
+                let receipt = ReadReceipt(
+                    originalMessageID: replacementID,
+                    readerID: context.myPeerID,
+                    readerNickname: context.nickname
+                )
+                context.sendMeshReadReceipt(receipt, to: finished.peerID)
+            }
         case .publicMesh:
             context.upsertPublicMeshMessage(replacement)
         }

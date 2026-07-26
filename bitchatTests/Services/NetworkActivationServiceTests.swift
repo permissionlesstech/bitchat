@@ -63,7 +63,7 @@ final class NetworkActivationServiceTests: XCTestCase {
         context.service.start()
         context.service.setUserTorEnabled(false)
 
-        wait(for: [notified], timeout: 1.0)
+        wait(for: [notified], timeout: TestConstants.negativeWaitWindow)
         context.notificationCenter.removeObserver(token)
 
         XCTAssertFalse(context.service.userTorEnabled)
@@ -91,9 +91,114 @@ final class NetworkActivationServiceTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(context.relayController.connectCallCount, 1)
     }
 
+    func test_stopForPanic_synchronouslyStopsAndIgnoresPublisherUpdates() async {
+        let context = makeService(permission: .authorized, favorites: [])
+
+        context.service.start()
+        context.service.stopForPanic()
+        let connectCountAfterStop = context.relayController.connectCallCount
+        let startCountAfterStop = context.torController.startIfNeededCallCount
+
+        context.favoritesSubject.send([Data([0x01])])
+        context.reachability.set(false)
+        context.reachability.set(true)
+        try? await Task.sleep(nanoseconds: 30_000_000)
+
+        XCTAssertFalse(context.service.activationAllowed)
+        XCTAssertEqual(context.reachability.stopCallCount, 1)
+        XCTAssertEqual(context.torController.autoStartAllowedValues.last, false)
+        XCTAssertEqual(context.proxyController.proxyModes.last, false)
+        XCTAssertGreaterThanOrEqual(
+            context.torController.shutdownCompletelyCallCount,
+            1
+        )
+        XCTAssertGreaterThanOrEqual(
+            context.relayController.disconnectCallCount,
+            1
+        )
+        XCTAssertEqual(
+            context.relayController.connectCallCount,
+            connectCountAfterStop
+        )
+        XCTAssertEqual(
+            context.torController.startIfNeededCallCount,
+            startCountAfterStop
+        )
+    }
+
+    func test_start_afterPanicStop_reestablishesSubscriptions() {
+        let context = makeService(permission: .authorized, favorites: [])
+
+        context.service.start()
+        context.service.stopForPanic()
+        context.service.start()
+
+        XCTAssertTrue(context.service.activationAllowed)
+        XCTAssertEqual(context.reachability.startCallCount, 2)
+        XCTAssertEqual(context.relayController.connectCallCount, 2)
+    }
+
+    /// Teleporting into a geohash needs no location permission, so someone who
+    /// denied location and has no mutual favorites could previously sit in a
+    /// channel that never connected: the gate suppressed Tor and the relays,
+    /// and nothing explained why.
+    func test_start_enablesNetworkForALocationChannelWithoutPermissionOrFavorites() {
+        let context = makeService(
+            permission: .denied,
+            favorites: [],
+            selectedChannel: .location(GeohashChannel(level: .city, geohash: "u4pruy"))
+        )
+
+        context.service.start()
+
+        XCTAssertTrue(context.service.activationAllowed)
+        XCTAssertEqual(context.torController.startIfNeededCallCount, 1)
+        XCTAssertEqual(context.relayController.connectCallCount, 1)
+    }
+
+    func test_selectedChannelPublisher_activatesOnEnteringALocationChannel() async {
+        let channelSubject = CurrentValueSubject<ChannelID, Never>(.mesh)
+        let context = makeService(
+            permission: .denied,
+            favorites: [],
+            selectedChannelSubject: channelSubject
+        )
+
+        context.service.start()
+        XCTAssertFalse(context.service.activationAllowed)
+
+        channelSubject.send(.location(GeohashChannel(level: .city, geohash: "u4pruy")))
+
+        let activated = await waitUntil { context.service.activationAllowed }
+        XCTAssertTrue(activated)
+    }
+
+    /// Leaving the channel must close the gate again, or the exception would
+    /// quietly become permanent for the rest of the session.
+    func test_selectedChannelPublisher_deactivatesOnReturningToMesh() async {
+        let channelSubject = CurrentValueSubject<ChannelID, Never>(
+            .location(GeohashChannel(level: .city, geohash: "u4pruy"))
+        )
+        let context = makeService(
+            permission: .denied,
+            favorites: [],
+            selectedChannelSubject: channelSubject
+        )
+
+        context.service.start()
+        XCTAssertTrue(context.service.activationAllowed)
+
+        channelSubject.send(.mesh)
+
+        let deactivated = await waitUntil { !context.service.activationAllowed }
+        XCTAssertTrue(deactivated)
+    }
+
     private func makeService(
         permission: LocationChannelManager.PermissionState,
-        favorites: Set<Data>
+        favorites: Set<Data>,
+        selectedChannel: ChannelID = .mesh,
+        selectedChannelSubject: CurrentValueSubject<ChannelID, Never>? = nil
     ) -> NetworkActivationTestContext {
         let suiteName = "NetworkActivationServiceTests-\(UUID().uuidString)"
         let storage = UserDefaults(suiteName: suiteName)!
@@ -101,9 +206,12 @@ final class NetworkActivationServiceTests: XCTestCase {
 
         let permissionSubject = CurrentValueSubject<LocationChannelManager.PermissionState, Never>(permission)
         let favoritesSubject = CurrentValueSubject<Set<Data>, Never>(favorites)
+        let channelSubject = selectedChannelSubject
+            ?? CurrentValueSubject<ChannelID, Never>(selectedChannel)
         let torController = MockNetworkActivationTorController()
         let relayController = MockNetworkActivationRelayController()
         let proxyController = MockNetworkActivationProxyController()
+        let reachability = MockNetworkActivationReachability()
         let notificationCenter = NotificationCenter()
         let service = NetworkActivationService(
             storage: storage,
@@ -111,7 +219,12 @@ final class NetworkActivationServiceTests: XCTestCase {
             mutualFavoritesPublisher: favoritesSubject.eraseToAnyPublisher(),
             permissionProvider: { permissionSubject.value },
             mutualFavoritesProvider: { favoritesSubject.value },
-            reachabilityMonitor: AlwaysReachableMonitor(),
+            selectedChannelPublisher: channelSubject.eraseToAnyPublisher(),
+            locationChannelSelectedProvider: {
+                if case .location = channelSubject.value { return true }
+                return false
+            },
+            reachabilityMonitor: reachability,
             torController: torController,
             relayController: relayController,
             proxyController: proxyController,
@@ -121,6 +234,7 @@ final class NetworkActivationServiceTests: XCTestCase {
             service: service,
             storage: storage,
             favoritesSubject: favoritesSubject,
+            reachability: reachability,
             torController: torController,
             relayController: relayController,
             proxyController: proxyController,
@@ -129,7 +243,7 @@ final class NetworkActivationServiceTests: XCTestCase {
     }
 
     private func waitUntil(
-        timeout: TimeInterval = 1.0,
+        timeout: TimeInterval = TestConstants.settleTimeout,
         condition: @escaping @MainActor () -> Bool
     ) async -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
@@ -148,10 +262,36 @@ private struct NetworkActivationTestContext {
     let service: NetworkActivationService
     let storage: UserDefaults
     let favoritesSubject: CurrentValueSubject<Set<Data>, Never>
+    let reachability: MockNetworkActivationReachability
     let torController: MockNetworkActivationTorController
     let relayController: MockNetworkActivationRelayController
     let proxyController: MockNetworkActivationProxyController
     let notificationCenter: NotificationCenter
+}
+
+@MainActor
+private final class MockNetworkActivationReachability:
+    NetworkReachabilityMonitoring {
+    private let subject = CurrentValueSubject<Bool, Never>(true)
+    private(set) var startCallCount = 0
+    private(set) var stopCallCount = 0
+
+    var isReachable: Bool { subject.value }
+    var reachabilityPublisher: AnyPublisher<Bool, Never> {
+        subject.removeDuplicates().dropFirst().eraseToAnyPublisher()
+    }
+
+    func start() {
+        startCallCount += 1
+    }
+
+    func stop() {
+        stopCallCount += 1
+    }
+
+    func set(_ reachable: Bool) {
+        subject.send(reachable)
+    }
 }
 
 @MainActor

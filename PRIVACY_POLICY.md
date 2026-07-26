@@ -17,12 +17,12 @@ bitchat is designed for private, account-free communication. This policy describ
 
 1. **Identity and cryptographic keys**
    - Noise, signing, group, prekey, and optional Nostr identity material is generated locally.
-   - Secret keys are stored in the system keychain. Public keys are shared when required for messaging, verification, groups, or Nostr events.
-   - Keys remain until they are rotated, removed by the relevant feature, erased with panic wipe, or removed with the app.
+   - Secret keys are stored in the system keychain as device-only items. Public keys are shared when required for messaging, verification, groups, or Nostr events.
+   - Keys remain until they are rotated, removed by the relevant feature, or erased with panic wipe. Because operating-system keychains can outlive an uninstall, bitchat records a non-secret install marker and deletes surviving app keys before use after a later reinstall.
 
 2. **Nickname, preferences, and relationships**
    - Your nickname, settings, favorites, petnames, read-receipt identifiers, and bounded operational metadata are stored locally.
-   - The share extension briefly places content you choose to share in the app-group preferences so the main app can import it.
+   - The share extension can retain one item you choose to share in the app-group preferences for up to 24 hours. The app shows the destination and a preview for review; it does not send the item automatically. The item is cleared when you add it to the composer, cancel, panic-wipe, or it expires.
 
 3. **Private group state**
    - Group names, rosters, creator identity, and key epoch are stored as protected files in Application Support.
@@ -34,13 +34,13 @@ bitchat is designed for private, account-free communication. This policy describ
    - A panic wipe deletes both stores.
 
 5. **Recent public mesh messages and notices**
-   - Signed public mesh messages may be kept in a protected local gossip archive for up to 15 minutes so they can cross mesh partitions and survive a short relaunch.
+   - Signed public mesh messages may be kept in a protected local gossip archive for up to 6 hours so they can cross mesh partitions and survive a relaunch.
    - Public bulletin-board posts and deletion tombstones persist until the post's author-selected expiry, at most seven days. Both stores are bounded and panic-wipeable.
    - These items are public to the mesh or board where they are posted; they are not confidential messages.
 
 6. **Media attachments**
    - Voice notes and images you send or receive can be stored under Application Support so they remain playable while referenced by the app.
-   - Incoming media is subject to a 100 MB quota with oldest-file eviction. Media is deleted by panic wipe or app removal; some outgoing media can otherwise remain on disk.
+   - Incoming media is subject to a 100 MB quota with oldest-file eviction. All stored media, sent and received, is also deleted once it is more than seven days old, and immediately by panic wipe or app removal.
 
 7. **Optional location-channel state**
    - Your selected geohash channel, bookmarks, teleport flags, and bookmark display names are stored locally so the UI can restore them.
@@ -73,13 +73,15 @@ Private group members receive the group's name, roster, key epoch, and encrypted
 
 Internet-backed features are optional. When enabled or used:
 
-- Private fallback messages use encrypted NIP-17 gift wraps. Relays can observe event and network metadata but not the message plaintext.
+- Private fallback messages use BitChat's app-specific encrypted envelopes. This format is not NIP-17, NIP-44, or NIP-59 compatible. Relays can observe the recipient public-key tag, event timing and size, and network metadata, but not the message plaintext or stable sender identity.
 - Public location-channel messages, notes, notices, and presence include a geohash tag, event kind, timestamp, and a public key. A geohash reveals an approximate area; finer precision reveals a smaller area.
 - The optional mesh bridge publishes bridge-enabled public mesh messages and presence to a neighborhood rendezvous cell. Those messages are public to participants and relays for that cell. A per-message “nearby only” choice prevents that message from crossing the bridge.
 - Bridge courier drops contain opaque end-to-end encrypted envelopes and a rotating recipient tag. Relays still observe timing and network metadata.
 - A device with gateway features enabled may relay signed bridge/location traffic or opaque courier envelopes for nearby mesh devices.
 
 Nostr relays are operated by third parties. Their retention, logging, availability, and privacy practices are outside the project's control. Public events and encrypted events may remain on relays according to each relay's policy.
+
+You can add relays yourself in settings, including `.onion` addresses. Added relays are stored locally, are limited in number, and are erased by panic wipe. Tor routing is on by default; while it is off, every relay you connect to can see your IP address, including relays carrying your private messages.
 
 ## Location and Apple Services
 
@@ -103,7 +105,7 @@ Private and public features use different protections:
 
 - Mesh private sessions use Noise XX with X25519, ChaCha20-Poly1305, and SHA-256.
 - Private group messages use ChaCha20-Poly1305; group state and relevant mesh packets use Ed25519 signatures.
-- Nostr events use secp256k1 Schnorr signatures. NIP-44 v2 private payloads use secp256k1 key agreement, HKDF-SHA256, and XChaCha20-Poly1305.
+- Nostr events use secp256k1 Schnorr signatures. BitChat private envelopes use secp256k1 key agreement, HKDF-SHA256, and XChaCha20-Poly1305. The envelope format is proprietary, only interoperates with BitChat clients, and does not provide forward secrecy against later compromise of the recipient's static Nostr private key.
 - The persistent private-message outbox uses ChaCha20-Poly1305 with a key held in the keychain. Some other protected local identity state uses AES-GCM.
 - Public mesh, bridge, geohash, and board content is signed or authenticated as appropriate but is intentionally not confidential.
 
@@ -114,14 +116,17 @@ No cryptographic system can protect content after a recipient reads, copies, scr
 - **In-memory chat timelines and active connections:** until the app closes or state is cleared.
 - **Queued outgoing private messages:** until acknowledged, dropped by bounded policy, or 24 hours, whichever comes first.
 - **Opaque courier envelopes:** until handed off, evicted by bounded policy, or 24 hours, whichever comes first.
-- **Recent public mesh gossip:** up to 15 minutes.
+- **Recent public mesh gossip:** up to 6 hours.
 - **Public board posts and tombstones:** until expiry, at most seven days.
-- **Groups, favorites, preferences, identity keys, bookmarks, and media:** until removed by the feature, panic wipe, quota eviction where applicable, or app removal.
+- **Media:** seven days, or sooner by quota eviction, panic wipe, or app removal.
+- **Groups, favorites, preferences, identity keys, and bookmarks:** until removed by the feature, panic wipe, or app removal.
 - **Nostr data:** according to the policies of the relays that receive it.
 
 ## Your Controls
 
-- **Panic wipe:** Triple-tap the logo to clear local keys, sessions, preferences, groups, queues, carried mail, public archives, board data, and media managed by the app.
+- **Panic wipe:** Triple-tap the logo to synchronously cancel in-flight media work and clear local keys, sessions, preferences, groups, queues, carried mail, public archives, board data, and media managed by the app.
+- **Notification previews:** Hidden by default, so lock-screen alerts do not show message text, sender names, or geohashes. Full previews can be turned on in settings.
+- **Clearing a conversation:** Clearing the mesh timeline also deletes the recent public gossip this device had stored on disk.
 - **Feature controls:** Location channels, mesh bridge, internet gateway, and related internet behaviors can be disabled in the app. Some already-published relay data cannot be recalled.
 - **System permissions:** Bluetooth, location, microphone, camera, and photo-library access can be revoked in system settings.
 - **No account:** The project operates no account record for you to request or export.

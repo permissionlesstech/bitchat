@@ -8,25 +8,9 @@ import XCTest
 /// the pooled subscription must come up exactly once and go down exactly once.
 @MainActor
 final class NearbyNotesCounterTests: XCTestCase {
-    private var previousNotesEnabled: Any?
-
-    override func setUp() {
-        super.setUp()
-        previousNotesEnabled = UserDefaults.standard.object(forKey: "locationNotes.enabled")
-        UserDefaults.standard.set(true, forKey: "locationNotes.enabled")
-    }
-
-    override func tearDown() {
-        if let previous = previousNotesEnabled as? Bool {
-            UserDefaults.standard.set(previous, forKey: "locationNotes.enabled")
-        } else {
-            UserDefaults.standard.removeObject(forKey: "locationNotes.enabled")
-        }
-        super.tearDown()
-    }
-
     func test_counterOnlySubscribesAfterReveal_countsUnexpiredNotes_andUnsubscribesOnDeactivate() async throws {
         let relays = SubscriptionRecorder()
+        let settings = LocationNotesSettingsStub()
         let locationManager = try await makeAuthorizedLocationManager()
         let buildingGeohash = try XCTUnwrap(
             locationManager.availableChannels.first(where: { $0.level == .building })?.geohash
@@ -35,7 +19,9 @@ final class NearbyNotesCounterTests: XCTestCase {
         let counter = NearbyNotesCounter(
             locationManager: locationManager,
             managerFactory: { LocationNotesManager(geohash: $0, dependencies: relays.dependencies) },
-            releaseManager: { $0?.cancel() }
+            releaseManager: { $0?.cancel() },
+            locationNotesEnabled: { settings.enabled },
+            locationNotesSettings: settings.changes
         )
 
         counter.activate()
@@ -93,11 +79,14 @@ final class NearbyNotesCounterTests: XCTestCase {
 
     func test_permissionRevocation_releasesBuildingSubscriptionDespiteCachedChannels() async throws {
         let relays = SubscriptionRecorder()
+        let settings = LocationNotesSettingsStub()
         let locationManager = try await makeAuthorizedLocationManager()
         let counter = NearbyNotesCounter(
             locationManager: locationManager,
             managerFactory: { LocationNotesManager(geohash: $0, dependencies: relays.dependencies) },
-            releaseManager: { $0?.cancel() }
+            releaseManager: { $0?.cancel() },
+            locationNotesEnabled: { settings.enabled },
+            locationNotesSettings: settings.changes
         )
 
         counter.activate()
@@ -122,24 +111,27 @@ final class NearbyNotesCounterTests: XCTestCase {
 
     func test_locationNotesKillSwitch_releasesAndCanReacquireBuildingSubscription() async throws {
         let relays = SubscriptionRecorder()
+        let settings = LocationNotesSettingsStub()
         let locationManager = try await makeAuthorizedLocationManager()
         let counter = NearbyNotesCounter(
             locationManager: locationManager,
             managerFactory: { LocationNotesManager(geohash: $0, dependencies: relays.dependencies) },
-            releaseManager: { $0?.cancel() }
+            releaseManager: { $0?.cancel() },
+            locationNotesEnabled: { settings.enabled },
+            locationNotesSettings: settings.changes
         )
 
         counter.activate()
         counter.reveal()
         XCTAssertEqual(relays.subscribeCount, 1)
 
-        LocationNotesSettings.enabled = false
+        settings.setEnabled(false)
 
         let released = await waitUntil { relays.unsubscribeCount == 1 }
         XCTAssertTrue(released)
         XCTAssertEqual(counter.noteCount, 0)
 
-        LocationNotesSettings.enabled = true
+        settings.setEnabled(true)
 
         let reacquired = await waitUntil { relays.subscribeCount == 2 }
         XCTAssertTrue(reacquired)
@@ -149,10 +141,13 @@ final class NearbyNotesCounterTests: XCTestCase {
 
     func test_checkNotesHint_requiresAuthorizedLocationPermission() {
         let relays = SubscriptionRecorder()
+        let settings = LocationNotesSettingsStub()
         let counter = NearbyNotesCounter(
             locationManager: makeBareLocationManager(),
             managerFactory: { LocationNotesManager(geohash: $0, dependencies: relays.dependencies) },
-            releaseManager: { $0?.cancel() }
+            releaseManager: { $0?.cancel() },
+            locationNotesEnabled: { settings.enabled },
+            locationNotesSettings: settings.changes
         )
 
         // An unauthorized install must never see the hint: the tap can't
@@ -164,9 +159,9 @@ final class NearbyNotesCounterTests: XCTestCase {
         XCTAssertTrue(counter.offersRevealHint(permissionState: .authorized))
 
         // The app-info kill switch hides it too.
-        LocationNotesSettings.enabled = false
+        settings.setEnabled(false)
         XCTAssertFalse(counter.offersRevealHint(permissionState: .authorized))
-        LocationNotesSettings.enabled = true
+        settings.setEnabled(true)
 
         // Once revealed, the hint yields to the live strip and count.
         counter.reveal()
@@ -397,7 +392,7 @@ final class NearbyNotesCounterTests: XCTestCase {
     }
 
     private func waitUntil(
-        timeout: TimeInterval = 1.0,
+        timeout: TimeInterval = TestConstants.settleTimeout,
         condition: @escaping @MainActor () -> Bool
     ) async -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
@@ -408,6 +403,21 @@ final class NearbyNotesCounterTests: XCTestCase {
             try? await Task.sleep(nanoseconds: 10_000_000)
         }
         return condition()
+    }
+}
+
+@MainActor
+private final class LocationNotesSettingsStub {
+    private let changesSubject = PassthroughSubject<Void, Never>()
+    private(set) var enabled = true
+
+    var changes: AnyPublisher<Void, Never> {
+        changesSubject.eraseToAnyPublisher()
+    }
+
+    func setEnabled(_ enabled: Bool) {
+        self.enabled = enabled
+        changesSubject.send(())
     }
 }
 
