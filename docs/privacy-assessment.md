@@ -26,12 +26,17 @@ Signed announces can expose:
 
 - Nickname, persistent Noise public key, and Ed25519 signing public key
 - Capability flags
-- A bounded set of short direct-neighbor identifiers
 - A coarse rendezvous geohash when the bridge capability is enabled
+
+Announces no longer advertise this device's direct neighbours. That TLV carried up to ten peer IDs, so a single passive receiver could reconstruct the local adjacency graph — who is standing next to whom — with no need for multiple receivers or signal-strength trilateration. It is off by default (`TransportConfig.announceIncludesDirectNeighbors`). Neighbour lists from other peers are still parsed, so a mixed network behaves sensibly. The cost is source routing: its adjacency map comes from these lists, so directed traffic falls back to flooding, which is already the documented fallback whenever a route fails.
 
 The app does not advertise the device's assigned name. iOS manages BLE address randomization; bitchat does not attempt to create a stable MAC address.
 
 That randomization does not deliver the unlinkability it might suggest, because the application layer publishes stable identifiers above it. The 8-byte peer ID in every packet header is the first 8 bytes of the Noise static key fingerprint, so it does not rotate; announces carry the static keys themselves; and the fixed service UUID makes any bitchat device detectable as such by a passive scanner. A receiver in radio range can therefore recognise a specific device across sessions and locations, and detect that the app is in use at all. RSSI, timing, traffic volume, and radio fingerprints remain observable as well.
+
+Public broadcasts are originated with a TTL drawn from a range rather than always at the maximum. A fixed maximum made `ttl == default` a reliable "this device wrote it" marker to any direct listener — disclosing authorship, not merely presence. Lower draws are ambiguous between an origin and a relay, at the cost of fewer hops for some messages. Announces keep the fixed TTL, because link binding treats a maximum-TTL announce as a direct link and an announce already identifies its sender.
+
+Payload length remains observable for most traffic: only Noise frames are padded, and the padding itself is inside the signed bytes, so widening its coverage or fixing its length-marker gap is a coordinated cross-platform change rather than a local one.
 
 Ingress validates announce structure, sender binding, signatures, payload sizes, and freshness. Current-link Noise authentication is required before destructive courier handoff or strict directed delivery. Floods, queues, fragments, ingress work, and per-peer state are bounded.
 

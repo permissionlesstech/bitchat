@@ -6,6 +6,50 @@ enum TransportConfig {
     // BLE / Protocol
     static let bleDefaultFragmentSize: Int = 469            // ~512 MTU minus protocol overhead
     static let messageTTLDefault: UInt8 = 7                 // Default TTL for mesh flooding
+
+    /// TTL range a public broadcast is originated with.
+    ///
+    /// Originating every message at the maximum makes `ttl == messageTTLDefault`
+    /// a reliable "this device wrote it" marker for any direct listener, which
+    /// tells a passive observer who *said* a thing rather than merely who is
+    /// present. Drawing from a range makes the lower values ambiguous between an
+    /// origin and a relay: in a dense graph relays already clamp broadcasts to
+    /// 5, so an origin that emits 5 is indistinguishable from relayed traffic,
+    /// and in a sparse chain a 6 could be an origin or one hop from a 7.
+    ///
+    /// The cost is reach: a message originated at 5 crosses two fewer hops than
+    /// one at 7. The upper bound stays at the default so the common case is
+    /// unchanged, and the floor is deliberately not lower than the dense-graph
+    /// relay clamp — going below it would cost reach without buying ambiguity
+    /// that clamp does not already provide.
+    ///
+    /// Announces are deliberately excluded: the link-binding paths treat
+    /// `ttl == messageTTLDefault` on an announce as "direct link", and an
+    /// announce's sender ID already identifies the device anyway, so there is
+    /// nothing to hide and something to break.
+    static let broadcastOriginTTLRange: ClosedRange<UInt8> = 5...7
+
+    /// Whether signed announces advertise this device's direct neighbours.
+    ///
+    /// The neighbour TLV carries up to ten 8-byte peer IDs, so a *single*
+    /// passive receiver can reconstruct the local adjacency graph — who is
+    /// standing next to whom — without needing several receivers or RSSI
+    /// trilateration. For a crowd, that is the most sensitive thing the radio
+    /// layer discloses, and unlike the identity keys it is not needed for the
+    /// protocol to work.
+    ///
+    /// Turning it off costs source routing. `MeshTopologyTracker` builds its
+    /// adjacency map from these lists, and `computeRoute` needs that map, so
+    /// with every device silent there are no routes to compute and directed
+    /// traffic falls back to flooding — which is the documented fallback and is
+    /// already what happens whenever a route fails. Expect more airtime for
+    /// directed sends in dense meshes, and no correctness change.
+    ///
+    /// Kept as a constant rather than a user setting because it is a protocol
+    /// trade-off, not a preference: flipping it back is a one-line change, and
+    /// receiving peers' lists is unaffected either way, so a mixed network
+    /// behaves sensibly during any transition.
+    static let announceIncludesDirectNeighbors = false
     static let bleMaxInFlightAssemblies: Int = 128          // Cap concurrent fragment assemblies
     static let bleHighDegreeThreshold: Int = 6              // For adaptive TTL/probabilistic relays
     static let bleMaxConcurrentTransfers: Int = 2           // Limit simultaneous large media sends

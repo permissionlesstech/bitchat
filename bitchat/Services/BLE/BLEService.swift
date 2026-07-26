@@ -869,7 +869,9 @@ final class BLEService: NSObject {
             timestamp: sendTimestampMs,
             payload: Data(content.utf8),
             signature: nil,
-            ttl: messageTTL
+            // Not the fixed maximum: that would mark every message this device
+            // wrote as originating here, to any direct listener.
+            ttl: BLEOriginTTLPolicy.originTTL()
         )
         guard let signedPacket = noiseService.signPacket(basePacket) else {
             SecureLogger.error("❌ Failed to sign public message", category: .security)
@@ -2892,7 +2894,12 @@ final class BLEService: NSObject {
         
         let (connectedPeerIDs, advertisedCapabilities, advertisedBridgeCell): ([Data], PeerCapabilities, String?) = collectionsQueue.sync {
             (
-                peerRegistry.connectedRoutingData,
+                // Publishing the neighbour list hands the local adjacency graph
+                // to a single passive receiver; see
+                // TransportConfig.announceIncludesDirectNeighbors.
+                TransportConfig.announceIncludesDirectNeighbors
+                    ? peerRegistry.connectedRoutingData
+                    : [],
                 PeerCapabilities.localSupported.union(runtimeCapabilities),
                 runtimeCapabilities.contains(.bridge) ? localBridgeGeohash : nil
             )
