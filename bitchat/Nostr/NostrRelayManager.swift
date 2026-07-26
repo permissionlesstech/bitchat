@@ -76,6 +76,18 @@ struct NostrRelayManagerDependencies {
     /// Uniform random value in [0, 1) used to jitter reconnect backoff.
     /// Injectable so tests can pin or sweep the jitter deterministically.
     var jitterUnit: () -> Double
+    /// Where relay-settings changes are observed. Injectable so a test can use
+    /// its own center instead of racing the process-wide one.
+    var notificationCenter: NotificationCenter = .default
+    /// Relays added by hand, merged with the built-in set. Injectable so tests
+    /// do not have to write to shared preferences.
+    var customRelays: () -> [String] = { NostrRelaySettings.customRelays() }
+    /// Whether a location channel is currently open. Mirrors the third arm of
+    /// `NetworkActivationService`'s gate: teleporting into a geohash needs no
+    /// location permission, and without this the relays would stay filtered out
+    /// for someone who denied location and has no mutual favorites.
+    var isInLocationChannel: () -> Bool = { false }
+    var selectedChannelPublisher: AnyPublisher<ChannelID, Never> = Empty().eraseToAnyPublisher()
 }
 
 private extension NostrRelayManagerDependencies {
@@ -104,7 +116,12 @@ private extension NostrRelayManagerDependencies {
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: action)
             },
             now: Date.init,
-            jitterUnit: { Double.random(in: 0..<1) }
+            jitterUnit: { Double.random(in: 0..<1) },
+            isInLocationChannel: {
+                if case .location = LocationChannelManager.shared.selectedChannel { return true }
+                return false
+            },
+            selectedChannelPublisher: LocationChannelManager.shared.$selectedChannel.eraseToAnyPublisher()
         )
     }
 }
@@ -134,15 +151,40 @@ final class NostrRelayManager: ObservableObject {
         var nextReconnectTime: Date?
     }
     
-    // Default relays carry NIP-17 gift wraps, so avoid relays known to reject kind 1059.
-    private static let defaultRelays = [
+    // Built-in relays carry private-message envelopes, so avoid relays known to
+    // reject the kinds they use.
+    private static let builtInRelays = [
         "wss://relay.damus.io",
         "wss://nos.lol",
         "wss://relay.primal.net",
         "wss://offchain.pub"
         // For local testing, you can add: "ws://localhost:8080"
     ]
-    private static let defaultRelaySet = Set(defaultRelays.compactMap { NostrRelayURL.normalized($0) })
+    private static let builtInRelaySet = Set(builtInRelays.compactMap { NostrRelayURL.normalized($0) })
+
+    /// The relays private messages target: the built-in set plus any added by
+    /// hand. Four hardcoded hostnames are four names for a censor to block, so
+    /// the added ones are what keeps this reachable without a new build.
+    ///
+    /// Cached rather than computed per access: `allowedRelayList` consults the
+    /// set once per candidate URL, and recomputing would mean a `UserDefaults`
+    /// read and a fresh normalize-and-dedupe pass inside that loop. Refreshed
+    /// from `reloadDefaultRelays()` on construction and whenever the relay
+    /// settings change.
+    private var defaultRelays: [String] = []
+    private var defaultRelaySet: Set<String> = []
+
+    private func reloadDefaultRelays() {
+        var seen = Set<String>()
+        defaultRelays = (Self.builtInRelays + dependencies.customRelays())
+            .compactMap { NostrRelayURL.normalized($0) }
+            .filter { seen.insert($0).inserted }
+        defaultRelaySet = Set(defaultRelays)
+    }
+
+    /// Exposed so the relay settings UI can reject re-adding a built-in.
+    /// `nonisolated` because it is an immutable constant with no actor state.
+    nonisolated static var builtInRelayURLs: Set<String> { builtInRelaySet }
     
     @Published private(set) var relays: [Relay] = []
     @Published private(set) var isConnected = false
@@ -276,37 +318,15 @@ final class NostrRelayManager: ObservableObject {
     // off-main; the yield stays cheap.
     private let inboundRouter = InboundFrameRouter()
 
-    init() {
-        self.dependencies = .live()
-        hasMutualFavorites = dependencies.hasMutualFavorites()
-        hasLocationPermission = dependencies.hasLocationPermission()
-        applyDefaultRelayPolicy(force: true)
-        // Deterministic JSON shape for outbound requests
-        self.encoder.outputFormatting = .sortedKeys
-        dependencies.mutualFavoritesPublisher
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] favorites in
-                guard let self = self else { return }
-                self.hasMutualFavorites = !favorites.isEmpty
-                self.applyDefaultRelayPolicy()
-            }
-            .store(in: &cancellables)
-        dependencies.locationPermissionPublisher
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] state in
-                guard let self = self else { return }
-                let authorized = (state == .authorized)
-                if authorized == self.hasLocationPermission { return }
-                self.hasLocationPermission = authorized
-                self.applyDefaultRelayPolicy()
-            }
-            .store(in: &cancellables)
+    convenience init() {
+        self.init(dependencies: .live())
     }
 
     internal init(dependencies: NostrRelayManagerDependencies) {
         self.dependencies = dependencies
         hasMutualFavorites = dependencies.hasMutualFavorites()
         hasLocationPermission = dependencies.hasLocationPermission()
+        reloadDefaultRelays()
         applyDefaultRelayPolicy(force: true)
         // Deterministic JSON shape for outbound requests
         self.encoder.outputFormatting = .sortedKeys
@@ -326,6 +346,28 @@ final class NostrRelayManager: ObservableObject {
                 if authorized == self.hasLocationPermission { return }
                 self.hasLocationPermission = authorized
                 self.applyDefaultRelayPolicy()
+            }
+            .store(in: &cancellables)
+        dependencies.selectedChannelPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.applyDefaultRelayPolicy()
+            }
+            .store(in: &cancellables)
+        // Adding or removing a relay by hand changes the target set, so
+        // reconcile connections now rather than at the next send.
+        dependencies.notificationCenter
+            .publisher(for: NostrRelaySettings.didChangeNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                // Reconcile against the previous set: a removed relay is no
+                // longer in `defaultRelays`, so nothing downstream would ever
+                // close its socket or drop its queued sends.
+                let previous = self.defaultRelaySet
+                self.reloadDefaultRelays()
+                self.dropRelays(previous.subtracting(self.defaultRelaySet))
+                self.applyDefaultRelayPolicy(force: true)
             }
             .store(in: &cancellables)
     }
@@ -509,13 +551,13 @@ final class NostrRelayManager: ObservableObject {
             // event locally so it survives a slow bootstrap (queued sends flush
             // when relays connect), then kick off connection setup, which itself
             // waits for Tor readiness.
-            let targetRelays = allowedRelayList(from: relayUrls ?? Self.defaultRelays)
+            let targetRelays = allowedRelayList(from: relayUrls ?? defaultRelays)
             guard !targetRelays.isEmpty else { return }
             enqueuePendingSend(event, pendingRelays: Set(targetRelays))
             ensureConnections(to: targetRelays)
             return
         }
-        let requestedRelays = relayUrls ?? Self.defaultRelays
+        let requestedRelays = relayUrls ?? defaultRelays
         let targetRelays = allowedRelayList(from: requestedRelays)
         guard !targetRelays.isEmpty else { return }
         ensureConnections(to: targetRelays)
@@ -554,7 +596,7 @@ final class NostrRelayManager: ObservableObject {
             return
         }
 
-        let requestedRelays = relayUrls ?? Self.defaultRelays
+        let requestedRelays = relayUrls ?? defaultRelays
         let targetRelays = allowedRelayList(from: requestedRelays)
         let connectedTargets = targetRelays.compactMap { relayUrl -> (String, NostrRelayConnectionProtocol)? in
             guard let connection = connectedConnection(for: relayUrl) else { return nil }
@@ -723,7 +765,7 @@ final class NostrRelayManager: ObservableObject {
             // SecureLogger.debug("📋 Subscription filter JSON: \(messageString.prefix(200))...", category: .session)
             
             // Target specific relays if provided; else default. Filter permanently failed relays.
-            let baseUrls = relayUrls ?? Self.defaultRelays
+            let baseUrls = relayUrls ?? defaultRelays
             let urls = allowedRelayList(from: baseUrls).filter { !isPermanentlyFailed($0) }
             let requestState = SubscriptionRequestState(messageString: messageString, relayURLs: Set(urls))
             if subscriptionRequestState[id] == requestState, subscriptionStateExists(id: id, requestState: requestState) {
@@ -765,42 +807,49 @@ final class NostrRelayManager: ObservableObject {
     }
 
     private func applyDefaultRelayPolicy(force: Bool = false) {
-        let shouldAllow = hasMutualFavorites || hasLocationPermission
+        let shouldAllow = hasMutualFavorites || hasLocationPermission || dependencies.isInLocationChannel()
         if !force && shouldAllow == allowDefaultRelays { return }
         allowDefaultRelays = shouldAllow
         if shouldAllow {
             var existing = Set(relays.map { $0.url })
-            for url in Self.defaultRelays where !existing.contains(url) {
+            for url in defaultRelays where !existing.contains(url) {
                 relays.append(Relay(url: url))
                 existing.insert(url)
             }
             if dependencies.activationAllowed() {
-                ensureConnections(to: Self.defaultRelays)
+                ensureConnections(to: defaultRelays)
             }
         } else {
-            for url in Self.defaultRelays {
-                if let connection = connections[url] {
-                    connection.cancel(with: .goingAway, reason: nil)
-                }
-                connections.removeValue(forKey: url)
-                teardownRelayInboundPipeline(for: url)
-                subscriptions.removeValue(forKey: url)
-                pendingSubscriptions.removeValue(forKey: url)
-            }
-            messageQueueLock.lock()
-            for index in (0..<messageQueue.count).reversed() {
-                var item = messageQueue[index]
-                item.pendingRelays.subtract(Self.defaultRelaySet)
-                if item.pendingRelays.isEmpty {
-                    messageQueue.remove(at: index)
-                } else {
-                    messageQueue[index] = item
-                }
-            }
-            messageQueueLock.unlock()
-            relays.removeAll { Self.defaultRelaySet.contains($0.url) }
-            updateConnectionStatus()
+            dropRelays(defaultRelaySet)
         }
+    }
+
+    /// Closes and forgets a set of relays: connection, inbound pipeline,
+    /// subscriptions, queued sends addressed only to them, and the published row.
+    private func dropRelays(_ urls: Set<String>) {
+        guard !urls.isEmpty else { return }
+        for url in urls {
+            if let connection = connections[url] {
+                connection.cancel(with: .goingAway, reason: nil)
+            }
+            connections.removeValue(forKey: url)
+            teardownRelayInboundPipeline(for: url)
+            subscriptions.removeValue(forKey: url)
+            pendingSubscriptions.removeValue(forKey: url)
+        }
+        messageQueueLock.lock()
+        for index in (0..<messageQueue.count).reversed() {
+            var item = messageQueue[index]
+            item.pendingRelays.subtract(urls)
+            if item.pendingRelays.isEmpty {
+                messageQueue.remove(at: index)
+            } else {
+                messageQueue[index] = item
+            }
+        }
+        messageQueueLock.unlock()
+        relays.removeAll { urls.contains($0.url) }
+        updateConnectionStatus()
     }
 
     private func allowedRelayList(from urls: [String]) -> [String] {
@@ -808,7 +857,7 @@ final class NostrRelayManager: ObservableObject {
         var result: [String] = []
         for rawURL in urls {
             guard let url = NostrRelayURL.normalized(rawURL) else { continue }
-            if !allowDefaultRelays && Self.defaultRelaySet.contains(url) { continue }
+            if !allowDefaultRelays && defaultRelaySet.contains(url) { continue }
             if seen.insert(url).inserted {
                 result.append(url)
             }
@@ -1366,7 +1415,7 @@ final class NostrRelayManager: ObservableObject {
         isConnected = relays.contains { $0.isConnected }
         // Relay URLs are normalized before entries are created, so direct
         // set membership is sound.
-        isDMRelayConnected = relays.contains { $0.isConnected && Self.defaultRelaySet.contains($0.url) }
+        isDMRelayConnected = relays.contains { $0.isConnected && defaultRelaySet.contains($0.url) }
     }
     
     /// A relay that drops before sending EOSE must not stall initial-load

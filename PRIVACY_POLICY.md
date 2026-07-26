@@ -81,6 +81,8 @@ Internet-backed features are optional. When enabled or used:
 
 Nostr relays are operated by third parties. Their retention, logging, availability, and privacy practices are outside the project's control. Public events and encrypted events may remain on relays according to each relay's policy.
 
+You can add relays yourself in settings, including `.onion` addresses. Added relays are stored locally, are limited in number, and are erased by panic wipe. Tor routing is on by default; while it is off, every relay you connect to can see your IP address, including relays carrying your private messages.
+
 ## Location and Apple Services
 
 Location permission is optional and requested as when-in-use access. It is used to compute geohash channels, bridge rendezvous cells, and nearby place labels.

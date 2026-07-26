@@ -138,9 +138,67 @@ final class NetworkActivationServiceTests: XCTestCase {
         XCTAssertEqual(context.relayController.connectCallCount, 2)
     }
 
+    /// Teleporting into a geohash needs no location permission, so someone who
+    /// denied location and has no mutual favorites could previously sit in a
+    /// channel that never connected: the gate suppressed Tor and the relays,
+    /// and nothing explained why.
+    func test_start_enablesNetworkForALocationChannelWithoutPermissionOrFavorites() {
+        let context = makeService(
+            permission: .denied,
+            favorites: [],
+            selectedChannel: .location(GeohashChannel(level: .city, geohash: "u4pruy"))
+        )
+
+        context.service.start()
+
+        XCTAssertTrue(context.service.activationAllowed)
+        XCTAssertEqual(context.torController.startIfNeededCallCount, 1)
+        XCTAssertEqual(context.relayController.connectCallCount, 1)
+    }
+
+    func test_selectedChannelPublisher_activatesOnEnteringALocationChannel() async {
+        let channelSubject = CurrentValueSubject<ChannelID, Never>(.mesh)
+        let context = makeService(
+            permission: .denied,
+            favorites: [],
+            selectedChannelSubject: channelSubject
+        )
+
+        context.service.start()
+        XCTAssertFalse(context.service.activationAllowed)
+
+        channelSubject.send(.location(GeohashChannel(level: .city, geohash: "u4pruy")))
+
+        let activated = await waitUntil { context.service.activationAllowed }
+        XCTAssertTrue(activated)
+    }
+
+    /// Leaving the channel must close the gate again, or the exception would
+    /// quietly become permanent for the rest of the session.
+    func test_selectedChannelPublisher_deactivatesOnReturningToMesh() async {
+        let channelSubject = CurrentValueSubject<ChannelID, Never>(
+            .location(GeohashChannel(level: .city, geohash: "u4pruy"))
+        )
+        let context = makeService(
+            permission: .denied,
+            favorites: [],
+            selectedChannelSubject: channelSubject
+        )
+
+        context.service.start()
+        XCTAssertTrue(context.service.activationAllowed)
+
+        channelSubject.send(.mesh)
+
+        let deactivated = await waitUntil { !context.service.activationAllowed }
+        XCTAssertTrue(deactivated)
+    }
+
     private func makeService(
         permission: LocationChannelManager.PermissionState,
-        favorites: Set<Data>
+        favorites: Set<Data>,
+        selectedChannel: ChannelID = .mesh,
+        selectedChannelSubject: CurrentValueSubject<ChannelID, Never>? = nil
     ) -> NetworkActivationTestContext {
         let suiteName = "NetworkActivationServiceTests-\(UUID().uuidString)"
         let storage = UserDefaults(suiteName: suiteName)!
@@ -148,6 +206,8 @@ final class NetworkActivationServiceTests: XCTestCase {
 
         let permissionSubject = CurrentValueSubject<LocationChannelManager.PermissionState, Never>(permission)
         let favoritesSubject = CurrentValueSubject<Set<Data>, Never>(favorites)
+        let channelSubject = selectedChannelSubject
+            ?? CurrentValueSubject<ChannelID, Never>(selectedChannel)
         let torController = MockNetworkActivationTorController()
         let relayController = MockNetworkActivationRelayController()
         let proxyController = MockNetworkActivationProxyController()
@@ -159,6 +219,11 @@ final class NetworkActivationServiceTests: XCTestCase {
             mutualFavoritesPublisher: favoritesSubject.eraseToAnyPublisher(),
             permissionProvider: { permissionSubject.value },
             mutualFavoritesProvider: { favoritesSubject.value },
+            selectedChannelPublisher: channelSubject.eraseToAnyPublisher(),
+            locationChannelSelectedProvider: {
+                if case .location = channelSubject.value { return true }
+                return false
+            },
             reachabilityMonitor: reachability,
             torController: torController,
             relayController: relayController,
