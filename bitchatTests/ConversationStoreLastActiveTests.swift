@@ -209,7 +209,6 @@ final class ConversationStoreLastActiveTests: XCTestCase {
             AppRuntime.isDirectChatRestorable(
                 peerID,
                 isPeerFavorited: { _ in false },
-                theyFavoritedUs: { _ in false },
                 hasStoredCryptographicIdentity: { _ in false },
                 isPeerBlocked: { _ in false }
             )
@@ -225,7 +224,6 @@ final class ConversationStoreLastActiveTests: XCTestCase {
             AppRuntime.isDirectChatRestorable(
                 peerID,
                 isPeerFavorited: { _ in true },
-                theyFavoritedUs: { _ in true },
                 hasStoredCryptographicIdentity: { _ in false },
                 isPeerBlocked: { _ in false }
             )
@@ -244,21 +242,37 @@ final class ConversationStoreLastActiveTests: XCTestCase {
             AppRuntime.isDirectChatRestorable(
                 peerID,
                 isPeerFavorited: { _ in true },
-                theyFavoritedUs: { _ in false },
                 hasStoredCryptographicIdentity: { _ in false },
                 isPeerBlocked: { _ in false }
             )
         )
     }
 
-    func test_peerWhoFavoritedUsIsRestorable() {
-        // The other direction of the same relaxation.
-        XCTAssertTrue(
+    func test_peerWhoOnlyFavoritedUsIsNotRestorable() {
+        // Remote state alone is not evidence we can address them. They favorited
+        // us, we never favorited them, and we hold no stored identity — the
+        // unaddressable phantom this predicate exists to refuse. Their opinion
+        // of us says nothing about whether we have a key for them.
+        XCTAssertFalse(
             AppRuntime.isDirectChatRestorable(
                 peerID,
                 isPeerFavorited: { _ in false },
-                theyFavoritedUs: { _ in true },
                 hasStoredCryptographicIdentity: { _ in false },
+                isPeerBlocked: { _ in false }
+            )
+        )
+    }
+
+    func test_geoChatIdIsNeverRestorableAsADirectChat() {
+        // A geohash channel id is not a direct chat at all, and the screen runs
+        // before the favorite term so nothing can match past it.
+        let geoChatID = PeerID(str: "nostr:01234567")
+        XCTAssertTrue(geoChatID.isGeoChat)
+        XCTAssertFalse(
+            AppRuntime.isDirectChatRestorable(
+                geoChatID,
+                isPeerFavorited: { _ in true },
+                hasStoredCryptographicIdentity: { _ in true },
                 isPeerBlocked: { _ in false }
             )
         )
@@ -272,7 +286,6 @@ final class ConversationStoreLastActiveTests: XCTestCase {
             AppRuntime.isDirectChatRestorable(
                 peerID,
                 isPeerFavorited: { _ in false },
-                theyFavoritedUs: { _ in false },
                 hasStoredCryptographicIdentity: { _ in true },
                 isPeerBlocked: { _ in false }
             )
@@ -286,7 +299,6 @@ final class ConversationStoreLastActiveTests: XCTestCase {
             AppRuntime.isDirectChatRestorable(
                 peerID,
                 isPeerFavorited: { _ in false },
-                theyFavoritedUs: { _ in false },
                 hasStoredCryptographicIdentity: { _ in true },
                 isPeerBlocked: { _ in true }
             )
@@ -307,7 +319,6 @@ final class ConversationStoreLastActiveTests: XCTestCase {
             AppRuntime.isDirectChatRestorable(
                 geoDMPeer,
                 isPeerFavorited: { _ in false },
-                theyFavoritedUs: { _ in false },
                 hasStoredCryptographicIdentity: { _ in true },
                 isPeerBlocked: { _ in false }
             )
@@ -322,7 +333,6 @@ final class ConversationStoreLastActiveTests: XCTestCase {
             AppRuntime.isDirectChatRestorable(
                 geoDMPeer,
                 isPeerFavorited: { _ in true },
-                theyFavoritedUs: { _ in false },
                 hasStoredCryptographicIdentity: { _ in false },
                 isPeerBlocked: { _ in false }
             )
@@ -336,7 +346,6 @@ final class ConversationStoreLastActiveTests: XCTestCase {
             AppRuntime.isDirectChatRestorable(
                 peerID,
                 isPeerFavorited: { _ in true },
-                theyFavoritedUs: { _ in true },
                 hasStoredCryptographicIdentity: { _ in false },
                 isPeerBlocked: { _ in true }
             )
@@ -354,7 +363,6 @@ final class ConversationStoreLastActiveTests: XCTestCase {
             AppRuntime.isDirectChatRestorable(
                 geoDMPeer,
                 isPeerFavorited: { _ in false },
-                theyFavoritedUs: { _ in false },
                 hasStoredCryptographicIdentity: { _ in false },
                 isPeerBlocked: { _ in false }
             )
@@ -374,7 +382,6 @@ final class ConversationStoreLastActiveTests: XCTestCase {
                 AppRuntime.isDirectChatRestorable(
                     $0,
                     isPeerFavorited: { _ in false },
-                    theyFavoritedUs: { _ in false },
                     hasStoredCryptographicIdentity: { _ in false },
                     isPeerBlocked: { _ in false }
                 )
@@ -467,25 +474,20 @@ final class ConversationStoreLastActiveTests: XCTestCase {
         )
     }
 
-    func test_production_unfavoritedPeerWhoStillFavoritesUsIsRestorable() {
-        // INVERTED by #1415, and the inversion worth arguing about.
-        //
+    func test_production_unfavoritedPeerWhoStillFavoritesUsIsNotRestorable() {
         // removeFavorite RETAINS a record (isFavorite: false, theyFavoritedUs:
-        // true) when the peer still favorites us. This previously refused to
-        // restore, so that a DM to a peer we deliberately unfavorited would not
-        // reopen on restart — the "is a persisted favorite" contract, added for
-        // an earlier Codex review.
+        // true) when the peer still favorites us. The resolver must key on
+        // isFavorite, not mere record existence — otherwise a DM to a peer we
+        // deliberately unfavorited reopens on restart. Regression for an
+        // earlier Codex review, and it SURVIVES the #1415 relaxation: the
+        // relaxed predicate admits our own favorite or a stored identity, and
+        // `theyFavoritedUs` is deliberately not a term, so the unfavorite still
+        // stands on its own.
         //
-        // #1415 dissolved that contract: chat entry no longer consults
-        // favorites at all, so this conversation is openable by hand and
-        // sendable through the router. Refusing to restore it would single out
-        // launch for a stricter rule than every other way in.
-        //
-        // Note the protection is largely moot in practice regardless: any peer
-        // we have actually corresponded with has a stored cryptographic
-        // identity, which admits them through the identity term whatever the
-        // favorite record says. Unfavoriting is not blocking — blocking still
-        // refuses, and that is the control for "do not reopen this".
+        // With a stored identity this peer would restore — see
+        // test_establishedNonFavoritePeerIsRestorable. That is the intended
+        // line: the durable evidence is then local capability rather than the
+        // other side's opinion of us.
         let favorites = FavoritesPersistenceService(keychain: MockKeychain())
         let noiseKey = Data((0..<32).map(UInt8.init))
         favorites.addFavorite(peerNoisePublicKey: noiseKey, peerNickname: "Alice")
@@ -497,23 +499,12 @@ final class ConversationStoreLastActiveTests: XCTestCase {
         XCTAssertNotNil(favorites.getFavoriteStatus(forPeerID: fullHexPeer.toShort()))
         XCTAssertFalse(favorites.getFavoriteStatus(forPeerID: fullHexPeer.toShort())!.isFavorite)
         XCTAssertTrue(favorites.getFavoriteStatus(forPeerID: fullHexPeer.toShort())!.theyFavoritedUs)
-        XCTAssertTrue(
-            AppRuntime.isDirectChatRestorable(
-                fullHexPeer,
-                favorites: favorites,
-                hasStoredCryptographicIdentity: { _ in false },
-                isPeerBlocked: { _ in false }
-            )
-        )
-
-        // Blocking is the control that still refuses, with everything else
-        // about this peer unchanged.
         XCTAssertFalse(
             AppRuntime.isDirectChatRestorable(
                 fullHexPeer,
                 favorites: favorites,
                 hasStoredCryptographicIdentity: { _ in false },
-                isPeerBlocked: { _ in true }
+                isPeerBlocked: { _ in false }
             )
         )
     }

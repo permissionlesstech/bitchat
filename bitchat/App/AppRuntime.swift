@@ -213,9 +213,16 @@ final class AppRuntime: ObservableObject {
     /// otherwise fall straight through `startPrivateChat` into an empty phantom
     /// DM.
     ///
-    /// Restorable iff the peer is NOT blocked and we hold durable evidence the
-    /// conversation is real: either side has favorited the other, or we have a
-    /// stored cryptographic identity for them.
+    /// Restorable iff the peer is NOT blocked and we hold durable evidence
+    /// *locally* that the conversation is addressable: we favorited them, or we
+    /// have a stored cryptographic identity for them.
+    ///
+    /// `theyFavoritedUs` is deliberately NOT a term. It is remote state, and on
+    /// its own it proves nothing about our ability to address the peer — a peer
+    /// who favorited us, whom we never favorited and hold no identity for, is
+    /// exactly the unaddressable phantom this predicate exists to refuse. It
+    /// would also override a deliberate local unfavorite on the strength of the
+    /// other side's opinion.
     ///
     /// This tracks `ChatPeerIdentityCoordinator.startPrivateChat`, which #1415
     /// relaxed — it no longer requires a mutual favorite, on the grounds that
@@ -237,28 +244,31 @@ final class AppRuntime: ObservableObject {
     /// defers loading until protected data is available and session state is
     /// in-memory, so both read empty at launch regardless of the truth.
     ///
-    /// Geohash/Nostr DMs stay excluded: a `nostr_` id's full Nostr key is
-    /// rebuilt only from inbound ephemeral events, so at launch it cannot
-    /// resolve, and `startPrivateChat` skips the handshake for geoDMs — a
-    /// phantom would open with no error at all. Their one durable anchor is a
-    /// favorite record, so for them the favorite terms decide and the identity
-    /// term is refused outright.
+    /// Geohash/Nostr ids are screened first, before any other term, so nothing
+    /// can bypass the check by matching earlier. A geoChat id is not a direct
+    /// chat at all. A geoDM's full Nostr key is rebuilt only from inbound
+    /// ephemeral events, so at launch it cannot resolve, and `startPrivateChat`
+    /// skips the handshake for geoDMs — a phantom would open with no error at
+    /// all. Its one durable anchor is OUR OWN favorite record, which carries
+    /// `peerNostrPublicKey`, so a geoDM restores on that and nothing else.
     static func isDirectChatRestorable(
         _ peerID: PeerID,
         isPeerFavorited: (PeerID) -> Bool,
-        theyFavoritedUs: (PeerID) -> Bool,
         hasStoredCryptographicIdentity: (PeerID) -> Bool,
         isPeerBlocked: (PeerID) -> Bool
     ) -> Bool {
-        // Blocked stays a veto, never one term among several.
+        // Blocked is a veto, never one term among several.
         guard !isPeerBlocked(peerID) else { return false }
-        if isPeerFavorited(peerID) || theyFavoritedUs(peerID) { return true }
-        // Explicit rather than incidental: a `nostr_` id does satisfy
-        // `isShort` (the prefix is not part of the length check), and today it
-        // misses only because the identity lookup re-attaches that prefix and
-        // no hex fingerprint starts with it. That is luck, not a rule.
-        guard !peerID.isGeoDM, !peerID.isGeoChat else { return false }
-        return hasStoredCryptographicIdentity(peerID)
+        // A geohash channel is not a direct chat.
+        guard !peerID.isGeoChat else { return false }
+        // Screened before the identity term rather than after, so no earlier
+        // match can skip it. The identity lookup does not reject these on its
+        // own merits either: a `nostr_` id satisfies `isShort` (the prefix is
+        // not part of the length check), and today it misses only because the
+        // lookup re-attaches that prefix and no hex fingerprint starts with it.
+        // Luck, not a rule.
+        if peerID.isGeoDM { return isPeerFavorited(peerID) }
+        return isPeerFavorited(peerID) || hasStoredCryptographicIdentity(peerID)
     }
 
     /// Production wiring of `isDirectChatRestorable`, extracted so the real
@@ -290,9 +300,6 @@ final class AppRuntime: ObservableObject {
             peerID,
             isPeerFavorited: {
                 favorites.getFavoriteStatus(forPeerID: $0.toShort())?.isFavorite ?? false
-            },
-            theyFavoritedUs: {
-                favorites.getFavoriteStatus(forPeerID: $0.toShort())?.theyFavoritedUs ?? false
             },
             hasStoredCryptographicIdentity: hasStoredCryptographicIdentity,
             isPeerBlocked: isPeerBlocked
