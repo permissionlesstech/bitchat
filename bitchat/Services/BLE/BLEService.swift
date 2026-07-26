@@ -325,24 +325,8 @@ final class BLEService: NSObject {
     // Route health for originated source routes (engine-confined).
     private var sourceRouteFailures = BLESourceRouteFailureCache()
 
-    // Mesh diagnostics: outstanding /ping probes keyed by nonce, plus the
-    // inbound ping budget — keyed by the ingress link (the directly connected
-    // peer that delivered the packet), since the unsigned claimed sender is
-    // spoofable — so a directed unencrypted probe cannot be turned into an
-    // amplification primitive. Both are engine-confined like the other
-    // mutable collections.
-    private struct PendingMeshPing {
-        let peerID: PeerID
-        let sentAt: Date
-        let lifecycleGeneration: UInt64
-        let completion: @MainActor (MeshPingResult?) -> Void
-        let timeout: DispatchWorkItem
-    }
-    private var pendingMeshPings: [Data: PendingMeshPing] = [:]
-    private var meshPingResponseLimiter = SyncResponseRateLimiter(
-        maxResponses: TransportConfig.meshPingInboundMaxPerLink,
-        window: TransportConfig.meshPingInboundWindowSeconds
-    )
+    // Mesh diagnostics (/ping): engine-confined probe and budget state.
+    private var meshPings = BLEMeshPingTracker()
 
     // 5. Fragment Reassembly (necessary for messages > MTU)
     private var fragmentAssemblyBuffer = BLEFragmentAssemblyBuffer()
@@ -1095,12 +1079,7 @@ final class BLEService: NSObject {
             let entries = outboundFragmentTransfers.removeAll().map {
                 (id: $0.id, items: $0.workItems)
             }
-            let pingTimeouts = pendingMeshPings.values.map(\.timeout)
-            pendingMeshPings.removeAll()
-            meshPingResponseLimiter = SyncResponseRateLimiter(
-                maxResponses: TransportConfig.meshPingInboundMaxPerLink,
-                window: TransportConfig.meshPingInboundWindowSeconds
-            )
+            let pingTimeouts = meshPings.reset()
             peerRegistry.mutate { $0.removeAll() }
             fragmentAssemblyBuffer.removeAll()
             sourceRouteFailures = BLESourceRouteFailureCache()
@@ -4815,7 +4794,7 @@ extension BLEService {
             let timeout = DispatchWorkItem { [weak self] in
                 guard let self else { return }
                 let expired = onEngine {
-                    self.pendingMeshPings.removeValue(forKey: nonce)
+                    self.meshPings.expire(nonce: nonce)
                 }
                 guard let expired else { return }
                 self.notifyUI { [weak self] in
@@ -4829,12 +4808,15 @@ extension BLEService {
                 }
             }
             onEngine {
-                self.pendingMeshPings[nonce] = PendingMeshPing(
-                    peerID: PeerID(hexData: recipientData),
-                    sentAt: Date(),
-                    lifecycleGeneration: generation,
-                    completion: completion,
-                    timeout: timeout
+                self.meshPings.register(
+                    BLEMeshPingProbe(
+                        peerID: PeerID(hexData: recipientData),
+                        sentAt: Date(),
+                        lifecycleGeneration: generation,
+                        completion: completion,
+                        timeout: timeout
+                    ),
+                    nonce: nonce
                 )
             }
             self.messageQueue.asyncAfter(
@@ -4861,7 +4843,7 @@ extension BLEService {
             return
         }
         let allowed = onEngine {
-            meshPingResponseLimiter.shouldRespond(to: linkPeerID, now: Date())
+            meshPings.shouldRespond(toLink: linkPeerID, now: Date())
         }
         guard allowed else {
             if logRateLimiter.shouldLog(key: "ping-limit:\(linkPeerID.id)") {
@@ -4888,9 +4870,8 @@ extension BLEService {
     private func handleMeshPong(_ packet: BitchatPacket, from peerID: PeerID) {
         guard packet.recipientID == myPeerIDData else { return }
         guard let pong = MeshPingPayload.decode(packet.payload) else { return }
-        let pending = onEngine { () -> PendingMeshPing? in
-            guard pendingMeshPings[pong.nonce]?.peerID == peerID else { return nil }
-            return pendingMeshPings.removeValue(forKey: pong.nonce)
+        let pending = onEngine {
+            meshPings.resolve(nonce: pong.nonce, from: peerID)
         }
         guard let pending else { return }
         pending.timeout.cancel()
