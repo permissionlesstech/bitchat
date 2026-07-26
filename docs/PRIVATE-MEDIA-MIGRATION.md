@@ -100,8 +100,16 @@ temporary `0x09` alias. Ordinary Noise messages retain their 64 KiB limit.
 
 Current Android builds cap each reassembly at 256 fragments. Depending on the
 negotiated BLE packet size and routing overhead, that is roughly 110-120 KiB,
-well below iOS's absolute inbound ceiling. Private-media v1 therefore runs the
-actual route-aware BLE fragment planner before both encrypted and consented
-legacy sends and rejects any plan above 256 fragments with a visible failure.
-This fragment-count contract, rather than a guessed byte threshold, stays
-correct as route overhead changes.
+well below iOS's absolute inbound ceiling. That cap only applies to those
+receivers, which take private media exclusively over the directed raw-file
+migration fallback (they do not implement the encrypted `0x20` path).
+Private-media v1 therefore runs the actual route-aware BLE fragment planner
+before a consented legacy send and rejects any plan above 256 fragments with a
+visible failure. Encrypted sends go only to peers that advertised the
+`privateMedia` capability — modern clients that reassemble up to the full
+receiver ceiling (10,000 fragments) — so they are not held to Android's cap and
+iOS→iOS photos in the ~120-512 KiB range keep working. This fragment-count
+contract, rather than a guessed byte threshold, stays correct as route overhead
+changes. A future Android client that adopts `0x20` but still caps its
+reassembler would need to negotiate an explicit per-peer fragment limit
+(tracked as a #1434 follow-up).

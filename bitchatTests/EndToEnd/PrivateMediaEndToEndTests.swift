@@ -741,7 +741,7 @@ struct PrivateMediaEndToEndTests {
     }
 
     @Test
-    func encryptedAndConsentedLegacySendsRejectAboveAndroidFragmentCap() async throws {
+    func consentedLegacySendRejectsAboveAndroidFragmentCapButEncryptedDoesNot() async throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("private-media-fragment-cap-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -790,14 +790,24 @@ struct PrivateMediaEndToEndTests {
             allowLegacyFallback: true
         )
 
-        let bothRejected = await TestHelpers.waitUntil(
-            { rejections.contains(encryptedID) && rejections.contains(legacyID) },
+        // The directed raw-file migration fallback (Android-style peer without
+        // the .privateMedia capability) still honors the 256-fragment ceiling.
+        let legacyRejected = await TestHelpers.waitUntil(
+            { rejections.contains(legacyID) },
             timeout: TestConstants.longTimeout
         )
-        #expect(bothRejected)
-        #expect(rejections.reason(for: encryptedID)?.contains("256") == true)
+        #expect(legacyRejected)
         #expect(rejections.reason(for: legacyID)?.contains("256") == true)
-        #expect(tap.snapshot().isEmpty, "No outer packet or fragment may be exposed before size rejection")
+
+        // Encrypted private media to a .privateMedia-capable peer is NOT forced
+        // down to Android's 256 cap: it uses the full receiver ceiling and
+        // proceeds to fragment/emit (a 130 KiB file exceeds 256 fragments).
+        let encryptedEmitted = await TestHelpers.waitUntil(
+            { !tap.snapshot().isEmpty },
+            timeout: TestConstants.longTimeout
+        )
+        #expect(encryptedEmitted, "Encrypted send to a capable peer must not be blocked by the Android cap")
+        #expect(!rejections.contains(encryptedID))
         _ = cancellable
     }
 

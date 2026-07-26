@@ -1950,15 +1950,26 @@ final class BLEService: NSObject {
         // Encode once using a small per-type padding policy, then delegate by type
         let padForBLE = BLEOutboundPacketPolicy.padsBLEFrame(for: packetToSend.type)
 
-        // Cross-platform private-media v1 is bounded by Android's deployed
-        // 256-fragment receive cap. Run the same planner the scheduler will
-        // use, after route application, for both encrypted and consented raw
-        // migration sends. Reject before reserving a transfer slot or writing
-        // any fragment; public media is intentionally unaffected.
+        // The 256-fragment ceiling exists to protect *current Android*
+        // receivers, which only ever receive private media over the directed
+        // raw-file migration fallback (they do not implement the encrypted
+        // 0x20 path). Encrypted private media (`noiseEncrypted`) is sent only to
+        // peers that advertised the `.privateMedia` capability — modern clients
+        // that assemble up to the full receiver ceiling (see
+        // `BLEFragmentAssemblyBuffer`'s 10,000-fragment guard) — so forcing them
+        // down to Android's 256 cap would needlessly reject iOS→iOS photos in
+        // the ~120–512 KiB range that work today. Restrict the low cap to the
+        // migration fallback (directed `fileTransfer`); public media is
+        // unaffected. Run the same planner the scheduler will use, after route
+        // application, and reject before reserving a transfer slot or writing
+        // any fragment.
+        // TODO(#1434): negotiate an explicit per-peer fragment limit so a future
+        // Android client that adopts the encrypted 0x20 path but still caps its
+        // reassembler can advertise its own ceiling instead of relying on the
+        // capability/type proxy above.
         if let transferId,
            let recipientPeerID = PeerID(hexData: packetToSend.recipientID),
-           packetToSend.type == MessageType.noiseEncrypted.rawValue
-                || packetToSend.type == MessageType.fileTransfer.rawValue {
+           packetToSend.type == MessageType.fileTransfer.rawValue {
             let compatibilityRequest = BLEOutboundFragmentTransferRequest(
                 packet: packetToSend,
                 pad: padForBLE,
