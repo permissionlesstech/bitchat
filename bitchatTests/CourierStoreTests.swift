@@ -733,6 +733,72 @@ struct CourierStoreTests {
         #expect(offerAll(store, to: courierB) == 2)
     }
 
+    #if DEBUG
+    /// The scan-to-commit span guard.
+    ///
+    /// Note this test's sibling below runs its two offers *in turn*, which is
+    /// safe and is what production does. This one nests the second offer inside
+    /// the first's accept closure — the one interleaving that breaks the
+    /// accounting, because `accepting` runs outside the store queue, so B's scan
+    /// reads a budget A has not yet spent while A's copies are already on the
+    /// wire.
+    ///
+    /// Production cannot reach this today: the sole caller runs inside
+    /// `notifyUI`, whose closure is a non-async `@MainActor () -> Void`, so
+    /// `await` there is a compile error. That is precisely why the guard needs a
+    /// test — nothing else would notice a future caller reintroducing the gap.
+    @Test func overlappingSprayOffersAreDetected() {
+        let store = makeStore()
+        let recipientKey = Data(repeating: 0xB0, count: 32)
+        let envelope = makeEnvelope(recipientKey: recipientKey).withCopies(8)
+        #expect(store.deposit(envelope, from: depositorA))
+        let courierA = Data(repeating: 0xC1, count: 32)
+        let courierB = Data(repeating: 0xC2, count: 32)
+
+        let overlaps = OverlapCounter()
+        CourierStore._test_onSprayOfferOverlap = { overlaps.count += 1 }
+        defer { CourierStore._test_onSprayOfferOverlap = nil }
+
+        _ = store.offerSprayCopies(to: courierA) { _ in
+            // Copies for A are on the wire; B now scans before A has committed.
+            _ = store.offerSprayCopies(to: courierB) { _ in true }
+            return true
+        }
+
+        #expect(overlaps.count == 1)
+    }
+
+    /// The same guard across the two spray paths, which is the reason one flag
+    /// covers both: `transferSprayCopies` and `offerSprayCopies` spend from a
+    /// single budget, so a transfer started inside an offer's accept closure
+    /// overcommits exactly as two offers would.
+    @Test func sprayTransferOverlappingAnOfferIsDetected() {
+        let store = makeStore()
+        let recipientKey = Data(repeating: 0xB0, count: 32)
+        let envelope = makeEnvelope(recipientKey: recipientKey).withCopies(8)
+        #expect(store.deposit(envelope, from: depositorA))
+        let courierA = Data(repeating: 0xC1, count: 32)
+        let courierB = Data(repeating: 0xC2, count: 32)
+
+        let overlaps = OverlapCounter()
+        CourierStore._test_onSprayOfferOverlap = { overlaps.count += 1 }
+        defer { CourierStore._test_onSprayOfferOverlap = nil }
+
+        _ = store.offerSprayCopies(to: courierA) { _ in
+            _ = store.takeSprayCopies(for: courierB)
+            return true
+        }
+
+        #expect(overlaps.count == 1)
+    }
+
+    /// Box so the detector's escaping closure can tally without capturing a
+    /// local `var`.
+    private final class OverlapCounter: @unchecked Sendable {
+        var count = 0
+    }
+    #endif
+
     @Test func concurrentOffersToDifferentCouriersConserveCopies() {
         let store = makeStore()
         let recipientKey = Data(repeating: 0xB0, count: 32)

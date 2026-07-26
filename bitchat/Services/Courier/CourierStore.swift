@@ -150,6 +150,52 @@ final class CourierStore {
     /// from a deleted generation can never inflate a new deposit's budget.
     private var pendingSprayOffers: [PendingSprayOfferKey: PendingSprayOffer] = [:]
     private let queue = DispatchQueue(label: "chat.bitchat.courier.store")
+
+    #if DEBUG
+    /// True while a spray offer is between its scan and its last commit.
+    ///
+    /// Both spray paths spend from one budget and both release the store queue
+    /// across `accepting` (they must: it enters BLE/collections queues). The
+    /// scan is therefore only sound if offers do not overlap — see the caller
+    /// invariant on `offerSprayCopies`. Guarded rather than asserted on actor
+    /// isolation, because the violation that would actually ship is a
+    /// suspension *inside* an already-MainActor block, which every isolation
+    /// check passes.
+    private var sprayOfferInFlight = false
+    /// Test seam for the overlap detector, mirroring `_test_onOutboundPacket`
+    /// in `BLEService`. Unset in normal debug runs, where an overlap trips
+    /// `assertionFailure` instead.
+    static var _test_onSprayOfferOverlap: (() -> Void)?
+    #endif
+
+    /// Marks the start of a spray offer's scan-to-commit span, reporting an
+    /// overlap with one already in flight. No-op in release builds.
+    private func beginSprayOfferSpan(_ function: StaticString = #function) {
+        #if DEBUG
+        queue.sync {
+            guard sprayOfferInFlight else {
+                sprayOfferInFlight = true
+                return
+            }
+            if let hook = Self._test_onSprayOfferOverlap {
+                hook()
+            } else {
+                assertionFailure("""
+                \(function) overlapped another spray offer. Copies are on the \
+                wire before either commit runs, so the second scan reads a \
+                budget the first has already spent and the excess ships \
+                uncharged. Offers must run to completion one at a time.
+                """)
+            }
+        }
+        #endif
+    }
+
+    private func endSprayOfferSpan() {
+        #if DEBUG
+        queue.sync { sprayOfferInFlight = false }
+        #endif
+    }
     private let fileURL: URL?
     private let now: () -> Date
     private let readData: (URL) throws -> Data
@@ -417,6 +463,11 @@ final class CourierStore {
         }
 
         var acceptedCount = 0
+        // Same span rule as `offerSprayCopies` — both spend from one budget and
+        // both release the queue across `accepting`, so an overlap between them
+        // inflates copies exactly as an overlap within either one would.
+        beginSprayOfferSpan()
+        defer { endSprayOfferSpan() }
         for copy in offered where accepting(copy) {
             // As with direct handover, BLE acceptance runs outside the store
             // queue. Revalidate and commit the exact budget that left this
@@ -495,11 +546,27 @@ final class CourierStore {
         // commit below. `accepting` puts copies on the wire irreversibly, so a
         // commit that then loses its revalidation leaves those copies uncharged
         // — two couriers each offered `copies / 2` before either commits would
-        // put 6 copies out from a budget of 4. What prevents it is that the sole
-        // caller (`BLEService.sprayCourierMail`) runs scan/send/commit inside a
-        // single `Task { @MainActor }` containing no `await`, so the actor's
-        // executor runs it to completion. Adding an `await` anywhere in that
-        // block reopens this. See `concurrentOffersToDifferentCouriersConserveCopies`.
+        // put 6 copies out from a budget of 4.
+        //
+        // Two things hold it, in order of strength:
+        //
+        // 1. The sole caller (`BLEService.sprayCourierMail`) runs scan/send/
+        //    commit inside `notifyUI`, whose closure is a NON-ASYNC
+        //    `@MainActor () -> Void`. `await` inside it is a compile error, so
+        //    at that call site the invariant is enforced by the type system,
+        //    not by this comment.
+        // 2. `beginSprayOfferSpan` traps an overlap in debug builds, which
+        //    covers a future caller reached from some other context — the type
+        //    guarantee above is a property of that one call site, not of this
+        //    method.
+        //
+        // No lock here can substitute: the copies are already on the wire
+        // before either commit runs, so the revalidation below protects the
+        // ledger and nothing else.
+        // See `concurrentOffersToDifferentCouriersConserveCopies` and
+        // `overlappingSprayOffersAreDetected`.
+        beginSprayOfferSpan()
+        defer { endSprayOfferSpan() }
         for copy in offered where accepting(copy) {
             // As with `transferSprayCopies`, BLE acceptance runs outside the
             // store queue. Revalidate and commit the exact budget that left this
