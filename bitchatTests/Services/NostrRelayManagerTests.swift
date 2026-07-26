@@ -1735,6 +1735,58 @@ final class NostrRelayManagerTests: XCTestCase {
         XCTAssertGreaterThan(Set(factors).count, 1)
     }
 
+    // MARK: - Hand-added relays
+
+    /// Adding a relay has to take effect without a restart: the whole point is
+    /// recovering reachability when the built-in hostnames are blocked.
+    @MainActor
+    func testAddedRelayJoinsTheTargetSetOnSettingsChange() async {
+        let center = NotificationCenter()
+        let custom = MutableRelayList(urls: [])
+        let context = makeContext(
+            permission: .authorized,
+            notificationCenter: center,
+            customRelays: custom
+        )
+
+        XCTAssertFalse(context.manager.relays.contains { $0.url == "wss://added.example.com" })
+
+        custom.urls = ["wss://added.example.com"]
+        center.post(name: NostrRelaySettings.didChangeNotification, object: nil)
+
+        let joined = await waitUntil {
+            context.manager.relays.contains { $0.url == "wss://added.example.com" }
+        }
+        XCTAssertTrue(joined)
+    }
+
+    /// Removing a relay must actually close it. The teardown path iterates the
+    /// current target list, and a removed relay is no longer in it, so without
+    /// an explicit reconcile against the previous set its socket and queued
+    /// sends would linger.
+    @MainActor
+    func testRemovedRelayLeavesTheTargetSet() async {
+        let center = NotificationCenter()
+        let custom = MutableRelayList(urls: ["wss://added.example.com"])
+        let context = makeContext(
+            permission: .authorized,
+            notificationCenter: center,
+            customRelays: custom
+        )
+
+        XCTAssertTrue(context.manager.relays.contains { $0.url == "wss://added.example.com" })
+
+        custom.urls = []
+        center.post(name: NostrRelaySettings.didChangeNotification, object: nil)
+
+        let dropped = await waitUntil {
+            !context.manager.relays.contains { $0.url == "wss://added.example.com" }
+        }
+        XCTAssertTrue(dropped)
+        // The built-in relays are untouched by a custom-relay removal.
+        XCTAssertTrue(context.manager.relays.contains { $0.url == "wss://nos.lol" })
+    }
+
     private func makeContext(
         permission: LocationChannelManager.PermissionState,
         favorites: Set<Data> = [],
@@ -1743,6 +1795,8 @@ final class NostrRelayManagerTests: XCTestCase {
         torEnforced: Bool = false,
         torIsReady: Bool = true,
         torIsForeground: Bool = true,
+        notificationCenter: NotificationCenter = NotificationCenter(),
+        customRelays: MutableRelayList = MutableRelayList(urls: []),
         jitterUnit: @escaping () -> Double = { 0.5 } // 0.5 -> jitter factor 1.0 (no jitter)
     ) -> RelayManagerTestContext {
         let permissionSubject = CurrentValueSubject<LocationChannelManager.PermissionState, Never>(permission)
@@ -1770,7 +1824,9 @@ final class NostrRelayManagerTests: XCTestCase {
                     scheduler.schedule(delay: delay, action: action)
                 },
                 now: { clock.now },
-                jitterUnit: jitterUnit
+                jitterUnit: jitterUnit,
+                notificationCenter: notificationCenter,
+                customRelays: { customRelays.urls }
             )
         )
         return RelayManagerTestContext(
@@ -1842,6 +1898,16 @@ private final class MutableClock {
 
     init(now: Date) {
         self.now = now
+    }
+}
+
+/// Stand-in for the persisted hand-added relay list, so tests can change it
+/// without writing to shared preferences.
+private final class MutableRelayList {
+    var urls: [String]
+
+    init(urls: [String]) {
+        self.urls = urls
     }
 }
 

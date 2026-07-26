@@ -48,6 +48,15 @@ public final class TorManager: ObservableObject {
     @Published private(set) var lastError: Error?
     @Published private(set) var bootstrapProgress: Int = 0
     @Published private(set) var bootstrapSummary: String = ""
+    /// True once a bootstrap attempt has spent its whole deadline without
+    /// completing.
+    ///
+    /// This separates "still starting" from "not getting through", which are
+    /// indistinguishable from `isStarting` alone. The second is what a network
+    /// that blocks Tor looks like from inside the app, and without it the UI
+    /// says "starting tor…" indefinitely while nothing is happening. Cleared on
+    /// each new start attempt.
+    @Published private(set) public var bootstrapDidStall: Bool = false
 
     // Internal readiness trackers
     private var socksReady: Bool = false { didSet { recomputeReady() } }
@@ -96,6 +105,7 @@ public final class TorManager: ObservableObject {
         guard !didStart else { return }
         didStart = true
         isStarting = true
+        bootstrapDidStall = false
         startedAt = Date()  // Track startup time for grace period
         SecureLogger.debug("TorManager: startIfNeeded() - startedAt set", category: .session)
         lastError = nil
@@ -265,6 +275,7 @@ public final class TorManager: ObservableObject {
 
     private func bootstrapPollLoop() async {
         let deadline = Date().addingTimeInterval(75)
+        var didComplete = false
         while Date() < deadline {
             let progress = Int(arti_bootstrap_progress())
             let summary = getBootstrapSummary()
@@ -276,8 +287,26 @@ public final class TorManager: ObservableObject {
                 self.recomputeReady()
             }
 
-            if progress >= 100 { break }
+            if progress >= 100 {
+                didComplete = true
+                break
+            }
             try? await Task.sleep(nanoseconds: 1_000_000_000)
+        }
+
+        // Running out the deadline is a reportable outcome, not silence. The
+        // loop previously just ended, leaving `isStarting` true forever, so a
+        // blocked network was indistinguishable from a slow one.
+        if !didComplete {
+            await MainActor.run {
+                self.isStarting = false
+                self.bootstrapDidStall = true
+                SecureLogger.warning(
+                    "TorManager: bootstrap did not complete within its deadline (progress=\(self.bootstrapProgress)); network may be blocking Tor",
+                    category: .session
+                )
+                NotificationCenter.default.post(name: .TorBootstrapDidStall, object: nil)
+            }
         }
     }
 
@@ -374,6 +403,7 @@ public final class TorManager: ObservableObject {
             self.bootstrapProgress = 0
             self.bootstrapSummary = ""
             self.isStarting = true
+            self.bootstrapDidStall = false
             self.lastRestartAt = Date()
         }
 

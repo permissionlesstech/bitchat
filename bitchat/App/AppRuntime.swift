@@ -319,6 +319,16 @@ private extension AppRuntime {
             }
             .store(in: &cancellables)
 
+        NotificationCenter.default.publisher(for: .TorBootstrapDidStall)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard self?.chatViewModel.networkActivationAllowed == true
+                else { return }
+                self?.record(.torLifecycleChanged(.bootstrapDidStall))
+                self?.chatViewModel.handleTorBootstrapDidStall()
+            }
+            .store(in: &cancellables)
+
         NotificationCenter.default.publisher(for: .TorUserPreferenceChanged)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] notification in

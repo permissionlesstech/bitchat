@@ -13,6 +13,8 @@ enum TorLifecycleEvent: String, Sendable, Equatable {
     case willRestart
     case didBecomeReady
     case preferenceChanged
+    /// Bootstrap ran out its deadline without completing.
+    case bootstrapDidStall
 }
 
 enum AppEvent: Sendable, Equatable {

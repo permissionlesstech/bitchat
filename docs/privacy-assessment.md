@@ -60,6 +60,9 @@ Public archives contain content already intended for public mesh/board distribut
 - When mesh bridge is enabled, public mesh messages not marked “nearby only” are signed under a per-cell Nostr identity and published to a neighborhood rendezvous geohash. Presence and public bridge traffic therefore expose a coarse area to relays and participants.
 - A bridge gateway can carry signed bridge/location events and opaque courier drops for nearby mesh-only peers. It cannot validly publish a neighbor's radio-only message because the author must first sign the bridge event.
 
+- Relays added by hand persist in local preferences (`nostr.customRelays`, at most 8, normalized on read) and are wiped on panic. An added relay names an operator someone chose to route through, so it is treated as sensitive local state rather than inert configuration. `.onion` addresses are accepted, which is the point: the four built-in relays are well-known clearnet hostnames and a filter blocking four names would otherwise end internet-delivered private messages until a new build shipped.
+- Turning the Tor preference off routes relay sockets and the relay-directory fetch directly, disclosing the device IP to every relay operator including those carrying private messages. The settings UI states this while the preference is off.
+
 Residual risk: Nostr relay retention and logging are outside project control. Public events may be copied indefinitely. Timing, coarse location, and participation can be correlated even when content is encrypted or per-cell identities are used.
 
 ## Location
@@ -88,7 +91,7 @@ Residual risk: Nostr relay retention and logging are outside project control. Pu
 
 ## Panic Wipe Coverage
 
-The panic action clears identity/session state, preferences, location state, groups, prekeys, outbox mail, courier mail, bridge dedup state, gossip archive, board data, managed media, and active subscriptions/transports. Managed media deletion completes synchronously, after active media work has been invalidated. Keychain secrets use device-only accessibility, and an install marker detects and clears app keys that survive uninstall before a later reinstall can use them. New persistent stores must add an explicit wipe hook and a regression test.
+The panic action clears identity/session state, preferences, location state, groups, prekeys, outbox mail, courier mail, bridge dedup state, gossip archive, board data, managed media, hand-added relays, and active subscriptions/transports. Managed media deletion completes synchronously, after active media work has been invalidated. Keychain secrets use device-only accessibility, and an install marker detects and clears app keys that survive uninstall before a later reinstall can use them. New persistent stores must add an explicit wipe hook and a regression test.
 
 ## Release Review Checklist
 
