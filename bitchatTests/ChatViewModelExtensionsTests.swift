@@ -1374,3 +1374,37 @@ private func makeImageData() throws -> Data {
     return data
     #endif
 }
+
+// MARK: - Tor Extension Tests
+
+struct ChatViewModelTorExtensionTests {
+
+    /// Turning Tor off mid-bootstrap must not read as "the network is
+    /// blocking tor": `torEnforced` is a compile-time constant, so the stall
+    /// handler has to consult the runtime preference before announcing.
+    @Test @MainActor
+    func bootstrapStall_withTorPreferenceOff_announcesNothing() async {
+        let key = NetworkActivationService.torPreferenceKey
+        let previous = UserDefaults.standard.object(forKey: key)
+        defer {
+            if let previous {
+                UserDefaults.standard.set(previous, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+        let (viewModel, _) = makeTestableViewModel()
+
+        UserDefaults.standard.set(false, forKey: key)
+        viewModel.handleTorBootstrapDidStall()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        #expect(viewModel.torStallAnnounced == false)
+
+        // The same stall with the preference on (the persisted default) is
+        // exactly what must still be announced.
+        UserDefaults.standard.set(true, forKey: key)
+        viewModel.handleTorBootstrapDidStall()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        #expect(viewModel.torStallAnnounced == true)
+    }
+}

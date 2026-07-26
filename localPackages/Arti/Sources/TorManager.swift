@@ -84,6 +84,10 @@ public final class TorManager: ObservableObject {
     private var shutdownsInFlight = 0
     private var startPendingAfterShutdown = false
     private var bootstrapMonitorStarted = false
+    // Fences the detached poll loop: shutdown, dormancy, and restart each bump
+    // this, so a loop from a previous attempt cannot run out its deadline and
+    // report a stall over state that a newer lifecycle event already owns.
+    private var bootstrapGeneration = 0
     private var pathMonitor: NWPathMonitor?
     private var isAppForeground: Bool = true
     private var lastRestartAt: Date? = nil
@@ -268,24 +272,25 @@ public final class TorManager: ObservableObject {
     private func startBootstrapMonitor() {
         guard !bootstrapMonitorStarted else { return }
         bootstrapMonitorStarted = true
+        bootstrapGeneration += 1
+        let generation = bootstrapGeneration
         Task.detached(priority: .utility) { [weak self] in
-            await self?.bootstrapPollLoop()
+            await self?.bootstrapPollLoop(generation: generation)
         }
     }
 
-    private func bootstrapPollLoop() async {
+    private func bootstrapPollLoop(generation: Int) async {
         let deadline = Date().addingTimeInterval(75)
         var didComplete = false
         while Date() < deadline {
+            guard generation == bootstrapGeneration else { return }
             let progress = Int(arti_bootstrap_progress())
             let summary = getBootstrapSummary()
 
-            await MainActor.run {
-                self.bootstrapProgress = progress
-                self.bootstrapSummary = summary
-                if progress >= 100 { self.isStarting = false }
-                self.recomputeReady()
-            }
+            self.bootstrapProgress = progress
+            self.bootstrapSummary = summary
+            if progress >= 100 { self.isStarting = false }
+            self.recomputeReady()
 
             if progress >= 100 {
                 didComplete = true
@@ -296,17 +301,17 @@ public final class TorManager: ObservableObject {
 
         // Running out the deadline is a reportable outcome, not silence. The
         // loop previously just ended, leaving `isStarting` true forever, so a
-        // blocked network was indistinguishable from a slow one.
+        // blocked network was indistinguishable from a slow one. A deliberate
+        // shutdown mid-bootstrap is not a stall, hence the generation check.
         if !didComplete {
-            await MainActor.run {
-                self.isStarting = false
-                self.bootstrapDidStall = true
-                SecureLogger.warning(
-                    "TorManager: bootstrap did not complete within its deadline (progress=\(self.bootstrapProgress)); network may be blocking Tor",
-                    category: .session
-                )
-                NotificationCenter.default.post(name: .TorBootstrapDidStall, object: nil)
-            }
+            guard generation == bootstrapGeneration else { return }
+            self.isStarting = false
+            self.bootstrapDidStall = true
+            SecureLogger.warning(
+                "TorManager: bootstrap did not complete within its deadline (progress=\(self.bootstrapProgress)); network may be blocking Tor",
+                category: .session
+            )
+            NotificationCenter.default.post(name: .TorBootstrapDidStall, object: nil)
         }
     }
 
@@ -352,6 +357,7 @@ public final class TorManager: ObservableObject {
         // Clear isStarting so foreground recovery can proceed if bootstrap was interrupted.
         SecureLogger.debug("TorManager: goDormantOnBackground() called", category: .session)
         Task { @MainActor in
+            self.bootstrapGeneration += 1
             self.isReady = false
             self.socksReady = false
             self.isStarting = false
@@ -361,6 +367,7 @@ public final class TorManager: ObservableObject {
     public func shutdownCompletely() {
         SecureLogger.debug("TorManager: shutdownCompletely() called", category: .session)
         startPendingAfterShutdown = false
+        bootstrapGeneration += 1
         shutdownsInFlight += 1
         Task.detached { [weak self] in
             guard let self = self else { return }
@@ -398,6 +405,7 @@ public final class TorManager: ObservableObject {
         SecureLogger.debug("TorManager: restartArti() starting", category: .session)
         await MainActor.run {
             NotificationCenter.default.post(name: .TorWillRestart, object: nil)
+            self.bootstrapGeneration += 1
             self.isReady = false
             self.socksReady = false
             self.bootstrapProgress = 0
