@@ -739,6 +739,12 @@ final class BLEService: NSObject {
 
     /// Reopen the radio only after media deletion and recovery-marker commit.
     func completePanicReset(restartServices: Bool) {
+        // The media wipe ran on the recovery operations' own file store; this
+        // service's store still caches pre-panic receipt decisions (and a
+        // callback drained during suspension may have re-read the pre-wipe
+        // ledger). Drop the cache before admission reopens so the next lookup
+        // rebuilds from the wiped directory.
+        incomingFileStore.resetPrivateMediaReceiptsForPanic()
         setPanicSuspended(false)
         guard restartServices else { return }
         startServices()
@@ -3411,6 +3417,15 @@ extension BLEService {
 
     var _test_isPanicIngressOpen: Bool {
         capturePanicLifecycleGeneration() != nil
+    }
+
+    /// Queries the receipt store of the service's OWN incoming-file store —
+    /// the instance production lookups run against — so panic tests exercise
+    /// the real wiring instead of a same-instance shortcut.
+    func _test_privateMediaReceiptState(
+        messageID: String
+    ) -> BLEPrivateMediaReceiptState {
+        incomingFileStore.privateMediaReceiptState(messageID: messageID)
     }
 
     /// Models a CoreBluetooth delegate callback without requiring a physical

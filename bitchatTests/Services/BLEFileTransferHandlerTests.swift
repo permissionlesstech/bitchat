@@ -882,16 +882,40 @@ struct BLEFileTransferHandlerTests {
         let seed = BLEPrivateMediaReceiptStore(baseDirectory: base)
         #expect(seed.recordDeleted(messageID: messageID))
 
-        let store = BLEIncomingFileStore(baseDirectory: base)
+        // Production wiring: receipt lookups run against the service's OWN
+        // incoming-file store while the panic wipe runs on the separate store
+        // `PanicRecoveryOperations.live()` constructs. The test must reset
+        // the instance BLEService uses, not a same-instance shortcut.
+        let keychain = MockKeychain()
+        let identityManager = MockIdentityManager(keychain)
+        let service = BLEService(
+            keychain: keychain,
+            idBridge: NostrIdentityBridge(keychain: MockKeychainHelper()),
+            identityManager: identityManager,
+            initializeBluetoothManagers: false,
+            incomingFileStore: BLEIncomingFileStore(baseDirectory: base)
+        )
         #expect(
-            store.privateMediaReceiptState(messageID: messageID)
+            service._test_privateMediaReceiptState(messageID: messageID)
                 == .tombstoned
         )
 
-        try store.panicWipe()
+        service.suspendForPanicReset()
+        // A receive callback drained during suspension can still consult the
+        // ledger and re-cache the pre-wipe decision before media deletion.
+        #expect(
+            service._test_privateMediaReceiptState(messageID: messageID)
+                == .tombstoned
+        )
+
+        // The wipe itself runs on the recovery operations' distinct store,
+        // exactly like ChatViewModel's panic transaction.
+        let recoveryStore = BLEIncomingFileStore(baseDirectory: base)
+        try recoveryStore.panicWipe()
+        service.completePanicReset(restartServices: false)
 
         #expect(
-            store.privateMediaReceiptState(messageID: messageID)
+            service._test_privateMediaReceiptState(messageID: messageID)
                 == .absent
         )
     }

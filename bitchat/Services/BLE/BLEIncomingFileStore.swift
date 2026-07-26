@@ -268,6 +268,17 @@ struct BLEIncomingFileStore {
         }
     }
 
+    /// Drops THIS instance's in-memory receipt index after a panic wipe.
+    ///
+    /// `panicWipe` already resets the receipt store it runs on, but the
+    /// production wipe runs on the `PanicRecoveryOperations.live()` file
+    /// store while receipt lookups are served by `BLEService`'s own
+    /// `incomingFileStore`. The service's panic path must invalidate its own
+    /// cache explicitly or pre-panic decisions survive in memory.
+    func resetPrivateMediaReceiptsForPanic() {
+        privateMediaReceipts.resetForPanic()
+    }
+
     func privateMediaReceiptState(
         messageID: String
     ) -> BLEPrivateMediaReceiptState {
