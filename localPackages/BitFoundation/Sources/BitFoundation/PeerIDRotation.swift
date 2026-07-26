@@ -133,10 +133,42 @@ public enum PeerIDRotation {
         return derived.withUnsafeBytes { Data($0) }
     }
 
-    /// The tag a peer holding this pair's recognition key expects this epoch.
-    public static func recognitionTag(recognitionKey: Data, epoch: UInt32) -> Data {
+    /// The tag `sender` puts in its announce for `recipient` this epoch.
+    ///
+    /// Three inputs beyond the epoch, each load-bearing:
+    ///
+    /// - **Ordered keys make the tag directional.** An earlier draft used
+    ///   `HMAC(K_AB, epoch)`, which is symmetric — so A and B broadcast the
+    ///   *same* 8 bytes, and an observer who spots one value in two different
+    ///   announces learns those two devices are mutual favourites and can link
+    ///   their rotating IDs to each other. That hands over exactly the social
+    ///   graph this design exists to hide. Ordering the keys gives A→B and B→A
+    ///   distinct values; both parties can still compute both directions,
+    ///   because both hold both public keys.
+    /// - **`peerID` binds the tag to the announce carrying it.** Without it the
+    ///   tag depends only on (pair, epoch), so an attacker could lift a tag out
+    ///   of A's announce and replay it under an ID of their choosing; the
+    ///   recipient would match and believe that ID is A. Binding means a lifted
+    ///   tag is only valid alongside A's own ID, which reduces the attack from
+    ///   impersonation-as-any-ID to replaying A's presence.
+    ///
+    /// Replaying A's own announce within the epoch window remains possible —
+    /// unsigned announces cannot prevent it. Recognition is therefore a hint
+    /// only, and anything consequential must wait for a completed handshake.
+    /// See open question O4.
+    public static func recognitionTag(
+        recognitionKey: Data,
+        epoch: UInt32,
+        senderStaticPublicKey: Data,
+        recipientStaticPublicKey: Data,
+        peerID: Data
+    ) -> Data {
+        var message = bigEndianBytes(epoch)
+        message.append(fixedWidth(senderStaticPublicKey, 32))
+        message.append(fixedWidth(recipientStaticPublicKey, 32))
+        message.append(fixedWidth(peerID, idLength))
         let mac = HMAC<SHA256>.authenticationCode(
-            for: bigEndianBytes(epoch),
+            for: message,
             using: SymmetricKey(data: recognitionKey)
         )
         return Data(mac).prefix(idLength)
@@ -185,7 +217,13 @@ public enum PeerIDRotation {
         }
     }
 
-    /// Whether any slot in `block` matches a tag this pair expects at `date`.
+    /// Whether any slot in `block` holds the tag we expect a specific peer to
+    /// have put there, for an announce carrying `peerID`.
+    ///
+    /// `senderStaticPublicKey` is the peer we hope sent this (so we compute the
+    /// direction they would use) and `recipientStaticPublicKey` is our own.
+    /// Passing them the other way round tests the opposite direction and will
+    /// not match, which is the point of making tags directional.
     ///
     /// Comparison is constant-time per candidate, and every slot is examined
     /// even after a match, so neither the presence of a match nor its slot
@@ -193,11 +231,20 @@ public enum PeerIDRotation {
     public static func blockMatches(
         _ block: Data,
         recognitionKey: Data,
+        senderStaticPublicKey: Data,
+        recipientStaticPublicKey: Data,
+        peerID: Data,
         at date: Date
     ) -> Bool {
         guard let slots = tags(fromBlock: block) else { return false }
         let expected = candidateEpochs(around: date).map {
-            recognitionTag(recognitionKey: recognitionKey, epoch: $0)
+            recognitionTag(
+                recognitionKey: recognitionKey,
+                epoch: $0,
+                senderStaticPublicKey: senderStaticPublicKey,
+                recipientStaticPublicKey: recipientStaticPublicKey,
+                peerID: peerID
+            )
         }
         var matched = false
         for slot in slots {

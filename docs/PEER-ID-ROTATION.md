@@ -120,17 +120,28 @@ Properties:
 
 ### 4.3 Recognising peers you already know
 
-With the static keys off the air, mutual favourites need another way to spot each other. Each announce carries a set of **pairwise recognition tags**. For a device A with mutual favourite B:
+With the static keys off the air, mutual favourites need another way to spot each other. Each announce carries a set of **pairwise recognition tags**. For a device A announcing under `peerID_e` to mutual favourite B:
 
 ```
 S_AB    = X25519(A_noiseStaticPrivate, B_noiseStaticPublic)      // == X25519(B_priv, A_pub)
 K_AB    = HKDF-SHA256(ikm: S_AB, salt: "", info: "bitchat-recognition-v1", length: 32)
-tag_AB  = HMAC-SHA256(key: K_AB, message: uint32be(epoch))[0..8]
+
+tag_A→B = HMAC-SHA256(key: K_AB,
+                      message: uint32be(epoch)
+                            || A_noiseStaticPublic   (32)
+                            || B_noiseStaticPublic   (32)
+                            || peerID_e              (8))[0..8]
 ```
 
-A includes `tag_AB` in its announce. B computes the same value independently (it holds the same shared secret) and matches it against inbound announces. Only A and B can compute it, because it needs one of the two private keys.
+A includes `tag_A→B` in its announce. B computes the same value independently — it holds the same shared secret and both public keys — and matches it against inbound announces. Only A and B can compute it, because it needs one of the two private keys.
 
-On a match, B learns "the device currently using `peerID_e` is A" and can populate its peer list, route DMs, and show A as nearby exactly as today.
+Two properties of that MAC input are load-bearing, and an earlier draft of this document got both wrong. They were caught in review of #1487, which is the argument for shipping the code alongside the prose.
+
+**Ordered keys make the tag directional.** The earlier form was `HMAC(K_AB, epoch)`, which is symmetric: A and B would broadcast the *identical* 8 bytes. An observer who saw one value appear in two different announces would learn that those two devices are mutual favourites, and could link their two rotating IDs to each other — handing over precisely the social graph this design exists to hide, and providing a cross-epoch correlation handle. Ordering the keys yields distinct A→B and B→A values, and both parties can still compute both directions because both hold both public keys.
+
+**`peerID_e` binds the tag to the announce carrying it.** Without it a tag depends only on (pair, epoch), so an attacker could lift A's tag out of a recorded announce and replay it in a fresh announce under an ID of their own choosing; B would match and treat that ID as A. Because `epoch-1` is also accepted, the spoof would stay usable into the following period. Binding to the ID reduces this from impersonation-as-any-ID to replaying A's own presence.
+
+**Residual risk, unfixable while announces are unsigned:** an attacker can rebroadcast A's exact announce within the epoch window, making A appear present when absent. Recognition is therefore a **hint only**. A match may populate presence, but anything consequential — routing a DM, showing a verified badge — MUST wait for a completed handshake whose static key equals the favourite that produced the match. See O4.
 
 Rules:
 
@@ -281,14 +292,24 @@ peerID(epoch=100) = HMAC-SHA256(rotationSecret,
                   = f7c08c528506a374
 ```
 
-With a recognition key derived from a shared secret of 32 × `0x42`:
+With a recognition key derived from a shared secret of 32 × `0x42`, sender key
+32 × `0x0A`, recipient key 32 × `0x0B`, and announced ID 8 × `0xA1`:
 
 ```
 recognitionKey = HKDF-SHA256(ikm: 42×32, salt: <empty>,
                              info: "bitchat-recognition-v1", len: 32)
-tag(epoch=100) = HMAC-SHA256(recognitionKey, uint32be(100))[0..8]
-               = 36400502fa59f4a9
+
+tag_A→B(epoch=100) = HMAC-SHA256(recognitionKey,
+                                 uint32be(100) || 0A×32 || 0B×32 || A1×8)[0..8]
+                   = 4568f61d61d6cbfb
+
+tag_B→A(epoch=100)   (same key, keys swapped)
+                   = 5313c7731f629959
 ```
+
+Both directions are given because their *difference* is the security property: if
+an implementation produces the same value for both, it has reintroduced the
+symmetric-tag flaw.
 
 Also asserted, and worth reproducing on Android because they are the properties rather than the numbers: both sides of a real X25519 pair derive the identical tag from opposite key halves; consecutive epochs produce unrelated IDs; the ±1 epoch window matches across a boundary but two epochs out does not; the tag block is always 64 bytes regardless of how many tags it carries; a match is found regardless of slot position; and the binding message is fixed-width so a short input cannot shift a later field into an earlier field's position.
 
@@ -299,7 +320,7 @@ Still to be written jointly: a full `announceV2` packet as a hex blob, and the �
 - **O1 — Rotation period.** One hour is a guess balancing unlinkability against churn. Shorter means less linkable and more session/route disruption; longer the reverse. Is there a period that is clearly right, or should it be a build constant both platforms pin?
 - **O2 — More than `TAG_SLOTS` favourites.** What is the required convergence guarantee — "every mutual favourite sees a tag within N announces"? Should the slot rotation be deterministic from the epoch so it is testable?
 - **O3 — New message type vs. announce version byte.** A distinct `MessageType` is cleanest given the decoder's required TLVs, but it consumes a type value and means two announce paths. Would a version TLV inside the existing type, with the identity TLVs made optional on both platforms first, be preferable?
-- **O4 — Unsigned v2 announces.** Is "unverified presence, not shown until recognised or handshaked" an acceptable posture? The alternative is an ephemeral per-epoch signing key with a proof-of-continuity, which is more machinery and more bytes.
+- **O4 — Unsigned v2 announces.** Binding tags to the announced peer ID removes impersonation-as-any-ID, but a recorded announce can still be rebroadcast verbatim within the epoch window, so a peer can be made to look present when absent. Is "presence is a hint; nothing consequential until a handshake whose static key matches the favourite that produced the match" acceptable? The alternatives are an ephemeral per-epoch signing key with a proof-of-continuity, or a freshness nonce echoed by the recipient — both more machinery and more bytes.
 - **O5 — Rotation while a session is live.** Defer rotation until sessions are idle, or rotate and migrate? Deferring is simpler and safer, but a long-lived session pins the ID for its lifetime, which weakens G1 for exactly the people who talk most.
 - **O6 — Nickname timing.** Moving the nickname into the session means a stranger's name appears only after a handshake. Is that acceptable UX on both platforms, or does the peer list need a "someone nearby" placeholder state?
 - **O7 — Android decoder tolerance.** iOS `BinaryProtocol.decodeCore` accepts trailing bytes (`guard offset <= buf.count`) and `decode` also retries after unpadding. Both matter for extending padding to more packet types. Does the Android decoder tolerate trailing bytes the same way? If not, padding coverage has to be gated on the capability bit too.

@@ -99,6 +99,10 @@ struct PeerIDRotationTests {
 
     // MARK: - Recognition tags
 
+    private var pubA: Data { Data(repeating: 0x0A, count: 32) }
+    private var pubB: Data { Data(repeating: 0x0B, count: 32) }
+    private var idA: Data { Data(repeating: 0xA1, count: 8) }
+
     /// The property that makes handshake-free recognition possible: both sides
     /// reach the same tag from opposite halves of the key pair.
     @Test func bothSidesDeriveTheSameRecognitionTag() throws {
@@ -115,19 +119,80 @@ struct PeerIDRotationTests {
         let keyB = PeerIDRotation.recognitionKey(sharedSecret: rawB)
         #expect(keyA == keyB)
 
-        let tagA = PeerIDRotation.recognitionTag(recognitionKey: keyA, epoch: 100)
-        let tagB = PeerIDRotation.recognitionTag(recognitionKey: keyB, epoch: 100)
-        #expect(tagA == tagB)
-        #expect(tagA.count == PeerIDRotation.idLength)
+        // A emits its A->B tag; B computes the same value to look for it.
+        let emitted = PeerIDRotation.recognitionTag(
+            recognitionKey: keyA, epoch: 100,
+            senderStaticPublicKey: privA.publicKey.rawRepresentation,
+            recipientStaticPublicKey: privB.publicKey.rawRepresentation,
+            peerID: idA
+        )
+        let expected = PeerIDRotation.recognitionTag(
+            recognitionKey: keyB, epoch: 100,
+            senderStaticPublicKey: privA.publicKey.rawRepresentation,
+            recipientStaticPublicKey: privB.publicKey.rawRepresentation,
+            peerID: idA
+        )
+        #expect(emitted == expected)
+        #expect(emitted.count == PeerIDRotation.idLength)
+    }
+
+    /// Regression, Codex #1487 P1: a symmetric tag means A and B broadcast the
+    /// identical 8 bytes, so an observer who sees one value in two announces
+    /// learns those two are mutual favourites and can link their rotating IDs.
+    /// Tags must therefore differ by direction.
+    @Test func recognitionTagsAreDirectional() {
+        let key = PeerIDRotation.recognitionKey(sharedSecret: Data(repeating: 0x42, count: 32))
+        let aToB = PeerIDRotation.recognitionTag(
+            recognitionKey: key, epoch: 100,
+            senderStaticPublicKey: pubA, recipientStaticPublicKey: pubB, peerID: idA
+        )
+        let bToA = PeerIDRotation.recognitionTag(
+            recognitionKey: key, epoch: 100,
+            senderStaticPublicKey: pubB, recipientStaticPublicKey: pubA, peerID: idA
+        )
+        #expect(aToB != bToA)
+    }
+
+    /// Regression, Codex #1487 P1: without the peer ID in the MAC, a tag lifted
+    /// from someone's announce could be replayed under an attacker-chosen ID and
+    /// the recipient would accept that ID as the favourite.
+    @Test func recognitionTagIsBoundToTheAnnouncedPeerID() {
+        let key = PeerIDRotation.recognitionKey(sharedSecret: Data(repeating: 0x42, count: 32))
+        let real = PeerIDRotation.recognitionTag(
+            recognitionKey: key, epoch: 100,
+            senderStaticPublicKey: pubA, recipientStaticPublicKey: pubB, peerID: idA
+        )
+        let underAttackerID = PeerIDRotation.recognitionTag(
+            recognitionKey: key, epoch: 100,
+            senderStaticPublicKey: pubA, recipientStaticPublicKey: pubB,
+            peerID: Data(repeating: 0xFF, count: 8)
+        )
+        #expect(real != underAttackerID)
+
+        // And the lifted tag must not verify against the attacker's ID.
+        let block = PeerIDRotation.tagBlock(tags: [real])
+        #expect(!PeerIDRotation.blockMatches(
+            block, recognitionKey: key,
+            senderStaticPublicKey: pubA, recipientStaticPublicKey: pubB,
+            peerID: Data(repeating: 0xFF, count: 8),
+            at: Date(timeIntervalSince1970: 3600 * 100)
+        ))
     }
 
     @Test func recognitionTagRotatesWithTheEpoch() {
         let key = PeerIDRotation.recognitionKey(sharedSecret: Data(repeating: 0x42, count: 32))
-        let now = PeerIDRotation.recognitionTag(recognitionKey: key, epoch: 100)
-        let next = PeerIDRotation.recognitionTag(recognitionKey: key, epoch: 101)
+        let now = PeerIDRotation.recognitionTag(
+            recognitionKey: key, epoch: 100,
+            senderStaticPublicKey: pubA, recipientStaticPublicKey: pubB, peerID: idA
+        )
+        let next = PeerIDRotation.recognitionTag(
+            recognitionKey: key, epoch: 101,
+            senderStaticPublicKey: pubA, recipientStaticPublicKey: pubB, peerID: idA
+        )
         #expect(now != next)
-        // VECTOR: HMAC-SHA256(HKDF(ikm: 0x42*32, info: "bitchat-recognition-v1"), uint32be(100))[0..8]
-        #expect(hex(now) == "36400502fa59f4a9")
+        // VECTOR: HMAC-SHA256(HKDF(ikm: 0x42*32, info: "bitchat-recognition-v1"),
+        //         uint32be(100) || 0x0A*32 || 0x0B*32 || 0xA1*8)[0..8]
+        #expect(hex(now) == "4568f61d61d6cbfb")
     }
 
     @Test func aThirdPartyCannotDeriveAPairsTag() {
@@ -135,8 +200,13 @@ struct PeerIDRotationTests {
         // which is what stops it from tracking the pair.
         let pair = PeerIDRotation.recognitionKey(sharedSecret: Data(repeating: 0x01, count: 32))
         let other = PeerIDRotation.recognitionKey(sharedSecret: Data(repeating: 0x02, count: 32))
-        #expect(PeerIDRotation.recognitionTag(recognitionKey: pair, epoch: 7)
-                != PeerIDRotation.recognitionTag(recognitionKey: other, epoch: 7))
+        #expect(PeerIDRotation.recognitionTag(
+            recognitionKey: pair, epoch: 7,
+            senderStaticPublicKey: pubA, recipientStaticPublicKey: pubB, peerID: idA
+        ) != PeerIDRotation.recognitionTag(
+            recognitionKey: other, epoch: 7,
+            senderStaticPublicKey: pubA, recipientStaticPublicKey: pubB, peerID: idA
+        ))
     }
 
     // MARK: - Tag block
@@ -190,49 +260,74 @@ struct PeerIDRotationTests {
 
     // MARK: - Matching
 
-    @Test func blockMatchesRecogniseAPeerAnywhereInTheBlock() {
+    private func matchFixture() -> (key: Data, tag: Data, date: Date) {
         let date = Date(timeIntervalSince1970: 3600 * 100)
         let key = PeerIDRotation.recognitionKey(sharedSecret: Data(repeating: 0x77, count: 32))
         let tag = PeerIDRotation.recognitionTag(
             recognitionKey: key,
-            epoch: PeerIDRotation.epoch(at: date)
+            epoch: PeerIDRotation.epoch(at: date),
+            senderStaticPublicKey: pubA,
+            recipientStaticPublicKey: pubB,
+            peerID: idA
         )
+        return (key, tag, date)
+    }
 
+    @Test func blockMatchesRecogniseAPeerAnywhereInTheBlock() {
+        let (key, tag, date) = matchFixture()
         // Slot order must not matter, so assert across many shuffles.
         for _ in 0..<20 {
             let block = PeerIDRotation.tagBlock(tags: [tag])
-            #expect(PeerIDRotation.blockMatches(block, recognitionKey: key, at: date))
+            #expect(PeerIDRotation.blockMatches(
+                block, recognitionKey: key,
+                senderStaticPublicKey: pubA, recipientStaticPublicKey: pubB,
+                peerID: idA, at: date
+            ))
         }
+    }
+
+    /// Testing the wrong direction must fail, or the directional fix would be
+    /// cosmetic.
+    @Test func blockDoesNotMatchTheOppositeDirection() {
+        let (key, tag, date) = matchFixture()
+        let block = PeerIDRotation.tagBlock(tags: [tag])
+        #expect(!PeerIDRotation.blockMatches(
+            block, recognitionKey: key,
+            senderStaticPublicKey: pubB, recipientStaticPublicKey: pubA,
+            peerID: idA, at: date
+        ))
     }
 
     @Test func blockMatchesToleratesTheEpochBoundary() {
         let date = Date(timeIntervalSince1970: 3600 * 100)
         let key = PeerIDRotation.recognitionKey(sharedSecret: Data(repeating: 0x11, count: 32))
 
-        // A peer whose clock has already ticked over still matches.
-        let nextEpochTag = PeerIDRotation.recognitionTag(recognitionKey: key, epoch: 101)
-        #expect(PeerIDRotation.blockMatches(
-            PeerIDRotation.tagBlock(tags: [nextEpochTag]),
-            recognitionKey: key,
-            at: date
-        ))
+        func tag(epoch: UInt32) -> Data {
+            PeerIDRotation.recognitionTag(
+                recognitionKey: key, epoch: epoch,
+                senderStaticPublicKey: pubA, recipientStaticPublicKey: pubB, peerID: idA
+            )
+        }
+        func matches(_ candidate: Data) -> Bool {
+            PeerIDRotation.blockMatches(
+                PeerIDRotation.tagBlock(tags: [candidate]), recognitionKey: key,
+                senderStaticPublicKey: pubA, recipientStaticPublicKey: pubB,
+                peerID: idA, at: date
+            )
+        }
 
-        // Two epochs out is outside the window and must not match.
-        let staleTag = PeerIDRotation.recognitionTag(recognitionKey: key, epoch: 98)
-        #expect(!PeerIDRotation.blockMatches(
-            PeerIDRotation.tagBlock(tags: [staleTag]),
-            recognitionKey: key,
-            at: date
-        ))
+        // A peer whose clock has already ticked over still matches.
+        #expect(matches(tag(epoch: 101)))
+        // Two epochs out is outside the window and must not.
+        #expect(!matches(tag(epoch: 98)))
     }
 
     @Test func randomBlockDoesNotMatch() {
-        let date = Date(timeIntervalSince1970: 3600 * 100)
-        let key = PeerIDRotation.recognitionKey(sharedSecret: Data(repeating: 0x99, count: 32))
+        let (key, _, date) = matchFixture()
         #expect(!PeerIDRotation.blockMatches(
-            PeerIDRotation.tagBlock(tags: []),
-            recognitionKey: key,
-            at: date
+            PeerIDRotation.tagBlock(tags: []), recognitionKey: key,
+            senderStaticPublicKey: pubA, recipientStaticPublicKey: pubB,
+            peerID: idA, at: date
         ))
     }
 
