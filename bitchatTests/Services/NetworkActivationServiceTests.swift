@@ -63,7 +63,7 @@ final class NetworkActivationServiceTests: XCTestCase {
         context.service.start()
         context.service.setUserTorEnabled(false)
 
-        wait(for: [notified], timeout: TestConstants.settleTimeout)
+        wait(for: [notified], timeout: TestConstants.negativeWaitWindow)
         context.notificationCenter.removeObserver(token)
 
         XCTAssertFalse(context.service.userTorEnabled)

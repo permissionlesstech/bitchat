@@ -166,7 +166,7 @@ struct NoiseEncryptionServiceTests {
         #expect(!receiver.hasSession(with: claimedAlicePeerID))
         let emittedAuthentication = await TestHelpers.waitUntil(
             { recorder.count > 0 },
-            timeout: TestConstants.shortTimeout
+            timeout: TestConstants.negativeWaitWindow
         )
         #expect(!emittedAuthentication)
     }
@@ -216,7 +216,7 @@ struct NoiseEncryptionServiceTests {
         #expect(try receiver.decrypt(after, from: alicePeerID) == Data("after".utf8))
         let emittedReplacementAuthentication = await TestHelpers.waitUntil(
             { recorder.count > 1 },
-            timeout: TestConstants.shortTimeout
+            timeout: TestConstants.negativeWaitWindow
         )
         #expect(!emittedReplacementAuthentication)
     }

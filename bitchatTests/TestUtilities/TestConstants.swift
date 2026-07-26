@@ -44,6 +44,21 @@ struct TestConstants {
     /// latency assumption in disguise.
     static let minimumSettleTimeout: TimeInterval = 10.0
 
+    /// For waits whose **expected outcome is `false`** — "prove this does not
+    /// happen".
+    ///
+    /// The floor above is wrong for these, and inverted: a negative wait always
+    /// runs its deadline out, so `settleTimeout` would spend 30 s per case
+    /// proving nothing extra. Starvation cannot cause a false failure here
+    /// either — a starved runner only makes the thing *less* likely to happen,
+    /// so the assertion still holds. Short is correct, and naming it says the
+    /// polarity out loud instead of leaving a bare literal that reads like the
+    /// mistake this file exists to prevent.
+    ///
+    /// `TestTimingHygieneTests` accepts this by name. Using it for a wait you
+    /// expect to succeed reintroduces exactly the flake class it sits next to.
+    static let negativeWaitWindow: TimeInterval = 1.0
+
 
     static let testNickname1 = "Alice"
     static let testNickname2 = "Bob"

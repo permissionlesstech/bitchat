@@ -93,15 +93,29 @@ struct TestTimingHygieneTests {
         ].map { try? NSRegularExpression(pattern: $0) }.compactMap { $0 }
         #expect(patterns.count == 2, "hygiene regexes failed to compile")
 
+        // Named constants hide the same mistake behind a symbol, and did: the
+        // fifth flake of the session was `timeout: TestConstants.shortTimeout`
+        // (1 s) on a positive wait, which a literals-only scan cannot see.
+        // `negativeWaitWindow` is deliberately absent — short is correct there.
+        let bannedConstants = ["shortTimeout", "defaultTimeout"]
+
         var offenders: [String] = []
         for line in lines where !Self.isWaived(line) {
             let range = NSRange(line.text.startIndex..., in: line.text)
+            var flagged = false
             for pattern in patterns {
                 guard let match = pattern.firstMatch(in: line.text, range: range),
                       let valueRange = Range(match.range(at: 1), in: line.text),
                       let value = TimeInterval(line.text[valueRange]),
                       value < TestConstants.minimumSettleTimeout else { continue }
                 offenders.append("\(line.file):\(line.number) — \(value)s: \(line.text.trimmingCharacters(in: .whitespaces))")
+                flagged = true
+                break
+            }
+            guard !flagged else { continue }
+            for name in bannedConstants
+            where line.text.contains("timeout: TestConstants.\(name)") {
+                offenders.append("\(line.file):\(line.number) — TestConstants.\(name): \(line.text.trimmingCharacters(in: .whitespaces))")
                 break
             }
         }
