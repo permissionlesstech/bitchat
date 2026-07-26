@@ -980,6 +980,63 @@ struct ChatMediaTransferCoordinatorContextTests {
     }
 
     @Test @MainActor
+    func disconnectClearsDroppedPolicyResolutionSoRetriesRecover() async throws {
+        let context = MockChatMediaTransferContext()
+        let peerID = PeerID(str: "1122334455667788")
+        context.selectedPrivateChatPeer = peerID
+        context.supportsAuthenticatedPrivateMediaReceipts = true
+        let fileName = "voice_3333444455556666.m4a"
+        let preparer = StaticVoiceNotePreparer(fileName: fileName)
+        let coordinator = ChatMediaTransferCoordinator(
+            context: context,
+            prepareVoiceNotePacket: { url in
+                try preparer.prepare(url)
+            }
+        )
+        let url = try makeCoordinatorVoiceURL(fileName: fileName)
+        defer {
+            try? FileManager.default.removeItem(
+                at: url.deletingLastPathComponent()
+            )
+        }
+
+        coordinator.sendVoiceNote(at: url)
+        #expect(await TestHelpers.waitUntil(
+            { context.privateFileSends.count == 1 },
+            timeout: TestConstants.longTimeout
+        ))
+        let initial = try #require(context.privateFileSends.first)
+        coordinator.handleTransferEvent(.completed(
+            id: initial.transferId,
+            totalFragments: 1
+        ))
+        #expect(coordinator.retainedReconnectRetryCount == 1)
+
+        // The transport accepts this resolution but its completion is never
+        // invoked (BLEService queue teardown drops the closure), so the
+        // pending entry parks every subsequent reconnect resolution.
+        context.resolvesPrivateMediaPolicyImmediately = false
+        coordinator.peerDidReconnect(peerID)
+        #expect(context.privateMediaPolicyResolutionRequests.count == 1)
+        coordinator.peerDidReconnect(peerID)
+        #expect(context.privateMediaPolicyResolutionRequests.count == 1)
+
+        // Disconnection invalidates the dropped resolution; the next
+        // reconnect must start fresh and complete the retry.
+        coordinator.peerDidDisconnect(peerID)
+        context.resolvesPrivateMediaPolicyImmediately = true
+        coordinator.peerDidReconnect(peerID)
+        #expect(context.privateMediaPolicyResolutionRequests.count == 2)
+        #expect(context.privateFileSends.count == 2)
+        let retry = try #require(context.privateFileSends.last)
+        #expect(retry.packet.encode() == initial.packet.encode())
+        #expect(retry.peerID == peerID)
+        #expect(context.privateFileReceiptRetryTransferIDs == [
+            retry.transferId
+        ])
+    }
+
+    @Test @MainActor
     func bit8OnlyEncryptedMediaNeverRetainsOrAutomaticallyRetries() async throws {
         let context = MockChatMediaTransferContext()
         let peerID = PeerID(str: "1122334455667788")

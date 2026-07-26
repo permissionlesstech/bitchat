@@ -965,6 +965,16 @@ final class ChatMediaTransferCoordinator {
         )
     }
 
+    /// A policy resolution's completion can be dropped entirely when the
+    /// transport tears down mid-flight (BLEService's queue guards on a
+    /// deallocated self), which would leave the pending entry blocking every
+    /// future resolution for this peer. Disconnection invalidates the
+    /// resolution's premise anyway, so drop it; retained records stay and the
+    /// next reconnect starts a fresh resolution.
+    func peerDidDisconnect(_ peerID: PeerID) {
+        peersResolvingReconnectRetry.removeValue(forKey: peerID.toShort())
+    }
+
     /// Local fragment completion is not proof that the recipient reconstructed
     /// the file. Only a remote delivery/read receipt releases retry ownership.
     func confirmPrivateMediaDelivery(messageID: String) {
