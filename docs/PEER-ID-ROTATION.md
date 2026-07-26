@@ -9,7 +9,7 @@
 | Piece | File |
 |---|---|
 | Epochs, ID derivation, recognition tags, tag block, binding message | `localPackages/BitFoundation/Sources/BitFoundation/PeerIDRotation.swift` |
-| `announceV2 = 0x05` wire format | `localPackages/BitFoundation/Sources/BitFoundation/AnnounceV2Packet.swift` |
+| `announceV2 = 0x2C` wire format | `localPackages/BitFoundation/Sources/BitFoundation/AnnounceV2Packet.swift` |
 | Executable test vectors | `localPackages/BitFoundation/Tests/BitFoundationTests/PeerIDRotationTests.swift` |
 | Wire-format tests | `localPackages/BitFoundation/Tests/BitFoundationTests/AnnounceV2PacketTests.swift` |
 
@@ -175,12 +175,15 @@ proof = Ed25519-Sign(signingPrivateKey,
 
 Sent as a new TLV in `AuthenticatedPeerStatePacket`, whose existing structure already carries a version byte, a canonicality-checked capability TLV, and the 32-byte signing key. The receiver verifies:
 
+- **that the `noiseStaticPublicKey` inside the proof is byte-equal to the remote static key the Noise session actually established** — see below, this one is load-bearing, and
 - the signature against the signing key in the same packet, **and**
 - that the signing key matches whatever it has already pinned for this fingerprint, using the existing trust ladder (authenticated key, then TOFU pin), and
 - that `peerID_e` equals the ID the session was actually conducted under, and
 - that `epoch` is within the ±1 window.
 
-This replaces `authenticatedRemoteKey`'s derivation check with an explicit signed statement. It is strictly stronger than today's self-signed announce, because the signing key is checked against a pin rather than taken from the same message.
+An earlier draft of this list omitted the first check, which left a hole worth spelling out because it is the kind that survives review. The proof is a self-contained signed blob: nothing in the signature ties it to *the session it arrives on*. So a peer M who has observed A's proof — it travels inside a session, but M can be a peer A legitimately talked to — could replay A's proof verbatim inside M's own session with B. Without the static-key check, B verifies A's signature successfully, sees a well-formed binding, and on **first contact** TOFU-pins A's signing key against M's fingerprint. From then on B attributes M's identity to A's key. Comparing the proof's static key against the key the handshake actually produced closes it: M cannot substitute A's key without also being A.
+
+This replaces `authenticatedRemoteKey`'s derivation check with an explicit signed statement. With the static-key check present it is strictly stronger than today's self-signed announce, because the signing key is checked against a pin rather than taken from the same message. Without it, it is weaker — a reminder that "signed" and "bound to this conversation" are different properties.
 
 Note the canonical-bytes helper for this already half-exists: `NoiseEncryptionService.buildAnnounceSignature` / `verifyAnnounceSignature` / `canonicalAnnounceBytes`, with context `"bitchat-announce-v1"`, are present but unreferenced in production (only tests call them). They sign `context‖peerID(8)‖noiseKey(32)‖ed25519Key(32)‖nickname‖timestampMs`. The binding above is deliberately a **different context string** and a different field set, so the two can never be confused; the dead code should be deleted or repurposed explicitly rather than silently reused.
 
@@ -199,7 +202,9 @@ Note the canonical-bytes helper for this already half-exists: `NoiseEncryptionSe
 
 `0x01`, `0x02`, `0x03` are **required** by the decoder (`Packets.swift:147`).
 
-**Proposed v2 announce.** Because the existing decoder hard-requires the three identity TLVs, a v2 announce cannot simply omit them — that is a parse failure, not a graceful degrade. It therefore needs a distinct message type. Assigned values today are `0x01`–`0x04`, `0x10`–`0x11`, and `0x20`–`0x29`, so **`announceV2 = 0x05`** is proposed: free, and adjacent to `announce = 0x01` so the grouping stays readable (see O3).
+**Proposed v2 announce.** Because the existing decoder hard-requires the three identity TLVs, a v2 announce cannot simply omit them — that is a parse failure, not a graceful degrade. It therefore needs a distinct message type: **`announceV2 = 0x2C`**.
+
+An earlier draft proposed `0x05` on the grounds that it is unassigned today and sits next to `announce = 0x01`. That was wrong. `0x05` has already been recycled twice — `announce`, then `bulkTransferResponse`, then `fragmentStart` until #446 — so a sufficiently old peer may still map it to a fragment header and misparse presence as a partial message. Values above `voiceFrame = 0x29` have only ever been allocated forward, which is the safe direction; `0x2A`/`0x2B` are spoken for by the courier spray-ack work, leaving `0x2C`. Verified never used anywhere in this repository's history (see O3).
 
 TLVs, all cleartext but none identifying:
 
@@ -323,7 +328,9 @@ Still to be written jointly: a full `announceV2` packet as a hex blob, and the �
 - **O4 — Unsigned v2 announces.** Binding tags to the announced peer ID removes impersonation-as-any-ID, but a recorded announce can still be rebroadcast verbatim within the epoch window, so a peer can be made to look present when absent. Is "presence is a hint; nothing consequential until a handshake whose static key matches the favourite that produced the match" acceptable? The alternatives are an ephemeral per-epoch signing key with a proof-of-continuity, or a freshness nonce echoed by the recipient — both more machinery and more bytes.
 - **O5 — Rotation while a session is live.** Defer rotation until sessions are idle, or rotate and migrate? Deferring is simpler and safer, but a long-lived session pins the ID for its lifetime, which weakens G1 for exactly the people who talk most.
 - **O6 — Nickname timing.** Moving the nickname into the session means a stranger's name appears only after a handshake. Is that acceptable UX on both platforms, or does the peer list need a "someone nearby" placeholder state?
-- **O7 — Padding is a coordinated change, not a local one.** This started as a question about decoder tolerance and turned into something firmer. `BitchatPacket.toBinaryDataForSigning()` encodes with padding enabled, so **the padding bytes are inside the signed material for every signed packet**. Changing the padding algorithm therefore changes the signed byte stream, and signatures stop verifying against any peer that has not made the identical change. Both outstanding padding fixes are affected: extending coverage beyond `noiseEncrypted`/`noiseHandshake`, and closing the gap where a frame needing more than 255 bytes of padding is emitted unpadded (payloads of 241–256, 497–768 and 1009–1792 bytes ship at exact length today). Two things to settle: whether Android's decoder also tolerates trailing bytes the way iOS's does (`guard offset <= buf.count`, plus an unpad retry), and whether padding changes ride this protocol revision or get their own capability-gated one.
+- **O7 — Padding is a coordinated change, not a local one.** This started as a question about decoder tolerance and turned into something firmer. `BitchatPacket.toBinaryDataForSigning()` encodes with padding enabled, so **the padding bytes are inside the signed material for every signed packet**. Changing the padding algorithm therefore changes the signed byte stream, and signatures stop verifying against any peer that has not made the identical change. Both outstanding padding fixes are affected: extending coverage beyond `noiseEncrypted`/`noiseHandshake`, and closing the gap where a frame needing more than 255 bytes of padding is emitted unpadded (encoded *frames* of 241–256, 497–768 and 1009–1792 bytes ship at exact length today — the arithmetic is over the whole encoded packet that `pad` receives, not the payload alone). Two things to settle: whether Android's decoder also tolerates trailing bytes the way iOS's does (`guard offset <= buf.count`, plus an unpad retry), and whether padding changes ride this protocol revision or get their own capability-gated one.
+
+- **O9 — A seized device recomputes every past peer ID.** `K_rot` is a long-lived secret, so `peerID_e = HMAC(K_rot, epoch)` is computable for *any* epoch by whoever holds it. Someone who seizes a phone, or extracts the Noise static key from a backup, can therefore take historical radio captures and identify which of them were this device — retroactively defeating the unlinkability for every past epoch. Rotation protects against the passive observer, not against later key compromise. A hash ratchet (`K_{e+1} = HKDF(K_e)`, discarding `K_e`) would give forward secrecy for the ID stream, at the cost of state that must survive restarts, tolerate clock jumps, and resynchronise after a gap — none of which is free, and all of which interacts with the ±1 window. Worth deciding deliberately rather than inheriting.
 
 ## 9. Relationship to other work
 

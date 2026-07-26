@@ -35,6 +35,13 @@ enum BLEOutboundPacketPolicy {
             return .fragment(totalFragments: fragmentTotalCount(from: packet.payload))
         case .fileTransfer:
             return .fileTransfer
+        case .announceV2:
+            // Stated rather than inherited from `default`. Presence is small,
+            // time-bounded to its epoch, and useless once stale, so it belongs
+            // with the other control traffic at high priority — but that should
+            // be a decision on the record, not a fall-through, since this type
+            // is not emitted yet and nobody would notice the choice being made.
+            return .high
         default:
             return .high
         }

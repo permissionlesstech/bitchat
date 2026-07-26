@@ -15,14 +15,6 @@ public enum MessageType: UInt8 {
     case message = 0x02         // Public chat message
     case leave = 0x03           // "I'm leaving"
     case courierEnvelope = 0x04 // Store-and-forward envelope carried by a trusted peer
-    /// Identity-free presence for rotating peer IDs. Carries an epoch, a fixed
-    /// block of pairwise recognition tags, and capabilities — no nickname, no
-    /// public keys, no neighbour list. A separate type rather than a version of
-    /// `announce` because that decoder hard-requires the identity TLVs, so
-    /// omitting them is a parse failure rather than a graceful degrade.
-    /// Not emitted or consumed by the shipping mesh yet; see
-    /// `docs/PEER-ID-ROTATION.md`.
-    case announceV2 = 0x05
     case requestSync = 0x21     // GCS filter-based sync request (local-only)
 
     // Noise encryption
@@ -47,6 +39,23 @@ public enum MessageType: UInt8 {
     // Live voice: one signed push-to-talk burst packet (ephemeral broadcast,
     // never gossip-synced). Private bursts ride noiseEncrypted instead.
     case voiceFrame = 0x29
+
+    /// Identity-free presence for rotating peer IDs. Carries an epoch, a fixed
+    /// block of pairwise recognition tags, and capabilities — no nickname, no
+    /// public keys, no neighbour list. A separate type rather than a version of
+    /// `announce` because that decoder hard-requires the identity TLVs, so
+    /// omitting them is a parse failure rather than a graceful degrade.
+    ///
+    /// `0x2C`, not the seemingly-free `0x05`: that value has been recycled
+    /// twice already (`announce`, then `bulkTransferResponse`, then
+    /// `fragmentStart` until #446), and a very old peer that still maps it to a
+    /// fragment header would misparse presence as a partial message. Values
+    /// after `voiceFrame` have only ever been allocated forward. `0x2A`/`0x2B`
+    /// are spoken for by the courier spray-ack work, hence `0x2C`.
+    ///
+    /// Not emitted or consumed by the shipping mesh yet; see
+    /// `docs/PEER-ID-ROTATION.md`.
+    case announceV2 = 0x2C
 
     public var description: String {
         switch self {

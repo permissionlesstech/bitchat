@@ -11,10 +11,16 @@ struct AnnounceV2PacketTests {
     }
 
     @Test func typeValueIsStable() {
-        // Changing this breaks every deployed decoder. 0x05 was free; 0x01-0x04,
-        // 0x10-0x11 and 0x20-0x29 were already taken.
-        #expect(MessageType.announceV2.rawValue == 0x05)
-        #expect(MessageType(rawValue: 0x05) == .announceV2)
+        // Changing this breaks every deployed decoder.
+        //
+        // Deliberately NOT 0x05, which merely looks free: it has been recycled
+        // twice already (announce, then bulkTransferResponse, then fragmentStart
+        // until #446), so an old peer could still map it to a fragment header
+        // and misparse presence as a partial message. Values above
+        // voiceFrame = 0x29 have only ever been allocated forward; 0x2A/0x2B
+        // belong to the courier spray-ack work.
+        #expect(MessageType.announceV2.rawValue == 0x2C)
+        #expect(MessageType(rawValue: 0x2C) == .announceV2)
         #expect(MessageType.announceV2.description == "announceV2")
     }
 
