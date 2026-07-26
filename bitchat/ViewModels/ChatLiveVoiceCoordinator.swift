@@ -158,7 +158,7 @@ final class ChatLiveVoiceCoordinator {
     /// `sweepsOnInit` exists for tests whose coordinator shares the real
     /// application-support directory: they pass `false` so parallel test
     /// runs never sweep each other's in-flight capture files.
-    init(context: any ChatLiveVoiceContext, fileStore: BLEIncomingFileStore = BLEIncomingFileStore(), sweepsOnInit: Bool = true) {
+    init(context: any ChatLiveVoiceContext, fileStore: BLEIncomingFileStore = .shared, sweepsOnInit: Bool = true) {
         self.context = context
         self.fileStore = fileStore
         // Orphaned partial captures from a previous session (live-only bursts

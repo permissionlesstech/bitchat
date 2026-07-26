@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import BitFoundation
 
 /// The small surface of `AVAudioRecorder` that `VoiceRecorder` owns. Keeping
 /// it behind a protocol lets lifecycle races be tested without opening the
@@ -298,9 +299,21 @@ actor VoiceRecorder {
         formatter.dateFormat = "yyyyMMdd_HHmmss"
         let fileName = "voice_\(formatter.string(from: Date()))_\(UUID().uuidString).m4a"
 
-        let baseDirectory = try outputDirectory
-            ?? applicationFilesDirectory().appendingPathComponent("voicenotes/outgoing", isDirectory: true)
-        try FileManager.default.createDirectory(at: baseDirectory, withIntermediateDirectories: true, attributes: BLEIncomingFileStore.mediaProtectionAttributes)
+        let baseDirectory: URL
+        if let outputDirectory {
+            baseDirectory = outputDirectory
+        } else {
+            BLEIncomingFileStore.shared.enforceOutgoingQuota(
+                reservingBytes: FileTransferLimits.maxVoiceNoteBytes
+            )
+            baseDirectory = try applicationFilesDirectory()
+                .appendingPathComponent("voicenotes/outgoing", isDirectory: true)
+        }
+        try FileManager.default.createDirectory(
+            at: baseDirectory,
+            withIntermediateDirectories: true,
+            attributes: BLEIncomingFileStore.mediaProtectionAttributes
+        )
         return baseDirectory.appendingPathComponent(fileName)
     }
 

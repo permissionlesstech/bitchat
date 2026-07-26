@@ -241,6 +241,9 @@ final class PTTLiveVoiceSession: VoiceCaptureSession {
             appropriateFor: nil,
             create: true
         )
+        BLEIncomingFileStore.shared.enforceOutgoingQuota(
+            reservingBytes: FileTransferLimits.maxVoiceNoteBytes
+        )
         let directory = base
             .appendingPathComponent("files", isDirectory: true)
             .appendingPathComponent("voicenotes/outgoing", isDirectory: true)

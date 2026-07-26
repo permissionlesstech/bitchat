@@ -73,7 +73,10 @@ enum ImageUtils {
                 }
             }
 
-            let outputURL = try makeOutputURL(outputDirectory: outputDirectory)
+            let outputURL = try makeOutputURL(
+                outputDirectory: outputDirectory,
+                reservingBytes: jpegData.count
+            )
             try jpegData.write(to: outputURL, options: .atomic)
             return outputURL
         }
@@ -151,7 +154,10 @@ enum ImageUtils {
                     }
                 }
             }
-            let outputURL = try makeOutputURL(outputDirectory: outputDirectory)
+            let outputURL = try makeOutputURL(
+                outputDirectory: outputDirectory,
+                reservingBytes: jpegData.count
+            )
             try jpegData.write(to: outputURL, options: .atomic)
             return outputURL
         }
@@ -195,7 +201,7 @@ enum ImageUtils {
     }
     #endif
 
-    private static func makeOutputURL(outputDirectory: URL? = nil) throws -> URL {
+    private static func makeOutputURL(outputDirectory: URL? = nil, reservingBytes: Int = 0) throws -> URL {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd_HHmmss"
         let fileName = "img_\(formatter.string(from: Date()))_\(UUID().uuidString).jpg"
@@ -204,6 +210,9 @@ enum ImageUtils {
         if let outputDirectory {
             directory = outputDirectory
         } else {
+            // Default Application Support outgoing tree shares the process-wide
+            // store with BLE deletion/delivery so quota exclusions stay live.
+            BLEIncomingFileStore.shared.enforceOutgoingQuota(reservingBytes: reservingBytes)
             directory = try applicationFilesDirectory().appendingPathComponent("images/outgoing", isDirectory: true)
         }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: BLEIncomingFileStore.mediaProtectionAttributes)

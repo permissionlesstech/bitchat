@@ -40,7 +40,7 @@ bitchat is designed for private, account-free communication. This policy describ
 
 6. **Media attachments**
    - Voice notes and images you send or receive can be stored under Application Support so they remain playable while referenced by the app.
-   - Incoming media is subject to a 100 MB quota with oldest-file eviction. All stored media, sent and received, is also deleted once it is more than seven days old, and immediately by panic wipe or app removal.
+   - Incoming and outgoing media each have a separate 100 MB oldest-file quota. All stored media, sent and received, is also deleted once it is more than seven days old, and immediately by panic wipe or app removal.
 
 7. **Optional location-channel state**
    - Your selected geohash channel, bookmarks, teleport flags, and bookmark display names are stored locally so the UI can restore them.
