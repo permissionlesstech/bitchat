@@ -848,6 +848,9 @@ final class NostrRelayManager: ObservableObject {
             }
         }
         messageQueueLock.unlock()
+        // A relay queued while Tor bootstraps would otherwise reconnect when
+        // the queue drains, overriding the explicit removal.
+        pendingTorConnectionURLs.subtract(urls)
         relays.removeAll { urls.contains($0.url) }
         updateConnectionStatus()
     }
