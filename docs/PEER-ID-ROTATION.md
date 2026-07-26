@@ -1,8 +1,25 @@
 # Peer ID Rotation Specification
 
-**Status:** Draft for cross-platform review. Nothing here is implemented yet.
+**Status:** Draft for cross-platform review. The derivations and the wire format **are implemented and tested**; nothing is wired into the shipping mesh.
 **Audience:** bitchat iOS and bitchat Android maintainers.
-**Requires agreement before implementation.** This changes the wire protocol, so neither platform can ship it alone.
+**Requires agreement before going further.** This changes the wire protocol, so neither platform can ship it alone.
+
+**Where the code is:**
+
+| Piece | File |
+|---|---|
+| Epochs, ID derivation, recognition tags, tag block, binding message | `localPackages/BitFoundation/Sources/BitFoundation/PeerIDRotation.swift` |
+| `announceV2 = 0x05` wire format | `localPackages/BitFoundation/Sources/BitFoundation/AnnounceV2Packet.swift` |
+| Executable test vectors | `localPackages/BitFoundation/Tests/BitFoundationTests/PeerIDRotationTests.swift` |
+| Wire-format tests | `localPackages/BitFoundation/Tests/BitFoundationTests/AnnounceV2PacketTests.swift` |
+
+The code is deliberately an **opinionated working base, not a finished feature**. Every number and context string in it is a concrete proposal you can disagree with by changing one function and watching a test vector move. What is *not* implemented is the part that carries risk: nothing emits a v2 announce, and `BLEService` parses the type and explicitly ignores it, because consuming it needs both the replacement identity binding (§4.5) and a decision on how unverified presence appears in the peer list (O4).
+
+Three policy decisions were forced by the compiler when the new message type was added, and are worth reviewing as part of this:
+
+- **Not gossip-synced** (`SyncTypeFlags`). Syncing presence would defeat the purpose: a device never in radio range could collect tag blocks, turning a local beacon into a network-wide one.
+- **Not padded** (`BLEOutboundPacketPolicy`). At ~75 bytes the smallest bucket would triple the airtime of the most frequent packet in the protocol. The format is already near-constant width; making the capability and geohash fields fixed-width would be cheaper than padding. Open for argument.
+- **Parsed but ignored** on receive (`BLEService`), as above.
 
 ---
 
@@ -248,16 +265,34 @@ Keyed by fingerprint, Noise key, or Ed25519 key rather than peer ID: the identit
 
 ## 7. Test vectors
 
-To be filled in jointly **before** implementation, so both platforms verify against the same numbers rather than against each other's bugs. Each vector should give hex inputs and expected outputs for:
+These live as assertions in `PeerIDRotationTests.swift`, so they run on every build rather than rotting in a table.
 
-1. `K_rot` from a fixed 32-byte Noise static private key.
-2. `peerID_e` for that `K_rot` at three consecutive epochs.
-3. `S_AB`, `K_AB`, `tag_AB` for a fixed key pair at a fixed epoch, computed from both sides, showing they agree.
-4. A padded 8-slot tag list with two real tags, showing the real tags are recoverable regardless of position.
-5. The §4.5 binding `proof` bytes and signature for fixed keys, ID, and epoch.
-6. A full v2 announce packet, encoded, as a hex blob.
+All three were **cross-checked against an independent implementation written from this document alone** — Python `hmac`/`hashlib`, HKDF as extract-then-expand with an empty salt — and matched byte for byte. That is the property that matters: the spec text is sufficient to reproduce the numbers without reading the Swift.
 
-Whichever platform writes a vector, the other MUST reproduce it independently from this document rather than from the first platform's code.
+With `noiseStaticPrivateKey = 0102…20` (bytes 1 through 32):
+
+```
+rotationSecret = HKDF-SHA256(ikm: 0102…20, salt: <empty>,
+                             info: "bitchat-peer-rotation-v1", len: 32)
+               = fb82dfec0c0a2a4677beca44e2f72c80e7c5de773dd5fce6ee47af83d3c25f09
+
+peerID(epoch=100) = HMAC-SHA256(rotationSecret,
+                                "bitchat-peer-id-v2" || uint32be(100))[0..8]
+                  = f7c08c528506a374
+```
+
+With a recognition key derived from a shared secret of 32 × `0x42`:
+
+```
+recognitionKey = HKDF-SHA256(ikm: 42×32, salt: <empty>,
+                             info: "bitchat-recognition-v1", len: 32)
+tag(epoch=100) = HMAC-SHA256(recognitionKey, uint32be(100))[0..8]
+               = 36400502fa59f4a9
+```
+
+Also asserted, and worth reproducing on Android because they are the properties rather than the numbers: both sides of a real X25519 pair derive the identical tag from opposite key halves; consecutive epochs produce unrelated IDs; the ±1 epoch window matches across a boundary but two epochs out does not; the tag block is always 64 bytes regardless of how many tags it carries; a match is found regardless of slot position; and the binding message is fixed-width so a short input cannot shift a later field into an earlier field's position.
+
+Still to be written jointly: a full `announceV2` packet as a hex blob, and the §4.5 signature over a fixed key. Whichever platform writes a vector, the other MUST reproduce it from this document rather than from the first platform's code.
 
 ## 8. Open questions for review
 

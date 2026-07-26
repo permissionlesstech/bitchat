@@ -15,7 +15,15 @@ enum BLEOutboundPacketPolicy {
         // voiceFrame is deliberately unpadded: padding to the 512 block would
         // push every ~490-byte signed voice packet over the MTU into the
         // fragment path.
-        case .none, .announce, .message, .leave, .requestSync, .fragment, .fileTransfer, .courierEnvelope, .boardPost, .ping, .pong, .nostrCarrier, .prekeyBundle, .groupMessage, .voiceFrame:
+        //
+        // announceV2 is unpadded too, but for a different reason and it is worth
+        // revisiting: it is ~75 bytes, so the smallest bucket would triple the
+        // airtime of the most frequently sent packet in the protocol. Its length
+        // is already near-constant by construction (the tag block is fixed
+        // width); the residual variation is the capability width and whether a
+        // bridge geohash is present. Making those fixed-width would be cheaper
+        // than padding. See docs/PEER-ID-ROTATION.md.
+        case .none, .announce, .announceV2, .message, .leave, .requestSync, .fragment, .fileTransfer, .courierEnvelope, .boardPost, .ping, .pong, .nostrCarrier, .prekeyBundle, .groupMessage, .voiceFrame:
             return false
         }
     }

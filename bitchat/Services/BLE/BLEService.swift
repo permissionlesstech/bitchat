@@ -7025,7 +7025,16 @@ extension BLEService {
         switch context.messageType {
         case .announce:
             handleAnnounce(packet, from: senderID)
-            
+
+        case .announceV2:
+            // Parsed and ignored on purpose. The wire format and derivations are
+            // implemented and tested (see PeerIDRotation, AnnounceV2Packet), but
+            // consuming presence from it needs the replacement identity binding
+            // and the peer-list policy for unverified presence, both of which are
+            // still open questions in docs/PEER-ID-ROTATION.md. Accepting it now
+            // would add unauthenticated entries to the peer list.
+            break
+
         case .message:
             handleMessage(packet, from: senderID)
             
