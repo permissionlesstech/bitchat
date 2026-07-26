@@ -39,7 +39,7 @@ struct BLEServiceCoreTests {
         ble._test_handlePacket(packet, fromPeerID: sender, signingPublicKey: signingKey)
         let receivedDuplicate = await TestHelpers.waitUntil(
             { delegate.publicMessagesSnapshot().count > 1 },
-            timeout: TestConstants.shortTimeout
+            timeout: TestConstants.negativeWaitWindow
         )
         #expect(!receivedDuplicate)
 
@@ -117,7 +117,7 @@ struct BLEServiceCoreTests {
 
         let unsignedRelayed = await TestHelpers.waitUntil(
             { outbound.count(ofType: .leave) > 0 },
-            timeout: TestConstants.shortTimeout
+            timeout: TestConstants.negativeWaitWindow
         )
         #expect(!unsignedRelayed)
         #expect(ble.currentPeerSnapshots().contains { $0.peerID == alicePeerID })
@@ -133,7 +133,7 @@ struct BLEServiceCoreTests {
 
         let badSignatureRelayed = await TestHelpers.waitUntil(
             { outbound.count(ofType: .leave) > 0 },
-            timeout: TestConstants.shortTimeout
+            timeout: TestConstants.negativeWaitWindow
         )
         #expect(!badSignatureRelayed)
         #expect(ble.currentPeerSnapshots().contains { $0.peerID == alicePeerID })
@@ -1209,7 +1209,7 @@ struct BLEServiceCoreTests {
         let didObservePanicClosure = await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 let didObserveClosure = panicIngressObserver.waitUntilClosed(
-                    timeout: TestConstants.defaultTimeout
+                    timeout: TestConstants.settleTimeout
                 )
                 gate.release()
                 continuation.resume(returning: didObserveClosure)
@@ -1340,7 +1340,7 @@ struct BLEServiceCoreTests {
         // rotated sender IDs never bought a sixth response.
         let exceededBudget = await TestHelpers.waitUntil(
             { outbound.count(ofType: .pong) > budget },
-            timeout: TestConstants.shortTimeout
+            timeout: TestConstants.negativeWaitWindow
         )
         #expect(!exceededBudget)
         #expect(outbound.count(ofType: .pong) == budget)
