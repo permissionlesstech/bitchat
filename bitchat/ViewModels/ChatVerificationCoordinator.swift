@@ -45,6 +45,9 @@ protocol ChatVerificationContext: AnyObject {
     func resolveNickname(for peerID: PeerID) -> String
     func cachedStablePeerID(for shortPeerID: PeerID) -> PeerID?
     func cacheStablePeerID(_ stablePeerID: PeerID, for shortPeerID: PeerID)
+    /// Flushes the message router's disk outbox for the given (stable) key so
+    /// mail queued while the peer was offline delivers once it authenticates.
+    func flushRouterOutbox(for peerID: PeerID)
 
     // MARK: Noise sessions & verification transport
     /// Installs the Noise service's session callbacks (single registration point).
@@ -78,7 +81,8 @@ extension ChatViewModel: ChatVerificationContext {
     // `isVerifiedFingerprint(_:)`, `setEncryptionStatus(_:for:)`,
     // `resolveNickname(for:)`, `cachedStablePeerID(for:)`,
     // `cacheStablePeerID(_:for:)`, `noiseSessionPublicKeyData(for:)`,
-    // `hasEstablishedNoiseSession(with:)`, and `triggerHandshake(with:)` are
+    // `hasEstablishedNoiseSession(with:)`, `triggerHandshake(with:)`, and
+    // `flushRouterOutbox(for:)` (shared with `ChatTransportEventContext`) are
     // shared requirements with the other contexts or satisfied by existing
     // `ChatViewModel` members. The members below flatten nested service
     // accesses into intent-named calls.
@@ -245,15 +249,27 @@ final class ChatVerificationCoordinator {
                     // retry it now that this newly authenticated/replacement
                     // session can actually decrypt it.
                     var peerIDAliases = [peerID]
-                    if let stablePeerID = authenticatedStablePeerID
-                        ?? self.context.cachedStablePeerID(for: peerID),
-                       stablePeerID != peerID {
+                    let stablePeerID = authenticatedStablePeerID
+                        ?? self.context.cachedStablePeerID(for: peerID)
+                    if let stablePeerID, stablePeerID != peerID {
                         // Conversations can migrate from the ephemeral BLE ID
                         // to the authenticated Noise-key ID. Retry both aliases
                         // because either may own the retained outbox entry.
                         peerIDAliases.append(stablePeerID)
                     }
                     self.context.retrySecurePrivateMessagesAfterAuthentication(for: peerIDAliases)
+
+                    // The retry above only reaches messages already transmitted
+                    // through a secure session (it filters on `sendAttempts > 0`).
+                    // A DM composed while this peer was offline was never
+                    // transmitted at all — it sits in the outbox under the
+                    // stable 64-hex key — so it is in neither that set nor the
+                    // short-id flush on connect. Flush it here, now that the
+                    // link is authenticated and the stable identity is known,
+                    // rather than leaving it for the TTL.
+                    if let stablePeerID, stablePeerID != peerID {
+                        self.context.flushRouterOutbox(for: stablePeerID)
+                    }
 
                     if var pending = self.pendingQRVerifications[peerID], pending.sent == false {
                         self.context.sendVerifyChallenge(

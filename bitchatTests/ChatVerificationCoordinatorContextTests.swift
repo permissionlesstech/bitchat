@@ -91,6 +91,9 @@ private final class MockChatVerificationContext: ChatVerificationContext {
         stablePeerIDCache[shortPeerID] = stablePeerID
     }
 
+    private(set) var flushedOutboxPeerIDs: [PeerID] = []
+    func flushRouterOutbox(for peerID: PeerID) { flushedOutboxPeerIDs.append(peerID) }
+
     // Noise sessions & verification transport
     var myNoiseStaticKey = Data(repeating: 0x42, count: 32)
     var establishedNoiseSessions: Set<PeerID> = []
