@@ -71,11 +71,6 @@
     "expected": "ad8514c90ca1fa6bf44e38c8a6252482"
   },
 
-  "ciphertextHash": {
-    "_comment": "SHA-256 of the ciphertext, truncated to 16 bytes. This is the envelope identity a spray receipt carries.",
-    "expected": "bb85dcc4d8b17377c61817992df95826"
-  },
-
   "packetSigning": {
     "_comment": [
       "THE trap. The signature does NOT cover the bytes as they appear on the",

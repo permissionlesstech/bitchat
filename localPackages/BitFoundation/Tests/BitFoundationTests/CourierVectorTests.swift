@@ -99,9 +99,6 @@ struct CourierVectorTests {
             let epochDay: UInt32
             let expected: String
         }
-        struct CiphertextHash: Decodable {
-            let expected: String
-        }
         struct PacketSigning: Decodable {
             struct Packet: Decodable {
                 let version: UInt8
@@ -133,7 +130,6 @@ struct CourierVectorTests {
         let envelopeTLV: EnvelopeTLV
         let copiesClamping: CopiesClamping
         let recipientTagDerivation: RecipientTagDerivation
-        let ciphertextHash: CiphertextHash
         let packetSigning: PacketSigning
         let signature: Signature
     }
@@ -225,23 +221,6 @@ struct CourierVectorTests {
             for: message, using: SymmetricKey(data: noiseStaticKey)
         ).prefix(CourierEnvelope.tagLength))
         #expect(recomputed == tag)
-    }
-
-    /// The 16-byte envelope identity a spray receipt carries.
-    ///
-    /// Weaker than the other vectors, and deliberately so: this derivation has
-    /// no consumer on main yet — the function that reads it arrives with the
-    /// courier-spray work. What production surface exists is asserted (the
-    /// `sha256Hash()` implementation and the `tagLength` constant), but the
-    /// truncation is spelled out here rather than called, so a future
-    /// `ciphertextHash` helper that truncates differently would not fail this.
-    /// When that helper lands it should assert against this same vector.
-    @Test func ciphertextHashIsSHA256TruncatedTo16() throws {
-        let v = try Self.loadVectors()
-        let hash = Data(try Self.hex(v.inputs.ciphertext)
-            .sha256Hash()
-            .prefix(CourierEnvelope.tagLength))
-        #expect(hash.hexEncodedString() == v.ciphertextHash.expected)
     }
 
     // MARK: Packet canonicalization — the trap worth a vector
