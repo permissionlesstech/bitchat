@@ -4511,6 +4511,14 @@ extension BLEService: PrivateMediaDeletionPersisting {
             }
         }
     }
+
+    @MainActor
+    func removeLegacyPrivateMediaPayload(relativePath: String) {
+        let fileStore = incomingFileStore
+        messageQueue.async(flags: .barrier) {
+            fileStore.removeLegacyIncomingFile(relativePath: relativePath)
+        }
+    }
 }
 
 // MARK: - Private Helpers

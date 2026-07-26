@@ -1041,6 +1041,103 @@ struct BLEFileTransferHandlerTests {
     }
 
     @Test
+    func legacyIncomingDeleteUnlinksUnreferencedPayload() throws {
+        let base = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "legacy-unlink-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: base) }
+        let store = BLEIncomingFileStore(baseDirectory: base)
+        let incoming = try store.incomingDirectory(
+            subdirectory: "images/incoming"
+        )
+        let payload = incoming.appendingPathComponent("legacy.jpg")
+        try Data([0xFF, 0xD8, 0xFF, 0xD9]).write(to: payload)
+
+        #expect(store.removeLegacyIncomingFile(
+            relativePath: "images/incoming/legacy.jpg"
+        ))
+        #expect(!FileManager.default.fileExists(atPath: payload.path))
+
+        // Only paths directly inside an incoming media directory qualify.
+        let outgoing = base.appendingPathComponent(
+            "files/images/outgoing",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(
+            at: outgoing,
+            withIntermediateDirectories: true
+        )
+        let victim = outgoing.appendingPathComponent("victim.jpg")
+        try Data([0x01]).write(to: victim)
+        #expect(!store.removeLegacyIncomingFile(
+            relativePath: "images/outgoing/victim.jpg"
+        ))
+        #expect(!store.removeLegacyIncomingFile(
+            relativePath: "images/incoming/../outgoing/victim.jpg"
+        ))
+        #expect(FileManager.default.fileExists(atPath: victim.path))
+    }
+
+    @Test
+    func legacyIncomingDeleteLeavesPendingDeliveryPayload() throws {
+        let base = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "legacy-pending-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: base) }
+        let store = BLEIncomingFileStore(baseDirectory: base)
+
+        // save() marks the stored path pending until delivery finishes; a
+        // legacy delete naming the same basename must not unlink it.
+        let stored = try #require(store.save(
+            data: Data([0xFF, 0xD8, 0xFF, 0xD9]),
+            preferredName: "pending.jpg",
+            subdirectory: "images/incoming",
+            fallbackExtension: "jpg",
+            defaultPrefix: "img"
+        ))
+        let relativePath = "images/incoming/\(stored.lastPathComponent)"
+
+        #expect(!store.removeLegacyIncomingFile(relativePath: relativePath))
+        #expect(FileManager.default.fileExists(atPath: stored.path))
+
+        // Once the delivery window closes the same unlink is allowed.
+        store.finishIncomingFileDelivery(at: stored)
+        #expect(store.removeLegacyIncomingFile(relativePath: relativePath))
+        #expect(!FileManager.default.fileExists(atPath: stored.path))
+    }
+
+    @Test
+    func legacyIncomingDeleteLeavesReceiptProtectedPayload() throws {
+        let base = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "legacy-protected-\(UUID().uuidString)",
+                isDirectory: true
+            )
+        defer { try? FileManager.default.removeItem(at: base) }
+        let store = BLEIncomingFileStore(baseDirectory: base)
+        let incoming = try store.incomingDirectory(
+            subdirectory: "images/incoming"
+        )
+        let payload = incoming.appendingPathComponent("owned.jpg")
+        try Data([0xFF, 0xD8, 0xFF, 0xD9]).write(to: payload)
+
+        // The basename belongs to a stable receipt (another record). The
+        // legacy delete must leave it for that owner.
+        #expect(store.commitPrivateMediaFile(
+            messageID: "media-00112233445566778899aabbccddeeff",
+            storedURL: payload
+        ))
+        #expect(!store.removeLegacyIncomingFile(
+            relativePath: "images/incoming/owned.jpg"
+        ))
+        #expect(FileManager.default.fileExists(atPath: payload.path))
+    }
+
+    @Test
     func panicWipeDeletesEveryManagedMediaFileAndRecreatesEmptyDirectories() throws {
         let base = FileManager.default.temporaryDirectory
             .appendingPathComponent("panic-media-wipe-\(UUID().uuidString)", isDirectory: true)

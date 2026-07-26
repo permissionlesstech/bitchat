@@ -255,6 +255,18 @@ final class MockTransport: Transport, PrivateMediaDeletionPersisting {
         completion(result ?? persistDeletedPrivateMediaResult)
     }
 
+    /// Real store instance so view-model tests exercise the gated legacy
+    /// unlink end to end (same Application Support tree the tests write to).
+    let legacyIncomingFileStore = BLEIncomingFileStore()
+    private(set) var removedLegacyPrivateMediaPaths: [String] = []
+
+    func removeLegacyPrivateMediaPayload(relativePath: String) {
+        removedLegacyPrivateMediaPaths.append(relativePath)
+        legacyIncomingFileStore.removeLegacyIncomingFile(
+            relativePath: relativePath
+        )
+    }
+
     func sendVerifyChallenge(to peerID: PeerID, noiseKeyHex: String, nonceA: Data) {
         sentVerifyChallenges.append((peerID, noiseKeyHex, nonceA))
     }

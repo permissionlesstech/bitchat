@@ -108,6 +108,14 @@ protocol PrivateMediaDeletionPersisting: AnyObject {
         protectedPayloadRelativePaths: Set<String>,
         completion: @escaping @MainActor (Bool) -> Void
     )
+
+    /// Gated unlink for a LEGACY (non-stable-ID) incoming payload whose
+    /// bubble was explicitly removed. Implementations delete the file only
+    /// when its path is not pending delivery and not reserved by any receipt
+    /// or in-flight deletion transaction; otherwise the file stays for
+    /// bounded quota cleanup.
+    @MainActor
+    func removeLegacyPrivateMediaPayload(relativePath: String)
 }
 
 protocol TransportEventDelegate: AnyObject {

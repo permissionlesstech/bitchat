@@ -1279,47 +1279,6 @@ struct ChatViewModelPrivateMediaDeletionTests {
     }
 
     @Test @MainActor
-    func legacyIncomingDeleteLeavesAmbiguousPayloadForQuota() throws {
-        let (viewModel, transport) = makeTestableViewModel()
-        let peerID = PeerID(str: String(repeating: "3", count: 64))
-        let incoming = try FileManager.default.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        )
-        .appendingPathComponent(
-            "files/images/incoming",
-            isDirectory: true
-        )
-        try FileManager.default.createDirectory(
-            at: incoming,
-            withIntermediateDirectories: true
-        )
-        let payload = incoming.appendingPathComponent(
-            "legacy-delete-\(UUID().uuidString).jpg"
-        )
-        try Data([0x01]).write(to: payload)
-        defer { try? FileManager.default.removeItem(at: payload) }
-        let legacyID = UUID().uuidString
-        viewModel.seedPrivateChat([
-            privateMediaMessage(
-                id: legacyID,
-                sender: "Old client",
-                senderPeerID: peerID,
-                recipient: viewModel.nickname,
-                filename: payload.lastPathComponent
-            )
-        ], for: peerID)
-
-        viewModel.deleteMediaMessage(messageID: legacyID)
-
-        #expect(transport.deletedPrivateMediaMessageIDBatches.isEmpty)
-        #expect((viewModel.privateChats[peerID] ?? []).isEmpty)
-        #expect(FileManager.default.fileExists(atPath: payload.path))
-    }
-
-    @Test @MainActor
     func clearPrivateChatTombstonesIncomingAndCancelsOutgoingBeforeClear() {
         let (viewModel, transport) = makeTestableViewModel()
         let peerID = PeerID(str: String(repeating: "1", count: 64))
@@ -1874,7 +1833,7 @@ struct ChatViewModelPrivateMediaDeletionTests {
     }
 
     @Test @MainActor
-    func clearPrivateChatLeavesAmbiguousLegacyFileForQuotaCleanup()
+    func clearPrivateChatUnlinksLegacyFileOnlyAfterLastReference()
         throws {
         let (viewModel, transport) = makeTestableViewModel()
         let firstPeerID = PeerID(str: String(repeating: "9", count: 64))
@@ -1907,14 +1866,113 @@ struct ChatViewModelPrivateMediaDeletionTests {
 
         viewModel.clearPrivateChat(firstPeerID)
 
+        // A surviving mirror in another conversation keeps the payload.
         #expect(transport.deletedPrivateMediaMessageIDBatches.isEmpty)
+        #expect(transport.removedLegacyPrivateMediaPaths.isEmpty)
         #expect(FileManager.default.fileExists(atPath: fileURL.path))
         #expect(viewModel.privateChats[aliasPeerID]?.map(\.id) == [message.id])
 
         viewModel.clearPrivateChat(aliasPeerID)
 
-        #expect(FileManager.default.fileExists(atPath: fileURL.path))
+        // Clearing the last reference routes the legacy payload through the
+        // transport's gated unlink, which deletes it (nothing pending or
+        // reserved names this basename).
         #expect((viewModel.privateChats[aliasPeerID] ?? []).isEmpty)
+        #expect(
+            transport.removedLegacyPrivateMediaPaths
+                == ["images/incoming/\(fileURL.lastPathComponent)"]
+        )
+        #expect(!FileManager.default.fileExists(atPath: fileURL.path))
+    }
+
+    @Test @MainActor
+    func deleteLegacyIncomingMediaUnlinksUnreferencedPayload() throws {
+        let (viewModel, transport) = makeTestableViewModel()
+        let peerID = PeerID(str: String(repeating: "b", count: 64))
+        let incomingDirectory = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        .appendingPathComponent("files/images/incoming", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: incomingDirectory,
+            withIntermediateDirectories: true
+        )
+        let fileURL = incomingDirectory.appendingPathComponent(
+            "legacy-delete-\(UUID().uuidString).jpg"
+        )
+        try Data("legacy-image".utf8).write(to: fileURL, options: .atomic)
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let message = privateMediaMessage(
+            id: UUID().uuidString,
+            sender: "Old client",
+            senderPeerID: peerID,
+            recipient: viewModel.nickname,
+            filename: fileURL.lastPathComponent
+        )
+        viewModel.seedPrivateChat([message], for: peerID)
+
+        viewModel.deleteMediaMessage(messageID: message.id)
+
+        // Legacy incoming media has no stable receipt, so no journal batch —
+        // but the explicit delete must still remove the decrypted payload
+        // through the gated unlink.
+        #expect(transport.deletedPrivateMediaMessageIDBatches.isEmpty)
+        #expect((viewModel.privateChats[peerID] ?? []).isEmpty)
+        #expect(
+            transport.removedLegacyPrivateMediaPaths
+                == ["images/incoming/\(fileURL.lastPathComponent)"]
+        )
+        #expect(!FileManager.default.fileExists(atPath: fileURL.path))
+    }
+
+    @Test @MainActor
+    func deleteLegacyIncomingMediaKeepsPayloadReferencedByAnotherBubble()
+        throws {
+        let (viewModel, transport) = makeTestableViewModel()
+        let peerID = PeerID(str: String(repeating: "c", count: 64))
+        let incomingDirectory = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        .appendingPathComponent("files/images/incoming", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: incomingDirectory,
+            withIntermediateDirectories: true
+        )
+        let fileURL = incomingDirectory.appendingPathComponent(
+            "legacy-shared-\(UUID().uuidString).jpg"
+        )
+        try Data("legacy-image".utf8).write(to: fileURL, options: .atomic)
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let deleted = privateMediaMessage(
+            id: UUID().uuidString,
+            sender: "Old client",
+            senderPeerID: peerID,
+            recipient: viewModel.nickname,
+            filename: fileURL.lastPathComponent
+        )
+        // A different bubble (different ID) references the same basename.
+        let survivor = privateMediaMessage(
+            id: UUID().uuidString,
+            sender: "Old client",
+            senderPeerID: peerID,
+            recipient: viewModel.nickname,
+            filename: fileURL.lastPathComponent
+        )
+        viewModel.seedPrivateChat([deleted, survivor], for: peerID)
+
+        viewModel.deleteMediaMessage(messageID: deleted.id)
+
+        #expect(
+            viewModel.privateChats[peerID]?.map(\.id) == [survivor.id]
+        )
+        #expect(transport.removedLegacyPrivateMediaPaths.isEmpty)
+        #expect(FileManager.default.fileExists(atPath: fileURL.path))
     }
 
     @Test @MainActor

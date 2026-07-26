@@ -908,8 +908,9 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
 
             // Stable payload cleanup belongs entirely to the durable receiver
             // journal. Legacy/raw incoming payloads have no durable identity,
-            // so their basenames may already belong to a pending new arrival;
-            // leave those files for bounded quota cleanup.
+            // so once their bubbles are gone the transport's gated cleanup
+            // decides per basename: unlink when unreferenced, or leave any
+            // pending/reserved path for bounded quota cleanup.
             let finalPlan = currentRemovalPlan()
 
             for (conversationID, messageIDs) in finalPlan {
@@ -917,6 +918,7 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, SynchronousMessage
                     messageIDs.contains($0.id)
                 }
             }
+            cleanupLegacyIncomingMediaPayloads(for: capturedIncomingMedia)
             completion()
         }
 

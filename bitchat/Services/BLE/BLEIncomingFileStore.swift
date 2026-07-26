@@ -392,6 +392,83 @@ struct BLEIncomingFileStore: @unchecked Sendable {
         )
     }
 
+    /// Explicit deletion of a LEGACY (non-stable-ID) incoming payload.
+    ///
+    /// Legacy media has no durable receipt, so the only safe unlink is one
+    /// that can prove no other owner may hold the basename: the path must
+    /// not be pending delivery, must not belong to an in-flight deletion
+    /// reservation, and must not be owned by a stable receipt or journal
+    /// entry. When any of those hold — or receipt state cannot be read —
+    /// the file stays for bounded quota cleanup (the fail-safe fallback).
+    /// Returns true only when the payload was verifiably unlinked.
+    @discardableResult
+    func removeLegacyIncomingFile(relativePath: String) -> Bool {
+        payloadCoordination.lock.lock()
+        defer { payloadCoordination.lock.unlock() }
+
+        guard let payload = incomingPayloadURL(
+            relativePath: relativePath
+        ) else {
+            return false
+        }
+        let standardizedPath = payload.standardizedFileURL.path
+        let reservedByDeletion = payloadCoordination.deletionReservations
+            .values.contains { $0.contains(standardizedPath) }
+        guard !reservedByDeletion,
+              !payloadCoordination.pendingDeliveryPaths.contains(
+                  standardizedPath
+              ),
+              let receiptOwnedPaths =
+                privateMediaReceipts.reservedPayloadPaths(),
+              !receiptOwnedPaths.contains(standardizedPath) else {
+            return false
+        }
+        guard fileManager.fileExists(atPath: payload.path),
+              (try? payload.resourceValues(
+                  forKeys: [.isRegularFileKey]
+              ).isRegularFile) == true else {
+            return false
+        }
+        do {
+            try fileManager.removeItem(at: payload)
+            return !fileManager.fileExists(atPath: payload.path)
+        } catch {
+            SecureLogger.warning(
+                "⚠️ Failed to remove explicitly deleted legacy media: \(error)",
+                category: .session
+            )
+            return false
+        }
+    }
+
+    /// Resolves a `files/`-relative path iff it lands directly inside one of
+    /// the incoming media directories. Anything else is not a deletable
+    /// incoming payload.
+    private func incomingPayloadURL(relativePath: String) -> URL? {
+        guard !relativePath.isEmpty,
+              let base = try? filesDirectory().standardizedFileURL else {
+            return nil
+        }
+        let candidate = base
+            .appendingPathComponent(relativePath, isDirectory: false)
+            .standardizedFileURL
+        let parentPath = candidate.deletingLastPathComponent().path
+        let incomingDirectories = [
+            "voicenotes/incoming",
+            "images/incoming",
+            "files/incoming"
+        ]
+        guard incomingDirectories.contains(where: { relativeDirectory in
+            base.appendingPathComponent(
+                relativeDirectory,
+                isDirectory: true
+            ).standardizedFileURL.path == parentPath
+        }) else {
+            return nil
+        }
+        return candidate
+    }
+
     /// Releases the short window between disk save and synchronous
     /// conversation insertion. Before this callback, a deletion transaction
     /// may not infer ownership from a stale bubble that names the same path.

@@ -226,18 +226,51 @@ extension ChatViewModel: ChatMediaTransferContext {
         let message = conversations.conversationsByID.values.lazy
             .flatMap(\.messages)
             .first { $0.id == messageID }
-        if let message {
-            if !isIncomingPrivateMessage(message) {
-                mediaTransferCoordinator.cleanupOutgoingLocalFile(
-                    forMessage: message
-                )
-            }
-            // Legacy/raw incoming media has no durable ID-to-file ownership.
-            // Its basename may already belong to a pending newer arrival, so
-            // leave the payload for bounded quota cleanup rather than unlink
-            // an ambiguous path.
+        if let message, !isIncomingPrivateMessage(message) {
+            mediaTransferCoordinator.cleanupOutgoingLocalFile(
+                forMessage: message
+            )
         }
         removeMessage(withID: messageID, cleanupFile: false)
+        if let message {
+            cleanupLegacyIncomingMediaPayloads(for: [message])
+        }
+    }
+
+    /// Explicitly deleted LEGACY (non-stable-ID) incoming media has no
+    /// durable ID-to-file ownership, so the actual unlink is delegated to
+    /// the transport's gated cleanup: a basename that is pending delivery or
+    /// reserved by a receipt/deletion transaction stays on disk for bounded
+    /// quota cleanup instead. Must run after the bubbles were removed; a
+    /// surviving reference in any conversation keeps the payload.
+    func cleanupLegacyIncomingMediaPayloads(for messages: [BitchatMessage]) {
+        guard let cleanup =
+                meshService as? any PrivateMediaDeletionPersisting else {
+            return
+        }
+        let legacyPaths = Set(messages.compactMap { message -> String? in
+            guard !PrivateMediaMessageIdentity.isStableID(message.id),
+                  isIncomingPrivateMessage(message) else {
+                return nil
+            }
+            return incomingMediaRelativePath(for: message)
+        })
+        guard !legacyPaths.isEmpty else { return }
+        let survivingPaths = Set(
+            conversations.conversationsByID.values.lazy
+                .flatMap(\.messages)
+                .compactMap { message -> String? in
+                    guard self.isIncomingPrivateMessage(message) else {
+                        return nil
+                    }
+                    return self.incomingMediaRelativePath(for: message)
+                }
+        )
+        for relativePath in legacyPaths.subtracting(survivingPaths).sorted() {
+            cleanup.removeLegacyPrivateMediaPayload(
+                relativePath: relativePath
+            )
+        }
     }
 
     func removeOutgoingMediaMessage(withID messageID: String) {
