@@ -810,6 +810,45 @@ struct GossipSyncManagerTests {
         #expect(manager._messageCount(for: PeerID(hexData: senderID)) == 0)
     }
 
+    /// Clearing the mesh timeline must leave nothing behind on disk: a
+    /// relaunch that restored the archive would undo the clear.
+    @Test func removeAllPublicMessagesErasesTheArchiveOnDisk() async throws {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("gossip-archive-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+
+        let senderID = try #require(Data(hexString: "1122334455667788"))
+        let packet = BitchatPacket(
+            type: MessageType.message.rawValue,
+            senderID: senderID,
+            recipientID: nil,
+            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+            payload: Data([0x01, 0x02]),
+            signature: nil,
+            ttl: 1
+        )
+
+        let manager = GossipSyncManager(
+            myPeerID: myPeerID,
+            requestSyncManager: RequestSyncManager(),
+            archive: GossipMessageArchive(fileURL: fileURL)
+        )
+        manager.onPublicPacketSeen(packet)
+        manager._performMaintenanceSynchronously(now: Date())
+        #expect(FileManager.default.fileExists(atPath: fileURL.path))
+
+        manager.removeAllPublicMessages()
+
+        let erased = await TestHelpers.waitUntil(
+            {
+                !FileManager.default.fileExists(atPath: fileURL.path)
+                    && manager._messageCount(for: PeerID(hexData: senderID)) == 0
+            },
+            timeout: TestConstants.shortTimeout
+        )
+        #expect(erased)
+    }
+
 }
 
 private final class RecordingDelegate: GossipSyncManager.Delegate {

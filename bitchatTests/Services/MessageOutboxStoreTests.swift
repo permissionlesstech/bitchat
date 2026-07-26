@@ -207,6 +207,42 @@ struct MessageOutboxStoreTests {
         #expect(MessageOutboxStore(keychain: keychain, fileURL: fileURL).load().isEmpty)
     }
 
+    @Test func deferredScopedRemovalTombstoneFiltersOnlySelectedPeer() {
+        let fileURL = makeTempURL()
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let keychain = MockKeychain()
+        let acknowledgedPeer = PeerID(str: "0000000000000001")
+        let otherPeer = PeerID(str: "0000000000000002")
+        MessageOutboxStore(keychain: keychain, fileURL: fileURL).save([
+            acknowledgedPeer: [makeMessage("shared-id", content: "for acknowledged peer")],
+            otherPeer: [makeMessage("shared-id", content: "for other peer")]
+        ])
+
+        var protectedDataUnavailable = true
+        let restored = MessageOutboxStore(
+            keychain: keychain,
+            fileURL: fileURL,
+            readData: { url in
+                if protectedDataUnavailable {
+                    throw NSError(domain: NSCocoaErrorDomain, code: NSFileReadNoPermissionError)
+                }
+                return try Data(contentsOf: url)
+            }
+        )
+        #expect(restored.load().isEmpty)
+        restored.recordRemoval(messageID: "shared-id", for: [acknowledgedPeer])
+        restored.save([:])
+
+        protectedDataUnavailable = false
+        let recovered = restored.retryDeferredLoad()
+        #expect(recovered?[acknowledgedPeer] == nil)
+        #expect(recovered?[otherPeer]?.map(\.messageID) == ["shared-id"])
+
+        let relaunched = MessageOutboxStore(keychain: keychain, fileURL: fileURL).load()
+        #expect(relaunched[acknowledgedPeer] == nil)
+        #expect(relaunched[otherPeer]?.map(\.messageID) == ["shared-id"])
+    }
+
     @Test func wipeRemovesFileAndKey() {
         let fileURL = makeTempURL()
         let keychain = MockKeychain()

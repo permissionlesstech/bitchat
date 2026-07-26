@@ -322,7 +322,7 @@ final class CourierStore {
 
     /// Envelopes eligible to park on relays as bridge courier drops. Merely
     /// offering one does not start its cooldown: the caller commits that only
-    /// after a relay explicitly accepts the event via NIP-20 OK.
+    /// after a relay explicitly accepts the event via NIP-01 `OK`.
     func envelopesForBridgePublish(cooldown: TimeInterval) -> [CourierEnvelope] {
         let date = now()
         return queue.sync {

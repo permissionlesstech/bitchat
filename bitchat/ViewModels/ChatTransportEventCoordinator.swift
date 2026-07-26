@@ -62,10 +62,15 @@ protocol ChatTransportEventContext: AnyObject {
     func sendMeshDeliveryAck(for messageID: String, to peerID: PeerID)
 
     // MARK: Delivery status
-    /// Applies the status to every known location of the message.
-    /// Returns `false` when no message with that ID was updated.
+    /// Applies an authenticated receipt to the message only when it belongs
+    /// to the supplied peer conversation aliases. Returns `false` for an
+    /// unknown ID, wrong peer, or rejected status transition.
     @discardableResult
-    func applyMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) -> Bool
+    func applyAcknowledgedMessageDeliveryStatus(
+        _ messageID: String,
+        status: DeliveryStatus,
+        from peerIDAliases: Set<PeerID>
+    ) -> Bool
     func deliveryStatus(for messageID: String) -> DeliveryStatus?
 
     // MARK: Verification payloads
@@ -122,8 +127,16 @@ extension ChatViewModel: ChatTransportEventContext {
     }
 
     @discardableResult
-    func applyMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) -> Bool {
-        deliveryCoordinator.updateMessageDeliveryStatus(messageID, status: status)
+    func applyAcknowledgedMessageDeliveryStatus(
+        _ messageID: String,
+        status: DeliveryStatus,
+        from peerIDAliases: Set<PeerID>
+    ) -> Bool {
+        deliveryCoordinator.updateAcknowledgedMessageDeliveryStatus(
+            messageID,
+            status: status,
+            from: peerIDAliases
+        )
     }
 
     func deliveryStatus(for messageID: String) -> DeliveryStatus? {
@@ -163,19 +176,18 @@ final class ChatTransportEventCoordinator {
     }
 
     func didReceiveMessage(_ message: BitchatMessage) {
-        runOnMain { context in
-            guard !context.isMessageBlocked(message) else { return }
-            guard !message.content.trimmed.isEmpty || message.isPrivate else { return }
-
-            if message.isPrivate {
-                context.handlePrivateMessage(message)
-            } else {
-                context.handlePublicMessage(message)
-            }
-
-            context.checkForMentions(message)
-            context.sendHapticFeedback(for: message)
+        runOnMain { [self] context in
+            handleReceivedMessage(message, in: context)
         }
+    }
+
+    /// Typed transport events already arrive on the main actor. Handle them
+    /// synchronously so observers see the ConversationStore mutation before
+    /// the transport completes delivery.
+    @MainActor
+    @discardableResult
+    func didReceiveMessageSynchronously(_ message: BitchatMessage) -> Bool {
+        handleReceivedMessage(message, in: context)
     }
 
     func didReceivePublicMessage(
@@ -185,26 +197,34 @@ final class ChatTransportEventCoordinator {
         timestamp: Date,
         messageID: String?
     ) {
-        runOnMain { context in
-            let normalized = content.trimmed
-            let mentions = context.parseMentions(from: normalized)
-            let message = BitchatMessage(
-                id: messageID,
-                sender: nickname,
-                content: normalized,
+        runOnMain { [self] context in
+            handlePublicMessage(
+                from: peerID,
+                nickname: nickname,
+                content: content,
                 timestamp: timestamp,
-                isRelay: false,
-                originalSender: nil,
-                isPrivate: false,
-                recipientNickname: nil,
-                senderPeerID: peerID,
-                mentions: mentions.isEmpty ? nil : mentions
+                messageID: messageID,
+                in: context
             )
-
-            context.handlePublicMessage(message)
-            context.checkForMentions(message)
-            context.sendHapticFeedback(for: message)
         }
+    }
+
+    @MainActor
+    func didReceivePublicMessageSynchronously(
+        from peerID: PeerID,
+        nickname: String,
+        content: String,
+        timestamp: Date,
+        messageID: String?
+    ) {
+        handlePublicMessage(
+            from: peerID,
+            nickname: nickname,
+            content: content,
+            timestamp: timestamp,
+            messageID: messageID,
+            in: context
+        )
     }
 
     func didReceiveNoisePayload(
@@ -224,59 +244,134 @@ final class ChatTransportEventCoordinator {
         }
     }
 
+    @MainActor
+    func didReceiveNoisePayloadSynchronously(
+        from peerID: PeerID,
+        type: NoisePayloadType,
+        payload: Data,
+        timestamp: Date
+    ) {
+        handleNoisePayload(
+            from: peerID,
+            type: type,
+            payload: payload,
+            timestamp: timestamp,
+            in: context
+        )
+    }
+
     func didConnectToPeer(_ peerID: PeerID) {
-        SecureLogger.debug("🤝 Peer connected: \(peerID)", category: .session)
-
-        runOnMain { context in
-            context.isConnected = true
-            context.registerEphemeralSession(peerID: peerID)
-            context.notifyUIChanged()
-
-            if let peer = context.unifiedPeer(for: peerID) {
-                let stablePeerID = PeerID(hexData: peer.noisePublicKey)
-                context.cacheStablePeerID(stablePeerID, for: peerID)
-            }
-
-            context.flushRouterOutbox(for: peerID)
-            context.retryCourierDeposits(via: peerID)
+        runOnMain { [weak self] _ in
+            self?.didConnectToPeerSynchronously(peerID)
         }
     }
 
+    @MainActor
+    func didConnectToPeerSynchronously(_ peerID: PeerID) {
+        SecureLogger.debug("🤝 Peer connected: \(peerID)", category: .session)
+
+        context.isConnected = true
+        context.registerEphemeralSession(peerID: peerID)
+        context.notifyUIChanged()
+
+        if let peer = context.unifiedPeer(for: peerID) {
+            let stablePeerID = PeerID(hexData: peer.noisePublicKey)
+            context.cacheStablePeerID(stablePeerID, for: peerID)
+        }
+
+        context.flushRouterOutbox(for: peerID)
+        context.retryCourierDeposits(via: peerID)
+    }
+
     func didDisconnectFromPeer(_ peerID: PeerID) {
+        runOnMain { [weak self] _ in
+            self?.didDisconnectFromPeerSynchronously(peerID)
+        }
+    }
+
+    @MainActor
+    func didDisconnectFromPeerSynchronously(_ peerID: PeerID) {
         SecureLogger.debug("👋 Peer disconnected: \(peerID)", category: .session)
 
-        runOnMain { context in
-            context.removeEphemeralSession(peerID: peerID)
+        context.removeEphemeralSession(peerID: peerID)
 
-            var stablePeerID = context.cachedStablePeerID(for: peerID)
-            if stablePeerID == nil,
-               let key = context.noiseSessionPublicKeyData(for: peerID) {
-                let derivedPeerID = PeerID(hexData: key)
-                context.cacheStablePeerID(derivedPeerID, for: peerID)
-                stablePeerID = derivedPeerID
-            }
-
-            if let currentPeerID = context.selectedPrivateChatPeer,
-               currentPeerID == peerID,
-               let stablePeerID {
-                self.migrateSelectedConversationIfNeeded(
-                    from: peerID,
-                    to: stablePeerID,
-                    in: context
-                )
-            }
-
-            let receiptIDs = context.privateMessages(for: peerID)
-                .filter { $0.senderPeerID == peerID }
-                .map(\.id)
-            context.unmarkReadReceiptsSent(receiptIDs)
-
-            context.notifyUIChanged()
+        var stablePeerID = context.cachedStablePeerID(for: peerID)
+        if stablePeerID == nil,
+           let key = context.noiseSessionPublicKeyData(for: peerID) {
+            let derivedPeerID = PeerID(hexData: key)
+            context.cacheStablePeerID(derivedPeerID, for: peerID)
+            stablePeerID = derivedPeerID
         }
+
+        if let currentPeerID = context.selectedPrivateChatPeer,
+           currentPeerID == peerID,
+           let stablePeerID {
+            migrateSelectedConversationIfNeeded(
+                from: peerID,
+                to: stablePeerID,
+                in: context
+            )
+        }
+
+        let receiptIDs = context.privateMessages(for: peerID)
+            .filter { $0.senderPeerID == peerID }
+            .map(\.id)
+        context.unmarkReadReceiptsSent(receiptIDs)
+
+        context.notifyUIChanged()
     }
 }
 
 private extension ChatTransportEventCoordinator {
+    @MainActor
+    func handlePublicMessage(
+        from peerID: PeerID,
+        nickname: String,
+        content: String,
+        timestamp: Date,
+        messageID: String?,
+        in context: any ChatTransportEventContext
+    ) {
+        let normalized = content.trimmed
+        let mentions = context.parseMentions(from: normalized)
+        let message = BitchatMessage(
+            id: messageID,
+            sender: nickname,
+            content: normalized,
+            timestamp: timestamp,
+            isRelay: false,
+            originalSender: nil,
+            isPrivate: false,
+            recipientNickname: nil,
+            senderPeerID: peerID,
+            mentions: mentions.isEmpty ? nil : mentions
+        )
+
+        context.handlePublicMessage(message)
+        context.checkForMentions(message)
+        context.sendHapticFeedback(for: message)
+    }
+
+    @MainActor
+    @discardableResult
+    func handleReceivedMessage(
+        _ message: BitchatMessage,
+        in context: any ChatTransportEventContext
+    ) -> Bool {
+        guard !context.isMessageBlocked(message) else { return false }
+        guard !message.content.trimmed.isEmpty || message.isPrivate else { return false }
+
+        if message.isPrivate {
+            context.handlePrivateMessage(message)
+        } else {
+            context.handlePublicMessage(message)
+        }
+
+        context.checkForMentions(message)
+        context.sendHapticFeedback(for: message)
+        return true
+    }
+
     func runOnMain(_ action: @escaping @MainActor (any ChatTransportEventContext) -> Void) {
         Task { @MainActor [weak context = self.context] in
             guard let context else { return }
@@ -364,9 +459,10 @@ private extension ChatTransportEventCoordinator {
             guard let messageID = String(data: payload, encoding: .utf8) else { return }
 
             let name = deliveryStatusName(for: peerID, in: context)
-            let didUpdate = context.applyMessageDeliveryStatus(
+            let didUpdate = context.applyAcknowledgedMessageDeliveryStatus(
                 messageID,
-                status: .delivered(to: name, at: Date())
+                status: .delivered(to: name, at: Date()),
+                from: receiptPeerAliases(for: peerID, in: context)
             )
 
             if !didUpdate {
@@ -381,9 +477,10 @@ private extension ChatTransportEventCoordinator {
             guard let messageID = String(data: payload, encoding: .utf8) else { return }
 
             let name = deliveryStatusName(for: peerID, in: context)
-            let didUpdate = context.applyMessageDeliveryStatus(
+            let didUpdate = context.applyAcknowledgedMessageDeliveryStatus(
                 messageID,
-                status: .read(by: name, at: Date())
+                status: .read(by: name, at: Date()),
+                from: receiptPeerAliases(for: peerID, in: context)
             )
 
             if !didUpdate {
@@ -407,11 +504,35 @@ private extension ChatTransportEventCoordinator {
 
         case .voiceFrame:
             context.handleVoiceFramePayload(from: peerID, payload: payload, timestamp: timestamp)
+
+        case .privateFile, .authenticatedPeerState:
+            // BLEService validates and persists decrypted private files before
+            // emitting a normal `.messageReceived` event, and consumes peer
+            // state inside the transport. Neither payload crosses this
+            // UI-facing typed-payload fallback.
+            break
         }
     }
 
     @MainActor
     func deliveryStatusName(for peerID: PeerID, in context: any ChatTransportEventContext) -> String {
         context.unifiedPeer(for: peerID)?.nickname ?? context.resolveNickname(for: peerID)
+    }
+
+    @MainActor
+    func receiptPeerAliases(
+        for peerID: PeerID,
+        in context: any ChatTransportEventContext
+    ) -> Set<PeerID> {
+        var aliases: Set<PeerID> = [peerID]
+        // The active authenticated Noise key is authoritative. A cached
+        // ephemeral→stable mapping can predate an identity replacement, so
+        // use it only when the live session cannot provide its static key.
+        if let keyData = context.noiseSessionPublicKeyData(for: peerID) {
+            aliases.insert(PeerID(hexData: keyData))
+        } else if let stablePeerID = context.cachedStablePeerID(for: peerID) {
+            aliases.insert(stablePeerID)
+        }
+        return aliases
     }
 }
