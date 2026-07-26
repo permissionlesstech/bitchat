@@ -9,7 +9,16 @@
 import struct Foundation.Data
 
 /// Provides privacy-preserving message padding to obscure actual content length.
-/// Uses PKCS#7-style padding with random bytes to prevent traffic analysis.
+///
+/// PKCS#7-style: every pad byte equals the pad length, which is what `unpad`
+/// verifies. The bytes are not random.
+///
+/// Two limits are worth knowing before relying on this for traffic analysis
+/// resistance. Only Noise frames are padded at all (see the outbound packet
+/// policy); everything else travels at its natural length. And because the pad
+/// length has to fit in one byte, `pad` declines any request needing more than
+/// 255 bytes — so a frame far below its target bucket is emitted unpadded
+/// rather than padded to a smaller bucket.
 struct MessagePadding {
     // Standard block sizes for padding
     static let blockSizes = [256, 512, 1024, 2048]

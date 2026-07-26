@@ -62,10 +62,15 @@ protocol ChatTransportEventContext: AnyObject {
     func sendMeshDeliveryAck(for messageID: String, to peerID: PeerID)
 
     // MARK: Delivery status
-    /// Applies the status to every known location of the message.
-    /// Returns `false` when no message with that ID was updated.
+    /// Applies an authenticated receipt to the message only when it belongs
+    /// to the supplied peer conversation aliases. Returns `false` for an
+    /// unknown ID, wrong peer, or rejected status transition.
     @discardableResult
-    func applyMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) -> Bool
+    func applyAcknowledgedMessageDeliveryStatus(
+        _ messageID: String,
+        status: DeliveryStatus,
+        from peerIDAliases: Set<PeerID>
+    ) -> Bool
     func deliveryStatus(for messageID: String) -> DeliveryStatus?
 
     // MARK: Verification payloads
@@ -122,8 +127,16 @@ extension ChatViewModel: ChatTransportEventContext {
     }
 
     @discardableResult
-    func applyMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) -> Bool {
-        deliveryCoordinator.updateMessageDeliveryStatus(messageID, status: status)
+    func applyAcknowledgedMessageDeliveryStatus(
+        _ messageID: String,
+        status: DeliveryStatus,
+        from peerIDAliases: Set<PeerID>
+    ) -> Bool {
+        deliveryCoordinator.updateAcknowledgedMessageDeliveryStatus(
+            messageID,
+            status: status,
+            from: peerIDAliases
+        )
     }
 
     func deliveryStatus(for messageID: String) -> DeliveryStatus? {
@@ -446,9 +459,10 @@ private extension ChatTransportEventCoordinator {
             guard let messageID = String(data: payload, encoding: .utf8) else { return }
 
             let name = deliveryStatusName(for: peerID, in: context)
-            let didUpdate = context.applyMessageDeliveryStatus(
+            let didUpdate = context.applyAcknowledgedMessageDeliveryStatus(
                 messageID,
-                status: .delivered(to: name, at: Date())
+                status: .delivered(to: name, at: Date()),
+                from: receiptPeerAliases(for: peerID, in: context)
             )
 
             if !didUpdate {
@@ -463,9 +477,10 @@ private extension ChatTransportEventCoordinator {
             guard let messageID = String(data: payload, encoding: .utf8) else { return }
 
             let name = deliveryStatusName(for: peerID, in: context)
-            let didUpdate = context.applyMessageDeliveryStatus(
+            let didUpdate = context.applyAcknowledgedMessageDeliveryStatus(
                 messageID,
-                status: .read(by: name, at: Date())
+                status: .read(by: name, at: Date()),
+                from: receiptPeerAliases(for: peerID, in: context)
             )
 
             if !didUpdate {
@@ -502,5 +517,22 @@ private extension ChatTransportEventCoordinator {
     @MainActor
     func deliveryStatusName(for peerID: PeerID, in context: any ChatTransportEventContext) -> String {
         context.unifiedPeer(for: peerID)?.nickname ?? context.resolveNickname(for: peerID)
+    }
+
+    @MainActor
+    func receiptPeerAliases(
+        for peerID: PeerID,
+        in context: any ChatTransportEventContext
+    ) -> Set<PeerID> {
+        var aliases: Set<PeerID> = [peerID]
+        // The active authenticated Noise key is authoritative. A cached
+        // ephemeral→stable mapping can predate an identity replacement, so
+        // use it only when the live session cannot provide its static key.
+        if let keyData = context.noiseSessionPublicKeyData(for: peerID) {
+            aliases.insert(PeerID(hexData: keyData))
+        } else if let stablePeerID = context.cachedStablePeerID(for: peerID) {
+            aliases.insert(stablePeerID)
+        }
+        return aliases
     }
 }

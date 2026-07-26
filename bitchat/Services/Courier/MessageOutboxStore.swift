@@ -110,6 +110,10 @@ final class MessageOutboxStore {
     /// Delivery/read acknowledgments received before a deferred cold-load
     /// reveals the durable queue. Applied to every merge before persistence.
     private var pendingRemovalMessageIDs = Set<String>()
+    /// Peer-scoped acknowledgments received before a deferred cold-load
+    /// reveals the durable queue. Unlike the legacy global tombstones above,
+    /// these must not remove a colliding message ID queued for another peer.
+    private var pendingScopedRemovalMessageIDs: [PeerID: Set<String>] = [:]
     private var recoveryHandler: (@MainActor (Snapshot) -> Void)?
     /// Recovery loaded durable state that MessageRouter has not merged yet.
     /// While true, router saves must union with `cachedSnapshot` instead of
@@ -195,7 +199,7 @@ final class MessageOutboxStore {
                 ? (pendingSnapshot ?? [:])
                 : Self.merge(durable, pendingSnapshot ?? [:]))
             diskState = .loaded
-            if pendingSnapshot != nil || !pendingRemovalMessageIDs.isEmpty {
+            if pendingSnapshot != nil || hasPendingRemovalsLocked {
                 if persistSnapshotAndClearRemovalsLocked(cachedSnapshot) {
                     pendingSnapshot = nil
                     pendingSnapshotIsAuthoritative = false
@@ -212,7 +216,7 @@ final class MessageOutboxStore {
         case .missing:
             cachedSnapshot = applyingPendingRemovalsLocked(pendingSnapshot ?? [:])
             diskState = .loaded
-            if pendingSnapshot != nil || !pendingRemovalMessageIDs.isEmpty {
+            if pendingSnapshot != nil || hasPendingRemovalsLocked {
                 if persistSnapshotAndClearRemovalsLocked(cachedSnapshot) {
                     pendingSnapshot = nil
                     pendingSnapshotIsAuthoritative = false
@@ -235,7 +239,7 @@ final class MessageOutboxStore {
             diskState = .loaded
             cachedSnapshot = applyingPendingRemovalsLocked(pendingSnapshot ?? [:])
             SecureLogger.error("Failed to decode encrypted outbox: \(error)", category: .session)
-            if pendingSnapshot != nil || !pendingRemovalMessageIDs.isEmpty {
+            if pendingSnapshot != nil || hasPendingRemovalsLocked {
                 if persistSnapshotAndClearRemovalsLocked(cachedSnapshot) {
                     pendingSnapshot = nil
                     pendingSnapshotIsAuthoritative = false
@@ -442,6 +446,25 @@ final class MessageOutboxStore {
         lock.unlock()
     }
 
+    /// Records an ack for only the supplied peer aliases. This preserves
+    /// another recipient's queued entry when message IDs happen to collide,
+    /// including while the durable snapshot is hidden by protected data.
+    func recordRemoval(messageID: String, for peerIDs: Set<PeerID>) {
+        guard !peerIDs.isEmpty else { return }
+
+        lock.lock()
+        for peerID in peerIDs {
+            pendingScopedRemovalMessageIDs[peerID, default: []].insert(messageID)
+        }
+        cachedSnapshot = Self.removing(pendingScopedRemovalMessageIDs, from: cachedSnapshot)
+        unseenRecoveredSnapshot = Self.removing(pendingScopedRemovalMessageIDs, from: unseenRecoveredSnapshot)
+        recoveryRouterSnapshot = Self.removing(pendingScopedRemovalMessageIDs, from: recoveryRouterSnapshot)
+        if let pendingSnapshot {
+            self.pendingSnapshot = Self.removing(pendingScopedRemovalMessageIDs, from: pendingSnapshot)
+        }
+        lock.unlock()
+    }
+
     /// Retries a deferred protected-data load. The returned snapshot includes
     /// both durable messages and any messages queued during the locked wake.
     @discardableResult
@@ -478,7 +501,7 @@ final class MessageOutboxStore {
                 : (pendingSnapshotIsAuthoritative ? known : Self.merge(durable, known)))
             cachedSnapshot = merged
             diskState = .loaded
-            if (pendingSnapshot == nil && pendingRemovalMessageIDs.isEmpty) ||
+            if (pendingSnapshot == nil && !hasPendingRemovalsLocked) ||
                 persistSnapshotAndClearRemovalsLocked(merged) {
                 pendingSnapshot = nil
                 pendingSnapshotIsAuthoritative = false
@@ -507,7 +530,7 @@ final class MessageOutboxStore {
                 : known)
             cachedSnapshot = merged
             diskState = .loaded
-            if (pendingSnapshot == nil && pendingRemovalMessageIDs.isEmpty) ||
+            if (pendingSnapshot == nil && !hasPendingRemovalsLocked) ||
                 persistSnapshotAndClearRemovalsLocked(merged) {
                 pendingSnapshot = nil
                 pendingSnapshotIsAuthoritative = false
@@ -539,7 +562,7 @@ final class MessageOutboxStore {
                 : known)
             cachedSnapshot = merged
             diskState = .loaded
-            if (pendingSnapshot == nil && pendingRemovalMessageIDs.isEmpty) ||
+            if (pendingSnapshot == nil && !hasPendingRemovalsLocked) ||
                 persistSnapshotAndClearRemovalsLocked(merged) {
                 pendingSnapshot = nil
                 pendingSnapshotIsAuthoritative = false
@@ -578,6 +601,7 @@ final class MessageOutboxStore {
         pendingSnapshot = nil
         pendingSnapshotIsAuthoritative = false
         pendingRemovalMessageIDs.removeAll()
+        pendingScopedRemovalMessageIDs.removeAll()
         recoveryDeliveryPending = false
         unseenRecoveryPendingPersistence = false
         unseenRecoveredSnapshot = [:]
@@ -742,12 +766,21 @@ final class MessageOutboxStore {
     private func persistSnapshotAndClearRemovalsLocked(_ snapshot: Snapshot) -> Bool {
         guard persistSnapshotLocked(snapshot) else { return false }
         pendingRemovalMessageIDs.removeAll()
+        pendingScopedRemovalMessageIDs.removeAll()
         return true
     }
 
     /// Must be called with `lock` held.
     private func applyingPendingRemovalsLocked(_ snapshot: Snapshot) -> Snapshot {
-        Self.removing(pendingRemovalMessageIDs, from: snapshot)
+        Self.removing(
+            pendingScopedRemovalMessageIDs,
+            from: Self.removing(pendingRemovalMessageIDs, from: snapshot)
+        )
+    }
+
+    /// Must be read with `lock` held.
+    private var hasPendingRemovalsLocked: Bool {
+        !pendingRemovalMessageIDs.isEmpty || !pendingScopedRemovalMessageIDs.isEmpty
     }
 
     private static func removing(_ messageIDs: Set<String>, from snapshot: Snapshot) -> Snapshot {
@@ -760,9 +793,28 @@ final class MessageOutboxStore {
         return filtered
     }
 
+    private static func removing(
+        _ messageIDsByPeer: [PeerID: Set<String>],
+        from snapshot: Snapshot
+    ) -> Snapshot {
+        guard !messageIDsByPeer.isEmpty else { return snapshot }
+        var filtered = snapshot
+        for (peerID, messageIDs) in messageIDsByPeer {
+            guard !messageIDs.isEmpty, let queue = filtered[peerID] else { continue }
+            let remaining = queue.filter { !messageIDs.contains($0.messageID) }
+            filtered[peerID] = remaining.isEmpty ? nil : remaining
+        }
+        return filtered
+    }
+
     private static func excludingKnownMessages(from durable: Snapshot, known: Snapshot) -> Snapshot {
-        let knownIDs = Set(known.values.flatMap { $0.map(\.messageID) })
-        return removing(knownIDs, from: durable)
+        var unseen: Snapshot = [:]
+        for (peerID, durableQueue) in durable {
+            let knownIDs = Set(known[peerID]?.map(\.messageID) ?? [])
+            let remaining = durableQueue.filter { !knownIDs.contains($0.messageID) }
+            if !remaining.isEmpty { unseen[peerID] = remaining }
+        }
+        return unseen
     }
 
     private static func merge(_ durable: Snapshot, _ pending: Snapshot) -> Snapshot {

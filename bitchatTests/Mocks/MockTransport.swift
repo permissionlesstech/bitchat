@@ -65,11 +65,15 @@ final class MockTransport: Transport, PrivateMediaDeletionPersisting {
     var peerFingerprints: [PeerID: String] = [:]
     var peerNoiseStates: [PeerID: LazyHandshakeState] = [:]
     var privateMediaPolicies: [PeerID: PrivateMediaSendPolicy] = [:]
+    var privateMediaReceiptSessionGenerations: [PeerID: UUID] = [:]
     var persistDeletedPrivateMediaResult = true
     var deferDeletedPrivateMediaPersistence = false
     private var pendingDeletedPrivateMediaCompletions: [
         @MainActor (Bool) -> Void
     ] = []
+    /// Optional synchronous hook for send-ordering tests (for example, an ack
+    /// arriving before the router's send call returns).
+    var onSendPrivateMessage: (@MainActor (_ messageID: String) -> Void)?
     private let mockKeychain = MockKeychain()
 
     // MARK: - Transport Protocol Implementation
@@ -174,6 +178,11 @@ final class MockTransport: Transport, PrivateMediaDeletionPersisting {
 
     func sendPrivateMessage(_ content: String, to peerID: PeerID, recipientNickname: String, messageID: String) {
         sentPrivateMessages.append((content, peerID, recipientNickname, messageID))
+        if let onSendPrivateMessage {
+            MainActor.assumeIsolated {
+                onSendPrivateMessage(messageID)
+            }
+        }
     }
 
     func sendReadReceipt(_ receipt: ReadReceipt, to peerID: PeerID) {
@@ -213,6 +222,12 @@ final class MockTransport: Transport, PrivateMediaDeletionPersisting {
 
     func privateMediaSendPolicy(to peerID: PeerID) -> PrivateMediaSendPolicy {
         privateMediaPolicies[peerID] ?? .encrypted
+    }
+
+    func authenticatedPrivateMediaReceiptSessionGeneration(
+        to peerID: PeerID
+    ) -> UUID? {
+        privateMediaReceiptSessionGenerations[peerID]
     }
 
     func resolvePrivateMediaSendPolicy(

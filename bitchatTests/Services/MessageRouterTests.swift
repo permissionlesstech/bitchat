@@ -79,18 +79,231 @@ struct MessageRouterTests {
     }
 
     @Test @MainActor
-    func sendPrivate_connectedSendIsNotRetained() async {
+    func peerBoundDeliveryAckCannotClearAnotherPeersRetainedMessage() async {
+        let intendedPeer = PeerID(str: "0000000000000023")
+        let otherPeer = PeerID(str: "0000000000000024")
+        let transport = MockTransport()
+        transport.reachablePeers = [intendedPeer, otherPeer]
+
+        let router = MessageRouter(transports: [transport])
+        router.sendPrivate(
+            "Secret",
+            to: intendedPeer,
+            recipientNickname: "Intended",
+            messageID: "peer-bound-ack"
+        )
+        #expect(transport.sentPrivateMessages.count == 1)
+
+        // Even a receipt arriving over another authenticated conversation
+        // must not terminalize the intended peer's retained retry.
+        router.markDelivered("peer-bound-ack", from: [otherPeer])
+        router.flushOutbox(for: intendedPeer)
+        #expect(transport.sentPrivateMessages.count == 2)
+
+        router.markDelivered("peer-bound-ack", from: [intendedPeer])
+        router.flushOutbox(for: intendedPeer)
+        #expect(transport.sentPrivateMessages.count == 2)
+    }
+
+    @Test @MainActor
+    func sendPrivate_connectedSecureSendRetainsUntilDeliveryAck() async {
         let peerID = PeerID(str: "0000000000000007")
         let transport = MockTransport()
         transport.connectedPeers.insert(peerID)
         transport.reachablePeers.insert(peerID)
+        transport.securePeers = [peerID]
 
         let router = MessageRouter(transports: [transport])
         router.sendPrivate("Hello", to: peerID, recipientNickname: "Peer", messageID: "m7")
         #expect(transport.sentPrivateMessages.count == 1)
 
-        router.flushOutbox(for: peerID)
+        // A newly authenticated/replacement session retries the retained
+        // message instead of losing the first ciphertext to a stale session.
+        router.retrySecurePrivateMessagesAfterAuthentication(for: [peerID])
+        #expect(transport.sentPrivateMessages.count == 2)
+
+        router.markDelivered("m7")
+        router.retrySecurePrivateMessagesAfterAuthentication(for: [peerID])
+        #expect(transport.sentPrivateMessages.count == 2)
+    }
+
+    @Test @MainActor
+    func authenticationRetry_matchesStableOutboxAliasWithoutDoubleSending() async {
+        let shortPeerID = PeerID(str: "0000000000000019")
+        let stablePeerID = PeerID(hexData: Data(repeating: 0x19, count: 32))
+        let transport = MockTransport()
+        transport.connectedPeers.insert(stablePeerID)
+        transport.securePeers = [stablePeerID]
+
+        let router = MessageRouter(transports: [transport])
+        router.sendPrivate("Hello", to: stablePeerID, recipientNickname: "Peer", messageID: "alias-retry")
+
+        router.retrySecurePrivateMessagesAfterAuthentication(for: [shortPeerID, stablePeerID, stablePeerID])
+
+        #expect(transport.sentPrivateMessages.map(\.messageID) == ["alias-retry", "alias-retry"])
+        #expect(transport.sentPrivateMessages.allSatisfy { $0.peerID == stablePeerID })
+    }
+
+    @Test @MainActor
+    func authenticationRetry_preservesFIFOAcrossSplitAliases() async {
+        let shortPeerID = PeerID(str: "0000000000000022")
+        let stablePeerID = PeerID(hexData: Data(repeating: 0x22, count: 32))
+        let transport = MockTransport()
+        transport.connectedPeers = [shortPeerID, stablePeerID]
+        transport.securePeers = [shortPeerID, stablePeerID]
+        let clock = MutableTestClock()
+        let router = MessageRouter(transports: [transport], now: { clock.now })
+
+        // The older message lives under the stable key, even though the auth
+        // callback supplies the ephemeral alias first.
+        router.sendPrivate("Older", to: stablePeerID, recipientNickname: "Peer", messageID: "fifo-old")
+        clock.now = clock.now.addingTimeInterval(1)
+        router.sendPrivate("Newer", to: shortPeerID, recipientNickname: "Peer", messageID: "fifo-new")
+        transport.resetRecordings()
+
+        router.retrySecurePrivateMessagesAfterAuthentication(for: [shortPeerID, stablePeerID])
+
+        #expect(transport.sentPrivateMessages.map(\.messageID) == ["fifo-old", "fifo-new"])
+        #expect(transport.sentPrivateMessages.map(\.peerID) == [stablePeerID, shortPeerID])
+    }
+
+    @Test @MainActor
+    func authenticationRetry_doesNotDuplicateNormalPendingHandshakeSend() async {
+        let peerID = PeerID(str: "0000000000000020")
+        let transport = MockTransport()
+        transport.connectedPeers.insert(peerID)
+        transport.securePeers = []
+
+        let router = MessageRouter(transports: [transport])
+        router.sendPrivate("Hello", to: peerID, recipientNickname: "Peer", messageID: "normal-handshake")
         #expect(transport.sentPrivateMessages.count == 1)
+
+        // BLE owns this pending send and drains it after authentication. Once
+        // the session becomes secure, the router's targeted auth retry must
+        // stay silent instead of producing a second copy.
+        transport.securePeers = [peerID]
+        router.retrySecurePrivateMessagesAfterAuthentication(for: [peerID])
+        #expect(transport.sentPrivateMessages.count == 1)
+
+        router.markDelivered("normal-handshake")
+    }
+
+    @Test @MainActor
+    func authenticationRetry_scopesCollidingMessageIDsByPeer() async {
+        let securePeer = PeerID(str: "0000000000000025")
+        let pendingPeer = PeerID(str: "0000000000000026")
+        let transport = MockTransport()
+        transport.connectedPeers = [securePeer, pendingPeer]
+        transport.securePeers = [securePeer]
+
+        let router = MessageRouter(transports: [transport])
+        let promotedID = "collision-promoted"
+        let clearedID = "collision-cleared"
+
+        // Pending B then secure A: an ID-global marker falsely promotes B.
+        router.sendPrivate(
+            "pending promoted",
+            to: pendingPeer,
+            recipientNickname: "Pending",
+            messageID: promotedID
+        )
+        router.sendPrivate(
+            "secure promoted",
+            to: securePeer,
+            recipientNickname: "Secure",
+            messageID: promotedID
+        )
+
+        // Secure A then pending B: an ID-global removal falsely clears A.
+        router.sendPrivate(
+            "secure cleared",
+            to: securePeer,
+            recipientNickname: "Secure",
+            messageID: clearedID
+        )
+        router.sendPrivate(
+            "pending cleared",
+            to: pendingPeer,
+            recipientNickname: "Pending",
+            messageID: clearedID
+        )
+
+        transport.resetRecordings()
+        transport.securePeers = [securePeer, pendingPeer]
+
+        router.retrySecurePrivateMessagesAfterAuthentication(for: [pendingPeer])
+        #expect(transport.sentPrivateMessages.isEmpty)
+
+        router.retrySecurePrivateMessagesAfterAuthentication(for: [securePeer])
+        #expect(transport.sentPrivateMessages.count == 2)
+        #expect(Set(transport.sentPrivateMessages.map(\.messageID)) == [promotedID, clearedID])
+        #expect(transport.sentPrivateMessages.allSatisfy { $0.peerID == securePeer })
+    }
+
+    @Test @MainActor
+    func authenticationRetry_doesNotDuplicateMessageRequeuedByBLEForHandshake() async {
+        let peerID = PeerID(str: "0000000000000021")
+        let transport = MockTransport()
+        transport.connectedPeers.insert(peerID)
+        transport.securePeers = [peerID]
+
+        let router = MessageRouter(transports: [transport])
+        router.sendPrivate("Hello", to: peerID, recipientNickname: "Peer", messageID: "session-lost")
+        #expect(transport.sentPrivateMessages.count == 1)
+
+        // The session disappears before a normal outbox flush. That send is
+        // now owned by BLE's pending-handshake queue, so it clears the
+        // router's secure-auth retry marker.
+        transport.securePeers = []
+        router.flushOutbox(for: peerID)
+        #expect(transport.sentPrivateMessages.count == 2)
+
+        transport.securePeers = [peerID]
+        router.retrySecurePrivateMessagesAfterAuthentication(for: [peerID])
+        #expect(transport.sentPrivateMessages.count == 2)
+
+        router.markDelivered("session-lost")
+    }
+
+    @Test @MainActor
+    func sendPrivate_fastDeliveryAckCannotRaceAheadOfRetention() async {
+        let peerID = PeerID(str: "0000000000000017")
+        let transport = MockTransport()
+        transport.connectedPeers.insert(peerID)
+        transport.securePeers = [peerID]
+
+        let router = MessageRouter(transports: [transport])
+        transport.onSendPrivateMessage = { messageID in
+            router.markDelivered(messageID)
+        }
+
+        router.sendPrivate("Hello", to: peerID, recipientNickname: "Peer", messageID: "fast-ack")
+        #expect(transport.sentPrivateMessages.map(\.messageID) == ["fast-ack"])
+
+        transport.onSendPrivateMessage = nil
+        router.flushOutbox(for: peerID)
+        #expect(transport.sentPrivateMessages.map(\.messageID) == ["fast-ack"])
+    }
+
+    @Test @MainActor
+    func flushOutbox_synchronousAckDoesNotResurrectSnapshotEntry() async {
+        let peerID = PeerID(str: "0000000000000018")
+        let transport = MockTransport()
+        transport.connectedPeers.insert(peerID)
+        transport.securePeers = [peerID]
+
+        let router = MessageRouter(transports: [transport])
+        router.sendPrivate("Hello", to: peerID, recipientNickname: "Peer", messageID: "flush-fast-ack")
+        transport.onSendPrivateMessage = { messageID in
+            router.markDelivered(messageID)
+        }
+
+        router.flushOutbox(for: peerID)
+        #expect(transport.sentPrivateMessages.count == 2)
+
+        transport.onSendPrivateMessage = nil
+        router.flushOutbox(for: peerID)
+        #expect(transport.sentPrivateMessages.count == 2)
     }
 
     @Test @MainActor
@@ -392,10 +605,31 @@ struct MessageRouterTests {
         #expect(transport.sentPrivateMessages.count == 11)
     }
 
-    /// With an established secure session the connected fast-path stays
-    /// exactly as before: trusted outright, no retained copy, no courier.
     @Test @MainActor
-    func sendPrivate_connectedWithSecureSessionIsTrustedOutright() async {
+    func authenticationRetry_capsActualSecureTransmissions() async {
+        let peerID = PeerID(str: "00000000000000ad")
+        let transport = MockTransport()
+        transport.connectedPeers.insert(peerID)
+        transport.securePeers = [peerID]
+
+        let router = MessageRouter(transports: [transport])
+        var dropped: [String] = []
+        router.onMessageDropped = { messageID, _ in dropped.append(messageID) }
+
+        router.sendPrivate("Hello", to: peerID, recipientNickname: "Peer", messageID: "secure-retry")
+        for _ in 0..<10 {
+            router.retrySecurePrivateMessagesAfterAuthentication(for: [peerID])
+        }
+
+        #expect(dropped == ["secure-retry"])
+        #expect(transport.sentPrivateMessages.count == 8)
+    }
+
+    /// With an established secure session the connected fast-path sends
+    /// immediately and never leaks to couriers, but retains a local encrypted
+    /// outbox copy until the peer confirms receipt.
+    @Test @MainActor
+    func sendPrivate_connectedWithSecureSessionRetainsLocallyWithoutCourier() async {
         let peerID = PeerID(str: "00000000000000ab")
         let peerKey = Data(repeating: 0xAB, count: 32)
         let courier = PeerID(str: "00000000000000cc")
@@ -415,7 +649,11 @@ struct MessageRouterTests {
         #expect(transport.sentPrivateMessages.map(\.messageID) == ["cs2"])
         #expect(transport.sentCourierMessages.isEmpty)
         router.flushOutbox(for: peerID)
-        #expect(transport.sentPrivateMessages.count == 1)
+        #expect(transport.sentPrivateMessages.count == 2)
+        #expect(transport.sentCourierMessages.isEmpty)
+        router.markDelivered("cs2")
+        router.flushOutbox(for: peerID)
+        #expect(transport.sentPrivateMessages.count == 2)
     }
 
     @Test @MainActor
@@ -527,6 +765,52 @@ struct MessageRouterTests {
         #expect(carried == ["bridge-ack"])
     }
 
+    @Test @MainActor
+    func bridgeDepositsScopeCollidingMessageIDsByRecipient() async {
+        let firstRecipient = PeerID(str: "00000000000000b1")
+        let secondRecipient = PeerID(str: "00000000000000b2")
+        let firstKey = Data(repeating: 0xB1, count: 32)
+        let secondKey = Data(repeating: 0xB2, count: 32)
+        let recipientKeys = [
+            firstRecipient: firstKey,
+            secondRecipient: secondKey
+        ]
+        let router = MessageRouter(
+            transports: [MockTransport()],
+            courierDirectory: CourierDirectory(
+                noiseKey: { recipientKeys[$0] },
+                isTrustedCourier: { _ in false }
+            )
+        )
+        var requestedKeys: [Data] = []
+        var completions: [@MainActor (Bool) -> Void] = []
+        router.bridgeCourierDeposit = { _, _, recipientKey, completion in
+            requestedKeys.append(recipientKey)
+            completions.append(completion)
+        }
+        var carriedPeers: [PeerID] = []
+        router.onMessageCarried = { _, peerID in carriedPeers.append(peerID) }
+
+        router.sendPrivate(
+            "First",
+            to: firstRecipient,
+            recipientNickname: "First",
+            messageID: "bridge-collision"
+        )
+        router.sendPrivate(
+            "Second",
+            to: secondRecipient,
+            recipientNickname: "Second",
+            messageID: "bridge-collision"
+        )
+
+        #expect(completions.count == 2)
+        #expect(Set(requestedKeys) == [firstKey, secondKey])
+
+        completions.forEach { $0(true) }
+        #expect(Set(carriedPeers) == [firstRecipient, secondRecipient])
+    }
+
     // MARK: - Outbox persistence
 
     @Test @MainActor
@@ -580,6 +864,82 @@ struct MessageRouterTests {
         )
         router2.flushOutbox(for: peerID)
         #expect(transport2.sentPrivateMessages.isEmpty)
+    }
+
+    @Test @MainActor
+    func scopedDeliveryAckClearsOnlySelectedPeerWhenMessageIDsCollide() async {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("router-outbox-scoped-ack-\(UUID().uuidString).sealed")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let keychain = MockKeychain()
+        let acknowledgedPeer = PeerID(str: "00000000000000d1")
+        let otherPeer = PeerID(str: "00000000000000d2")
+        let transport = MockTransport()
+        let router = MessageRouter(
+            transports: [transport],
+            outboxStore: MessageOutboxStore(keychain: keychain, fileURL: fileURL)
+        )
+        router.sendPrivate("For acknowledged peer", to: acknowledgedPeer, recipientNickname: "One", messageID: "shared-id")
+        router.sendPrivate("For other peer", to: otherPeer, recipientNickname: "Two", messageID: "shared-id")
+
+        #expect(router.markDelivered("shared-id", for: [acknowledgedPeer]))
+        transport.reachablePeers.formUnion([acknowledgedPeer, otherPeer])
+        router.flushOutbox(for: acknowledgedPeer)
+        router.flushOutbox(for: otherPeer)
+
+        #expect(transport.sentPrivateMessages.map(\.peerID) == [otherPeer])
+        let persisted = MessageOutboxStore(keychain: keychain, fileURL: fileURL).load()
+        #expect(persisted[acknowledgedPeer] == nil)
+        #expect(persisted[otherPeer]?.map(\.messageID) == ["shared-id"])
+    }
+
+    @Test @MainActor
+    func scopedAckWhileColdLoadIsLockedPreventsOnlyTargetPeerResurrection() async {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("router-locked-scoped-ack-\(UUID().uuidString).sealed")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let keychain = MockKeychain()
+        let acknowledgedPeer = PeerID(str: "00000000000000d3")
+        let otherPeer = PeerID(str: "00000000000000d4")
+        let durable = MessageOutboxStore.QueuedMessage(
+            content: "Queued before reboot",
+            nickname: "Peer",
+            messageID: "shared-locked-id",
+            timestamp: Date()
+        )
+        MessageOutboxStore(keychain: keychain, fileURL: fileURL).save([
+            acknowledgedPeer: [durable],
+            otherPeer: [durable]
+        ])
+
+        var protectedDataUnavailable = true
+        let restoredStore = MessageOutboxStore(
+            keychain: keychain,
+            fileURL: fileURL,
+            readData: { url in
+                if protectedDataUnavailable {
+                    throw NSError(domain: NSCocoaErrorDomain, code: NSFileReadNoPermissionError)
+                }
+                return try Data(contentsOf: url)
+            }
+        )
+        let transport = MockTransport()
+        transport.reachablePeers.formUnion([acknowledgedPeer, otherPeer])
+        let router = MessageRouter(transports: [transport], outboxStore: restoredStore)
+
+        router.markDelivered(
+            "shared-locked-id",
+            from: [acknowledgedPeer]
+        )
+        protectedDataUnavailable = false
+        restoredStore.retryDeferredLoad()
+        await Task.yield()
+        await Task.yield()
+
+        #expect(transport.sentPrivateMessages.map(\.peerID) == [otherPeer])
+        let persisted = MessageOutboxStore(keychain: keychain, fileURL: fileURL).load()
+        #expect(persisted[acknowledgedPeer] == nil)
+        #expect(persisted[otherPeer]?.map(\.messageID) == ["shared-locked-id"])
     }
 
     @Test @MainActor
@@ -780,12 +1140,14 @@ struct MessageRouterTests {
         protectedDataUnavailable = false
         restoredStore.retryDeferredLoad() // captures unseen durable + known wake
 
-        // Secure direct flush removes the wake message before recovery's
-        // MainActor merge. It must remain removed, while the unseen durable
-        // message still arrives through the pending recovery claim.
+        // A secure direct retry followed by its delivery ack removes the wake
+        // message before recovery's MainActor merge. It must remain removed,
+        // while the unseen durable message still arrives through the pending
+        // recovery claim.
         transport.connectedPeers.insert(peerID)
         transport.securePeers = [peerID]
         router.flushOutbox(for: peerID)
+        router.markDelivered("recovery-gap-known")
         await Task.yield()
         await Task.yield()
 
@@ -856,7 +1218,8 @@ struct MessageRouterTests {
         restoredStore.retryDeferredLoad() // persists D+W and queues recovery
         transport.connectedPeers.insert(peerID)
         transport.securePeers = [peerID]
-        router.flushOutbox(for: peerID) // removes W before queued callback
+        router.flushOutbox(for: peerID)
+        router.markDelivered("recovery-write-failure-known") // removes W before queued callback
 
         // The gap save may remove W, but it must leave unseen D durable until
         // MessageRouter receives the pending recovery callback.

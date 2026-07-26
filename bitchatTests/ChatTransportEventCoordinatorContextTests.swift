@@ -133,11 +133,17 @@ private final class MockChatTransportEventContext: ChatTransportEventContext {
     // Delivery status
     var applyMessageDeliveryStatusResult = true
     var deliveryStatusesByMessageID: [String: DeliveryStatus] = [:]
-    private(set) var appliedDeliveryStatuses: [(messageID: String, status: DeliveryStatus)] = []
+    private(set) var appliedDeliveryStatuses: [
+        (messageID: String, status: DeliveryStatus, peerIDAliases: Set<PeerID>)
+    ] = []
 
     @discardableResult
-    func applyMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) -> Bool {
-        appliedDeliveryStatuses.append((messageID, status))
+    func applyAcknowledgedMessageDeliveryStatus(
+        _ messageID: String,
+        status: DeliveryStatus,
+        from peerIDAliases: Set<PeerID>
+    ) -> Bool {
+        appliedDeliveryStatuses.append((messageID, status, peerIDAliases))
         return applyMessageDeliveryStatusResult
     }
 
@@ -417,6 +423,10 @@ struct ChatTransportEventCoordinatorContextTests {
         let peerID = PeerID(str: "99aabbccddeeff00")
         let noiseKey = Data(repeating: 0x44, count: 32)
         context.peersByID[peerID] = BitchatPeer(peerID: peerID, noisePublicKey: noiseKey, nickname: "alice")
+        let stablePeerID = PeerID(hexData: noiseKey)
+        let staleStablePeerID = PeerID(hexData: Data(repeating: 0x55, count: 32))
+        context.cacheStablePeerID(staleStablePeerID, for: peerID)
+        context.noiseSessionKeysByPeerID[peerID] = noiseKey
 
         // Inbound private message: decoded, handled, and delivery-acked.
         let packet = PrivateMessagePacket(messageID: "pm-1", content: "hi there")
@@ -438,6 +448,8 @@ struct ChatTransportEventCoordinatorContextTests {
         await drainMainActorTasks()
         #expect(context.appliedDeliveryStatuses.count == 2)
         #expect(context.appliedDeliveryStatuses[0].messageID == "m-1")
+        #expect(context.appliedDeliveryStatuses[0].peerIDAliases == [peerID, stablePeerID])
+        #expect(!context.appliedDeliveryStatuses[0].peerIDAliases.contains(staleStablePeerID))
         if case .delivered(let to, _) = context.appliedDeliveryStatuses[0].status {
             #expect(to == "alice")
         } else {

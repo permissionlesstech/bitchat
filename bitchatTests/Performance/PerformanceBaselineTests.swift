@@ -749,10 +749,28 @@ private final class PerfDeliveryContext: ChatDeliveryContext {
 
     func notifyUIChanged() {}
     func markMessageDelivered(_ messageID: String) {}
+    func markMessageDelivered(_ messageID: String, from peerIDs: Set<PeerID>) {}
+    func confirmPrivateMediaDelivery(_ messageID: String) {}
+    func isOutgoingPrivateMessage(_ messageID: String, toAny peerIDs: Set<PeerID>) -> Bool {
+        true
+    }
 
     @discardableResult
     func setDeliveryStatus(_ status: DeliveryStatus, forMessageID messageID: String) -> Bool {
         store.setDeliveryStatus(status, forMessageID: messageID)
+    }
+
+    @discardableResult
+    func setDeliveryStatus(
+        _ status: DeliveryStatus,
+        forMessageID messageID: String,
+        inDirectPeerAliases peerIDs: Set<PeerID>
+    ) -> Bool {
+        store.setDeliveryStatus(
+            status,
+            forMessageID: messageID,
+            inDirectPeerAliases: peerIDs
+        )
     }
 
     func deliveryStatus(forMessageID messageID: String) -> DeliveryStatus? {
