@@ -1235,9 +1235,17 @@ struct NoiseEncryptionServiceTests {
     @Test("Lost reconnect completion restores the quarantined transport")
     func timedOutReconnectRestoresQuarantinedTransport() async throws {
         let alice = NoiseEncryptionService(keychain: MockKeychain())
+        // The injected responder timeout also arms during the ordinary setup
+        // handshake below (bob is its responder), where the only work between
+        // message 1 and message 3 is two consecutive synchronous statements.
+        // It must be generous enough that a preempted runner cannot let the
+        // timeout fire mid-setup and tear down the half-open responder — at
+        // 20ms a loaded 2-core CI runner did exactly that, so message 3 was
+        // answered as a fresh initiation (96-byte message 2) and nothing was
+        // ever quarantined.
         let bob = NoiseEncryptionService(
             keychain: MockKeychain(),
-            ordinaryResponderHandshakeTimeout: 0.02
+            ordinaryResponderHandshakeTimeout: 1.0
         )
         let mallory = NoiseEncryptionService(keychain: MockKeychain())
         let alicePeerID = PeerID(publicKey: alice.getStaticPublicKeyData())
@@ -1253,9 +1261,17 @@ struct NoiseEncryptionServiceTests {
         )
         #expect(!bob.hasEstablishedSession(with: alicePeerID))
 
-        try? await Task.sleep(nanoseconds: 100_000_000)
-
-        #expect(bob.hasEstablishedSession(with: alicePeerID))
+        // Poll instead of sleeping a fixed interval: the responder timeout
+        // fires on bob's manager queue at the quarantine deadline, and a
+        // starved runner can delay that work item well past the deadline.
+        let restored = await TestHelpers.waitUntil(
+            { bob.hasEstablishedSession(with: alicePeerID) },
+            timeout: TestConstants.longTimeout
+        )
+        try #require(
+            restored,
+            "Responder timeout should restore the quarantined transport"
+        )
         let oldTransport = try alice.encrypt(
             Data("timeout rollback".utf8),
             for: bobPeerID
