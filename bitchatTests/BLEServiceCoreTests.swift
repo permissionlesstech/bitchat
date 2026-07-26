@@ -666,6 +666,10 @@ struct BLEServiceCoreTests {
         )
         await ble._test_drainNoiseMessagePipeline()
         #expect(ble.canDeliverSecurely(to: alicePeerID))
+        // The establishment transition enqueues its forced announce as a
+        // separate serialized phase; drain again so it lands before the tap
+        // and cannot masquerade as restore-driven announce traffic below.
+        await ble._test_drainNoiseMessagePipeline()
 
         let outbound = OutboundPacketTap()
         ble._test_onOutboundPacket = outbound.record

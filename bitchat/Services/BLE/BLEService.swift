@@ -4892,8 +4892,23 @@ extension BLEService {
             // A quarantined transport restored the same cryptographic
             // generation. Its capability proof and announce state never
             // became stale; only work queued while outbound keys were paused
-            // needs one idempotent ready transition.
+            // needs one idempotent ready transition. Retrying the bounded
+            // early-ciphertext queue is receive-side and therefore always
+            // safe under the restored keys.
             noisePacketHandler.handleSessionAuthenticated(normalizedPeerID)
+            #if DEBUG
+            _test_onPrivateMediaSessionReconciled?(normalizedPeerID)
+            #endif
+            if deferOutboundUntilConvergence {
+                // Timeout-restore: the counterpart may have completed the
+                // replacement handshake and discarded these keys, so
+                // encrypting the parked queues here would lose them silently.
+                // The restore's mandatory convergence retry — or any later
+                // handshake the reconnect policy initiates — re-enters this
+                // transition with a fresh generation and drains them under
+                // keys both sides hold.
+                return
+            }
             sendPendingMessagesAfterHandshake(for: normalizedPeerID)
             sendPendingNoisePayloadsAfterHandshake(for: normalizedPeerID)
             return
