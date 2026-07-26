@@ -1331,6 +1331,15 @@ final class ChatViewModel: ObservableObject, BitchatDelegate, TransportEventDele
         // posts are signed with our identity key and persist for days.
         BoardStore.shared.wipe()
 
+        // Drop any share-extension handoff staged in the app group. The normal
+        // panic path clears this through AppChromeModel.onPanicWipe, but the
+        // crash-recovery replay calls this method directly and would otherwise
+        // let a staged envelope survive the wipe. Clearing here is idempotent
+        // (it only removes the app-group key), so the double-clear is harmless.
+        if let sharedDefaults = UserDefaults(suiteName: BitchatApp.groupID) {
+            SharedContentStore(defaults: sharedDefaults).discardAll()
+        }
+
         // Identity manager has cleared persisted identity data above
 
         // Clear autocomplete state
