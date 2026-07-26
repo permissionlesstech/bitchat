@@ -224,7 +224,10 @@ struct BLEPrivateMediaReceiptStoreTests {
         )
         #expect(FileManager.default.fileExists(atPath: victim.path))
 
-        try FileManager.default.removeItem(at: receiptURL)
+        // The invalid record was quarantined aside, never executed. Clear it
+        // so the second phase exercises the journal validation on its own.
+        #expect(!FileManager.default.fileExists(atPath: receiptURL.path))
+        try FileManager.default.removeItem(at: quarantinedRecord(in: root))
         let journal = JournalFixture(
             version: 1,
             entries: [messageID: JournalEntryFixture(
