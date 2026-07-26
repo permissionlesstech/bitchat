@@ -426,7 +426,8 @@ final class BLEService: NSObject {
     // Relay jitter scheduling to reduce redundant floods
     private var scheduledRelays = BLEScheduledRelayStore()
     // Track short-lived traffic bursts to adapt announces/scanning under load
-    private var recentTrafficTracker = BLERecentTrafficTracker()
+    // (lock-backed: written by the receive pipeline, read on bleQueue)
+    private let recentTrafficTracker = BLERecentTrafficMonitor()
 
     // Ingress link tracking for duplicate and last-hop suppression
     private var ingressLinks = BLEIngressLinkRegistry()
@@ -4661,13 +4662,11 @@ extension BLEService {
         let peripheralState = peripheralManager?.state ?? .unknown
         let isAdvertising = peripheralManager?.isAdvertising ?? false
 
-        let peerSummary = collectionsQueue.sync {
-            (
-                connected: peerRegistry.connectedCount,
-                known: peerRegistry.count,
-                candidates: connectionScheduler.candidateCount
-            )
-        }
+        let peerSummary = (
+            connected: peerRegistry.connectedCount,
+            known: peerRegistry.count,
+            candidates: connectionScheduler.candidateCount
+        )
 
         #if os(iOS)
         // INVARIANT: bleQueue must NEVER sync-dispatch to the main thread.
@@ -4701,10 +4700,7 @@ extension BLEService {
     }
 
     private func refreshLocalTopology() {
-        let neighbors: [Data] = collectionsQueue.sync {
-            peerRegistry.connectedRoutingData
-        }
-        meshTopology.updateNeighbors(for: myPeerIDData, neighbors: neighbors)
+        meshTopology.updateNeighbors(for: myPeerIDData, neighbors: peerRegistry.connectedRoutingData)
     }
 
     private func computeRoute(to peerID: PeerID) -> [Data]? {
@@ -7932,9 +7928,7 @@ extension BLEService {
         let now = Date()
         let connectedCount = peerRegistry.connectedCount
         let elapsed = announceThrottle.elapsed(since: now)
-        let recentSeen = collectionsQueue.sync { () -> Bool in
-            recentTrafficTracker.hasTraffic(within: 5.0, now: now)
-        }
+        let recentSeen = recentTrafficTracker.hasTraffic(within: 5.0, now: now)
         let hasNoPeers = peerRegistry.isEmpty
         let plan = BLEMaintenancePolicy.plan(
             cycle: maintenanceCounter,
@@ -8061,18 +8055,20 @@ extension BLEService {
         // Clean old fragments (> configured seconds old), then ask peers for
         // the specific fragment streams whose reassembly has stalled instead
         // of waiting for the next periodic GCS fragment round.
-        let stalledFragmentIDs = collectionsQueue.sync(flags: .barrier) { () -> [Data] in
+        collectionsQueue.async(flags: .barrier) { [weak self] in
+            guard let self else { return }
             let cutoff = now.addingTimeInterval(-TransportConfig.bleFragmentLifetimeSeconds)
-            fragmentAssemblyBuffer.removeExpired(before: cutoff)
-            sourceRouteFailures.prune(now: now)
-            return fragmentAssemblyBuffer.stalledBroadcastFragmentIDs(
+            self.fragmentAssemblyBuffer.removeExpired(before: cutoff)
+            self.sourceRouteFailures.prune(now: now)
+            let stalledFragmentIDs = self.fragmentAssemblyBuffer.stalledBroadcastFragmentIDs(
                 stalledAfter: TransportConfig.bleFragmentResyncStallSeconds,
                 retryAfter: TransportConfig.bleFragmentResyncRetrySeconds,
                 now: now
             )
-        }
-        if !stalledFragmentIDs.isEmpty {
-            gossipSyncManager?.requestMissingFragments(fragmentIDs: stalledFragmentIDs)
+            if !stalledFragmentIDs.isEmpty {
+                // GossipSyncManager serializes on its own internal queue.
+                self.gossipSyncManager?.requestMissingFragments(fragmentIDs: stalledFragmentIDs)
+            }
         }
 
         // Clean old connection timeout backoff entries (> window)
@@ -8117,12 +8113,10 @@ extension BLEService {
         let active = true
         #endif
         // Force full-time scanning if we have very few neighbors or very recent traffic
-        let hasRecentTraffic: Bool = collectionsQueue.sync {
-            recentTrafficTracker.hasTraffic(
-                within: TransportConfig.bleRecentTrafficForceScanSeconds,
-                now: Date()
-            )
-        }
+        let hasRecentTraffic = recentTrafficTracker.hasTraffic(
+            within: TransportConfig.bleRecentTrafficForceScanSeconds,
+            now: Date()
+        )
         let scanPlan = BLEScanDutyPolicy.plan(
             dutyEnabled: dutyEnabled,
             appIsActive: active,
