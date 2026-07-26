@@ -167,6 +167,51 @@ struct MessageRouterTests {
         #expect(transport.sentPrivateMessages.map(\.peerID) == [stablePeerID, shortPeerID])
     }
 
+    /// The retry claims each message ID once across the alias set. It must not
+    /// claim one for a candidate that turns out to be dead: a synchronous ack
+    /// from an earlier send in the same loop is peer-scoped, so it can clear
+    /// one copy while the twin under the other alias stays live and eligible.
+    /// A claim made before that check would silently skip a retry that was due.
+    @Test @MainActor
+    func authenticationRetry_aDeadCandidateDoesNotSuppressTheLiveTwin() async {
+        let shortPeerID = PeerID(str: "0000000000000028")
+        let stablePeerID = PeerID(hexData: Data(repeating: 0x28, count: 32))
+        let transport = MockTransport()
+        transport.connectedPeers = [shortPeerID, stablePeerID]
+        transport.securePeers = [shortPeerID, stablePeerID]
+        let clock = MutableTestClock()
+        let router = MessageRouter(transports: [transport], now: { clock.now })
+
+        // Oldest, so it is retried first and its ack lands mid-loop.
+        router.sendPrivate("First", to: shortPeerID, recipientNickname: "Peer", messageID: "r-first")
+        clock.now = clock.now.addingTimeInterval(1)
+        router.sendPrivate("Twin", to: shortPeerID, recipientNickname: "Peer", messageID: "r-twin")
+        clock.now = clock.now.addingTimeInterval(1)
+        router.sendPrivate("Twin", to: stablePeerID, recipientNickname: "Peer", messageID: "r-twin")
+
+        // Flushing marks all three as securely transmitted, which is what puts
+        // them in the retry's candidate set.
+        router.flushOutbox(for: shortPeerID)
+        router.flushOutbox(for: stablePeerID)
+        transport.resetRecordings()
+
+        // Retrying the first message synchronously acks the short-ID copy of
+        // the twin, scoped to that alias alone.
+        transport.onSendPrivateMessage = { messageID in
+            guard messageID == "r-first" else { return }
+            router.markDelivered("r-twin", for: [shortPeerID])
+        }
+
+        router.retrySecurePrivateMessagesAfterAuthentication(for: [shortPeerID, stablePeerID])
+        transport.onSendPrivateMessage = nil
+
+        #expect(
+            transport.sentPrivateMessages.map(\.messageID) == ["r-first", "r-twin"],
+            "a copy acked mid-retry claimed the message ID and suppressed the live twin"
+        )
+        #expect(transport.sentPrivateMessages.map(\.peerID) == [shortPeerID, stablePeerID])
+    }
+
     /// Reconnect drains both the ephemeral and the stable outbox key. Draining
     /// them as two sequential `flushOutbox(for:)` calls would put the newer
     /// short-ID mail on the air first; the merged flush must order by
@@ -189,7 +234,7 @@ struct MessageRouterTests {
 
         transport.connectedPeers = [shortPeerID, stablePeerID]
         transport.securePeers = [shortPeerID, stablePeerID]
-        router.flushOutbox(forAliases: [shortPeerID, stablePeerID])
+        router.flushOutbox(forAliases: [shortPeerID, stablePeerID], skippingSecurelyTransmitted: false)
 
         #expect(transport.sentPrivateMessages.map(\.messageID) == ["flush-old", "flush-new"])
         #expect(transport.sentPrivateMessages.map(\.peerID) == [stablePeerID, shortPeerID])
@@ -211,7 +256,7 @@ struct MessageRouterTests {
 
         transport.connectedPeers = [shortPeerID, stablePeerID]
         transport.securePeers = [shortPeerID, stablePeerID]
-        router.flushOutbox(forAliases: [shortPeerID, stablePeerID])
+        router.flushOutbox(forAliases: [shortPeerID, stablePeerID], skippingSecurelyTransmitted: false)
 
         #expect(transport.sentPrivateMessages.map(\.messageID) == ["dup-1"])
 
@@ -220,7 +265,7 @@ struct MessageRouterTests {
         // holds the ID, so the copy the flush passed over goes with it.
         router.markDelivered("dup-1", for: [shortPeerID, stablePeerID])
         transport.resetRecordings()
-        router.flushOutbox(forAliases: [shortPeerID, stablePeerID])
+        router.flushOutbox(forAliases: [shortPeerID, stablePeerID], skippingSecurelyTransmitted: false)
         #expect(
             transport.sentPrivateMessages.isEmpty,
             "the copy the merged flush skipped was re-sent after the ack"
@@ -336,7 +381,7 @@ struct MessageRouterTests {
             router.markDelivered("gone-1", for: [shortPeerID])
         }
 
-        router.flushOutbox(forAliases: [shortPeerID, stablePeerID])
+        router.flushOutbox(forAliases: [shortPeerID, stablePeerID], skippingSecurelyTransmitted: false)
         transport.onSendPrivateMessage = nil
 
         #expect(

@@ -587,13 +587,37 @@ final class MessageRouter {
     /// undecryptable remotely. Normal pre-handshake sends are intentionally
     /// absent from `secureTransmissions` because BLE already queues
     /// and drains them when authentication completes.
+    /// One retained message paired with the alias whose queue holds it, plus
+    /// the tie-breakers that make a merge across aliases deterministic.
+    private typealias OutboxCandidate = (
+        peerID: PeerID,
+        message: QueuedMessage,
+        aliasOrder: Int,
+        queueOrder: Int
+    )
+
+    /// Merge candidates drawn from several alias queues into one chronological
+    /// stream, so the order the aliases happen to arrive in cannot send newer
+    /// mail ahead of older mail for the same conversation.
+    private static func chronologically(
+        _ candidates: [OutboxCandidate]
+    ) -> [OutboxCandidate] {
+        candidates.sorted { lhs, rhs in
+            if lhs.message.timestamp != rhs.message.timestamp {
+                return lhs.message.timestamp < rhs.message.timestamp
+            }
+            if lhs.aliasOrder != rhs.aliasOrder {
+                return lhs.aliasOrder < rhs.aliasOrder
+            }
+            if lhs.queueOrder != rhs.queueOrder {
+                return lhs.queueOrder < rhs.queueOrder
+            }
+            return lhs.message.messageID < rhs.message.messageID
+        }
+    }
+
     func retrySecurePrivateMessagesAfterAuthentication(for peerIDAliases: [PeerID]) {
-        typealias Candidate = (
-            peerID: PeerID,
-            message: QueuedMessage,
-            aliasOrder: Int,
-            queueOrder: Int
-        )
+        typealias Candidate = OutboxCandidate
 
         var visitedPeerIDs = Set<PeerID>()
         var retriedMessageIDs = Set<String>()
@@ -625,28 +649,22 @@ final class MessageRouter {
         // ephemeral and stable outbox keys. Merge both queues into one
         // chronological stream so callback alias order cannot send newer mail
         // ahead of older mail.
-        candidates.sort { lhs, rhs in
-            if lhs.message.timestamp != rhs.message.timestamp {
-                return lhs.message.timestamp < rhs.message.timestamp
-            }
-            if lhs.aliasOrder != rhs.aliasOrder {
-                return lhs.aliasOrder < rhs.aliasOrder
-            }
-            if lhs.queueOrder != rhs.queueOrder {
-                return lhs.queueOrder < rhs.queueOrder
-            }
-            return lhs.message.messageID < rhs.message.messageID
-        }
+        candidates = Self.chronologically(candidates)
 
         for candidate in candidates {
             let peerID = candidate.peerID
             let message = candidate.message
             let key = PeerMessageKey(peerID: peerID, messageID: message.messageID)
-            guard retriedMessageIDs.insert(message.messageID).inserted,
-                  secureTransmissions.contains(key),
+            // Claim the ID last. A synchronous ack from an earlier send in
+            // this loop is peer-scoped, so it can clear this copy while the
+            // twin under the other alias stays live and eligible — and a
+            // claim made before these checks would let the dead candidate
+            // suppress that twin, silently skipping a retry that was due.
+            guard secureTransmissions.contains(key),
                   queuedMessage(message.messageID, for: peerID) != nil,
                   let transport = connectedTransport(for: peerID),
-                  transport.canDeliverSecurely(to: peerID) else {
+                  transport.canDeliverSecurely(to: peerID),
+                  retriedMessageIDs.insert(message.messageID).inserted else {
                 continue
             }
 
@@ -725,16 +743,10 @@ final class MessageRouter {
     /// of it — re-sending every message the retry just put on the air and
     /// burning a second attempt against the cap. Skipping that set makes the
     /// two passes disjoint by construction rather than by comment.
-    func flushOutbox(forAliases peerIDAliases: [PeerID], skippingSecurelyTransmitted: Bool = false) {
-        typealias Candidate = (
-            peerID: PeerID,
-            message: QueuedMessage,
-            aliasOrder: Int,
-            queueOrder: Int
-        )
+    func flushOutbox(forAliases peerIDAliases: [PeerID], skippingSecurelyTransmitted: Bool) {
+        typealias Candidate = OutboxCandidate
 
-        var visitedPeerIDs = Set<PeerID>()
-        for peerID in peerIDAliases { visitedPeerIDs.insert(peerID) }
+        let aliasSet = Set(peerIDAliases)
 
         // The retry that precedes a skipping flush covers a message ID once,
         // under whichever alias holds the securely-transmitted copy. So the
@@ -745,12 +757,12 @@ final class MessageRouter {
         // precisely the double-send this flag exists to prevent.
         var retriedMessageIDs = Set<String>()
         if skippingSecurelyTransmitted {
-            for key in secureTransmissions where visitedPeerIDs.contains(key.peerID) {
+            for key in secureTransmissions where aliasSet.contains(key.peerID) {
                 retriedMessageIDs.insert(key.messageID)
             }
         }
 
-        visitedPeerIDs.removeAll()
+        var visitedPeerIDs = Set<PeerID>()
         var candidates: [Candidate] = []
 
         for (aliasOrder, peerID) in peerIDAliases.enumerated() {
@@ -769,18 +781,7 @@ final class MessageRouter {
 
         guard !candidates.isEmpty else { return }
 
-        candidates.sort { lhs, rhs in
-            if lhs.message.timestamp != rhs.message.timestamp {
-                return lhs.message.timestamp < rhs.message.timestamp
-            }
-            if lhs.aliasOrder != rhs.aliasOrder {
-                return lhs.aliasOrder < rhs.aliasOrder
-            }
-            if lhs.queueOrder != rhs.queueOrder {
-                return lhs.queueOrder < rhs.queueOrder
-            }
-            return lhs.message.messageID < rhs.message.messageID
-        }
+        candidates = Self.chronologically(candidates)
 
         SecureLogger.debug(
             "Flushing merged outbox for \(peerIDAliases.count) alias(es) count=\(candidates.count)",
