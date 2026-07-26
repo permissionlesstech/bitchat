@@ -509,10 +509,6 @@ struct ContentView: View {
         guard let trimmed = messageText.trimmedOrNilIfEmpty else { return }
 
         messageText = ""
-        // Sending via the return key steals focus on iOS, so every message
-        // costs a tap to reopen the keyboard. Conversations are bursts;
-        // keep the composer ready for the next line.
-        isTextFieldFocused = true
 
         DispatchQueue.main.async {
             self.conversationUIModel.sendMessage(trimmed)
