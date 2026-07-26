@@ -35,10 +35,10 @@ final class MessageRouter {
     typealias QueuedMessage = MessageOutboxStore.QueuedMessage
 
     private struct PeerMessageKey: Hashable {
-        // periphery:ignore - read only via the synthesized Hashable
-        // conformance (dictionary-key identity), which the indexer
-        // cannot attribute; see retain_codable_properties in .periphery.yml
-        // for the same class of false positive.
+        // Both properties are read directly now — `peerID` by the alias-scoped
+        // sweep in `flushOutbox(forAliases:)`, `messageID` throughout — so the
+        // ignore directive this once carried (for reads visible only through
+        // the synthesized Hashable conformance) would itself be flagged.
         let peerID: PeerID
         let messageID: String
     }
