@@ -412,14 +412,16 @@ final class BLEService: NSObject {
     
     // Noise messages and typed payloads pending handshake completion.
     private var pendingNoiseSessionQueues = BLENoiseSessionQueues()
-    // Queue for notifications that failed due to full queue
+    // Queue for notifications that failed due to full queue (bleQueue-owned,
+    // like the link state store: every producer and drain runs there).
     private var pendingNotifications = BLEOutboundNotificationBuffer<CBCentral>()
     // Backpressure logging fires per fragment during media transfers
     // (hundreds of lines per image); sampled via this counter, which is
-    // only touched inside collectionsQueue barriers (no sync needed).
+    // only touched on bleQueue (no sync needed).
     var notificationBackpressureLogCount = 0
 
     // Accumulate long write chunks per central until a full frame decodes
+    // (bleQueue-owned)
     private var pendingWriteBuffers = BLEInboundWriteBuffer()
     // Relay jitter scheduling to reduce redundant floods
     private var scheduledRelays = BLEScheduledRelayStore()
@@ -437,6 +439,7 @@ final class BLEService: NSObject {
     private var openedCourierMessageIDs = BoundedIDSet(capacity: TransportConfig.courierOpenedMessageIDCap)
     private let logRateLimiter = BLELogRateLimiter(defaultMinimumInterval: 5)
 
+    // Per-peripheral write backpressure (bleQueue-owned)
     private var pendingPeripheralWrites = BLEOutboundWriteBuffer()
     // Debounce duplicate disconnect notifies
     private var disconnectNotifyDebouncer = BLEPeerEventDebouncer()
@@ -769,8 +772,6 @@ final class BLEService: NSObject {
         }
 
         let panicReset = collectionsQueue.sync(flags: .barrier) {
-            pendingPeripheralWrites.removeAll()
-            pendingNotifications.removeAll()
             let transfers = outboundFragmentTransfers.removeAll()
             fragmentAssemblyBuffer.removeAll()
             pendingDirectedRelays.removeAll()
@@ -796,6 +797,8 @@ final class BLEService: NSObject {
         }
 
         bleQueue.sync {
+            pendingPeripheralWrites.removeAll()
+            pendingNotifications.removeAll()
             pendingWriteBuffers.removeAll()
             noiseAuthenticatedLinkOwners.removeAll()
             noiseReconnectPolicy.removeAll()
@@ -1014,7 +1017,7 @@ final class BLEService: NSObject {
         }
 
         // Clear pending notifications
-        collectionsQueue.sync(flags: .barrier) {
+        bleQueue.sync {
             pendingNotifications.removeAll()
         }
 
@@ -1038,7 +1041,7 @@ final class BLEService: NSObject {
     /// pumping the main run loop. Close the radio and timers immediately;
     /// the identity/session cleanup follows synchronously.
     private func stopServicesImmediatelyForPanic() {
-        collectionsQueue.sync(flags: .barrier) {
+        bleQueue.sync {
             pendingNotifications.removeAll()
         }
 
@@ -2243,7 +2246,7 @@ final class BLEService: NSObject {
 
     private func enqueuePendingNotification(data: Data, centrals: [CBCentral]?, context: String, attempt: Int = 0) {
         guard !isPanicSuspended else { return }
-        collectionsQueue.async(flags: .barrier) { [weak self] in
+        bleQueue.async { [weak self] in
             guard let self = self else { return }
             guard !self.isPanicSuspended else { return }
             let result = self.pendingNotifications.enqueue(
@@ -2278,13 +2281,12 @@ final class BLEService: NSObject {
         centrals: [CBCentral],
         context: String
     ) -> Bool {
-        let result = collectionsQueue.sync(flags: .barrier) {
-            pendingNotifications.enqueue(
-                data: data,
-                targets: centrals,
-                capCount: TransportConfig.blePendingNotificationsCapCount
-            )
-        }
+        dispatchPrecondition(condition: .onQueue(bleQueue))
+        let result = pendingNotifications.enqueue(
+            data: data,
+            targets: centrals,
+            capCount: TransportConfig.blePendingNotificationsCapCount
+        )
         switch result {
         case let .enqueued(count):
             SecureLogger.debug("📋 Queued \(context) packet for retry (pending=\(count))", category: .session)
@@ -3130,9 +3132,7 @@ extension BLEService: CBCentralManagerDelegate {
             let peerIDs: [PeerID] = peripheralStates.compactMap(\.peerID)
             for state in peripheralStates {
                 let peripheralID = state.peripheral.identifier.uuidString
-                collectionsQueue.sync(flags: .barrier) {
-                    pendingPeripheralWrites.discardAll(for: peripheralID)
-                }
+                pendingPeripheralWrites.discardAll(for: peripheralID)
                 noiseAuthenticatedLinkOwners.removeValue(
                     forKey: .peripheral(peripheralID)
                 )
@@ -3292,9 +3292,7 @@ extension BLEService: CBCentralManagerDelegate {
         #endif
 
         // Clean up references and peer mappings
-        collectionsQueue.sync(flags: .barrier) {
-            pendingPeripheralWrites.discardAll(for: peripheralID)
-        }
+        pendingPeripheralWrites.discardAll(for: peripheralID)
         noiseAuthenticatedLinkOwners.removeValue(forKey: .peripheral(peripheralID))
         noiseReconnectPolicy.endLinkEpoch(.peripheral(peripheralID))
         _ = linkStateStore.removePeripheral(peripheralID)
@@ -3345,13 +3343,11 @@ extension BLEService: CBCentralManagerDelegate {
         let peripheralID = peripheral.identifier.uuidString
         
         // Clean up the references
-        collectionsQueue.sync(flags: .barrier) {
-            pendingPeripheralWrites.discardAll(for: peripheralID)
-        }
+        pendingPeripheralWrites.discardAll(for: peripheralID)
         noiseAuthenticatedLinkOwners.removeValue(forKey: .peripheral(peripheralID))
         noiseReconnectPolicy.endLinkEpoch(.peripheral(peripheralID))
         _ = linkStateStore.removePeripheral(peripheralID)
-        
+
         SecureLogger.error("❌ Failed to connect to peripheral: \(peripheral.name ?? "Unknown") [\(peripheralID)] - Error: \(error?.localizedDescription ?? "Unknown")", category: .session)
         connectionScheduler.recordConnectionFailure(peripheralID: peripheralID)
         // Try next candidate
@@ -3453,9 +3449,7 @@ extension BLEService {
 
             SecureLogger.debug("⏱️ Timeout: \(candidate.name)", category: .session)
             central.cancelPeripheralConnection(peripheral)
-            self.collectionsQueue.sync(flags: .barrier) {
-                self.pendingPeripheralWrites.discardAll(for: peripheralID)
-            }
+            self.pendingPeripheralWrites.discardAll(for: peripheralID)
             self.noiseAuthenticatedLinkOwners.removeValue(forKey: .peripheral(peripheralID))
             self.noiseReconnectPolicy.endLinkEpoch(.peripheral(peripheralID))
             _ = self.linkStateStore.removePeripheral(peripheralID)
@@ -4104,10 +4098,8 @@ extension BLEService: CBPeripheralManagerDelegate {
                 )
                 noiseReconnectPolicy.endLinkEpoch(.central(centralID))
             }
-            collectionsQueue.sync(flags: .barrier) {
-                pendingNotifications.removeAll()
-                pendingWriteBuffers.removeAll()
-            }
+            pendingNotifications.removeAll()
+            pendingWriteBuffers.removeAll()
             let centralPeerIDs = linkStateStore.clearCentrals()
             subscriptionAnnounceLimiter.removeAll()
             characteristic = nil
@@ -4229,9 +4221,7 @@ extension BLEService: CBPeripheralManagerDelegate {
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic) {
         let centralID = central.identifier.uuidString
         SecureLogger.debug("📤 Central unsubscribed: \(centralID.prefix(8))…", category: .session)
-        collectionsQueue.sync(flags: .barrier) {
-            pendingNotifications.removeTarget { $0.identifier.uuidString == centralID }
-        }
+        pendingNotifications.removeTarget { $0.identifier.uuidString == centralID }
         noiseAuthenticatedLinkOwners.removeValue(forKey: .central(centralID))
         noiseReconnectPolicy.endLinkEpoch(.central(centralID))
         let removedPeerID = linkStateStore.removeSubscribedCentral(central)
@@ -4285,7 +4275,7 @@ extension BLEService: CBPeripheralManagerDelegate {
     }
 
     private func drainPendingNotifications(logPrefix: String) {
-        collectionsQueue.async(flags: .barrier) { [weak self] in
+        bleQueue.async { [weak self] in
             guard let self = self,
                   let characteristic = self.characteristic,
                   !self.pendingNotifications.isEmpty else { return }
@@ -6164,22 +6154,20 @@ extension BLEService {
             if peripheral.canSendWriteWithoutResponse {
                 peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
             } else {
-                self.collectionsQueue.async(flags: .barrier) {
-                    let result = self.pendingPeripheralWrites.enqueue(
-                        data: data,
-                        for: uuid,
-                        priority: priority,
-                        capBytes: TransportConfig.blePendingWriteBufferCapBytes
-                    )
+                let result = self.pendingPeripheralWrites.enqueue(
+                    data: data,
+                    for: uuid,
+                    priority: priority,
+                    capBytes: TransportConfig.blePendingWriteBufferCapBytes
+                )
 
-                    switch result {
-                    case .oversized(let bytes):
-                        SecureLogger.warning("⚠️ Dropping oversized write chunk (\(bytes)B) for peripheral \(uuid)", category: .session)
-                    case let .enqueued(trimmedBytes, remainingBytes) where trimmedBytes > 0:
-                        SecureLogger.warning("📉 Trimmed pending write buffer for \(uuid) by \(trimmedBytes)B to \(remainingBytes)B", category: .session)
-                    case .enqueued:
-                        break
-                    }
+                switch result {
+                case .oversized(let bytes):
+                    SecureLogger.warning("⚠️ Dropping oversized write chunk (\(bytes)B) for peripheral \(uuid)", category: .session)
+                case let .enqueued(trimmedBytes, remainingBytes) where trimmedBytes > 0:
+                    SecureLogger.warning("📉 Trimmed pending write buffer for \(uuid) by \(trimmedBytes)B to \(remainingBytes)B", category: .session)
+                case .enqueued:
+                    break
                 }
             }
         }
@@ -6216,14 +6204,12 @@ extension BLEService {
                 return true
             }
 
-            let attempt = collectionsQueue.sync(flags: .barrier) {
-                pendingPeripheralWrites.enqueueReportingAcceptance(
-                    data: data,
-                    for: uuid,
-                    priority: priority,
-                    capBytes: TransportConfig.blePendingWriteBufferCapBytes
-                )
-            }
+            let attempt = pendingPeripheralWrites.enqueueReportingAcceptance(
+                data: data,
+                for: uuid,
+                priority: priority,
+                capBytes: TransportConfig.blePendingWriteBufferCapBytes
+            )
             switch attempt.result {
             case .oversized(let bytes):
                 SecureLogger.warning("⚠️ Rejecting oversized write chunk (\(bytes)B) for peripheral \(uuid)", category: .session)
@@ -6248,11 +6234,7 @@ extension BLEService {
             guard !self.isPanicSuspended else { return }
             guard let state = self.linkStateStore.state(forPeripheralID: uuid), let ch = state.characteristic else { return }
 
-            // Atomically take all pending items from the queue to avoid race conditions
-            // where new items could be enqueued between read and update
-            let itemsToSend: [BLEPendingWrite] = self.collectionsQueue.sync(flags: .barrier) {
-                self.pendingPeripheralWrites.takeAll(for: uuid)
-            }
+            let itemsToSend = self.pendingPeripheralWrites.takeAll(for: uuid)
             guard !itemsToSend.isEmpty else { return }
 
             // Send as many as possible
@@ -6269,9 +6251,7 @@ extension BLEService {
             // Re-enqueue any items that couldn't be sent (maintaining order)
             let unsent = Array(itemsToSend.dropFirst(sent))
             if !unsent.isEmpty {
-                self.collectionsQueue.async(flags: .barrier) {
-                    self.pendingPeripheralWrites.prepend(unsent, for: uuid)
-                }
+                self.pendingPeripheralWrites.prepend(unsent, for: uuid)
             }
         }
     }
@@ -6283,7 +6263,7 @@ extension BLEService {
 
     /// Periodically try to drain pending writes for all connected peripherals
     private func drainAllPendingWrites() {
-        let uuids = collectionsQueue.sync { pendingPeripheralWrites.peripheralIDs }
+        let uuids = pendingPeripheralWrites.peripheralIDs
         for uuid in uuids {
             guard let state = linkStateStore.state(forPeripheralID: uuid), state.isConnected else { continue }
             drainPendingWrites(for: state.peripheral)
@@ -6392,9 +6372,7 @@ extension BLEService {
                 guard age > TransportConfig.bleConnectTimeoutSeconds else { continue }
                 let peripheralID = state.peripheral.identifier.uuidString
                 central.cancelPeripheralConnection(state.peripheral)
-                self.collectionsQueue.sync(flags: .barrier) {
-                    self.pendingPeripheralWrites.discardAll(for: peripheralID)
-                }
+                self.pendingPeripheralWrites.discardAll(for: peripheralID)
                 self.noiseAuthenticatedLinkOwners.removeValue(forKey: .peripheral(peripheralID))
                 self.noiseReconnectPolicy.endLinkEpoch(.peripheral(peripheralID))
                 _ = self.linkStateStore.removePeripheral(peripheralID)
@@ -7322,9 +7300,7 @@ extension BLEService {
         )
         for uuid in retiring {
             guard let state = linkStateStore.state(forPeripheralID: uuid) else { continue }
-            collectionsQueue.sync(flags: .barrier) {
-                pendingPeripheralWrites.discardAll(for: uuid)
-            }
+            pendingPeripheralWrites.discardAll(for: uuid)
             noiseAuthenticatedLinkOwners.removeValue(forKey: .peripheral(uuid))
             noiseReconnectPolicy.endLinkEpoch(.peripheral(uuid))
             _ = linkStateStore.removePeripheral(uuid)
@@ -7940,9 +7916,7 @@ extension BLEService {
     
     // NEW: Publish peer snapshots to subscribers and notify Transport delegates
     private func publishFullPeerData() {
-        let transportPeers: [TransportPeerSnapshot] = collectionsQueue.sync {
-            peerRegistry.transportSnapshots(selfNickname: myNickname)
-        }
+        let transportPeers = peerRegistry.transportSnapshots(selfNickname: myNickname)
         notifyUI { [weak self] in
             self?.peerEventsDelegate?.didUpdatePeerSnapshots(transportPeers)
         }
