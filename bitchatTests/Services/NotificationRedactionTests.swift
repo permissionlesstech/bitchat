@@ -9,9 +9,10 @@ import UserNotifications
 /// a table narrated conversations to anyone looking at it. These cover the
 /// redaction that is now the default.
 ///
-/// Serialized because the preference lives in `UserDefaults.standard`; parallel
-/// cases would race each other's saves.
-@Suite(.serialized)
+/// The preference is injected rather than written to shared preferences. These
+/// run in the same process as `NotificationServiceTests`, and mutating the
+/// global store made whichever ran second depend on the other's cleanup — which
+/// passed locally and failed in CI.
 struct NotificationRedactionTests {
     private final class RecordingDeliverer: NotificationRequestDelivering {
         var requests: [UNNotificationRequest] = []
@@ -30,92 +31,100 @@ struct NotificationRedactionTests {
         }
     }
 
-    /// Runs `body` with the preference forced to `hidePreviews`, restoring
-    /// whatever the environment had afterwards.
-    private func withHidePreviews(
-        _ hidePreviews: Bool,
-        _ body: (NotificationService, RecordingDeliverer) throws -> Void
-    ) rethrows {
-        let original = NotificationPrivacySettings.hideMessagePreviews
-        defer { NotificationPrivacySettings.hideMessagePreviews = original }
-        NotificationPrivacySettings.hideMessagePreviews = hidePreviews
-
+    private func makeService(
+        hidePreviews: Bool
+    ) -> (NotificationService, RecordingDeliverer) {
         let deliverer = RecordingDeliverer()
         let service = NotificationService(
             isRunningTestsProvider: { false },
             authorizer: StubAuthorizer(),
-            requestDeliverer: deliverer
+            requestDeliverer: deliverer,
+            hidePreviewsProvider: { hidePreviews }
         )
-        try body(service, deliverer)
+        return (service, deliverer)
+    }
+
+    private func isolatedDefaults() -> UserDefaults {
+        UserDefaults(suiteName: "bitchat.tests.notifications.\(UUID().uuidString)")!
     }
 
     @Test func previewsAreHiddenByDefault() {
         // A fresh install must start quiet rather than opt-in quiet.
-        UserDefaults.standard.removeObject(forKey: "notifications.hideMessagePreviews")
-        #expect(NotificationPrivacySettings.hideMessagePreviews)
+        #expect(NotificationPrivacySettings.hideMessagePreviews(in: isolatedDefaults()))
     }
 
-    @Test func redactedDirectMessageWithholdsSenderAndBody() {
-        withHidePreviews(true) { service, deliverer in
-            service.sendPrivateMessageNotification(
-                from: "alice",
-                message: "meet at the north gate",
-                peerID: PeerID(str: "00112233445566ff")
-            )
+    @Test func theSettingRoundTrips() {
+        let defaults = isolatedDefaults()
 
-            let content = try! #require(deliverer.requests.first).content
-            #expect(!content.title.contains("alice"))
-            #expect(!content.body.contains("north gate"))
-            #expect(!content.title.isEmpty)
-            // Still routable: userInfo is never rendered on the lock screen.
-            #expect(content.userInfo["peerID"] as? String == "00112233445566ff")
-        }
+        NotificationPrivacySettings.setHideMessagePreviews(false, in: defaults)
+        #expect(!NotificationPrivacySettings.hideMessagePreviews(in: defaults))
+
+        // Panic wipe restores the safe default rather than the last choice.
+        NotificationPrivacySettings.reset(in: defaults)
+        #expect(NotificationPrivacySettings.hideMessagePreviews(in: defaults))
     }
 
-    @Test func redactedMentionWithholdsSenderAndBody() {
-        withHidePreviews(true) { service, deliverer in
-            service.sendMentionNotification(from: "bob", message: "regroup now")
+    @Test func redactedDirectMessageWithholdsSenderAndBody() throws {
+        let (service, deliverer) = makeService(hidePreviews: true)
 
-            let content = try! #require(deliverer.requests.first).content
-            #expect(!content.title.contains("bob"))
-            #expect(!content.body.contains("regroup"))
-        }
+        service.sendPrivateMessageNotification(
+            from: "alice",
+            message: "meet at the north gate",
+            peerID: PeerID(str: "00112233445566ff")
+        )
+
+        let content = try #require(deliverer.requests.first).content
+        #expect(!content.title.contains("alice"))
+        #expect(!content.body.contains("north gate"))
+        #expect(!content.title.isEmpty)
+        // Still routable: userInfo is never rendered on the lock screen.
+        #expect(content.userInfo["peerID"] as? String == "00112233445566ff")
     }
 
-    @Test func redactedGeohashActivityWithholdsTheGeohash() {
-        withHidePreviews(true) { service, deliverer in
-            service.sendGeohashActivityNotification(
-                geohash: "u4pruyd",
-                bodyPreview: "someone said something"
-            )
+    @Test func redactedMentionWithholdsSenderAndBody() throws {
+        let (service, deliverer) = makeService(hidePreviews: true)
 
-            let content = try! #require(deliverer.requests.first).content
-            #expect(!content.title.contains("u4pruyd"))
-            #expect(!content.body.contains("someone said"))
-            // The deep link still carries it: tapping must land in the channel.
-            #expect(content.userInfo["deeplink"] as? String == "bitchat://geohash/u4pruyd")
-        }
+        service.sendMentionNotification(from: "bob", message: "regroup now")
+
+        let content = try #require(deliverer.requests.first).content
+        #expect(!content.title.contains("bob"))
+        #expect(!content.body.contains("regroup"))
+    }
+
+    @Test func redactedGeohashActivityWithholdsTheGeohash() throws {
+        let (service, deliverer) = makeService(hidePreviews: true)
+
+        service.sendGeohashActivityNotification(
+            geohash: "u4pruyd",
+            bodyPreview: "someone said something"
+        )
+
+        let content = try #require(deliverer.requests.first).content
+        #expect(!content.title.contains("u4pruyd"))
+        #expect(!content.body.contains("someone said"))
+        // The deep link still carries it: tapping must land in the channel.
+        #expect(content.userInfo["deeplink"] as? String == "bitchat://geohash/u4pruyd")
     }
 
     @Test func previewsShownWhenTheSettingIsOff() {
-        withHidePreviews(false) { service, deliverer in
-            service.sendPrivateMessageNotification(
-                from: "alice",
-                message: "meet at the north gate",
-                peerID: PeerID(str: "00112233445566ff")
-            )
-            service.sendGeohashActivityNotification(
-                geohash: "u4pruyd",
-                bodyPreview: "someone said something"
-            )
+        let (service, deliverer) = makeService(hidePreviews: false)
 
-            #expect(deliverer.requests.count == 2)
-            let dm = deliverer.requests[0].content
-            #expect(dm.title.contains("alice"))
-            #expect(dm.body == "meet at the north gate")
-            let geo = deliverer.requests[1].content
-            #expect(geo.title.contains("u4pruyd"))
-            #expect(geo.body == "someone said something")
-        }
+        service.sendPrivateMessageNotification(
+            from: "alice",
+            message: "meet at the north gate",
+            peerID: PeerID(str: "00112233445566ff")
+        )
+        service.sendGeohashActivityNotification(
+            geohash: "u4pruyd",
+            bodyPreview: "someone said something"
+        )
+
+        #expect(deliverer.requests.count == 2)
+        let dm = deliverer.requests[0].content
+        #expect(dm.title.contains("alice"))
+        #expect(dm.body == "meet at the north gate")
+        let geo = deliverer.requests[1].content
+        #expect(geo.title.contains("u4pruyd"))
+        #expect(geo.body == "someone said something")
     }
 }

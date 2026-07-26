@@ -114,8 +114,14 @@ final class NotificationService {
     }
 
     /// Whether delivered alerts must withhold sender, content, and geohash.
+    ///
+    /// Injected rather than read from the preference directly so tests state
+    /// which behavior they are asserting instead of inheriting whatever the
+    /// shared preference happens to hold when they run.
+    private let hidePreviewsProvider: () -> Bool
+
     private var hidePreviews: Bool {
-        NotificationPrivacySettings.hideMessagePreviews
+        hidePreviewsProvider()
     }
 
     private let isRunningTestsProvider: () -> Bool
@@ -129,6 +135,7 @@ final class NotificationService {
     }
 
     private init() {
+        self.hidePreviewsProvider = { NotificationPrivacySettings.hideMessagePreviews }
         self.isRunningTestsProvider = {
             let env = ProcessInfo.processInfo.environment
             return NSClassFromString("XCTestCase") != nil ||
@@ -153,12 +160,14 @@ final class NotificationService {
         isRunningTestsProvider: @escaping () -> Bool,
         authorizer: NotificationAuthorizing,
         requestDeliverer: NotificationRequestDelivering,
-        categoryRegistrar: NotificationCategoryRegistering = NoopNotificationCategoryRegistrar()
+        categoryRegistrar: NotificationCategoryRegistering = NoopNotificationCategoryRegistrar(),
+        hidePreviewsProvider: @escaping () -> Bool = { NotificationPrivacySettings.hideMessagePreviews }
     ) {
         self.isRunningTestsProvider = isRunningTestsProvider
         self.authorizer = authorizer
         self.requestDeliverer = requestDeliverer
         self.categoryRegistrar = categoryRegistrar
+        self.hidePreviewsProvider = hidePreviewsProvider
     }
 
     func requestAuthorization() {

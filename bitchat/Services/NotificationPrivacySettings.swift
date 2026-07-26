@@ -22,13 +22,23 @@ enum NotificationPrivacySettings {
     private static let hidePreviewsKey = "notifications.hideMessagePreviews"
 
     static var hideMessagePreviews: Bool {
-        get { UserDefaults.standard.object(forKey: hidePreviewsKey) as? Bool ?? true }
-        set { UserDefaults.standard.set(newValue, forKey: hidePreviewsKey) }
+        get { hideMessagePreviews(in: .standard) }
+        set { setHideMessagePreviews(newValue, in: .standard) }
+    }
+
+    /// Store-injecting forms, so tests can assert the default and both settings
+    /// without touching the shared preferences other tests read.
+    static func hideMessagePreviews(in defaults: UserDefaults) -> Bool {
+        defaults.object(forKey: hidePreviewsKey) as? Bool ?? true
+    }
+
+    static func setHideMessagePreviews(_ hide: Bool, in defaults: UserDefaults) {
+        defaults.set(hide, forKey: hidePreviewsKey)
     }
 
     /// Panic-wipe hook. Removing the key restores the hidden default, so a
-    /// wiped device cannot come back quieter than a fresh install.
-    static func reset() {
-        UserDefaults.standard.removeObject(forKey: hidePreviewsKey)
+    /// wiped device cannot come back louder than a fresh install.
+    static func reset(in defaults: UserDefaults = .standard) {
+        defaults.removeObject(forKey: hidePreviewsKey)
     }
 }
