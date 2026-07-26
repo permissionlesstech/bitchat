@@ -37,15 +37,6 @@ final class MessageRouter {
     private struct PeerMessageKey: Hashable {
         let peerID: PeerID
         let messageID: String
-
-        static func == (lhs: PeerMessageKey, rhs: PeerMessageKey) -> Bool {
-            lhs.peerID == rhs.peerID && lhs.messageID == rhs.messageID
-        }
-
-        func hash(into hasher: inout Hasher) {
-            hasher.combine(peerID)
-            hasher.combine(messageID)
-        }
     }
 
     private let transports: [Transport]
@@ -399,7 +390,7 @@ final class MessageRouter {
     /// every copy of the message. Authenticated remote receipts must use the
     /// peer-bound overload below instead.
     func markDelivered(_ messageID: String) {
-        clearRetainedMessage(messageID, allowedPeerIDs: nil)
+        clearRetainedMessage(messageID)
     }
 
     /// Stops retaining a message only for the authenticated conversation
@@ -411,15 +402,9 @@ final class MessageRouter {
         _ = markDelivered(messageID, for: Array(peerIDs))
     }
 
-    private func clearRetainedMessage(
-        _ messageID: String,
-        allowedPeerIDs: Set<PeerID>?
-    ) {
+    private func clearRetainedMessage(_ messageID: String) {
         var cleared = false
         for (peerID, queue) in outbox {
-            if let allowedPeerIDs, !allowedPeerIDs.contains(peerID) {
-                continue
-            }
             let filtered = queue.filter { $0.messageID != messageID }
             guard filtered.count != queue.count else { continue }
             outbox[peerID] = filtered.isEmpty ? nil : filtered

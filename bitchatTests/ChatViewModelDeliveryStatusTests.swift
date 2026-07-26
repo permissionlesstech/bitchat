@@ -13,8 +13,11 @@ import BitFoundation
 // MARK: - Test Helpers
 
 @MainActor
-private func makeTestableViewModel() -> (viewModel: ChatViewModel, transport: MockTransport) {
-    let keychain = MockKeychain()
+private func makeTestableViewModel(
+    keychain injectedKeychain: MockKeychain? = nil,
+    outboxStore: MessageOutboxStore? = nil
+) -> (viewModel: ChatViewModel, transport: MockTransport) {
+    let keychain = injectedKeychain ?? MockKeychain()
     let keychainHelper = MockKeychainHelper()
     let idBridge = NostrIdentityBridge(keychain: keychainHelper)
     let identityManager = MockIdentityManager(keychain)
@@ -24,7 +27,8 @@ private func makeTestableViewModel() -> (viewModel: ChatViewModel, transport: Mo
         keychain: keychain,
         idBridge: idBridge,
         identityManager: identityManager,
-        transport: transport
+        transport: transport,
+        outboxStore: outboxStore
     )
 
     return (viewModel, transport)
@@ -454,6 +458,65 @@ struct ChatViewModelDeliveryStatusTests {
         #expect(viewModel.sentReadReceipts == ["keep-receipt"])
     }
 
+    // MARK: - Relaunch-Restored Outbox Tests
+
+    @Test @MainActor
+    func deliveryAckAfterRelaunchClearsRestoredOutboxWithoutConversation() async {
+        // Force-quit → relaunch: the durable outbox restores the retained DM,
+        // but the in-memory conversation store starts empty. The delivery ack
+        // must still clear the router's retained copy — gating it on the
+        // conversation lookup would leave the entry re-sending on every
+        // flush/auth event until the attempt cap marks it failed despite
+        // delivery.
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("relaunch-ack-\(UUID().uuidString).sealed")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let keychain = MockKeychain()
+        let peerID = PeerID(str: "0102030405060708")
+        let messageID = "relaunch-retained-dm"
+
+        // Pre-quit state: one retained private message on disk.
+        MessageOutboxStore(keychain: keychain, fileURL: fileURL).save([
+            peerID: [MessageOutboxStore.QueuedMessage(
+                content: "Sent before force-quit",
+                nickname: "Peer",
+                messageID: messageID,
+                timestamp: Date()
+            )]
+        ])
+
+        // Relaunch: fresh view model over the same durable store.
+        let (viewModel, transport) = makeTestableViewModel(
+            keychain: keychain,
+            outboxStore: MessageOutboxStore(keychain: keychain, fileURL: fileURL)
+        )
+        #expect(viewModel.privateChats[peerID] == nil)
+
+        // The peer's delivery ack arrives with no conversation in the store.
+        // No UI transition is possible (and none must crash), but the durable
+        // retry state has to clear.
+        let didUpdate = viewModel.deliveryCoordinator
+            .updateAcknowledgedMessageDeliveryStatus(
+                messageID,
+                status: .delivered(to: "Peer", at: Date()),
+                from: [peerID]
+            )
+        #expect(!didUpdate)
+        #expect(viewModel.privateChats[peerID] == nil)
+
+        // Neither a flush nor a replacement-handshake auth event may re-send
+        // the already-delivered message.
+        transport.connectedPeers.insert(peerID)
+        transport.securePeers = [peerID]
+        viewModel.messageRouter.flushOutbox(for: peerID)
+        viewModel.messageRouter.retrySecurePrivateMessagesAfterAuthentication(for: [peerID])
+        #expect(transport.sentPrivateMessages.isEmpty)
+
+        // The clear reached the durable snapshot: the next relaunch restores
+        // nothing.
+        #expect(MessageOutboxStore(keychain: keychain, fileURL: fileURL).load().isEmpty)
+    }
+
     // MARK: - Public Timeline Status Tests
 
     @Test @MainActor
@@ -709,6 +772,7 @@ private final class MockChatDeliveryContext: ChatDeliveryContext {
     private(set) var notifyUIChangedCount = 0
     private(set) var markedDeliveredMessageIDs: [String] = []
     private(set) var peerBoundDeliveredMessages: [(messageID: String, peerIDs: Set<PeerID>)] = []
+    private(set) var confirmedMediaMessageIDs: [String] = []
 
     @discardableResult
     func setDeliveryStatus(_ status: DeliveryStatus, forMessageID messageID: String) -> Bool {
@@ -752,6 +816,10 @@ private final class MockChatDeliveryContext: ChatDeliveryContext {
 
     func markMessageDelivered(_ messageID: String, from peerIDs: Set<PeerID>) {
         peerBoundDeliveredMessages.append((messageID, peerIDs))
+    }
+
+    func confirmPrivateMediaDelivery(_ messageID: String) {
+        confirmedMediaMessageIDs.append(messageID)
     }
 
     func isOutgoingPrivateMessage(_ messageID: String, toAny peerIDs: Set<PeerID>) -> Bool {
@@ -963,13 +1031,19 @@ struct ChatDeliveryCoordinatorContextTests {
         )
 
         #expect(isSent(coordinator.deliveryStatus(for: messageID)))
-        #expect(context.peerBoundDeliveredMessages.isEmpty)
+        // The router-side clear runs, but bound only to the wrong peer's own
+        // aliases — a scoped no-op that cannot touch the intended peer's
+        // retained copy. Status, media retry, and UI stay untouched.
+        #expect(context.peerBoundDeliveredMessages.count == 1)
+        #expect(context.peerBoundDeliveredMessages[0].messageID == messageID)
+        #expect(context.peerBoundDeliveredMessages[0].peerIDs == [otherPeer])
         #expect(context.markedDeliveredMessageIDs.isEmpty)
+        #expect(context.confirmedMediaMessageIDs.isEmpty)
         #expect(context.notifyUIChangedCount == 0)
     }
 
     @Test @MainActor
-    func rejectedStaleReceiptDoesNotTerminalizeRetryState() async {
+    func rejectedStaleReceiptDoesNotDowngradeStatusOrNotify() async {
         let context = MockChatDeliveryContext()
         let coordinator = ChatDeliveryCoordinator(context: context)
         let peerID = PeerID(str: "0102030405060708")
@@ -990,8 +1064,14 @@ struct ChatDeliveryCoordinatorContextTests {
 
         #expect(!didUpdate)
         #expect(isRead(coordinator.deliveryStatus(for: messageID)))
-        #expect(context.peerBoundDeliveredMessages.isEmpty)
+        // The peer-scoped router clear re-runs (idempotent: the earlier read
+        // receipt already emptied this peer's retained copy), but the stale
+        // delivered ack must not downgrade the read status, release media, or
+        // notify the UI.
+        #expect(context.peerBoundDeliveredMessages.count == 1)
+        #expect(context.peerBoundDeliveredMessages[0].peerIDs == [peerID])
         #expect(context.markedDeliveredMessageIDs.isEmpty)
+        #expect(context.confirmedMediaMessageIDs.isEmpty)
         #expect(context.notifyUIChangedCount == 0)
     }
 

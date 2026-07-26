@@ -42,8 +42,15 @@ protocol ChatDeliveryContext: AnyObject {
     /// Confirms receipt so the message router stops retaining the message for resend.
     func markMessageDelivered(_ messageID: String)
     /// Peer-bound form for authenticated remote receipts. Only the supplied
-    /// conversation aliases may have retained state terminalized.
+    /// conversation aliases may have retained state terminalized. This is the
+    /// router-side clear only: it is safe without a conversation lookup
+    /// because the router scopes removal to the acking peer's own queues.
     func markMessageDelivered(_ messageID: String, from peerIDs: Set<PeerID>)
+    /// Releases the media reconnect retry for a private transfer. Unlike the
+    /// router clear above this is keyed only by the stable media message ID,
+    /// so callers must first bind the receipt to one of our outgoing
+    /// conversations for the acking peer.
+    func confirmPrivateMediaDelivery(_ messageID: String)
     /// Returns true only when `messageID` is one of our outgoing messages in
     /// at least one of the authenticated peer's direct-conversation aliases.
     func isOutgoingPrivateMessage(_ messageID: String, toAny peerIDs: Set<PeerID>) -> Bool
@@ -89,9 +96,9 @@ extension ChatViewModel: ChatDeliveryContext {
 
     func markMessageDelivered(_ messageID: String, from peerIDs: Set<PeerID>) {
         messageRouter.markDelivered(messageID, from: peerIDs)
-        // The caller has already bound this receipt to one of our outgoing
-        // conversations. Release the matching media retry only after that
-        // peer-scoped validation and accepted delivery-status transition.
+    }
+
+    func confirmPrivateMediaDelivery(_ messageID: String) {
         mediaTransferCoordinator.confirmPrivateMediaDelivery(
             messageID: messageID
         )
@@ -165,10 +172,18 @@ final class ChatDeliveryCoordinator {
         return true
     }
 
-    /// Applies an authenticated remote delivery/read receipt only when it
-    /// belongs to one of our outgoing messages in that peer's conversation.
-    /// Retry state is cleared after, never before, the status transition is
-    /// accepted by the store.
+    /// Applies an authenticated remote delivery/read receipt. The durable
+    /// retry state is always released for the acking peer's own aliases
+    /// (`markMessageDelivered(_:from:)` is peer-scoped on the router side, so
+    /// a receipt can only terminalize messages queued for that peer). Only the
+    /// UI status transition and the media-retry release are gated on the
+    /// in-memory conversation holding the message as one of ours: after a
+    /// force-quit → relaunch the durable outbox is restored
+    /// while the conversation may not be, and discarding the ack there would
+    /// re-send an already-delivered message on every flush/auth event until
+    /// the attempt cap marks it failed. Mirrors the Nostr path
+    /// (`ChatPrivateConversationCoordinator.handleDelivered`), which clears
+    /// retained state unconditionally.
     @MainActor
     @discardableResult
     func updateAcknowledgedMessageDeliveryStatus(
@@ -182,8 +197,9 @@ final class ChatDeliveryCoordinator {
         default:
             return false
         }
-        guard !peerIDAliases.isEmpty,
-              context.isOutgoingPrivateMessage(messageID, toAny: peerIDAliases),
+        guard !peerIDAliases.isEmpty else { return false }
+        context.markMessageDelivered(messageID, from: peerIDAliases)
+        guard context.isOutgoingPrivateMessage(messageID, toAny: peerIDAliases),
               context.setDeliveryStatus(
                 status,
                 forMessageID: messageID,
@@ -191,7 +207,10 @@ final class ChatDeliveryCoordinator {
               ) else {
             return false
         }
-        context.markMessageDelivered(messageID, from: peerIDAliases)
+        // The receipt is now bound to one of our outgoing conversations for
+        // the acking peer; only then release the media reconnect retry, whose
+        // stable message ID is not peer-scoped.
+        context.confirmPrivateMediaDelivery(messageID)
         context.notifyUIChanged()
         return true
     }
