@@ -734,18 +734,30 @@ final class MessageRouter {
         )
 
         var visitedPeerIDs = Set<PeerID>()
+        for peerID in peerIDAliases { visitedPeerIDs.insert(peerID) }
+
+        // The retry that precedes a skipping flush covers a message ID once,
+        // under whichever alias holds the securely-transmitted copy. So the
+        // skip has to be by message ID across the whole alias set, not by
+        // peer/message pair: the same ID can also sit under the *other* alias
+        // without being in `secureTransmissions`, and filtering per pair would
+        // let that copy sail through and put the message on the air twice —
+        // precisely the double-send this flag exists to prevent.
+        var retriedMessageIDs = Set<String>()
+        if skippingSecurelyTransmitted {
+            for key in secureTransmissions where visitedPeerIDs.contains(key.peerID) {
+                retriedMessageIDs.insert(key.messageID)
+            }
+        }
+
+        visitedPeerIDs.removeAll()
         var candidates: [Candidate] = []
 
         for (aliasOrder, peerID) in peerIDAliases.enumerated() {
             guard visitedPeerIDs.insert(peerID).inserted else { continue }
             guard let queued = outbox[peerID], !queued.isEmpty else { continue }
             for (queueOrder, message) in queued.enumerated() {
-                if skippingSecurelyTransmitted,
-                   secureTransmissions.contains(
-                       PeerMessageKey(peerID: peerID, messageID: message.messageID)
-                   ) {
-                    continue
-                }
+                guard !retriedMessageIDs.contains(message.messageID) else { continue }
                 candidates.append((
                     peerID: peerID,
                     message: message,
@@ -780,6 +792,13 @@ final class MessageRouter {
         var flushedMessageIDs = Set<String>()
 
         for candidate in candidates {
+            // Claim the ID only for a candidate that is still live. Marking it
+            // flushed first would let a copy removed by a synchronous ack
+            // earlier in this loop suppress the live copy under the other
+            // alias, which would silently drop mail rather than dedup it.
+            guard queuedMessage(candidate.message.messageID, for: candidate.peerID) != nil else {
+                continue
+            }
             guard flushedMessageIDs.insert(candidate.message.messageID).inserted else { continue }
             outboxChanged = flushQueuedMessage(
                 candidate.message,
