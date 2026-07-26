@@ -104,6 +104,9 @@ struct CourierVectorTests {
                 let version: UInt8
                 let type: String
                 let ttlOnWire: UInt8
+                /// Declared so it cannot be renamed or dropped unnoticed; the
+                /// byte count it names is asserted against the real payload.
+                let payloadIs: String
             }
             struct Flags: Decodable {
                 let unsignedUnpadded: String
@@ -124,6 +127,9 @@ struct CourierVectorTests {
             let publicKey: String
             let signatureLength: Int
             let deterministic: Bool
+            /// Declared for the same reason as `payloadIs`: an undeclared key
+            /// can vanish from the published file and every test stays green.
+            let verify: String
         }
 
         let inputs: Inputs
@@ -176,6 +182,12 @@ struct CourierVectorTests {
         let encoded = try #require(try Self.envelope(from: v).encode())
         #expect(encoded.hexEncodedString() == v.envelopeTLV.encoded)
         #expect(encoded.count == v.envelopeTLV.encodedLength)
+
+        // The prose in `packet.payloadIs` states this byte count. Prose that
+        // states a number is a claim like any other, and this is the one place
+        // it can be checked rather than trusted.
+        #expect(v.packetSigning.packet.payloadIs.contains("\(encoded.count) bytes"),
+                "packet.payloadIs disagrees with the real payload length")
 
         // 0x02 carries 000001a3185c5000 == 1_800_000_000_000 ms, not seconds.
         let decoded = try #require(CourierEnvelope.decode(encoded))
@@ -302,6 +314,9 @@ struct CourierVectorTests {
         let a = try key.signature(for: preimage)
         let b = try key.signature(for: preimage)
         #expect(v.signature.deterministic == false)
+        // The published instruction must keep naming the field it points at,
+        // so renaming `signingPreimage` cannot leave it dangling.
+        #expect(v.signature.verify.contains("signingPreimage"))
         #expect(Data(a) != Data(b), "CryptoKit Ed25519 signing is randomized")
         #expect(key.publicKey.isValidSignature(a, for: preimage))
         #expect(key.publicKey.isValidSignature(b, for: preimage))
