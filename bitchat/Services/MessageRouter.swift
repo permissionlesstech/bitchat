@@ -35,6 +35,10 @@ final class MessageRouter {
     typealias QueuedMessage = MessageOutboxStore.QueuedMessage
 
     private struct PeerMessageKey: Hashable {
+        // periphery:ignore - read only via the synthesized Hashable
+        // conformance (dictionary-key identity), which the indexer
+        // cannot attribute; see retain_codable_properties in .periphery.yml
+        // for the same class of false positive.
         let peerID: PeerID
         let messageID: String
     }
