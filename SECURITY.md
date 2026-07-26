@@ -22,7 +22,7 @@ Fixes ship to the latest App Store release and `main`. Older releases are not pa
 
 In scope — the properties the app promises:
 
-- Confidentiality and integrity of private messages and media (Noise sessions over BLE, gift-wrapped Nostr delivery)
+- Confidentiality and integrity of private messages and media (Noise sessions over BLE; over Nostr, bitchat's own ephemeral private-envelope format — a proprietary scheme, *not* NIP-17/NIP-44/NIP-59, see `WHITEPAPER.md`)
 - Identity: key handling, verification, impersonation, session binding
 - The panic wipe actually destroying what it claims to destroy
 - Metadata exposure beyond what the documentation already discloses (see `PRIVACY_POLICY.md` and `docs/privacy-assessment.md`)
