@@ -250,9 +250,29 @@ final class AppRuntime: ObservableObject {
     /// empty for every group without ever consulting the group. Left to the
     /// peer terms a group would therefore never restore — silently, every
     /// time. `startPrivateChat` gates group re-entry on nothing at all ("no
-    /// peer identity, favorites, handshake … just select the chat"), and there
-    /// is no phantom to guard against: the conversation is local state, not a
-    /// claim about reachability. So groups are admitted outright.
+    /// peer identity, favorites, handshake … just select the chat"), so
+    /// admitting groups here restores what re-entry would have opened. (Not
+    /// quite an identity: the block veto above has no counterpart in
+    /// `startPrivateChat`'s group branch, so restore is the narrower of the
+    /// two. Moot today — `isBlocked` needs a resolved fingerprint and a group
+    /// id never has one — but stated rather than leaned on.)
+    ///
+    /// Note the bound on that admission: `isGroup` tests the `group_` prefix
+    /// only — `PeerID(str:)` assigns a prefix by `hasPrefix` and never
+    /// validates the bare — so this branch admits any persisted id *claiming*
+    /// to be a group, not a group proven to exist.
+    ///
+    /// That is acceptable, but for a narrower reason than "the id is trusted".
+    /// A group id can certainly originate remotely: an invite carries one, and
+    /// `GroupProtocol` derives the conversation id from it. Every such id is
+    /// built by `PeerID(groupID:)`, which hex-encodes the raw bytes, so a
+    /// group learned from the network still has a structurally valid bare. A
+    /// malformed `group_` id therefore implies corrupted local persistence
+    /// rather than hostile input. And the failure it produces is an empty
+    /// group, not a DM compose box aimed at an unreachable peer — which is the
+    /// specific hazard this predicate exists to prevent. Admitting only groups
+    /// that still exist locally would need a membership lookup this predicate
+    /// does not take.
     ///
     /// Geohash/Nostr ids are screened before the peer terms, so nothing can
     /// bypass the check by matching earlier. A geoChat id is not a direct chat
@@ -266,19 +286,20 @@ final class AppRuntime: ObservableObject {
     /// alone, and `getFavoriteStatus(forPeerID:)` matches by rebuilding
     /// `PeerID(publicKey:)` — which carries no prefix — so it can never equal a
     /// `nostr_`-prefixed id no matter what is favorited. The geoDM branch below
-    /// is the correct shape for the day a Nostr-keyed lookup exists; until
-    /// then it resolves to `false` and the fallback to the conversation list is
-    /// the whole behaviour. Documented rather than fixed here: adding that
-    /// lookup means new favorites plumbing, which is not this change.
+    /// is kept because it is the right shape once a Nostr-keyed lookup exists,
+    /// but read it precisely: it resolves to `false` for the *production*
+    /// closure only. The injected seam will happily return `true` for a stub
+    /// that accepts a geoDM, so a passing test here is not evidence that geoDM
+    /// restore works. Documented rather than fixed: wiring the real lookup
+    /// means new favorites plumbing, which is not this change.
     static func isDirectChatRestorable(
         _ peerID: PeerID,
         isPeerFavorited: (PeerID) -> Bool,
         hasStoredCryptographicIdentity: (PeerID) -> Bool,
         isPeerBlocked: (PeerID) -> Bool
     ) -> Bool {
-        // Blocked is a veto, never one term among several. Kept ahead of the
-        // group branch so the veto is unconditional; a group id is never
-        // blocked in practice, so the order costs nothing.
+        // Blocked is a veto, never one term among several — including over the
+        // group branch below, so no id class can sidestep it.
         guard !isPeerBlocked(peerID) else { return false }
         // A private group is local state, not a claim about reaching a peer.
         // The peer terms below cannot represent it and would refuse it.

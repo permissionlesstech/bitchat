@@ -375,6 +375,44 @@ final class ConversationStoreLastActiveTests: XCTestCase {
         XCTAssertEqual(identityLookups, 0, "group restore consulted the identity term")
     }
 
+    func test_idClassesAreMutuallyExclusive() {
+        // The group branch sits between the geoChat guard and the geoDM one,
+        // so its placement would be load-bearing if an id could belong to two
+        // classes at once. `PeerID` assigns exactly one prefix, so it cannot —
+        // pin that, because the day it stops being true the ordering silently
+        // decides which rule wins.
+        let group = PeerID(str: "group_" + String(repeating: "ab", count: 16))
+        let geoDM = PeerID(str: "nostr_0123456789abcdef")
+        let geoChat = PeerID(str: "nostr:someGeohashChannel")
+
+        XCTAssertTrue(group.isGroup)
+        XCTAssertFalse(group.isGeoDM)
+        XCTAssertFalse(group.isGeoChat)
+
+        XCTAssertFalse(geoDM.isGroup)
+        XCTAssertFalse(geoChat.isGroup)
+    }
+
+    func test_malformedGroupIDIsStillAdmitted_documentingTheBound() {
+        // `isGroup` tests the prefix only — `PeerID(str:)` never validates the
+        // bare — so this branch admits any persisted id claiming to be a
+        // group. That is deliberate and bounded: the value is written by our
+        // own selection path into local state, never parsed from the network,
+        // and the failure it can produce is an empty group rather than the
+        // phantom DM this predicate exists to prevent. Pinned so that if the
+        // id ever becomes untrusted, this test is the thing that has to change.
+        let malformed = PeerID(str: "group_not-hex")
+        XCTAssertTrue(malformed.isGroup)
+        XCTAssertTrue(
+            AppRuntime.isDirectChatRestorable(
+                malformed,
+                isPeerFavorited: { _ in false },
+                hasStoredCryptographicIdentity: { _ in false },
+                isPeerBlocked: { _ in false }
+            )
+        )
+    }
+
     func test_blockedGroupIsNotRestorable() {
         // Block stays an unconditional veto, ahead of the group branch.
         let group = PeerID(str: "group_" + String(repeating: "ef", count: 16))
