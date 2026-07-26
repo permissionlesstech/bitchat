@@ -79,10 +79,15 @@ private final class MockChatPublicConversationContext: ChatPublicConversationCon
     }
 
     private(set) var clearedConversations: [ConversationID] = []
+    private(set) var archivePurgeCount = 0
 
     func clearPublicConversation(_ conversationID: ConversationID) {
         clearedConversations.append(conversationID)
         conversations[conversationID] = []
+    }
+
+    func purgeArchivedPublicMessages() {
+        archivePurgeCount += 1
     }
 
     func queueGeohashSystemMessage(_ content: String) {
@@ -343,6 +348,35 @@ struct ChatPublicConversationCoordinatorContextTests {
         coordinator.handlePublicMessage(second)
         #expect(context.enqueuedMessages.map(\.messageID) == ["geo-msg-2"])
         #expect(context.enqueuedMessages.first?.conversationID == .geohash(geohash))
+    }
+
+    /// `/clear` on the mesh timeline used to only record a watermark, leaving
+    /// the archive on disk for up to its freshness window — so someone who
+    /// cleared before a police stop had deleted nothing. It must now erase the
+    /// archive behind the timeline.
+    @Test @MainActor
+    func clearCurrentPublicTimeline_onMesh_erasesTheArchive() async {
+        let context = MockChatPublicConversationContext()
+        let coordinator = ChatPublicConversationCoordinator(context: context)
+        context.activeChannel = .mesh
+
+        coordinator.clearCurrentPublicTimeline()
+
+        #expect(context.clearedConversations == [.mesh])
+        #expect(context.archivePurgeCount == 1)
+    }
+
+    /// Geohash timelines are Nostr-backed and carry no mesh gossip archive, so
+    /// clearing one must not reach for it.
+    @Test @MainActor
+    func clearCurrentPublicTimeline_onGeohash_leavesTheArchiveAlone() async {
+        let context = MockChatPublicConversationContext()
+        let coordinator = ChatPublicConversationCoordinator(context: context)
+        context.activeChannel = .location(GeohashChannel(level: .city, geohash: "u4pruy"))
+
+        coordinator.clearCurrentPublicTimeline()
+
+        #expect(context.archivePurgeCount == 0)
     }
 
     @Test @MainActor

@@ -293,6 +293,9 @@ protocol Transport: AnyObject {
     /// Drops any carried public messages from a (newly blocked) sender so
     /// they can't resurface as archived echoes on a later launch.
     func purgeArchivedPublicMessages(from peerID: PeerID)
+    /// Erases the whole carried public-message archive, on disk included, so
+    /// clearing the mesh timeline deletes that history rather than hiding it.
+    func purgeAllArchivedPublicMessages()
 }
 
 /// A carried public mesh message from the store-and-forward window, decoded
@@ -403,6 +406,7 @@ extension Transport {
     }
 
     func purgeArchivedPublicMessages(from peerID: PeerID) {}
+    func purgeAllArchivedPublicMessages() {}
 }
 
 protocol TransportPeerEventsDelegate: AnyObject {

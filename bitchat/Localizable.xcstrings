@@ -1,6 +1,2052 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "app_info.settings.relays.add" : {
+      "comment" : "Button that adds the typed relay address to the list",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إضافة"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "যোগ করুন"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hinzufügen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "add"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "añadir"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "افزودن"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "idagdag"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ajouter"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הוסף"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "जोड़ें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tambah"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "aggiungi"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "追加"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "추가"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tambah"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "थप"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "toevoegen"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dodaj"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "adicionar"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "adicionar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "добавить"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "lägg till"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "சேர்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เพิ่ม"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ekle"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "додати"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "شامل کریں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "thêm"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加入"
+          }
+        }
+      }
+    },
+    "app_info.settings.relays.built_in" : {
+      "comment" : "Label marking a relay as one of the built-in relays, which cannot be removed",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مدمج"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "বিল্ট-ইন"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "eingebaut"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "built in"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "integrado"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "داخلی"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "built in"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "intégré"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "מובנה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "अंतर्निर्मित"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bawaan"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "integrato"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "組み込み"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "기본 제공"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "terbina dalam"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "पूर्वनिर्मित"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ingebouwd"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wbudowany"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "integrado"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "integrado"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "встроенное"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "inbyggt"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "உள்ளமைந்தது"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "มาพร้อมแอป"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yerleşik"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "вбудований"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بلٹ اِن"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tích hợp"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "内置"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "內建"
+          }
+        }
+      }
+    },
+    "app_info.settings.relays.error.duplicate" : {
+      "comment" : "Error shown when the typed relay address is already in the list",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "هذا المرحّل موجود في القائمة بالفعل."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "এই রিলে আগেই তালিকায় আছে।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dieses relay steht schon in der liste."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "that relay is already in the list."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ese relay ya está en la lista."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "این رله از قبل در فهرست است."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nasa listahan na ang relay na iyon."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ce relais est déjà dans la liste."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הממסר הזה כבר ברשימה."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "वह रिले पहले से सूची में है।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "relay itu sudah ada di daftar."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "quel relay è già nell'elenco."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "そのリレーはすでにリストにあります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "그 릴레이는 이미 목록에 있습니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "relay itu sudah ada dalam senarai."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "त्यो रिले पहिले नै सूचीमा छ।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "die relay staat al in de lijst."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ten relay już jest na liście."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "esse relé já está na lista."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "esse relay já está na lista."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "это реле уже в списке."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "det reläet finns redan i listan."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "அந்த ரிலே ஏற்கெனவே பட்டியலில் உள்ளது."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "รีเลย์นี้อยู่ในรายการแล้ว"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bu röle listede zaten var."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "цей релей уже в списку."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "یہ ریلے پہلے ہی فہرست میں ہے۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "relay đó đã có trong danh sách."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "该中继已在列表中。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "該中繼已在清單中。"
+          }
+        }
+      }
+    },
+    "app_info.settings.relays.error.limit" : {
+      "comment" : "Error shown when the relay list is already at its maximum size; %d is that maximum",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يمكنك إضافة %d مرحّلات كحد أقصى."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "আপনি সর্বোচ্চ %d টি রিলে যোগ করতে পারেন।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "du kannst bis zu %d relays hinzufügen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "you can add up to %d relays."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "puedes añadir hasta %d relays."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "می‌توانید تا %d رله اضافه کنید."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hanggang %d relay lang ang maaari mong idagdag."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tu peux ajouter jusqu'à %d relais."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "אפשר להוסיף עד %d ממסרים."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "आप %d रिले तक जोड़ सकते हैं।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kamu bisa menambahkan hingga %d relay."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "puoi aggiungere fino a %d relay."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "リレーは最大%d件まで追加できます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "릴레이는 최대 %d개까지 추가할 수 있습니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "anda boleh menambah sehingga %d relay."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "तिमी %d रिलेसम्म थप्न सक्छौ।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "je kunt tot %d relays toevoegen."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "możesz dodać maksymalnie %d relay."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "podes adicionar até %d relés."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "você pode adicionar até %d relays."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "можно добавить до %d реле."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "du kan lägga till upp till %d reläer."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d ரிலேகள் வரை சேர்க்கலாம்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เพิ่มรีเลย์ได้สูงสุด %d รายการ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "en fazla %d röle ekleyebilirsiniz."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "можна додати до %d релеїв."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "آپ %d ریلے تک شامل کر سکتے ہیں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bạn có thể thêm tối đa %d relay."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最多可以添加 %d 个中继。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最多可以加入 %d 個中繼。"
+          }
+        }
+      }
+    },
+    "app_info.settings.relays.error.malformed" : {
+      "comment" : "Error shown when a typed relay address cannot be parsed",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لا يبدو هذا عنوان مرحّل. جرّب wss://host."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "এটি রিলের ঠিকানার মতো মনে হচ্ছে না। wss://host দিয়ে চেষ্টা করুন।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "das sieht nicht wie eine relay-adresse aus. versuch wss://host."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "that doesn't look like a relay address. try wss://host."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "eso no parece una dirección de relay. prueba wss://host."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "این شبیه نشانی رله نیست. wss://host را امتحان کنید."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mukhang hindi ito address ng relay. subukan ang wss://host."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ça ne ressemble pas à une adresse de relais. essaie wss://host."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "זה לא נראה כמו כתובת של ממסר. נסה wss://host."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "यह रिले का पता नहीं लगता। wss://host आज़माएँ।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "itu tidak tampak seperti alamat relay. coba wss://host."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "non sembra l'indirizzo di un relay. prova wss://host."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "リレーのアドレスではないようです。wss://host を試してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "릴레이 주소가 아닌 것 같습니다. wss://host 형식으로 시도하세요."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "itu tidak kelihatan seperti alamat relay. cuba wss://host."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "यो रिलेको ठेगाना जस्तो देखिँदैन। wss://host प्रयास गर।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dat lijkt niet op een relay-adres. probeer wss://host."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "to nie wygląda na adres relay. spróbuj wss://host."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "isso não parece um endereço de relé. tenta wss://host."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "isso não parece um endereço de relay. tente wss://host."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "это не похоже на адрес реле. попробуй wss://host."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "det ser inte ut som en reläadress. prova wss://host."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "இது ரிலே முகவரி போல் தெரியவில்லை. wss://host முயற்சிக்கவும்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ดูเหมือนไม่ใช่ที่อยู่รีเลย์ ลอง wss://host"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bu bir röle adresine benzemiyor. wss://host deneyin."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "це не схоже на адресу релея. спробуй wss://host."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "یہ ریلے کا پتہ نہیں لگتا۔ wss://host آزمائیں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "đó không giống địa chỉ relay. hãy thử wss://host."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这看起来不像中继地址。试试 wss://host。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這看起來不像中繼位址。試試 wss://host。"
+          }
+        }
+      }
+    },
+    "app_info.settings.relays.placeholder" : {
+      "comment" : "Placeholder text in the field for adding a relay address",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wss://relay.example.com"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wss://relay.example.com"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wss://relay.example.com"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wss://relay.example.com"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wss://relay.example.com"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wss://relay.example.com"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wss://relay.example.com"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wss://relay.example.com"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wss://relay.example.com"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wss://relay.example.com"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wss://relay.example.com"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wss://relay.example.com"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wss://relay.example.com"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wss://relay.example.com"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wss://relay.example.com"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wss://relay.example.com"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wss://relay.example.com"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wss://relay.example.com"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wss://relay.example.com"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wss://relay.example.com"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wss://relay.example.com"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wss://relay.example.com"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wss://relay.example.com"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wss://relay.example.com"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wss://relay.example.com"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wss://relay.example.com"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wss://relay.example.com"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wss://relay.example.com"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wss://relay.example.com"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wss://relay.example.com"
+          }
+        }
+      }
+    },
+    "app_info.settings.relays.remove" : {
+      "comment" : "Accessibility label for the button that removes an added relay",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إزالة المرحّل"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "রিলে সরান"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "relay entfernen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "remove relay"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "quitar relay"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حذف رله"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alisin ang relay"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "retirer le relais"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "הסר ממסר"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "रिले हटाएँ"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hapus relay"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "rimuovi relay"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "リレーを削除"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "릴레이 제거"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "buang relay"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "रिले हटाउ"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "relay verwijderen"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "usuń relay"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "remover relé"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "remover relay"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "удалить реле"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ta bort relä"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ரிலேயை நீக்கு"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ลบรีเลย์"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "röleyi kaldır"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "видалити релей"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ریلے ہٹائیں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "xóa relay"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移除中继"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移除中繼"
+          }
+        }
+      }
+    },
+    "app_info.settings.relays.subtitle" : {
+      "comment" : "Subtitle explaining what the relay list is for and why someone would add a relay",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عندما لا تصل شبكة mesh إلى شخص، تنتقل الرسائل الخاصة عبر هذه المرحّلات. المرحّلات المدمجة عناوين معروفة يمكن لمرشّح الشبكة حجبها — لذا يمكنك إضافة مرحّلاتك الخاصة، بما في ذلك عناوين .onion."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "মেশ কারও কাছে পৌঁছাতে না পারলে ব্যক্তিগত বার্তা এই রিলেগুলোর মধ্য দিয়ে যায়। বিল্ট-ইন রিলেগুলো সুপরিচিত ঠিকানা, যা নেটওয়ার্ক ফিল্টার আটকে দিতে পারে — তাই আপনি নিজের রিলে যোগ করতে পারেন, .onion ঠিকানাও।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wenn das mesh jemanden nicht erreicht, laufen private nachrichten über diese relays. die eingebauten sind bekannte adressen, die ein netzwerkfilter blockieren kann — du kannst also eigene hinzufügen, auch .onion-adressen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "when the mesh can't reach someone, private messages travel through these relays. the built-in ones are well-known addresses that a network filter can block, so you can add your own — including .onion addresses."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cuando el mesh no llega a alguien, los mensajes privados viajan por estos relays. los integrados son direcciones muy conocidas que un filtro de red puede bloquear, así que puedes añadir los tuyos — incluidas direcciones .onion."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "وقتی مش به کسی نمی‌رسد، پیام‌های خصوصی از این رله‌ها می‌گذرند. رله‌های داخلی نشانی‌های شناخته‌شده‌ای هستند که یک صافی شبکه می‌تواند مسدودشان کند — پس می‌توانید رله‌های خودتان را اضافه کنید، از جمله نشانی‌های .onion."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kapag hindi maabot ng mesh ang isang tao, dumadaan ang mga pribadong mensahe sa mga relay na ito. ang mga built-in ay kilalang-kilalang address na kayang harangin ng filter ng network — kaya maaari kang magdagdag ng sarili mo, kasama ang mga .onion address."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "quand le mesh ne joint pas quelqu'un, les messages privés passent par ces relais. ceux intégrés sont des adresses bien connues qu'un filtre réseau peut bloquer — tu peux donc ajouter les tiens, y compris des adresses .onion."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "כשה-mesh לא מגיע למישהו, הודעות פרטיות עוברות דרך הממסרים האלה. הממסרים המובנים הם כתובות מוכרות שמסנן רשת יכול לחסום — אפשר להוסיף ממסרים משלך, כולל כתובות .onion."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "जब मेश किसी तक नहीं पहुँच पाता, तब निजी संदेश इन रिले से होकर जाते हैं। अंतर्निर्मित रिले जाने-पहचाने पते हैं जिन्हें नेटवर्क फ़िल्टर रोक सकता है — इसलिए आप अपने रिले जोड़ सकते हैं, .onion पते भी।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "saat mesh tidak bisa menjangkau seseorang, pesan pribadi lewat relay ini. relay bawaan adalah alamat yang sudah dikenal luas dan bisa diblokir filter jaringan — jadi kamu bisa menambahkan relay sendiri, termasuk alamat .onion."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "quando la mesh non raggiunge qualcuno, i messaggi privati passano da questi relay. quelli integrati sono indirizzi molto noti che un filtro di rete può bloccare — puoi quindi aggiungere i tuoi, anche indirizzi .onion."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "meshで相手に届かないとき、プライベートメッセージはこれらのリレーを通ります。組み込みのリレーはよく知られたアドレスで、ネットワークのフィルターにブロックされることがあります — 自分のリレー、.onionアドレスも追加できます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh로 상대에게 닿지 않으면 비공개 메시지는 이 릴레이를 거칩니다. 기본 릴레이는 널리 알려진 주소여서 네트워크 필터가 차단할 수 있습니다 — 그래서 .onion 주소를 포함해 직접 릴레이를 추가할 수 있습니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "apabila mesh tidak dapat mencapai seseorang, pesan peribadi bergerak melalui relay ini. relay terbina dalam ialah alamat yang terkenal dan boleh dihalang oleh penapis rangkaian — jadi anda boleh menambah relay sendiri, termasuk alamat .onion."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh कसैसम्म पुग्न सक्दैन भने निजी सन्देश यी रिले मार्फत जान्छन्। पूर्वनिर्मित रिले सबैलाई थाहा भएका ठेगाना हुन्, जसलाई नेटवर्क फिल्टरले रोक्न सक्छ — त्यसैले तिमी आफ्नै रिले थप्न सक्छौ, .onion ठेगाना पनि।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "als de mesh iemand niet bereikt, gaan privéberichten via deze relays. de ingebouwde relays zijn bekende adressen die een netwerkfilter kan blokkeren — je kunt dus je eigen relays toevoegen, ook .onion-adressen."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gdy mesh nie dosięga kogoś, wiadomości prywatne idą przez te relay. wbudowane to powszechnie znane adresy, które filtr sieciowy może zablokować — możesz więc dodać własne, także adresy .onion."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "quando a mesh não chega a alguém, as mensagens privadas seguem por estes relés. os integrados são endereços bem conhecidos que um filtro de rede pode bloquear — por isso podes acrescentar os teus, incluindo endereços .onion."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "quando o mesh não alcança alguém, as mensagens privadas passam por estes relays. os integrados são endereços conhecidos que um filtro de rede pode bloquear — então você pode adicionar os seus, inclusive endereços .onion."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "когда mesh не достаёт до человека, приватные сообщения идут через эти реле. встроенные — это широко известные адреса, которые может заблокировать сетевой фильтр, поэтому можно добавить свои, в том числе .onion-адреса."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "när mesh inte når fram till någon går privata meddelanden via dessa reläer. de inbyggda är välkända adresser som ett nätverksfilter kan blockera — du kan därför lägga till egna, även .onion-adresser."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh ஒருவரை எட்ட முடியாதபோது, தனிப்பட்ட செய்திகள் இந்த ரிலேகள் வழியாகச் செல்கின்றன. உள்ளமைந்த ரிலேகள் நன்கு அறியப்பட்ட முகவரிகள், அவற்றை நெட்வொர்க் வடிகட்டி தடுக்க முடியும் — எனவே .onion முகவரிகள் உட்பட உங்கள் சொந்த ரிலேகளைச் சேர்க்கலாம்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เมื่อ mesh ไปไม่ถึงใคร ข้อความส่วนตัวจะเดินทางผ่านรีเลย์เหล่านี้ รีเลย์ที่มาพร้อมแอปเป็นที่อยู่ที่รู้จักกันดีและตัวกรองเครือข่ายปิดกั้นได้ — คุณจึงเพิ่มรีเลย์ของตัวเองได้ รวมถึงที่อยู่ .onion"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mesh birine ulaşamadığında özel mesajlar bu rölelerden geçer. yerleşik röleler herkesin bildiği adreslerdir ve bir ağ filtresi bunları engelleyebilir — bu yüzden .onion adresleri de dahil kendi rölelerinizi ekleyebilirsiniz."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "коли mesh не дотягується до людини, приватні повідомлення йдуть через ці релеї. вбудовані — це добре відомі адреси, які може заблокувати мережевий фільтр, тож можна додати власні, зокрема .onion-адреси."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "جب mesh کسی تک نہ پہنچ سکے تو نجی پیغامات ان ریلے سے گزرتے ہیں۔ بلٹ اِن ریلے مشہور پتے ہیں جنہیں نیٹ ورک فلٹر روک سکتا ہے — اس لیے آپ اپنے ریلے شامل کر سکتے ہیں، .onion پتے بھی۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "khi mesh không tới được ai đó, tin nhắn riêng đi qua các relay này. các relay tích hợp là những địa chỉ ai cũng biết nên bộ lọc mạng có thể chặn — vì vậy bạn có thể thêm relay của mình, kể cả địa chỉ .onion."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当 mesh 无法触达某人时，私密消息会经这些中继传递。内置中继是众所周知的地址，网络过滤可以封锁它们 — 所以你可以添加自己的中继，包括 .onion 地址。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "當 mesh 無法觸及某人時，私密訊息會經這些中繼傳遞。內建中繼是眾所周知的位址，網路過濾可以封鎖它們 — 所以你可以加入自己的中繼，包括 .onion 位址。"
+          }
+        }
+      }
+    },
+    "app_info.settings.relays.title" : {
+      "comment" : "Title of the relay list editor in settings",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مرحّلات الرسائل الخاصة"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ব্যক্তিগত বার্তার রিলে"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "relays für private nachrichten"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "private message relays"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "relays para mensajes privados"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رله‌های پیام خصوصی"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mga relay para sa pribadong mensahe"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "relais pour messages privés"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ממסרים להודעות פרטיות"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "निजी संदेश रिले"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "relay pesan pribadi"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "relay per messaggi privati"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "プライベートメッセージのリレー"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "비공개 메시지 릴레이"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "relay pesan peribadi"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "निजी सन्देशका रिले"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "relays voor privéberichten"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "relay dla wiadomości prywatnych"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "relés para mensagens privadas"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "relays para mensagens privadas"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "реле для приватных сообщений"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "reläer för privata meddelanden"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "தனிப்பட்ட செய்திகளுக்கான ரிலேகள்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "รีเลย์สำหรับข้อความส่วนตัว"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "özel mesaj röleleri"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "релеї для приватних повідомлень"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نجی پیغامات کے ریلے"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "relay cho tin nhắn riêng"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "私密消息中继"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "私密訊息中繼"
+          }
+        }
+      }
+    },
+    "app_info.settings.tor.off_warning" : {
+      "comment" : "Warning shown under the tor toggle while tor is switched off, stating that relay operators can see the device IP address",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor متوقف: كل مرحّل تتصل به يمكنه رؤية عنوان IP الخاص بك، بما في ذلك المرحّلات التي تحمل رسائلك الخاصة."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tor বন্ধ: আপনি যে রিলেতেই সংযুক্ত হন সেটি আপনার IP ঠিকানা দেখতে পায়, আপনার ব্যক্তিগত বার্তা বহনকারী রিলেগুলোও।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor ist aus: jedes relay, mit dem du dich verbindest, kann deine ip-adresse sehen, auch die relays, die deine privaten nachrichten tragen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor is off: every relay you connect to can see your IP address, including relays carrying your private messages."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tor está desactivado: cada relay al que te conectas puede ver tu dirección IP, incluidos los relays que llevan tus mensajes privados."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tor خاموش است: هر رله‌ای که به آن وصل می‌شوید می‌تواند نشانی IP شما را ببیند، از جمله رله‌هایی که پیام‌های خصوصی شما را می‌برند."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "naka-off ang tor: nakikita ng bawat relay na kinokonekta mo ang iyong IP address, kasama ang mga relay na nagdadala ng iyong mga pribadong mensahe."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor est désactivé : chaque relais auquel tu te connectes voit ton adresse ip, y compris les relais qui transportent tes messages privés."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor כבוי: כל ממסר שאתה מתחבר אליו רואה את כתובת ה-ip שלך, כולל ממסרים שנושאים את ההודעות הפרטיות שלך."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tor बंद है: आप जिस भी रिले से जुड़ते हैं वह आपका IP पता देख सकता है, उनमें वे रिले भी शामिल हैं जो आपके निजी संदेश ले जाते हैं।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor nonaktif: setiap relay yang kamu hubungi bisa melihat alamat ip-mu, termasuk relay yang membawa pesan pribadimu."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor è disattivato: ogni relay a cui ti colleghi può vedere il tuo indirizzo ip, compresi i relay che trasportano i tuoi messaggi privati."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "torはオフです: 接続するすべてのリレーがあなたのipアドレスを見られます。プライベートメッセージを運ぶリレーも同じです。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor가 꺼져 있습니다: 연결하는 모든 릴레이가 IP 주소를 볼 수 있고, 비공개 메시지를 운반하는 릴레이도 마찬가지입니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor tidak aktif: setiap relay yang anda sambung boleh melihat alamat ip anda, termasuk relay yang membawa pesan peribadi anda."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor बन्द छ: तिमी जोडिने हरेक रिलेले तिम्रो ip ठेगाना देख्न सक्छ, तिम्रा निजी सन्देश बोक्ने रिले पनि।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor staat uit: elke relay waarmee je verbindt kan je IP-adres zien, ook de relays die je privéberichten vervoeren."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor jest wyłączony: każdy relay, z którym się łączysz, widzi twój adres IP, także te przenoszące twoje wiadomości prywatne."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "o Tor está desligado: cada relé a que te ligas consegue ver o teu endereço IP, incluindo os relés que transportam as tuas mensagens privadas."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "o tor está desligado: cada relay a que você se conecta consegue ver seu endereço ip, inclusive os relays que carregam suas mensagens privadas."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor выключен: каждое реле, к которому ты подключаешься, видит твой ip-адрес, включая реле, через которые идут твои приватные сообщения."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor är av: varje relä du ansluter till kan se din IP-adress, även reläerna som bär dina privata meddelanden."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor அணைந்திருக்கிறது: நீங்கள் இணைக்கும் ஒவ்வொரு ரிலேயும் உங்கள் IP முகவரியைப் பார்க்க முடியும், உங்கள் தனிப்பட்ட செய்திகளை எடுத்துச் செல்லும் ரிலேகளும் அதில் அடங்கும்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor ปิดอยู่: ทุกรีเลย์ที่คุณเชื่อมต่อเห็นที่อยู่ IP ของคุณ รวมถึงรีเลย์ที่ส่งข้อความส่วนตัวของคุณ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tor kapalı: bağlandığınız her röle IP adresinizi görebilir, özel mesajlarınızı taşıyan röleler de dahil."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor вимкнено: кожен релей, до якого ти підключаєшся, бачить твою ip-адресу, включно з релеями, що несуть твої приватні повідомлення."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor بند ہے: آپ جس ریلے سے بھی جڑتے ہیں وہ آپ کا IP پتہ دیکھ سکتا ہے، اُن ریلے سمیت جو آپ کے نجی پیغامات لے جاتے ہیں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor đang tắt: mọi relay bạn kết nối đều thấy địa chỉ IP của bạn, kể cả những relay mang tin nhắn riêng của bạn."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor 已关闭：你连接的每个中继都能看到你的 IP 地址，包括承载你私密消息的中继。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tor 已關閉：你連線的每個中繼都能看到你的 IP 位址，包括承載你私密訊息的中繼。"
+          }
+        }
+      }
+    },
+    "app_info.settings.tor.subtitle" : {
+      "comment" : "Subtitle for the tor routing toggle in settings, explaining what it covers",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يرسل حركة الإنترنت عبر tor، فيرى مشغّلو المرحّلات عنوان tor بدلاً من عنوانك. يشمل قنوات الموقع والرسائل الخاصة المسلَّمة عبر الإنترنت. الموصى به: تشغيل."
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ইন্টারনেট ট্রাফিক Tor দিয়ে পাঠায়, তাই রিলে পরিচালকেরা আপনার ঠিকানার বদলে Tor-এর ঠিকানা দেখে। লোকেশন চ্যানেল ও ইন্টারনেটে পাঠানো ব্যক্তিগত বার্তা এর আওতায় পড়ে। সুপারিশ: চালু।"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sendet internetverkehr über tor, sodass relay-betreiber die adresse von tor statt deiner sehen. gilt für standortkanäle und private nachrichten, die über das internet zugestellt werden. empfohlen: an."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sends internet traffic through tor, so relay operators see tor's address instead of yours. covers location channels and private messages delivered over the internet. recommended: on."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "envía el tráfico de internet a través de Tor, así quienes gestionan los relays ven la dirección de Tor en lugar de la tuya. cubre los canales de ubicación y los mensajes privados entregados por internet. recomendado: activado."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ترافیک اینترنت را از طریق Tor می‌فرستد، بنابراین گردانندگان رله به‌جای نشانی شما نشانی Tor را می‌بینند. کانال‌های موقعیت و پیام‌های خصوصی که از اینترنت تحویل می‌شوند را پوشش می‌دهد. توصیه: روشن."
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ipinapadala ang trapiko sa internet sa pamamagitan ng tor, kaya nakikita ng mga nagpapatakbo ng relay ang address ng tor at hindi ang sa iyo. saklaw nito ang mga channel ng lokasyon at ang mga pribadong mensaheng ipinapadala sa internet. inirerekomenda: naka-on."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "envoie le trafic internet par tor, donc ceux qui gèrent les relais voient l'adresse de tor et pas la tienne. couvre les canaux de localisation et les messages privés livrés par internet. recommandé : activé."
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "שולח את תעבורת האינטרנט דרך tor, כך שמפעילי ממסרים רואים את הכתובת של tor במקום שלך. חל על ערוצי מיקום ועל הודעות פרטיות שנשלחות דרך האינטרנט. מומלץ: פעיל."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "इंटरनेट ट्रैफ़िक Tor से भेजता है, जिससे रिले चलाने वालों को आपके पते की जगह Tor का पता दिखता है। यह लोकेशन चैनलों और इंटरनेट से पहुँचाए जाने वाले निजी संदेशों पर लागू होता है। अनुशंसित: चालू।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mengirim lalu lintas internet lewat tor, jadi pengelola relay melihat alamat tor bukan alamatmu. berlaku untuk kanal lokasi dan pesan pribadi yang dikirim lewat internet. disarankan: aktif."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "invia il traffico internet attraverso tor, così chi gestisce i relay vede l'indirizzo di tor invece del tuo. riguarda i canali posizione e i messaggi privati consegnati via internet. consigliato: attivo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "インターネット通信をtor経由で送るため、リレーの運営者にはあなたの代わりにtorのアドレスが見えます。ロケーションチャンネルと、インターネット経由で届くプライベートメッセージが対象です。推奨: オン"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "인터넷 트래픽을 tor를 통해 보내므로 릴레이를 운영하는 쪽에는 내 주소가 아니라 tor의 주소가 보입니다. 위치 채널과 인터넷으로 전달되는 비공개 메시지에 적용됩니다. 권장: 켜기."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "menghantar trafik internet melalui tor, jadi pengendali relay melihat alamat tor dan bukan alamat anda. ia merangkumi kanal lokasi dan pesan peribadi yang dihantar melalui internet. disarankan: aktif."
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "इन्टरनेट ट्राफिक tor मार्फत पठाउँछ, त्यसैले रिले चलाउनेहरूले तिम्रो ठेगानाको सट्टा tor को ठेगाना देख्छन्। यो स्थान च्यानल र इन्टरनेटबाट पुग्ने निजी सन्देशमा लागू हुन्छ। सिफारिस: अन।"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "stuurt internetverkeer via tor, zodat relaybeheerders het adres van tor zien in plaats van het jouwe. geldt voor locatiekanalen en privéberichten die via internet worden bezorgd. aanbevolen: aan."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wysyła ruch internetowy przez tor, więc osoby prowadzące relay widzą adres tor, a nie twój. dotyczy kanałów lokalizacji i wiadomości prywatnych dostarczanych przez internet. zalecane: włączone."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "envia o tráfego de internet através do Tor, por isso quem opera os relés vê o endereço do Tor em vez do teu. abrange os canais de localização e as mensagens privadas entregues pela internet. recomendado: ligado."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "envia o tráfego de internet pelo tor, então quem opera os relays vê o endereço do tor em vez do seu. vale para os canais de localização e as mensagens privadas entregues pela internet. recomendado: ligado."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "отправляет интернет-трафик через tor, поэтому операторы реле видят адрес tor, а не твой. распространяется на каналы локации и приватные сообщения, доставляемые через интернет. рекомендуем включить."
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "skickar internettrafik via tor, så de som driver reläer ser tors adress i stället för din. gäller platskanaler och privata meddelanden som levereras över internet. rekommenderas: på."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "இணைய போக்குவரத்தை tor வழியாக அனுப்புகிறது, அதனால் ரிலேகளை நடத்துபவர்கள் உங்கள் முகவரிக்குப் பதிலாக tor இன் முகவரியைப் பார்க்கிறார்கள். இட சேனல்களுக்கும் இணையம் வழியாக வழங்கப்படும் தனிப்பட்ட செய்திகளுக்கும் இது பொருந்தும். பரிந்துரை: இயக்கவும்."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ส่งทราฟฟิกอินเทอร์เน็ตผ่าน tor ผู้ดูแลรีเลย์จึงเห็นที่อยู่ของ tor แทนที่อยู่ของคุณ ครอบคลุมช่องตามตำแหน่งและข้อความส่วนตัวที่ส่งผ่านอินเทอร์เน็ต แนะนำให้เปิด"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "internet trafiğini Tor üzerinden gönderir; böylece röle işletenler sizin adresiniz yerine Tor'un adresini görür. konum kanallarını ve internet üzerinden iletilen özel mesajları kapsar. önerilen: açık."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "надсилає інтернет-трафік через tor, тож оператори релеїв бачать адресу tor, а не твою. охоплює канали локації та приватні повідомлення, що доставляються через інтернет. рекомендовано ввімкнути."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "انٹرنیٹ ٹریفک tor کے ذریعے بھیجتا ہے، اس لیے ریلے چلانے والوں کو آپ کے پتے کی جگہ tor کا پتہ نظر آتا ہے۔ اس میں لوکیشن چینلز اور انٹرنیٹ سے پہنچائے جانے والے نجی پیغامات شامل ہیں۔ تجویز: آن رکھیں۔"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "gửi lưu lượng internet qua tor, nên bên vận hành relay thấy địa chỉ của tor thay vì địa chỉ của bạn. áp dụng cho kênh vị trí và tin nhắn riêng được gửi qua internet. khuyến nghị: bật."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通过 tor 发送互联网流量，中继运营方看到的是 tor 的地址而不是你的。适用于位置频道和经互联网投递的私密消息。推荐：开启。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "透過 tor 傳送網際網路流量，中繼營運方看到的是 tor 的位址而不是你的。適用於位置頻道和經網際網路投遞的私密訊息。推薦：開啟。"
+          }
+        }
+      }
+    },
     "content.system.media_delete_refused" : {
       "comment" : "System message shown in the affected chat when an explicit media delete or /clear was refused and bubbles/files were kept",
       "extractionState" : "manual",
@@ -12468,2048 +14514,560 @@
         }
       }
     },
-    "app_info.settings.relays.add" : {
-      "comment" : "Button that adds the typed relay address to the list",
+    "app_info.settings.hide_previews.subtitle" : {
+      "comment" : "Subtitle explaining what hiding notification message previews does",
       "extractionState" : "manual",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "إضافة"
+            "value" : "تقول الإشعارات إن شيئًا ما وصل دون إظهار الرسالة ولا من أرسلها ولا قناة الموقع التي جاءت منها. من يحمل هاتفك المقفل لا يعرف شيئًا من شاشة القفل. مفعّل افتراضيًا."
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "যোগ করুন"
+            "value" : "নোটিফিকেশন শুধু জানায় যে কিছু এসেছে — বার্তা, কে পাঠিয়েছে বা কোন লোকেশন চ্যানেল থেকে এসেছে তা দেখায় না। আপনার লক করা ফোন যার হাতেই থাকুক, লক স্ক্রিন থেকে কিছুই জানতে পারবে না। ডিফল্টভাবে চালু।"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "hinzufügen"
+            "value" : "benachrichtigungen sagen nur, dass etwas angekommen ist — ohne die nachricht, ohne wer sie geschickt hat und ohne den standortkanal, aus dem sie kam. wer dein gesperrtes handy in der hand hält, erfährt vom sperrbildschirm nichts. standardmäßig an."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "add"
+            "value" : "notifications say that something arrived without showing the message, who sent it, or which location channel it came from. anyone holding your locked phone learns nothing from the lock screen. on by default."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "añadir"
+            "value" : "las notificaciones dicen que ha llegado algo sin mostrar el mensaje, quién lo envió ni de qué canal de ubicación viene. quien tenga tu teléfono bloqueado en la mano no aprende nada de la pantalla de bloqueo. activado por defecto."
           }
         },
         "fa" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "افزودن"
+            "value" : "اعلان‌ها فقط می‌گویند چیزی رسیده است، بدون نشان دادن متن پیام، فرستنده یا کانال موقعیتی که از آن آمده. هر کسی گوشی قفل‌شده‌ات را در دست بگیرد، از صفحهٔ قفل چیزی نمی‌فهمد. به‌طور پیش‌فرض روشن."
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "idagdag"
+            "value" : "sinasabi lang ng mga notification na may dumating, hindi ang mensahe, hindi kung sino ang nagpadala, at hindi kung saang channel ng lokasyon ito nanggaling. kahit sino ang may hawak ng naka-lock na telepono mo, wala siyang malalaman sa lock screen. naka-on bilang default."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ajouter"
+            "value" : "les notifications disent que quelque chose est arrivé sans montrer le message, qui l'a envoyé, ni de quel canal de localisation il vient. quiconque tient ton téléphone verrouillé n'apprend rien depuis l'écran de verrouillage. activé par défaut."
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "הוסף"
+            "value" : "ההתראות מודיעות שמשהו הגיע בלי להציג את ההודעה, מי שלח אותה או מאיזה ערוץ מיקום היא באה. מי שמחזיק את הטלפון הנעול שלך לא לומד דבר ממסך הנעילה. פעיל כברירת מחדל."
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "जोड़ें"
+            "value" : "नोटिफिकेशन सिर्फ बताते हैं कि कुछ आया है — न संदेश, न भेजने वाला, न वह लोकेशन चैनल जहाँ से वह आया। आपका लॉक किया हुआ फोन किसी के हाथ में हो, लॉक स्क्रीन से उसे कुछ पता नहीं चलेगा। डिफ़ॉल्ट रूप से चालू।"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tambah"
+            "value" : "notifikasi hanya bilang ada sesuatu yang masuk, tanpa menampilkan pesannya, siapa pengirimnya, atau dari kanal lokasi mana. siapa pun yang memegang ponselmu yang terkunci tidak mendapat apa pun dari layar kunci. aktif secara bawaan."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "aggiungi"
+            "value" : "le notifiche dicono che è arrivato qualcosa senza mostrare il messaggio, chi l'ha inviato o da quale canale posizione arriva. chi tiene in mano il tuo telefono bloccato non scopre nulla dalla schermata di blocco. attivo per impostazione predefinita."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "追加"
+            "value" : "通知は何か届いたことだけを伝え、メッセージの内容も、送り主も、どのロケーションチャンネルから来たかも表示しません。ロックしたスマホを誰が手にしても、ロック画面からは何もわかりません。初期設定はオンです。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "추가"
+            "value" : "알림은 무언가 도착했다는 사실만 알리고 메시지 내용, 보낸 사람, 어느 위치 채널에서 왔는지는 보여주지 않습니다. 잠긴 휴대폰을 누가 들고 있어도 잠금 화면에서 알 수 있는 것은 없습니다. 기본값은 켜짐입니다."
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tambah"
+            "value" : "notifikasi hanya memberitahu ada sesuatu masuk, tanpa menunjukkan mesejnya, siapa yang menghantar, atau dari kanal lokasi mana. sesiapa yang memegang telefonmu yang berkunci tidak tahu apa-apa daripada skrin kunci. hidup secara lalai."
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "थप"
+            "value" : "सूचनाहरूले केवल कुनै कुरा आयो भन्छन्, सन्देश, पठाउने व्यक्ति वा कुन स्थान च्यानलबाट आयो भन्ने देखाउँदैनन्। तिम्रो लक भएको फोन जोसुकैको हातमा परे पनि लक स्क्रिनबाट केही थाहा पाउँदैन। पूर्वनिर्धारित रूपमा अन।"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "toevoegen"
+            "value" : "meldingen zeggen alleen dat er iets is binnengekomen, zonder het bericht, de afzender of het locatiekanaal waaruit het komt. wie je vergrendelde telefoon vasthoudt, komt niets te weten via het vergrendelscherm. standaard aan."
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "dodaj"
+            "value" : "powiadomienia mówią tylko, że coś przyszło — bez treści, bez nadawcy i bez kanału lokalizacji, z którego przyszło. ktokolwiek trzyma twój zablokowany telefon, nie dowie się niczego z ekranu blokady. domyślnie włączone."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "adicionar"
+            "value" : "as notificações dizem que chegou algo sem mostrar a mensagem, quem a enviou nem de que canal de localização vem. quem tem o teu telemóvel bloqueado na mão não fica a saber nada pelo ecrã de bloqueio. ligado por predefinição."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "adicionar"
+            "value" : "as notificações dizem que algo chegou sem mostrar a mensagem, quem enviou nem de qual canal de localização veio. quem estiver com seu celular bloqueado na mão não descobre nada pela tela de bloqueio. ligado por padrão."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "добавить"
+            "value" : "уведомления сообщают только, что что-то пришло — без текста, без отправителя и без канала локации, откуда оно. кто бы ни держал твой заблокированный телефон, с экрана блокировки он не узнает ничего. по умолчанию включено."
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "lägg till"
+            "value" : "aviseringar säger bara att något kommit in, utan meddelandet, vem som skickade det eller vilken platskanal det kom från. den som håller i din låsta telefon får inget veta från låsskärmen. på som standard."
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "சேர்"
+            "value" : "அறிவிப்புகள் ஏதோ வந்ததை மட்டும் சொல்லும் — செய்தியையும், அனுப்பியவரையும், எந்த இட சேனலிலிருந்து வந்ததையும் காட்டாது. உங்கள் பூட்டிய தொலைபேசியை யார் கையில் வைத்திருந்தாலும், பூட்டுத் திரையிலிருந்து எதுவும் தெரியாது. இயல்பாக இயக்கத்தில் உள்ளது."
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "เพิ่ม"
+            "value" : "การแจ้งเตือนจะบอกแค่ว่ามีอะไรเข้ามา โดยไม่แสดงข้อความ ไม่บอกว่าใครส่ง และไม่บอกว่ามาจากช่องตามตำแหน่งใด ใครถือโทรศัพท์ที่ล็อกอยู่ของคุณก็ไม่รู้อะไรจากหน้าจอล็อก เปิดไว้เป็นค่าเริ่มต้น"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ekle"
+            "value" : "bildirimler yalnızca bir şeyin geldiğini söyler; mesajı, kimin gönderdiğini ya da hangi konum kanalından geldiğini göstermez. kilitli telefonunu elinde tutan kişi kilit ekranından hiçbir şey öğrenemez. varsayılan olarak açık."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "додати"
+            "value" : "повідомлення лише кажуть, що щось надійшло — без тексту, без відправника й без каналу локації, звідки воно. хто б не тримав твій заблокований телефон, з екрана блокування він не дізнається нічого. типово ввімкнено."
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "شامل کریں"
+            "value" : "اطلاعات صرف یہ بتاتی ہیں کہ کچھ آیا ہے، نہ پیغام دکھاتی ہیں، نہ بھیجنے والا، نہ یہ کہ کس لوکیشن چینل سے آیا۔ آپ کا مقفل فون جس کے ہاتھ میں بھی ہو، لاک اسکرین سے اسے کچھ معلوم نہیں ہوتا۔ بطور طے شدہ آن ہے۔"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "thêm"
+            "value" : "thông báo chỉ cho biết có gì vừa đến, không hiện nội dung tin nhắn, ai gửi, hay đến từ kênh vị trí nào. ai đang giữ chiếc điện thoại đã khoá của bạn cũng không biết được gì từ màn hình khoá. bật theo mặc định."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "添加"
+            "value" : "通知只告诉你有新消息抵达，不显示内容、发送者，也不显示来自哪个位置频道。谁拿着你锁定的手机，都无法从锁屏上得知任何信息。默认开启。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "加入"
+            "value" : "通知只告訴你有新訊息抵達，不顯示內容、發送者，也不顯示來自哪個位置頻道。誰拿著你鎖定的手機，都無法從鎖定畫面得知任何資訊。預設開啟。"
           }
         }
       }
     },
-    "app_info.settings.relays.built_in" : {
-      "comment" : "Label marking a relay as one of the built-in relays, which cannot be removed",
+    "app_info.settings.hide_previews.title" : {
+      "comment" : "Title of the setting that keeps message text, sender names, and geohashes out of lock-screen notifications",
       "extractionState" : "manual",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "مدمج"
+            "value" : "إخفاء معاينات الرسائل"
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "বিল্ট-ইন"
+            "value" : "বার্তার প্রিভিউ লুকান"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "eingebaut"
+            "value" : "nachrichtenvorschau ausblenden"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "built in"
+            "value" : "hide message previews"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "integrado"
+            "value" : "ocultar vistas previas de mensajes"
           }
         },
         "fa" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "داخلی"
+            "value" : "پنهان کردن پیش‌نمایش پیام‌ها"
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "built in"
+            "value" : "itago ang preview ng mensahe"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "intégré"
+            "value" : "masquer les aperçus de messages"
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "מובנה"
+            "value" : "הסתרת תצוגה מקדימה של הודעות"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "अंतर्निर्मित"
+            "value" : "संदेश प्रीव्यू छुपाएँ"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "bawaan"
+            "value" : "sembunyikan pratinjau pesan"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "integrato"
+            "value" : "nascondi le anteprime dei messaggi"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "組み込み"
+            "value" : "メッセージのプレビューを隠す"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "기본 제공"
+            "value" : "메시지 미리보기 숨기기"
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "terbina dalam"
+            "value" : "sembunyikan pratonton mesej"
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "पूर्वनिर्मित"
+            "value" : "सन्देशको प्रिभ्यु लुकाउ"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ingebouwd"
+            "value" : "berichtvoorbeelden verbergen"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "wbudowany"
+            "value" : "ukryj podglądy wiadomości"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "integrado"
+            "value" : "ocultar pré-visualizações de mensagens"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "integrado"
+            "value" : "ocultar prévias de mensagens"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "встроенное"
+            "value" : "скрывать превью сообщений"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "inbyggt"
+            "value" : "dölj förhandsvisning av meddelanden"
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "உள்ளமைந்தது"
+            "value" : "செய்தி முன்தோற்றத்தை மறை"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "มาพร้อมแอป"
+            "value" : "ซ่อนตัวอย่างข้อความ"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "yerleşik"
+            "value" : "mesaj önizlemelerini gizle"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "вбудований"
+            "value" : "приховувати попередній перегляд повідомлень"
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "بلٹ اِن"
+            "value" : "پیغام کی جھلک چھپائیں"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tích hợp"
+            "value" : "ẩn nội dung xem trước tin nhắn"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "内置"
+            "value" : "隐藏消息预览"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "內建"
+            "value" : "隱藏訊息預覽"
           }
         }
       }
     },
-    "app_info.settings.relays.error.duplicate" : {
-      "comment" : "Error shown when the typed relay address is already in the list",
+    "app_info.settings.privacy.title" : {
+      "comment" : "Section header (uppercase) for privacy settings such as hiding notification previews",
       "extractionState" : "manual",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "هذا المرحّل موجود في القائمة بالفعل."
+            "value" : "خصوصية"
           }
         },
         "bn" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "এই রিলে আগেই তালিকায় আছে।"
+            "value" : "গোপনীয়তা"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "dieses relay steht schon in der liste."
+            "value" : "PRIVATSPHÄRE"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "that relay is already in the list."
+            "value" : "PRIVACY"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ese relay ya está en la lista."
+            "value" : "PRIVACIDAD"
           }
         },
         "fa" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "این رله از قبل در فهرست است."
+            "value" : "حریم خصوصی"
           }
         },
         "fil" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "nasa listahan na ang relay na iyon."
+            "value" : "PRIBASYA"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ce relais est déjà dans la liste."
+            "value" : "CONFIDENTIALITÉ"
           }
         },
         "he" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "הממסר הזה כבר ברשימה."
+            "value" : "פרטיות"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "वह रिले पहले से सूची में है।"
+            "value" : "गोपनीयता"
           }
         },
         "id" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "relay itu sudah ada di daftar."
+            "value" : "PRIVASI"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "quel relay è già nell'elenco."
+            "value" : "PRIVACY"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "そのリレーはすでにリストにあります。"
+            "value" : "プライバシー"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "그 릴레이는 이미 목록에 있습니다."
+            "value" : "개인정보 보호"
           }
         },
         "ms" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "relay itu sudah ada dalam senarai."
+            "value" : "PRIVASI"
           }
         },
         "ne" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "त्यो रिले पहिले नै सूचीमा छ।"
+            "value" : "गोपनीयता"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "die relay staat al in de lijst."
+            "value" : "PRIVACY"
           }
         },
         "pl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ten relay już jest na liście."
+            "value" : "PRYWATNOŚĆ"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "esse relé já está na lista."
+            "value" : "PRIVACIDADE"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "esse relay já está na lista."
+            "value" : "PRIVACIDADE"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "это реле уже в списке."
+            "value" : "КОНФИДЕНЦИАЛЬНОСТЬ"
           }
         },
         "sv" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "det reläet finns redan i listan."
+            "value" : "PRIVAT"
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "அந்த ரிலே ஏற்கெனவே பட்டியலில் உள்ளது."
+            "value" : "தனியுரிமை"
           }
         },
         "th" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "รีเลย์นี้อยู่ในรายการแล้ว"
+            "value" : "ความเป็นส่วนตัว"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "bu röle listede zaten var."
+            "value" : "GİZLİLİK"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "цей релей уже в списку."
+            "value" : "КОНФІДЕНЦІЙНІСТЬ"
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "یہ ریلے پہلے ہی فہرست میں ہے۔"
+            "value" : "رازداری"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "relay đó đã có trong danh sách."
+            "value" : "QUYỀN RIÊNG TƯ"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "该中继已在列表中。"
+            "value" : "隐私"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "該中繼已在清單中。"
-          }
-        }
-      }
-    },
-    "app_info.settings.relays.error.limit" : {
-      "comment" : "Error shown when the relay list is already at its maximum size; %d is that maximum",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "يمكنك إضافة %d مرحّلات كحد أقصى."
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "আপনি সর্বোচ্চ %d টি রিলে যোগ করতে পারেন।"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "du kannst bis zu %d relays hinzufügen."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "you can add up to %d relays."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "puedes añadir hasta %d relays."
-          }
-        },
-        "fa" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "می‌توانید تا %d رله اضافه کنید."
-          }
-        },
-        "fil" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "hanggang %d relay lang ang maaari mong idagdag."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tu peux ajouter jusqu'à %d relais."
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "אפשר להוסיף עד %d ממסרים."
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "आप %d रिले तक जोड़ सकते हैं।"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "kamu bisa menambahkan hingga %d relay."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "puoi aggiungere fino a %d relay."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "リレーは最大%d件まで追加できます。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "릴레이는 최대 %d개까지 추가할 수 있습니다."
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "anda boleh menambah sehingga %d relay."
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "तिमी %d रिलेसम्म थप्न सक्छौ।"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "je kunt tot %d relays toevoegen."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "możesz dodać maksymalnie %d relay."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "podes adicionar até %d relés."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "você pode adicionar até %d relays."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "можно добавить до %d реле."
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "du kan lägga till upp till %d reläer."
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%d ரிலேகள் வரை சேர்க்கலாம்."
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "เพิ่มรีเลย์ได้สูงสุด %d รายการ"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "en fazla %d röle ekleyebilirsiniz."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "можна додати до %d релеїв."
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "آپ %d ریلے تک شامل کر سکتے ہیں۔"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "bạn có thể thêm tối đa %d relay."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "最多可以添加 %d 个中继。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "最多可以加入 %d 個中繼。"
-          }
-        }
-      }
-    },
-    "app_info.settings.relays.error.malformed" : {
-      "comment" : "Error shown when a typed relay address cannot be parsed",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "لا يبدو هذا عنوان مرحّل. جرّب wss://host."
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "এটি রিলের ঠিকানার মতো মনে হচ্ছে না। wss://host দিয়ে চেষ্টা করুন।"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "das sieht nicht wie eine relay-adresse aus. versuch wss://host."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "that doesn't look like a relay address. try wss://host."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "eso no parece una dirección de relay. prueba wss://host."
-          }
-        },
-        "fa" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "این شبیه نشانی رله نیست. wss://host را امتحان کنید."
-          }
-        },
-        "fil" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "mukhang hindi ito address ng relay. subukan ang wss://host."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ça ne ressemble pas à une adresse de relais. essaie wss://host."
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "זה לא נראה כמו כתובת של ממסר. נסה wss://host."
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "यह रिले का पता नहीं लगता। wss://host आज़माएँ।"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "itu tidak tampak seperti alamat relay. coba wss://host."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "non sembra l'indirizzo di un relay. prova wss://host."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "リレーのアドレスではないようです。wss://host を試してください。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "릴레이 주소가 아닌 것 같습니다. wss://host 형식으로 시도하세요."
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "itu tidak kelihatan seperti alamat relay. cuba wss://host."
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "यो रिलेको ठेगाना जस्तो देखिँदैन। wss://host प्रयास गर।"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "dat lijkt niet op een relay-adres. probeer wss://host."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "to nie wygląda na adres relay. spróbuj wss://host."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "isso não parece um endereço de relé. tenta wss://host."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "isso não parece um endereço de relay. tente wss://host."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "это не похоже на адрес реле. попробуй wss://host."
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "det ser inte ut som en reläadress. prova wss://host."
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "இது ரிலே முகவரி போல் தெரியவில்லை. wss://host முயற்சிக்கவும்."
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ดูเหมือนไม่ใช่ที่อยู่รีเลย์ ลอง wss://host"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "bu bir röle adresine benzemiyor. wss://host deneyin."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "це не схоже на адресу релея. спробуй wss://host."
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "یہ ریلے کا پتہ نہیں لگتا۔ wss://host آزمائیں۔"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "đó không giống địa chỉ relay. hãy thử wss://host."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这看起来不像中继地址。试试 wss://host。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "這看起來不像中繼位址。試試 wss://host。"
-          }
-        }
-      }
-    },
-    "app_info.settings.relays.placeholder" : {
-      "comment" : "Placeholder text in the field for adding a relay address",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wss://relay.example.com"
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wss://relay.example.com"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wss://relay.example.com"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wss://relay.example.com"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wss://relay.example.com"
-          }
-        },
-        "fa" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wss://relay.example.com"
-          }
-        },
-        "fil" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wss://relay.example.com"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wss://relay.example.com"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wss://relay.example.com"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wss://relay.example.com"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wss://relay.example.com"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wss://relay.example.com"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wss://relay.example.com"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wss://relay.example.com"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wss://relay.example.com"
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wss://relay.example.com"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wss://relay.example.com"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wss://relay.example.com"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wss://relay.example.com"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wss://relay.example.com"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wss://relay.example.com"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wss://relay.example.com"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wss://relay.example.com"
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wss://relay.example.com"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wss://relay.example.com"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wss://relay.example.com"
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wss://relay.example.com"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wss://relay.example.com"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wss://relay.example.com"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wss://relay.example.com"
-          }
-        }
-      }
-    },
-    "app_info.settings.relays.remove" : {
-      "comment" : "Accessibility label for the button that removes an added relay",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "إزالة المرحّل"
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "রিলে সরান"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "relay entfernen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "remove relay"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "quitar relay"
-          }
-        },
-        "fa" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "حذف رله"
-          }
-        },
-        "fil" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "alisin ang relay"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "retirer le relais"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "הסר ממסר"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "रिले हटाएँ"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "hapus relay"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "rimuovi relay"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "リレーを削除"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "릴레이 제거"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "buang relay"
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "रिले हटाउ"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "relay verwijderen"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "usuń relay"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "remover relé"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "remover relay"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "удалить реле"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ta bort relä"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ரிலேயை நீக்கு"
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ลบรีเลย์"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "röleyi kaldır"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "видалити релей"
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ریلے ہٹائیں"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "xóa relay"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "移除中继"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "移除中繼"
-          }
-        }
-      }
-    },
-    "app_info.settings.relays.subtitle" : {
-      "comment" : "Subtitle explaining what the relay list is for and why someone would add a relay",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "عندما لا تصل شبكة mesh إلى شخص، تنتقل الرسائل الخاصة عبر هذه المرحّلات. المرحّلات المدمجة عناوين معروفة يمكن لمرشّح الشبكة حجبها — لذا يمكنك إضافة مرحّلاتك الخاصة، بما في ذلك عناوين .onion."
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "মেশ কারও কাছে পৌঁছাতে না পারলে ব্যক্তিগত বার্তা এই রিলেগুলোর মধ্য দিয়ে যায়। বিল্ট-ইন রিলেগুলো সুপরিচিত ঠিকানা, যা নেটওয়ার্ক ফিল্টার আটকে দিতে পারে — তাই আপনি নিজের রিলে যোগ করতে পারেন, .onion ঠিকানাও।"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wenn das mesh jemanden nicht erreicht, laufen private nachrichten über diese relays. die eingebauten sind bekannte adressen, die ein netzwerkfilter blockieren kann — du kannst also eigene hinzufügen, auch .onion-adressen."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "when the mesh can't reach someone, private messages travel through these relays. the built-in ones are well-known addresses that a network filter can block, so you can add your own — including .onion addresses."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "cuando el mesh no llega a alguien, los mensajes privados viajan por estos relays. los integrados son direcciones muy conocidas que un filtro de red puede bloquear, así que puedes añadir los tuyos — incluidas direcciones .onion."
-          }
-        },
-        "fa" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "وقتی مش به کسی نمی‌رسد، پیام‌های خصوصی از این رله‌ها می‌گذرند. رله‌های داخلی نشانی‌های شناخته‌شده‌ای هستند که یک صافی شبکه می‌تواند مسدودشان کند — پس می‌توانید رله‌های خودتان را اضافه کنید، از جمله نشانی‌های .onion."
-          }
-        },
-        "fil" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "kapag hindi maabot ng mesh ang isang tao, dumadaan ang mga pribadong mensahe sa mga relay na ito. ang mga built-in ay kilalang-kilalang address na kayang harangin ng filter ng network — kaya maaari kang magdagdag ng sarili mo, kasama ang mga .onion address."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "quand le mesh ne joint pas quelqu'un, les messages privés passent par ces relais. ceux intégrés sont des adresses bien connues qu'un filtre réseau peut bloquer — tu peux donc ajouter les tiens, y compris des adresses .onion."
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "כשה-mesh לא מגיע למישהו, הודעות פרטיות עוברות דרך הממסרים האלה. הממסרים המובנים הם כתובות מוכרות שמסנן רשת יכול לחסום — אפשר להוסיף ממסרים משלך, כולל כתובות .onion."
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "जब मेश किसी तक नहीं पहुँच पाता, तब निजी संदेश इन रिले से होकर जाते हैं। अंतर्निर्मित रिले जाने-पहचाने पते हैं जिन्हें नेटवर्क फ़िल्टर रोक सकता है — इसलिए आप अपने रिले जोड़ सकते हैं, .onion पते भी।"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "saat mesh tidak bisa menjangkau seseorang, pesan pribadi lewat relay ini. relay bawaan adalah alamat yang sudah dikenal luas dan bisa diblokir filter jaringan — jadi kamu bisa menambahkan relay sendiri, termasuk alamat .onion."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "quando la mesh non raggiunge qualcuno, i messaggi privati passano da questi relay. quelli integrati sono indirizzi molto noti che un filtro di rete può bloccare — puoi quindi aggiungere i tuoi, anche indirizzi .onion."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "meshで相手に届かないとき、プライベートメッセージはこれらのリレーを通ります。組み込みのリレーはよく知られたアドレスで、ネットワークのフィルターにブロックされることがあります — 自分のリレー、.onionアドレスも追加できます。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "mesh로 상대에게 닿지 않으면 비공개 메시지는 이 릴레이를 거칩니다. 기본 릴레이는 널리 알려진 주소여서 네트워크 필터가 차단할 수 있습니다 — 그래서 .onion 주소를 포함해 직접 릴레이를 추가할 수 있습니다."
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "apabila mesh tidak dapat mencapai seseorang, pesan peribadi bergerak melalui relay ini. relay terbina dalam ialah alamat yang terkenal dan boleh dihalang oleh penapis rangkaian — jadi anda boleh menambah relay sendiri, termasuk alamat .onion."
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "mesh कसैसम्म पुग्न सक्दैन भने निजी सन्देश यी रिले मार्फत जान्छन्। पूर्वनिर्मित रिले सबैलाई थाहा भएका ठेगाना हुन्, जसलाई नेटवर्क फिल्टरले रोक्न सक्छ — त्यसैले तिमी आफ्नै रिले थप्न सक्छौ, .onion ठेगाना पनि।"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "als de mesh iemand niet bereikt, gaan privéberichten via deze relays. de ingebouwde relays zijn bekende adressen die een netwerkfilter kan blokkeren — je kunt dus je eigen relays toevoegen, ook .onion-adressen."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "gdy mesh nie dosięga kogoś, wiadomości prywatne idą przez te relay. wbudowane to powszechnie znane adresy, które filtr sieciowy może zablokować — możesz więc dodać własne, także adresy .onion."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "quando a mesh não chega a alguém, as mensagens privadas seguem por estes relés. os integrados são endereços bem conhecidos que um filtro de rede pode bloquear — por isso podes acrescentar os teus, incluindo endereços .onion."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "quando o mesh não alcança alguém, as mensagens privadas passam por estes relays. os integrados são endereços conhecidos que um filtro de rede pode bloquear — então você pode adicionar os seus, inclusive endereços .onion."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "когда mesh не достаёт до человека, приватные сообщения идут через эти реле. встроенные — это широко известные адреса, которые может заблокировать сетевой фильтр, поэтому можно добавить свои, в том числе .onion-адреса."
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "när mesh inte når fram till någon går privata meddelanden via dessa reläer. de inbyggda är välkända adresser som ett nätverksfilter kan blockera — du kan därför lägga till egna, även .onion-adresser."
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "mesh ஒருவரை எட்ட முடியாதபோது, தனிப்பட்ட செய்திகள் இந்த ரிலேகள் வழியாகச் செல்கின்றன. உள்ளமைந்த ரிலேகள் நன்கு அறியப்பட்ட முகவரிகள், அவற்றை நெட்வொர்க் வடிகட்டி தடுக்க முடியும் — எனவே .onion முகவரிகள் உட்பட உங்கள் சொந்த ரிலேகளைச் சேர்க்கலாம்."
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "เมื่อ mesh ไปไม่ถึงใคร ข้อความส่วนตัวจะเดินทางผ่านรีเลย์เหล่านี้ รีเลย์ที่มาพร้อมแอปเป็นที่อยู่ที่รู้จักกันดีและตัวกรองเครือข่ายปิดกั้นได้ — คุณจึงเพิ่มรีเลย์ของตัวเองได้ รวมถึงที่อยู่ .onion"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "mesh birine ulaşamadığında özel mesajlar bu rölelerden geçer. yerleşik röleler herkesin bildiği adreslerdir ve bir ağ filtresi bunları engelleyebilir — bu yüzden .onion adresleri de dahil kendi rölelerinizi ekleyebilirsiniz."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "коли mesh не дотягується до людини, приватні повідомлення йдуть через ці релеї. вбудовані — це добре відомі адреси, які може заблокувати мережевий фільтр, тож можна додати власні, зокрема .onion-адреси."
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "جب mesh کسی تک نہ پہنچ سکے تو نجی پیغامات ان ریلے سے گزرتے ہیں۔ بلٹ اِن ریلے مشہور پتے ہیں جنہیں نیٹ ورک فلٹر روک سکتا ہے — اس لیے آپ اپنے ریلے شامل کر سکتے ہیں، .onion پتے بھی۔"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "khi mesh không tới được ai đó, tin nhắn riêng đi qua các relay này. các relay tích hợp là những địa chỉ ai cũng biết nên bộ lọc mạng có thể chặn — vì vậy bạn có thể thêm relay của mình, kể cả địa chỉ .onion."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "当 mesh 无法触达某人时，私密消息会经这些中继传递。内置中继是众所周知的地址，网络过滤可以封锁它们 — 所以你可以添加自己的中继，包括 .onion 地址。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "當 mesh 無法觸及某人時，私密訊息會經這些中繼傳遞。內建中繼是眾所周知的位址，網路過濾可以封鎖它們 — 所以你可以加入自己的中繼，包括 .onion 位址。"
-          }
-        }
-      }
-    },
-    "app_info.settings.relays.title" : {
-      "comment" : "Title of the relay list editor in settings",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "مرحّلات الرسائل الخاصة"
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ব্যক্তিগত বার্তার রিলে"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "relays für private nachrichten"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "private message relays"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "relays para mensajes privados"
-          }
-        },
-        "fa" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "رله‌های پیام خصوصی"
-          }
-        },
-        "fil" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "mga relay para sa pribadong mensahe"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "relais pour messages privés"
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ממסרים להודעות פרטיות"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "निजी संदेश रिले"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "relay pesan pribadi"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "relay per messaggi privati"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "プライベートメッセージのリレー"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "비공개 메시지 릴레이"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "relay pesan peribadi"
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "निजी सन्देशका रिले"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "relays voor privéberichten"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "relay dla wiadomości prywatnych"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "relés para mensagens privadas"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "relays para mensagens privadas"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "реле для приватных сообщений"
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "reläer för privata meddelanden"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "தனிப்பட்ட செய்திகளுக்கான ரிலேகள்"
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "รีเลย์สำหรับข้อความส่วนตัว"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "özel mesaj röleleri"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "релеї для приватних повідомлень"
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "نجی پیغامات کے ریلے"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "relay cho tin nhắn riêng"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "私密消息中继"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "私密訊息中繼"
-          }
-        }
-      }
-    },
-    "app_info.settings.tor.off_warning" : {
-      "comment" : "Warning shown under the tor toggle while tor is switched off, stating that relay operators can see the device IP address",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tor متوقف: كل مرحّل تتصل به يمكنه رؤية عنوان IP الخاص بك، بما في ذلك المرحّلات التي تحمل رسائلك الخاصة."
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tor বন্ধ: আপনি যে রিলেতেই সংযুক্ত হন সেটি আপনার IP ঠিকানা দেখতে পায়, আপনার ব্যক্তিগত বার্তা বহনকারী রিলেগুলোও।"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tor ist aus: jedes relay, mit dem du dich verbindest, kann deine ip-adresse sehen, auch die relays, die deine privaten nachrichten tragen."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tor is off: every relay you connect to can see your IP address, including relays carrying your private messages."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tor está desactivado: cada relay al que te conectas puede ver tu dirección IP, incluidos los relays que llevan tus mensajes privados."
-          }
-        },
-        "fa" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tor خاموش است: هر رله‌ای که به آن وصل می‌شوید می‌تواند نشانی IP شما را ببیند، از جمله رله‌هایی که پیام‌های خصوصی شما را می‌برند."
-          }
-        },
-        "fil" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "naka-off ang tor: nakikita ng bawat relay na kinokonekta mo ang iyong IP address, kasama ang mga relay na nagdadala ng iyong mga pribadong mensahe."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tor est désactivé : chaque relais auquel tu te connectes voit ton adresse ip, y compris les relais qui transportent tes messages privés."
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tor כבוי: כל ממסר שאתה מתחבר אליו רואה את כתובת ה-ip שלך, כולל ממסרים שנושאים את ההודעות הפרטיות שלך."
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tor बंद है: आप जिस भी रिले से जुड़ते हैं वह आपका IP पता देख सकता है, उनमें वे रिले भी शामिल हैं जो आपके निजी संदेश ले जाते हैं।"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tor nonaktif: setiap relay yang kamu hubungi bisa melihat alamat ip-mu, termasuk relay yang membawa pesan pribadimu."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tor è disattivato: ogni relay a cui ti colleghi può vedere il tuo indirizzo ip, compresi i relay che trasportano i tuoi messaggi privati."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "torはオフです: 接続するすべてのリレーがあなたのipアドレスを見られます。プライベートメッセージを運ぶリレーも同じです。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tor가 꺼져 있습니다: 연결하는 모든 릴레이가 IP 주소를 볼 수 있고, 비공개 메시지를 운반하는 릴레이도 마찬가지입니다."
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tor tidak aktif: setiap relay yang anda sambung boleh melihat alamat ip anda, termasuk relay yang membawa pesan peribadi anda."
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tor बन्द छ: तिमी जोडिने हरेक रिलेले तिम्रो ip ठेगाना देख्न सक्छ, तिम्रा निजी सन्देश बोक्ने रिले पनि।"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tor staat uit: elke relay waarmee je verbindt kan je IP-adres zien, ook de relays die je privéberichten vervoeren."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tor jest wyłączony: każdy relay, z którym się łączysz, widzi twój adres IP, także te przenoszące twoje wiadomości prywatne."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "o Tor está desligado: cada relé a que te ligas consegue ver o teu endereço IP, incluindo os relés que transportam as tuas mensagens privadas."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "o tor está desligado: cada relay a que você se conecta consegue ver seu endereço ip, inclusive os relays que carregam suas mensagens privadas."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tor выключен: каждое реле, к которому ты подключаешься, видит твой ip-адрес, включая реле, через которые идут твои приватные сообщения."
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tor är av: varje relä du ansluter till kan se din IP-adress, även reläerna som bär dina privata meddelanden."
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tor அணைந்திருக்கிறது: நீங்கள் இணைக்கும் ஒவ்வொரு ரிலேயும் உங்கள் IP முகவரியைப் பார்க்க முடியும், உங்கள் தனிப்பட்ட செய்திகளை எடுத்துச் செல்லும் ரிலேகளும் அதில் அடங்கும்."
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tor ปิดอยู่: ทุกรีเลย์ที่คุณเชื่อมต่อเห็นที่อยู่ IP ของคุณ รวมถึงรีเลย์ที่ส่งข้อความส่วนตัวของคุณ"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tor kapalı: bağlandığınız her röle IP adresinizi görebilir, özel mesajlarınızı taşıyan röleler de dahil."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tor вимкнено: кожен релей, до якого ти підключаєшся, бачить твою ip-адресу, включно з релеями, що несуть твої приватні повідомлення."
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tor بند ہے: آپ جس ریلے سے بھی جڑتے ہیں وہ آپ کا IP پتہ دیکھ سکتا ہے، اُن ریلے سمیت جو آپ کے نجی پیغامات لے جاتے ہیں۔"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tor đang tắt: mọi relay bạn kết nối đều thấy địa chỉ IP của bạn, kể cả những relay mang tin nhắn riêng của bạn."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tor 已关闭：你连接的每个中继都能看到你的 IP 地址，包括承载你私密消息的中继。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tor 已關閉：你連線的每個中繼都能看到你的 IP 位址，包括承載你私密訊息的中繼。"
-          }
-        }
-      }
-    },
-    "app_info.settings.tor.subtitle" : {
-      "comment" : "Subtitle for the tor routing toggle in settings, explaining what it covers",
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "يرسل حركة الإنترنت عبر tor، فيرى مشغّلو المرحّلات عنوان tor بدلاً من عنوانك. يشمل قنوات الموقع والرسائل الخاصة المسلَّمة عبر الإنترنت. الموصى به: تشغيل."
-          }
-        },
-        "bn" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ইন্টারনেট ট্রাফিক Tor দিয়ে পাঠায়, তাই রিলে পরিচালকেরা আপনার ঠিকানার বদলে Tor-এর ঠিকানা দেখে। লোকেশন চ্যানেল ও ইন্টারনেটে পাঠানো ব্যক্তিগত বার্তা এর আওতায় পড়ে। সুপারিশ: চালু।"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "sendet internetverkehr über tor, sodass relay-betreiber die adresse von tor statt deiner sehen. gilt für standortkanäle und private nachrichten, die über das internet zugestellt werden. empfohlen: an."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "sends internet traffic through tor, so relay operators see tor's address instead of yours. covers location channels and private messages delivered over the internet. recommended: on."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "envía el tráfico de internet a través de Tor, así quienes gestionan los relays ven la dirección de Tor en lugar de la tuya. cubre los canales de ubicación y los mensajes privados entregados por internet. recomendado: activado."
-          }
-        },
-        "fa" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ترافیک اینترنت را از طریق Tor می‌فرستد، بنابراین گردانندگان رله به‌جای نشانی شما نشانی Tor را می‌بینند. کانال‌های موقعیت و پیام‌های خصوصی که از اینترنت تحویل می‌شوند را پوشش می‌دهد. توصیه: روشن."
-          }
-        },
-        "fil" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ipinapadala ang trapiko sa internet sa pamamagitan ng tor, kaya nakikita ng mga nagpapatakbo ng relay ang address ng tor at hindi ang sa iyo. saklaw nito ang mga channel ng lokasyon at ang mga pribadong mensaheng ipinapadala sa internet. inirerekomenda: naka-on."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "envoie le trafic internet par tor, donc ceux qui gèrent les relais voient l'adresse de tor et pas la tienne. couvre les canaux de localisation et les messages privés livrés par internet. recommandé : activé."
-          }
-        },
-        "he" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "שולח את תעבורת האינטרנט דרך tor, כך שמפעילי ממסרים רואים את הכתובת של tor במקום שלך. חל על ערוצי מיקום ועל הודעות פרטיות שנשלחות דרך האינטרנט. מומלץ: פעיל."
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "इंटरनेट ट्रैफ़िक Tor से भेजता है, जिससे रिले चलाने वालों को आपके पते की जगह Tor का पता दिखता है। यह लोकेशन चैनलों और इंटरनेट से पहुँचाए जाने वाले निजी संदेशों पर लागू होता है। अनुशंसित: चालू।"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "mengirim lalu lintas internet lewat tor, jadi pengelola relay melihat alamat tor bukan alamatmu. berlaku untuk kanal lokasi dan pesan pribadi yang dikirim lewat internet. disarankan: aktif."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "invia il traffico internet attraverso tor, così chi gestisce i relay vede l'indirizzo di tor invece del tuo. riguarda i canali posizione e i messaggi privati consegnati via internet. consigliato: attivo."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "インターネット通信をtor経由で送るため、リレーの運営者にはあなたの代わりにtorのアドレスが見えます。ロケーションチャンネルと、インターネット経由で届くプライベートメッセージが対象です。推奨: オン"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "인터넷 트래픽을 tor를 통해 보내므로 릴레이를 운영하는 쪽에는 내 주소가 아니라 tor의 주소가 보입니다. 위치 채널과 인터넷으로 전달되는 비공개 메시지에 적용됩니다. 권장: 켜기."
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "menghantar trafik internet melalui tor, jadi pengendali relay melihat alamat tor dan bukan alamat anda. ia merangkumi kanal lokasi dan pesan peribadi yang dihantar melalui internet. disarankan: aktif."
-          }
-        },
-        "ne" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "इन्टरनेट ट्राफिक tor मार्फत पठाउँछ, त्यसैले रिले चलाउनेहरूले तिम्रो ठेगानाको सट्टा tor को ठेगाना देख्छन्। यो स्थान च्यानल र इन्टरनेटबाट पुग्ने निजी सन्देशमा लागू हुन्छ। सिफारिस: अन।"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "stuurt internetverkeer via tor, zodat relaybeheerders het adres van tor zien in plaats van het jouwe. geldt voor locatiekanalen en privéberichten die via internet worden bezorgd. aanbevolen: aan."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wysyła ruch internetowy przez tor, więc osoby prowadzące relay widzą adres tor, a nie twój. dotyczy kanałów lokalizacji i wiadomości prywatnych dostarczanych przez internet. zalecane: włączone."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "envia o tráfego de internet através do Tor, por isso quem opera os relés vê o endereço do Tor em vez do teu. abrange os canais de localização e as mensagens privadas entregues pela internet. recomendado: ligado."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "envia o tráfego de internet pelo tor, então quem opera os relays vê o endereço do tor em vez do seu. vale para os canais de localização e as mensagens privadas entregues pela internet. recomendado: ligado."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "отправляет интернет-трафик через tor, поэтому операторы реле видят адрес tor, а не твой. распространяется на каналы локации и приватные сообщения, доставляемые через интернет. рекомендуем включить."
-          }
-        },
-        "sv" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "skickar internettrafik via tor, så de som driver reläer ser tors adress i stället för din. gäller platskanaler och privata meddelanden som levereras över internet. rekommenderas: på."
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "இணைய போக்குவரத்தை tor வழியாக அனுப்புகிறது, அதனால் ரிலேகளை நடத்துபவர்கள் உங்கள் முகவரிக்குப் பதிலாக tor இன் முகவரியைப் பார்க்கிறார்கள். இட சேனல்களுக்கும் இணையம் வழியாக வழங்கப்படும் தனிப்பட்ட செய்திகளுக்கும் இது பொருந்தும். பரிந்துரை: இயக்கவும்."
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ส่งทราฟฟิกอินเทอร์เน็ตผ่าน tor ผู้ดูแลรีเลย์จึงเห็นที่อยู่ของ tor แทนที่อยู่ของคุณ ครอบคลุมช่องตามตำแหน่งและข้อความส่วนตัวที่ส่งผ่านอินเทอร์เน็ต แนะนำให้เปิด"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "internet trafiğini Tor üzerinden gönderir; böylece röle işletenler sizin adresiniz yerine Tor'un adresini görür. konum kanallarını ve internet üzerinden iletilen özel mesajları kapsar. önerilen: açık."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "надсилає інтернет-трафік через tor, тож оператори релеїв бачать адресу tor, а не твою. охоплює канали локації та приватні повідомлення, що доставляються через інтернет. рекомендовано ввімкнути."
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "انٹرنیٹ ٹریفک tor کے ذریعے بھیجتا ہے، اس لیے ریلے چلانے والوں کو آپ کے پتے کی جگہ tor کا پتہ نظر آتا ہے۔ اس میں لوکیشن چینلز اور انٹرنیٹ سے پہنچائے جانے والے نجی پیغامات شامل ہیں۔ تجویز: آن رکھیں۔"
-          }
-        },
-        "vi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "gửi lưu lượng internet qua tor, nên bên vận hành relay thấy địa chỉ của tor thay vì địa chỉ của bạn. áp dụng cho kênh vị trí và tin nhắn riêng được gửi qua internet. khuyến nghị: bật."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "通过 tor 发送互联网流量，中继运营方看到的是 tor 的地址而不是你的。适用于位置频道和经互联网投递的私密消息。推荐：开启。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "透過 tor 傳送網際網路流量，中繼營運方看到的是 tor 的位址而不是你的。適用於位置頻道和經網際網路投遞的私密訊息。推薦：開啟。"
+            "value" : "隱私"
           }
         }
       }
@@ -62704,6 +63262,750 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "公告"
+          }
+        }
+      }
+    },
+    "notification.redacted.body" : {
+      "comment" : "Lock-screen notification body shown in place of the message text when message previews are hidden",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "افتح bitchat للقراءة"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "পড়তে bitchat খুলুন"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "öffne bitchat zum lesen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "open bitchat to read"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "abre bitchat para leer"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "برای خواندن bitchat را باز کن"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "buksan ang bitchat para makita"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ouvre bitchat pour lire"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "פתח את bitchat כדי לקרוא"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "पढ़ने के लिए bitchat खोलें"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "buka bitchat untuk membaca"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "apri bitchat per leggere"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "読むには bitchat を開いてください"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "읽으려면 bitchat을 열어보세요"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "buka bitchat untuk membaca"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "पढ्न bitchat खोल"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "open bitchat om te lezen"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "otwórz bitchat, aby przeczytać"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "abre o bitchat para ler"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "abra o bitchat para ler"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "открой bitchat, чтобы прочитать"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "öppna bitchat för att läsa"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "படிக்க bitchat ஐத் திறக்கவும்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เปิด bitchat เพื่ออ่าน"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "okumak için bitchat'i aç"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "відкрий bitchat, щоб прочитати"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پڑھنے کے لیے bitchat کھولیں"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "mở bitchat để đọc"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开 bitchat 查看"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "開啟 bitchat 查看"
+          }
+        }
+      }
+    },
+    "notification.redacted.dm.title" : {
+      "comment" : "Lock-screen notification title for a received direct message when message previews are hidden; deliberately names neither the sender nor the content",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 رسالة خاصة جديدة"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 নতুন ডিএম"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 neue pn"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 new dm"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 nuevo md"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 پیام خصوصی جدید"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 bagong dm"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 nouveau mp"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 הודעה פרטית חדשה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 नया dm"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 dm baru"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 nuovo dm"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 新しいdm"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 새 dm"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 dm baru"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 नयाँ dm"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 nieuwe dm"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 nowy dm"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 nova mensagem privada"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 novo dm"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 новое личное сообщение"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 nytt dm"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 புதிய dm"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 dm ใหม่"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 yeni dm"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 нове приватне повідомлення"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 نیا نجی پیغام"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 dm mới"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 新的 dm"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🔒 新的 dm"
+          }
+        }
+      }
+    },
+    "notification.redacted.geohash.title" : {
+      "comment" : "Lock-screen notification title for activity in a location channel when message previews are hidden; deliberately omits the geohash",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 نشاط جديد قريب منك"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 আশেপাশে নতুন কার্যকলাপ"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 neue aktivität in der nähe"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 new activity nearby"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 nueva actividad cerca"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 فعالیت جدید در نزدیکی"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 may bagong aktibidad sa paligid"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 nouvelle activité à proximité"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 פעילות חדשה בסביבה"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 आसपास नई गतिविधि"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 aktivitas baru di sekitar"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 nuova attività nelle vicinanze"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 近くで新しい動き"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 근처에 새 활동"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 aktiviti baru berdekatan"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 नजिकै नयाँ गतिविधि"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 nieuwe activiteit in de buurt"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 nowa aktywność w okolicy"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 nova atividade por perto"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 nova atividade por perto"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 новая активность рядом"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 ny aktivitet i närheten"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 அருகில் புதிய செயல்பாடு"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 มีความเคลื่อนไหวใหม่ใกล้คุณ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 yakınında yeni hareket"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 нова активність поблизу"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 قریب نئی سرگرمی"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 hoạt động mới gần bạn"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 附近有新动态"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📍 附近有新動態"
+          }
+        }
+      }
+    },
+    "notification.redacted.mention.title" : {
+      "comment" : "Lock-screen notification title telling someone they were mentioned when message previews are hidden; deliberately omits who mentioned them",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 تمّت الإشارة إليك"
+          }
+        },
+        "bn" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 আপনাকে মেনশন করা হয়েছে"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 du wurdest erwähnt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 you were mentioned"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 te han mencionado"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 منشن شدی"
+          }
+        },
+        "fil" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 nabanggit ka"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 on t'a mentionné"
+          }
+        },
+        "he" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 הוזכרת"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 आपको मेंशन किया गया"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 kamu disebut"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 ti hanno menzionato"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 メンションされました"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 멘션되었습니다"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 kamu disebut"
+          }
+        },
+        "ne" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 तिमीलाई उल्लेख गरियो"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 je bent vermeld"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 wspomniano o tobie"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 mencionaram-te"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 mencionaram você"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 тебя упомянули"
+          }
+        },
+        "sv" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 du har omnämnts"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 உங்களைக் குறிப்பிட்டுள்ளனர்"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 คุณถูกกล่าวถึง"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 senden bahsedildi"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 тебе згадали"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 آپ کا ذکر ہوا"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 bạn được nhắc tới"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 你被提及"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🫵 你被提及"
           }
         }
       }
