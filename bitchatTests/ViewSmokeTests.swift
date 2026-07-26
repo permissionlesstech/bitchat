@@ -700,18 +700,26 @@ struct ViewSmokeTests {
         #expect(deliveryStatusSnapshot(of: mediaRow) == read)
     }
 
-    #if os(iOS)
     @Test
     func cameraScannerView_previewAndCoordinatorSmoke() {
+        #if os(iOS)
         let preview = CameraScannerView.PreviewView(frame: .zero)
-        let coordinator = CameraScannerView.Coordinator()
+        let coordinator = CameraScannerCoordinator()
 
         _ = CameraScannerView.PreviewView.layerClass
         _ = preview.videoPreviewLayer
-        coordinator.setup(sessionOwner: preview) { _ in }
+        coordinator.setup(previewLayer: preview.videoPreviewLayer) { _ in }
         coordinator.setActive(false)
 
         #expect(preview.videoPreviewLayer.videoGravity == .resizeAspectFill)
+        #elseif os(macOS)
+        let preview = CameraScannerView.PreviewView(frame: .zero)
+        let coordinator = CameraScannerCoordinator()
+        preview.layout()
+        coordinator.setup(previewLayer: preview.videoPreviewLayer) { _ in }
+        coordinator.setActive(false)
+
+        #expect(preview.videoPreviewLayer.videoGravity == .resizeAspectFill)
+        #endif
     }
-    #endif
 }
