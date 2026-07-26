@@ -59,11 +59,24 @@ struct VoiceNotePlaybackControllerTests {
         return url
     }
 
+    /// Waits for an async settle, then asserts.
+    ///
+    /// The deadline is deliberately far larger than the work it waits on. Every
+    /// condition here depends on a `@MainActor` Task that playback schedules
+    /// (the session acquire and its failure path), and on a CI runner executing
+    /// many suites in parallel that Task can simply not be scheduled for
+    /// seconds. At five seconds this timed out on CI and reported *two*
+    /// failures — the wait itself, and the `!isPlaying` that the un-run failure
+    /// path had not yet reset — which reads like a playback bug rather than a
+    /// starved scheduler.
+    ///
+    /// A generous deadline costs nothing when the condition holds, since this
+    /// returns as soon as it does; it only extends the genuine-failure case.
     private func waitUntil(
         _ condition: () -> Bool,
         sourceLocation: SourceLocation = #_sourceLocation
     ) async {
-        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        let deadline = ContinuousClock.now.advanced(by: .seconds(TestConstants.settleTimeout))
         while !condition(), ContinuousClock.now < deadline {
             await Task.yield()
             try? await Task.sleep(nanoseconds: 1_000_000)

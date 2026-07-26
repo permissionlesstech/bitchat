@@ -960,7 +960,7 @@ final class NostrRelayManagerTests: XCTestCase {
             try context.sessionFactory.latestConnection(for: relayURL)?.emitEventMessage(subscriptionID: "ordered", event: event)
         }
 
-        let allDelivered = await waitUntil(timeout: 5.0) {
+        let allDelivered = await waitUntil(timeout: TestConstants.settleTimeout) {
             receivedIDs.count == events.count
         }
         XCTAssertTrue(allDelivered)
@@ -1006,7 +1006,7 @@ final class NostrRelayManagerTests: XCTestCase {
         }
         try context.sessionFactory.latestConnection(for: quietRelayURL)?.emitEventMessage(subscriptionID: "quiet", event: quietEvent)
 
-        let quietDelivered = await waitUntil(timeout: 5.0) { quietDeliveredAfterBusyCount >= 0 }
+        let quietDelivered = await waitUntil(timeout: TestConstants.settleTimeout) { quietDeliveredAfterBusyCount >= 0 }
         XCTAssertTrue(quietDelivered, "relay B's event was never delivered")
 
         // The signal: B did not have to wait for A's entire backlog. If the two
@@ -1019,7 +1019,7 @@ final class NostrRelayManagerTests: XCTestCase {
         )
 
         // Both relays still drain fully and in order.
-        let allDelivered = await waitUntil(timeout: 5.0) {
+        let allDelivered = await waitUntil(timeout: TestConstants.settleTimeout) {
             busyDeliveredCount == busyEvents.count
         }
         XCTAssertTrue(allDelivered)
@@ -1907,7 +1907,7 @@ final class NostrRelayManagerTests: XCTestCase {
     }
 
     private func waitUntil(
-        timeout: TimeInterval = 1.0,
+        timeout: TimeInterval = TestConstants.settleTimeout,
         condition: @escaping @MainActor () -> Bool
     ) async -> Bool {
         let deadline = Date().addingTimeInterval(timeout)

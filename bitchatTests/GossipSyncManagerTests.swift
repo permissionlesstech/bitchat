@@ -37,7 +37,7 @@ struct GossipSyncManagerTests {
             }
 
             manager.scheduleInitialSyncToPeer(PeerID(str: "FFFFFFFFFFFFFFFF"), delaySeconds: 0.0)
-            try await TestHelpers.waitFor({ delegate.lastPacket != nil }, timeout: TestConstants.shortTimeout)
+            try await TestHelpers.waitFor({ delegate.lastPacket != nil }, timeout: TestConstants.settleTimeout)
         }
 
         let lastPacket = try #require(delegate.lastPacket, "Expected sync packet to be sent")
@@ -394,7 +394,7 @@ struct GossipSyncManagerTests {
         )
         manager.handleRequestSync(from: peer, request: request)
 
-        try await TestHelpers.waitFor({ delegate.packets.count == 2 }, timeout: TestConstants.shortTimeout)
+        try await TestHelpers.waitFor({ delegate.packets.count == 2 }, timeout: TestConstants.settleTimeout)
         // Barrier: flush the sync queue so a late third packet would be visible.
         manager._performMaintenanceSynchronously(now: Date())
         let sentPackets = delegate.packets
@@ -477,7 +477,7 @@ struct GossipSyncManagerTests {
         manager.handleRequestSync(from: peer, request: request)
         manager.handleRequestSync(from: peer, request: request)
 
-        try await TestHelpers.waitFor({ delegate.packets.count >= 1 }, timeout: TestConstants.shortTimeout)
+        try await TestHelpers.waitFor({ delegate.packets.count >= 1 }, timeout: TestConstants.settleTimeout)
         // Barrier: both requests have been processed once this returns.
         manager._performMaintenanceSynchronously(now: Date())
         #expect(delegate.packets.count == 1)
@@ -498,7 +498,7 @@ struct GossipSyncManagerTests {
 
         manager.scheduleInitialSyncToPeer(PeerID(str: "FFFFFFFFFFFFFFFF"), delaySeconds: 0.0)
 
-        try await TestHelpers.waitFor({ delegate.packets.count == 1 }, timeout: TestConstants.shortTimeout)
+        try await TestHelpers.waitFor({ delegate.packets.count == 1 }, timeout: TestConstants.settleTimeout)
         let packet = try #require(delegate.packets.first)
         let request = try #require(RequestSyncPacket.decode(from: packet.payload))
         let types = try #require(request.types)
@@ -553,7 +553,7 @@ struct GossipSyncManagerTests {
         let request = RequestSyncPacket(p: 4, m: 1, data: Data(), types: .fragment)
         manager.handleRequestSync(from: peer, request: request)
 
-        try await TestHelpers.waitFor({ delegate.packets.count == 1 }, timeout: TestConstants.shortTimeout)
+        try await TestHelpers.waitFor({ delegate.packets.count == 1 }, timeout: TestConstants.settleTimeout)
         let sentPackets = delegate.packets
         #expect(sentPackets.count == 1)
         #expect(sentPackets[0].type == MessageType.fragment.rawValue)
@@ -615,7 +615,7 @@ struct GossipSyncManagerTests {
         )
         manager.handleRequestSync(from: PeerID(str: "FFFFFFFFFFFFFFFF"), request: request)
 
-        try await TestHelpers.waitFor({ delegate.packets.count == 1 }, timeout: TestConstants.shortTimeout)
+        try await TestHelpers.waitFor({ delegate.packets.count == 1 }, timeout: TestConstants.settleTimeout)
         // Barrier: flush the sync queue so a late second packet would be visible.
         manager._performMaintenanceSynchronously(now: Date())
         let sentPackets = delegate.packets
@@ -641,7 +641,7 @@ struct GossipSyncManagerTests {
         let stalledID = try #require(Data(hexString: "0102030405060708"))
         manager.requestMissingFragments(fragmentIDs: [stalledID])
 
-        try await TestHelpers.waitFor({ delegate.packets.count == 1 }, timeout: TestConstants.shortTimeout)
+        try await TestHelpers.waitFor({ delegate.packets.count == 1 }, timeout: TestConstants.settleTimeout)
         let sent = try #require(delegate.packets.first)
         #expect(sent.type == MessageType.requestSync.rawValue)
         #expect(sent.ttl == 0)
@@ -697,7 +697,7 @@ struct GossipSyncManagerTests {
         // And a .prekeyBundle sync request is answered with the stored packet.
         let request = RequestSyncPacket(p: 7, m: 1, data: Data(), types: .prekeyBundle)
         manager.handleRequestSync(from: PeerID(str: "FFFFFFFFFFFFFFFF"), request: request)
-        try await TestHelpers.waitFor({ delegate.packets.count == 1 }, timeout: TestConstants.shortTimeout)
+        try await TestHelpers.waitFor({ delegate.packets.count == 1 }, timeout: TestConstants.settleTimeout)
         let served = try #require(delegate.packets.first)
         #expect(served.type == MessageType.prekeyBundle.rawValue)
         #expect(served.isRSR)
@@ -774,7 +774,7 @@ struct GossipSyncManagerTests {
         )
         let restored = await TestHelpers.waitUntil(
             { second._messageCount(for: PeerID(hexData: senderID)) == 1 },
-            timeout: TestConstants.shortTimeout
+            timeout: TestConstants.settleTimeout
         )
         #expect(restored)
     }
@@ -844,7 +844,7 @@ struct GossipSyncManagerTests {
                 !FileManager.default.fileExists(atPath: fileURL.path)
                     && manager._messageCount(for: PeerID(hexData: senderID)) == 0
             },
-            timeout: TestConstants.shortTimeout
+            timeout: TestConstants.settleTimeout
         )
         #expect(erased)
     }
