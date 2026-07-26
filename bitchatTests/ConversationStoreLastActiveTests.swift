@@ -339,6 +339,55 @@ final class ConversationStoreLastActiveTests: XCTestCase {
         )
     }
 
+    func test_privateGroupIsRestorable() {
+        // A group id is `group_` plus 32 hex, so both peer lookups guard on
+        // `isShort` and return empty for it. Left to those terms a group would
+        // never restore, silently, every time — even though `startPrivateChat`
+        // gates group re-entry on nothing at all.
+        let group = PeerID(str: "group_" + String(repeating: "ab", count: 16))
+        XCTAssertTrue(group.isGroup, "test fixture is not a group id")
+        XCTAssertTrue(
+            AppRuntime.isDirectChatRestorable(
+                group,
+                isPeerFavorited: { _ in false },
+                hasStoredCryptographicIdentity: { _ in false },
+                isPeerBlocked: { _ in false }
+            )
+        )
+    }
+
+    func test_privateGroupNeverConsultsThePeerTerms() {
+        // Admitting groups by accident — because some peer term happened to
+        // match — would be a different bug wearing the same green check. The
+        // group must be admitted on its own branch, before either lookup runs.
+        let group = PeerID(str: "group_" + String(repeating: "cd", count: 16))
+        var favoriteLookups = 0
+        var identityLookups = 0
+        XCTAssertTrue(
+            AppRuntime.isDirectChatRestorable(
+                group,
+                isPeerFavorited: { _ in favoriteLookups += 1; return false },
+                hasStoredCryptographicIdentity: { _ in identityLookups += 1; return false },
+                isPeerBlocked: { _ in false }
+            )
+        )
+        XCTAssertEqual(favoriteLookups, 0, "group restore consulted the favorites term")
+        XCTAssertEqual(identityLookups, 0, "group restore consulted the identity term")
+    }
+
+    func test_blockedGroupIsNotRestorable() {
+        // Block stays an unconditional veto, ahead of the group branch.
+        let group = PeerID(str: "group_" + String(repeating: "ef", count: 16))
+        XCTAssertFalse(
+            AppRuntime.isDirectChatRestorable(
+                group,
+                isPeerFavorited: { _ in false },
+                hasStoredCryptographicIdentity: { _ in false },
+                isPeerBlocked: { _ in true }
+            )
+        )
+    }
+
     func test_blockedMutualFavoriteIsNotRestorable() {
         // A blocked peer is never restorable, even if the favorite is mutual —
         // mirrors the gate's first (block) reject.

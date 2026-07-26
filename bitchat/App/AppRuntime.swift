@@ -244,21 +244,45 @@ final class AppRuntime: ObservableObject {
     /// defers loading until protected data is available and session state is
     /// in-memory, so both read empty at launch regardless of the truth.
     ///
-    /// Geohash/Nostr ids are screened first, before any other term, so nothing
-    /// can bypass the check by matching earlier. A geoChat id is not a direct
-    /// chat at all. A geoDM's full Nostr key is rebuilt only from inbound
-    /// ephemeral events, so at launch it cannot resolve, and `startPrivateChat`
-    /// skips the handshake for geoDMs — a phantom would open with no error at
-    /// all. Its one durable anchor is OUR OWN favorite record, which carries
-    /// `peerNostrPublicKey`, so a geoDM restores on that and nothing else.
+    /// A private group is a virtual conversation, so none of the peer terms
+    /// apply to it and none of them would pass: a group id is `group_` plus 32
+    /// hex, and both lookups guard on `isShort` (a 16-hex bare), so they return
+    /// empty for every group without ever consulting the group. Left to the
+    /// peer terms a group would therefore never restore — silently, every
+    /// time. `startPrivateChat` gates group re-entry on nothing at all ("no
+    /// peer identity, favorites, handshake … just select the chat"), and there
+    /// is no phantom to guard against: the conversation is local state, not a
+    /// claim about reachability. So groups are admitted outright.
+    ///
+    /// Geohash/Nostr ids are screened before the peer terms, so nothing can
+    /// bypass the check by matching earlier. A geoChat id is not a direct chat
+    /// at all. A geoDM's full Nostr key is rebuilt only from inbound ephemeral
+    /// events, so at launch it cannot resolve, and `startPrivateChat` skips the
+    /// handshake for geoDMs — a phantom would open with no error at all. Its
+    /// only conceivable durable anchor is our own favorite record.
+    ///
+    /// In practice that anchor does not exist yet, so **a geoDM never restores
+    /// today**. `FavoritesPersistenceService` is keyed by Noise public key
+    /// alone, and `getFavoriteStatus(forPeerID:)` matches by rebuilding
+    /// `PeerID(publicKey:)` — which carries no prefix — so it can never equal a
+    /// `nostr_`-prefixed id no matter what is favorited. The geoDM branch below
+    /// is the correct shape for the day a Nostr-keyed lookup exists; until
+    /// then it resolves to `false` and the fallback to the conversation list is
+    /// the whole behaviour. Documented rather than fixed here: adding that
+    /// lookup means new favorites plumbing, which is not this change.
     static func isDirectChatRestorable(
         _ peerID: PeerID,
         isPeerFavorited: (PeerID) -> Bool,
         hasStoredCryptographicIdentity: (PeerID) -> Bool,
         isPeerBlocked: (PeerID) -> Bool
     ) -> Bool {
-        // Blocked is a veto, never one term among several.
+        // Blocked is a veto, never one term among several. Kept ahead of the
+        // group branch so the veto is unconditional; a group id is never
+        // blocked in practice, so the order costs nothing.
         guard !isPeerBlocked(peerID) else { return false }
+        // A private group is local state, not a claim about reaching a peer.
+        // The peer terms below cannot represent it and would refuse it.
+        if peerID.isGroup { return true }
         // A geohash channel is not a direct chat.
         guard !peerID.isGeoChat else { return false }
         // Screened before the identity term rather than after, so no earlier
