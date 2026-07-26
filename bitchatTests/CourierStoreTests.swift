@@ -733,6 +733,25 @@ struct CourierStoreTests {
         #expect(offerAll(store, to: courierB) == 2)
     }
 
+    /// Pins the envelope identity a spray receipt carries.
+    ///
+    /// Every other use in this file derives the hash the same way production
+    /// does — `CourierStore.ciphertextHash(envelope.ciphertext)` on both sides —
+    /// so a change to the derivation moves both and every one of them stays
+    /// green. This is the one place the bytes are written down, which is the
+    /// only way a receipt-identity change can fail a test rather than silently
+    /// re-key every pending offer and break interop with an already-shipped
+    /// peer.
+    ///
+    /// Input and expected value are the published courier vector's, so when
+    /// the vectors file lands this assertion moves into it unchanged.
+    @Test func ciphertextHashIsPinnedSHA256TruncatedTo16() {
+        let ciphertext = Data("courier-vector-ciphertext-0001".utf8)
+        #expect(CourierStore.ciphertextHash(ciphertext).hexEncodedString()
+                == "bb85dcc4d8b17377c61817992df95826")
+        #expect(CourierStore.ciphertextHash(ciphertext).count == CourierEnvelope.tagLength)
+    }
+
     #if DEBUG
     /// The scan-to-commit span guard.
     ///
@@ -756,8 +775,7 @@ struct CourierStoreTests {
         let courierB = Data(repeating: 0xC2, count: 32)
 
         let overlaps = OverlapCounter()
-        CourierStore._test_onSprayOfferOverlap = { overlaps.count += 1 }
-        defer { CourierStore._test_onSprayOfferOverlap = nil }
+        store._test_onSprayOfferOverlap = { overlaps.count += 1 }
 
         _ = store.offerSprayCopies(to: courierA) { _ in
             // Copies for A are on the wire; B now scans before A has committed.
@@ -781,8 +799,7 @@ struct CourierStoreTests {
         let courierB = Data(repeating: 0xC2, count: 32)
 
         let overlaps = OverlapCounter()
-        CourierStore._test_onSprayOfferOverlap = { overlaps.count += 1 }
-        defer { CourierStore._test_onSprayOfferOverlap = nil }
+        store._test_onSprayOfferOverlap = { overlaps.count += 1 }
 
         _ = store.offerSprayCopies(to: courierA) { _ in
             _ = store.takeSprayCopies(for: courierB)
@@ -808,8 +825,7 @@ struct CourierStoreTests {
         let courierC = Data(repeating: 0xC3, count: 32)
 
         let overlaps = OverlapCounter()
-        CourierStore._test_onSprayOfferOverlap = { overlaps.count += 1 }
-        defer { CourierStore._test_onSprayOfferOverlap = nil }
+        store._test_onSprayOfferOverlap = { overlaps.count += 1 }
 
         _ = store.offerSprayCopies(to: courierA) { _ in
             // B overlaps A and finishes; A is still in flight afterwards.

@@ -169,7 +169,11 @@ final class CourierStore {
     /// Test seam for the overlap detector, mirroring `_test_onOutboundPacket`
     /// in `BLEService`. Unset in normal debug runs, where an overlap trips
     /// `assertionFailure` instead.
-    static var _test_onSprayOfferOverlap: (() -> Void)?
+    ///
+    /// Per instance, not static: Swift Testing runs cases in parallel, so a
+    /// shared hook would let one case overwrite another's and tally overlaps
+    /// onto the wrong test. Each test owns its store, so each owns its seam.
+    var _test_onSprayOfferOverlap: (() -> Void)?
     #endif
 
     /// Marks the start of a spray offer's scan-to-commit span, reporting an
@@ -179,7 +183,7 @@ final class CourierStore {
         queue.sync {
             defer { sprayOffersInFlight += 1 }
             guard sprayOffersInFlight > 0 else { return }
-            if let hook = Self._test_onSprayOfferOverlap {
+            if let hook = _test_onSprayOfferOverlap {
                 hook()
             } else {
                 assertionFailure("""
