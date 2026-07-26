@@ -34,4 +34,33 @@ enum BLEOriginTTLPolicy {
         }
         return randomTTL(range)
     }
+
+    /// Gap after which the next voice frame counts as a new talk burst.
+    static let voiceBurstGap: TimeInterval = 1.0
+
+    /// TTL for a live-voice frame: one draw per talk burst, not per frame.
+    ///
+    /// This distinction is the whole value. Voice leaves at roughly 15 frames a
+    /// second, so drawing per frame would hand an observer the maximum of the
+    /// range within a fraction of a second — averaging over a burst would
+    /// defeat the randomisation completely and cost reach for nothing. One draw
+    /// per burst makes a burst a single sample, the same as a text message.
+    ///
+    /// Returns the TTL to use and the burst TTL to remember. A burst ends when
+    /// `voiceBurstGap` passes with no frame.
+    static func voiceBurstTTL(
+        now: Date,
+        lastFrameAt: Date?,
+        currentBurstTTL: UInt8?,
+        burstGap: TimeInterval = voiceBurstGap,
+        range: ClosedRange<UInt8> = TransportConfig.broadcastOriginTTLRange,
+        randomTTL: (ClosedRange<UInt8>) -> UInt8 = { UInt8.random(in: $0) }
+    ) -> UInt8 {
+        if let currentBurstTTL,
+           let lastFrameAt,
+           now.timeIntervalSince(lastFrameAt) < burstGap {
+            return currentBurstTTL
+        }
+        return originTTL(range: range, randomTTL: randomTTL)
+    }
 }

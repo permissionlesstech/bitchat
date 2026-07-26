@@ -227,6 +227,12 @@ final class BLEService: NSObject {
     private let bleMaxMTU = 512
     private let maxMessageLength = InputValidator.Limits.maxMessageLength
     private let messageTTL: UInt8 = TransportConfig.messageTTLDefault
+    /// Live-voice burst TTL state: one draw per talk burst rather than per
+    /// frame, so a ~15 fps stream is a single sample to an observer instead of
+    /// handing over the range maximum immediately. Both are touched only on
+    /// `messageQueue`.
+    private var currentVoiceBurstTTL: UInt8?
+    private var lastVoiceBurstFrameAt: Date?
     // Flood/battery controls
     private let maxInFlightAssemblies = TransportConfig.bleMaxInFlightAssemblies // cap concurrent fragment assemblies
     private let highDegreeThreshold = TransportConfig.bleHighDegreeThreshold // for adaptive TTL/probabilistic relays
@@ -982,7 +988,7 @@ final class BLEService: NSObject {
             timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
             payload: Data(),
             signature: nil,
-            ttl: messageTTL
+            ttl: BLEOriginTTLPolicy.originTTL()
         )
 
         if let signed = noiseService.signPacket(leavePacket) {
@@ -1619,7 +1625,7 @@ final class BLEService: NSObject {
                 timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                 payload: payload,
                 signature: nil,
-                ttl: self.messageTTL,
+                ttl: BLEOriginTTLPolicy.originTTL(),
                 version: 2
             )
 
@@ -2978,7 +2984,7 @@ final class BLEService: NSObject {
                 timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                 payload: envelope,
                 signature: nil,
-                ttl: self.messageTTL
+                ttl: BLEOriginTTLPolicy.originTTL()
             )
             // Pre-mark our own broadcast as processed to avoid handling a
             // relayed self copy.
@@ -3034,6 +3040,16 @@ final class BLEService: NSObject {
         guard !burstContent.isEmpty else { return }
         messageQueue.async { [weak self] in
             guard let self else { return }
+            // One TTL draw per talk burst. Drawing per frame would leak the
+            // maximum within a fraction of a second at ~15 frames/sec.
+            let now = Date()
+            let burstTTL = BLEOriginTTLPolicy.voiceBurstTTL(
+                now: now,
+                lastFrameAt: self.lastVoiceBurstFrameAt,
+                currentBurstTTL: self.currentVoiceBurstTTL
+            )
+            self.currentVoiceBurstTTL = burstTTL
+            self.lastVoiceBurstFrameAt = now
             let packet = BitchatPacket(
                 type: MessageType.voiceFrame.rawValue,
                 senderID: self.myPeerIDData,
@@ -3041,7 +3057,7 @@ final class BLEService: NSObject {
                 timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                 payload: burstContent,
                 signature: nil,
-                ttl: self.messageTTL
+                ttl: burstTTL
             )
             guard let signedPacket = self.noiseService.signPacket(packet) else {
                 SecureLogger.error("❌ Failed to sign voice frame", category: .security)
@@ -7616,7 +7632,7 @@ extension BLEService {
                 timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
                 payload: payload,
                 signature: nil,
-                ttl: self.messageTTL
+                ttl: BLEOriginTTLPolicy.originTTL()
             )
             guard let signedPacket = self.noiseService.signPacket(basePacket) else {
                 SecureLogger.error("❌ Failed to sign board packet", category: .security)

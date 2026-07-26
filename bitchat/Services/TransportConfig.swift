@@ -13,9 +13,23 @@ enum TransportConfig {
     /// a reliable "this device wrote it" marker for any direct listener, which
     /// tells a passive observer who *said* a thing rather than merely who is
     /// present. Drawing from a range makes the lower values ambiguous between an
-    /// origin and a relay: in a dense graph relays already clamp broadcasts to
-    /// 5, so an origin that emits 5 is indistinguishable from relayed traffic,
-    /// and in a sparse chain a 6 could be an origin or one hop from a 7.
+    /// origin and a relay: in a dense graph relays clamp broadcasts to 5, so an
+    /// origin emitting 5 is indistinguishable from relayed traffic, and in a
+    /// sparse chain a 6 could be an origin or one hop from a 7.
+    ///
+    /// **What this does not do, stated plainly.** Every relay branch in
+    /// `RelayController` emits `ttlLimit - 1`, so TTL is strictly decreasing and
+    /// the top of whatever range is chosen can only ever come from an origin.
+    /// With three values that is one message in three, and the probability that
+    /// a sender has revealed itself after `k` messages is `1 - (2/3)^k` — about
+    /// 87% by the fifth. So this meaningfully protects an occasional sender and
+    /// barely protects a chatty one.
+    ///
+    /// Removing the marker entirely is not possible from the origin side: it
+    /// needs relays to sometimes *not* decrement, which trades directly against
+    /// TTL's job as the loop bound. Widening the range trades against reach.
+    /// Both belong in a follow-up with the mesh behaviour in scope; what this
+    /// constant buys is that a single observed packet is no longer conclusive.
     ///
     /// The cost is reach: a message originated at 5 crosses two fewer hops than
     /// one at 7. The upper bound stays at the default so the common case is
@@ -23,10 +37,19 @@ enum TransportConfig {
     /// relay clamp — going below it would cost reach without buying ambiguity
     /// that clamp does not already provide.
     ///
-    /// Announces are deliberately excluded: the link-binding paths treat
-    /// `ttl == messageTTLDefault` on an announce as "direct link", and an
-    /// announce's sender ID already identifies the device anyway, so there is
-    /// nothing to hide and something to break.
+    /// Applied to public broadcasts that carry content this device authored:
+    /// public messages, group messages, broadcast files, board posts, live
+    /// voice (one draw per talk burst, see `BLEOriginTTLPolicy`), and leave.
+    /// Deliberately excluded:
+    ///
+    /// - **Announces.** Link binding treats `ttl == messageTTLDefault` on an
+    ///   announce as "direct link", and an announce's sender ID already
+    ///   identifies the device — nothing to hide, something to break.
+    /// - **Directed traffic** (DMs, handshakes, courier envelopes, directed
+    ///   files). Fewer hops means fewer deliveries, and the trade needs its own
+    ///   look rather than riding along here.
+    /// - **Prekey bundles and gateway carriers.** A bundle already contains its
+    ///   owner's key, and carriers are re-broadcasts rather than authorship.
     static let broadcastOriginTTLRange: ClosedRange<UInt8> = 5...7
 
     /// Whether signed announces advertise this device's direct neighbours.

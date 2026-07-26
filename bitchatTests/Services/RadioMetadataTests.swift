@@ -49,6 +49,119 @@ struct RadioMetadataTests {
         #expect(range.lowerBound >= 2, "TTL 1 is dropped by RelayController")
     }
 
+    // MARK: - Voice burst TTL
+
+    /// Per-frame drawing would be worse than useless: at ~15 frames a second an
+    /// observer collects the range maximum almost immediately, so the sender is
+    /// marked within a fraction of a second while every low draw still costs
+    /// reach. One draw per burst makes a burst a single sample.
+    @Test func voiceFramesInOneBurstShareOneTTL() {
+        let start = Date(timeIntervalSince1970: 1_784_000_000)
+        let first = BLEOriginTTLPolicy.voiceBurstTTL(
+            now: start, lastFrameAt: nil, currentBurstTTL: nil, randomTTL: { _ in 6 }
+        )
+        // Subsequent frames inside the burst must reuse it even though the
+        // randomizer would now return something else.
+        var last = start
+        var current = first
+        for step in 1...20 {
+            let now = start.addingTimeInterval(Double(step) * 0.066)
+            current = BLEOriginTTLPolicy.voiceBurstTTL(
+                now: now, lastFrameAt: last, currentBurstTTL: current, randomTTL: { _ in 7 }
+            )
+            last = now
+            #expect(current == first)
+        }
+    }
+
+    @Test func aNewBurstRedrawsTheTTL() {
+        let start = Date(timeIntervalSince1970: 1_784_000_000)
+        let first = BLEOriginTTLPolicy.voiceBurstTTL(
+            now: start, lastFrameAt: nil, currentBurstTTL: nil, randomTTL: { _ in 5 }
+        )
+        #expect(first == 5)
+
+        // A gap longer than the burst window means a new talk burst.
+        let later = start.addingTimeInterval(BLEOriginTTLPolicy.voiceBurstGap + 0.5)
+        let second = BLEOriginTTLPolicy.voiceBurstTTL(
+            now: later, lastFrameAt: start, currentBurstTTL: first, randomTTL: { _ in 7 }
+        )
+        #expect(second == 7)
+    }
+
+    @Test func voiceBurstTTLStaysInRange() {
+        var last: Date?
+        var current: UInt8?
+        let start = Date(timeIntervalSince1970: 1_784_000_000)
+        for step in 0..<200 {
+            // Gaps long enough to force a fresh draw each time.
+            let now = start.addingTimeInterval(Double(step) * 5)
+            let ttl = BLEOriginTTLPolicy.voiceBurstTTL(
+                now: now, lastFrameAt: last, currentBurstTTL: current
+            )
+            #expect(TransportConfig.broadcastOriginTTLRange.contains(ttl))
+            last = now
+            current = ttl
+        }
+    }
+
+    // MARK: - Wiring
+
+    /// The first version of this change defined the policy and used it in
+    /// exactly one place, leaving voice, files, group messages and board posts
+    /// originating at a fixed maximum — i.e. still perfectly marked, while the
+    /// docs claimed otherwise. A policy that exists but is not wired is worse
+    /// than none, because it reads as solved.
+    ///
+    /// This asserts against the source rather than behaviour because the send
+    /// paths need a live radio; it is a cheap guard against the specific
+    /// regression of adding a broadcast origination site and forgetting it.
+    @Test func everyAuthoredBroadcastOriginatesWithADrawnTTL() throws {
+        let source = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Services
+            .deletingLastPathComponent()   // bitchatTests
+            .deletingLastPathComponent()   // repo root
+            .appendingPathComponent("bitchat/Services/BLE/BLEService.swift")
+        let lines = try String(contentsOf: source, encoding: .utf8)
+            .components(separatedBy: .newlines)
+
+        // Packet constructions that still pin the fixed maximum.
+        let fixed = lines.enumerated().filter {
+            $0.element.contains("ttl: messageTTL") || $0.element.contains("ttl: self.messageTTL")
+        }
+
+        // Each remaining one must be a deliberate exclusion. Announces keep the
+        // fixed TTL for link binding; the rest are directed, diagnostics, or
+        // re-broadcasts. Identify by the packet type named just above.
+        let allowedTypes = [
+            "announce",        // link binding depends on ttl == max
+            "ping", "pong",    // diagnostics; payload records origin TTL for hops
+            "noiseEncrypted", "noiseHandshake", "courierEnvelope",  // directed
+            "fileTransfer",    // the directed variant; the broadcast one is drawn
+            "prekeyBundle",    // payload already names its owner
+            "nostrCarrier"     // re-broadcast, not authorship
+        ]
+
+        var unexplained: [String] = []
+        for (index, line) in fixed {
+            let window = lines[max(0, index - 14)...index].joined(separator: "\n")
+            guard !allowedTypes.contains(where: { window.contains("MessageType.\($0)") }) else { continue }
+            unexplained.append("BLEService.swift:\(index + 1) — \(line.trimmingCharacters(in: .whitespaces))")
+        }
+
+        #expect(
+            unexplained.isEmpty,
+            """
+            These broadcast origination sites still use the fixed maximum TTL, \
+            which marks this device as the author to any direct listener. Use \
+            BLEOriginTTLPolicy.originTTL(), or add the type to allowedTypes here \
+            with the reason.
+
+            \(unexplained.joined(separator: "\n"))
+            """
+        )
+    }
+
     // MARK: - Neighbour list
 
     @Test func neighborAdvertisingIsOffByDefault() {
