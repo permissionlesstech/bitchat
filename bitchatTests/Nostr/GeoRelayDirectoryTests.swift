@@ -580,8 +580,16 @@ final class GeoRelayDirectoryTests: XCTestCase {
     /// constrained CI runners (2-core, serialized testing) can starve the
     /// detached utility-priority fetch task for seconds before it runs, and
     /// a successful wait returns as soon as the condition becomes true.
+    /// Default deliberately far larger than the work being awaited.
+    ///
+    /// The directory performs its fetch in a `Task.detached(priority: .utility)`,
+    /// and utility priority competes with every other suite on a CI runner. At
+    /// ten seconds the retry-scheduling test timed out at exactly 10.06s with
+    /// the retry never scheduled — which reads like a missing retry rather than
+    /// a starved background task. Returning as soon as the condition holds means
+    /// a longer deadline only extends the genuine-failure case.
     private func waitUntil(
-        timeout: TimeInterval = 10.0,
+        timeout: TimeInterval = 30.0,
         condition: @escaping @MainActor () async -> Bool
     ) async -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
